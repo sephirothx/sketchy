@@ -430,17 +430,21 @@
 
 .chat-input {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.chat-input-row {
+  display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
 }
 
 .chat-input-box {
   flex: 1;
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
   min-width: 0;
   padding: 8px 10px;
   border: 1px solid #c7cad1;
@@ -449,27 +453,34 @@
 }
 
 .chat-input-box input {
-  flex: 0 1 auto;
+  flex: 1;
   min-width: 0;
-  max-width: 100%;
   border: none;
   outline: none;
   padding: 0;
   font: inherit;
 }
 
-.input-mirror {
-  position: absolute;
-  visibility: hidden;
-  white-space: pre;
-  font: inherit;
+.guess-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  min-height: 1.1rem;
+  padding: 0 10px;
+  font-size: 1rem;
 }
 
-.guess-hint {
-  display: inline-flex;
-  gap: 3px;
+.guess-hint-typing {
   color: #868e96;
-  white-space: nowrap;
+}
+
+.guess-hint-correct {
+  color: #2f9e44;
+}
+
+.guess-hint-wrong {
+  color: #e03131;
 }
 
 .chat-input button {

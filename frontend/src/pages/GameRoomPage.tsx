@@ -7,6 +7,7 @@ import { WordDisplay } from "../components/WordDisplay";
 import { Timer } from "../components/Timer";
 import { GuessChat } from "../components/GuessChat";
 import { emitWithAck, socket } from "../lib/socket";
+import { splitMaskedWord } from "../lib/maskedWord";
 import { useGameStore } from "../store/gameStore";
 import type { AckResponse, DrawTool } from "../types";
 
@@ -159,7 +160,12 @@ export function GameRoomPage() {
             )}
           </main>
           <aside className="sidebar-right">
-            <GuessChat messages={messages} isDrawer={amDrawer} canGuess={phase === "drawing"} />
+            <GuessChat
+              messages={messages}
+              isDrawer={amDrawer}
+              canGuess={phase === "drawing"}
+              targetWordLengths={splitMaskedWord(maskedWord).counts}
+            />
           </aside>
         </div>
       )}
