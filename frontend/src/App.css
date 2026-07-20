@@ -243,7 +243,6 @@
 .word-display {
   min-height: 32px;
   font-size: 24px;
-  letter-spacing: 6px;
   font-weight: 700;
   text-align: center;
 }
@@ -251,6 +250,32 @@
 .word-display.choosing {
   letter-spacing: normal;
   font-size: 16px;
+}
+
+.word-reveal {
+  letter-spacing: 1px;
+}
+
+.word-masked {
+  /* Preserve the backend's literal space runs (single space between
+     letters, double space between words) instead of the browser
+     collapsing every run down to one space. */
+  white-space: pre-wrap;
+  letter-spacing: 3px;
+}
+
+.word-lengths {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 10px;
+  vertical-align: super;
+  letter-spacing: normal;
+}
+
+.word-lengths sup {
+  font-size: 13px;
+  font-weight: 600;
+  color: #868e96;
 }
 
 .word-choices {
@@ -405,15 +430,57 @@
 
 .chat-input {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 8px;
 }
 
-.chat-input input {
+.chat-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-input-box {
   flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
   padding: 8px 10px;
   border: 1px solid #c7cad1;
   border-radius: 6px;
+  background: white;
+}
+
+.chat-input-box input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  padding: 0;
+  font: inherit;
+}
+
+.guess-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  min-height: 1.1rem;
+  padding: 0 10px;
+  font-size: 1rem;
+}
+
+.guess-hint-typing {
+  color: #868e96;
+}
+
+.guess-hint-correct {
+  color: #2f9e44;
+}
+
+.guess-hint-wrong {
+  color: #e03131;
 }
 
 .chat-input button {

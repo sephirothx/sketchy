@@ -51,7 +51,23 @@ def test_masked_word_reveals_length_only():
     game = make_game()
     game.start_next_turn()
     game.choose_word(game.current_drawer, game.word_choices[0])
-    assert game.masked_word() == " ".join("_" for _ in game.word)
+    word = game.word
+    expected = "_" * len(word) + f"  {len(word)}"
+    assert game.masked_word() == expected
+
+
+def test_masked_word_shows_spaces_and_special_characters():
+    game = make_game(n_players=1, rounds=1)
+    game.word_pool = ["red panda"]
+    game.start_next_turn()
+    game.force_word_choice()
+    assert game.masked_word() == "___  _____  3 5"
+
+    game2 = make_game(n_players=1, rounds=1)
+    game2.word_pool = ["spider-man"]
+    game2.start_next_turn()
+    game2.force_word_choice()
+    assert game2.masked_word() == "______-___  6 3"
 
 
 def test_submit_guess_correct_awards_points_and_ignores_drawer():

@@ -7,6 +7,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from itertools import groupby
 
 from app.words import random_word_choices
 
@@ -93,11 +94,27 @@ class Game:
         self.phase = Phase.DRAWING
 
     def masked_word(self) -> str:
-        """Blank out letters but preserve spaces, so multi-word expressions
-        (e.g. "red panda") visibly show their word boundaries to guessers."""
+        """Blank out each word's letters/digits into underscores while keeping
+        spaces and other special characters (hyphens, apostrophes, etc.)
+        visible, so multi-word expressions (e.g. "red panda") and punctuated
+        words (e.g. "spider-man") clearly show their structure to guessers.
+        Every letter run's count is appended at the end, in order - special
+        characters act as boundaries here too, so "spider-man" reports "6 3"
+        (one count for "spider", one for "man") - and the blanks themselves
+        stay tightly packed with a clear gap between words.
+        """
         if not self.word:
             return ""
-        return " ".join("_" if ch != " " else " " for ch in self.word)
+        tokens = self.word.split()
+        masked_words = [
+            "".join("_" if ch.isalnum() else ch for ch in token) for token in tokens
+        ]
+        letter_counts = [
+            str(len(list(run)))
+            for is_alnum, run in groupby(self.word, key=str.isalnum)
+            if is_alnum
+        ]
+        return "  ".join(masked_words) + "  " + " ".join(letter_counts)
 
     def record_stroke(self, event: str, payload: dict) -> None:
         self.strokes.append({"event": event, "payload": payload})

@@ -7,6 +7,7 @@ import { WordDisplay } from "../components/WordDisplay";
 import { Timer } from "../components/Timer";
 import { GuessChat } from "../components/GuessChat";
 import { emitWithAck, socket } from "../lib/socket";
+import { splitMaskedWord } from "../lib/maskedWord";
 import { useGameStore } from "../store/gameStore";
 import type { AckResponse, DrawTool } from "../types";
 
@@ -28,6 +29,7 @@ export function GameRoomPage() {
   const drawerToken = useGameStore((s) => s.drawerToken);
   const maskedWord = useGameStore((s) => s.maskedWord);
   const myWord = useGameStore((s) => s.myWord);
+  const guessedWord = useGameStore((s) => s.guessedWord);
   const wordChoices = useGameStore((s) => s.wordChoices);
   const roundNumber = useGameStore((s) => s.roundNumber);
   const totalRounds = useGameStore((s) => s.totalRounds);
@@ -141,6 +143,9 @@ export function GameRoomPage() {
               myWord={myWord}
               maskedWord={maskedWord}
               wordChoices={wordChoices}
+              revealedWord={
+                phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord
+              }
             />
             <Canvas isDrawer={canDrawNow} color={color} brushWidth={brushWidth} tool={tool} />
             {canDrawNow && (
@@ -153,12 +158,14 @@ export function GameRoomPage() {
                 onToolChange={setTool}
               />
             )}
-            {lastRoundResult && phase === "round_end" && (
-              <p className="round-result">The word was &ldquo;{lastRoundResult.word}&rdquo;</p>
-            )}
           </main>
           <aside className="sidebar-right">
-            <GuessChat messages={messages} isDrawer={amDrawer} canGuess={phase === "drawing"} />
+            <GuessChat
+              messages={messages}
+              isDrawer={amDrawer}
+              canGuess={phase === "drawing"}
+              targetWordLengths={splitMaskedWord(maskedWord).counts}
+            />
           </aside>
         </div>
       )}

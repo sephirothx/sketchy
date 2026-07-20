@@ -24,6 +24,7 @@ interface GameStore {
   drawerToken: string | null;
   maskedWord: string;
   myWord: string | null;
+  guessedWord: string | null;
   wordChoices: string[];
   roundNumber: number;
   totalRounds: number;
@@ -56,6 +57,7 @@ interface GameStore {
     seconds: number;
   }) => void;
   setMyWord: (word: string | null) => void;
+  setGuessedWord: (word: string | null) => void;
   endRound: (payload: RoundEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
   setError: (error: string | null) => void;
@@ -67,6 +69,7 @@ const initialGameFields = {
   drawerToken: null as string | null,
   maskedWord: "",
   myWord: null as string | null,
+  guessedWord: null as string | null,
   wordChoices: [] as string[],
   roundNumber: 0,
   totalRounds: 0,
@@ -126,6 +129,7 @@ export const useGameStore = create<GameStore>((set) => ({
       phaseStartedAt: Date.now(),
       maskedWord: "",
       myWord: null,
+      guessedWord: null,
       wordChoices: [],
       lastRoundResult: null,
     }),
@@ -143,6 +147,7 @@ export const useGameStore = create<GameStore>((set) => ({
       wordChoices: [],
     }),
   setMyWord: (word) => set({ myWord: word }),
+  setGuessedWord: (word) => set({ guessedWord: word }),
   endRound: (payload) =>
     set((s) => ({
       phase: "round_end",

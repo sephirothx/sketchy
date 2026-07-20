@@ -112,6 +112,10 @@ export function useGameSocketListeners() {
       });
     };
 
+    const onYouGuessedCorrectly = (payload: { word: string }) => {
+      store.getState().setGuessedWord(payload.word);
+    };
+
     const onRoundEnded = (payload: RoundEndedPayload) => {
       store.getState().endRound(payload);
       store.getState().addMessage({
@@ -158,6 +162,7 @@ export function useGameSocketListeners() {
     socket.on("turn_started", onTurnStarted);
     socket.on("chat_message", onChatMessage);
     socket.on("correct_guess", onCorrectGuess);
+    socket.on("you_guessed_correctly", onYouGuessedCorrectly);
     socket.on("round_ended", onRoundEnded);
     socket.on("game_ended", onGameEnded);
     socket.on("sync_game", onSyncGame);
@@ -175,6 +180,7 @@ export function useGameSocketListeners() {
       socket.off("turn_started", onTurnStarted);
       socket.off("chat_message", onChatMessage);
       socket.off("correct_guess", onCorrectGuess);
+      socket.off("you_guessed_correctly", onYouGuessedCorrectly);
       socket.off("round_ended", onRoundEnded);
       socket.off("game_ended", onGameEnded);
       socket.off("sync_game", onSyncGame);
