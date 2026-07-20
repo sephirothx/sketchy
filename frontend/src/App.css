@@ -243,7 +243,6 @@
 .word-display {
   min-height: 32px;
   font-size: 24px;
-  letter-spacing: 6px;
   font-weight: 700;
   text-align: center;
 }
@@ -251,6 +250,32 @@
 .word-display.choosing {
   letter-spacing: normal;
   font-size: 16px;
+}
+
+.word-reveal {
+  letter-spacing: 1px;
+}
+
+.word-masked {
+  /* Preserve the backend's literal space runs (single space between
+     letters, double space between words) instead of the browser
+     collapsing every run down to one space. */
+  white-space: pre-wrap;
+  letter-spacing: 3px;
+}
+
+.word-lengths {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 10px;
+  vertical-align: super;
+  letter-spacing: normal;
+}
+
+.word-lengths sup {
+  font-size: 13px;
+  font-weight: 600;
+  color: #868e96;
 }
 
 .word-choices {
@@ -405,15 +430,46 @@
 
 .chat-input {
   display: flex;
+  align-items: center;
   gap: 6px;
   margin-top: 8px;
 }
 
-.chat-input input {
+.chat-input-box {
   flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
   padding: 8px 10px;
   border: 1px solid #c7cad1;
   border-radius: 6px;
+  background: white;
+}
+
+.chat-input-box input {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  border: none;
+  outline: none;
+  padding: 0;
+  font: inherit;
+}
+
+.input-mirror {
+  position: absolute;
+  visibility: hidden;
+  white-space: pre;
+  font: inherit;
+}
+
+.guess-hint {
+  display: inline-flex;
+  gap: 3px;
+  color: #868e96;
+  white-space: nowrap;
 }
 
 .chat-input button {

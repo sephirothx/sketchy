@@ -480,6 +480,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             {"token": player.token, "nickname": player.nickname, "points": points},
             room=room.id,
         )
+        await sio.emit("you_guessed_correctly", {"word": game.word}, to=player.sid)
         in_the_know = [
             p.sid
             for p in room.player_list()

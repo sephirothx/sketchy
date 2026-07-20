@@ -28,6 +28,7 @@ export function GameRoomPage() {
   const drawerToken = useGameStore((s) => s.drawerToken);
   const maskedWord = useGameStore((s) => s.maskedWord);
   const myWord = useGameStore((s) => s.myWord);
+  const guessedWord = useGameStore((s) => s.guessedWord);
   const wordChoices = useGameStore((s) => s.wordChoices);
   const roundNumber = useGameStore((s) => s.roundNumber);
   const totalRounds = useGameStore((s) => s.totalRounds);
@@ -141,6 +142,9 @@ export function GameRoomPage() {
               myWord={myWord}
               maskedWord={maskedWord}
               wordChoices={wordChoices}
+              revealedWord={
+                phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord
+              }
             />
             <Canvas isDrawer={canDrawNow} color={color} brushWidth={brushWidth} tool={tool} />
             {canDrawNow && (
@@ -152,9 +156,6 @@ export function GameRoomPage() {
                 tool={tool}
                 onToolChange={setTool}
               />
-            )}
-            {lastRoundResult && phase === "round_end" && (
-              <p className="round-result">The word was &ldquo;{lastRoundResult.word}&rdquo;</p>
             )}
           </main>
           <aside className="sidebar-right">
