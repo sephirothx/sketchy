@@ -18,6 +18,7 @@ export function LobbyBrowserPage() {
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
+  const [drawingSeconds, setDrawingSeconds] = useState(80);
   const [customWords, setCustomWords] = useState("");
   const [customWordsOnly, setCustomWordsOnly] = useState(false);
   const [joinCode, setJoinCode] = useState("");
@@ -66,6 +67,7 @@ export function LobbyBrowserPage() {
       isPublic,
       maxPlayers,
       rounds,
+      drawingSeconds,
       customWords: customWords.trim(),
       customWordsOnly,
     });
@@ -168,6 +170,16 @@ export function LobbyBrowserPage() {
             />
           </label>
           <label>
+            Drawing time (seconds)
+            <input
+              type="number"
+              min={15}
+              max={240}
+              value={drawingSeconds}
+              onChange={(e) => setDrawingSeconds(Number(e.target.value))}
+            />
+          </label>
+          <label>
             Custom words (optional)
             <input
               value={customWords}
@@ -220,6 +232,7 @@ export function LobbyBrowserPage() {
               <span className="room-meta">
                 {room.playerCount}/{room.maxPlayers} players &middot; {room.state} &middot;{" "}
                 {room.rounds} {room.rounds === 1 ? "round" : "rounds"} &middot;{" "}
+                {room.drawingSeconds}s to draw &middot;{" "}
                 {room.customWordCount > 0
                   ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " + default"}`
                   : "default words"}

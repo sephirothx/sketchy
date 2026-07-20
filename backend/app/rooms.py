@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
-from app.game import Game
+from app.game import DRAWING_SECONDS, Game
 from app.words import WORDS
 
 
@@ -35,6 +35,7 @@ class Room:
     rounds: int
     custom_words: list[str] = field(default_factory=list)
     custom_words_only: bool = False
+    drawing_seconds: int = DRAWING_SECONDS
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
@@ -72,6 +73,7 @@ class Room:
             "rounds": self.rounds,
             "customWordCount": len(self.custom_words),
             "customWordsOnly": self.custom_words_only,
+            "drawingSeconds": self.drawing_seconds,
             "state": self.state,
         }
 
@@ -85,6 +87,7 @@ class Room:
             "rounds": self.rounds,
             "customWordCount": len(self.custom_words),
             "customWordsOnly": self.custom_words_only,
+            "drawingSeconds": self.drawing_seconds,
             "state": self.state,
             "players": [
                 {
@@ -111,6 +114,7 @@ class RoomManager:
         rounds: int = 3,
         custom_words: list[str] | None = None,
         custom_words_only: bool = False,
+        drawing_seconds: int = DRAWING_SECONDS,
     ) -> Room:
         room_id = str(uuid.uuid4())
         room = Room(
@@ -122,6 +126,7 @@ class RoomManager:
             rounds=rounds,
             custom_words=custom_words or [],
             custom_words_only=custom_words_only,
+            drawing_seconds=drawing_seconds,
         )
         self.rooms[room_id] = room
         return room

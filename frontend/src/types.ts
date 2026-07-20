@@ -16,6 +16,7 @@ export interface RoomSummary {
   rounds: number;
   customWordCount: number;
   customWordsOnly: boolean;
+  drawingSeconds: number;
   state: "waiting" | "playing";
 }
 
@@ -28,6 +29,7 @@ export interface RoomStatePayload {
   rounds: number;
   customWordCount: number;
   customWordsOnly: boolean;
+  drawingSeconds: number;
   state: "waiting" | "playing";
   players: PlayerInfo[];
 }

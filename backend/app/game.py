@@ -40,6 +40,7 @@ class Game:
     phase_deadline: float | None = None
     used_words: set[str] = field(default_factory=set)
     word_pool: list[str] | None = None
+    drawing_seconds: float = DRAWING_SECONDS
 
     @property
     def total_turns(self) -> int:
@@ -113,7 +114,7 @@ class Game:
         if normalized_guess != normalized_word:
             return False, 0
         self.correct_guessers.add(token)
-        remaining_ratio = self.remaining_seconds() / DRAWING_SECONDS
+        remaining_ratio = self.remaining_seconds() / self.drawing_seconds
         points = max(MIN_GUESS_POINTS, round(MAX_GUESS_POINTS * remaining_ratio))
         self.guess_points[token] = points
         return True, points

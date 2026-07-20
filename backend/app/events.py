@@ -122,7 +122,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     async def _begin_drawing(room: Room) -> None:
         game = room.game
         assert game is not None
-        game.set_phase_deadline(DRAWING_SECONDS)
+        game.set_phase_deadline(game.drawing_seconds)
         drawer = room.players.get(game.current_drawer)
         if drawer and drawer.sid:
             await sio.emit("you_are_drawing", {"word": game.word}, to=drawer.sid)
@@ -133,11 +133,11 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 "maskedWord": game.masked_word(),
                 "roundNumber": game.round_number,
                 "totalRounds": game.rounds_total,
-                "seconds": DRAWING_SECONDS,
+                "seconds": game.drawing_seconds,
             },
             room=room.id,
         )
-        schedule_phase_timer(room, DRAWING_SECONDS)
+        schedule_phase_timer(room, game.drawing_seconds)
 
     async def _end_round(room: Room) -> None:
         game = room.game
@@ -271,6 +271,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         is_public = bool(data.get("isPublic", True))
         max_players = _clamp(int(data.get("maxPlayers", 8) or 8), 2, 12)
         rounds = _clamp(int(data.get("rounds", 3) or 3), 1, 10)
+        drawing_seconds = _clamp(int(data.get("drawingSeconds", DRAWING_SECONDS) or DRAWING_SECONDS), 15, 240)
         custom_words = parse_custom_word_list(str(data.get("customWords", "") or ""))
         custom_words_only = bool(data.get("customWordsOnly", False))
 
@@ -281,6 +282,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             rounds=rounds,
             custom_words=custom_words,
             custom_words_only=custom_words_only,
+            drawing_seconds=drawing_seconds,
         )
         player = room_manager.add_player(room, nickname)
         await _join_socket_room(sid, room, player, is_reconnect=False)
@@ -365,6 +367,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             turn_order=[p.token for p in room.connected_players()],
             rounds_total=room.rounds,
             word_pool=room.effective_word_pool(),
+            drawing_seconds=room.drawing_seconds,
         )
         await _emit_room_state(room)
         await sio.emit("game_started", {}, room=room.id)
