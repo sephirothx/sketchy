@@ -1,0 +1,419 @@
+/* Layout shells */
+.lobby-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.lobby-page h1 {
+  margin-bottom: 0;
+}
+
+.subtitle {
+  color: #6b6f76;
+  margin-top: 4px;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #dfe1e6;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.panel input[type="text"],
+.panel input[type="number"],
+.panel input:not([type]) {
+  font-weight: normal;
+  padding: 8px 10px;
+  border: 1px solid #c7cad1;
+  border-radius: 6px;
+  font-size: 15px;
+}
+
+.checkbox-label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.lobby-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .lobby-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel button {
+  background: #4c6ef5;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.error-banner {
+  background: #fff0f0;
+  border: 1px solid #f5b5b5;
+  color: #a02020;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.room-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.room-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.room-row:last-child {
+  border-bottom: none;
+}
+
+.room-name {
+  font-weight: 600;
+  flex: 1;
+}
+
+.room-meta {
+  color: #6b6f76;
+  font-size: 13px;
+}
+
+.room-row button {
+  background: #4c6ef5;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+
+/* Game room */
+.game-room {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.game-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.game-header h2 {
+  margin: 0;
+}
+
+.room-code {
+  color: #6b6f76;
+  font-size: 14px;
+}
+
+.game-header button {
+  margin-left: auto;
+  background: #e64980;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+}
+
+.waiting-panel {
+  text-align: center;
+  padding: 40px 0;
+}
+
+.waiting-panel button {
+  background: #40c057;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.game-end-panel {
+  max-width: 320px;
+  margin: 24px auto 0;
+  background: #fff;
+  border: 1px solid #dfe1e6;
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.game-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr 260px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sidebar-left,
+.sidebar-right {
+  background: #fff;
+  border: 1px solid #dfe1e6;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.player-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.player-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 4px;
+  border-radius: 6px;
+}
+
+.player-row.disconnected {
+  opacity: 0.5;
+}
+
+.player-score {
+  font-weight: 700;
+}
+
+.canvas-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.round-info {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-weight: 600;
+}
+
+.timer {
+  font-variant-numeric: tabular-nums;
+}
+
+.timer.urgent {
+  color: #e03131;
+}
+
+.word-display {
+  min-height: 32px;
+  font-size: 24px;
+  letter-spacing: 6px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.word-display.choosing {
+  letter-spacing: normal;
+  font-size: 16px;
+}
+
+.word-choices {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.word-choices button {
+  background: #4c6ef5;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.drawing-canvas {
+  width: 100%;
+  max-width: 800px;
+  aspect-ratio: 4 / 3;
+  background: white;
+  border: 1px solid #c7cad1;
+  border-radius: 8px;
+  touch-action: none;
+}
+
+.drawing-canvas.drawable {
+  cursor: crosshair;
+}
+
+.canvas-stack {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+}
+
+.canvas-stack .preview-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 4 / 3;
+  pointer-events: none;
+}
+
+.round-result {
+  font-style: italic;
+  color: #6b6f76;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.toolbar-tools,
+.toolbar-colors,
+.toolbar-widths {
+  display: flex;
+  gap: 6px;
+}
+
+.tool-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid #c7cad1;
+  background: white;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tool-button.selected {
+  border-color: #4c6ef5;
+  background: #edf1ff;
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #dfe1e6;
+  padding: 0;
+}
+
+.color-swatch.selected {
+  border-color: #4c6ef5;
+}
+
+.width-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #dfe1e6;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.width-swatch.selected {
+  border-color: #4c6ef5;
+}
+
+.width-dot {
+  border-radius: 50%;
+  background: #1c1d21;
+  display: inline-block;
+}
+
+.clear-button {
+  background: #f1f3f5;
+  border: 1px solid #c7cad1;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/* Guess / chat */
+.guess-chat {
+  display: flex;
+  flex-direction: column;
+  height: 480px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  padding-right: 4px;
+}
+
+.chat-message.system {
+  color: #6b6f76;
+  font-style: italic;
+}
+
+.chat-message.correct {
+  color: #2f9e44;
+  font-weight: 600;
+}
+
+.chat-input {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #c7cad1;
+  border-radius: 6px;
+}
+
+.chat-input button {
+  background: #4c6ef5;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+}
