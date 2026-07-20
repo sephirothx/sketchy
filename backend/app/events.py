@@ -14,6 +14,7 @@ from app.game import (
     Phase,
 )
 from app.rooms import Player, Room, RoomFullError, RoomManager
+from app.words import parse_custom_word_list
 
 logger = logging.getLogger("sketchy.events")
 
@@ -270,9 +271,16 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         is_public = bool(data.get("isPublic", True))
         max_players = _clamp(int(data.get("maxPlayers", 8) or 8), 2, 12)
         rounds = _clamp(int(data.get("rounds", 3) or 3), 1, 10)
+        custom_words = parse_custom_word_list(str(data.get("customWords", "") or ""))
+        custom_words_only = bool(data.get("customWordsOnly", False))
 
         room = room_manager.create_room(
-            name=name, is_public=is_public, max_players=max_players, rounds=rounds
+            name=name,
+            is_public=is_public,
+            max_players=max_players,
+            rounds=rounds,
+            custom_words=custom_words,
+            custom_words_only=custom_words_only,
         )
         player = room_manager.add_player(room, nickname)
         await _join_socket_room(sid, room, player, is_reconnect=False)
@@ -354,7 +362,9 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             p.score = 0
         room.state = "playing"
         room.game = Game(
-            turn_order=[p.token for p in room.connected_players()], rounds_total=room.rounds
+            turn_order=[p.token for p in room.connected_players()],
+            rounds_total=room.rounds,
+            word_pool=room.effective_word_pool(),
         )
         await _emit_room_state(room)
         await sio.emit("game_started", {}, room=room.id)

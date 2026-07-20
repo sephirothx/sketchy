@@ -13,6 +13,9 @@ export interface RoomSummary {
   isPublic: boolean;
   playerCount: number;
   maxPlayers: number;
+  rounds: number;
+  customWordCount: number;
+  customWordsOnly: boolean;
   state: "waiting" | "playing";
 }
 
@@ -23,6 +26,8 @@ export interface RoomStatePayload {
   isPublic: boolean;
   maxPlayers: number;
   rounds: number;
+  customWordCount: number;
+  customWordsOnly: boolean;
   state: "waiting" | "playing";
   players: PlayerInfo[];
 }

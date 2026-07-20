@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from app.game import Game
+from app.words import WORDS
 
 
 class RoomFullError(Exception):
@@ -32,6 +33,8 @@ class Room:
     is_public: bool
     max_players: int
     rounds: int
+    custom_words: list[str] = field(default_factory=list)
+    custom_words_only: bool = False
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
@@ -42,6 +45,22 @@ class Room:
     def connected_players(self) -> list[Player]:
         return [p for p in self.players.values() if p.connected]
 
+    def effective_word_pool(self) -> list[str] | None:
+        """Return the word pool a Game should draw from, or None for the default list.
+
+        If no custom words were provided, returns None (Game falls back to the
+        built-in WORDS). If `custom_words_only` is set, returns just the custom
+        words. Otherwise, merges custom words with the default list (custom
+        words first, deduped case-insensitively) so they extend the variety
+        rather than replacing it.
+        """
+        if not self.custom_words:
+            return None
+        if self.custom_words_only:
+            return self.custom_words
+        seen = {w.lower() for w in self.custom_words}
+        return self.custom_words + [w for w in WORDS if w.lower() not in seen]
+
     def to_public_summary(self) -> dict:
         return {
             "id": self.id,
@@ -50,6 +69,9 @@ class Room:
             "isPublic": self.is_public,
             "playerCount": len(self.connected_players()),
             "maxPlayers": self.max_players,
+            "rounds": self.rounds,
+            "customWordCount": len(self.custom_words),
+            "customWordsOnly": self.custom_words_only,
             "state": self.state,
         }
 
@@ -61,6 +83,8 @@ class Room:
             "isPublic": self.is_public,
             "maxPlayers": self.max_players,
             "rounds": self.rounds,
+            "customWordCount": len(self.custom_words),
+            "customWordsOnly": self.custom_words_only,
             "state": self.state,
             "players": [
                 {
@@ -85,6 +109,8 @@ class RoomManager:
         is_public: bool,
         max_players: int = 8,
         rounds: int = 3,
+        custom_words: list[str] | None = None,
+        custom_words_only: bool = False,
     ) -> Room:
         room_id = str(uuid.uuid4())
         room = Room(
@@ -94,6 +120,8 @@ class RoomManager:
             is_public=is_public,
             max_players=max_players,
             rounds=rounds,
+            custom_words=custom_words or [],
+            custom_words_only=custom_words_only,
         )
         self.rooms[room_id] = room
         return room
