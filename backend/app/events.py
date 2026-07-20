@@ -40,11 +40,26 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         cancel_phase_timer(room.id)
 
         async def _runner() -> None:
+            task = asyncio.current_task()
             try:
                 await asyncio.sleep(seconds)
+            except asyncio.CancelledError:
+                return
+            # Deregister ourselves before running the timeout callback. The
+            # callback (e.g. _end_round) may itself call cancel_phase_timer,
+            # and without this, that call would cancel *this* still-running
+            # task (since we're still stored in _phase_timers), which raises
+            # CancelledError into us at the next await and prevents the
+            # follow-up timer (e.g. for ROUND_END) from ever being scheduled
+            # - silently stalling the game.
+            if _phase_timers.get(room.id) is task:
+                del _phase_timers[room.id]
+            try:
                 await _on_phase_timeout(room)
             except asyncio.CancelledError:
                 pass
+            except Exception:
+                logger.exception("Unhandled error in phase timeout for room %s", room.id)
 
         _phase_timers[room.id] = asyncio.create_task(_runner())
 
