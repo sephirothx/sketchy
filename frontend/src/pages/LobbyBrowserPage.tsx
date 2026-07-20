@@ -18,6 +18,8 @@ export function LobbyBrowserPage() {
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
+  const [customWords, setCustomWords] = useState("");
+  const [customWordsOnly, setCustomWordsOnly] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,6 +66,8 @@ export function LobbyBrowserPage() {
       isPublic,
       maxPlayers,
       rounds,
+      customWords: customWords.trim(),
+      customWordsOnly,
     });
     setBusy(false);
     if (res.ok && res.roomId && res.code && res.token) {
@@ -163,6 +167,27 @@ export function LobbyBrowserPage() {
               onChange={(e) => setRounds(Number(e.target.value))}
             />
           </label>
+          <label>
+            Custom words (optional)
+            <input
+              value={customWords}
+              onChange={(e) => setCustomWords(e.target.value)}
+              placeholder="e.g. cat, red panda, ice cream truck"
+              maxLength={400000}
+            />
+          </label>
+          <p className="field-hint">
+            Comma-separated words or expressions, up to 32 characters each.
+          </p>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={customWordsOnly}
+              disabled={!customWords.trim()}
+              onChange={(e) => setCustomWordsOnly(e.target.checked)}
+            />
+            Only use custom words (skip the default word list)
+          </label>
           <button disabled={busy} onClick={handleCreateRoom}>
             Create room
           </button>
@@ -193,7 +218,11 @@ export function LobbyBrowserPage() {
             <li key={room.id} className="room-row">
               <span className="room-name">{room.name}</span>
               <span className="room-meta">
-                {room.playerCount}/{room.maxPlayers} players &middot; {room.state}
+                {room.playerCount}/{room.maxPlayers} players &middot; {room.state} &middot;{" "}
+                {room.rounds} {room.rounds === 1 ? "round" : "rounds"} &middot;{" "}
+                {room.customWordCount > 0
+                  ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " + default"}`
+                  : "default words"}
               </span>
               <button
                 disabled={busy || room.state !== "waiting" || room.playerCount >= room.maxPlayers}

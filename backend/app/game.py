@@ -39,6 +39,7 @@ class Game:
     strokes: list[dict] = field(default_factory=list)
     phase_deadline: float | None = None
     used_words: set[str] = field(default_factory=set)
+    word_pool: list[str] | None = None
 
     @property
     def total_turns(self) -> int:
@@ -66,7 +67,7 @@ class Game:
         self.turn_index += 1
         self.current_drawer = self.turn_order[self.turn_index % len(self.turn_order)]
         self.word = None
-        self.word_choices = random_word_choices(3, exclude=self.used_words)
+        self.word_choices = random_word_choices(3, exclude=self.used_words, pool=self.word_pool)
         self.correct_guessers = set()
         self.guess_points = {}
         self.strokes = []
@@ -91,9 +92,11 @@ class Game:
         self.phase = Phase.DRAWING
 
     def masked_word(self) -> str:
+        """Blank out letters but preserve spaces, so multi-word expressions
+        (e.g. "red panda") visibly show their word boundaries to guessers."""
         if not self.word:
             return ""
-        return " ".join("_" for _ in self.word)
+        return " ".join("_" if ch != " " else " " for ch in self.word)
 
     def record_stroke(self, event: str, payload: dict) -> None:
         self.strokes.append({"event": event, "payload": payload})
@@ -103,7 +106,11 @@ class Game:
             return False, 0
         if token == self.current_drawer or token in self.correct_guessers:
             return False, 0
-        if text.strip().lower() != self.word.lower():
+        # Normalize whitespace so multi-word expressions match regardless of
+        # extra/irregular spacing in the guesser's input (e.g. "red  panda").
+        normalized_guess = " ".join(text.split()).lower()
+        normalized_word = " ".join(self.word.split()).lower()
+        if normalized_guess != normalized_word:
             return False, 0
         self.correct_guessers.add(token)
         remaining_ratio = self.remaining_seconds() / DRAWING_SECONDS
