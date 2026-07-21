@@ -162,6 +162,25 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         drawer = room.players.get(game.current_drawer)
         if drawer:
             drawer.score += drawer_bonus
+
+        # Build a per-player score breakdown for this round: how many points
+        # each player just earned (guess points, or the drawer's bonus), plus
+        # their leaderboard rank before/after those points were applied, so
+        # the client can show a "you moved up 2 places" style overtake.
+        players = room.player_list()
+        deltas = {
+            p.token: game.guess_points.get(p.token, 0)
+            + (drawer_bonus if p.token == game.current_drawer else 0)
+            for p in players
+        }
+        previous_scores = {p.token: p.score - deltas[p.token] for p in players}
+        previous_ranks = {
+            p.token: rank
+            for rank, p in enumerate(sorted(players, key=lambda p: -previous_scores[p.token]), start=1)
+        }
+        new_ranked = sorted(players, key=lambda p: -p.score)
+        new_ranks = {p.token: rank for rank, p in enumerate(new_ranked, start=1)}
+
         await sio.emit(
             "round_ended",
             {
@@ -169,8 +188,15 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 "drawerToken": game.current_drawer,
                 "drawerBonus": drawer_bonus,
                 "scores": [
-                    {"token": p.token, "nickname": p.nickname, "score": p.score}
-                    for p in room.player_list()
+                    {
+                        "token": p.token,
+                        "nickname": p.nickname,
+                        "score": p.score,
+                        "delta": deltas[p.token],
+                        "previousRank": previous_ranks[p.token],
+                        "newRank": new_ranks[p.token],
+                    }
+                    for p in new_ranked
                 ],
             },
             room=room.id,

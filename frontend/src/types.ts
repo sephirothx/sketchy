@@ -50,11 +50,17 @@ export interface ScoreEntry {
   score: number;
 }
 
+export interface RoundScoreEntry extends ScoreEntry {
+  delta: number;
+  previousRank: number;
+  newRank: number;
+}
+
 export interface RoundEndedPayload {
   word: string;
   drawerToken: string;
   drawerBonus: number;
-  scores: ScoreEntry[];
+  scores: RoundScoreEntry[];
 }
 
 export interface GameEndedPayload {
