@@ -85,6 +85,14 @@ export function GameRoomPage() {
     (phase === "drawing" || phase === "choosing_word") && drawerToken === token;
   const canDrawNow = phase === "drawing" && drawerToken === token;
 
+  // Reset to the default color whenever a new drawing turn starts for this
+  // player, instead of carrying over whatever color was last picked.
+  useEffect(() => {
+    if (amDrawer) {
+      setColor("#000000");
+    }
+  }, [amDrawer]);
+
   if (joinError) {
     return (
       <div className="lobby-page">
