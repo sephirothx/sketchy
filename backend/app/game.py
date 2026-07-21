@@ -4,6 +4,8 @@ Pure state/logic only (no socket I/O) so it can be unit tested directly.
 """
 from __future__ import annotations
 
+import random
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -17,6 +19,15 @@ ROUND_END_SECONDS = 5
 DRAWER_POINTS_PER_GUESSER = 10
 MIN_GUESS_POINTS = 10
 MAX_GUESS_POINTS = 100
+
+# Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter):
+# - "checkpoints" reveals letters to everyone at fixed points during drawing.
+# - "purchase" lets each guesser spend points to reveal a letter of their choice,
+#   visible only to them.
+HINT_MODES = ("none", "checkpoints", "purchase")
+# Each hint a player buys in a turn costs more than the last: 5, 10, 15, ...
+HINT_BASE_COST = 5
+MIN_HIDDEN_LETTERS = 2
 
 
 class Phase(str, Enum):
@@ -42,6 +53,10 @@ class Game:
     used_words: set[str] = field(default_factory=set)
     word_pool: list[str] | None = None
     drawing_seconds: float = DRAWING_SECONDS
+    hint_mode: str = "none"
+    letter_positions: list[int] = field(default_factory=list)
+    revealed_positions: set[int] = field(default_factory=set)
+    purchased_hints: dict[str, set[int]] = field(default_factory=dict)
 
     @property
     def total_turns(self) -> int:
@@ -73,6 +88,9 @@ class Game:
         self.correct_guessers = set()
         self.guess_points = {}
         self.strokes = []
+        self.letter_positions = []
+        self.revealed_positions = set()
+        self.purchased_hints = {}
         self.phase = Phase.CHOOSING_WORD
         return self.word_choices
 
@@ -91,9 +109,10 @@ class Game:
     def _set_word(self, word: str) -> None:
         self.word = word
         self.used_words.add(word)
+        self.letter_positions = [i for i, ch in enumerate(word) if ch.isalnum()]
         self.phase = Phase.DRAWING
 
-    def masked_word(self) -> str:
+    def masked_word(self, token: str | None = None) -> str:
         """Blank out each word's letters/digits into underscores while keeping
         spaces and other special characters (hyphens, apostrophes, etc.)
         visible, so multi-word expressions (e.g. "red panda") and punctuated
@@ -102,19 +121,81 @@ class Game:
         characters act as boundaries here too, so "spider-man" reports "6 3"
         (one count for "spider", one for "man") - and the blanks themselves
         stay tightly packed with a clear gap between words.
+
+        Letters revealed via checkpoint hints (`revealed_positions`) are shown
+        to everyone. Letters a specific player bought (`purchased_hints`) are
+        only shown when `masked_word` is called with that player's token -
+        every other caller (including token=None) never sees them.
         """
         if not self.word:
             return ""
-        tokens = self.word.split()
-        masked_words = [
-            "".join("_" if ch.isalnum() else ch for ch in token) for token in tokens
-        ]
+        revealed_slots = self.revealed_positions | self.purchased_hints.get(token, set())
+        revealed_indices = {
+            self.letter_positions[slot] for slot in revealed_slots if slot < len(self.letter_positions)
+        }
+        masked_words = []
+        for match in re.finditer(r"\S+", self.word):
+            start = match.start()
+            masked_words.append(
+                "".join(
+                    ch if not ch.isalnum() or (start + i) in revealed_indices else "_"
+                    for i, ch in enumerate(match.group())
+                )
+            )
         letter_counts = [
             str(len(list(run)))
             for is_alnum, run in groupby(self.word, key=str.isalnum)
             if is_alnum
         ]
         return "  ".join(masked_words) + "  " + " ".join(letter_counts)
+
+    def reveal_hint_letter(self) -> bool:
+        """Reveal one more random letter to every player (hint_mode="checkpoints").
+
+        Keeps at least MIN_HIDDEN_LETTERS letters hidden so the word never
+        becomes trivially guessable. Returns False if there was nothing left
+        to safely reveal.
+        """
+        if not self.word:
+            return False
+        available = [
+            slot for slot in range(len(self.letter_positions)) if slot not in self.revealed_positions
+        ]
+        if len(available) <= MIN_HIDDEN_LETTERS:
+            return False
+        self.revealed_positions.add(random.choice(available))
+        return True
+
+    def hint_cost(self, token: str) -> int:
+        """Cost in points of the next hint `token` would buy this turn.
+
+        Scales up with each hint the player already bought this turn (5,
+        10, 15, ...), so hints stay useful early but can't be spammed cheaply.
+        """
+        already_bought = len(self.purchased_hints.get(token, set()))
+        return HINT_BASE_COST * (already_bought + 1)
+
+    def buy_hint_letter(self, token: str, slot: int) -> bool:
+        """Reveal a specific letter slot for `token` only (hint_mode="purchase").
+
+        The caller is responsible for checking/deducting points - this only
+        validates and records which slot was unlocked. Returns False if the
+        slot is invalid, already revealed (publicly or to this player), or
+        the token isn't an eligible guesser right now.
+        """
+        if self.hint_mode != "purchase" or self.phase != Phase.DRAWING or not self.word:
+            return False
+        if token == self.current_drawer or token in self.correct_guessers:
+            return False
+        if slot < 0 or slot >= len(self.letter_positions):
+            return False
+        if slot in self.revealed_positions:
+            return False
+        purchased = self.purchased_hints.setdefault(token, set())
+        if slot in purchased:
+            return False
+        purchased.add(slot)
+        return True
 
     def record_stroke(self, event: str, payload: dict) -> None:
         self.strokes.append({"event": event, "payload": payload})

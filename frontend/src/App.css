@@ -265,6 +265,42 @@
   letter-spacing: 3px;
 }
 
+.hint-blank {
+  font: inherit;
+  letter-spacing: inherit;
+  color: #4c6ef5;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.hint-blank:hover:not(:disabled) {
+  color: #364fc7;
+}
+
+.hint-blank:disabled {
+  color: inherit;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.hint-price {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4c6ef5;
+}
+
+.hint-price strong {
+  font-size: 14px;
+}
+
+.hint-price-warning {
+  font-weight: 600;
+  color: #e03131;
+}
+
 .word-lengths {
   display: inline-flex;
   gap: 6px;

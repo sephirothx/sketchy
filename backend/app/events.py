@@ -9,11 +9,12 @@ import socketio
 from app.game import (
     DRAWING_SECONDS,
     CHOOSE_WORD_SECONDS,
+    HINT_MODES,
     ROUND_END_SECONDS,
     Game,
     Phase,
 )
-from app.rooms import Player, Room, RoomFullError, RoomManager
+from app.rooms import Player, Room, RoomFullError, RoomManager, STARTING_SCORE
 from app.words import parse_custom_word_list
 
 logger = logging.getLogger("sketchy.events")
@@ -22,6 +23,9 @@ RECONNECT_GRACE_SECONDS = 30
 
 # Per-room asyncio task driving the current phase's timeout (choosing/drawing/round-end).
 _phase_timers: dict[str, asyncio.Task] = {}
+# Per-room list of asyncio tasks that reveal checkpoint hint letters during drawing.
+# Kept separate from _phase_timers so canceling one never cancels the other.
+_hint_timers: dict[str, list[asyncio.Task]] = {}
 # Per-player-token asyncio task that evicts a disconnected player after a grace period.
 _disconnect_timers: dict[str, asyncio.Task] = {}
 
@@ -35,7 +39,6 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         task = _phase_timers.pop(room_id, None)
         if task and not task.done():
             task.cancel()
-
     def schedule_phase_timer(room: Room, seconds: float) -> None:
         cancel_phase_timer(room.id)
 
@@ -63,6 +66,38 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
         _phase_timers[room.id] = asyncio.create_task(_runner())
 
+    def cancel_hint_timers(room_id: str) -> None:
+        tasks = _hint_timers.pop(room_id, [])
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+
+    def schedule_hint_checkpoints(room: Room) -> None:
+        cancel_hint_timers(room.id)
+        game = room.game
+        if not game or game.hint_mode != "checkpoints":
+            return
+
+        # Reveal one extra letter to everyone when the drawing phase is 50%
+        # and 25% of the way through (i.e. half, then a quarter, of the total
+        # time remains).
+        for remaining_fraction in (0.5, 0.25):
+            delay = game.drawing_seconds * (1 - remaining_fraction)
+
+            async def _runner(delay=delay, game=game) -> None:
+                try:
+                    await asyncio.sleep(delay)
+                except asyncio.CancelledError:
+                    return
+                if room.game is not game or game.phase != Phase.DRAWING:
+                    return
+                if game.reveal_hint_letter():
+                    await sio.emit(
+                        "hint_revealed", {"maskedWord": game.masked_word()}, room=room.id
+                    )
+
+            _hint_timers.setdefault(room.id, []).append(asyncio.create_task(_runner()))
+
     def cancel_disconnect_timer(token: str) -> None:
         task = _disconnect_timers.pop(token, None)
         if task and not task.done():
@@ -87,7 +122,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if room.game and room.game.phase in (Phase.CHOOSING_WORD, Phase.DRAWING):
             await sio.emit(
                 "sync_game",
-                _turn_payload(room.game),
+                _turn_payload(room.game, player.token),
                 to=sid,
             )
             await sio.emit("sync_strokes", {"strokes": room.game.strokes}, to=sid)
@@ -98,14 +133,15 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                     to=sid,
                 )
 
-    def _turn_payload(game: Game) -> dict:
+    def _turn_payload(game: Game, token: str | None = None) -> dict:
         return {
             "phase": game.phase.value,
             "drawerToken": game.current_drawer,
-            "maskedWord": game.masked_word(),
+            "maskedWord": game.masked_word(token),
             "roundNumber": game.round_number,
             "totalRounds": game.rounds_total,
             "remainingSeconds": round(game.remaining_seconds()),
+            "hintCost": game.hint_cost(token) if token else None,
         }
 
     async def _start_turn(room: Room) -> None:
@@ -141,23 +177,31 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         drawer = room.players.get(game.current_drawer)
         if drawer and drawer.sid:
             await sio.emit("you_are_drawing", {"word": game.word}, to=drawer.sid)
-        await sio.emit(
-            "turn_started",
-            {
-                "drawerToken": game.current_drawer,
-                "maskedWord": game.masked_word(),
-                "roundNumber": game.round_number,
-                "totalRounds": game.rounds_total,
-                "seconds": game.drawing_seconds,
-            },
-            room=room.id,
-        )
+        # Sent per-player (rather than broadcast) because in "purchase" hint
+        # mode each guesser may have their own set of bought letters revealed.
+        for p in room.player_list():
+            if not p.sid:
+                continue
+            await sio.emit(
+                "turn_started",
+                {
+                    "drawerToken": game.current_drawer,
+                    "maskedWord": game.masked_word(p.token),
+                    "roundNumber": game.round_number,
+                    "totalRounds": game.rounds_total,
+                    "seconds": game.drawing_seconds,
+                    "hintCost": game.hint_cost(p.token),
+                },
+                to=p.sid,
+            )
         schedule_phase_timer(room, game.drawing_seconds)
+        schedule_hint_checkpoints(room)
 
     async def _end_round(room: Room) -> None:
         game = room.game
         assert game is not None
         cancel_phase_timer(room.id)
+        cancel_hint_timers(room.id)
         drawer_bonus = game.end_round()
         drawer = room.players.get(game.current_drawer)
         if drawer:
@@ -315,6 +359,9 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         drawing_seconds = _clamp(int(data.get("drawingSeconds", DRAWING_SECONDS) or DRAWING_SECONDS), 15, 240)
         custom_words = parse_custom_word_list(str(data.get("customWords", "") or ""))
         custom_words_only = bool(data.get("customWordsOnly", False))
+        hint_mode = str(data.get("hintMode", "none") or "none")
+        if hint_mode not in HINT_MODES:
+            hint_mode = "none"
 
         room = room_manager.create_room(
             name=name,
@@ -324,6 +371,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             custom_words=custom_words,
             custom_words_only=custom_words_only,
             drawing_seconds=drawing_seconds,
+            hint_mode=hint_mode,
         )
         player = room_manager.add_player(room, nickname)
         await _join_socket_room(sid, room, player, is_reconnect=False)
@@ -402,13 +450,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return {"ok": False, "error": "Game already in progress"}
 
         for p in room.player_list():
-            p.score = 0
+            p.score = STARTING_SCORE
         room.state = "playing"
         room.game = Game(
             turn_order=[p.token for p in room.connected_players()],
             rounds_total=room.rounds,
             word_pool=room.effective_word_pool(),
             drawing_seconds=room.drawing_seconds,
+            hint_mode=room.hint_mode,
         )
         await _emit_room_state(room)
         await sio.emit("game_started", {}, room=room.id)
@@ -538,3 +587,34 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         guesser_count = len([p for p in room.connected_players() if p.token != game.current_drawer])
         if game.all_guessed(guesser_count):
             await _end_round(room)
+
+    @sio.event
+    async def buy_hint(sid, data):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        if not room or not room.game:
+            return {"ok": False, "error": "Not in an active game"}
+        game = room.game
+        if game.hint_mode != "purchase":
+            return {"ok": False, "error": "Hint purchasing is disabled in this room"}
+        player = room.players.get(session.get("token"))
+        if not player:
+            return {"ok": False, "error": "Not in this room"}
+        try:
+            slot = int((data or {}).get("slot"))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "Invalid hint"}
+        cost = game.hint_cost(player.token)
+        if player.score < cost:
+            return {"ok": False, "error": "Not enough points"}
+        if not game.buy_hint_letter(player.token, slot):
+            return {"ok": False, "error": "Hint unavailable"}
+
+        player.score -= cost
+        await sio.emit(
+            "hint_revealed",
+            {"maskedWord": game.masked_word(player.token), "hintCost": game.hint_cost(player.token)},
+            to=sid,
+        )
+        await _emit_room_state(room)
+        return {"ok": True, "cost": cost}
