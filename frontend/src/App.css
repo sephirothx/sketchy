@@ -339,10 +339,16 @@
 }
 
 .toolbar-tools,
-.toolbar-colors,
 .toolbar-widths {
   display: flex;
   gap: 6px;
+}
+
+.toolbar-colors {
+  display: grid;
+  grid-template-rows: repeat(2, 1fr);
+  grid-auto-flow: column;
+  gap: 2px;
 }
 
 .tool-button {
@@ -363,15 +369,38 @@
 }
 
 .color-swatch {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
   border: 2px solid #dfe1e6;
   padding: 0;
 }
 
 .color-swatch.selected {
   border-color: #4c6ef5;
+}
+
+.color-swatch-custom {
+  grid-row: span 2;
+  width: 20px;
+  height: 42px;
+  border-radius: 4px;
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  position: relative;
+  overflow: hidden;
+  display: block;
+  cursor: pointer;
+}
+
+.color-swatch-custom input[type="color"] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  border: none;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .width-swatch {
