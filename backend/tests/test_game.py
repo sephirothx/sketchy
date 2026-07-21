@@ -150,3 +150,48 @@ def test_all_guessed():
     for token in others:
         game.submit_guess(token, game.word)
     assert game.all_guessed(len(others)) is True
+
+
+def test_undo_last_stroke_with_no_strokes():
+    game = make_game()
+    assert game.undo_last_stroke() is False
+
+
+def test_undo_last_stroke_removes_entire_pen_stroke():
+    game = make_game()
+    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_move", {"points": [{"x": 0.1, "y": 0.1}]})
+    game.record_stroke("draw_end", {})
+    assert game.undo_last_stroke() is True
+    assert game.strokes == []
+
+
+def test_undo_last_stroke_only_removes_most_recent_stroke():
+    game = make_game()
+    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_end", {})
+    game.record_stroke("draw_start", {"x": 1, "y": 1})
+    game.record_stroke("draw_move", {"points": [{"x": 0.2, "y": 0.2}]})
+    game.record_stroke("draw_end", {})
+    assert game.undo_last_stroke() is True
+    assert [s["event"] for s in game.strokes] == ["draw_start", "draw_end"]
+
+
+def test_undo_last_stroke_removes_single_shape_event():
+    game = make_game()
+    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_end", {})
+    game.record_stroke("draw_shape", {"shape": "rectangle"})
+    assert game.undo_last_stroke() is True
+    assert [s["event"] for s in game.strokes] == ["draw_start", "draw_end"]
+
+
+def test_undo_last_stroke_repeatedly_empties_history():
+    game = make_game()
+    game.record_stroke("draw_shape", {"shape": "ellipse"})
+    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_end", {})
+    assert game.undo_last_stroke() is True
+    assert game.undo_last_stroke() is True
+    assert game.strokes == []
+    assert game.undo_last_stroke() is False

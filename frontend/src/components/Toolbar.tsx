@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { socket } from "../lib/socket";
 import type { DrawTool } from "../types";
 
@@ -40,6 +41,21 @@ export function Toolbar({
   tool,
   onToolChange,
 }: ToolbarProps) {
+  // Ctrl+Z / Cmd+Z triggers undo, mirroring the toolbar button. This effect
+  // is only mounted while the toolbar itself is (i.e. while it's this
+  // player's turn to draw), so it can never fire for guessers.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== "z") return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      e.preventDefault();
+      socket.emit("undo_stroke", {});
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <div className="toolbar">
       <div className="toolbar-tools">
@@ -77,7 +93,14 @@ export function Toolbar({
           </button>
         ))}
       </div>
-      <button className="clear-button" onClick={() => socket.emit("clear_canvas", {})}>
+      <button
+        className="toolbar-action-button"
+        onClick={() => socket.emit("undo_stroke", {})}
+        title="Undo (Ctrl+Z)"
+      >
+        Undo
+      </button>
+      <button className="toolbar-action-button" onClick={() => socket.emit("clear_canvas", {})}>
         Clear
       </button>
     </div>

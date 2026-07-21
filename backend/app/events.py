@@ -473,6 +473,22 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         # in the room including the sender.
         await sio.emit("clear_canvas", {}, room=room.id)
 
+    @sio.event
+    async def undo_stroke(sid, data=None):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        if not room or not room.game:
+            return
+        token = session.get("token")
+        if token != room.game.current_drawer:
+            return
+        if room.game.undo_last_stroke():
+            # The canvas is a raster, so the only way to "undo" a stroke for
+            # everyone (including the drawer, who already rendered it
+            # locally) is a full clear + replay of what remains - reusing
+            # the same sync_strokes event used to catch up new joiners.
+            await sio.emit("sync_strokes", {"strokes": room.game.strokes}, room=room.id)
+
     # ------------------------------------------------------------------
     # Guessing / chat
     # ------------------------------------------------------------------

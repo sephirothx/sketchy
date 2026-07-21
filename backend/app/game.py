@@ -119,6 +119,28 @@ class Game:
     def record_stroke(self, event: str, payload: dict) -> None:
         self.strokes.append({"event": event, "payload": payload})
 
+    def undo_last_stroke(self) -> bool:
+        """Remove the most recent logical stroke from the recorded history.
+
+        The canvas is a raster (not vector), so "undoing" means dropping the
+        last stroke's events from the replay log and having every client
+        clear + redraw from what remains (via a fresh sync_strokes). A
+        logical stroke is either a single draw_shape event, or a
+        draw_start/draw_move*/draw_end run - so this walks backward from the
+        end to find where that run began. Returns False if there was nothing
+        to undo.
+        """
+        if not self.strokes:
+            return False
+        if self.strokes[-1]["event"] == "draw_shape":
+            self.strokes.pop()
+            return True
+        start = len(self.strokes) - 1
+        while start >= 0 and self.strokes[start]["event"] != "draw_start":
+            start -= 1
+        self.strokes = self.strokes[:start] if start >= 0 else self.strokes[:-1]
+        return True
+
     def submit_guess(self, token: str, text: str) -> tuple[bool, int]:
         if self.phase != Phase.DRAWING or not self.word:
             return False, 0

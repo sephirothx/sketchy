@@ -395,11 +395,15 @@
   display: inline-block;
 }
 
-.clear-button {
+.toolbar-action-button {
   background: #f1f3f5;
   border: 1px solid #c7cad1;
   border-radius: 6px;
   padding: 8px 12px;
+}
+
+.toolbar-action-button:disabled {
+  opacity: 0.5;
 }
 
 /* Guess / chat */
