@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { emitWithAck, SERVER_URL } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
-import type { AckResponse, RoomSummary } from "../types";
+import type { AckResponse, HintMode, RoomSummary } from "../types";
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -21,6 +21,7 @@ export function LobbyBrowserPage() {
   const [drawingSeconds, setDrawingSeconds] = useState(80);
   const [customWords, setCustomWords] = useState("");
   const [customWordsOnly, setCustomWordsOnly] = useState(false);
+  const [hintMode, setHintMode] = useState<HintMode>("none");
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,6 +71,7 @@ export function LobbyBrowserPage() {
       drawingSeconds,
       customWords: customWords.trim(),
       customWordsOnly,
+      hintMode,
     });
     setBusy(false);
     if (res.ok && res.roomId && res.code && res.token) {
@@ -200,6 +202,14 @@ export function LobbyBrowserPage() {
             />
             Only use custom words (skip the default word list)
           </label>
+          <label>
+            Hint letters
+            <select value={hintMode} onChange={(e) => setHintMode(e.target.value as HintMode)}>
+              <option value="none">Off</option>
+              <option value="checkpoints">Timed hints, shown to everyone</option>
+              <option value="purchase">Players can buy hints with points</option>
+            </select>
+          </label>
           <button disabled={busy} onClick={handleCreateRoom}>
             Create room
           </button>
@@ -236,6 +246,12 @@ export function LobbyBrowserPage() {
                 {room.customWordCount > 0
                   ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " + default"}`
                   : "default words"}
+                {room.hintMode !== "none" && (
+                  <>
+                    {" "}
+                    &middot; {room.hintMode === "checkpoints" ? "timed hints" : "buyable hints"}
+                  </>
+                )}
               </span>
               <button
                 disabled={busy || room.state !== "waiting" || room.playerCount >= room.maxPlayers}

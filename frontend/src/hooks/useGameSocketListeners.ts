@@ -93,6 +93,7 @@ export function useGameSocketListeners() {
       roundNumber: number;
       totalRounds: number;
       seconds: number;
+      hintCost?: number | null;
     }) => {
       store.getState().startDrawing(payload);
     };
@@ -114,6 +115,10 @@ export function useGameSocketListeners() {
 
     const onYouGuessedCorrectly = (payload: { word: string }) => {
       store.getState().setGuessedWord(payload.word);
+    };
+
+    const onHintRevealed = (payload: { maskedWord: string; hintCost?: number | null }) => {
+      store.getState().setHintRevealed(payload);
     };
 
     const onRoundEnded = (payload: RoundEndedPayload) => {
@@ -138,6 +143,7 @@ export function useGameSocketListeners() {
       roundNumber: number;
       totalRounds: number;
       remainingSeconds: number;
+      hintCost?: number | null;
     }) => {
       if (payload.phase === "drawing" || payload.phase === "choosing_word") {
         store.getState().startDrawing({
@@ -146,6 +152,7 @@ export function useGameSocketListeners() {
           roundNumber: payload.roundNumber,
           totalRounds: payload.totalRounds,
           seconds: payload.remainingSeconds,
+          hintCost: payload.hintCost,
         });
       }
     };
@@ -163,6 +170,7 @@ export function useGameSocketListeners() {
     socket.on("chat_message", onChatMessage);
     socket.on("correct_guess", onCorrectGuess);
     socket.on("you_guessed_correctly", onYouGuessedCorrectly);
+    socket.on("hint_revealed", onHintRevealed);
     socket.on("round_ended", onRoundEnded);
     socket.on("game_ended", onGameEnded);
     socket.on("sync_game", onSyncGame);
@@ -181,6 +189,7 @@ export function useGameSocketListeners() {
       socket.off("chat_message", onChatMessage);
       socket.off("correct_guess", onCorrectGuess);
       socket.off("you_guessed_correctly", onYouGuessedCorrectly);
+      socket.off("hint_revealed", onHintRevealed);
       socket.off("round_ended", onRoundEnded);
       socket.off("game_ended", onGameEnded);
       socket.off("sync_game", onSyncGame);

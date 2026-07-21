@@ -10,6 +10,8 @@ from typing import Optional
 from app.game import DRAWING_SECONDS, Game
 from app.words import WORDS
 
+STARTING_SCORE = 50
+
 
 class RoomFullError(Exception):
     pass
@@ -20,7 +22,7 @@ class Player:
     token: str
     nickname: str
     sid: Optional[str] = None
-    score: int = 0
+    score: int = STARTING_SCORE
     connected: bool = True
     is_host: bool = False
 
@@ -36,6 +38,7 @@ class Room:
     custom_words: list[str] = field(default_factory=list)
     custom_words_only: bool = False
     drawing_seconds: int = DRAWING_SECONDS
+    hint_mode: str = "none"
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
@@ -74,6 +77,7 @@ class Room:
             "customWordCount": len(self.custom_words),
             "customWordsOnly": self.custom_words_only,
             "drawingSeconds": self.drawing_seconds,
+            "hintMode": self.hint_mode,
             "state": self.state,
         }
 
@@ -88,6 +92,7 @@ class Room:
             "customWordCount": len(self.custom_words),
             "customWordsOnly": self.custom_words_only,
             "drawingSeconds": self.drawing_seconds,
+            "hintMode": self.hint_mode,
             "state": self.state,
             "players": [
                 {
@@ -115,6 +120,7 @@ class RoomManager:
         custom_words: list[str] | None = None,
         custom_words_only: bool = False,
         drawing_seconds: int = DRAWING_SECONDS,
+        hint_mode: str = "none",
     ) -> Room:
         room_id = str(uuid.uuid4())
         room = Room(
@@ -127,6 +133,7 @@ class RoomManager:
             custom_words=custom_words or [],
             custom_words_only=custom_words_only,
             drawing_seconds=drawing_seconds,
+            hint_mode=hint_mode,
         )
         self.rooms[room_id] = room
         return room

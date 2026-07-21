@@ -3,6 +3,7 @@ import type {
   ChatMessage,
   GameEndedPayload,
   GamePhase,
+  HintMode,
   PlayerInfo,
   RoomStatePayload,
   RoundEndedPayload,
@@ -17,6 +18,7 @@ interface GameStore {
   isPublic: boolean;
   maxPlayers: number;
   rounds: number;
+  hintMode: HintMode;
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
 
@@ -30,6 +32,7 @@ interface GameStore {
   totalRounds: number;
   phaseSeconds: number;
   phaseStartedAt: number;
+  nextHintCost: number | null;
 
   messages: ChatMessage[];
   lastRoundResult: RoundEndedPayload | null;
@@ -55,9 +58,12 @@ interface GameStore {
     roundNumber: number;
     totalRounds: number;
     seconds: number;
+    hintCost?: number | null;
   }) => void;
   setMyWord: (word: string | null) => void;
   setGuessedWord: (word: string | null) => void;
+  setMaskedWord: (word: string) => void;
+  setHintRevealed: (payload: { maskedWord: string; hintCost?: number | null }) => void;
   endRound: (payload: RoundEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
   setError: (error: string | null) => void;
@@ -75,6 +81,7 @@ const initialGameFields = {
   totalRounds: 0,
   phaseSeconds: 0,
   phaseStartedAt: 0,
+  nextHintCost: null as number | null,
   messages: [] as ChatMessage[],
   lastRoundResult: null as RoundEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
@@ -89,6 +96,7 @@ export const useGameStore = create<GameStore>((set) => ({
   isPublic: true,
   maxPlayers: 8,
   rounds: 3,
+  hintMode: "none" as HintMode,
   roomState: "waiting",
   players: [],
   error: null,
@@ -111,6 +119,7 @@ export const useGameStore = create<GameStore>((set) => ({
       isPublic: payload.isPublic,
       maxPlayers: payload.maxPlayers,
       rounds: payload.rounds,
+      hintMode: payload.hintMode,
       roomState: payload.state,
       players: payload.players,
     }),
@@ -135,7 +144,7 @@ export const useGameStore = create<GameStore>((set) => ({
     }),
   setMyWordChoices: (choices, seconds) =>
     set({ wordChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
-  startDrawing: ({ drawerToken, maskedWord, roundNumber, totalRounds, seconds }) =>
+  startDrawing: ({ drawerToken, maskedWord, roundNumber, totalRounds, seconds, hintCost }) =>
     set({
       phase: "drawing",
       drawerToken,
@@ -145,9 +154,13 @@ export const useGameStore = create<GameStore>((set) => ({
       phaseSeconds: seconds,
       phaseStartedAt: Date.now(),
       wordChoices: [],
+      nextHintCost: hintCost ?? null,
     }),
   setMyWord: (word) => set({ myWord: word }),
   setGuessedWord: (word) => set({ guessedWord: word }),
+  setMaskedWord: (word) => set({ maskedWord: word }),
+  setHintRevealed: ({ maskedWord, hintCost }) =>
+    set((s) => ({ maskedWord, nextHintCost: hintCost ?? s.nextHintCost })),
   endRound: (payload) =>
     set((s) => ({
       phase: "round_end",

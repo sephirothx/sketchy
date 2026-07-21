@@ -6,6 +6,8 @@ export interface PlayerInfo {
   isHost: boolean;
 }
 
+export type HintMode = "none" | "checkpoints" | "purchase";
+
 export interface RoomSummary {
   id: string;
   code: string;
@@ -17,6 +19,7 @@ export interface RoomSummary {
   customWordCount: number;
   customWordsOnly: boolean;
   drawingSeconds: number;
+  hintMode: HintMode;
   state: "waiting" | "playing";
 }
 
@@ -30,6 +33,7 @@ export interface RoomStatePayload {
   customWordCount: number;
   customWordsOnly: boolean;
   drawingSeconds: number;
+  hintMode: HintMode;
   state: "waiting" | "playing";
   players: PlayerInfo[];
 }
