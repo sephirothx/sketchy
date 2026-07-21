@@ -2,18 +2,25 @@ import { useEffect } from "react";
 import { socket } from "../lib/socket";
 import type { DrawTool } from "../types";
 
-const COLORS = [
-  "#000000",
-  "#ffffff",
-  "#e03131",
-  "#f08c00",
-  "#f5d400",
-  "#2f9e44",
-  "#1971c2",
-  "#7048e8",
-  "#a3384a",
-  "#5c5f66",
+// Each pair is [light shade, dark shade] for the same color family, laid out
+// as two rows of matching columns (mirroring skribbl.io's palette).
+const COLOR_PAIRS: readonly (readonly [string, string])[] = [
+  ["#ffffff", "#000000"],
+  ["#c1c1c1", "#4c4c4c"],
+  ["#ed1c24", "#7f0000"],
+  ["#ff7f27", "#a0522d"],
+  ["#fff200", "#c9a227"],
+  ["#b5e61d", "#2d5b1e"],
+  ["#22b14c", "#1c6b5a"],
+  ["#7ac9e8", "#2e5090"],
+  ["#3f48cc", "#1b1b6e"],
+  ["#a349a4", "#5c2d91"],
+  ["#ec6ea8", "#7b3f61"],
+  ["#ffae85", "#a9714b"],
+  ["#c69c6d", "#5b3a1e"],
 ];
+
+const COLORS = COLOR_PAIRS.flat();
 
 const WIDTHS = [2, 4, 8, 16];
 
