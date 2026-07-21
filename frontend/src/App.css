@@ -380,6 +380,29 @@
   border-color: #4c6ef5;
 }
 
+.color-swatch-custom {
+  grid-row: span 2;
+  width: 20px;
+  height: 44px;
+  border-radius: 10px;
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  position: relative;
+  overflow: hidden;
+  display: block;
+  cursor: pointer;
+}
+
+.color-swatch-custom input[type="color"] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  border: none;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .width-swatch {
   width: 28px;
   height: 28px;

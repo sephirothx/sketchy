@@ -48,6 +48,8 @@ export function Toolbar({
   tool,
   onToolChange,
 }: ToolbarProps) {
+  const isCustomColor = !COLORS.includes(color);
+
   // Ctrl+Z / Cmd+Z triggers undo, mirroring the toolbar button. This effect
   // is only mounted while the toolbar itself is (i.e. while it's this
   // player's turn to draw), so it can never fire for guessers.
@@ -88,6 +90,18 @@ export function Toolbar({
             aria-label={`color ${c}`}
           />
         ))}
+        <label
+          className={`color-swatch color-swatch-custom${isCustomColor ? " selected" : ""}`}
+          style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
+          title="Choose any color"
+        >
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => onColorChange(e.target.value)}
+            aria-label="Choose any color"
+          />
+        </label>
       </div>
       <div className="toolbar-widths">
         {WIDTHS.map((w) => (
