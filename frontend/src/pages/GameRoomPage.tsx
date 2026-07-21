@@ -44,6 +44,7 @@ export function GameRoomPage() {
   const [color, setColor] = useState("#000000");
   const [brushWidth, setBrushWidth] = useState(4);
   const [tool, setTool] = useState<DrawTool>("pen");
+  const [wasDrawer, setWasDrawer] = useState(false);
 
   useEffect(() => {
     if (!code) return;
@@ -84,6 +85,17 @@ export function GameRoomPage() {
   const amDrawer =
     (phase === "drawing" || phase === "choosing_word") && drawerToken === token;
   const canDrawNow = phase === "drawing" && drawerToken === token;
+
+  // Reset to the default color whenever a new drawing turn starts for this
+  // player, instead of carrying over whatever color was last picked. Done
+  // during render (rather than an effect) per React's "adjusting state when
+  // a prop changes" pattern, to avoid an extra render pass.
+  if (amDrawer !== wasDrawer) {
+    setWasDrawer(amDrawer);
+    if (amDrawer) {
+      setColor("#000000");
+    }
+  }
 
   if (joinError) {
     return (
