@@ -6,6 +6,7 @@ import { PlayerList } from "../components/PlayerList";
 import { WordDisplay } from "../components/WordDisplay";
 import { Timer } from "../components/Timer";
 import { GuessChat } from "../components/GuessChat";
+import { RoundEndOverlay } from "../components/RoundEndOverlay";
 import { emitWithAck, socket } from "../lib/socket";
 import { splitMaskedWord } from "../lib/maskedWord";
 import { useGameStore } from "../store/gameStore";
@@ -148,6 +149,13 @@ export function GameRoomPage() {
               }
             />
             <Canvas isDrawer={canDrawNow} color={color} brushWidth={brushWidth} tool={tool} />
+            {phase === "round_end" && lastRoundResult && (
+              <RoundEndOverlay
+                word={lastRoundResult.word}
+                drawerToken={lastRoundResult.drawerToken}
+                scores={lastRoundResult.scores}
+              />
+            )}
             {canDrawNow && (
               <Toolbar
                 color={color}
