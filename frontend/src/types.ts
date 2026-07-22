@@ -90,7 +90,7 @@ export interface StrokeMovePayload {
 
 export type ShapeType = "rectangle" | "ellipse" | "triangle";
 
-export type DrawTool = "pen" | ShapeType;
+export type DrawTool = "pen" | ShapeType | "fill";
 
 export interface StrokeShapePayload {
   shape: ShapeType;
@@ -100,9 +100,28 @@ export interface StrokeShapePayload {
   width: number;
 }
 
+// A flood fill is computed once (locally, on the drawer's own rendered
+// canvas pixels) and its result - the rectangular patch of pixels it
+// changed - is shipped as a base64 PNG so every other client (and late
+// joiners replaying history) renders the exact same pixels, instead of each
+// client re-running the fill algorithm on canvases that could have subtly
+// different anti-aliasing.
+export interface StrokeFillPayload {
+  patchX: number;
+  patchY: number;
+  patchWidth: number;
+  patchHeight: number;
+  patchData: string;
+}
+
 export interface StrokeRecord {
-  event: "draw_start" | "draw_move" | "draw_end" | "draw_shape";
-  payload: StrokeStartPayload | StrokeMovePayload | StrokeShapePayload | Record<string, never>;
+  event: "draw_start" | "draw_move" | "draw_end" | "draw_shape" | "draw_fill";
+  payload:
+    | StrokeStartPayload
+    | StrokeMovePayload
+    | StrokeShapePayload
+    | StrokeFillPayload
+    | Record<string, never>;
 }
 
 export interface AckResponse {

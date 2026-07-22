@@ -279,14 +279,14 @@ class Game:
         The canvas is a raster (not vector), so "undoing" means dropping the
         last stroke's events from the replay log and having every client
         clear + redraw from what remains (via a fresh sync_strokes). A
-        logical stroke is either a single draw_shape event, or a
+        logical stroke is either a single draw_shape/draw_fill event, or a
         draw_start/draw_move*/draw_end run - so this walks backward from the
         end to find where that run began. Returns False if there was nothing
         to undo.
         """
         if not self.strokes:
             return False
-        if self.strokes[-1]["event"] == "draw_shape":
+        if self.strokes[-1]["event"] in ("draw_shape", "draw_fill"):
             self.strokes.pop()
             return True
         start = len(self.strokes) - 1
