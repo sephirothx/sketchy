@@ -68,6 +68,23 @@ function hexToRgba(hex: string): [number, number, number, number] {
   return [r, g, b, 255];
 }
 
+// The drawing canvas's "empty" appearance comes purely from the white CSS
+// background showing through an untouched (fully transparent) canvas
+// element. That mismatch matters once white becomes a real drawable color:
+// a white stroke over blank canvas would snap to opaque white pixel data
+// sitting right next to transparent "blank" pixels - an invisible boundary
+// to the eye, but a very real one to flood fill (and to hard-edge draws
+// generally), which would then refuse to flow across it. Painting the
+// canvas with actual opaque white up front - and every time it's cleared -
+// keeps the underlying pixel data consistent with what's visible, so a
+// white stroke is indistinguishable from blank canvas everywhere it matters.
+function fillWhite(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
 function colorsEqual(data: Uint8ClampedArray, index: number, target: [number, number, number, number]): boolean {
   return (
     data[index] === target[0] &&
@@ -265,6 +282,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     if (!ctx) return;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+    fillWhite(ctx, canvas.width, canvas.height);
     ctxRef.current = ctx;
 
     const preview = previewCanvasRef.current;
@@ -363,7 +381,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     const onClearCanvas = () => {
       const canvas = canvasRef.current;
       const ctx = ctxRef.current;
-      if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (canvas && ctx) fillWhite(ctx, canvas.width, canvas.height);
       remoteState.last = null;
     };
 
@@ -381,6 +399,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
       offscreen.height = CANVAS_HEIGHT;
       const offCtx = offscreen.getContext("2d");
       if (!offCtx) return;
+      fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       let last: StrokePoint | null = null;
       let color = "#000000";
