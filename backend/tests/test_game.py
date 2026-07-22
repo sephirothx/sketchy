@@ -285,3 +285,129 @@ def test_hint_cost_scales_up_per_hint_bought_this_turn():
     other = next(t for t in game.turn_order if t not in (game.current_drawer, buyer))
     assert game.hint_cost(other) == 5
 
+
+def make_close_guess_game(word, n_players=3):
+    game = make_game(n_players=n_players, rounds=1)
+    game.word_pool = [word]
+    game.start_next_turn()
+    game.force_word_choice()
+    return game
+
+
+def test_guess_hint_distance_one_is_always_close():
+    game = make_close_guess_game("testing")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.guess_hint(guesser, "testng") == "close"  # 1 char missing
+
+
+def test_guess_hint_counts_transposition_as_one_edit():
+    # Damerau-Levenshtein: a swapped pair of adjacent letters is a single
+    # edit, not two substitutions, so "elpehant" (swapped "pe") should be
+    # just as close as a one-letter typo.
+    game = make_close_guess_game("elephant")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.guess_hint(guesser, "elpehant") == "close"
+
+
+def test_guess_hint_distance_between_2_and_5_uses_similarity_ratio():
+    game = make_close_guess_game("testing")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.guess_hint(guesser, "testong") == "close"  # distance 2, high overlap
+    assert game.guess_hint(guesser, "xyz") is None  # distance too large / ratio too low
+
+
+def test_guess_hint_exact_match_returns_none():
+    game = make_close_guess_game("testing")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.guess_hint(guesser, "testing") is None
+
+
+def test_guess_hint_rejects_drawer_and_correct_guessers():
+    game = make_close_guess_game("testing")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.guess_hint(game.current_drawer, "testng") is None
+
+    game.set_phase_deadline(DRAWING_SECONDS)
+    game.submit_guess(guesser, game.word)
+    assert game.guess_hint(guesser, "testng") is None
+
+
+def test_guess_hint_ignores_very_short_strings():
+    game = make_close_guess_game("cat")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # A single-letter guess is too short to be meaningfully "close", and
+    # there's only one word so no partial-match hint applies either.
+    assert game.guess_hint(guesser, "c") is None
+
+
+def test_guess_hint_close_whole_phrase():
+    game = make_close_guess_game("red panda")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.guess_hint(guesser, "red pand") == "close"
+    assert game.guess_hint(guesser, "totally unrelated") is None
+
+
+def test_guess_hint_partial_word_match():
+    game = make_close_guess_game("big shiny castle")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # "shiny" (5 letters) matches exactly, but the whole phrase is too
+    # different overall to be flagged "close" - falls back to the
+    # partial-word-match hint.
+    assert game.guess_hint(guesser, "big shiny house") == "partial"
+
+
+def test_guess_hint_partial_multiple_short_words_reach_min_letters():
+    game = make_close_guess_game("tiny red ant")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # Neither "red" nor "ant" alone reaches CLOSE_GUESS_MIN_CORRECT_LETTERS,
+    # but their combined length (6) does.
+    assert game.guess_hint(guesser, "huge red ant") == "partial"
+
+
+def test_guess_hint_partial_requires_min_correct_letters():
+    game = make_close_guess_game("tiny red ant")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # Only one short word ("red", 3 letters) matches exactly - below
+    # CLOSE_GUESS_MIN_CORRECT_LETTERS.
+    assert game.guess_hint(guesser, "huge red bug") is None
+
+
+def test_guess_hint_partial_single_word_below_min_letters():
+    game = make_close_guess_game("big frog king")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # "frog" (4 letters) is the only match - just below the 5-letter minimum.
+    assert game.guess_hint(guesser, "hot frog thing") is None
+
+
+def test_guess_hint_partial_allows_one_word_count_difference():
+    game = make_close_guess_game("big giant purple octopus")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # Missing the last word entirely, but the word-count difference is only
+    # 1, which is now tolerated - "big", "giant" and "purple" all match.
+    assert game.guess_hint(guesser, "big giant purple") == "partial"
+
+
+def test_guess_hint_partial_rejects_word_count_diff_over_one():
+    game = make_close_guess_game("big giant purple octopus")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # Missing 2 of the 4 words: word-count difference is 2, too large to be
+    # tolerated, so the partial-word check is skipped entirely.
+    assert game.guess_hint(guesser, "big giant") is None
+
+
+def test_guess_hint_partial_word_order_independent():
+    game = make_close_guess_game("red panda bear")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # All 3 words are correct but reordered - matching is position
+    # independent (bag-of-words), so this still counts as partial.
+    assert game.guess_hint(guesser, "panda red bear") == "partial"
+
+
+def test_guess_hint_partial_caps_duplicate_word_matches():
+    game = make_close_guess_game("red red panda")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # Duplicate words are capped at the lower count per word (multiset
+    # intersection): 1x "red" (guess has 1, target has 2) + 1x "panda"
+    # (guess has 2, target has 1) = 3 + 5 = 8 correct letters total.
+    assert game.guess_hint(guesser, "red panda panda") == "partial"
+

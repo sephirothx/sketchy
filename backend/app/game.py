@@ -4,9 +4,11 @@ Pure state/logic only (no socket I/O) so it can be unit tested directly.
 """
 from __future__ import annotations
 
+import difflib
 import random
 import re
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum
 from itertools import groupby
@@ -29,12 +31,83 @@ HINT_MODES = ("none", "checkpoints", "purchase")
 HINT_BASE_COST = 5
 MIN_HIDDEN_LETTERS = 2
 
+# Close guess detection (see Game.guess_hint):
+# - distance 1 (a single insertion/deletion/substitution/transposition) is
+#   always considered close.
+# - distance >1 and <= CLOSE_GUESS_MAX_DISTANCE is close if the strings are
+#   still similar enough overall (difflib ratio).
+# - for multi-word answers, words are matched position-independently (as a
+#   bag/multiset, so reordered guesses still count) as long as the guess's
+#   word count is within 1 of the target's. One or more correct words whose
+#   combined length is at least CLOSE_GUESS_MIN_CORRECT_LETTERS letters is
+#   flagged separately as a "some words are correct" hint.
+CLOSE_GUESS_MAX_DISTANCE = 2
+CLOSE_GUESS_SIMILARITY_THRESHOLD = 0.75
+CLOSE_GUESS_MIN_CORRECT_LETTERS = 5
+
 
 class Phase(str, Enum):
     CHOOSING_WORD = "choosing_word"
     DRAWING = "drawing"
     ROUND_END = "round_end"
     GAME_END = "game_end"
+
+
+def _normalize(text: str) -> str:
+    """Collapse whitespace and lowercase, so multi-word expressions match
+    regardless of extra/irregular spacing in the guesser's input (e.g. "red  panda")."""
+    return " ".join(text.split()).lower()
+
+
+def _damerau_levenshtein(a: str, b: str) -> int:
+    """Damerau-Levenshtein edit distance (optimal string alignment variant):
+    minimum single-character insertions, deletions, substitutions, or
+    transpositions of two adjacent characters to turn `a` into `b`.
+
+    Counting adjacent transpositions as a single edit (rather than two
+    substitutions) matters for a guessing game, since swapped letters are one
+    of the most common typos (e.g. "hte" for "the").
+    """
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    len_a, len_b = len(a), len(b)
+    # Full matrix (rather than a rolling row) since the transposition check
+    # needs the row from two steps back, not just the previous one.
+    rows = [[0] * (len_b + 1) for _ in range(len_a + 1)]
+    for i in range(len_a + 1):
+        rows[i][0] = i
+    for j in range(len_b + 1):
+        rows[0][j] = j
+    for i, ch_a in enumerate(a, start=1):
+        for j, ch_b in enumerate(b, start=1):
+            insert_cost = rows[i][j - 1] + 1
+            delete_cost = rows[i - 1][j] + 1
+            substitute_cost = rows[i - 1][j - 1] + (ch_a != ch_b)
+            best = min(insert_cost, delete_cost, substitute_cost)
+            if i > 1 and j > 1 and ch_a == b[j - 2] and a[i - 2] == ch_b:
+                best = min(best, rows[i - 2][j - 2] + 1)
+            rows[i][j] = best
+    return rows[len_a][len_b]
+
+
+def _is_close_pair(guess: str, target: str) -> bool:
+    """Whether `guess` is a near-miss for `target` (already known to differ).
+
+    Very short strings are skipped to avoid trivial/noisy matches (e.g. a
+    guess of "a" being "close" to a 3-letter word just by sharing a letter).
+    """
+    if len(target) < 3 or len(guess) < 2 or guess == target:
+        return False
+    distance = _damerau_levenshtein(guess, target)
+    if distance == 1:
+        return True
+    if distance <= CLOSE_GUESS_MAX_DISTANCE:
+        return difflib.SequenceMatcher(None, guess, target).ratio() >= CLOSE_GUESS_SIMILARITY_THRESHOLD
+    return False
 
 
 @dataclass
@@ -227,10 +300,8 @@ class Game:
             return False, 0
         if token == self.current_drawer or token in self.correct_guessers:
             return False, 0
-        # Normalize whitespace so multi-word expressions match regardless of
-        # extra/irregular spacing in the guesser's input (e.g. "red  panda").
-        normalized_guess = " ".join(text.split()).lower()
-        normalized_word = " ".join(self.word.split()).lower()
+        normalized_guess = _normalize(text)
+        normalized_word = _normalize(self.word)
         if normalized_guess != normalized_word:
             return False, 0
         self.correct_guessers.add(token)
@@ -238,6 +309,39 @@ class Game:
         points = max(MIN_GUESS_POINTS, round(MAX_GUESS_POINTS * remaining_ratio))
         self.guess_points[token] = points
         return True, points
+
+    def guess_hint(self, token: str, text: str) -> str | None:
+        """Whether a (known-incorrect) guess deserves a private hint instead of
+        being silently broadcast to the room as-is.
+
+        Returns "close" if the guess is a near-miss for the whole word/phrase
+        (see `_is_close_pair`), "partial" if (for multi-word answers only,
+        matching words position-independently and tolerating a word-count
+        difference of at most 1) one or more correct words together add up to
+        at least `CLOSE_GUESS_MIN_CORRECT_LETTERS` letters, or None if
+        neither applies.
+        """
+        if not self.word:
+            return None
+        if token == self.current_drawer or token in self.correct_guessers:
+            return None
+        guess = _normalize(text)
+        word = _normalize(self.word)
+        if guess == word:
+            return None
+        if _is_close_pair(guess, word):
+            return "close"
+        word_tokens = word.split(" ")
+        if len(word_tokens) > 1:
+            guess_tokens = guess.split(" ")
+            if abs(len(guess_tokens) - len(word_tokens)) <= 1:
+                # Bag-of-words intersection: matches regardless of word order,
+                # capping duplicate words at the lower count on either side.
+                overlap = Counter(guess_tokens) & Counter(word_tokens)
+                correct_letter_count = sum(len(w) * count for w, count in overlap.items())
+                if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
+                    return "partial"
+        return None
 
     def all_guessed(self, total_guessers: int) -> bool:
         return total_guessers > 0 and len(self.correct_guessers) >= total_guessers

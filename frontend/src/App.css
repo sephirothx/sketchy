@@ -498,6 +498,11 @@
   font-weight: 600;
 }
 
+.chat-message.close-hint {
+  color: #f08c00;
+  font-style: italic;
+}
+
 .chat-input {
   display: flex;
   flex-direction: column;

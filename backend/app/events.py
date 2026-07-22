@@ -558,11 +558,46 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         game = room.game
         correct, points = game.submit_guess(player.token, text)
         if not correct:
-            await sio.emit(
-                "chat_message",
-                {"token": player.token, "nickname": player.nickname, "text": text, "correct": False},
-                room=room.id,
-            )
+            hint = game.guess_hint(player.token, text)
+            if hint:
+                hint_text = f'"{text}" is very close!' if hint == "close" else "Some words are correct"
+                # The guesser should always see their own guess, even when it's
+                # not broadcast to the rest of the room.
+                await sio.emit(
+                    "chat_message",
+                    {"token": player.token, "nickname": player.nickname, "text": text, "correct": False},
+                    to=sid,
+                )
+                await sio.emit(
+                    "chat_message",
+                    {
+                        "token": player.token,
+                        "nickname": player.nickname,
+                        "text": hint_text,
+                        "correct": False,
+                        "close": True,
+                    },
+                    to=sid,
+                )
+                in_the_know = [
+                    p.sid
+                    for p in room.player_list()
+                    if p.sid
+                    and p.sid != sid
+                    and (p.token in game.correct_guessers or p.token == game.current_drawer)
+                ]
+                for target_sid in in_the_know:
+                    await sio.emit(
+                        "chat_message",
+                        {"token": player.token, "nickname": player.nickname, "text": text, "correct": False},
+                        to=target_sid,
+                    )
+            else:
+                await sio.emit(
+                    "chat_message",
+                    {"token": player.token, "nickname": player.nickname, "text": text, "correct": False},
+                    room=room.id,
+                )
             return
 
         player.score += points
