@@ -29,6 +29,7 @@ const TOOLS: { value: DrawTool; label: string; glyph: string }[] = [
   { value: "rectangle", label: "Rectangle", glyph: "\u25a1" },
   { value: "ellipse", label: "Ellipse", glyph: "\u25ef" },
   { value: "triangle", label: "Triangle", glyph: "\u25b3" },
+  { value: "fill", label: "Fill", glyph: "\u{1FAA3}" },
 ];
 
 interface ToolbarProps {

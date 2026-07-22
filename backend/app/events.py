@@ -21,6 +21,15 @@ logger = logging.getLogger("sketchy.events")
 
 RECONNECT_GRACE_SECONDS = 30
 
+# Must match the frontend's Canvas.tsx CANVAS_WIDTH/CANVAS_HEIGHT - used only
+# to sanity-check draw_fill patch bounds below.
+CANVAS_WIDTH = 800
+CANVAS_HEIGHT = 600
+# Generous cap on a base64-encoded fill patch: solid-color regions compress
+# extremely well as PNG, so a legitimate fill of the whole canvas is nowhere
+# near this size - this is purely a backstop against abusive payloads.
+MAX_FILL_PATCH_CHARS = 300_000
+
 # Per-room asyncio task driving the current phase's timeout (choosing/drawing/round-end).
 _phase_timers: dict[str, asyncio.Task] = {}
 # Per-room list of asyncio tasks that reveal checkpoint hint letters during drawing.
@@ -506,6 +515,28 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     @sio.event
     async def draw_shape(sid, data):
         await _broadcast_drawer_event(sid, "draw_shape", data)
+
+    @sio.event
+    async def draw_fill(sid, data):
+        if not isinstance(data, dict):
+            return
+        patch_data = data.get("patchData")
+        if not isinstance(patch_data, str) or not patch_data or len(patch_data) > MAX_FILL_PATCH_CHARS:
+            return
+        try:
+            patch_x = int(data.get("patchX"))
+            patch_y = int(data.get("patchY"))
+            patch_width = int(data.get("patchWidth"))
+            patch_height = int(data.get("patchHeight"))
+        except (TypeError, ValueError):
+            return
+        if patch_width <= 0 or patch_height <= 0:
+            return
+        if patch_x < 0 or patch_y < 0:
+            return
+        if patch_x + patch_width > CANVAS_WIDTH or patch_y + patch_height > CANVAS_HEIGHT:
+            return
+        await _broadcast_drawer_event(sid, "draw_fill", data)
 
     @sio.event
     async def clear_canvas(sid, data=None):
