@@ -88,14 +88,16 @@ export function GameRoomPage() {
     (phase === "drawing" || phase === "choosing_word") && drawerToken === token;
   const canDrawNow = phase === "drawing" && drawerToken === token;
 
-  // Reset to the default color whenever a new drawing turn starts for this
-  // player, instead of carrying over whatever color was last picked. Done
-  // during render (rather than an effect) per React's "adjusting state when
-  // a prop changes" pattern, to avoid an extra render pass.
+  // Reset to the default color and tool whenever a new drawing turn starts
+  // for this player, instead of carrying over whatever color/tool was last
+  // picked. Done during render (rather than an effect) per React's
+  // "adjusting state when a prop changes" pattern, to avoid an extra render
+  // pass.
   if (amDrawer !== wasDrawer) {
     setWasDrawer(amDrawer);
     if (amDrawer) {
       setColor("#000000");
+      setTool("pen");
     }
   }
 
