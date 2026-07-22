@@ -560,7 +560,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not correct:
             hint = game.guess_hint(player.token, text)
             if hint:
-                hint_text = f'"{text}" is close!' if hint == "close" else "Some words are correct!"
+                hint_text = f'"{text}" is very close!' if hint == "close" else "Some words are correct"
                 # The guesser should always see their own guess, even when it's
                 # not broadcast to the rest of the room.
                 await sio.emit(

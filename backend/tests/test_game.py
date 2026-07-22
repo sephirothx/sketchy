@@ -356,26 +356,58 @@ def test_guess_hint_partial_word_match():
     assert game.guess_hint(guesser, "big shiny house") == "partial"
 
 
-def test_guess_hint_partial_two_short_words_match():
+def test_guess_hint_partial_multiple_short_words_reach_min_letters():
     game = make_close_guess_game("tiny red ant")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
-    # Neither "red" nor "ant" reaches CLOSE_GUESS_MIN_WORD_LENGTH on its own,
-    # but 2 whole words matching exactly is still enough for the partial hint.
+    # Neither "red" nor "ant" alone reaches CLOSE_GUESS_MIN_CORRECT_LETTERS,
+    # but their combined length (6) does.
     assert game.guess_hint(guesser, "huge red ant") == "partial"
 
 
-def test_guess_hint_partial_requires_long_word_or_min_correct_words():
+def test_guess_hint_partial_requires_min_correct_letters():
     game = make_close_guess_game("tiny red ant")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
-    # Only one short word ("red") matches exactly - neither rule is satisfied.
+    # Only one short word ("red", 3 letters) matches exactly - below
+    # CLOSE_GUESS_MIN_CORRECT_LETTERS.
     assert game.guess_hint(guesser, "huge red bug") is None
 
 
-def test_guess_hint_partial_requires_matching_token_count():
+def test_guess_hint_partial_single_word_below_min_letters():
+    game = make_close_guess_game("big frog king")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # "frog" (4 letters) is the only match - just below the 5-letter minimum.
+    assert game.guess_hint(guesser, "hot frog thing") is None
+
+
+def test_guess_hint_partial_allows_one_word_count_difference():
     game = make_close_guess_game("big giant purple octopus")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
-    # Missing the last word entirely: token count differs from the target so
-    # the partial-word check is skipped, and the whole phrase is too
-    # different (missing "octopus") to be flagged "close" either.
-    assert game.guess_hint(guesser, "big giant purple") is None
+    # Missing the last word entirely, but the word-count difference is only
+    # 1, which is now tolerated - "big", "giant" and "purple" all match.
+    assert game.guess_hint(guesser, "big giant purple") == "partial"
+
+
+def test_guess_hint_partial_rejects_word_count_diff_over_one():
+    game = make_close_guess_game("big giant purple octopus")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # Missing 2 of the 4 words: word-count difference is 2, too large to be
+    # tolerated, so the partial-word check is skipped entirely.
+    assert game.guess_hint(guesser, "big giant") is None
+
+
+def test_guess_hint_partial_word_order_independent():
+    game = make_close_guess_game("red panda bear")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # All 3 words are correct but reordered - matching is position
+    # independent (bag-of-words), so this still counts as partial.
+    assert game.guess_hint(guesser, "panda red bear") == "partial"
+
+
+def test_guess_hint_partial_caps_duplicate_word_matches():
+    game = make_close_guess_game("red red panda")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    # Duplicate words are capped at the lower count per word (multiset
+    # intersection): 1x "red" (guess has 1, target has 2) + 1x "panda"
+    # (guess has 2, target has 1) = 3 + 5 = 8 correct letters total.
+    assert game.guess_hint(guesser, "red panda panda") == "partial"
 

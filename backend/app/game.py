@@ -8,6 +8,7 @@ import difflib
 import random
 import re
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum
 from itertools import groupby
@@ -35,14 +36,14 @@ MIN_HIDDEN_LETTERS = 2
 #   always considered close.
 # - distance >1 and <= CLOSE_GUESS_MAX_DISTANCE is close if the strings are
 #   still similar enough overall (difflib ratio).
-# - for multi-word answers, exactly matching at least one word of
-#   CLOSE_GUESS_MIN_WORD_LENGTH letters or more, OR at least
-#   CLOSE_GUESS_MIN_CORRECT_WORDS whole words (of any length), is flagged
-#   separately as a "some words are correct" hint.
+# - for multi-word answers, words are matched position-independently (as a
+#   bag/multiset, so reordered guesses still count) as long as the guess's
+#   word count is within 1 of the target's. One or more correct words whose
+#   combined length is at least CLOSE_GUESS_MIN_CORRECT_LETTERS letters is
+#   flagged separately as a "some words are correct" hint.
 CLOSE_GUESS_MAX_DISTANCE = 2
 CLOSE_GUESS_SIMILARITY_THRESHOLD = 0.75
-CLOSE_GUESS_MIN_WORD_LENGTH = 5
-CLOSE_GUESS_MIN_CORRECT_WORDS = 2
+CLOSE_GUESS_MIN_CORRECT_LETTERS = 5
 
 
 class Phase(str, Enum):
@@ -314,11 +315,11 @@ class Game:
         being silently broadcast to the room as-is.
 
         Returns "close" if the guess is a near-miss for the whole word/phrase
-        (see `_is_close_pair`), "partial" if (for multi-word answers only) at
-        least one of its words exactly matches the corresponding target word
-        and is at least `CLOSE_GUESS_MIN_WORD_LENGTH` letters long, or at
-        least `CLOSE_GUESS_MIN_CORRECT_WORDS` whole words match exactly
-        regardless of length, or None if none of these apply.
+        (see `_is_close_pair`), "partial" if (for multi-word answers only,
+        matching words position-independently and tolerating a word-count
+        difference of at most 1) one or more correct words together add up to
+        at least `CLOSE_GUESS_MIN_CORRECT_LETTERS` letters, or None if
+        neither applies.
         """
         if not self.word:
             return None
@@ -333,10 +334,12 @@ class Game:
         word_tokens = word.split(" ")
         if len(word_tokens) > 1:
             guess_tokens = guess.split(" ")
-            if len(guess_tokens) == len(word_tokens):
-                correct_words = [w for g, w in zip(guess_tokens, word_tokens) if g == w]
-                has_long_correct_word = any(len(w) >= CLOSE_GUESS_MIN_WORD_LENGTH for w in correct_words)
-                if has_long_correct_word or len(correct_words) >= CLOSE_GUESS_MIN_CORRECT_WORDS:
+            if abs(len(guess_tokens) - len(word_tokens)) <= 1:
+                # Bag-of-words intersection: matches regardless of word order,
+                # capping duplicate words at the lower count on either side.
+                overlap = Counter(guess_tokens) & Counter(word_tokens)
+                correct_letter_count = sum(len(w) * count for w, count in overlap.items())
+                if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
                     return "partial"
         return None
 
