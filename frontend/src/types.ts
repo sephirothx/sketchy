@@ -46,6 +46,7 @@ export interface ChatMessage {
   text: string;
   correct: boolean;
   system?: boolean;
+  close?: boolean;
 }
 
 export interface ScoreEntry {
