@@ -587,6 +587,33 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return
 
         game = room.game
+
+        # Once a player has already found the word this round, anything else
+        # they type could spoil it for players who haven't guessed yet (or
+        # just be confusing out-of-context chatter). Keep the rest of their
+        # messages for the round visible only to the drawer and other
+        # players who've also already guessed correctly, flagged so the
+        # client can render a clear "restricted visibility" indicator.
+        if player.token in game.correct_guessers:
+            in_the_know = [
+                p.sid
+                for p in room.player_list()
+                if p.sid and (p.token in game.correct_guessers or p.token == game.current_drawer)
+            ]
+            for target_sid in in_the_know:
+                await sio.emit(
+                    "chat_message",
+                    {
+                        "token": player.token,
+                        "nickname": player.nickname,
+                        "text": text,
+                        "correct": False,
+                        "restricted": True,
+                    },
+                    to=target_sid,
+                )
+            return
+
         correct, points = game.submit_guess(player.token, text)
         if not correct:
             hint = game.guess_hint(player.token, text)
