@@ -47,6 +47,7 @@ export interface ChatMessage {
   correct: boolean;
   system?: boolean;
   close?: boolean;
+  restricted?: boolean;
 }
 
 export interface ScoreEntry {

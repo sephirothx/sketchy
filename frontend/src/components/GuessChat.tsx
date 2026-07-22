@@ -73,7 +73,7 @@ export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths }: G
         {messages.map((m) => (
           <div
             key={m.id}
-            className={`chat-message${m.system ? " system" : ""}${m.correct ? " correct" : ""}${m.close ? " close-hint" : ""}`}
+            className={`chat-message${m.system ? " system" : ""}${m.correct ? " correct" : ""}${m.close ? " close-hint" : ""}${m.restricted ? " restricted" : ""}`}
           >
             {m.system || m.close ? (
               m.text
