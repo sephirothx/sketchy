@@ -289,9 +289,13 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
 
   // Render strokes coming from the current drawer (remote to this client).
   useEffect(() => {
-    function drawSegment(from: StrokePoint, to: StrokePoint, strokeColor: string, strokeWidth: number) {
-      const ctx = ctxRef.current;
-      if (!ctx) return;
+    function drawSegmentOn(
+      ctx: CanvasRenderingContext2D,
+      from: StrokePoint,
+      to: StrokePoint,
+      strokeColor: string,
+      strokeWidth: number,
+    ) {
       const a = toPixels(from);
       const b = toPixels(to);
       drawWithHardEdges(ctx, boundsFromPoints(a, b, strokeWidth), hexToRgba(strokeColor), () => {
@@ -302,6 +306,20 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
       });
+    }
+
+    function drawShapeOn(ctx: CanvasRenderingContext2D, payload: StrokeShapePayload) {
+      const a = toPixels(payload.from);
+      const b = toPixels(payload.to);
+      drawWithHardEdges(ctx, boundsFromPoints(a, b, payload.width), hexToRgba(payload.color), () => {
+        drawShapeOutline(ctx, payload.from, payload.to, payload.shape, payload.color, payload.width);
+      });
+    }
+
+    function drawSegment(from: StrokePoint, to: StrokePoint, strokeColor: string, strokeWidth: number) {
+      const ctx = ctxRef.current;
+      if (!ctx) return;
+      drawSegmentOn(ctx, from, to, strokeColor, strokeWidth);
     }
 
     const remoteState: { last: StrokePoint | null; color: string; width: number } = {
@@ -333,11 +351,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     const onDrawShape = (payload: StrokeShapePayload) => {
       const ctx = ctxRef.current;
       if (!ctx) return;
-      const a = toPixels(payload.from);
-      const b = toPixels(payload.to);
-      drawWithHardEdges(ctx, boundsFromPoints(a, b, payload.width), hexToRgba(payload.color), () => {
-        drawShapeOutline(ctx, payload.from, payload.to, payload.shape, payload.color, payload.width);
-      });
+      drawShapeOn(ctx, payload);
     };
 
     const onDrawFill = (payload: StrokeFillPayload) => {
@@ -354,26 +368,53 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     };
 
     const onSyncStrokes = async (payload: { strokes: StrokeRecord[] }) => {
-      onClearCanvas();
+      // Replay the entire stroke log into an offscreen buffer first, then
+      // swap it onto the visible canvas in a single paint. Replaying
+      // directly on the visible canvas (as before) meant clearing it up
+      // front and redrawing stroke-by-stroke while awaiting each fill
+      // patch's async image decode in between - which left the canvas
+      // visibly blank/partial for a frame or more whenever the log
+      // contained a fill, producing a flicker (most noticeable right after
+      // Undo, since undo always triggers a full resync).
+      const offscreen = document.createElement("canvas");
+      offscreen.width = CANVAS_WIDTH;
+      offscreen.height = CANVAS_HEIGHT;
+      const offCtx = offscreen.getContext("2d");
+      if (!offCtx) return;
+
+      let last: StrokePoint | null = null;
+      let color = "#000000";
+      let width = 4;
+
       for (const stroke of payload.strokes) {
         if (stroke.event === "draw_start") {
-          onDrawStart(stroke.payload as StrokeStartPayload);
+          const p = stroke.payload as StrokeStartPayload;
+          last = { x: p.x, y: p.y };
+          color = p.color;
+          width = p.width;
+          drawSegmentOn(offCtx, last, last, color, width);
         } else if (stroke.event === "draw_move") {
-          onDrawMove(stroke.payload as StrokeMovePayload);
+          const p = stroke.payload as StrokeMovePayload;
+          for (const point of p.points) {
+            if (last) drawSegmentOn(offCtx, last, point, color, width);
+            last = point;
+          }
         } else if (stroke.event === "draw_shape") {
-          onDrawShape(stroke.payload as StrokeShapePayload);
+          drawShapeOn(offCtx, stroke.payload as StrokeShapePayload);
         } else if (stroke.event === "draw_fill") {
-          const ctx = ctxRef.current;
-          // Awaited (rather than fire-and-forget like the real-time
-          // listener) so later strokes in the replay log aren't drawn to
-          // the canvas before this patch, which would otherwise let the
-          // patch's async image decode finish afterwards and incorrectly
-          // paint over them.
-          if (ctx) await applyFillPatch(ctx, stroke.payload as StrokeFillPayload);
+          await applyFillPatch(offCtx, stroke.payload as StrokeFillPayload);
         } else {
-          onDrawEnd();
+          last = null;
         }
       }
+
+      const canvas = canvasRef.current;
+      const ctx = ctxRef.current;
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(offscreen, 0, 0);
+      }
+      remoteState.last = null;
     };
 
     socket.on("draw_start", onDrawStart);
