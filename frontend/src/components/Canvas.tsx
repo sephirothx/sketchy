@@ -275,6 +275,26 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
   const lastPointRef = useRef<StrokePoint | null>(null);
   const shapeStartRef = useRef<StrokePoint | null>(null);
 
+  // If the turn ends (isDrawer flips to false) while the drawer is still
+  // physically holding the pointer down mid-stroke, the real "pointer up"
+  // only fires afterwards - and handlePointerUp bails out immediately once
+  // isDrawer is false, so it never clears isPointerDownRef/lastPointRef.
+  // Left stale, the next time this player becomes the drawer again, the
+  // very first pointer move would see isPointerDownRef still true and draw
+  // a spurious segment from that old leftover point to the current cursor
+  // position. Reset all in-progress pointer/shape state as soon as drawing
+  // rights are taken away, regardless of whether a pointer up ever arrives.
+  useEffect(() => {
+    if (isDrawer) return;
+    isPointerDownRef.current = false;
+    pendingPointsRef.current = [];
+    lastPointRef.current = null;
+    shapeStartRef.current = null;
+    const preview = previewCanvasRef.current;
+    const previewCtx = previewCtxRef.current;
+    if (preview && previewCtx) previewCtx.clearRect(0, 0, preview.width, preview.height);
+  }, [isDrawer]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
