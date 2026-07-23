@@ -684,3 +684,17 @@
   text-align: right;
   font-weight: 700;
 }
+
+.version-badge {
+  position: fixed;
+  right: 8px;
+  bottom: 6px;
+  font-size: 11px;
+  color: #adb5bd;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 1px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  user-select: none;
+  z-index: 10;
+}
