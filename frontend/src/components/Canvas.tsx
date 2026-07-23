@@ -71,13 +71,13 @@ function hexToRgba(hex: string): [number, number, number, number] {
 // The drawing canvas's "empty" appearance comes purely from the white CSS
 // background showing through an untouched (fully transparent) canvas
 // element. That mismatch matters once white becomes a real drawable color:
-// a white stroke over blank canvas would snap to opaque white pixel data
+// a white stroke over blank canvas would write opaque white pixel data
 // sitting right next to transparent "blank" pixels - an invisible boundary
-// to the eye, but a very real one to flood fill (and to hard-edge draws
-// generally), which would then refuse to flow across it. Painting the
-// canvas with actual opaque white up front - and every time it's cleared -
-// keeps the underlying pixel data consistent with what's visible, so a
-// white stroke is indistinguishable from blank canvas everywhere it matters.
+// to the eye, but a very real one to flood fill, which would then refuse to
+// flow across it. Painting the canvas with actual opaque white up front -
+// and every time it's cleared - keeps the underlying pixel data consistent
+// with what's visible, so a white stroke is indistinguishable from blank
+// canvas everywhere it matters.
 function fillWhite(ctx: CanvasRenderingContext2D, width: number, height: number): void {
   ctx.save();
   ctx.fillStyle = "#ffffff";
@@ -94,6 +94,11 @@ function colorsEqual(data: Uint8ClampedArray, index: number, target: [number, nu
   );
 }
 
+interface Point {
+  x: number;
+  y: number;
+}
+
 interface Bounds {
   minX: number;
   minY: number;
@@ -101,89 +106,159 @@ interface Bounds {
   maxY: number;
 }
 
-function boundsFromPoints(a: { x: number; y: number }, b: { x: number; y: number }, strokeWidth: number): Bounds {
-  // Pad by half the stroke width plus a couple pixels of slack for round
-  // caps/joins and any incidental anti-aliasing spread beyond the nominal
-  // width, so the snapshot fully covers everything this stroke could touch.
-  const pad = strokeWidth / 2 + 2;
-  return {
-    minX: Math.min(a.x, b.x) - pad,
-    minY: Math.min(a.y, b.y) - pad,
-    maxX: Math.max(a.x, b.x) + pad,
-    maxY: Math.max(a.y, b.y) + pad,
-  };
+function boundsFromPath(points: Point[], radius: number): Bounds {
+  let minX = points[0].x;
+  let minY = points[0].y;
+  let maxX = points[0].x;
+  let maxY = points[0].y;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const pad = radius + 1;
+  return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-// Canvas 2D has no way to disable anti-aliasing on stroked/filled paths
-// (unlike `imageSmoothingEnabled`, which only applies to drawImage), so every
-// stroke/shape edge would otherwise leave a fringe of partially-blended
-// pixels that are neither the drawn color nor the prior background - making
-// exact-match flood fill unreliable, and any tolerance/dilation-based
-// workaround compounds worse with every repeated fill of the same region
-// (each pass eats a little more of the fringe, so the "filled" area visibly
-// grows on each click). Instead, every draw call is wrapped in this helper,
-// which snapshots the affected region before drawing, then snaps every pixel
-// touched by the draw call to EXACTLY the drawn color or EXACTLY its prior
-// value - whichever it ended up closer to - so the canvas only ever contains
-// flat, exactly-matchable colors and flood fill can rely on cheap equality
-// with zero drift across repeated fills.
-function drawWithHardEdges(
+// Squared distance from a point to a segment [a, b] - used to test whether a
+// pixel falls within a thick line's "capsule" (a rectangle with semicircular
+// round caps at each end), which is exactly what a round-linecap stroke of a
+// given radius covers.
+function distanceToSegmentSquared(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) {
+    const ex = px - ax;
+    const ey = py - ay;
+    return ex * ex + ey * ey;
+  }
+  let t = ((px - ax) * dx + (py - ay) * dy) / lengthSquared;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  const ex = px - cx;
+  const ey = py - cy;
+  return ex * ex + ey * ey;
+}
+
+// Rasterizes a thick path directly into pixel data instead of asking
+// Canvas 2D to stroke it. Canvas 2D's path rasterizer always anti-aliases
+// (there's no flag to disable it for strokes/fills, unlike
+// `imageSmoothingEnabled`, which only affects `drawImage`), leaving a fringe
+// of partially-blended pixels along every edge that are neither the drawn
+// color nor the prior background - which made flood fill unreliable, and
+// every workaround for it (tolerance matching, eroding/dilating the fill
+// region, or post-hoc snapping pixels to the nearer of two colors) fragile
+// in its own way. Testing each pixel directly against the geometry
+// sidesteps the problem instead of patching around it: every pixel this
+// touches is set to exactly `color`, or left exactly as it was - never
+// anything in between.
+//
+// Each consecutive pair of points (and, if `closed`, the pair wrapping from
+// the last point back to the first) is treated as a capsule of the given
+// radius: a pixel is set to `color` if its center falls within `radius` of
+// that segment. A single point drawn as [p, p] naturally becomes a filled
+// circle (a degenerate, zero-length capsule), which is how a lone click/tap
+// renders as a dot.
+function rasterizePath(
   ctx: CanvasRenderingContext2D,
-  bounds: Bounds,
-  drawColor: [number, number, number, number],
-  draw: () => void,
+  points: Point[],
+  radius: number,
+  color: [number, number, number, number],
+  closed: boolean,
 ): void {
+  if (points.length === 0) return;
+  const bounds = boundsFromPath(points, radius);
   const x = Math.max(0, Math.floor(bounds.minX));
   const y = Math.max(0, Math.floor(bounds.minY));
   const right = Math.min(CANVAS_WIDTH, Math.ceil(bounds.maxX));
   const bottom = Math.min(CANVAS_HEIGHT, Math.ceil(bounds.maxY));
   const w = right - x;
   const h = bottom - y;
-  if (w <= 0 || h <= 0) {
-    draw();
-    return;
-  }
+  if (w <= 0 || h <= 0) return;
 
-  const before = ctx.getImageData(x, y, w, h);
-  draw();
-  const after = ctx.getImageData(x, y, w, h);
-  const beforeData = before.data;
-  const afterData = after.data;
+  const imageData = ctx.getImageData(x, y, w, h);
+  const data = imageData.data;
+  const radiusSquared = radius * radius;
+  const segmentCount = closed ? points.length : points.length - 1;
 
-  for (let i = 0; i < afterData.length; i += 4) {
-    if (
-      afterData[i] === beforeData[i] &&
-      afterData[i + 1] === beforeData[i + 1] &&
-      afterData[i + 2] === beforeData[i + 2] &&
-      afterData[i + 3] === beforeData[i + 3]
-    ) {
-      continue; // untouched by this draw call
-    }
-    const dr1 = afterData[i] - drawColor[0];
-    const dg1 = afterData[i + 1] - drawColor[1];
-    const db1 = afterData[i + 2] - drawColor[2];
-    const da1 = afterData[i + 3] - drawColor[3];
-    const distToDrawColor = dr1 * dr1 + dg1 * dg1 + db1 * db1 + da1 * da1;
-
-    const dr2 = afterData[i] - beforeData[i];
-    const dg2 = afterData[i + 1] - beforeData[i + 1];
-    const db2 = afterData[i + 2] - beforeData[i + 2];
-    const da2 = afterData[i + 3] - beforeData[i + 3];
-    const distToBefore = dr2 * dr2 + dg2 * dg2 + db2 * db2 + da2 * da2;
-
-    if (distToDrawColor <= distToBefore) {
-      afterData[i] = drawColor[0];
-      afterData[i + 1] = drawColor[1];
-      afterData[i + 2] = drawColor[2];
-      afterData[i + 3] = drawColor[3];
-    } else {
-      afterData[i] = beforeData[i];
-      afterData[i + 1] = beforeData[i + 1];
-      afterData[i + 2] = beforeData[i + 2];
-      afterData[i + 3] = beforeData[i + 3];
+  for (let s = 0; s < segmentCount; s++) {
+    const a = points[s];
+    const b = points[(s + 1) % points.length];
+    const segMinX = Math.max(0, Math.floor(Math.min(a.x, b.x) - radius - x));
+    const segMinY = Math.max(0, Math.floor(Math.min(a.y, b.y) - radius - y));
+    const segMaxX = Math.min(w - 1, Math.ceil(Math.max(a.x, b.x) + radius - x));
+    const segMaxY = Math.min(h - 1, Math.ceil(Math.max(a.y, b.y) + radius - y));
+    for (let py = segMinY; py <= segMaxY; py++) {
+      for (let px = segMinX; px <= segMaxX; px++) {
+        const worldX = px + x + 0.5;
+        const worldY = py + y + 0.5;
+        if (distanceToSegmentSquared(worldX, worldY, a.x, a.y, b.x, b.y) <= radiusSquared) {
+          const idx = (py * w + px) * 4;
+          data[idx] = color[0];
+          data[idx + 1] = color[1];
+          data[idx + 2] = color[2];
+          data[idx + 3] = color[3];
+        }
+      }
     }
   }
-  ctx.putImageData(after, x, y);
+
+  ctx.putImageData(imageData, x, y);
+}
+
+const ELLIPSE_OUTLINE_SEGMENTS = 96;
+
+// Same inscribed-rectangle geometry as drawShapeOutline (still used as-is
+// for the live drag preview, which is transient and never flood-filled so
+// its anti-aliasing doesn't matter), but returning perimeter vertices for
+// rasterizePath instead of tracing a Path2D.
+function shapeOutlinePoints(from: StrokePoint, to: StrokePoint, shape: ShapeType): Point[] {
+  const a = toPixels(from);
+  const b = toPixels(to);
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  const w = Math.abs(b.x - a.x);
+  const h = Math.abs(b.y - a.y);
+
+  if (shape === "rectangle") {
+    return [
+      { x, y },
+      { x: x + w, y },
+      { x: x + w, y: y + h },
+      { x, y: y + h },
+    ];
+  }
+  if (shape === "ellipse") {
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    const rx = w / 2;
+    const ry = h / 2;
+    const points: Point[] = [];
+    for (let i = 0; i < ELLIPSE_OUTLINE_SEGMENTS; i++) {
+      const angle = (i / ELLIPSE_OUTLINE_SEGMENTS) * Math.PI * 2;
+      points.push({ x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) });
+    }
+    return points;
+  }
+  return [
+    { x: x + w / 2, y },
+    { x, y: y + h },
+    { x: x + w, y: y + h },
+  ];
+}
+
+function drawShapeOutlinePixels(
+  ctx: CanvasRenderingContext2D,
+  from: StrokePoint,
+  to: StrokePoint,
+  shape: ShapeType,
+  strokeColor: string,
+  strokeWidth: number,
+): void {
+  rasterizePath(ctx, shapeOutlinePoints(from, to, shape), strokeWidth / 2, hexToRgba(strokeColor), true);
 }
 
 interface BoundingBox {
@@ -193,15 +268,21 @@ interface BoundingBox {
   maxY: number;
 }
 
-// Stack-based 4-connected flood fill, mutating `imageData.data` in place and
+// Stack-based 8-connected flood fill, mutating `imageData.data` in place and
 // returning the bounding box of every pixel it touched (or null if the
-// clicked pixel already exactly matches the fill color). Since every stroke
-// is drawn via drawWithHardEdges, the canvas only ever contains flat colors,
-// so exact equality is all that's needed - no tolerance, no dilation, no
-// drift on repeated fills. Matching is purely pixel-based, so it naturally
-// respects whatever shape the rendered strokes happen to form - including
-// sub-regions carved out by self-intersecting lines, which have no explicit
-// notion of "closed path" on a raster canvas.
+// clicked pixel already exactly matches the fill color). 8-connectivity
+// (orthogonal + diagonal neighbors) is used rather than plain 4-connectivity
+// so that regions which only touch corner-to-corner - e.g. the pinched tip
+// of a triangle, or two areas separated by a thin single-pixel-wide
+// staircased diagonal line - are still treated as the same fillable region
+// instead of leaving an unfilled sliver behind. Since every stroke is
+// rasterized directly into pixel data (see rasterizePath) rather than
+// through Canvas 2D's anti-aliased stroke/fill, the canvas only ever
+// contains flat colors, so exact equality is all that's needed - no
+// tolerance, no dilation, no drift on repeated fills. Matching is purely
+// pixel-based, so it naturally respects whatever shape the rendered strokes
+// happen to form - including sub-regions carved out by self-intersecting
+// lines, which have no explicit notion of "closed path" on a raster canvas.
 function floodFillPixels(
   imageData: ImageData,
   startX: number,
@@ -239,7 +320,16 @@ function floodFillPixels(
     if (x > box.maxX) box.maxX = x;
     if (y < box.minY) box.minY = y;
     if (y > box.maxY) box.maxY = y;
-    stack.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
+    stack.push(
+      x + 1, y,
+      x - 1, y,
+      x, y + 1,
+      x, y - 1,
+      x + 1, y + 1,
+      x + 1, y - 1,
+      x - 1, y + 1,
+      x - 1, y - 1,
+    );
   }
   return box;
 }
@@ -334,24 +424,11 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
       strokeColor: string,
       strokeWidth: number,
     ) {
-      const a = toPixels(from);
-      const b = toPixels(to);
-      drawWithHardEdges(ctx, boundsFromPoints(a, b, strokeWidth), hexToRgba(strokeColor), () => {
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = strokeWidth;
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-      });
+      rasterizePath(ctx, [toPixels(from), toPixels(to)], strokeWidth / 2, hexToRgba(strokeColor), false);
     }
 
     function drawShapeOn(ctx: CanvasRenderingContext2D, payload: StrokeShapePayload) {
-      const a = toPixels(payload.from);
-      const b = toPixels(payload.to);
-      drawWithHardEdges(ctx, boundsFromPoints(a, b, payload.width), hexToRgba(payload.color), () => {
-        drawShapeOutline(ctx, payload.from, payload.to, payload.shape, payload.color, payload.width);
-      });
+      drawShapeOutlinePixels(ctx, payload.from, payload.to, payload.shape, payload.color, payload.width);
     }
 
     function drawSegment(from: StrokePoint, to: StrokePoint, strokeColor: string, strokeWidth: number) {
@@ -487,16 +564,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
   function drawLocalSegment(from: StrokePoint, to: StrokePoint) {
     const ctx = ctxRef.current;
     if (!ctx) return;
-    const a = { x: from.x * CANVAS_WIDTH, y: from.y * CANVAS_HEIGHT };
-    const b = { x: to.x * CANVAS_WIDTH, y: to.y * CANVAS_HEIGHT };
-    drawWithHardEdges(ctx, boundsFromPoints(a, b, brushWidth), hexToRgba(color), () => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = brushWidth;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-    });
+    rasterizePath(ctx, [toPixels(from), toPixels(to)], brushWidth / 2, hexToRgba(color), false);
   }
 
   function clearPreview() {
@@ -596,11 +664,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
       if (start && end) {
         const ctx = ctxRef.current;
         if (ctx) {
-          const a = toPixels(start);
-          const b = toPixels(end);
-          drawWithHardEdges(ctx, boundsFromPoints(a, b, brushWidth), hexToRgba(color), () => {
-            drawShapeOutline(ctx, start, end, tool, color, brushWidth);
-          });
+          drawShapeOutlinePixels(ctx, start, end, tool, color, brushWidth);
         }
         socket.emit("draw_shape", { shape: tool, from: start, to: end, color, width: brushWidth });
       }
