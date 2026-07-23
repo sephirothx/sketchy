@@ -3,6 +3,7 @@ import "./App.css";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { LobbyBrowserPage } from "./pages/LobbyBrowserPage";
 import { GameRoomPage } from "./pages/GameRoomPage";
+import { VersionBadge } from "./components/VersionBadge";
 
 function App() {
   useGameSocketListeners();
@@ -13,6 +14,7 @@ function App() {
         <Route path="/" element={<LobbyBrowserPage />} />
         <Route path="/room/:code" element={<GameRoomPage />} />
       </Routes>
+      <VersionBadge />
     </BrowserRouter>
   );
 }
