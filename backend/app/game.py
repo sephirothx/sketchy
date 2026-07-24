@@ -7,13 +7,14 @@ from __future__ import annotations
 import difflib
 import random
 import re
+import string
 import time
 from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum
 from itertools import groupby
 
-from app.words import random_word_choices
+from app.words import WORDS, random_word_choices
 
 CHOOSE_WORD_SECONDS = 15
 DRAWING_SECONDS = 80
@@ -22,14 +23,32 @@ DRAWER_POINTS_PER_GUESSER = 10
 MIN_GUESS_POINTS = 10
 MAX_GUESS_POINTS = 100
 
-# Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter):
+# Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter / Game.buy_wheel_letter):
 # - "checkpoints" reveals letters to everyone at fixed points during drawing.
-# - "purchase" lets each guesser spend points to reveal a letter of their choice,
-#   visible only to them.
-HINT_MODES = ("none", "checkpoints", "purchase")
+# - "purchase" lets each guesser spend points to reveal a letter SLOT of their
+#   choice, visible only to them.
+# - "wheel" (wheel-of-fortune style) lets each guesser spend points to buy a
+#   specific LETTER, revealing every occurrence of it (if any) in the word,
+#   visible only to them. Unlike "purchase", the cost varies per letter
+#   (vowels cost more than consonants, and more common letters across the
+#   room's word pool cost more than rare ones) and is charged whether or not
+#   the letter turns out to be in the word.
+HINT_MODES = ("none", "checkpoints", "purchase", "wheel")
 # Each hint a player buys in a turn costs more than the last: 5, 10, 15, ...
-HINT_BASE_COST = 5
+HINT_BASE_COST = 12
 MIN_HIDDEN_LETTERS = 2
+
+# Wheel-of-fortune letter pricing: a flat base cost depending on whether the
+# letter is a vowel or consonant (vowels cost more, since there are only 5 of
+# them and they're needed to reveal most of a word), scaled by how common
+# that letter is across the room's own word pool (commoner -> pricier, rarer
+# -> cheaper, clamped to a sane range so a letter that never appears in any
+# candidate word is still worth something small rather than free).
+VOWELS = frozenset("aeiou")
+WHEEL_VOWEL_BASE_COST = 12
+WHEEL_CONSONANT_BASE_COST = 8
+WHEEL_MIN_FREQUENCY_MULTIPLIER = 1.0
+WHEEL_MAX_FREQUENCY_MULTIPLIER = 3.0
 
 # Close guess detection (see Game.guess_hint):
 # - distance 1 (a single insertion/deletion/substitution/transposition) is
@@ -129,7 +148,8 @@ class Game:
     hint_mode: str = "none"
     letter_positions: list[int] = field(default_factory=list)
     revealed_positions: set[int] = field(default_factory=set)
-    purchased_hints: dict[str, set[int]] = field(default_factory=dict)
+    purchased_hints: dict[str, set[int]] = field(default_factory=dict)  # slot hints ("purchase")
+    purchased_letters: dict[str, set[str]] = field(default_factory=dict)  # letter hints ("wheel")
 
     @property
     def total_turns(self) -> int:
@@ -164,6 +184,7 @@ class Game:
         self.letter_positions = []
         self.revealed_positions = set()
         self.purchased_hints = {}
+        self.purchased_letters = {}
         self.phase = Phase.CHOOSING_WORD
         return self.word_choices
 
@@ -196,9 +217,11 @@ class Game:
         stay tightly packed with a clear gap between words.
 
         Letters revealed via checkpoint hints (`revealed_positions`) are shown
-        to everyone. Letters a specific player bought (`purchased_hints`) are
-        only shown when `masked_word` is called with that player's token -
-        every other caller (including token=None) never sees them.
+        to everyone. Letters a specific player bought - either a slot
+        (`purchased_hints`, hint_mode="purchase") or a whole letter
+        (`purchased_letters`, hint_mode="wheel") - are only shown when
+        `masked_word` is called with that player's token - every other caller
+        (including token=None) never sees them.
         """
         if not self.word:
             return ""
@@ -206,6 +229,9 @@ class Game:
         revealed_indices = {
             self.letter_positions[slot] for slot in revealed_slots if slot < len(self.letter_positions)
         }
+        bought_letters = self.purchased_letters.get(token, set())
+        if bought_letters:
+            revealed_indices |= {i for i in self.letter_positions if self.word[i].lower() in bought_letters}
         masked_words = []
         for match in re.finditer(r"\S+", self.word):
             start = match.start()
@@ -268,6 +294,84 @@ class Game:
         if slot in purchased:
             return False
         purchased.add(slot)
+        return True
+
+    def _letter_frequencies(self) -> dict[str, float]:
+        """Relative frequency (0-1) of each a-z letter across this game's word
+        pool (`word_pool`, or the built-in `WORDS` list when no custom pool is
+        set) - used to price wheel-of-fortune letters by how rare they are
+        among the actual possible solutions, rather than English-language
+        letter frequency.
+        """
+        pool = self.word_pool or WORDS
+        counts = Counter(ch for w in pool for ch in w.lower() if ch.isalpha())
+        total = sum(counts.values()) or 1
+        return {letter: counts.get(letter, 0) / total for letter in string.ascii_lowercase}
+
+    def letter_price(self, letter: str) -> int:
+        """Base cost (before the per-turn escalation in `wheel_hint_cost`) of
+        buying `letter` in hint_mode="wheel": a flat vowel/consonant cost,
+        scaled up the more common that letter is across `word_pool`/`WORDS`
+        (rarer letters are cheaper - revealing every instance of a letter
+        that barely appears in the word is worth comparatively little).
+        """
+        letter = letter.lower()
+        base = WHEEL_VOWEL_BASE_COST if letter in VOWELS else WHEEL_CONSONANT_BASE_COST
+        frequencies = self._letter_frequencies()
+        max_frequency = max(frequencies.values()) or 1e-9
+        relative_frequency = frequencies.get(letter, 0.0)
+        frequency_multiplier = min(
+            WHEEL_MAX_FREQUENCY_MULTIPLIER,
+            max(
+                WHEEL_MIN_FREQUENCY_MULTIPLIER,
+                WHEEL_MIN_FREQUENCY_MULTIPLIER
+                + (WHEEL_MAX_FREQUENCY_MULTIPLIER - WHEEL_MIN_FREQUENCY_MULTIPLIER)
+                * (relative_frequency / max_frequency),
+            ),
+        )
+        return round(base * frequency_multiplier)
+
+    def wheel_hint_cost(self, token: str, letter: str) -> int:
+        """Cost in points for `token` to buy `letter` right now (hint_mode="wheel").
+
+        Like `hint_cost`, scales up with each wheel letter the player already
+        bought this turn (so hints stay useful early but can't be spammed
+        cheaply), on top of that letter's own base price.
+        """
+        already_bought = len(self.purchased_letters.get(token, set()))
+        return self.letter_price(letter) * (already_bought + 1)
+
+    def wheel_letter_prices(self, token: str) -> dict[str, int]:
+        """Current price of every a-z letter `token` hasn't already bought this
+        turn (hint_mode="wheel") - sent to the client to render the letter picker.
+        """
+        bought = self.purchased_letters.get(token, set())
+        return {
+            letter: self.wheel_hint_cost(token, letter)
+            for letter in string.ascii_lowercase
+            if letter not in bought
+        }
+
+    def buy_wheel_letter(self, token: str, letter: str) -> bool:
+        """Buy a whole letter for `token` only (hint_mode="wheel").
+
+        Every occurrence of `letter` in the word will be shown to this player
+        (via `masked_word`) regardless of whether it's actually present - the
+        caller is responsible for checking/deducting points before calling
+        this. Returns False if the letter is invalid, already bought by this
+        player this turn, or the token isn't an eligible guesser right now.
+        """
+        if self.hint_mode != "wheel" or self.phase != Phase.DRAWING or not self.word:
+            return False
+        if token == self.current_drawer or token in self.correct_guessers:
+            return False
+        letter = letter.lower()
+        if letter not in string.ascii_lowercase:
+            return False
+        bought = self.purchased_letters.setdefault(token, set())
+        if letter in bought:
+            return False
+        bought.add(letter)
         return True
 
     def record_stroke(self, event: str, payload: dict) -> None:

@@ -6,7 +6,7 @@ export interface PlayerInfo {
   isHost: boolean;
 }
 
-export type HintMode = "none" | "checkpoints" | "purchase";
+export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 
 export interface RoomSummary {
   id: string;

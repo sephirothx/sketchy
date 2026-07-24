@@ -208,6 +208,7 @@ export function LobbyBrowserPage() {
               <option value="none">Off</option>
               <option value="checkpoints">Timed hints, shown to everyone</option>
               <option value="purchase">Players can buy hints with points</option>
+              <option value="wheel">Buy full letters, wheel-of-fortune style</option>
             </select>
           </label>
           <button disabled={busy} onClick={handleCreateRoom}>
@@ -249,7 +250,12 @@ export function LobbyBrowserPage() {
                 {room.hintMode !== "none" && (
                   <>
                     {" "}
-                    &middot; {room.hintMode === "checkpoints" ? "timed hints" : "buyable hints"}
+                    &middot;{" "}
+                    {room.hintMode === "checkpoints"
+                      ? "timed hints"
+                      : room.hintMode === "wheel"
+                        ? "buy-a-letter hints"
+                        : "buyable hints"}
                   </>
                 )}
               </span>
