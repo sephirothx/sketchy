@@ -254,7 +254,7 @@ export function LobbyBrowserPage() {
                 )}
               </span>
               <button
-                disabled={busy || room.state !== "waiting" || room.playerCount >= room.maxPlayers}
+                disabled={busy || room.playerCount >= room.maxPlayers}
                 onClick={() => handleJoinRoom(room)}
               >
                 Join
