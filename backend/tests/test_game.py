@@ -276,14 +276,90 @@ def test_buy_hint_letter_is_private_to_the_buyer():
 def test_hint_cost_scales_up_per_hint_bought_this_turn():
     game = make_hint_game("testing", "purchase")
     buyer = next(t for t in game.turn_order if t != game.current_drawer)
-    assert game.hint_cost(buyer) == 5
+    assert game.hint_cost(buyer) == 12
     game.buy_hint_letter(buyer, 0)
-    assert game.hint_cost(buyer) == 10
+    assert game.hint_cost(buyer) == 24
     game.buy_hint_letter(buyer, 1)
-    assert game.hint_cost(buyer) == 15
+    assert game.hint_cost(buyer) == 36
     # Cost is tracked per-player - another guesser's first hint is still cheap.
     other = next(t for t in game.turn_order if t not in (game.current_drawer, buyer))
-    assert game.hint_cost(other) == 5
+    assert game.hint_cost(other) == 12
+
+
+def test_buy_wheel_letter_rejects_when_not_in_wheel_mode():
+    game = make_hint_game("testing", "purchase")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.buy_wheel_letter(guesser, "t") is False
+
+
+def test_buy_wheel_letter_rejects_drawer_and_correct_guessers():
+    game = make_hint_game("testing", "wheel")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.buy_wheel_letter(game.current_drawer, "t") is False
+
+    game.set_phase_deadline(DRAWING_SECONDS)
+    game.submit_guess(guesser, game.word)
+    assert game.buy_wheel_letter(guesser, "e") is False
+
+
+def test_buy_wheel_letter_rejects_duplicate_letter():
+    game = make_hint_game("testing", "wheel")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.buy_wheel_letter(guesser, "t") is True
+    assert game.buy_wheel_letter(guesser, "t") is False
+
+
+def test_buy_wheel_letter_reveals_all_occurrences_privately():
+    game = make_hint_game("testing", "wheel")
+    tokens = [t for t in game.turn_order if t != game.current_drawer]
+    buyer, other = tokens[0], tokens[1]
+    assert game.buy_wheel_letter(buyer, "t") is True  # "testing" has 2 t's
+
+    masked_for_buyer = game.masked_word(buyer)
+    masked_for_other = game.masked_word(other)
+    masked_for_no_one = game.masked_word()
+    assert masked_for_buyer.count("_") == len(game.word) - 2
+    assert masked_for_other.count("_") == len(game.word)
+    assert masked_for_no_one.count("_") == len(game.word)
+
+
+def test_buy_wheel_letter_still_recorded_when_letter_absent():
+    game = make_hint_game("testing", "wheel")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.buy_wheel_letter(guesser, "z") is True  # not in "testing"
+    assert game.masked_word(guesser).count("_") == len(game.word)
+    # Still counts toward this turn's escalating cost, and can't be re-bought.
+    assert game.buy_wheel_letter(guesser, "z") is False
+
+
+def test_wheel_hint_cost_scales_up_per_letter_bought_this_turn():
+    game = make_hint_game("testing", "wheel")
+    buyer = next(t for t in game.turn_order if t != game.current_drawer)
+    base_cost = game.letter_price("t")
+    assert game.wheel_hint_cost(buyer, "t") == base_cost
+    game.buy_wheel_letter(buyer, "t")
+    assert game.wheel_hint_cost(buyer, "e") == game.letter_price("e") * 2
+    game.buy_wheel_letter(buyer, "e")
+    assert game.wheel_hint_cost(buyer, "s") == game.letter_price("s") * 3
+    # Cost is tracked per-player - another guesser's first letter is still base price.
+    other = next(t for t in game.turn_order if t not in (game.current_drawer, buyer))
+    assert game.wheel_hint_cost(other, "t") == base_cost
+
+
+def test_letter_price_vowel_pricier_than_consonant_baseline():
+    # A word pool with equal frequency for the vowel and consonant compared,
+    # so only the flat vowel/consonant baseline (not frequency) affects price.
+    game = make_hint_game("aabb", "wheel")
+    assert game.letter_price("a") > game.letter_price("b")
+
+
+def test_letter_price_rarer_letter_costs_less():
+    # "t" appears far more often than "z" across this pool, so "z" (rarer)
+    # should cost less than "t", both being consonants - use two consonants
+    # to isolate the frequency effect from the vowel/consonant baseline.
+    game = make_hint_game("test", "wheel")
+    game.word_pool = ["ttttt", "ttttt", "ttttz"]
+    assert game.letter_price("z") < game.letter_price("t")
 
 
 def make_close_guess_game(word, n_players=3):

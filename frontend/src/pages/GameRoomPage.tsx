@@ -31,6 +31,7 @@ export function GameRoomPage() {
   const maskedWord = useGameStore((s) => s.maskedWord);
   const hintMode = useGameStore((s) => s.hintMode);
   const nextHintCost = useGameStore((s) => s.nextHintCost);
+  const letterPrices = useGameStore((s) => s.letterPrices);
   const myWord = useGameStore((s) => s.myWord);
   const guessedWord = useGameStore((s) => s.guessedWord);
   const wordChoices = useGameStore((s) => s.wordChoices);
@@ -167,6 +168,7 @@ export function GameRoomPage() {
               canBuyHint={phase === "drawing" && !amDrawer && !guessedWord}
               myScore={me?.score ?? 0}
               nextHintCost={nextHintCost}
+              letterPrices={letterPrices}
             />
             <Canvas isDrawer={canDrawNow} color={color} brushWidth={brushWidth} tool={tool} />
             {phase === "round_end" && lastRoundResult && (

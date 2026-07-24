@@ -94,6 +94,7 @@ export function useGameSocketListeners() {
       totalRounds: number;
       seconds: number;
       hintCost?: number | null;
+      letterPrices?: Record<string, number> | null;
     }) => {
       store.getState().startDrawing(payload);
     };
@@ -117,7 +118,11 @@ export function useGameSocketListeners() {
       store.getState().setGuessedWord(payload.word);
     };
 
-    const onHintRevealed = (payload: { maskedWord: string; hintCost?: number | null }) => {
+    const onHintRevealed = (payload: {
+      maskedWord: string;
+      hintCost?: number | null;
+      letterPrices?: Record<string, number> | null;
+    }) => {
       store.getState().setHintRevealed(payload);
     };
 
@@ -144,6 +149,7 @@ export function useGameSocketListeners() {
       totalRounds: number;
       remainingSeconds: number;
       hintCost?: number | null;
+      letterPrices?: Record<string, number> | null;
     }) => {
       if (payload.phase === "drawing" || payload.phase === "choosing_word") {
         store.getState().startDrawing({
@@ -153,6 +159,7 @@ export function useGameSocketListeners() {
           totalRounds: payload.totalRounds,
           seconds: payload.remainingSeconds,
           hintCost: payload.hintCost,
+          letterPrices: payload.letterPrices,
         });
       }
     };

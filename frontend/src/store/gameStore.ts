@@ -33,6 +33,7 @@ interface GameStore {
   phaseSeconds: number;
   phaseStartedAt: number;
   nextHintCost: number | null;
+  letterPrices: Record<string, number> | null;
 
   messages: ChatMessage[];
   lastRoundResult: RoundEndedPayload | null;
@@ -59,11 +60,16 @@ interface GameStore {
     totalRounds: number;
     seconds: number;
     hintCost?: number | null;
+    letterPrices?: Record<string, number> | null;
   }) => void;
   setMyWord: (word: string | null) => void;
   setGuessedWord: (word: string | null) => void;
   setMaskedWord: (word: string) => void;
-  setHintRevealed: (payload: { maskedWord: string; hintCost?: number | null }) => void;
+  setHintRevealed: (payload: {
+    maskedWord: string;
+    hintCost?: number | null;
+    letterPrices?: Record<string, number> | null;
+  }) => void;
   endRound: (payload: RoundEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
   setError: (error: string | null) => void;
@@ -82,6 +88,7 @@ const initialGameFields = {
   phaseSeconds: 0,
   phaseStartedAt: 0,
   nextHintCost: null as number | null,
+  letterPrices: null as Record<string, number> | null,
   messages: [] as ChatMessage[],
   lastRoundResult: null as RoundEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
@@ -144,7 +151,7 @@ export const useGameStore = create<GameStore>((set) => ({
     }),
   setMyWordChoices: (choices, seconds) =>
     set({ wordChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
-  startDrawing: ({ drawerToken, maskedWord, roundNumber, totalRounds, seconds, hintCost }) =>
+  startDrawing: ({ drawerToken, maskedWord, roundNumber, totalRounds, seconds, hintCost, letterPrices }) =>
     set({
       phase: "drawing",
       drawerToken,
@@ -155,12 +162,17 @@ export const useGameStore = create<GameStore>((set) => ({
       phaseStartedAt: Date.now(),
       wordChoices: [],
       nextHintCost: hintCost ?? null,
+      letterPrices: letterPrices ?? null,
     }),
   setMyWord: (word) => set({ myWord: word }),
   setGuessedWord: (word) => set({ guessedWord: word }),
   setMaskedWord: (word) => set({ maskedWord: word }),
-  setHintRevealed: ({ maskedWord, hintCost }) =>
-    set((s) => ({ maskedWord, nextHintCost: hintCost ?? s.nextHintCost })),
+  setHintRevealed: ({ maskedWord, hintCost, letterPrices }) =>
+    set((s) => ({
+      maskedWord,
+      nextHintCost: hintCost ?? s.nextHintCost,
+      letterPrices: letterPrices !== undefined ? letterPrices : s.letterPrices,
+    })),
   endRound: (payload) =>
     set((s) => ({
       phase: "round_end",

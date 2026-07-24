@@ -13,6 +13,7 @@ interface WordDisplayProps {
   canBuyHint?: boolean;
   myScore?: number;
   nextHintCost?: number | null;
+  letterPrices?: Record<string, number> | null;
 }
 
 // tightly spaced blanks per word, followed by each word's letter count (in
@@ -83,6 +84,7 @@ export function WordDisplay({
   canBuyHint = false,
   myScore = 0,
   nextHintCost = null,
+  letterPrices = null,
 }: WordDisplayProps) {
   if (isDrawer && wordChoices.length > 0 && !myWord) {
     return (
@@ -100,6 +102,7 @@ export function WordDisplay({
   }
 
   const canBuy = hintMode === "purchase" && canBuyHint && !isDrawer && !revealedWord && nextHintCost != null;
+  const canBuyWheel = hintMode === "wheel" && canBuyHint && !isDrawer && !revealedWord && letterPrices != null;
 
   return (
     <div className="word-display">
@@ -120,6 +123,28 @@ export function WordDisplay({
             canBuy ? { canAfford: myScore >= nextHintCost, cost: nextHintCost } : undefined,
           )}
         </span>
+      )}
+      {canBuyWheel && (
+        <div className="wheel-hint-panel">
+          <p className="hint-price">Buy a letter to reveal every occurrence:</p>
+          <div className="wheel-letter-grid">
+            {Object.entries(letterPrices)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([letter, price]) => (
+                <button
+                  key={letter}
+                  type="button"
+                  className="wheel-letter-btn"
+                  disabled={myScore < price}
+                  title={`Buy "${letter.toUpperCase()}" for ${price} points`}
+                  onClick={() => emitWithAck("buy_wheel_letter", { letter })}
+                >
+                  {letter.toUpperCase()}
+                  <sub>{price}</sub>
+                </button>
+              ))}
+          </div>
+        </div>
       )}
     </div>
   );

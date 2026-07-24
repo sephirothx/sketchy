@@ -151,6 +151,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             "totalRounds": game.rounds_total,
             "remainingSeconds": round(game.remaining_seconds()),
             "hintCost": game.hint_cost(token) if token else None,
+            "letterPrices": game.wheel_letter_prices(token) if token and game.hint_mode == "wheel" else None,
         }
 
     async def _start_turn(room: Room) -> None:
@@ -186,8 +187,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         drawer = room.players.get(game.current_drawer)
         if drawer and drawer.sid:
             await sio.emit("you_are_drawing", {"word": game.word}, to=drawer.sid)
-        # Sent per-player (rather than broadcast) because in "purchase" hint
-        # mode each guesser may have their own set of bought letters revealed.
+        # Sent per-player (rather than broadcast) because in "purchase"/"wheel"
+        # hint modes each guesser may have their own set of bought letters revealed.
         for p in room.player_list():
             if not p.sid:
                 continue
@@ -200,6 +201,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                     "totalRounds": game.rounds_total,
                     "seconds": game.drawing_seconds,
                     "hintCost": game.hint_cost(p.token),
+                    "letterPrices": game.wheel_letter_prices(p.token) if game.hint_mode == "wheel" else None,
                 },
                 to=p.sid,
             )
@@ -731,3 +733,46 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         )
         await _emit_room_state(room)
         return {"ok": True, "cost": cost}
+
+    @sio.event
+    async def buy_wheel_letter(sid, data):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        if not room or not room.game:
+            return {"ok": False, "error": "Not in an active game"}
+        game = room.game
+        if game.hint_mode != "wheel":
+            return {"ok": False, "error": "Letter buying is disabled in this room"}
+        player = room.players.get(session.get("token"))
+        if not player:
+            return {"ok": False, "error": "Not in this room"}
+        letter = str((data or {}).get("letter", "")).strip().lower()
+        if len(letter) != 1 or not letter.isalpha():
+            return {"ok": False, "error": "Invalid letter"}
+        cost = game.wheel_hint_cost(player.token, letter)
+        if player.score < cost:
+            return {"ok": False, "error": "Not enough points"}
+        if not game.buy_wheel_letter(player.token, letter):
+            return {"ok": False, "error": "Letter unavailable"}
+
+        player.score -= cost
+        found_count = sum(1 for i in game.letter_positions if game.word[i].lower() == letter)
+        await sio.emit(
+            "hint_revealed",
+            {
+                "maskedWord": game.masked_word(player.token),
+                "letterPrices": game.wheel_letter_prices(player.token),
+            },
+            to=sid,
+        )
+        if found_count:
+            feedback = f"You bought '{letter.upper()}' for {cost} pts - found {found_count} time{'s' if found_count != 1 else ''}!"
+        else:
+            feedback = f"You bought '{letter.upper()}' for {cost} pts - not in the word."
+        await sio.emit(
+            "chat_message",
+            {"token": "", "nickname": "", "text": feedback, "correct": False, "system": True},
+            to=sid,
+        )
+        await _emit_room_state(room)
+        return {"ok": True, "cost": cost, "found": found_count}
