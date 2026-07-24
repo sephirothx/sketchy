@@ -79,6 +79,26 @@ frontend/
 
 Requires Python 3.11+ and Node 20+.
 
+### Quick start
+
+```bash
+./scripts/serve.sh
+```
+
+Installs backend/frontend dependencies, builds the frontend, runs the backend test suite, then
+starts a single local server on http://localhost:8000 that serves the built frontend alongside
+the API/WebSocket (see [Production build](#production-build) below). Useful flags:
+
+```bash
+./scripts/serve.sh --skip-build   # reuse the existing frontend/dist
+./scripts/serve.sh --skip-tests   # skip the pytest run
+./scripts/serve.sh --force        # kill whatever is already listening on the port first
+PORT=9000 ./scripts/serve.sh      # serve on a custom port
+```
+
+For frontend development with hot-reload instead, follow the Backend/Frontend steps below and
+run each independently.
+
 ### Backend
 
 ```bash
