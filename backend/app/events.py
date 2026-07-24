@@ -306,6 +306,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not room or not token or token not in room.players:
             return
         player = room.players[token]
+        if player.sid != sid:
+            # Stale disconnect for a sid that's already been superseded by a
+            # newer connection (e.g. the client reconnected - a new sid ran
+            # join_room and updated player.sid - before this older sid's
+            # disconnect event was processed). The player is still actively
+            # connected via the newer sid, so ignore this one rather than
+            # incorrectly marking them disconnected.
+            return
         player.connected = False
         player.sid = None
         await sio.emit(
@@ -398,22 +406,34 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not room:
             return {"ok": False, "error": "Room not found"}
 
+        # Checked before the token-reconnect branch below: a client's first
+        # join_room call (e.g. from the lobby) is very often followed by a
+        # second one moments later on the very same socket (e.g. GameRoomPage
+        # re-joining with the token it was just given). That second call
+        # would otherwise match the token-reconnect branch and fire a
+        # spurious "reconnected" message for a session that never actually
+        # disconnected - so if this exact socket already has a live session
+        # in this room, just confirm it rather than reprocessing the join.
+        already_joined = await _existing_player_for_sid(sid, room.id)
+        if already_joined:
+            return {"ok": True, "roomId": room.id, "code": room.code, "token": already_joined.token}
+
         if token and token in room.players:
             player = room.players[token]
             await _join_socket_room(sid, room, player, is_reconnect=True)
             return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
 
-        already_joined = await _existing_player_for_sid(sid, room.id)
-        if already_joined:
-            return {"ok": True, "roomId": room.id, "code": room.code, "token": already_joined.token}
-
-        if room.state != "waiting":
-            return {"ok": False, "error": "Game already in progress"}
-
         try:
             player = room_manager.add_player(room, nickname)
         except RoomFullError:
             return {"ok": False, "error": "Room is full"}
+
+        # A game already in progress keeps running its existing turn_order -
+        # joining mid-game just enrolls the new player into future turns
+        # (appended to the end, so everyone already playing keeps their
+        # relative order) rather than blocking the join entirely.
+        if room.game:
+            room.game.turn_order.append(player.token)
 
         await _join_socket_room(sid, room, player, is_reconnect=False)
         return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
