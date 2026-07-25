@@ -177,7 +177,7 @@ def test_end_round_awards_drawer_bonus_per_guesser():
     for token in others:
         game.submit_guess(token, game.word)
     bonus = game.end_round()
-    assert bonus == 10 * len(others)
+    assert bonus == 300 * len(others)
     assert game.phase == Phase.ROUND_END
 
 
@@ -575,3 +575,27 @@ def test_guess_hint_partial_caps_duplicate_word_matches():
     # intersection): 1x "red" (guess has 1, target has 2) + 1x "panda"
     # (guess has 2, target has 1) = 3 + 5 = 8 correct letters total.
     assert game.guess_hint(guesser, "red panda panda") == "partial"
+
+
+def test_new_scoring_system_guesser_and_drawer_scores():
+    game = make_game(n_players=3)
+    game.start_next_turn()
+    game.choose_word(game.current_drawer, game.word_choices[0])
+
+    others = [t for t in game.turn_order if t != game.current_drawer]
+    g1, g2 = others[0], others[1]
+
+    # Guesser 1 guesses at start (t = 0, remaining = 80s) -> 300 points
+    game.remaining_seconds = lambda: DRAWING_SECONDS
+    _, p1 = game.submit_guess(g1, game.word)
+    assert p1 == 300
+
+    # Guesser 2 guesses halfway through (t = 40s, remaining = 40s) -> 200 points
+    game.remaining_seconds = lambda: DRAWING_SECONDS / 2
+    _, p2 = game.submit_guess(g2, game.word)
+    assert p2 == 200
+
+    # Drawer score equals sum of guesser scores (300 + 200 = 500)
+    drawer_score = game.end_round()
+    assert drawer_score == 500
+

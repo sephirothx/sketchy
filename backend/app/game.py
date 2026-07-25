@@ -19,9 +19,8 @@ from app.words import WORDS, random_word_choices
 CHOOSE_WORD_SECONDS = 15
 DRAWING_SECONDS = 80
 ROUND_END_SECONDS = 5
-DRAWER_POINTS_PER_GUESSER = 10
-MIN_GUESS_POINTS = 10
-MAX_GUESS_POINTS = 100
+MIN_GUESS_POINTS = 100
+MAX_GUESS_POINTS = 300
 MAX_STROKE_RECORDS = 20_000
 SCORING_MODES = ("none", "default")
 
@@ -469,7 +468,7 @@ class Game:
             self.guess_points[token] = 0
             return True, 0
         remaining_ratio = self.remaining_seconds() / self.drawing_seconds
-        points = max(MIN_GUESS_POINTS, round(MAX_GUESS_POINTS * remaining_ratio))
+        points = round(100 + 200 * remaining_ratio)
         self.guess_points[token] = points
         return True, points
 
@@ -512,12 +511,7 @@ class Game:
     def end_round(self) -> int | None:
         """Transition to ROUND_END, return drawer bonus points.
 
-        The bonus scales with how quickly guessers actually answered (each
-        guesser's own points, scaled down to the DRAWER_POINTS_PER_GUESSER
-        baseline), not just a flat amount per correct guesser. This removes
-        the incentive for a drawer to stall before drawing: delaying reveals
-        an easy word right before the deadline still caps everyone's guess
-        points near the floor, which now also caps the drawer's own bonus.
+        The drawer receives the sum of the points earned by all correct guessers in this round.
 
         Returns None if the game is no longer drawing, making the transition
         safe when a timeout races the final correct guess.
@@ -525,10 +519,7 @@ class Game:
         if self.phase != Phase.DRAWING:
             return None
         self.phase = Phase.ROUND_END
-        return sum(
-            round(points * DRAWER_POINTS_PER_GUESSER / MAX_GUESS_POINTS)
-            for points in self.guess_points.values()
-        )
+        return sum(self.guess_points.values())
 
     def advance_phase_after_round(self) -> Phase:
         self.phase = Phase.GAME_END if self.is_finished() else Phase.CHOOSING_WORD
