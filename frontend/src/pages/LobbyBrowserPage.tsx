@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { emitWithAck, SERVER_URL } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
-import type { AckResponse, HintMode, RoomSummary } from "../types";
+import type { AckResponse, HintMode, RoomSummary, ScoringMode } from "../types";
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -22,6 +22,7 @@ export function LobbyBrowserPage() {
   const [customWords, setCustomWords] = useState("");
   const [customWordsOnly, setCustomWordsOnly] = useState(false);
   const [hintMode, setHintMode] = useState<HintMode>("none");
+  const [scoringMode, setScoringMode] = useState<ScoringMode>("default");
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,6 +73,7 @@ export function LobbyBrowserPage() {
       customWords: customWords.trim(),
       customWordsOnly,
       hintMode,
+      scoringMode,
     });
     setBusy(false);
     if (res.ok && res.roomId && res.code && res.token) {
@@ -203,12 +205,32 @@ export function LobbyBrowserPage() {
             Only use custom words (skip the default word list)
           </label>
           <label>
+            Scoring
+            <select
+              value={scoringMode}
+              onChange={(e) => {
+                const mode = e.target.value as ScoringMode;
+                setScoringMode(mode);
+                if (mode === "none" && (hintMode === "purchase" || hintMode === "wheel")) {
+                  setHintMode("none");
+                }
+              }}
+            >
+              <option value="default">Default scoring</option>
+              <option value="none">No scoring — just for fun</option>
+            </select>
+          </label>
+          <label>
             Hint letters
             <select value={hintMode} onChange={(e) => setHintMode(e.target.value as HintMode)}>
               <option value="none">Off</option>
               <option value="checkpoints">Timed hints, shown to everyone</option>
-              <option value="purchase">Players can buy hints with points</option>
-              <option value="wheel">Buy full letters, wheel-of-fortune style</option>
+              <option value="purchase" disabled={scoringMode === "none"}>
+                Players can buy hints with points
+              </option>
+              <option value="wheel" disabled={scoringMode === "none"}>
+                Buy full letters, wheel-of-fortune style
+              </option>
             </select>
           </label>
           <button disabled={busy} onClick={handleCreateRoom}>
@@ -244,6 +266,7 @@ export function LobbyBrowserPage() {
                 {room.playerCount}/{room.maxPlayers} players &middot; {room.state} &middot;{" "}
                 {room.rounds} {room.rounds === 1 ? "round" : "rounds"} &middot;{" "}
                 {room.drawingSeconds}s to draw &middot;{" "}
+                {room.scoringMode === "none" ? "no scoring" : "default scoring"} &middot;{" "}
                 {room.customWordCount > 0
                   ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " + default"}`
                   : "default words"}

@@ -7,6 +7,7 @@ import type {
   PlayerInfo,
   RoomStatePayload,
   RoundEndedPayload,
+  ScoringMode,
 } from "../types";
 
 interface GameStore {
@@ -19,6 +20,7 @@ interface GameStore {
   maxPlayers: number;
   rounds: number;
   hintMode: HintMode;
+  scoringMode: ScoringMode;
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
 
@@ -104,6 +106,7 @@ export const useGameStore = create<GameStore>((set) => ({
   maxPlayers: 8,
   rounds: 3,
   hintMode: "none" as HintMode,
+  scoringMode: "default" as ScoringMode,
   roomState: "waiting",
   players: [],
   error: null,
@@ -127,6 +130,7 @@ export const useGameStore = create<GameStore>((set) => ({
       maxPlayers: payload.maxPlayers,
       rounds: payload.rounds,
       hintMode: payload.hintMode,
+      scoringMode: payload.scoringMode ?? "default",
       roomState: payload.state,
       players: payload.players,
     }),

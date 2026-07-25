@@ -61,3 +61,13 @@ def test_get_room_by_code_case_insensitive():
     room = rm.create_room(name="Room", is_public=False)
     found = rm.get_room_by_code(room.code.lower())
     assert found is room
+
+
+def test_scoring_mode_is_in_room_payloads():
+    rm = RoomManager()
+    room = rm.create_room(name="Casual", is_public=True, scoring_mode="none")
+    player = rm.add_player(room, "Alice")
+
+    assert room.to_public_summary()["scoringMode"] == "none"
+    assert room.to_state_payload()["scoringMode"] == "none"
+    assert player.score == 0

@@ -23,6 +23,7 @@ DRAWER_POINTS_PER_GUESSER = 10
 MIN_GUESS_POINTS = 10
 MAX_GUESS_POINTS = 100
 MAX_STROKE_RECORDS = 20_000
+SCORING_MODES = ("none", "default")
 
 # Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter / Game.buy_wheel_letter):
 # - "checkpoints" reveals letters to everyone at fixed points during drawing.
@@ -134,6 +135,7 @@ def _is_close_pair(guess: str, target: str) -> bool:
 class Game:
     turn_order: list[str]
     rounds_total: int = 3
+    scoring_mode: str = "default"
     turn_index: int = -1
     phase: Phase = Phase.CHOOSING_WORD
     current_drawer: str | None = None
@@ -141,6 +143,7 @@ class Game:
     word_choices: list[str] = field(default_factory=list)
     correct_guessers: set[str] = field(default_factory=set)
     guess_points: dict[str, int] = field(default_factory=dict)
+    guess_times: dict[str, float] = field(default_factory=dict)
     strokes: list[dict] = field(default_factory=list)
     phase_deadline: float | None = None
     used_words: set[str] = field(default_factory=set)
@@ -225,6 +228,7 @@ class Game:
         self.word_choices = random_word_choices(3, exclude=self.used_words, pool=self.word_pool)
         self.correct_guessers = set()
         self.guess_points = {}
+        self.guess_times = {}
         self.strokes = []
         self.letter_positions = []
         self.revealed_positions = set()
@@ -457,6 +461,13 @@ class Game:
         if normalized_guess != normalized_word:
             return False, 0
         self.correct_guessers.add(token)
+        self.guess_times[token] = max(
+            0.0,
+            min(self.drawing_seconds, self.drawing_seconds - self.remaining_seconds()),
+        )
+        if self.scoring_mode == "none":
+            self.guess_points[token] = 0
+            return True, 0
         remaining_ratio = self.remaining_seconds() / self.drawing_seconds
         points = max(MIN_GUESS_POINTS, round(MAX_GUESS_POINTS * remaining_ratio))
         self.guess_points[token] = points

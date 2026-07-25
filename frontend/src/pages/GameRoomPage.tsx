@@ -30,6 +30,7 @@ export function GameRoomPage() {
   const drawerToken = useGameStore((s) => s.drawerToken);
   const maskedWord = useGameStore((s) => s.maskedWord);
   const hintMode = useGameStore((s) => s.hintMode);
+  const scoringMode = useGameStore((s) => s.scoringMode);
   const nextHintCost = useGameStore((s) => s.nextHintCost);
   const letterPrices = useGameStore((s) => s.letterPrices);
   const myWord = useGameStore((s) => s.myWord);
@@ -116,7 +117,8 @@ export function GameRoomPage() {
       <header className="game-header">
         <h2>{roomName || code}</h2>
         <span className="room-code">
-          Code: {code} ({isPublic ? "public" : "private"})
+          Code: {code} ({isPublic ? "public" : "private"} &middot;{" "}
+          {scoringMode === "default" ? "default scoring" : "no scoring"})
         </span>
         <button onClick={handleLeave}>Leave</button>
       </header>
@@ -131,14 +133,16 @@ export function GameRoomPage() {
           )}
           {finalScores && (
             <div className="game-end-panel">
-              <h3>Final scores</h3>
-              <ol>
-                {finalScores.map((s) => (
-                  <li key={s.token}>
-                    {s.nickname}: {s.score}
-                  </li>
-                ))}
-              </ol>
+              <h3>{scoringMode === "default" ? "Final scores" : "Game over!"}</h3>
+              {scoringMode === "default" && (
+                <ol>
+                  {finalScores.map((s) => (
+                    <li key={s.token}>
+                      {s.nickname}: {s.score}
+                    </li>
+                  ))}
+                </ol>
+              )}
             </div>
           )}
         </div>
@@ -147,7 +151,11 @@ export function GameRoomPage() {
       {roomState === "playing" && (
         <div className="game-layout">
           <aside className="sidebar-left">
-            <PlayerList players={players} drawerToken={drawerToken} />
+            <PlayerList
+              players={players}
+              drawerToken={drawerToken}
+              showScores={scoringMode === "default"}
+            />
           </aside>
           <main className="canvas-area">
             <div className="round-info">
@@ -175,7 +183,9 @@ export function GameRoomPage() {
               <RoundEndOverlay
                 word={lastRoundResult.word}
                 drawerToken={lastRoundResult.drawerToken}
+                guesses={lastRoundResult.guesses}
                 scores={lastRoundResult.scores}
+                showScores={scoringMode === "default"}
               />
             )}
             {canDrawNow && (

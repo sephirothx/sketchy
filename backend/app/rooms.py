@@ -39,6 +39,7 @@ class Room:
     custom_words_only: bool = False
     drawing_seconds: int = DRAWING_SECONDS
     hint_mode: str = "none"
+    scoring_mode: str = "default"
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
@@ -78,6 +79,7 @@ class Room:
             "customWordsOnly": self.custom_words_only,
             "drawingSeconds": self.drawing_seconds,
             "hintMode": self.hint_mode,
+            "scoringMode": self.scoring_mode,
             "state": self.state,
         }
 
@@ -93,6 +95,7 @@ class Room:
             "customWordsOnly": self.custom_words_only,
             "drawingSeconds": self.drawing_seconds,
             "hintMode": self.hint_mode,
+            "scoringMode": self.scoring_mode,
             "state": self.state,
             "players": [
                 {
@@ -121,6 +124,7 @@ class RoomManager:
         custom_words_only: bool = False,
         drawing_seconds: int = DRAWING_SECONDS,
         hint_mode: str = "none",
+        scoring_mode: str = "default",
     ) -> Room:
         room_id = str(uuid.uuid4())
         room = Room(
@@ -134,6 +138,7 @@ class RoomManager:
             custom_words_only=custom_words_only,
             drawing_seconds=drawing_seconds,
             hint_mode=hint_mode,
+            scoring_mode=scoring_mode,
         )
         self.rooms[room_id] = room
         return room
@@ -167,7 +172,12 @@ class RoomManager:
         if len(room.players) >= room.max_players:
             raise RoomFullError("Room is full")
         token = str(uuid.uuid4())
-        player = Player(token=token, nickname=nickname, is_host=len(room.players) == 0)
+        player = Player(
+            token=token,
+            nickname=nickname,
+            score=STARTING_SCORE if room.scoring_mode == "default" else 0,
+            is_host=len(room.players) == 0,
+        )
         room.players[token] = player
         return player
 

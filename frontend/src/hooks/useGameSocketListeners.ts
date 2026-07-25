@@ -105,10 +105,12 @@ export function useGameSocketListeners() {
 
     const onCorrectGuess = (payload: { token: string; nickname: string; points: number }) => {
       store.getState().applyGuessPoints(payload.token, payload.points);
+      const pointsSuffix =
+        store.getState().scoringMode === "default" ? ` (+${payload.points})` : "";
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.nickname} guessed the word! (+${payload.points})`,
+        text: `${payload.nickname} guessed the word!${pointsSuffix}`,
         correct: false,
         system: true,
       });

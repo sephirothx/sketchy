@@ -3,10 +3,11 @@ import type { PlayerInfo } from "../types";
 interface PlayerListProps {
   players: PlayerInfo[];
   drawerToken: string | null;
+  showScores?: boolean;
 }
 
-export function PlayerList({ players, drawerToken }: PlayerListProps) {
-  const sorted = [...players].sort((a, b) => b.score - a.score);
+export function PlayerList({ players, drawerToken, showScores = true }: PlayerListProps) {
+  const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
   return (
     <ul className="player-list">
       {sorted.map((p) => (
@@ -17,7 +18,7 @@ export function PlayerList({ players, drawerToken }: PlayerListProps) {
             {p.isHost ? " \u2605" : ""}
             {!p.connected ? " (disconnected)" : ""}
           </span>
-          <span className="player-score">{p.score}</span>
+          {showScores && <span className="player-score">{p.score}</span>}
         </li>
       ))}
     </ul>

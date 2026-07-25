@@ -60,6 +60,33 @@ def test_validated_draw_payload_rejects_malformed_input(event_name, payload):
 
 
 @pytest.mark.asyncio
+async def test_create_room_accepts_no_scoring_and_disables_point_purchase_hints():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value=None)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid",
+        {
+            "nickname": "Host",
+            "name": "Casual",
+            "scoringMode": "none",
+            "hintMode": "purchase",
+        },
+    )
+
+    room = room_manager.get_room(response["roomId"])
+    assert room is not None
+    assert room.scoring_mode == "none"
+    assert room.hint_mode == "none"
+    assert room.player_list()[0].score == 0
+
+
+@pytest.mark.asyncio
 async def test_draw_handler_rejects_events_outside_drawing_phase():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -194,6 +221,11 @@ async def test_simultaneous_final_guesses_end_round_once():
     )
     assert players[0].score == STARTING_SCORE + drawer_bonus
     assert [call.args[0] for call in sio.emit.await_args_list].count("round_ended") == 1
+    round_ended_payload = next(
+        call.args[1] for call in sio.emit.await_args_list if call.args[0] == "round_ended"
+    )
+    assert {guess["nickname"] for guess in round_ended_payload["guesses"]} == {"One", "Two"}
+    assert all(0 <= guess["seconds"] <= DRAWING_SECONDS for guess in round_ended_payload["guesses"])
 
     timer = events._phase_timers.pop(room.id)
     timer.cancel()

@@ -652,6 +652,42 @@
   letter-spacing: 0.5px;
 }
 
+.round-guesses-heading {
+  margin: 0 0 6px;
+  color: #495057;
+}
+
+.round-guesses-list {
+  margin: 0 0 14px;
+  padding-left: 24px;
+}
+
+.round-guesses-list li {
+  padding: 3px 0 3px 4px;
+}
+
+.round-guesses-list li::marker {
+  color: #868e96;
+  font-weight: 600;
+}
+
+.round-guesses-list span {
+  margin-right: 24px;
+}
+
+.round-guesses-list time {
+  float: right;
+  color: #495057;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.round-no-guesses {
+  margin: 0 0 14px;
+  color: #868e96;
+  font-style: italic;
+}
+
 .round-score-list {
   list-style: none;
   margin: 0;

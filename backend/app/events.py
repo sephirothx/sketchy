@@ -13,6 +13,7 @@ from app.game import (
     CHOOSE_WORD_SECONDS,
     HINT_MODES,
     ROUND_END_SECONDS,
+    SCORING_MODES,
     Game,
     Phase,
 )
@@ -330,6 +331,18 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 "word": game.word,
                 "drawerToken": game.current_drawer,
                 "drawerBonus": drawer_bonus,
+                "guesses": [
+                    {
+                        "token": p.token,
+                        "nickname": p.nickname,
+                        "seconds": game.guess_times[p.token],
+                    }
+                    for p in sorted(
+                        players,
+                        key=lambda player: game.guess_times.get(player.token, float("inf")),
+                    )
+                    if p.token in game.guess_times
+                ],
                 "scores": [
                     {
                         "token": p.token,
@@ -482,6 +495,11 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         hint_mode = str(data.get("hintMode", "none") or "none")
         if hint_mode not in HINT_MODES:
             hint_mode = "none"
+        scoring_mode = str(data.get("scoringMode", "default") or "default")
+        if scoring_mode not in SCORING_MODES:
+            scoring_mode = "default"
+        if scoring_mode == "none" and hint_mode in ("purchase", "wheel"):
+            hint_mode = "none"
 
         room = room_manager.create_room(
             name=name,
@@ -492,6 +510,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             custom_words_only=custom_words_only,
             drawing_seconds=drawing_seconds,
             hint_mode=hint_mode,
+            scoring_mode=scoring_mode,
         )
         player = room_manager.add_player(room, nickname)
         await _join_socket_room(sid, room, player, is_reconnect=False)
@@ -582,7 +601,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return {"ok": False, "error": "Game already in progress"}
 
         for p in room.player_list():
-            p.score = STARTING_SCORE
+            p.score = STARTING_SCORE if room.scoring_mode == "default" else 0
         room.state = "playing"
         room.game = Game(
             turn_order=[p.token for p in room.connected_players()],
@@ -590,6 +609,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             word_pool=room.effective_word_pool(),
             drawing_seconds=room.drawing_seconds,
             hint_mode=room.hint_mode,
+            scoring_mode=room.scoring_mode,
         )
         await _emit_room_state(room)
         await sio.emit("game_started", {}, room=room.id)
