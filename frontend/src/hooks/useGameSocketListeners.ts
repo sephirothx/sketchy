@@ -151,7 +151,14 @@ export function useGameSocketListeners() {
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
     }) => {
-      if (payload.phase === "drawing" || payload.phase === "choosing_word") {
+      if (payload.phase === "choosing_word") {
+        store.getState().startChoosing({
+          drawerToken: payload.drawerToken || "",
+          roundNumber: payload.roundNumber,
+          totalRounds: payload.totalRounds,
+          seconds: payload.remainingSeconds,
+        });
+      } else if (payload.phase === "drawing") {
         store.getState().startDrawing({
           drawerToken: payload.drawerToken || "",
           maskedWord: payload.maskedWord,

@@ -22,6 +22,7 @@ ROUND_END_SECONDS = 5
 DRAWER_POINTS_PER_GUESSER = 10
 MIN_GUESS_POINTS = 10
 MAX_GUESS_POINTS = 100
+MAX_STROKE_RECORDS = 20_000
 
 # Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter / Game.buy_wheel_letter):
 # - "checkpoints" reveals letters to everyone at fixed points during drawing.
@@ -163,6 +164,50 @@ class Game:
 
     def is_finished(self) -> bool:
         return self.turn_index + 1 >= self.total_turns
+
+    def add_player_to_rotation(self, token: str) -> None:
+        """Add a mid-game player without moving the current turn cursor."""
+        if token in self.turn_order:
+            return
+        current_round = self.round_number
+        current_drawer = self.current_drawer
+        self.turn_order.append(token)
+        if current_drawer in self.turn_order and current_round > 0:
+            current_position = self.turn_order.index(current_drawer)
+            self.turn_index = (current_round - 1) * len(self.turn_order) + current_position
+
+    def remove_player_from_rotation(self, token: str) -> bool:
+        """Remove a player while preserving the current or next turn.
+
+        Returns whether the removed player was the active drawer. In that
+        case, the cursor is positioned immediately before the next survivor
+        so the caller can start the replacement turn.
+        """
+        if token not in self.turn_order:
+            return False
+
+        old_order = self.turn_order
+        removed_position = old_order.index(token)
+        current_round = self.round_number
+        was_drawer = token == self.current_drawer
+        surviving_order = [player_token for player_token in old_order if player_token != token]
+        self.turn_order = surviving_order
+
+        if not surviving_order:
+            self.current_drawer = None
+            return was_drawer
+
+        if was_drawer:
+            next_old_position = (removed_position + 1) % len(old_order)
+            next_token = old_order[next_old_position]
+            next_round = current_round + (next_old_position <= removed_position)
+            next_position = surviving_order.index(next_token)
+            self.turn_index = (next_round - 1) * len(surviving_order) + next_position - 1
+        elif self.current_drawer in surviving_order:
+            current_position = surviving_order.index(self.current_drawer)
+            self.turn_index = (current_round - 1) * len(surviving_order) + current_position
+
+        return was_drawer
 
     def set_phase_deadline(self, seconds: float) -> None:
         self.phase_deadline = time.monotonic() + seconds
@@ -374,8 +419,11 @@ class Game:
         bought.add(letter)
         return True
 
-    def record_stroke(self, event: str, payload: dict) -> None:
+    def record_stroke(self, event: str, payload: dict) -> bool:
+        if len(self.strokes) >= MAX_STROKE_RECORDS:
+            return False
         self.strokes.append({"event": event, "payload": payload})
+        return True
 
     def undo_last_stroke(self) -> bool:
         """Remove the most recent logical stroke from the recorded history.
@@ -450,7 +498,7 @@ class Game:
     def all_guessed(self, total_guessers: int) -> bool:
         return total_guessers > 0 and len(self.correct_guessers) >= total_guessers
 
-    def end_round(self) -> int:
+    def end_round(self) -> int | None:
         """Transition to ROUND_END, return drawer bonus points.
 
         The bonus scales with how quickly guessers actually answered (each
@@ -459,7 +507,12 @@ class Game:
         the incentive for a drawer to stall before drawing: delaying reveals
         an easy word right before the deadline still caps everyone's guess
         points near the floor, which now also caps the drawer's own bonus.
+
+        Returns None if the game is no longer drawing, making the transition
+        safe when a timeout races the final correct guess.
         """
+        if self.phase != Phase.DRAWING:
+            return None
         self.phase = Phase.ROUND_END
         return sum(
             round(points * DRAWER_POINTS_PER_GUESSER / MAX_GUESS_POINTS)

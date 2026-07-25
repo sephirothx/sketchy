@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
+import re
 
 import socketio
 
@@ -29,6 +31,15 @@ CANVAS_HEIGHT = 600
 # extremely well as PNG, so a legitimate fill of the whole canvas is nowhere
 # near this size - this is purely a backstop against abusive payloads.
 MAX_FILL_PATCH_CHARS = 300_000
+MAX_POINTS_PER_MOVE = 256
+MAX_BRUSH_WIDTH = 64
+# Pointer capture keeps reporting movement after the cursor leaves the canvas.
+# Those off-canvas points are required to clip the same segment at the canvas
+# edge for remote clients. Keep a generous finite bound to reject pathological
+# payloads without restricting normal pointer movement across the viewport.
+MAX_NORMALIZED_COORDINATE_MAGNITUDE = 1_000_000
+DRAW_SHAPES = frozenset(("rectangle", "ellipse", "triangle"))
+HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 # Per-room asyncio task driving the current phase's timeout (choosing/drawing/round-end).
 _phase_timers: dict[str, asyncio.Task] = {}
@@ -41,6 +52,74 @@ _disconnect_timers: dict[str, asyncio.Task] = {}
 
 def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, value))
+
+
+def _draw_number(value, low: float, high: float) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) and low <= number <= high else None
+
+
+def _draw_point(value) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    x = _draw_number(
+        value.get("x"),
+        -MAX_NORMALIZED_COORDINATE_MAGNITUDE,
+        MAX_NORMALIZED_COORDINATE_MAGNITUDE,
+    )
+    y = _draw_number(
+        value.get("y"),
+        -MAX_NORMALIZED_COORDINATE_MAGNITUDE,
+        MAX_NORMALIZED_COORDINATE_MAGNITUDE,
+    )
+    return {"x": x, "y": y} if x is not None and y is not None else None
+
+
+def _draw_style(data: dict) -> tuple[str, float] | None:
+    color = data.get("color")
+    width = _draw_number(data.get("width"), 1, MAX_BRUSH_WIDTH)
+    if not isinstance(color, str) or not HEX_COLOR_PATTERN.fullmatch(color) or width is None:
+        return None
+    return color.lower(), width
+
+
+def _validated_draw_payload(event_name: str, data) -> dict | None:
+    if event_name == "draw_end":
+        return {}
+    if not isinstance(data, dict):
+        return None
+    if event_name == "draw_start":
+        point = _draw_point(data)
+        style = _draw_style(data)
+        if not point or not style:
+            return None
+        color, width = style
+        return {**point, "color": color, "width": width}
+    if event_name == "draw_move":
+        points = data.get("points")
+        if not isinstance(points, list) or not 1 <= len(points) <= MAX_POINTS_PER_MOVE:
+            return None
+        validated_points = []
+        for point in points:
+            validated_point = _draw_point(point)
+            if validated_point is None:
+                return None
+            validated_points.append(validated_point)
+        return {"points": validated_points}
+    if event_name == "draw_shape":
+        shape = data.get("shape")
+        start = _draw_point(data.get("from"))
+        end = _draw_point(data.get("to"))
+        style = _draw_style(data)
+        if not isinstance(shape, str) or shape not in DRAW_SHAPES or not start or not end or not style:
+            return None
+        color, width = style
+        return {"shape": shape, "from": start, "to": end, "color": color, "width": width}
+    if event_name == "draw_fill":
+        return data
+    return None
 
 
 def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> None:
@@ -136,11 +215,17 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             )
             await sio.emit("sync_strokes", {"strokes": room.game.strokes}, to=sid)
             if player.token == room.game.current_drawer:
-                await sio.emit(
-                    "you_are_drawing",
-                    {"word": room.game.word, "choices": room.game.word_choices},
-                    to=sid,
-                )
+                if room.game.phase == Phase.CHOOSING_WORD:
+                    await sio.emit(
+                        "your_word_choices",
+                        {
+                            "choices": room.game.word_choices,
+                            "seconds": round(room.game.remaining_seconds()),
+                        },
+                        to=sid,
+                    )
+                else:
+                    await sio.emit("you_are_drawing", {"word": room.game.word}, to=sid)
 
     def _turn_payload(game: Game, token: str | None = None) -> dict:
         return {
@@ -208,12 +293,15 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         schedule_phase_timer(room, game.drawing_seconds)
         schedule_hint_checkpoints(room)
 
-    async def _end_round(room: Room) -> None:
+    async def _end_round(room: Room) -> bool:
         game = room.game
-        assert game is not None
+        if not game or game.phase != Phase.DRAWING:
+            return False
         cancel_phase_timer(room.id)
         cancel_hint_timers(room.id)
         drawer_bonus = game.end_round()
+        if drawer_bonus is None:
+            return False
         drawer = room.players.get(game.current_drawer)
         if drawer:
             drawer.score += drawer_bonus
@@ -257,6 +345,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             room=room.id,
         )
         schedule_phase_timer(room, ROUND_END_SECONDS)
+        return True
 
     async def _finish_or_next(room: Room) -> None:
         game = room.game
@@ -331,20 +420,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             still_present = room.players.get(token)
             if not still_present or still_present.connected:
                 return
-            was_drawer = bool(room.game and room.game.current_drawer == token)
             room_manager.remove_player(room, token)
             await sio.emit("player_left", {"token": token}, room=room.id)
             if not room.connected_players():
                 cancel_phase_timer(room.id)
+                cancel_hint_timers(room.id)
                 room_manager.remove_room_if_empty(room.id)
                 return
-            if room.game:
-                room.game.turn_order = [t for t in room.game.turn_order if t != token]
-                if not room.game.turn_order:
-                    room.state = "waiting"
-                    room.game = None
-                elif was_drawer:
-                    await _start_turn(room)
+            await _remove_player_from_game(room, token)
             await _emit_room_state(room)
 
         _disconnect_timers[token] = asyncio.create_task(_evict_after_grace())
@@ -352,6 +435,24 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     # ------------------------------------------------------------------
     # Room lifecycle
     # ------------------------------------------------------------------
+
+    async def _remove_player_from_game(room: Room, token: str) -> None:
+        game = room.game
+        if not game:
+            return
+        was_drawer = game.remove_player_from_rotation(token)
+        if not game.turn_order:
+            cancel_phase_timer(room.id)
+            cancel_hint_timers(room.id)
+            room.state = "waiting"
+            room.game = None
+        elif was_drawer:
+            cancel_phase_timer(room.id)
+            cancel_hint_timers(room.id)
+            if game.is_finished():
+                await _finish_or_next(room)
+            else:
+                await _start_turn(room)
 
     async def _existing_player_for_sid(sid: str, room_id: str) -> Player | None:
         """If this socket already has a live session in the target room, return its player.
@@ -435,7 +536,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         # (appended to the end, so everyone already playing keeps their
         # relative order) rather than blocking the join entirely.
         if room.game:
-            room.game.turn_order.append(player.token)
+            room.game.add_player_to_rotation(player.token)
 
         await _join_socket_room(sid, room, player, is_reconnect=False)
         return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
@@ -455,10 +556,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         await sio.save_session(sid, {})
         if not room.connected_players():
             cancel_phase_timer(room.id)
+            cancel_hint_timers(room.id)
             room_manager.remove_room_if_empty(room.id)
         else:
-            if room.game:
-                room.game.turn_order = [t for t in room.game.turn_order if t != token]
+            await _remove_player_from_game(room, token)
             await sio.emit("player_left", {"token": token}, room=room.id)
             await _emit_room_state(room)
 
@@ -517,10 +618,12 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not room or not room.game:
             return
         token = session.get("token")
-        if token != room.game.current_drawer:
+        if token != room.game.current_drawer or room.game.phase != Phase.DRAWING:
             return
-        room.game.record_stroke(event_name, data or {})
-        await sio.emit(event_name, data or {}, room=room.id, skip_sid=sid)
+        payload = _validated_draw_payload(event_name, data)
+        if payload is None or not room.game.record_stroke(event_name, payload):
+            return
+        await sio.emit(event_name, payload, room=room.id, skip_sid=sid)
 
     @sio.event
     async def draw_start(sid, data):
