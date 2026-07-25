@@ -21,6 +21,7 @@ interface GameStore {
   rounds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
+  spectatorsSeeSolution: boolean;
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
 
@@ -107,6 +108,7 @@ export const useGameStore = create<GameStore>((set) => ({
   rounds: 3,
   hintMode: "none" as HintMode,
   scoringMode: "default" as ScoringMode,
+  spectatorsSeeSolution: false,
   roomState: "waiting",
   players: [],
   error: null,
@@ -131,6 +133,7 @@ export const useGameStore = create<GameStore>((set) => ({
       rounds: payload.rounds,
       hintMode: payload.hintMode,
       scoringMode: payload.scoringMode ?? "default",
+      spectatorsSeeSolution: payload.spectatorsSeeSolution ?? false,
       roomState: payload.state,
       players: payload.players,
     }),
