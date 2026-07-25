@@ -485,7 +485,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     async def create_room(sid, data):
         data = data or {}
         nickname = str(data.get("nickname", "")).strip()[:20] or "Player"
-        name = str(data.get("name", "")).strip()[:40] or f"{nickname}'s game"
+        name = str(data.get("name", "")).strip()[:40]
         is_public = bool(data.get("isPublic", True))
         max_players = _clamp(int(data.get("maxPlayers", 8) or 8), 2, 12)
         rounds = _clamp(int(data.get("rounds", 3) or 3), 1, 10)

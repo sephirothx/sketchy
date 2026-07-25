@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { socket } from "../lib/socket";
 import type { DrawTool } from "../types";
 
@@ -119,12 +119,12 @@ export function Toolbar({
   const sliderValue = currentIdx !== -1 ? currentIdx : 2; // default to 6px (index 2)
 
   // Automatically switch from Fill tool to Pen when brush stroke size changes
-  function handleWidthChange(newWidth: number) {
+  const handleWidthChange = useCallback((newWidth: number) => {
     onBrushWidthChange(newWidth);
     if (tool === "fill") {
       onToolChange("pen");
     }
-  }
+  }, [onBrushWidthChange, tool, onToolChange]);
 
   // Close brush size popover when clicking outside
   useEffect(() => {
