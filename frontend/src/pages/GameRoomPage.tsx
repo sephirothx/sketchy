@@ -111,6 +111,7 @@ export function GameRoomPage() {
   const amDrawer =
     (phase === "drawing" || phase === "choosing_word") && drawerToken === token;
   const canDrawNow = phase === "drawing" && drawerToken === token;
+  const canGuess = phase === "drawing" && !amDrawer && !(me?.isSpectator) && !guessedWord;
 
   // Reset to the default color and tool whenever a new drawing turn starts
   // for this player, instead of carrying over whatever color/tool was last
@@ -246,7 +247,7 @@ export function GameRoomPage() {
             <GuessChat
               messages={messages}
               isDrawer={amDrawer}
-              canGuess={phase === "drawing"}
+              canGuess={canGuess}
               targetWordLengths={splitMaskedWord(maskedWord).counts}
             />
           </aside>
