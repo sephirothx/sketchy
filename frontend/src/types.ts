@@ -7,6 +7,7 @@ export interface PlayerInfo {
 }
 
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
+export type ScoringMode = "none" | "default";
 
 export interface RoomSummary {
   id: string;
@@ -20,6 +21,7 @@ export interface RoomSummary {
   customWordsOnly: boolean;
   drawingSeconds: number;
   hintMode: HintMode;
+  scoringMode: ScoringMode;
   state: "waiting" | "playing";
 }
 
@@ -34,6 +36,7 @@ export interface RoomStatePayload {
   customWordsOnly: boolean;
   drawingSeconds: number;
   hintMode: HintMode;
+  scoringMode: ScoringMode;
   state: "waiting" | "playing";
   players: PlayerInfo[];
 }
@@ -66,6 +69,11 @@ export interface RoundEndedPayload {
   word: string;
   drawerToken: string;
   drawerBonus: number;
+  guesses: {
+    token: string;
+    nickname: string;
+    seconds: number;
+  }[];
   scores: RoundScoreEntry[];
 }
 

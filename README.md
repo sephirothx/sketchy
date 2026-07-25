@@ -9,7 +9,7 @@ private room with a friend code — no accounts, no database, just a nickname an
 - Public lobby with a live, polled list of open rooms, or join a private room by code.
 - Turn-based rounds: each player draws once per round, choosing from 3 word options.
 - Real-time synced canvas (freehand pen + rectangle/ellipse/triangle shape tools).
-- Live guess chat with scoring based on how fast you guess.
+- Optional scoring, selected when the room is created.
 - Reconnection grace period (30s) — refreshing mid-game rejoins you with your score intact.
 - Score system designed to resist "sandbagging": drawers can't game an easy word by stalling,
   since their bonus scales with how fast guessers actually answered (see
@@ -154,7 +154,8 @@ so the whole game (UI + API + WebSocket) is served from a single port.
 ## Game flow
 
 1. **Lobby**: pick a nickname, then create a room (public or private, with a max player count
-   and number of rounds) or join one by code.
+   and number of rounds), choose default scoring or a score-free casual game, or join one by
+   code.
 2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**.
 3. **Choosing word** (15s): the current drawer picks one of 3 word options.
 4. **Drawing** (80s): the drawer draws; everyone else sees a masked word (`_ _ _ _`) and
@@ -166,6 +167,9 @@ so the whole game (UI + API + WebSocket) is served from a single port.
 
 ### Scoring
 
+- Room creators can choose **Default scoring** or **No scoring**. No-scoring games still detect
+  correct guesses and end rounds normally, but everyone remains on zero points and no
+  leaderboard is shown.
 - A correct guess scores `max(10, round(100 * remaining_seconds / 80))` — guess fast for up to
   100 points, or at least 10 points however late (as long as it's before the round ends).
 - The drawer's bonus is the sum of each correct guesser's points, scaled down to a `10`-point

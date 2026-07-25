@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import type { RoundScoreEntry } from "../types";
+import type { RoundEndedPayload, RoundScoreEntry } from "../types";
 
 interface RoundEndOverlayProps {
   word: string;
   drawerToken: string;
+  guesses?: RoundEndedPayload["guesses"];
   scores: RoundScoreEntry[];
+  showScores?: boolean;
 }
 
 // Must match the height of .round-score-row in App.css - used to compute how
@@ -19,7 +21,19 @@ function rankChange(entry: RoundScoreEntry) {
   return null;
 }
 
-export function RoundEndOverlay({ word, drawerToken, scores }: RoundEndOverlayProps) {
+function formatGuessTime(seconds: number) {
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
+}
+
+export function RoundEndOverlay({
+  word,
+  drawerToken,
+  guesses = [],
+  scores,
+  showScores = true,
+}: RoundEndOverlayProps) {
   // Rows render in their final (new-rank) order the whole time, but start
   // visually offset to where they *used* to rank. After a short pause (so
   // players have a moment to read the initial standings), we flip to
@@ -37,42 +51,59 @@ export function RoundEndOverlay({ word, drawerToken, scores }: RoundEndOverlayPr
   return (
     <div className="round-end-overlay">
       <div className="round-end-panel">
-        <h3>Round results</h3>
+        <h3>{showScores ? "Round results" : "Round complete"}</h3>
         <p className="round-end-word">
           The word was <strong>{word}</strong>
         </p>
-        <ul className="round-score-list">
-          {sorted.map((entry) => {
-            const change = rankChange(entry);
-            const startOffset = (entry.previousRank - entry.newRank) * ROW_HEIGHT;
-            return (
-              <li
-                key={entry.token}
-                className="round-score-row"
-                style={{
-                  transform: `translateY(${settled ? 0 : startOffset}px)`,
-                  transition: settled ? "transform 600ms ease" : "none",
-                }}
-              >
-                <span className="round-score-rank">#{entry.newRank}</span>
-                <span className="round-score-name">
-                  {entry.token === drawerToken ? "\u270F\uFE0F " : ""}
-                  {entry.nickname}
-                </span>
-                {change && (
-                  <span className={`round-score-change ${change.className}`}>
-                    {change.symbol}
-                    {change.places}
+        {guesses.length > 0 ? (
+          <>
+            <h4 className="round-guesses-heading">Correct guesses</h4>
+            <ol className="round-guesses-list">
+              {guesses.map((guess) => (
+                <li key={guess.token}>
+                  <span>{guess.nickname}</span>
+                  <time>{formatGuessTime(guess.seconds)}</time>
+                </li>
+              ))}
+            </ol>
+          </>
+        ) : (
+          <p className="round-no-guesses">No one guessed correctly.</p>
+        )}
+        {showScores && (
+          <ul className="round-score-list">
+            {sorted.map((entry) => {
+              const change = rankChange(entry);
+              const startOffset = (entry.previousRank - entry.newRank) * ROW_HEIGHT;
+              return (
+                <li
+                  key={entry.token}
+                  className="round-score-row"
+                  style={{
+                    transform: `translateY(${settled ? 0 : startOffset}px)`,
+                    transition: settled ? "transform 600ms ease" : "none",
+                  }}
+                >
+                  <span className="round-score-rank">#{entry.newRank}</span>
+                  <span className="round-score-name">
+                    {entry.token === drawerToken ? "\u270F\uFE0F " : ""}
+                    {entry.nickname}
                   </span>
-                )}
-                <span className={`round-score-delta${entry.delta > 0 ? " positive" : ""}`}>
-                  {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
-                </span>
-                <span className="round-score-total">{entry.score}</span>
-              </li>
-            );
-          })}
-        </ul>
+                  {change && (
+                    <span className={`round-score-change ${change.className}`}>
+                      {change.symbol}
+                      {change.places}
+                    </span>
+                  )}
+                  <span className={`round-score-delta${entry.delta > 0 ? " positive" : ""}`}>
+                    {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
+                  </span>
+                  <span className="round-score-total">{entry.score}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );

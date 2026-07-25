@@ -131,6 +131,19 @@ def test_submit_guess_correct_awards_points_and_ignores_drawer():
     assert points_again == 0
 
 
+def test_submit_guess_records_elapsed_guess_time():
+    game = make_game(n_players=2)
+    game.start_next_turn()
+    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.remaining_seconds = lambda: DRAWING_SECONDS - 12.5
+    guesser = next(token for token in game.turn_order if token != game.current_drawer)
+
+    correct, _ = game.submit_guess(guesser, game.word)
+
+    assert correct is True
+    assert game.guess_times[guesser] == 12.5
+
+
 def test_submit_guess_wrong_word():
     game = make_game()
     game.start_next_turn()
@@ -139,6 +152,20 @@ def test_submit_guess_wrong_word():
     correct, points = game.submit_guess("p1", "definitely-wrong")
     assert correct is False
     assert points == 0
+
+
+def test_no_scoring_marks_correct_guesses_without_awarding_points():
+    game = Game(turn_order=["drawer", "guesser"], scoring_mode="none")
+    game.start_next_turn()
+    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.set_phase_deadline(DRAWING_SECONDS)
+
+    correct, points = game.submit_guess("guesser", game.word)
+
+    assert correct is True
+    assert points == 0
+    assert game.guess_points == {"guesser": 0}
+    assert game.end_round() == 0
 
 
 def test_end_round_awards_drawer_bonus_per_guesser():
