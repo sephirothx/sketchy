@@ -16,6 +16,7 @@ export function PlayerList({ players, drawerToken, showScores = true }: PlayerLi
             {p.token === drawerToken ? "\u270F\uFE0F " : ""}
             {p.nickname}
             {p.isHost ? " \u2605" : ""}
+            {p.isSpectator ? " 👁️" : ""}
             {!p.connected ? " (disconnected)" : ""}
           </span>
           {showScores && <span className="player-score">{p.score}</span>}

@@ -4,6 +4,7 @@ export interface PlayerInfo {
   score: number;
   connected: boolean;
   isHost: boolean;
+  isSpectator: boolean;
 }
 
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
@@ -22,6 +23,7 @@ export interface RoomSummary {
   drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
+  spectatorsSeeSolution: boolean;
   state: "waiting" | "playing";
 }
 
@@ -37,6 +39,7 @@ export interface RoomStatePayload {
   drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
+  spectatorsSeeSolution: boolean;
   state: "waiting" | "playing";
   players: PlayerInfo[];
 }
@@ -51,6 +54,7 @@ export interface ChatMessage {
   system?: boolean;
   close?: boolean;
   restricted?: boolean;
+  isSpectator?: boolean;
 }
 
 export interface ScoreEntry {

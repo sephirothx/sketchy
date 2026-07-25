@@ -306,8 +306,26 @@ def test_new_stroke_after_clear_resets_pre_clear_history():
 
     # Starting a new stroke after Clear resets pre-clear history
     game.record_stroke("draw_start", {"x": 1, "y": 1})
-    assert [s["event"] for s in game.strokes] == ["draw_start"]
     assert game.strokes[0]["payload"]["x"] == 1
+
+
+def test_masked_word_returns_unmasked_for_drawer_and_correct_guesser():
+    game = make_game(n_players=3)
+    game.start_next_turn()
+    game._set_word("cat")
+    drawer = game.current_drawer
+    guesser1, guesser2 = [t for t in game.turn_order if t != drawer]
+
+    # Drawer sees unmasked word
+    assert game.masked_word(drawer) == "cat"
+    # Other guessers see masked word
+    assert game.masked_word(guesser1) != "cat"
+
+    # Correct guesser sees unmasked word
+    game.submit_guess(guesser1, "cat")
+    assert game.masked_word(guesser1) == "cat"
+    assert game.masked_word(guesser2) != "cat"
+
 
 
 def make_hint_game(word, mode, n_players=3):

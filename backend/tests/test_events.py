@@ -571,3 +571,54 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
     assert len(emitted_sync[0].args[1]["strokes"]) == 2
 
 
+@pytest.mark.asyncio
+async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, spectators_see_solution=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    spectator = room_manager.add_player(room, "Spectator", is_spectator=True)
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+    spectator.sid = "spec-sid"
+
+    room.game = Game(turn_order=[drawer.token, guesser.token], rounds_total=1)
+    room.game.start_next_turn()
+    room.game._set_word("apple")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "drawer-sid": {"room_id": room.id, "token": drawer.token},
+        "guesser-sid": {"room_id": room.id, "token": guesser.token},
+        "spec-sid": {"room_id": room.id, "token": spectator.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    # Spectator masked word is unmasked because spectators_see_solution=True
+    spec_masked = room.game.masked_word(spectator.token, is_spectator=spectator.is_spectator, spectators_see_solution=room.spectators_see_solution)
+    assert spec_masked == "apple"
+
+    # Active guesser masked word is masked
+    guesser_masked = room.game.masked_word(guesser.token, is_spectator=guesser.is_spectator, spectators_see_solution=room.spectators_see_solution)
+    assert guesser_masked != "apple"
+
+    # Spectator sends chat message
+    guess = sio.handlers["/"]["guess"]
+    await guess("spec-sid", {"text": "hello spectators!"})
+
+    # Message is restricted and sent to drawer and spectator, NOT active guesser
+    emitted = [call for call in sio.emit.await_args_list if call.args[0] == "chat_message"]
+    target_sids = {call.kwargs.get("to") for call in emitted}
+    assert target_sids == {"drawer-sid", "spec-sid"}
+    assert "guesser-sid" not in target_sids
+
+    timer = events._phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+

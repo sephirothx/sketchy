@@ -211,7 +211,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if room.game and room.game.phase in (Phase.CHOOSING_WORD, Phase.DRAWING):
             await sio.emit(
                 "sync_game",
-                _turn_payload(room.game, player.token),
+                _turn_payload(room.game, player, room.spectators_see_solution),
                 to=sid,
             )
             await sio.emit("sync_strokes", {"strokes": room.game.strokes}, to=sid)
@@ -228,11 +228,17 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 else:
                     await sio.emit("you_are_drawing", {"word": room.game.word}, to=sid)
 
-    def _turn_payload(game: Game, token: str | None = None) -> dict:
+    def _turn_payload(game: Game, player: Player | None = None, spectators_see_solution: bool = False) -> dict:
+        token = player.token if player else None
+        is_spec = player.is_spectator if player else False
         return {
             "phase": game.phase.value,
             "drawerToken": game.current_drawer,
-            "maskedWord": game.masked_word(token),
+            "maskedWord": game.masked_word(
+                token,
+                is_spectator=is_spec,
+                spectators_see_solution=spectators_see_solution,
+            ),
             "roundNumber": game.round_number,
             "totalRounds": game.rounds_total,
             "remainingSeconds": round(game.remaining_seconds()),
@@ -270,11 +276,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         game = room.game
         assert game is not None
         game.set_phase_deadline(game.drawing_seconds)
-        drawer = room.players.get(game.current_drawer)
-        if drawer and drawer.sid:
-            await sio.emit("you_are_drawing", {"word": game.word}, to=drawer.sid)
-        # Sent per-player (rather than broadcast) because in "purchase"/"wheel"
-        # hint modes each guesser may have their own set of bought letters revealed.
+        schedule_hint_checkpoints(room)
         for p in room.player_list():
             if not p.sid:
                 continue
@@ -282,7 +284,11 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 "turn_started",
                 {
                     "drawerToken": game.current_drawer,
-                    "maskedWord": game.masked_word(p.token),
+                    "maskedWord": game.masked_word(
+                        p.token,
+                        is_spectator=p.is_spectator,
+                        spectators_see_solution=room.spectators_see_solution,
+                    ),
                     "roundNumber": game.round_number,
                     "totalRounds": game.rounds_total,
                     "seconds": game.drawing_seconds,
@@ -501,6 +507,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if scoring_mode == "none" and hint_mode in ("purchase", "wheel"):
             hint_mode = "none"
 
+        spectators_see_solution = bool(data.get("spectatorsSeeSolution", False))
+
         room = room_manager.create_room(
             name=name,
             is_public=is_public,
@@ -511,6 +519,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             drawing_seconds=drawing_seconds,
             hint_mode=hint_mode,
             scoring_mode=scoring_mode,
+            spectators_see_solution=spectators_see_solution,
         )
         player = room_manager.add_player(room, nickname)
         await _join_socket_room(sid, room, player, is_reconnect=False)
@@ -523,6 +532,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         room_id = data.get("roomId")
         code = data.get("code")
         nickname = str(data.get("nickname", "")).strip()[:20] or "Player"
+        as_spectator = bool(data.get("asSpectator", False))
 
         room = room_manager.get_room(room_id) or room_manager.get_room_by_code(code)
         if not room:
@@ -546,7 +556,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
 
         try:
-            player = room_manager.add_player(room, nickname)
+            player = room_manager.add_player(room, nickname, is_spectator=as_spectator)
         except RoomFullError:
             return {"ok": False, "error": "Room is full"}
 
@@ -554,7 +564,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         # joining mid-game just enrolls the new player into future turns
         # (appended to the end, so everyone already playing keeps their
         # relative order) rather than blocking the join entirely.
-        if room.game:
+        if room.game and not player.is_spectator:
             room.game.add_player_to_rotation(player.token)
 
         await _join_socket_room(sid, room, player, is_reconnect=False)
@@ -595,16 +605,17 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         player = room.players.get(session.get("token"))
         if not player or not player.is_host:
             return {"ok": False, "error": "Only the host can start the game"}
-        if len(room.connected_players()) < 2:
-            return {"ok": False, "error": "Need at least 2 players to start"}
+        active_players = [p for p in room.connected_players() if not p.is_spectator]
+        if len(active_players) < 2:
+            return {"ok": False, "error": "Need at least 2 active players to start"}
         if room.state == "playing":
             return {"ok": False, "error": "Game already in progress"}
 
         for p in room.player_list():
-            p.score = STARTING_SCORE if room.scoring_mode == "default" else 0
+            p.score = 0 if p.is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0)
         room.state = "playing"
         room.game = Game(
-            turn_order=[p.token for p in room.connected_players()],
+            turn_order=[p.token for p in active_players],
             rounds_total=room.rounds,
             word_pool=room.effective_word_pool(),
             drawing_seconds=room.drawing_seconds,
@@ -739,11 +750,34 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         # messages for the round visible only to the drawer and other
         # players who've also already guessed correctly, flagged so the
         # client can render a clear "restricted visibility" indicator.
+        # Spectators and players who have already guessed correctly can chat,
+        # but their messages are restricted to the drawer, other correct guessers, and spectators.
+        if player.is_spectator:
+            in_the_know = [
+                p.sid
+                for p in room.player_list()
+                if p.sid and (p.token in game.correct_guessers or p.token == game.current_drawer or p.is_spectator)
+            ]
+            for target_sid in in_the_know:
+                await sio.emit(
+                    "chat_message",
+                    {
+                        "token": player.token,
+                        "nickname": player.nickname,
+                        "text": text,
+                        "correct": False,
+                        "restricted": True,
+                        "isSpectator": True,
+                    },
+                    to=target_sid,
+                )
+            return
+
         if player.token in game.correct_guessers:
             in_the_know = [
                 p.sid
                 for p in room.player_list()
-                if p.sid and (p.token in game.correct_guessers or p.token == game.current_drawer)
+                if p.sid and (p.token in game.correct_guessers or p.token == game.current_drawer or p.is_spectator)
             ]
             for target_sid in in_the_know:
                 await sio.emit(
@@ -787,7 +821,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                     for p in room.player_list()
                     if p.sid
                     and p.sid != sid
-                    and (p.token in game.correct_guessers or p.token == game.current_drawer)
+                    and (p.token in game.correct_guessers or p.token == game.current_drawer or p.is_spectator)
                 ]
                 for target_sid in in_the_know:
                     await sio.emit(
@@ -813,7 +847,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         in_the_know = [
             p.sid
             for p in room.player_list()
-            if p.sid and (p.token in game.correct_guessers or p.token == game.current_drawer)
+            if p.sid and (p.token in game.correct_guessers or p.token == game.current_drawer or p.is_spectator)
         ]
         for target_sid in in_the_know:
             await sio.emit(
@@ -822,7 +856,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 to=target_sid,
             )
 
-        guesser_count = len([p for p in room.connected_players() if p.token != game.current_drawer])
+        guesser_count = len([p for p in room.connected_players() if p.token != game.current_drawer and not p.is_spectator])
         if game.all_guessed(guesser_count):
             await _end_round(room)
 

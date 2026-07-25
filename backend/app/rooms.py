@@ -78,6 +78,7 @@ class Player:
     score: int = STARTING_SCORE
     connected: bool = True
     is_host: bool = False
+    is_spectator: bool = False
 
 
 @dataclass
@@ -93,6 +94,7 @@ class Room:
     drawing_seconds: int = DRAWING_SECONDS
     hint_mode: str = "none"
     scoring_mode: str = "default"
+    spectators_see_solution: bool = False
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
@@ -133,6 +135,7 @@ class Room:
             "drawingSeconds": self.drawing_seconds,
             "hintMode": self.hint_mode,
             "scoringMode": self.scoring_mode,
+            "spectatorsSeeSolution": self.spectators_see_solution,
             "state": self.state,
         }
 
@@ -149,6 +152,7 @@ class Room:
             "drawingSeconds": self.drawing_seconds,
             "hintMode": self.hint_mode,
             "scoringMode": self.scoring_mode,
+            "spectatorsSeeSolution": self.spectators_see_solution,
             "state": self.state,
             "players": [
                 {
@@ -157,6 +161,7 @@ class Room:
                     "score": p.score,
                     "connected": p.connected,
                     "isHost": p.is_host,
+                    "isSpectator": p.is_spectator,
                 }
                 for p in self.player_list()
             ],
@@ -178,6 +183,7 @@ class RoomManager:
         drawing_seconds: int = DRAWING_SECONDS,
         hint_mode: str = "none",
         scoring_mode: str = "default",
+        spectators_see_solution: bool = False,
     ) -> Room:
         room_id = str(uuid.uuid4())
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
@@ -193,6 +199,7 @@ class RoomManager:
             drawing_seconds=drawing_seconds,
             hint_mode=hint_mode,
             scoring_mode=scoring_mode,
+            spectators_see_solution=spectators_see_solution,
         )
         self.rooms[room_id] = room
         return room
@@ -222,15 +229,17 @@ class RoomManager:
     def list_public_rooms(self) -> list[dict]:
         return [r.to_public_summary() for r in self.rooms.values() if r.is_public]
 
-    def add_player(self, room: Room, nickname: str) -> Player:
-        if len(room.players) >= room.max_players:
+    def add_player(self, room: Room, nickname: str, is_spectator: bool = False) -> Player:
+        active_players = [p for p in room.players.values() if not p.is_spectator]
+        if not is_spectator and len(active_players) >= room.max_players:
             raise RoomFullError("Room is full")
         token = str(uuid.uuid4())
         player = Player(
             token=token,
             nickname=nickname,
-            score=STARTING_SCORE if room.scoring_mode == "default" else 0,
-            is_host=len(room.players) == 0,
+            score=0 if is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0),
+            is_host=not is_spectator and len(active_players) == 0,
+            is_spectator=is_spectator,
         )
         room.players[token] = player
         return player
@@ -243,8 +252,13 @@ class RoomManager:
         if any(p.is_host for p in room.players.values()):
             return
         for p in room.players.values():
-            p.is_host = True
-            break
+            if not p.is_spectator:
+                p.is_host = True
+                break
+        else:
+            for p in room.players.values():
+                p.is_host = True
+                break
 
     def remove_room_if_empty(self, room_id: str) -> None:
         room = self.rooms.get(room_id)
