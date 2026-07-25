@@ -32,3 +32,7 @@ pnpm-debug.log*
 # --- OS ---
 .DS_Store
 Thumbs.db
+
+# --- AI ---
+.agents/
+.cursor/
