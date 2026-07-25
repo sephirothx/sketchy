@@ -27,6 +27,7 @@ export interface RoomSummary {
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
+  hideMaskedPrompt: boolean;
   state: "waiting" | "playing";
 }
 
@@ -43,6 +44,7 @@ export interface RoomStatePayload {
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
+  hideMaskedPrompt: boolean;
   state: "waiting" | "playing";
   players: PlayerInfo[];
 }

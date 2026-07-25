@@ -149,6 +149,7 @@ class Game:
     word_pool: list[str] | None = None
     drawing_seconds: float = DRAWING_SECONDS
     hint_mode: str = "none"
+    hide_masked_prompt: bool = False
     letter_positions: list[int] = field(default_factory=list)
     revealed_positions: set[int] = field(default_factory=set)
     purchased_hints: dict[str, set[int]] = field(default_factory=dict)  # slot hints ("purchase")
@@ -287,6 +288,8 @@ class Game:
             token and (token == self.current_drawer or token in self.correct_guessers)
         ):
             return self.word
+        if self.hide_masked_prompt:
+            return "???"
         revealed_slots = self.revealed_positions | self.purchased_hints.get(token, set())
         revealed_indices = {
             self.letter_positions[slot] for slot in revealed_slots if slot < len(self.letter_positions)

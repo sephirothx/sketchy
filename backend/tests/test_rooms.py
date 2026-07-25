@@ -123,4 +123,14 @@ def test_remove_player_cleans_up_votes():
     assert p1.token not in p2.afk_votes
 
 
+def test_create_room_with_hide_masked_prompt_forces_hints_off():
+    rm = RoomManager()
+    room = rm.create_room(name="Hidden Room", hide_masked_prompt=True, hint_mode="checkpoints")
+    assert room.hide_masked_prompt is True
+    assert room.hint_mode == "none"
+    assert room.to_public_summary()["hideMaskedPrompt"] is True
+    assert room.to_state_payload()["hideMaskedPrompt"] is True
+
+
+
 

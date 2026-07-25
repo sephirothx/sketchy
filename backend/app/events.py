@@ -525,6 +525,9 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             hint_mode = "none"
 
         spectators_see_solution = bool(data.get("spectatorsSeeSolution", False))
+        hide_masked_prompt = bool(data.get("hideMaskedPrompt", False))
+        if hide_masked_prompt:
+            hint_mode = "none"
 
         room = room_manager.create_room(
             name=name,
@@ -537,6 +540,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             hint_mode=hint_mode,
             scoring_mode=scoring_mode,
             spectators_see_solution=spectators_see_solution,
+            hide_masked_prompt=hide_masked_prompt,
         )
         player = room_manager.add_player(room, nickname)
         await _join_socket_room(sid, room, player, is_reconnect=False)
@@ -752,6 +756,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             drawing_seconds=room.drawing_seconds,
             hint_mode=room.hint_mode,
             scoring_mode=room.scoring_mode,
+            hide_masked_prompt=room.hide_masked_prompt,
         )
         await _emit_room_state(room)
         await sio.emit("game_started", {}, room=room.id)

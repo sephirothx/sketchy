@@ -98,6 +98,7 @@ class Room:
     hint_mode: str = "none"
     scoring_mode: str = "default"
     spectators_see_solution: bool = False
+    hide_masked_prompt: bool = False
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
@@ -139,6 +140,7 @@ class Room:
             "hintMode": self.hint_mode,
             "scoringMode": self.scoring_mode,
             "spectatorsSeeSolution": self.spectators_see_solution,
+            "hideMaskedPrompt": self.hide_masked_prompt,
             "state": self.state,
         }
 
@@ -156,6 +158,7 @@ class Room:
             "hintMode": self.hint_mode,
             "scoringMode": self.scoring_mode,
             "spectatorsSeeSolution": self.spectators_see_solution,
+            "hideMaskedPrompt": self.hide_masked_prompt,
             "state": self.state,
             "players": [
                 {
@@ -190,9 +193,12 @@ class RoomManager:
         hint_mode: str = "none",
         scoring_mode: str = "default",
         spectators_see_solution: bool = False,
+        hide_masked_prompt: bool = False,
     ) -> Room:
         room_id = str(uuid.uuid4())
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
+        if hide_masked_prompt:
+            hint_mode = "none"
         room = Room(
             id=room_id,
             code=self._generate_unique_code(),
@@ -206,6 +212,7 @@ class RoomManager:
             hint_mode=hint_mode,
             scoring_mode=scoring_mode,
             spectators_see_solution=spectators_see_solution,
+            hide_masked_prompt=hide_masked_prompt,
         )
         self.rooms[room_id] = room
         return room

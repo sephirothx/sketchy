@@ -101,6 +101,10 @@ export function WordDisplay({
     );
   }
 
+  if (maskedWord === "???" && !revealedWord && !isDrawer) {
+    return null;
+  }
+
   const canBuy = hintMode === "purchase" && canBuyHint && !isDrawer && !revealedWord && nextHintCost != null;
   const canBuyWheel = hintMode === "wheel" && canBuyHint && !isDrawer && !revealedWord && letterPrices != null;
 
