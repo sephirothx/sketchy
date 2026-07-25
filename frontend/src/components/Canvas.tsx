@@ -652,10 +652,42 @@ export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null 
     }
   }
 
+  // Clear preview canvas when tool or drawer status changes
+  useEffect(() => {
+    clearPreview();
+  }, [tool, isDrawer]);
+
+  function drawEraserPreview(point: StrokePoint) {
+    const previewCtx = previewCtxRef.current;
+    if (!previewCtx) return;
+    const px = toPixels(point);
+    const radius = brushWidth / 2;
+    previewCtx.save();
+    previewCtx.beginPath();
+    previewCtx.arc(px.x, px.y, Math.max(radius, 1.5), 0, Math.PI * 2);
+    previewCtx.strokeStyle = "rgba(0, 0, 0, 0.75)";
+    previewCtx.lineWidth = 1.5;
+    previewCtx.stroke();
+    previewCtx.beginPath();
+    previewCtx.arc(px.x, px.y, Math.max(radius, 1.5), 0, Math.PI * 2);
+    previewCtx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    previewCtx.lineWidth = 0.8;
+    previewCtx.stroke();
+    previewCtx.restore();
+  }
+
   function handlePointerMove(e: ReactPointerEvent<HTMLCanvasElement>) {
-    if (!isDrawer || !isPointerDownRef.current) return;
-    if (tool === "fill") return; // fill happens once on pointer-down, not a drag
+    if (!isDrawer) return;
     const point = getNormalizedPoint(e);
+
+    if (tool === "eraser") {
+      clearPreview();
+      drawEraserPreview(point);
+    }
+
+    if (!isPointerDownRef.current) return;
+    if (tool === "fill") return; // fill happens once on pointer-down, not a drag
+
     if (tool === "pen" || tool === "eraser") {
       if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point);
       lastPointRef.current = point;
@@ -730,7 +762,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null 
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
-          className={`drawing-canvas${isDrawer ? " drawable" : ""}`}
+          className={`drawing-canvas${isDrawer ? " drawable" : ""}${isDrawer && tool === "eraser" ? " eraser-tool" : ""}`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

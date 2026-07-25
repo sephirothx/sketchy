@@ -396,6 +396,10 @@
   cursor: crosshair;
 }
 
+.drawing-canvas.drawable.eraser-tool {
+  cursor: none;
+}
+
 .canvas-stack {
   position: relative;
   width: 100%;
