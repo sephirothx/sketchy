@@ -80,6 +80,8 @@ class Player:
     is_host: bool = False
     is_spectator: bool = False
     is_afk: bool = False
+    kick_votes: set[str] = field(default_factory=set)
+    afk_votes: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -164,6 +166,8 @@ class Room:
                     "isHost": p.is_host,
                     "isSpectator": p.is_spectator,
                     "isAfk": p.is_afk,
+                    "kickVotes": list(p.kick_votes),
+                    "afkVotes": list(p.afk_votes),
                 }
                 for p in self.player_list()
             ],
@@ -248,6 +252,9 @@ class RoomManager:
 
     def remove_player(self, room: Room, token: str) -> None:
         room.players.pop(token, None)
+        for p in room.players.values():
+            p.kick_votes.discard(token)
+            p.afk_votes.discard(token)
         self._promote_new_host_if_needed(room)
 
     def _promote_new_host_if_needed(self, room: Room) -> None:

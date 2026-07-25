@@ -6,6 +6,8 @@ export interface PlayerInfo {
   isHost: boolean;
   isSpectator: boolean;
   isAfk: boolean;
+  kickVotes?: string[];
+  afkVotes?: string[];
 }
 
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";

@@ -74,6 +74,24 @@ export function GameRoomPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
+  const [notification, setNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onKicked(data: { reason?: string }) {
+      reset();
+      navigate("/", { state: { error: data?.reason || "You were kicked from the room." } });
+    }
+    function onVotedAfk(data: { message?: string }) {
+      setNotification(data?.message || "You were marked AFK by room vote.");
+    }
+    socket.on("kicked", onKicked);
+    socket.on("voted_afk", onVotedAfk);
+    return () => {
+      socket.off("kicked", onKicked);
+      socket.off("voted_afk", onVotedAfk);
+    };
+  }, [navigate, reset]);
+
   function handleLeave() {
     socket.emit("leave_room");
     reset();
@@ -118,6 +136,18 @@ export function GameRoomPage() {
 
   return (
     <div className="game-room">
+      {notification && (
+        <div className="modal-overlay" onClick={() => setNotification(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon">💤</div>
+            <h3 className="modal-title">Marked as AFK</h3>
+            <p className="modal-body">{notification}</p>
+            <button className="modal-button" onClick={() => setNotification(null)}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
       <header className="game-header">
         <h2>{roomName || code}</h2>
         <span className="room-code">
@@ -166,6 +196,7 @@ export function GameRoomPage() {
             <PlayerList
               players={players}
               drawerToken={drawerToken}
+              myToken={token}
               showScores={scoringMode === "default"}
             />
           </aside>
