@@ -11,6 +11,7 @@ private room with a friend code — no accounts, no database, just a nickname an
 - Real-time synced canvas (freehand pen + rectangle/ellipse/triangle shape tools).
 - Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the secret word solution, and private spectator chat restricted to the drawer, spectators, and correct guessers.
 - AFK mode — toggle AFK status anytime so you are skipped for drawing turns and not waited for during rounds.
+- Vote kick and vote AFK — room players can vote to kick or mark another player AFK by majority vote.
 - Optional scoring, selected when the room is created.
 - Reconnection grace period (30s) — refreshing mid-game rejoins you with your score intact.
 - Score system designed to resist "sandbagging": drawers can't game an easy word by stalling,

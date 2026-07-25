@@ -1001,3 +1001,93 @@
   user-select: none;
   z-index: 10;
 }
+
+/* Clickable Player Row & Hover Feedback */
+.player-row.clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.player-row.clickable:hover {
+  background-color: #f1f5f9;
+}
+
+/* Pop-up Modal Component */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeInModal 0.15s ease-out;
+}
+
+@keyframes fadeInModal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px 28px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: popUpModal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes popUpModal {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-icon {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+}
+
+.modal-title {
+  margin: 0 0 8px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.modal-body {
+  margin: 0 0 20px;
+  font-size: 0.95rem;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.modal-button {
+  background: #4c6ef5;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 24px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.modal-button:hover {
+  background: #3b5bdb;
+}

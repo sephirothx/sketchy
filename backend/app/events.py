@@ -427,6 +427,9 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return
         player.connected = False
         player.sid = None
+        for p in room.players.values():
+            p.kick_votes.discard(token)
+            p.afk_votes.discard(token)
         await sio.emit(
             "player_disconnected", {"token": token, "nickname": player.nickname}, room=room.id
         )
@@ -626,6 +629,87 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
         return {"ok": True, "isAfk": player.is_afk}
 
+    @sio.event
+    async def vote_player(sid, data):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        if not room:
+            return {"ok": False, "error": "Not in a room"}
+        voter = room.players.get(session.get("token"))
+        if not voter:
+            return {"ok": False, "error": "Not in this room"}
+
+        target_token = (data or {}).get("targetToken")
+        action = (data or {}).get("action")
+        if not target_token or action not in ("kick", "afk"):
+            return {"ok": False, "error": "Invalid vote parameter"}
+
+        target = room.players.get(target_token)
+        if not target or target.token == voter.token:
+            return {"ok": False, "error": "Cannot vote on yourself or non-existent player"}
+
+        target.kick_votes = {v for v in target.kick_votes if v in room.players and room.players[v].connected}
+        target.afk_votes = {v for v in target.afk_votes if v in room.players and room.players[v].connected}
+        connected_players = room.connected_players()
+        required_votes = (len(connected_players) // 2) + 1
+
+        if action == "kick":
+            if voter.token in target.kick_votes:
+                target.kick_votes.remove(voter.token)
+            else:
+                target.kick_votes.add(voter.token)
+
+            if len(target.kick_votes) >= required_votes:
+                target_sid = target.sid
+                room_manager.remove_player(room, target.token)
+                if target_sid:
+                    await sio.emit("kicked", {"reason": "You were kicked from the room by vote."}, to=target_sid)
+                    await sio.leave_room(target_sid, room.id)
+                await sio.emit(
+                    "chat_message",
+                    {"token": "", "nickname": "", "text": f"{target.nickname} was kicked by vote.", "correct": False, "system": True},
+                    room=room.id,
+                )
+                if room.game and room.state == "playing":
+                    await _remove_player_from_game(room, target.token)
+                await _emit_room_state(room)
+                return {"ok": True, "action": "kick", "executed": True}
+
+        elif action == "afk":
+            if voter.token in target.afk_votes:
+                target.afk_votes.remove(voter.token)
+            else:
+                target.afk_votes.add(voter.token)
+
+            if len(target.afk_votes) >= required_votes:
+                target.is_afk = True
+                target.afk_votes.clear()
+                if target.sid:
+                    await sio.emit("voted_afk", {"message": "You were marked AFK by room vote."}, to=target.sid)
+                await sio.emit(
+                    "chat_message",
+                    {"token": "", "nickname": "", "text": f"{target.nickname} was marked AFK by vote.", "correct": False, "system": True},
+                    room=room.id,
+                )
+                if room.game and room.state == "playing":
+                    if target.token == room.game.current_drawer:
+                        if room.game.phase == Phase.CHOOSING_WORD:
+                            await _start_turn(room)
+                        elif room.game.phase == Phase.DRAWING:
+                            await _end_round(room)
+                    elif room.game.phase == Phase.DRAWING:
+                        guesser_count = len([
+                            p for p in room.connected_players()
+                            if p.token != room.game.current_drawer and not p.is_spectator and not p.is_afk
+                        ])
+                        if room.game.all_guessed(guesser_count):
+                            await _end_round(room)
+                await _emit_room_state(room)
+                return {"ok": True, "action": "afk", "executed": True}
+
+        await _emit_room_state(room)
+        return {"ok": True, "action": action, "executed": False}
+
     # ------------------------------------------------------------------
     # Game flow
     # ------------------------------------------------------------------
@@ -775,6 +859,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         text = str((data or {}).get("text", "")).strip()
         if not text:
             return
+
+        if player.is_afk:
+            player.is_afk = False
+            await _emit_room_state(room)
 
         game = room.game
 

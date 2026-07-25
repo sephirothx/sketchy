@@ -665,5 +665,116 @@ async def test_toggle_afk_socket_handler_and_not_waited_for():
             await timer
 
 
+@pytest.mark.asyncio
+async def test_vote_kick_and_vote_afk_socket_handlers():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    p1 = room_manager.add_player(room, "P1")
+    p2 = room_manager.add_player(room, "P2")
+    p3 = room_manager.add_player(room, "P3")
+    p1.sid, p2.sid, p3.sid = "p1-sid", "p2-sid", "p3-sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "p1-sid": {"room_id": room.id, "token": p1.token},
+        "p2-sid": {"room_id": room.id, "token": p2.token},
+        "p3-sid": {"room_id": room.id, "token": p3.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    vote_player = sio.handlers["/"]["vote_player"]
+
+    # P1 votes to AFK P2 (required = 2 votes because 2 other connected players)
+    res1 = await vote_player("p1-sid", {"targetToken": p2.token, "action": "afk"})
+    assert res1["ok"] is True
+    assert res1["executed"] is False
+    assert p1.token in p2.afk_votes
+    assert p2.is_afk is False
+
+    # P3 votes to AFK P2 -> threshold reached -> P2 is marked AFK
+    res2 = await vote_player("p3-sid", {"targetToken": p2.token, "action": "afk"})
+    assert res2["ok"] is True
+    assert res2["executed"] is True
+    assert p2.is_afk is True
+
+    # P1 votes to Kick P2
+    res3 = await vote_player("p1-sid", {"targetToken": p2.token, "action": "kick"})
+    assert res3["ok"] is True
+    assert res3["executed"] is False
+
+    # P3 votes to Kick P2 -> threshold reached -> P2 is kicked
+    res4 = await vote_player("p3-sid", {"targetToken": p2.token, "action": "kick"})
+    assert res4["ok"] is True
+    assert res4["executed"] is True
+    assert p2.token not in room.players
+
+    # Emitted kicked event to P2
+    kicked_calls = [call for call in sio.emit.await_args_list if call.args[0] == "kicked" and call.kwargs.get("to") == "p2-sid"]
+    assert len(kicked_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_votes_removed_when_player_leaves_or_disconnects():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    p1 = room_manager.add_player(room, "P1")
+    p2 = room_manager.add_player(room, "P2")
+    p3 = room_manager.add_player(room, "P3")
+    p1.sid, p2.sid, p3.sid = "p1-sid", "p2-sid", "p3-sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "p1-sid": {"room_id": room.id, "token": p1.token},
+        "p2-sid": {"room_id": room.id, "token": p2.token},
+        "p3-sid": {"room_id": room.id, "token": p3.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    vote_player = sio.handlers["/"]["vote_player"]
+    disconnect = sio.handlers["/"]["disconnect"]
+
+    # P1 votes to AFK P2
+    await vote_player("p1-sid", {"targetToken": p2.token, "action": "afk"})
+    assert p1.token in p2.afk_votes
+
+    # P1 disconnects -> P1's votes are removed from P2
+    await disconnect("p1-sid")
+    assert p1.token not in p2.afk_votes
+
+
+@pytest.mark.asyncio
+async def test_chatting_removes_afk_status():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    p1 = room_manager.add_player(room, "P1")
+    p2 = room_manager.add_player(room, "P2")
+    p1.sid, p2.sid = "p1-sid", "p2-sid"
+    p1.is_afk = True
+
+    room.state = "playing"
+    room.game = Game(turn_order=[p1.token, p2.token], rounds_total=1)
+    room.game.start_next_turn()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "p1-sid": {"room_id": room.id, "token": p1.token},
+        "p2-sid": {"room_id": room.id, "token": p2.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    guess = sio.handlers["/"]["guess"]
+    await guess("p1-sid", {"text": "hello chat"})
+    assert p1.is_afk is False
+
+
+
+
+
 
 

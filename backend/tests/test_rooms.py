@@ -109,3 +109,18 @@ def test_spectator_can_join_full_room_and_option_in_payload():
     assert any(p["nickname"] == "Charlie" and p["isSpectator"] is True for p in players_payload)
 
 
+def test_remove_player_cleans_up_votes():
+    rm = RoomManager()
+    room = rm.create_room(name="Room", is_public=True)
+    p1 = rm.add_player(room, "Alice")
+    p2 = rm.add_player(room, "Bob")
+
+    p2.kick_votes.add(p1.token)
+    p2.afk_votes.add(p1.token)
+
+    rm.remove_player(room, p1.token)
+    assert p1.token not in p2.kick_votes
+    assert p1.token not in p2.afk_votes
+
+
+

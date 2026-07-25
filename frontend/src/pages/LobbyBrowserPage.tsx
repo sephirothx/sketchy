@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, SERVER_URL } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import type { AckResponse, HintMode, RoomSummary, ScoringMode } from "../types";
@@ -8,6 +8,7 @@ const POLL_INTERVAL_MS = 4000;
 
 export function LobbyBrowserPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
   const setSession = useGameStore((s) => s.setSession);
@@ -25,7 +26,7 @@ export function LobbyBrowserPage() {
   const [scoringMode, setScoringMode] = useState<ScoringMode>("default");
   const [spectatorsSeeSolution, setSpectatorsSeeSolution] = useState(false);
   const [joinCode, setJoinCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(location.state?.error ?? null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -130,7 +131,18 @@ export function LobbyBrowserPage() {
         </label>
       </section>
 
-      {error && <p className="error-banner">{error}</p>}
+      {error && (
+        <div className="modal-overlay" onClick={() => setError(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon">🚫</div>
+            <h3 className="modal-title">Notice</h3>
+            <p className="modal-body">{error}</p>
+            <button className="modal-button" onClick={() => setError(null)}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="lobby-columns">
         <section className="panel">
