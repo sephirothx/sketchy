@@ -9,6 +9,7 @@ private room with a friend code — no accounts, no database, just a nickname an
 - Public lobby with a live, polled list of open rooms, or join a private room by code.
 - Turn-based rounds: each player draws once per round, choosing from 3 word options.
 - Real-time synced canvas (freehand pen + rectangle/ellipse/triangle shape tools).
+- Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the secret word solution, and private spectator chat restricted to the drawer, spectators, and correct guessers.
 - Optional scoring, selected when the room is created.
 - Reconnection grace period (30s) — refreshing mid-game rejoins you with your score intact.
 - Score system designed to resist "sandbagging": drawers can't game an easy word by stalling,
@@ -170,6 +171,12 @@ so the whole game (UI + API + WebSocket) is served from a single port.
   leaderboard is shown.
 - A correct guess scores between 100 and 300 points based on time remaining: `round(100 + 200 * remaining_seconds / 80)` — guess quickly for up to 300 points, or 100 points minimum near the deadline.
 - The drawer receives the sum of points earned by all correct guessers in that round (`drawer_score = sum of guesser scores`), balancing drawing and guessing potential across complete rotations.
+
+### Spectating
+
+- Players can join any room (including full rooms) as a spectator. Spectators do not draw or earn scores.
+- By default, spectators see the masked word like active guessers, but room creators can enable **Allow spectators to see the word**.
+- Spectator chat messages are restricted to the drawer, spectators, and players who have already guessed, keeping active guessers spoiler-free.
 
 ### Reconnection & disconnection
 
