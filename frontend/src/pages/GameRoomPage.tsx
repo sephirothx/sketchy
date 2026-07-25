@@ -126,6 +126,21 @@ export function GameRoomPage() {
     }
   }
 
+  const spectatorsSeeSolution = useGameStore((s) => s.spectatorsSeeSolution);
+  const isDrawerPerson = drawerToken === token;
+  const drawerWord = myWord || (maskedWord && !maskedWord.includes("_") ? splitMaskedWord(maskedWord).blanks.trim() : null);
+
+  const solutionWord =
+    phase === "round_end"
+      ? lastRoundResult?.word ?? null
+      : isDrawerPerson && phase === "drawing"
+      ? drawerWord
+      : guessedWord
+      ? guessedWord
+      : me?.isSpectator && spectatorsSeeSolution && maskedWord && !maskedWord.includes("_")
+      ? splitMaskedWord(maskedWord).blanks.trim()
+      : null;
+
   if (joinError) {
     return (
       <div className="lobby-page">
@@ -222,7 +237,13 @@ export function GameRoomPage() {
               nextHintCost={nextHintCost}
               letterPrices={letterPrices}
             />
-            <Canvas isDrawer={canDrawNow} color={color} brushWidth={brushWidth} tool={tool} />
+            <Canvas
+              isDrawer={canDrawNow}
+              color={color}
+              brushWidth={brushWidth}
+              tool={tool}
+              solutionWord={solutionWord}
+            />
             {phase === "round_end" && lastRoundResult && (
               <RoundEndOverlay
                 word={lastRoundResult.word}

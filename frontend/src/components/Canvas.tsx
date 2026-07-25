@@ -21,6 +21,24 @@ interface CanvasProps {
   color: string;
   brushWidth: number;
   tool: DrawTool;
+  solutionWord?: string | null;
+}
+
+function getYYMMDDhhmm(d = new Date()): string {
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${yy}${mm}${dd}${hh}${min}`;
+}
+
+function sanitizePrompt(prompt: string): string {
+  return prompt
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9_-]/g, "");
 }
 
 function toPixels(p: StrokePoint) {
@@ -355,7 +373,7 @@ async function applyFillPatch(ctx: CanvasRenderingContext2D, payload: StrokeFill
   }
 }
 
-export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
+export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null }: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -690,24 +708,56 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     }
   }
 
+  function handleSaveImage() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    const dateStr = getYYMMDDhhmm();
+    const promptSlug = solutionWord ? sanitizePrompt(solutionWord) : "";
+    const suffix = promptSlug ? `-${promptSlug}` : "";
+    link.download = `sketchy-${dateStr}${suffix}.png`;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
   return (
-    <div className="canvas-stack">
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className={`drawing-canvas${isDrawer ? " drawable" : ""}`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerLeave}
-      />
-      <canvas
-        ref={previewCanvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="preview-canvas"
-      />
+    <div className="canvas-wrapper">
+      <div className="canvas-stack">
+        <canvas
+          ref={canvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          className={`drawing-canvas${isDrawer ? " drawable" : ""}`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerLeave}
+        />
+        <canvas
+          ref={previewCanvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          className="preview-canvas"
+        />
+      </div>
+      <div className="canvas-footer-bar">
+        <button
+          type="button"
+          className="save-image-button"
+          onClick={handleSaveImage}
+          title="Save drawn image to file"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span>Save Image</span>
+        </button>
+      </div>
     </div>
   );
 }
