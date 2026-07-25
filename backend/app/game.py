@@ -219,9 +219,14 @@ class Game:
             return 0.0
         return max(0.0, self.phase_deadline - time.monotonic())
 
-    def start_next_turn(self) -> list[str]:
+    def start_next_turn(self, afk_tokens: set[str] | None = None) -> list[str]:
         """Advance to the next drawer and offer word choices."""
         self.turn_index += 1
+        if afk_tokens:
+            attempts = 0
+            while attempts < len(self.turn_order) and self.turn_order[self.turn_index % len(self.turn_order)] in afk_tokens:
+                self.turn_index += 1
+                attempts += 1
         self.current_drawer = self.turn_order[self.turn_index % len(self.turn_order)]
         self.word = None
         self.word_choices = random_word_choices(3, exclude=self.used_words, pool=self.word_pool)

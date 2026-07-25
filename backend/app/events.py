@@ -249,7 +249,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     async def _start_turn(room: Room) -> None:
         game = room.game
         assert game is not None
-        choices = game.start_next_turn()
+        afk_tokens = {p.token for p in room.player_list() if p.is_afk}
+        choices = game.start_next_turn(afk_tokens)
         game.set_phase_deadline(CHOOSE_WORD_SECONDS)
         drawer = room.players.get(game.current_drawer)
         await sio.emit("clear_canvas", {}, room=room.id)
@@ -592,6 +593,39 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             await sio.emit("player_left", {"token": token}, room=room.id)
             await _emit_room_state(room)
 
+    @sio.event
+    async def toggle_afk(sid, data=None):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        if not room:
+            return {"ok": False, "error": "Not in a room"}
+        player = room.players.get(session.get("token"))
+        if not player:
+            return {"ok": False, "error": "Not in this room"}
+
+        target_afk = not player.is_afk
+        if data and "afk" in data:
+            target_afk = bool(data["afk"])
+
+        player.is_afk = target_afk
+        await _emit_room_state(room)
+
+        if room.game and room.state == "playing":
+            if player.is_afk and player.token == room.game.current_drawer:
+                if room.game.phase == Phase.CHOOSING_WORD:
+                    await _start_turn(room)
+                elif room.game.phase == Phase.DRAWING:
+                    await _end_round(room)
+            elif room.game.phase == Phase.DRAWING:
+                guesser_count = len([
+                    p for p in room.connected_players()
+                    if p.token != room.game.current_drawer and not p.is_spectator and not p.is_afk
+                ])
+                if room.game.all_guessed(guesser_count):
+                    await _end_round(room)
+
+        return {"ok": True, "isAfk": player.is_afk}
+
     # ------------------------------------------------------------------
     # Game flow
     # ------------------------------------------------------------------
@@ -605,9 +639,9 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         player = room.players.get(session.get("token"))
         if not player or not player.is_host:
             return {"ok": False, "error": "Only the host can start the game"}
-        active_players = [p for p in room.connected_players() if not p.is_spectator]
+        active_players = [p for p in room.connected_players() if not p.is_spectator and not p.is_afk]
         if len(active_players) < 2:
-            return {"ok": False, "error": "Need at least 2 active players to start"}
+            return {"ok": False, "error": "Need at least 2 active non-AFK players to start"}
         if room.state == "playing":
             return {"ok": False, "error": "Game already in progress"}
 

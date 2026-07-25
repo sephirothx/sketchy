@@ -80,6 +80,10 @@ export function GameRoomPage() {
     navigate("/");
   }
 
+  function handleToggleAfk() {
+    socket.emit("toggle_afk");
+  }
+
   function handleStartGame() {
     emitWithAck("start_game", {});
   }
@@ -120,7 +124,15 @@ export function GameRoomPage() {
           Code: {code} ({isPublic ? "public" : "private"} &middot;{" "}
           {scoringMode === "default" ? "default scoring" : "no scoring"})
         </span>
-        <button onClick={handleLeave}>Leave</button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button
+            style={{ background: me?.isAfk ? "#f59e0b" : undefined, color: me?.isAfk ? "#fff" : undefined }}
+            onClick={handleToggleAfk}
+          >
+            {me?.isAfk ? "AFK 💤" : "AFK"}
+          </button>
+          <button onClick={handleLeave}>Leave</button>
+        </div>
       </header>
 
       {roomState === "waiting" && (

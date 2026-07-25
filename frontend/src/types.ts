@@ -5,6 +5,7 @@ export interface PlayerInfo {
   connected: boolean;
   isHost: boolean;
   isSpectator: boolean;
+  isAfk: boolean;
 }
 
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
