@@ -668,3 +668,27 @@ def test_new_scoring_system_guesser_and_drawer_scores():
     drawer_score = game.end_round()
     assert drawer_score == 500
 
+
+def test_hide_masked_prompt_returns_question_marks():
+    game = Game(turn_order=["p0", "p1"], rounds_total=1, hide_masked_prompt=True)
+    game.start_next_turn()
+    word = game.word_choices[0]
+    game.choose_word("p0", word)
+
+    # Drawer sees full word
+    assert game.masked_word("p0") == word
+
+    # Guesser sees ???
+    assert game.masked_word("p1") == "???"
+
+    # Spectator without solution sees ???
+    assert game.masked_word("spec", is_spectator=True, spectators_see_solution=False) == "???"
+
+    # Spectator with solution sees full word
+    assert game.masked_word("spec", is_spectator=True, spectators_see_solution=True) == word
+
+    # Guesser who answered correctly sees full word
+    game.submit_guess("p1", word)
+    assert game.masked_word("p1") == word
+
+

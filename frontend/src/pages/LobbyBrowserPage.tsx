@@ -25,6 +25,7 @@ export function LobbyBrowserPage() {
   const [hintMode, setHintMode] = useState<HintMode>("none");
   const [scoringMode, setScoringMode] = useState<ScoringMode>("default");
   const [spectatorsSeeSolution, setSpectatorsSeeSolution] = useState(false);
+  const [hideMaskedPrompt, setHideMaskedPrompt] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(location.state?.error ?? null);
   const [busy, setBusy] = useState(false);
@@ -73,6 +74,7 @@ export function LobbyBrowserPage() {
       hintMode,
       scoringMode,
       spectatorsSeeSolution,
+      hideMaskedPrompt,
     });
     setBusy(false);
     if (res.ok && res.roomId && res.code && res.token) {
@@ -172,6 +174,20 @@ export function LobbyBrowserPage() {
             />
             Allow spectators to see the word (default: No)
           </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={hideMaskedPrompt}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setHideMaskedPrompt(checked);
+                if (checked) {
+                  setHintMode("none");
+                }
+              }}
+            />
+            Always hide masked prompt to guessers (forces hints off)
+          </label>
           <label>
             Max players
             <input
@@ -241,7 +257,11 @@ export function LobbyBrowserPage() {
           </label>
           <label>
             Hint letters
-            <select value={hintMode} onChange={(e) => setHintMode(e.target.value as HintMode)}>
+            <select
+              value={hintMode}
+              disabled={hideMaskedPrompt}
+              onChange={(e) => setHintMode(e.target.value as HintMode)}
+            >
               <option value="none">Off</option>
               <option value="checkpoints">Timed hints, shown to everyone</option>
               <option value="purchase" disabled={scoringMode === "none"}>
@@ -292,7 +312,7 @@ export function LobbyBrowserPage() {
                 {room.drawingSeconds}s to draw &middot;{" "}
                 {room.scoringMode === "none" ? "no scoring" : "default scoring"} &middot;{" "}
                 {room.spectatorsSeeSolution ? "spectators see solution" : "spectators see masked word"} &middot;{" "}
-                {room.customWordCount > 0
+                {room.hideMaskedPrompt ? "hidden prompt" : room.customWordCount > 0
                   ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " + default"}`
                   : "default words"}
                 {room.hintMode !== "none" && (

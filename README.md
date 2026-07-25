@@ -13,6 +13,7 @@ private room with a friend code — no accounts, no database, just a nickname an
 - AFK mode — toggle AFK status anytime so you are skipped for drawing turns and not waited for during rounds.
 - Vote kick and vote AFK — room players can vote to kick or mark another player AFK by majority vote.
 - Save image — download the current drawn image directly as a PNG file at any time.
+- Customization option to always hide masked prompt word length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Reconnection grace period (30s) — refreshing mid-game rejoins you with your score intact.
 - Score system designed to resist "sandbagging": drawers can't game an easy word by stalling,

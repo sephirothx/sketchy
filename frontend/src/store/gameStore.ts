@@ -22,6 +22,7 @@ interface GameStore {
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
+  hideMaskedPrompt: boolean;
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
 
@@ -109,6 +110,7 @@ export const useGameStore = create<GameStore>((set) => ({
   hintMode: "none" as HintMode,
   scoringMode: "default" as ScoringMode,
   spectatorsSeeSolution: false,
+  hideMaskedPrompt: false,
   roomState: "waiting",
   players: [],
   error: null,
@@ -134,6 +136,7 @@ export const useGameStore = create<GameStore>((set) => ({
       hintMode: payload.hintMode,
       scoringMode: payload.scoringMode ?? "default",
       spectatorsSeeSolution: payload.spectatorsSeeSolution ?? false,
+      hideMaskedPrompt: payload.hideMaskedPrompt ?? false,
       roomState: payload.state,
       players: payload.players,
     }),

@@ -354,6 +354,17 @@
   color: #868e96;
 }
 
+.word-hidden-prompt {
+  font-size: 1.5rem;
+  letter-spacing: 4px;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 16px;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+}
+
 .word-choices {
   display: flex;
   gap: 10px;
