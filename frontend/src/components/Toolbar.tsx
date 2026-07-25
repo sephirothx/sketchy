@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { socket } from "../lib/socket";
 import type { DrawTool } from "../types";
 
@@ -22,25 +22,74 @@ const COLOR_PAIRS: readonly (readonly [string, string])[] = [
 
 const COLORS = COLOR_PAIRS.flat();
 
-const WIDTHS = [2, 4, 8, 16];
+const PRESET_WIDTHS = [2, 4, 6, 8, 12, 16, 24, 32];
 
-const TOOLS: { value: DrawTool; label: string; glyph: React.ReactNode }[] = [
-  { value: "pen", label: "Pen (P / 1)", glyph: "\u270e" },
+const TOOLS: { value: DrawTool; label: string; shortcut: string; glyph: React.ReactNode }[] = [
   {
-    value: "eraser",
-    label: "Eraser (E / 2)",
+    value: "pen",
+    label: "Pen (P / 1)",
+    shortcut: "P",
     glyph: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l12-12a1 1 0 0 1 1.4 0l4.3 4.3a1 1 0 0 1 0 1.4L8.4 21a1 1 0 0 1-1.4 0Z"/>
-        <path d="m22 21-15 0"/>
-        <path d="m5 11 9 9"/>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
       </svg>
     ),
   },
-  { value: "fill", label: "Fill (F / 3)", glyph: "\u{1FAA3}" },
-  { value: "rectangle", label: "Rectangle (R / 4)", glyph: "\u25a1" },
-  { value: "ellipse", label: "Ellipse (C / 5)", glyph: "\u25ef" },
-  { value: "triangle", label: "Triangle (T / 6)", glyph: "\u25b3" },
+  {
+    value: "eraser",
+    label: "Eraser (E / 2)",
+    shortcut: "E",
+    glyph: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l12-12a1 1 0 0 1 1.4 0l4.3 4.3a1 1 0 0 1 0 1.4L8.4 21a1 1 0 0 1-1.4 0Z" />
+        <path d="m22 21-15 0" />
+        <path d="m5 11 9 9" />
+      </svg>
+    ),
+  },
+  {
+    value: "fill",
+    label: "Fill (F / 3)",
+    shortcut: "F",
+    glyph: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z" />
+        <path d="m5 2 5 5" />
+        <path d="M2 13h15" />
+        <path d="M22 20a2 2 0 1 1-4 0c0-1.6 2-4 2-4s2 2.4 2 4Z" />
+      </svg>
+    ),
+  },
+  {
+    value: "rectangle",
+    label: "Rectangle (R / 4)",
+    shortcut: "R",
+    glyph: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+      </svg>
+    ),
+  },
+  {
+    value: "ellipse",
+    label: "Ellipse (C / 5)",
+    shortcut: "C",
+    glyph: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+      </svg>
+    ),
+  },
+  {
+    value: "triangle",
+    label: "Triangle (T / 6)",
+    shortcut: "T",
+    glyph: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+      </svg>
+    ),
+  },
 ];
 
 interface ToolbarProps {
@@ -61,6 +110,32 @@ export function Toolbar({
   onToolChange,
 }: ToolbarProps) {
   const isCustomColor = !COLORS.includes(color);
+  const activeColor = tool === "eraser" ? "#6c757d" : color;
+  const [sizePickerOpen, setSizePickerOpen] = useState(false);
+  const sizePickerRef = useRef<HTMLDivElement | null>(null);
+
+  // Index of current brush width in snap PRESET_WIDTHS array [2, 4, 6, 8, 12, 16, 24, 32]
+  const currentIdx = PRESET_WIDTHS.indexOf(brushWidth);
+  const sliderValue = currentIdx !== -1 ? currentIdx : 2; // default to 6px (index 2)
+
+  // Automatically switch from Fill tool to Pen when brush stroke size changes
+  function handleWidthChange(newWidth: number) {
+    onBrushWidthChange(newWidth);
+    if (tool === "fill") {
+      onToolChange("pen");
+    }
+  }
+
+  // Close brush size popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (sizePickerRef.current && !sizePickerRef.current.contains(e.target as Node)) {
+        setSizePickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Keyboard shortcuts (tool switching, brush sizing, Ctrl+Z undo) while drawing.
   useEffect(() => {
@@ -90,76 +165,158 @@ export function Toolbar({
       } else if (key === "t" || key === "6") {
         onToolChange("triangle");
       } else if (key === "[") {
-        const idx = WIDTHS.indexOf(brushWidth);
-        if (idx > 0) onBrushWidthChange(WIDTHS[idx - 1]);
+        const idx = PRESET_WIDTHS.indexOf(brushWidth);
+        if (idx > 0) {
+          handleWidthChange(PRESET_WIDTHS[idx - 1]);
+        } else if (idx === -1) {
+          handleWidthChange(PRESET_WIDTHS[0]);
+        }
       } else if (key === "]") {
-        const idx = WIDTHS.indexOf(brushWidth);
-        if (idx >= 0 && idx < WIDTHS.length - 1) onBrushWidthChange(WIDTHS[idx + 1]);
+        const idx = PRESET_WIDTHS.indexOf(brushWidth);
+        if (idx >= 0 && idx < PRESET_WIDTHS.length - 1) {
+          handleWidthChange(PRESET_WIDTHS[idx + 1]);
+        } else if (idx === -1) {
+          handleWidthChange(PRESET_WIDTHS[2]);
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [brushWidth, onBrushWidthChange, onToolChange]);
+  }, [brushWidth, handleWidthChange, onToolChange]);
 
   return (
-    <div className="toolbar">
-      <div className="toolbar-tools">
-        {TOOLS.map((t) => (
+    <div className="toolbar-container">
+      <div className="toolbar">
+        {/* Tool selector group */}
+        <div className="toolbar-group toolbar-tools" aria-label="Drawing tools">
+          {TOOLS.map((t) => (
+            <button
+              key={t.value}
+              className={`tool-button${t.value === tool ? " selected" : ""}`}
+              onClick={() => onToolChange(t.value)}
+              aria-label={t.label}
+              title={t.label}
+            >
+              <span className="tool-glyph">{t.glyph}</span>
+              <span className="shortcut-badge">{t.shortcut}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Single Brush Size Dropdown with Snapping Vertical Slider */}
+        <div className="toolbar-group brush-size-dropdown" ref={sizePickerRef}>
           <button
-            key={t.value}
-            className={`tool-button${t.value === tool ? " selected" : ""}`}
-            onClick={() => onToolChange(t.value)}
-            aria-label={t.label}
-            title={t.label}
+            type="button"
+            className={`brush-size-trigger${sizePickerOpen ? " active" : ""}`}
+            onClick={() => setSizePickerOpen((prev) => !prev)}
+            aria-label={`Brush size ${brushWidth}px`}
+            title={`Brush size: ${brushWidth}px ([ / ])`}
           >
-            {t.glyph}
+            <span
+              style={{
+                width: Math.max(5, Math.min(20, brushWidth * 0.65 + 3)),
+                height: Math.max(5, Math.min(20, brushWidth * 0.65 + 3)),
+                backgroundColor: activeColor,
+              }}
+              className="width-dot"
+            />
+            <span className="size-text-readout">{brushWidth}px</span>
           </button>
-        ))}
-      </div>
-      <div className="toolbar-colors">
-        {COLORS.map((c) => (
-          <button
-            key={c}
-            className={`color-swatch${c === color ? " selected" : ""}`}
-            style={{ backgroundColor: c }}
-            onClick={() => onColorChange(c)}
-            aria-label={`color ${c}`}
-          />
-        ))}
-        <label
-          className={`color-swatch color-swatch-custom${isCustomColor ? " selected" : ""}`}
-          style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
-          title="Choose any color"
-        >
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => onColorChange(e.target.value)}
-            aria-label="Choose any color"
-          />
-        </label>
-      </div>
-      <div className="toolbar-widths">
-        {WIDTHS.map((w) => (
-          <button
-            key={w}
-            className={`width-swatch${w === brushWidth ? " selected" : ""}`}
-            onClick={() => onBrushWidthChange(w)}
+
+          {sizePickerOpen && (
+            <div className="brush-slider-popover" role="dialog" aria-label="Adjust brush size">
+              <div className="slider-top-preview">
+                <span
+                  className="preview-dot"
+                  style={{
+                    width: Math.max(4, Math.min(26, brushWidth * 0.7 + 3)),
+                    height: Math.max(4, Math.min(26, brushWidth * 0.7 + 3)),
+                    backgroundColor: activeColor,
+                  }}
+                />
+                <span className="preview-readout">{brushWidth}px</span>
+              </div>
+
+              <div className="slider-track-wrapper">
+                <input
+                  type="range"
+                  min="0"
+                  max={PRESET_WIDTHS.length - 1}
+                  step="1"
+                  value={sliderValue}
+                  onChange={(e) => handleWidthChange(PRESET_WIDTHS[Number(e.target.value)])}
+                  className="vertical-brush-slider"
+                  aria-label="Brush size snapping slider"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Color Palette group */}
+        <div className="toolbar-group toolbar-colors" aria-label="Color palette">
+          {COLORS.map((c) => (
+            <button
+              key={c}
+              className={`color-swatch${c === color && tool !== "eraser" ? " selected" : ""}`}
+              style={{ backgroundColor: c }}
+              onClick={() => {
+                onColorChange(c);
+                if (tool === "eraser") onToolChange("pen");
+              }}
+              aria-label={`color ${c}`}
+            />
+          ))}
+          <label
+            className={`color-swatch color-swatch-custom${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
+            style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
+            title="Choose custom color"
           >
-            <span style={{ width: w, height: w }} className="width-dot" />
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => {
+                onColorChange(e.target.value);
+                if (tool === "eraser") onToolChange("pen");
+              }}
+              aria-label="Choose custom color"
+            />
+          </label>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Canvas action buttons */}
+        <div className="toolbar-group toolbar-actions" aria-label="Canvas actions">
+          <button
+            className="toolbar-action-button undo-button"
+            onClick={() => socket.emit("undo_stroke", {})}
+            title="Undo last stroke (Ctrl+Z)"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 7v6h6" />
+              <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+            </svg>
+            <span>Undo</span>
           </button>
-        ))}
+          <button
+            className="toolbar-action-button clear-button"
+            onClick={() => socket.emit("clear_canvas", {})}
+            title="Clear canvas"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" />
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+            </svg>
+            <span>Clear</span>
+          </button>
+        </div>
       </div>
-      <button
-        className="toolbar-action-button"
-        onClick={() => socket.emit("undo_stroke", {})}
-        title="Undo (Ctrl+Z)"
-      >
-        Undo
-      </button>
-      <button className="toolbar-action-button" onClick={() => socket.emit("clear_canvas", {})}>
-        Clear
-      </button>
     </div>
   );
 }
