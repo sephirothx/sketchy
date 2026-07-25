@@ -57,10 +57,6 @@ export function LobbyBrowserPage() {
 
   async function handleCreateRoom() {
     if (!requireNickname()) return;
-    if (!roomName.trim()) {
-      setError("Please enter a room name");
-      return;
-    }
     setBusy(true);
     setError(null);
     const res = await emitWithAck<AckResponse>("create_room", {
@@ -137,12 +133,12 @@ export function LobbyBrowserPage() {
         <section className="panel">
           <h2>Create a room</h2>
           <label>
-            Room name
+            Room name (optional)
             <input
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
               maxLength={40}
-              placeholder="e.g. Friday game night"
+              placeholder="Leave blank for a random name!"
             />
           </label>
           <label className="checkbox-label">

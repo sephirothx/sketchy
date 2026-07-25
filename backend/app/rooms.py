@@ -12,6 +12,59 @@ from app.words import WORDS
 
 STARTING_SCORE = 50
 
+ROOM_NAME_ADJECTIVES: tuple[str, ...] = (
+    "The Sketchy",
+    "Picasso's",
+    "The Frantic",
+    "The Chaotic",
+    "The Scribbly",
+    "The Abstract",
+    "The Messy",
+    "The Crayola",
+    "Bob Ross's",
+    "The Wobbly",
+    "The Furious",
+    "The Unfinished",
+    "The Finger-Painted",
+    "The Accidental",
+    "The Over-Drawn",
+    "The Pixelated",
+    "The Ear-Resistible",
+    "The Wild",
+    "The Melting",
+    "The Glorious",
+    "Leonardo's",
+    "Van Gogh's",
+)
+
+ROOM_NAME_NOUNS: tuple[str, ...] = (
+    "Panic Room",
+    "Catastrophe",
+    "Disaster Zone",
+    "Sanctuary",
+    "Society",
+    "Asylum",
+    "Speakeasy",
+    "Workshop",
+    "Canvas",
+    "Gallery",
+    "Lab",
+    "Guild",
+    "Haven",
+    "Corner",
+    "Studio",
+    "Art Class",
+    "Accident",
+    "Rejects",
+    "Caper",
+)
+
+
+def generate_random_room_name() -> str:
+    adj = random.choice(ROOM_NAME_ADJECTIVES)
+    noun = random.choice(ROOM_NAME_NOUNS)
+    return f"{adj} {noun}"
+
 
 class RoomFullError(Exception):
     pass
@@ -116,8 +169,8 @@ class RoomManager:
 
     def create_room(
         self,
-        name: str,
-        is_public: bool,
+        name: str | None = None,
+        is_public: bool = True,
         max_players: int = 8,
         rounds: int = 3,
         custom_words: list[str] | None = None,
@@ -127,10 +180,11 @@ class RoomManager:
         scoring_mode: str = "default",
     ) -> Room:
         room_id = str(uuid.uuid4())
+        final_name = name.strip() if name and name.strip() else generate_random_room_name()
         room = Room(
             id=room_id,
             code=self._generate_unique_code(),
-            name=name,
+            name=final_name,
             is_public=is_public,
             max_players=max_players,
             rounds=rounds,

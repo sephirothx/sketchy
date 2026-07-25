@@ -71,3 +71,18 @@ def test_scoring_mode_is_in_room_payloads():
     assert room.to_public_summary()["scoringMode"] == "none"
     assert room.to_state_payload()["scoringMode"] == "none"
     assert player.score == 0
+
+
+def test_create_room_assigns_funny_random_name_when_unspecified():
+    from app.rooms import ROOM_NAME_ADJECTIVES, ROOM_NAME_NOUNS
+
+    rm = RoomManager()
+    room1 = rm.create_room(name="", is_public=True)
+    room2 = rm.create_room(name="   ", is_public=True)
+    room3 = rm.create_room(is_public=True)
+
+    for r in (room1, room2, room3):
+        assert r.name and isinstance(r.name, str)
+        assert any(adj in r.name for adj in ROOM_NAME_ADJECTIVES)
+        assert any(noun in r.name for noun in ROOM_NAME_NOUNS)
+
