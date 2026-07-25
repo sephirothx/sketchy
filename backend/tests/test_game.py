@@ -24,6 +24,47 @@ def test_total_turns_and_finished():
     assert game.is_finished() is True
 
 
+def test_adding_player_mid_round_preserves_current_and_next_drawer():
+    game = make_game(n_players=3, rounds=2)
+    game.start_next_turn()
+    game.start_next_turn()
+    assert game.current_drawer == "p1"
+
+    game.add_player_to_rotation("late")
+
+    assert game.current_drawer == "p1"
+    assert game.round_number == 1
+    game.start_next_turn()
+    assert game.current_drawer == "p2"
+
+
+def test_removing_non_drawer_preserves_current_and_next_drawer():
+    game = make_game(n_players=3, rounds=2)
+    game.start_next_turn()
+    game.start_next_turn()
+    assert game.current_drawer == "p1"
+
+    assert game.remove_player_from_rotation("p0") is False
+
+    assert game.current_drawer == "p1"
+    assert game.round_number == 1
+    game.start_next_turn()
+    assert game.current_drawer == "p2"
+
+
+def test_removing_drawer_positions_cursor_before_next_survivor():
+    game = make_game(n_players=3, rounds=2)
+    game.start_next_turn()
+    game.start_next_turn()
+    assert game.current_drawer == "p1"
+
+    assert game.remove_player_from_rotation("p1") is True
+    game.start_next_turn()
+
+    assert game.current_drawer == "p2"
+    assert game.round_number == 1
+
+
 def test_choose_word_rejects_wrong_player():
     game = make_game()
     game.start_next_turn()
@@ -113,6 +154,18 @@ def test_end_round_awards_drawer_bonus_per_guesser():
     assert game.phase == Phase.ROUND_END
 
 
+def test_end_round_is_idempotent():
+    game = make_game(n_players=3)
+    game.start_next_turn()
+    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.set_phase_deadline(DRAWING_SECONDS)
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    game.submit_guess(guesser, game.word)
+
+    assert game.end_round() is not None
+    assert game.end_round() is None
+
+
 def test_end_round_bonus_shrinks_when_drawer_stalls_before_drawing():
     """A drawer who delays drawing (eating into the shared deadline) should earn a
     smaller bonus, not the same flat amount - otherwise stalling with an easy word
@@ -155,6 +208,15 @@ def test_all_guessed():
 def test_undo_last_stroke_with_no_strokes():
     game = make_game()
     assert game.undo_last_stroke() is False
+
+
+def test_record_stroke_respects_history_limit(monkeypatch):
+    monkeypatch.setattr("app.game.MAX_STROKE_RECORDS", 1)
+    game = make_game()
+
+    assert game.record_stroke("draw_end", {}) is True
+    assert game.record_stroke("draw_end", {}) is False
+    assert len(game.strokes) == 1
 
 
 def test_undo_last_stroke_removes_entire_pen_stroke():
@@ -486,4 +548,3 @@ def test_guess_hint_partial_caps_duplicate_word_matches():
     # intersection): 1x "red" (guess has 1, target has 2) + 1x "panda"
     # (guess has 2, target has 1) = 3 + 5 = 8 correct letters total.
     assert game.guess_hint(guesser, "red panda panda") == "partial"
-

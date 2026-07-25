@@ -364,6 +364,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
   const pendingPointsRef = useRef<StrokePoint[]>([]);
   const lastPointRef = useRef<StrokePoint | null>(null);
   const shapeStartRef = useRef<StrokePoint | null>(null);
+  const replayGenerationRef = useRef(0);
 
   // If the turn ends (isDrawer flips to false) while the drawer is still
   // physically holding the pointer down mid-stroke, the real "pointer up"
@@ -476,6 +477,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     };
 
     const onClearCanvas = () => {
+      replayGenerationRef.current += 1;
       const canvas = canvasRef.current;
       const ctx = ctxRef.current;
       if (canvas && ctx) fillWhite(ctx, canvas.width, canvas.height);
@@ -483,6 +485,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     };
 
     const onSyncStrokes = async (payload: { strokes: StrokeRecord[] }) => {
+      const replayGeneration = ++replayGenerationRef.current;
       // Replay the entire stroke log into an offscreen buffer first, then
       // swap it onto the visible canvas in a single paint. Replaying
       // directly on the visible canvas (as before) meant clearing it up
@@ -519,6 +522,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
           drawShapeOn(offCtx, stroke.payload as StrokeShapePayload);
         } else if (stroke.event === "draw_fill") {
           await applyFillPatch(offCtx, stroke.payload as StrokeFillPayload);
+          if (replayGeneration !== replayGenerationRef.current) return;
         } else {
           last = null;
         }
@@ -526,7 +530,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
 
       const canvas = canvasRef.current;
       const ctx = ctxRef.current;
-      if (canvas && ctx) {
+      if (replayGeneration === replayGenerationRef.current && canvas && ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(offscreen, 0, 0);
       }
@@ -694,4 +698,3 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     </div>
   );
 }
-
