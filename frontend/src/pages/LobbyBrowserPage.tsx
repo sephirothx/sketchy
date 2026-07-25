@@ -23,6 +23,7 @@ export function LobbyBrowserPage() {
   const [customWordsOnly, setCustomWordsOnly] = useState(false);
   const [hintMode, setHintMode] = useState<HintMode>("none");
   const [scoringMode, setScoringMode] = useState<ScoringMode>("default");
+  const [spectatorsSeeSolution, setSpectatorsSeeSolution] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,6 +71,7 @@ export function LobbyBrowserPage() {
       customWordsOnly,
       hintMode,
       scoringMode,
+      spectatorsSeeSolution,
     });
     setBusy(false);
     if (res.ok && res.roomId && res.code && res.token) {
@@ -80,25 +82,26 @@ export function LobbyBrowserPage() {
     }
   }
 
-  async function handleJoinByCode() {
+  async function handleJoinByCode(asSpectator = false) {
     if (!requireNickname()) return;
     if (!joinCode.trim()) {
       setError("Please enter a room code");
       return;
     }
-    await joinRoom({ code: joinCode.trim().toUpperCase() });
+    await joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator);
   }
 
-  async function handleJoinRoom(room: RoomSummary) {
+  async function handleJoinRoom(room: RoomSummary, asSpectator = false) {
     if (!requireNickname()) return;
-    await joinRoom({ roomId: room.id });
+    await joinRoom({ roomId: room.id }, asSpectator);
   }
 
-  async function joinRoom(target: { roomId?: string; code?: string }) {
+  async function joinRoom(target: { roomId?: string; code?: string }, asSpectator = false) {
     setBusy(true);
     setError(null);
     const res = await emitWithAck<AckResponse>("join_room", {
       nickname: nicknameInput.trim(),
+      asSpectator,
       ...target,
     });
     setBusy(false);
@@ -148,6 +151,14 @@ export function LobbyBrowserPage() {
               onChange={(e) => setIsPublic(e.target.checked)}
             />
             Public (listed below)
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={spectatorsSeeSolution}
+              onChange={(e) => setSpectatorsSeeSolution(e.target.checked)}
+            />
+            Allow spectators to see the word (default: No)
           </label>
           <label>
             Max players
@@ -245,9 +256,14 @@ export function LobbyBrowserPage() {
               placeholder="ABC123"
             />
           </label>
-          <button disabled={busy} onClick={handleJoinByCode}>
-            Join by code
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button disabled={busy} onClick={() => handleJoinByCode(false)}>
+              Join by code
+            </button>
+            <button disabled={busy} onClick={() => handleJoinByCode(true)}>
+              Spectate
+            </button>
+          </div>
         </section>
       </div>
 
@@ -263,6 +279,7 @@ export function LobbyBrowserPage() {
                 {room.rounds} {room.rounds === 1 ? "round" : "rounds"} &middot;{" "}
                 {room.drawingSeconds}s to draw &middot;{" "}
                 {room.scoringMode === "none" ? "no scoring" : "default scoring"} &middot;{" "}
+                {room.spectatorsSeeSolution ? "spectators see solution" : "spectators see masked word"} &middot;{" "}
                 {room.customWordCount > 0
                   ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " + default"}`
                   : "default words"}
@@ -278,12 +295,20 @@ export function LobbyBrowserPage() {
                   </>
                 )}
               </span>
-              <button
-                disabled={busy || room.playerCount >= room.maxPlayers}
-                onClick={() => handleJoinRoom(room)}
-              >
-                Join
-              </button>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  disabled={busy || room.playerCount >= room.maxPlayers}
+                  onClick={() => handleJoinRoom(room, false)}
+                >
+                  Join
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() => handleJoinRoom(room, true)}
+                >
+                  Spectate
+                </button>
+              </div>
             </li>
           ))}
         </ul>

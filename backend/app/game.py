@@ -254,7 +254,12 @@ class Game:
         self.letter_positions = [i for i, ch in enumerate(word) if ch.isalnum()]
         self.phase = Phase.DRAWING
 
-    def masked_word(self, token: str | None = None) -> str:
+    def masked_word(
+        self,
+        token: str | None = None,
+        is_spectator: bool = False,
+        spectators_see_solution: bool = False,
+    ) -> str:
         """Blank out each word's letters/digits into underscores while keeping
         spaces and other special characters (hyphens, apostrophes, etc.)
         visible, so multi-word expressions (e.g. "red panda") and punctuated
@@ -273,6 +278,10 @@ class Game:
         """
         if not self.word:
             return ""
+        if (is_spectator and spectators_see_solution) or (
+            token and (token == self.current_drawer or token in self.correct_guessers)
+        ):
+            return self.word
         revealed_slots = self.revealed_positions | self.purchased_hints.get(token, set())
         revealed_indices = {
             self.letter_positions[slot] for slot in revealed_slots if slot < len(self.letter_positions)
