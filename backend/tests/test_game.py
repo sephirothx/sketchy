@@ -368,6 +368,20 @@ def test_reveal_hint_letter_too_short_word_never_reveals():
     assert game.revealed_positions == set()
 
 
+def test_max_hint_checkpoints_scales_with_word_length():
+    game = make_hint_game("hi", "checkpoints")
+    assert game.max_hint_checkpoints() == 0
+
+    game_cat = make_hint_game("cat", "checkpoints")
+    assert game_cat.max_hint_checkpoints() == 1
+
+    game_banana = make_hint_game("banana", "checkpoints")
+    assert game_banana.max_hint_checkpoints() == 2
+
+    game_long = make_hint_game("the quick brown fox", "checkpoints")
+    assert game_long.max_hint_checkpoints() == 6
+
+
 def test_reveal_hint_letter_is_shown_to_everyone():
     game = make_hint_game("testing", "checkpoints")
     assert game.reveal_hint_letter() is True

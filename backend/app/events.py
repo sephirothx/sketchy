@@ -167,11 +167,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not game or game.hint_mode != "checkpoints":
             return
 
-        # Reveal one extra letter to everyone when the drawing phase is 50%
-        # and 25% of the way through (i.e. half, then a quarter, of the total
-        # time remains).
-        for remaining_fraction in (0.5, 0.25):
-            delay = game.drawing_seconds * (1 - remaining_fraction)
+        num_checkpoints = game.max_hint_checkpoints()
+        if num_checkpoints <= 0:
+            return
+
+        # Distribute timed hints evenly across drawing duration based on prompt length
+        interval = game.drawing_seconds / (num_checkpoints + 1)
+        for i in range(1, num_checkpoints + 1):
+            delay = interval * i
 
             async def _runner(delay=delay, game=game) -> None:
                 try:
