@@ -168,12 +168,8 @@ so the whole game (UI + API + WebSocket) is served from a single port.
 - Room creators can choose **Default scoring** or **No scoring**. No-scoring games still detect
   correct guesses and end rounds normally, but everyone remains on zero points and no
   leaderboard is shown.
-- A correct guess scores `max(10, round(100 * remaining_seconds / 80))` — guess fast for up to
-  100 points, or at least 10 points however late (as long as it's before the round ends).
-- The drawer's bonus is the sum of each correct guesser's points, scaled down to a `10`-point
-  baseline (`round(guesser_points * 10 / 100)`) — so a drawer who reveals the word quickly and
-  lets everyone guess promptly earns the full bonus, while stalling until the last few seconds
-  (to game an easy word) also shrinks their own bonus, not just everyone else's.
+- A correct guess scores between 100 and 300 points based on time remaining: `round(100 + 200 * remaining_seconds / 80)` — guess quickly for up to 300 points, or 100 points minimum near the deadline.
+- The drawer receives the sum of points earned by all correct guessers in that round (`drawer_score = sum of guesser scores`), balancing drawing and guessing potential across complete rotations.
 
 ### Reconnection & disconnection
 

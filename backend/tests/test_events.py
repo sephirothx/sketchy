@@ -215,10 +215,7 @@ async def test_simultaneous_final_guesses_end_round_once():
         guess(players[2].sid, {"text": answer}),
     )
 
-    drawer_bonus = sum(
-        round(points * 10 / 100)
-        for points in room.game.guess_points.values()
-    )
+    drawer_bonus = sum(room.game.guess_points.values())
     assert players[0].score == STARTING_SCORE + drawer_bonus
     assert [call.args[0] for call in sio.emit.await_args_list].count("round_ended") == 1
     round_ended_payload = next(
