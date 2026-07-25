@@ -46,7 +46,7 @@ export function GameRoomPage() {
 
   const [joinError, setJoinError] = useState<string | null>(null);
   const [color, setColor] = useState("#000000");
-  const [brushWidth, setBrushWidth] = useState(4);
+  const [brushWidth, setBrushWidth] = useState(6);
   const [tool, setTool] = useState<DrawTool>("pen");
   const [wasDrawer, setWasDrawer] = useState(false);
 
