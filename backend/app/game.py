@@ -310,6 +310,21 @@ class Game:
         ]
         return "  ".join(masked_words) + "  " + " ".join(letter_counts)
 
+    def max_hint_checkpoints(self) -> int:
+        """Calculate the number of timed hint checkpoints for the current word.
+
+        Frequency and amount scale with prompt length (approx ~40% of letters) while
+        keeping at least MIN_HIDDEN_LETTERS hidden.
+        """
+        if not self.word:
+            return 0
+        total_slots = len(self.letter_positions)
+        if total_slots <= MIN_HIDDEN_LETTERS:
+            return 0
+        max_possible = total_slots - MIN_HIDDEN_LETTERS
+        scaled = max(1, round(total_slots * 0.4))
+        return min(max_possible, scaled)
+
     def reveal_hint_letter(self) -> bool:
         """Reveal one more random letter to every player (hint_mode="checkpoints").
 
