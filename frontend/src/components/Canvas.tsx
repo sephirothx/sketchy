@@ -565,10 +565,12 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     };
   }
 
+  const activeColor = tool === "eraser" ? "#ffffff" : color;
+
   function drawLocalSegment(from: StrokePoint, to: StrokePoint) {
     const ctx = ctxRef.current;
     if (!ctx) return;
-    rasterizePath(ctx, [toPixels(from), toPixels(to)], brushWidth / 2, hexToRgba(color), false);
+    rasterizePath(ctx, [toPixels(from), toPixels(to)], brushWidth / 2, hexToRgba(activeColor), false);
   }
 
   function clearPreview() {
@@ -618,9 +620,9 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     const point = getNormalizedPoint(e);
     isPointerDownRef.current = true;
     lastPointRef.current = point;
-    if (tool === "pen") {
+    if (tool === "pen" || tool === "eraser") {
       drawLocalSegment(point, point); // visible dot for a single click/tap
-      socket.emit("draw_start", { x: point.x, y: point.y, color, width: brushWidth });
+      socket.emit("draw_start", { x: point.x, y: point.y, color: activeColor, width: brushWidth });
     } else if (tool === "fill") {
       performFill(point);
     } else {
@@ -632,7 +634,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     if (!isDrawer || !isPointerDownRef.current) return;
     if (tool === "fill") return; // fill happens once on pointer-down, not a drag
     const point = getNormalizedPoint(e);
-    if (tool === "pen") {
+    if (tool === "pen" || tool === "eraser") {
       if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point);
       lastPointRef.current = point;
       pendingPointsRef.current.push(point);
@@ -654,7 +656,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
       lastPointRef.current = null;
       return;
     }
-    if (tool === "pen") {
+    if (tool === "pen" || tool === "eraser") {
       lastPointRef.current = null;
       if (pendingPointsRef.current.length > 0) {
         socket.emit("draw_move", { points: pendingPointsRef.current });
@@ -665,7 +667,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
       const start = shapeStartRef.current;
       const end = lastPointRef.current;
       clearPreview();
-      if (start && end) {
+      if (start && end && (tool === "rectangle" || tool === "ellipse" || tool === "triangle")) {
         const ctx = ctxRef.current;
         if (ctx) {
           drawShapeOutlinePixels(ctx, start, end, tool, color, brushWidth);
@@ -674,6 +676,13 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
       }
       shapeStartRef.current = null;
       lastPointRef.current = null;
+    }
+  }
+
+  function handlePointerLeave() {
+    clearPreview();
+    if (isPointerDownRef.current) {
+      handlePointerUp();
     }
   }
 
@@ -687,7 +696,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
       />
       <canvas
         ref={previewCanvasRef}
