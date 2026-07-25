@@ -114,8 +114,8 @@ export function WordDisplay({
       )}
       {revealedWord ? (
         <span className="word-reveal">{revealedWord}</span>
-      ) : isDrawer && myWord ? (
-        <span className="word-reveal">{myWord}</span>
+      ) : isDrawer && (myWord || !maskedWord.includes("_")) ? (
+        <span className="word-reveal">{myWord || maskedWord}</span>
       ) : (
         <span className="word-masked">
           {renderMaskedWord(
