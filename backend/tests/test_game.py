@@ -327,6 +327,19 @@ def test_masked_word_returns_unmasked_for_drawer_and_correct_guesser():
     assert game.masked_word(guesser2) != "cat"
 
 
+def test_start_next_turn_skips_afk_drawers():
+    game = make_game(n_players=3)
+    p1, p2, p3 = game.turn_order
+    # p2 is marked AFK
+    game.start_next_turn(afk_tokens={p2})
+    assert game.current_drawer == p1
+
+    # Next turn skips p2 and chooses p3
+    game.start_next_turn(afk_tokens={p2})
+    assert game.current_drawer == p3
+
+
+
 
 def make_hint_game(word, mode, n_players=3):
     game = make_game(n_players=n_players, rounds=1)

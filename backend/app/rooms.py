@@ -79,6 +79,7 @@ class Player:
     connected: bool = True
     is_host: bool = False
     is_spectator: bool = False
+    is_afk: bool = False
 
 
 @dataclass
@@ -162,6 +163,7 @@ class Room:
                     "connected": p.connected,
                     "isHost": p.is_host,
                     "isSpectator": p.is_spectator,
+                    "isAfk": p.is_afk,
                 }
                 for p in self.player_list()
             ],

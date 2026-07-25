@@ -621,4 +621,49 @@ async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
             await timer
 
 
+@pytest.mark.asyncio
+async def test_toggle_afk_socket_handler_and_not_waited_for():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    p1 = room_manager.add_player(room, "P1")
+    p2 = room_manager.add_player(room, "P2")
+    p3 = room_manager.add_player(room, "P3")
+    p1.sid, p2.sid, p3.sid = "p1-sid", "p2-sid", "p3-sid"
+
+    room.state = "playing"
+    room.game = Game(turn_order=[p1.token, p2.token, p3.token], rounds_total=1)
+    room.game.start_next_turn()
+    room.game._set_word("banana")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "p1-sid": {"room_id": room.id, "token": p1.token},
+        "p2-sid": {"room_id": room.id, "token": p2.token},
+        "p3-sid": {"room_id": room.id, "token": p3.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    toggle_afk = sio.handlers["/"]["toggle_afk"]
+    guess = sio.handlers["/"]["guess"]
+
+    # P2 guesses correctly
+    await guess("p2-sid", {"text": "banana"})
+    # Round is not ended yet because P3 hasn't guessed
+    assert room.game.phase == events.Phase.DRAWING
+
+    # P3 goes AFK -> P3 is no longer waited for -> round ends immediately!
+    await toggle_afk("p3-sid", {"afk": True})
+    assert p3.is_afk is True
+    assert room.game.phase == events.Phase.ROUND_END
+
+    timer = events._phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+
 
