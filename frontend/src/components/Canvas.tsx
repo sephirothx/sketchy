@@ -523,6 +523,9 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
         } else if (stroke.event === "draw_fill") {
           await applyFillPatch(offCtx, stroke.payload as StrokeFillPayload);
           if (replayGeneration !== replayGenerationRef.current) return;
+        } else if (stroke.event === "clear_canvas") {
+          fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
+          last = null;
         } else {
           last = null;
         }

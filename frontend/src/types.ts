@@ -124,7 +124,7 @@ export interface StrokeFillPayload {
 }
 
 export interface StrokeRecord {
-  event: "draw_start" | "draw_move" | "draw_end" | "draw_shape" | "draw_fill";
+  event: "draw_start" | "draw_move" | "draw_end" | "draw_shape" | "draw_fill" | "clear_canvas";
   payload:
     | StrokeStartPayload
     | StrokeMovePayload

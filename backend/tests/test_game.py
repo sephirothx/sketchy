@@ -286,6 +286,30 @@ def test_undo_last_stroke_repeatedly_empties_history():
     assert game.undo_last_stroke() is False
 
 
+def test_clear_canvas_stroke_and_undo_clear():
+    game = make_game()
+    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_end", {})
+    assert game.clear_canvas_stroke() is True
+    assert [s["event"] for s in game.strokes] == ["draw_start", "draw_end", "clear_canvas"]
+
+    # Undo recovers drawing history to before Clear was pressed
+    assert game.undo_last_stroke() is True
+    assert [s["event"] for s in game.strokes] == ["draw_start", "draw_end"]
+
+
+def test_new_stroke_after_clear_resets_pre_clear_history():
+    game = make_game()
+    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_end", {})
+    game.clear_canvas_stroke()
+
+    # Starting a new stroke after Clear resets pre-clear history
+    game.record_stroke("draw_start", {"x": 1, "y": 1})
+    assert [s["event"] for s in game.strokes] == ["draw_start"]
+    assert game.strokes[0]["payload"]["x"] == 1
+
+
 def make_hint_game(word, mode, n_players=3):
     game = make_game(n_players=n_players, rounds=1)
     game.hint_mode = mode

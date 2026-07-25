@@ -692,7 +692,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         token = session.get("token")
         if token != room.game.current_drawer:
             return
-        room.game.strokes = []
+        room.game.clear_canvas_stroke()
         # Unlike draw_start/move/end (where the drawer already renders locally as they
         # draw), the drawer has no local-only clear feedback, so broadcast to everyone
         # in the room including the sender.

@@ -425,23 +425,37 @@ class Game:
     def record_stroke(self, event: str, payload: dict) -> bool:
         if len(self.strokes) >= MAX_STROKE_RECORDS:
             return False
+        # If the canvas was previously cleared and a new stroke starts, reset pre-clear history.
+        if self.strokes and self.strokes[-1]["event"] == "clear_canvas":
+            if event == "clear_canvas":
+                return True
+            self.strokes = []
         self.strokes.append({"event": event, "payload": payload})
         return True
 
+    def clear_canvas_stroke(self) -> bool:
+        """Record a clear_canvas event in stroke history, allowing undo to restore pre-clear history."""
+        if not self.strokes:
+            return False
+        if self.strokes[-1]["event"] == "clear_canvas":
+            return False
+        self.strokes.append({"event": "clear_canvas", "payload": {}})
+        return True
+
     def undo_last_stroke(self) -> bool:
-        """Remove the most recent logical stroke from the recorded history.
+        """Remove the most recent logical stroke or clear event from the recorded history.
 
         The canvas is a raster (not vector), so "undoing" means dropping the
         last stroke's events from the replay log and having every client
         clear + redraw from what remains (via a fresh sync_strokes). A
-        logical stroke is either a single draw_shape/draw_fill event, or a
-        draw_start/draw_move*/draw_end run - so this walks backward from the
+        logical stroke is either a single draw_shape/draw_fill/clear_canvas event,
+        or a draw_start/draw_move*/draw_end run - so this walks backward from the
         end to find where that run began. Returns False if there was nothing
         to undo.
         """
         if not self.strokes:
             return False
-        if self.strokes[-1]["event"] in ("draw_shape", "draw_fill"):
+        if self.strokes[-1]["event"] in ("draw_shape", "draw_fill", "clear_canvas"):
             self.strokes.pop()
             return True
         start = len(self.strokes) - 1

@@ -382,9 +382,15 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     assert len(room.game.strokes) == 1
 
     await clear_canvas("drawer-sid", {})
-    assert len(room.game.strokes) == 0
+    assert len(room.game.strokes) == 2
+    assert room.game.strokes[-1]["event"] == "clear_canvas"
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
     assert "clear_canvas" in emitted_events
+
+    # Drawer undoes Clear - recovers pre-clear stroke
+    await undo_stroke("drawer-sid", {})
+    assert len(room.game.strokes) == 1
+    assert room.game.strokes[0]["event"] == "draw_start"
 
     timer = events._phase_timers.pop(room.id, None)
     if timer:
