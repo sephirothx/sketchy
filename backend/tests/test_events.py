@@ -526,3 +526,42 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
         with suppress(asyncio.CancelledError):
             await timer
 
+
+@pytest.mark.asyncio
+async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    drawer.sid = "drawer-sid"
+
+    room.game = Game(turn_order=[drawer.token], rounds_total=1)
+    room.game.start_next_turn()
+    room.game.force_word_choice()
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+
+    # Record drawing strokes in progress
+    room.game.record_stroke("draw_start", {"x": 0.1, "y": 0.2, "color": "#000000", "width": 4})
+    room.game.record_stroke("draw_move", {"points": [{"x": 0.3, "y": 0.4}]})
+
+    # New player joins and requests canvas strokes
+    joiner = room_manager.add_player(room, "Joiner")
+    joiner.sid = "joiner-sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {"joiner-sid": {"room_id": room.id, "token": joiner.token}}
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    request_handler = sio.handlers["/"]["request_sync_strokes"]
+    await request_handler("joiner-sid")
+
+    # Check sync_strokes payload sent to joiner
+    emitted_sync = [
+        call for call in sio.emit.await_args_list
+        if call.args[0] == "sync_strokes" and call.kwargs.get("to") == "joiner-sid"
+    ]
+    assert len(emitted_sync) == 1
+    assert len(emitted_sync[0].args[1]["strokes"]) == 2
+
+

@@ -899,3 +899,12 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         )
         await _emit_room_state(room)
         return {"ok": True, "cost": cost, "found": found_count}
+
+    @sio.event
+    async def request_sync_strokes(sid):
+        session = await sio.get_session(sid) if sid else None
+        if not session:
+            return
+        room = room_manager.get_room(session.get("room_id"))
+        if room and room.game and room.game.strokes:
+            await sio.emit("sync_strokes", {"strokes": room.game.strokes}, to=sid)

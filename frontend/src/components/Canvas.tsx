@@ -544,6 +544,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool }: CanvasProps) {
     socket.on("draw_fill", onDrawFill);
     socket.on("clear_canvas", onClearCanvas);
     socket.on("sync_strokes", onSyncStrokes);
+    socket.emit("request_sync_strokes");
 
     return () => {
       socket.off("draw_start", onDrawStart);
