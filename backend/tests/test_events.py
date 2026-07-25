@@ -231,3 +231,301 @@ async def test_simultaneous_final_guesses_end_round_once():
     timer.cancel()
     with suppress(asyncio.CancelledError):
         await timer
+
+
+@pytest.mark.asyncio
+async def test_buy_hint_purchase_mode():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, hint_mode="purchase")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+
+    room.game = Game(
+        turn_order=[drawer.token, guesser.token],
+        hint_mode="purchase",
+        word_pool=["apple"],
+    )
+    room.game.start_next_turn()
+    room.game.choose_word(drawer.token, "apple")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "drawer-sid": {"room_id": room.id, "token": drawer.token},
+        "guesser-sid": {"room_id": room.id, "token": guesser.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+    buy_hint = sio.handlers["/"]["buy_hint"]
+
+    # Drawer attempting to buy a hint should fail
+    drawer_res = await buy_hint("drawer-sid", {"slot": 0})
+    assert drawer_res == {"ok": False, "error": "Hint unavailable"}
+
+    # Guesser buying a valid hint slot
+    initial_score = guesser.score
+    res = await buy_hint("guesser-sid", {"slot": 0})
+    assert res["ok"] is True
+    assert res["cost"] == 12
+    assert guesser.score == initial_score - 12
+    assert 0 in room.game.purchased_hints[guesser.token]
+
+    # Check hint_revealed event emission
+    emitted_events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "hint_revealed" in emitted_events
+
+    # Guesser with insufficient points
+    guesser.score = 5
+    res_broke = await buy_hint("guesser-sid", {"slot": 1})
+    assert res_broke == {"ok": False, "error": "Not enough points"}
+
+    timer = events._phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+@pytest.mark.asyncio
+async def test_buy_wheel_letter():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, hint_mode="wheel")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    guesser.sid = "guesser-sid"
+    drawer.sid = "drawer-sid"
+
+    room.game = Game(
+        turn_order=[drawer.token, guesser.token],
+        hint_mode="wheel",
+        word_pool=["banana"],
+    )
+    room.game.start_next_turn()
+    room.game.choose_word(drawer.token, "banana")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": guesser.token})
+    sio.emit = AsyncMock()
+    buy_wheel_letter = sio.handlers["/"]["buy_wheel_letter"]
+
+    # Invalid letter format
+    inv_res = await buy_wheel_letter("guesser-sid", {"letter": "123"})
+    assert inv_res == {"ok": False, "error": "Invalid letter"}
+
+    # Buy letter 'a' (present 3 times in 'banana')
+    guesser.score = 500
+    initial_score = guesser.score
+    res = await buy_wheel_letter("guesser-sid", {"letter": "a"})
+    assert res["ok"] is True
+    assert res["found"] == 3
+    assert guesser.score < initial_score
+    assert "a" in room.game.purchased_letters[guesser.token]
+
+    # Attempting to buy the same letter again should fail
+    dup_res = await buy_wheel_letter("guesser-sid", {"letter": "a"})
+    assert dup_res == {"ok": False, "error": "Letter unavailable"}
+
+    # Verify system message emission
+    emitted = [call.args for call in sio.emit.await_args_list]
+    chat_emits = [args for args in emitted if args[0] == "chat_message"]
+    assert any("You bought 'A'" in args[1]["text"] for args in chat_emits)
+
+    timer = events._phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+@pytest.mark.asyncio
+async def test_undo_stroke_and_clear_canvas_handlers():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+
+    room.game = Game(turn_order=[drawer.token, guesser.token])
+    room.game.start_next_turn()
+    room.game.force_word_choice()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "drawer-sid": {"room_id": room.id, "token": drawer.token},
+        "guesser-sid": {"room_id": room.id, "token": guesser.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    draw_start = sio.handlers["/"]["draw_start"]
+    undo_stroke = sio.handlers["/"]["undo_stroke"]
+    clear_canvas = sio.handlers["/"]["clear_canvas"]
+
+    # Drawer draws a stroke
+    await draw_start("drawer-sid", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4})
+    assert len(room.game.strokes) == 1
+
+    # Guesser attempting to undo should be ignored
+    await undo_stroke("guesser-sid", {})
+    assert len(room.game.strokes) == 1
+
+    # Drawer undoes the stroke
+    await undo_stroke("drawer-sid", {})
+    assert len(room.game.strokes) == 0
+    emitted_events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "sync_strokes" in emitted_events
+
+    # Drawer draws again then clears canvas
+    await draw_start("drawer-sid", {"x": 0.2, "y": 0.2, "color": "#ff0000", "width": 4})
+    assert len(room.game.strokes) == 1
+
+    await clear_canvas("drawer-sid", {})
+    assert len(room.game.strokes) == 0
+    emitted_events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "clear_canvas" in emitted_events
+
+    timer = events._phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+@pytest.mark.asyncio
+async def test_draw_fill_handler_validation():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    drawer.sid = "drawer-sid"
+
+    room.game = Game(turn_order=[drawer.token])
+    room.game.start_next_turn()
+    room.game.force_word_choice()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.emit = AsyncMock()
+    draw_fill = sio.handlers["/"]["draw_fill"]
+
+    # Valid fill payload
+    valid_patch = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    valid_data = {
+        "patchX": 10,
+        "patchY": 10,
+        "patchWidth": 50,
+        "patchHeight": 50,
+        "patchData": valid_patch,
+    }
+    await draw_fill("drawer-sid", valid_data)
+    assert len(room.game.strokes) == 1
+    assert room.game.strokes[0]["event"] == "draw_fill"
+
+    # Oversized patch data payload (exceeding MAX_FILL_PATCH_CHARS = 300,000)
+    oversized_data = {
+        "patchX": 10,
+        "patchY": 10,
+        "patchWidth": 50,
+        "patchHeight": 50,
+        "patchData": "A" * 300_001,
+    }
+    await draw_fill("drawer-sid", oversized_data)
+    assert len(room.game.strokes) == 1  # Not added
+
+    # Out of bounds fill payload (patchX + patchWidth > CANVAS_WIDTH 800)
+    oob_data = {
+        "patchX": 780,
+        "patchY": 10,
+        "patchWidth": 50,
+        "patchHeight": 50,
+        "patchData": valid_patch,
+    }
+    await draw_fill("drawer-sid", oob_data)
+    assert len(room.game.strokes) == 1  # Not added
+
+    timer = events._phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+@pytest.mark.asyncio
+async def test_near_miss_guess_privacy_and_restricted_chat():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser1 = room_manager.add_player(room, "Guesser1")
+    guesser2 = room_manager.add_player(room, "Guesser2")
+    drawer.sid = "drawer-sid"
+    guesser1.sid = "guesser1-sid"
+    guesser2.sid = "guesser2-sid"
+
+    room.game = Game(
+        turn_order=[drawer.token, guesser1.token, guesser2.token],
+        word_pool=["panda"],
+    )
+    room.game.start_next_turn()
+    room.game.choose_word(drawer.token, "panda")
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "drawer-sid": {"room_id": room.id, "token": drawer.token},
+        "guesser1-sid": {"room_id": room.id, "token": guesser1.token},
+        "guesser2-sid": {"room_id": room.id, "token": guesser2.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+    guess = sio.handlers["/"]["guess"]
+
+    # Guesser1 makes a near-miss guess "pandas" (distance 1 from "panda")
+    await guess("guesser1-sid", {"text": "pandas"})
+
+    # Check emits for near-miss
+    emitted_calls = sio.emit.await_args_list
+    # Guesser1 should receive a close hint message to their specific sid
+    close_hints = [
+        call for call in emitted_calls
+        if call.args[0] == "chat_message" and call.kwargs.get("to") == "guesser1-sid" and call.args[1].get("close")
+    ]
+    assert len(close_hints) == 1
+    assert "very close" in close_hints[0].args[1]["text"]
+
+    # Guesser1's guess text should NOT be broadcast to room.id or guesser2-sid
+    room_broadcasts = [call for call in emitted_calls if call.kwargs.get("room") == room.id]
+    assert not any(call.args[1].get("text") == "pandas" for call in room_broadcasts)
+
+    sio.emit.reset_mock()
+
+    # Guesser1 guesses correctly ("panda")
+    await guess("guesser1-sid", {"text": "panda"})
+    assert guesser1.token in room.game.correct_guessers
+
+    sio.emit.reset_mock()
+
+    # Guesser1 sends follow-up chat after guessing correctly
+    await guess("guesser1-sid", {"text": "I got it!"})
+
+    # The chat message should be restricted: True and sent only to in_the_know sids (drawer-sid and guesser1-sid)
+    restricted_emits = [
+        call for call in sio.emit.await_args_list
+        if call.args[0] == "chat_message" and call.args[1].get("restricted") is True
+    ]
+    assert len(restricted_emits) == 2
+    target_sids = {call.kwargs.get("to") for call in restricted_emits}
+    assert target_sids == {"drawer-sid", "guesser1-sid"}
+    assert "guesser2-sid" not in target_sids
+
+    timer = events._phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+

@@ -137,9 +137,7 @@ cd backend
 .venv/bin/pytest
 ```
 
-`game.py` and `rooms.py` are pure logic (no sockets), so they're covered directly by unit
-tests. `events.py` (the socket handlers) is best exercised with a real Socket.IO client
-against a running server for end-to-end checks.
+`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. `events.py` socket event handlers (room lifecycle, word choice, drawing undo/fill/shapes, hint purchases, chat privacy) are covered by asyncio integration tests.
 
 ### Production build
 
