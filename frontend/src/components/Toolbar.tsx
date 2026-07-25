@@ -24,12 +24,23 @@ const COLORS = COLOR_PAIRS.flat();
 
 const WIDTHS = [2, 4, 8, 16];
 
-const TOOLS: { value: DrawTool; label: string; glyph: string }[] = [
-  { value: "pen", label: "Pen", glyph: "\u270e" },
-  { value: "rectangle", label: "Rectangle", glyph: "\u25a1" },
-  { value: "ellipse", label: "Ellipse", glyph: "\u25ef" },
-  { value: "triangle", label: "Triangle", glyph: "\u25b3" },
-  { value: "fill", label: "Fill", glyph: "\u{1FAA3}" },
+const TOOLS: { value: DrawTool; label: string; glyph: React.ReactNode }[] = [
+  { value: "pen", label: "Pen (P / 1)", glyph: "\u270e" },
+  {
+    value: "eraser",
+    label: "Eraser (E / 2)",
+    glyph: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l12-12a1 1 0 0 1 1.4 0l4.3 4.3a1 1 0 0 1 0 1.4L8.4 21a1 1 0 0 1-1.4 0Z"/>
+        <path d="m22 21-15 0"/>
+        <path d="m5 11 9 9"/>
+      </svg>
+    ),
+  },
+  { value: "fill", label: "Fill (F / 3)", glyph: "\u{1FAA3}" },
+  { value: "rectangle", label: "Rectangle (R / 4)", glyph: "\u25a1" },
+  { value: "ellipse", label: "Ellipse (C / 5)", glyph: "\u25ef" },
+  { value: "triangle", label: "Triangle (T / 6)", glyph: "\u25b3" },
 ];
 
 interface ToolbarProps {
@@ -51,20 +62,44 @@ export function Toolbar({
 }: ToolbarProps) {
   const isCustomColor = !COLORS.includes(color);
 
-  // Ctrl+Z / Cmd+Z triggers undo, mirroring the toolbar button. This effect
-  // is only mounted while the toolbar itself is (i.e. while it's this
-  // player's turn to draw), so it can never fire for guessers.
+  // Keyboard shortcuts (tool switching, brush sizing, Ctrl+Z undo) while drawing.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== "z") return;
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-      e.preventDefault();
-      socket.emit("undo_stroke", {});
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        socket.emit("undo_stroke", {});
+        return;
+      }
+
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const key = e.key.toLowerCase();
+      if (key === "p" || key === "1") {
+        onToolChange("pen");
+      } else if (key === "e" || key === "2") {
+        onToolChange("eraser");
+      } else if (key === "f" || key === "3") {
+        onToolChange("fill");
+      } else if (key === "r" || key === "4") {
+        onToolChange("rectangle");
+      } else if (key === "c" || key === "5") {
+        onToolChange("ellipse");
+      } else if (key === "t" || key === "6") {
+        onToolChange("triangle");
+      } else if (key === "[") {
+        const idx = WIDTHS.indexOf(brushWidth);
+        if (idx > 0) onBrushWidthChange(WIDTHS[idx - 1]);
+      } else if (key === "]") {
+        const idx = WIDTHS.indexOf(brushWidth);
+        if (idx >= 0 && idx < WIDTHS.length - 1) onBrushWidthChange(WIDTHS[idx + 1]);
+      }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [brushWidth, onBrushWidthChange, onToolChange]);
 
   return (
     <div className="toolbar">

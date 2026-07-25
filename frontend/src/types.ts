@@ -99,7 +99,7 @@ export interface StrokeMovePayload {
 
 export type ShapeType = "rectangle" | "ellipse" | "triangle";
 
-export type DrawTool = "pen" | ShapeType | "fill";
+export type DrawTool = "pen" | "eraser" | ShapeType | "fill";
 
 export interface StrokeShapePayload {
   shape: ShapeType;
