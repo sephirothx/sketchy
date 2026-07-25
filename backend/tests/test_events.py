@@ -747,6 +747,46 @@ async def test_votes_removed_when_player_leaves_or_disconnects():
 
 
 @pytest.mark.asyncio
+async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid, guesser.sid = "drawer-sid", "guesser-sid"
+
+    room.game = Game(turn_order=[drawer.token, guesser.token], word_pool=["banana"], rounds_total=1, hint_mode="checkpoints", drawing_seconds=0.05)
+    room.game.start_next_turn()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "drawer-sid": {"room_id": room.id, "token": drawer.token},
+        "guesser-sid": {"room_id": room.id, "token": guesser.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    select_word = sio.handlers["/"]["select_word"]
+    await select_word("drawer-sid", {"word": "banana"})
+    await asyncio.sleep(0.1)
+
+    drawer_hints = [call for call in sio.emit.await_args_list if call.args[0] == "hint_revealed" and call.kwargs.get("to") == "drawer-sid"]
+    guesser_hints = [call for call in sio.emit.await_args_list if call.args[0] == "hint_revealed" and call.kwargs.get("to") == "guesser-sid"]
+
+    assert len(drawer_hints) >= 1
+    assert drawer_hints[0].args[1]["maskedWord"] == "banana"
+
+    assert len(guesser_hints) >= 1
+    assert guesser_hints[0].args[1]["maskedWord"] != "banana"
+
+    timer = events._phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+@pytest.mark.asyncio
 async def test_chatting_removes_afk_status():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)

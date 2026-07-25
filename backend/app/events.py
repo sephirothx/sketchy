@@ -184,9 +184,19 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 if room.game is not game or game.phase != Phase.DRAWING:
                     return
                 if game.reveal_hint_letter():
-                    await sio.emit(
-                        "hint_revealed", {"maskedWord": game.masked_word()}, room=room.id
-                    )
+                    for p in room.player_list():
+                        if not p.sid:
+                            continue
+                        masked = game.masked_word(
+                            p.token,
+                            is_spectator=p.is_spectator,
+                            spectators_see_solution=room.spectators_see_solution,
+                        )
+                        await sio.emit(
+                            "hint_revealed",
+                            {"maskedWord": masked},
+                            to=p.sid,
+                        )
 
             _hint_timers.setdefault(room.id, []).append(asyncio.create_task(_runner()))
 
