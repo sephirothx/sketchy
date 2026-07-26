@@ -99,11 +99,12 @@ export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths }: G
           <div className="chat-input-row">
             <div className="chat-input-box">
               <input
-                type="text"
+                type="search"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={canGuess ? "Type your guess..." : "Type a message..."}
                 maxLength={60}
+                autoComplete="off"
               />
             </div>
             <button type="submit">Send</button>

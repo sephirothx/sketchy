@@ -141,10 +141,12 @@ export function LobbyBrowserPage() {
         <label>
           Nickname
           <input
+            type="search"
             value={nicknameInput}
             onChange={(e) => setNicknameInput(e.target.value)}
             maxLength={20}
             placeholder="Your name"
+            autoComplete="off"
           />
         </label>
       </section>
@@ -168,10 +170,12 @@ export function LobbyBrowserPage() {
           <label>
             Room name (optional)
             <input
+              type="search"
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
               maxLength={40}
               placeholder="Leave blank for a random name!"
+              autoComplete="off"
             />
           </label>
           <label className="checkbox-label">
@@ -237,10 +241,12 @@ export function LobbyBrowserPage() {
           <label>
             Custom words (optional)
             <input
+              type="search"
               value={customWords}
               onChange={(e) => setCustomWords(e.target.value)}
               placeholder="e.g. cat, red panda, ice cream truck"
               maxLength={400000}
+              autoComplete="off"
             />
           </label>
           <p className="field-hint">
@@ -298,10 +304,12 @@ export function LobbyBrowserPage() {
           <label>
             Room code
             <input
+              type="search"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value)}
               maxLength={6}
               placeholder="ABC123"
+              autoComplete="off"
             />
           </label>
           <div style={{ display: "flex", gap: "0.5rem" }}>
