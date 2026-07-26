@@ -652,7 +652,10 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     if (!isDrawer) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const point = getNormalizedPoint(e);
-    setPointerPos(point);
+    const showCirclePreview = tool === "eraser" || (tool === "pen" && penCursor === "circle");
+    if (showCirclePreview) {
+      setPointerPos(point);
+    }
     isPointerDownRef.current = true;
     lastPointRef.current = point;
     if (tool === "pen" || tool === "eraser") {
@@ -689,8 +692,8 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
 
   // Clear preview canvas and re-render cursor outline when pointerPos, brushWidth, tool, penCursor, or drawer status changes
   useEffect(() => {
-    clearPreview();
     const showCirclePreview = isDrawer && (tool === "eraser" || (tool === "pen" && penCursor === "circle"));
+    clearPreview();
     if (showCirclePreview && pointerPos) {
       drawCircleCursorPreview(pointerPos, brushWidth);
     }
@@ -699,11 +702,11 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   function handlePointerMove(e: ReactPointerEvent<HTMLCanvasElement>) {
     if (!isDrawer) return;
     const point = getNormalizedPoint(e);
-    setPointerPos(point);
 
     const showCirclePreview = tool === "eraser" || (tool === "pen" && penCursor === "circle");
 
     if (showCirclePreview) {
+      setPointerPos(point);
       clearPreview();
       drawCircleCursorPreview(point, brushWidth);
     }
