@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+export type PenCursorStyle = "crosshair" | "circle";
+
 export interface KeyBindings {
   pen: string[];
   eraser: string[];
@@ -24,6 +26,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   undo: ["z"],
 };
 
+export const DEFAULT_PEN_CURSOR: PenCursorStyle = "crosshair";
+
 export const ACTION_LABELS: Record<keyof KeyBindings, string> = {
   pen: "Pen Tool",
   eraser: "Eraser Tool",
@@ -47,12 +51,25 @@ function loadStoredKeyBindings(): KeyBindings {
   }
 }
 
+function loadStoredPenCursor(): PenCursorStyle {
+  try {
+    const raw = localStorage.getItem("sketchy_pencursor");
+    if (raw === "circle" || raw === "crosshair") return raw;
+    return DEFAULT_PEN_CURSOR;
+  } catch {
+    return DEFAULT_PEN_CURSOR;
+  }
+}
+
 interface SettingsStore {
   isSettingsOpen: boolean;
   openSettings: () => void;
   closeSettings: () => void;
   keyBindings: KeyBindings;
-  setAllKeyBindings: (bindings: KeyBindings) => void;
+  penCursor: PenCursorStyle;
+  setAllSettings: (payload: { keyBindings: KeyBindings; penCursor: PenCursorStyle }) => void;
+  setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
+  setPenCursor: (penCursor: PenCursorStyle) => void;
   resetKeyBindings: () => void;
 }
 
@@ -61,10 +78,23 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   openSettings: () => set({ isSettingsOpen: true }),
   closeSettings: () => set({ isSettingsOpen: false }),
   keyBindings: loadStoredKeyBindings(),
-  setAllKeyBindings: (bindings) =>
+  penCursor: loadStoredPenCursor(),
+  setAllSettings: ({ keyBindings, penCursor }) =>
     set(() => {
-      localStorage.setItem("sketchy_keybindings", JSON.stringify(bindings));
-      return { keyBindings: bindings };
+      localStorage.setItem("sketchy_keybindings", JSON.stringify(keyBindings));
+      localStorage.setItem("sketchy_pencursor", penCursor);
+      return { keyBindings, penCursor };
+    }),
+  setKeyBinding: (action, keys) =>
+    set((state) => {
+      const updated = { ...state.keyBindings, [action]: keys };
+      localStorage.setItem("sketchy_keybindings", JSON.stringify(updated));
+      return { keyBindings: updated };
+    }),
+  setPenCursor: (penCursor) =>
+    set(() => {
+      localStorage.setItem("sketchy_pencursor", penCursor);
+      return { penCursor };
     }),
   resetKeyBindings: () =>
     set(() => {

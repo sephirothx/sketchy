@@ -4,6 +4,7 @@ import {
   ACTION_LABELS,
   DEFAULT_KEY_BINDINGS,
   type KeyBindings,
+  type PenCursorStyle,
   useSettingsStore,
 } from "../store/settingsStore";
 
@@ -22,10 +23,11 @@ function formatKey(key: string): string {
 }
 
 function SettingsModalContent() {
-  const { closeSettings, keyBindings, setAllKeyBindings } = useSettingsStore();
+  const { closeSettings, keyBindings, penCursor, setAllSettings } = useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [draftKeyBindings, setDraftKeyBindings] = useState<KeyBindings>(keyBindings);
+  const [draftPenCursor, setDraftPenCursor] = useState<PenCursorStyle>(penCursor);
   const [activeRebind, setActiveRebind] = useState<{
     action: keyof KeyBindings;
     slotIndex: number;
@@ -73,7 +75,10 @@ function SettingsModalContent() {
   };
 
   const handleSave = () => {
-    setAllKeyBindings(draftKeyBindings);
+    setAllSettings({
+      keyBindings: draftKeyBindings,
+      penCursor: draftPenCursor,
+    });
     closeSettings();
   };
 
@@ -125,8 +130,25 @@ function SettingsModalContent() {
           )}
 
           {activeTab === "game" && (
-            <div className="tab-placeholder">
-              <p>No game settings available yet.</p>
+            <div className="settings-section">
+              <h4>Game Settings</h4>
+              <div className="settings-field" style={{ marginTop: "12px" }}>
+                <label htmlFor="pen-cursor-style" className="settings-label">
+                  Pen Cursor Style
+                </label>
+                <select
+                  id="pen-cursor-style"
+                  className="settings-select"
+                  value={draftPenCursor}
+                  onChange={(e) => setDraftPenCursor(e.target.value as PenCursorStyle)}
+                >
+                  <option value="crosshair">Default Crosshair</option>
+                  <option value="circle">Circular Outline (matching brush size)</option>
+                </select>
+                <p className="settings-description" style={{ marginTop: "6px" }}>
+                  Choose whether the pen tool displays the default crosshair or a circular outline showing its field of action.
+                </p>
+              </div>
             </div>
           )}
 

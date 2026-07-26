@@ -1301,6 +1301,36 @@
   border-color: #94a3b8;
 }
 
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.settings-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.settings-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.settings-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
 .settings-section h4 {
   margin: 0 0 4px 0;
   font-size: 15px;
