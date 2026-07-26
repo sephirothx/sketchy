@@ -32,6 +32,7 @@
 }
 
 .panel input[type="text"],
+.panel input[type="search"],
 .panel input[type="number"],
 .panel input:not([type]) {
   font-weight: normal;
