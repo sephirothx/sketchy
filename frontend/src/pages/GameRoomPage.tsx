@@ -27,10 +27,8 @@ export function GameRoomPage() {
   const getStoredToken = useGameStore((s) => s.getStoredToken);
   const reset = useGameStore((s) => s.reset);
 
-  const roomName = useGameStore((s) => s.name);
   const roomState = useGameStore((s) => s.roomState);
   const players = useGameStore((s) => s.players);
-  const isPublic = useGameStore((s) => s.isPublic);
   const phase = useGameStore((s) => s.phase);
   const drawerToken = useGameStore((s) => s.drawerToken);
   const maskedWord = useGameStore((s) => s.maskedWord);
@@ -171,11 +169,7 @@ export function GameRoomPage() {
       )}
       <header className="game-header">
         <div>
-          <h2>{roomName || code}</h2>
-          <span className="room-code">
-            Code: {code} ({isPublic ? "public" : "private"} &middot;{" "}
-            {scoringMode === "default" ? "default scoring" : "no scoring"})
-          </span>
+          <span className="room-code">Code: {code}</span>
         </div>
         <div className="game-header-actions">
           <button
