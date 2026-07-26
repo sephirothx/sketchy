@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { socket } from "../lib/socket";
 import { useSettingsStore } from "../store/settingsStore";
@@ -374,7 +374,14 @@ async function applyFillPatch(ctx: CanvasRenderingContext2D, payload: StrokeFill
   }
 }
 
-export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null }: CanvasProps) {
+export interface CanvasRef {
+  saveImage: () => void;
+}
+
+export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
+  { isDrawer, color, brushWidth, tool, solutionWord = null }: CanvasProps,
+  ref
+) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -384,6 +391,10 @@ export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null 
   const lastPointRef = useRef<StrokePoint | null>(null);
   const shapeStartRef = useRef<StrokePoint | null>(null);
   const replayGenerationRef = useRef(0);
+
+  useImperativeHandle(ref, () => ({
+    saveImage: handleSaveImage,
+  }));
 
   // If the turn ends (isDrawer flips to false) while the drawer is still
   // physically holding the pointer down mid-stroke, the real "pointer up"
@@ -788,21 +799,6 @@ export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null 
           className="preview-canvas"
         />
       </div>
-      <div className="canvas-footer-bar">
-        <button
-          type="button"
-          className="save-image-button"
-          onClick={handleSaveImage}
-          title="Save drawn image to file"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          <span>Save Image</span>
-        </button>
-      </div>
     </div>
   );
-}
+});
