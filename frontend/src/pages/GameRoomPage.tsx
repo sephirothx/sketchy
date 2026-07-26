@@ -9,12 +9,15 @@ import { GuessChat } from "../components/GuessChat";
 import { RoundEndOverlay } from "../components/RoundEndOverlay";
 import { emitWithAck, socket } from "../lib/socket";
 import { splitMaskedWord } from "../lib/maskedWord";
+import { SettingsIcon } from "../components/SettingsIcon";
 import { useGameStore } from "../store/gameStore";
+import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, DrawTool } from "../types";
 
 export function GameRoomPage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const openSettings = useSettingsStore((s) => s.openSettings);
 
   const nickname = useGameStore((s) => s.nickname);
   const token = useGameStore((s) => s.token);
@@ -165,12 +168,14 @@ export function GameRoomPage() {
         </div>
       )}
       <header className="game-header">
-        <h2>{roomName || code}</h2>
-        <span className="room-code">
-          Code: {code} ({isPublic ? "public" : "private"} &middot;{" "}
-          {scoringMode === "default" ? "default scoring" : "no scoring"})
-        </span>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div>
+          <h2>{roomName || code}</h2>
+          <span className="room-code">
+            Code: {code} ({isPublic ? "public" : "private"} &middot;{" "}
+            {scoringMode === "default" ? "default scoring" : "no scoring"})
+          </span>
+        </div>
+        <div className="game-header-actions">
           <button
             style={{ background: me?.isAfk ? "#f59e0b" : undefined, color: me?.isAfk ? "#fff" : undefined }}
             onClick={handleToggleAfk}
@@ -178,6 +183,15 @@ export function GameRoomPage() {
             {me?.isAfk ? "AFK 💤" : "AFK"}
           </button>
           <button onClick={handleLeave}>Leave</button>
+          <button
+            type="button"
+            className="header-settings-button"
+            onClick={openSettings}
+            title="Game Settings"
+          >
+            <SettingsIcon size={16} />
+            <span>Settings</span>
+          </button>
         </div>
       </header>
 
