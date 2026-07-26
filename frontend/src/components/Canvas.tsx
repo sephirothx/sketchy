@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { socket } from "../lib/socket";
+import { useSettingsStore } from "../store/settingsStore";
 import type {
   DrawTool,
   ShapeType,
@@ -640,6 +641,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null 
     if (!isDrawer) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const point = getNormalizedPoint(e);
+    setPointerPos(point);
     isPointerDownRef.current = true;
     lastPointRef.current = point;
     if (tool === "pen" || tool === "eraser") {
@@ -652,16 +654,14 @@ export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null 
     }
   }
 
-  // Clear preview canvas when tool or drawer status changes
-  useEffect(() => {
-    clearPreview();
-  }, [tool, isDrawer]);
+  const [pointerPos, setPointerPos] = useState<StrokePoint | null>(null);
+  const penCursor = useSettingsStore((s) => s.penCursor);
 
-  function drawEraserPreview(point: StrokePoint) {
+  function drawCircleCursorPreview(point: StrokePoint, width: number) {
     const previewCtx = previewCtxRef.current;
     if (!previewCtx) return;
     const px = toPixels(point);
-    const radius = brushWidth / 2;
+    const radius = width / 2;
     previewCtx.save();
     previewCtx.beginPath();
     previewCtx.arc(px.x, px.y, Math.max(radius, 1.5), 0, Math.PI * 2);
@@ -676,13 +676,25 @@ export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null 
     previewCtx.restore();
   }
 
+  // Clear preview canvas and re-render cursor outline when pointerPos, brushWidth, tool, penCursor, or drawer status changes
+  useEffect(() => {
+    clearPreview();
+    const showCirclePreview = isDrawer && (tool === "eraser" || (tool === "pen" && penCursor === "circle"));
+    if (showCirclePreview && pointerPos) {
+      drawCircleCursorPreview(pointerPos, brushWidth);
+    }
+  }, [pointerPos, brushWidth, tool, isDrawer, penCursor]);
+
   function handlePointerMove(e: ReactPointerEvent<HTMLCanvasElement>) {
     if (!isDrawer) return;
     const point = getNormalizedPoint(e);
+    setPointerPos(point);
 
-    if (tool === "eraser") {
+    const showCirclePreview = tool === "eraser" || (tool === "pen" && penCursor === "circle");
+
+    if (showCirclePreview) {
       clearPreview();
-      drawEraserPreview(point);
+      drawCircleCursorPreview(point, brushWidth);
     }
 
     if (!isPointerDownRef.current) return;
@@ -734,6 +746,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null 
   }
 
   function handlePointerLeave() {
+    setPointerPos(null);
     clearPreview();
     if (isPointerDownRef.current) {
       handlePointerUp();
@@ -762,7 +775,7 @@ export function Canvas({ isDrawer, color, brushWidth, tool, solutionWord = null 
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
-          className={`drawing-canvas${isDrawer ? " drawable" : ""}${isDrawer && tool === "eraser" ? " eraser-tool" : ""}`}
+          className={`drawing-canvas${isDrawer ? " drawable" : ""}${isDrawer && (tool === "eraser" || (tool === "pen" && penCursor === "circle")) ? " eraser-tool" : ""}`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
