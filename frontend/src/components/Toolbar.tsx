@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { socket } from "../lib/socket";
+import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 
 // Each pair is [light shade, dark shade] for the same color family, laid out
@@ -24,11 +25,10 @@ const COLORS = COLOR_PAIRS.flat();
 
 const PRESET_WIDTHS = [2, 4, 6, 8, 12, 16, 24, 32];
 
-const TOOLS: { value: DrawTool; label: string; shortcut: string; glyph: React.ReactNode }[] = [
+const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
   {
     value: "pen",
-    label: "Pen (P / 1)",
-    shortcut: "P",
+    name: "Pen",
     glyph: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
@@ -37,8 +37,7 @@ const TOOLS: { value: DrawTool; label: string; shortcut: string; glyph: React.Re
   },
   {
     value: "eraser",
-    label: "Eraser (E / 2)",
-    shortcut: "E",
+    name: "Eraser",
     glyph: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l12-12a1 1 0 0 1 1.4 0l4.3 4.3a1 1 0 0 1 0 1.4L8.4 21a1 1 0 0 1-1.4 0Z" />
@@ -49,8 +48,7 @@ const TOOLS: { value: DrawTool; label: string; shortcut: string; glyph: React.Re
   },
   {
     value: "fill",
-    label: "Fill (F / 3)",
-    shortcut: "F",
+    name: "Fill",
     glyph: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z" />
@@ -62,8 +60,7 @@ const TOOLS: { value: DrawTool; label: string; shortcut: string; glyph: React.Re
   },
   {
     value: "rectangle",
-    label: "Rectangle (R / 4)",
-    shortcut: "R",
+    name: "Rectangle",
     glyph: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -72,8 +69,7 @@ const TOOLS: { value: DrawTool; label: string; shortcut: string; glyph: React.Re
   },
   {
     value: "ellipse",
-    label: "Ellipse (C / 5)",
-    shortcut: "C",
+    name: "Ellipse",
     glyph: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="9" />
@@ -82,8 +78,7 @@ const TOOLS: { value: DrawTool; label: string; shortcut: string; glyph: React.Re
   },
   {
     value: "triangle",
-    label: "Triangle (T / 6)",
-    shortcut: "T",
+    name: "Triangle",
     glyph: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
@@ -113,6 +108,18 @@ export function Toolbar({
   const activeColor = tool === "eraser" ? "#6c757d" : color;
   const [sizePickerOpen, setSizePickerOpen] = useState(false);
   const sizePickerRef = useRef<HTMLDivElement | null>(null);
+  const keyBindings = useSettingsStore((s) => s.keyBindings);
+
+  function getToolBadge(toolValue: DrawTool): string {
+    const keys = keyBindings[toolValue as keyof KeyBindings];
+    return keys && keys.length > 0 ? keys[0].toUpperCase() : "";
+  }
+
+  function getToolLabel(toolValue: DrawTool, name: string): string {
+    const keys = keyBindings[toolValue as keyof KeyBindings];
+    const keyStr = keys && keys.length > 0 ? keys.map((k) => k.toUpperCase()).join(" / ") : "";
+    return keyStr ? `${name} (${keyStr})` : name;
+  }
 
   // Index of current brush width in snap PRESET_WIDTHS array [2, 4, 6, 8, 12, 16, 24, 32]
   const currentIdx = PRESET_WIDTHS.indexOf(brushWidth);
@@ -143,7 +150,13 @@ export function Toolbar({
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
 
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+      const kb = useSettingsStore.getState().keyBindings;
+      const key = e.key.toLowerCase();
+
+      const isUndo =
+        ((e.metaKey || e.ctrlKey) && !e.shiftKey && key === "z") ||
+        (kb.undo && kb.undo.includes(key));
+      if (isUndo) {
         e.preventDefault();
         socket.emit("undo_stroke", {});
         return;
@@ -151,27 +164,26 @@ export function Toolbar({
 
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-      const key = e.key.toLowerCase();
-      if (key === "p" || key === "1") {
+      if (kb.pen.includes(key)) {
         onToolChange("pen");
-      } else if (key === "e" || key === "2") {
+      } else if (kb.eraser.includes(key)) {
         onToolChange("eraser");
-      } else if (key === "f" || key === "3") {
+      } else if (kb.fill.includes(key)) {
         onToolChange("fill");
-      } else if (key === "r" || key === "4") {
+      } else if (kb.rectangle.includes(key)) {
         onToolChange("rectangle");
-      } else if (key === "c" || key === "5") {
+      } else if (kb.ellipse.includes(key)) {
         onToolChange("ellipse");
-      } else if (key === "t" || key === "6") {
+      } else if (kb.triangle.includes(key)) {
         onToolChange("triangle");
-      } else if (key === "[") {
+      } else if (kb.brushDecrease.includes(key)) {
         const idx = PRESET_WIDTHS.indexOf(brushWidth);
         if (idx > 0) {
           handleWidthChange(PRESET_WIDTHS[idx - 1]);
         } else if (idx === -1) {
           handleWidthChange(PRESET_WIDTHS[0]);
         }
-      } else if (key === "]") {
+      } else if (kb.brushIncrease.includes(key)) {
         const idx = PRESET_WIDTHS.indexOf(brushWidth);
         if (idx >= 0 && idx < PRESET_WIDTHS.length - 1) {
           handleWidthChange(PRESET_WIDTHS[idx + 1]);
@@ -189,18 +201,22 @@ export function Toolbar({
       <div className="toolbar">
         {/* Tool selector group */}
         <div className="toolbar-group toolbar-tools" aria-label="Drawing tools">
-          {TOOLS.map((t) => (
-            <button
-              key={t.value}
-              className={`tool-button${t.value === tool ? " selected" : ""}`}
-              onClick={() => onToolChange(t.value)}
-              aria-label={t.label}
-              title={t.label}
-            >
-              <span className="tool-glyph">{t.glyph}</span>
-              <span className="shortcut-badge">{t.shortcut}</span>
-            </button>
-          ))}
+          {TOOLS.map((t) => {
+            const label = getToolLabel(t.value, t.name);
+            const badge = getToolBadge(t.value);
+            return (
+              <button
+                key={t.value}
+                className={`tool-button${t.value === tool ? " selected" : ""}`}
+                onClick={() => onToolChange(t.value)}
+                aria-label={label}
+                title={label}
+              >
+                <span className="tool-glyph">{t.glyph}</span>
+                {badge && <span className="shortcut-badge">{badge}</span>}
+              </button>
+            );
+          })}
         </div>
 
         <div className="toolbar-divider" />

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, SERVER_URL } from "../lib/socket";
+import { SettingsIcon } from "../components/SettingsIcon";
 import { useGameStore } from "../store/gameStore";
+import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, HintMode, RoomSummary, ScoringMode } from "../types";
 
 const POLL_INTERVAL_MS = 4000;
@@ -11,6 +13,7 @@ export function LobbyBrowserPage() {
   const location = useLocation();
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
+  const openSettings = useSettingsStore((s) => s.openSettings);
   const setSession = useGameStore((s) => s.setSession);
 
   const [nicknameInput, setNicknameInput] = useState(nickname);
@@ -118,8 +121,21 @@ export function LobbyBrowserPage() {
 
   return (
     <div className="lobby-page">
-      <h1>Sketchy</h1>
-      <p className="subtitle">An online multiplayer drawing &amp; guessing game</p>
+      <div className="lobby-header">
+        <div>
+          <h1>Sketchy</h1>
+          <p className="subtitle">An online multiplayer drawing &amp; guessing game</p>
+        </div>
+        <button
+          type="button"
+          className="header-settings-button"
+          onClick={openSettings}
+          title="Game Settings"
+        >
+          <SettingsIcon size={16} />
+          <span>Settings</span>
+        </button>
+      </div>
 
       <section className="panel">
         <label>
