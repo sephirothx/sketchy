@@ -4,11 +4,11 @@ export type PenCursorStyle = "crosshair" | "circle";
 
 export interface KeyBindings {
   pen: string[];
-  eraser: string[];
   fill: string[];
+  eraser: string[];
   rectangle: string[];
-  ellipse: string[];
   triangle: string[];
+  ellipse: string[];
   brushDecrease: string[];
   brushIncrease: string[];
   undo: string[];
@@ -16,11 +16,11 @@ export interface KeyBindings {
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   pen: ["p", "1"],
-  eraser: ["e", "2"],
-  fill: ["f", "3"],
+  fill: ["f", "2"],
+  eraser: ["e", "3"],
   rectangle: ["r", "4"],
-  ellipse: ["c", "5"],
-  triangle: ["t", "6"],
+  triangle: ["t", "5"],
+  ellipse: ["c", "6"],
   brushDecrease: ["["],
   brushIncrease: ["]"],
   undo: ["z"],
@@ -30,11 +30,11 @@ export const DEFAULT_PEN_CURSOR: PenCursorStyle = "crosshair";
 
 export const ACTION_LABELS: Record<keyof KeyBindings, string> = {
   pen: "Pen Tool",
-  eraser: "Eraser Tool",
   fill: "Fill Tool",
+  eraser: "Eraser Tool",
   rectangle: "Rectangle Tool",
-  ellipse: "Ellipse Tool",
   triangle: "Triangle Tool",
+  ellipse: "Ellipse Tool",
   brushDecrease: "Decrease Brush Size",
   brushIncrease: "Increase Brush Size",
   undo: "Undo Stroke",
