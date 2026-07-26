@@ -56,7 +56,7 @@ flowchart LR
 |----------|------------|
 | Backend  | Python 3.14, FastAPI, python-socketio (`AsyncServer`, ASGI), uvicorn |
 | Frontend | React 19, TypeScript, Vite, react-router-dom, zustand, socket.io-client |
-| Testing  | pytest + pytest-asyncio (backend unit tests) |
+| Testing  | pytest + pytest-asyncio (backend unit tests), Playwright (multi-browser E2E testing) |
 
 ## Project structure
 
@@ -138,11 +138,14 @@ tabs in the *same* browser profile will share that storage and can behave unexpe
 ### Running tests
 
 ```bash
-cd backend
-.venv/bin/pytest
+# Unit & integration tests
+cd backend && .venv/bin/pytest
+
+# Multi-browser Playwright E2E tests
+./scripts/test-e2e.sh
 ```
 
-`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. `events.py` socket event handlers (room lifecycle, word choice, drawing undo/fill/shapes, hint purchases, chat privacy) are covered by asyncio integration tests.
+`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. `events.py` socket event handlers (room lifecycle, word choice, drawing undo/fill/shapes, hint purchases, chat privacy) are covered by asyncio integration tests. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 
 ### Production build
 
