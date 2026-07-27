@@ -54,6 +54,17 @@ export function GameRoomPage() {
   const [tool, setTool] = useState<DrawTool>("pen");
   const [wasDrawer, setWasDrawer] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  function handleCopyLink() {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }).catch(() => {
+      // fallback if clipboard API fails
+    });
+  }
 
   useEffect(() => {
     if (!code) return;
@@ -257,7 +268,15 @@ export function GameRoomPage() {
       )}
       <header className="game-header">
         <div>
-          <span className="room-code">Code: {code}</span>
+          <button
+            type="button"
+            className="room-copy-button"
+            onClick={handleCopyLink}
+            title="Click to copy room invite link"
+          >
+            <span>Code: {code}</span>
+            {copiedLink && <span className="room-copied-badge">Copied link! ✓</span>}
+          </button>
         </div>
         <div className="game-header-actions">
           <button
