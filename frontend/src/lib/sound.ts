@@ -40,7 +40,7 @@ function getVolumeGain(ctx: AudioContext): GainNode | null {
   return gain;
 }
 
-/** Standard two-tone chime when another player guesses correctly (523Hz -> 659Hz) */
+/** Standard two-tone chime when another player guesses correctly (C5 -> F5) */
 export function playCorrectGuessSound() {
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -61,11 +61,11 @@ export function playCorrectGuessSound() {
   osc1.start(now);
   osc1.stop(now + 0.15);
 
-  // Second note: E5 (659.25 Hz)
+  // Second note: F5 (698.46 Hz)
   const osc2 = ctx.createOscillator();
   const gain2 = ctx.createGain();
   osc2.type = "triangle";
-  osc2.frequency.setValueAtTime(659.25, now + 0.1);
+  osc2.frequency.setValueAtTime(698.46, now + 0.1);
   gain2.gain.setValueAtTime(1.0, now + 0.1);
   gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
   osc2.connect(gain2);
@@ -74,7 +74,7 @@ export function playCorrectGuessSound() {
   osc2.stop(now + 0.35);
 }
 
-/** Extra cheerful ascending major chime when YOU guess correctly 🎉 (C5 -> E5 -> G5 -> C6) */
+/** Extra cheerful ascending major chime when YOU guess correctly 🎉 (C5 -> E5 -> G5) */
 export function playMyCorrectGuessSound() {
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -85,8 +85,7 @@ export function playMyCorrectGuessSound() {
   const notes = [
     { freq: 523.25, offset: 0, duration: 0.12, type: "sine" as OscillatorType, volume: 0.7 },
     { freq: 659.25, offset: 0.08, duration: 0.15, type: "sine" as OscillatorType, volume: 0.8 },
-    { freq: 783.99, offset: 0.16, duration: 0.18, type: "triangle" as OscillatorType, volume: 0.9 },
-    { freq: 1046.5, offset: 0.24, duration: 0.45, type: "triangle" as OscillatorType, volume: 1.0 },
+    { freq: 783.99, offset: 0.16, duration: 0.28, type: "triangle" as OscillatorType, volume: 0.9 },
   ];
 
   notes.forEach((n) => {
