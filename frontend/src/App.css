@@ -873,6 +873,26 @@
   cursor: pointer;
 }
 
+.recent-colors-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.recent-colors-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  margin-right: 2px;
+  user-select: none;
+}
+
+.recent-swatch {
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
+}
+
 .toolbar-actions {
   display: flex;
   gap: 6px;

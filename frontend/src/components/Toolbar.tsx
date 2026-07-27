@@ -110,6 +110,21 @@ export function Toolbar({
   const sizePickerRef = useRef<HTMLDivElement | null>(null);
   const keyBindings = useSettingsStore((s) => s.keyBindings);
 
+  const prevColorRef = useRef<string>("#ffffff");
+  const [recentColors, setRecentColors] = useState<string[]>(["#000000", "#ffffff"]);
+
+  const handleSelectColor = useCallback(
+    (newColor: string) => {
+      if (newColor !== color) {
+        prevColorRef.current = color;
+        setRecentColors((prev) => [newColor, ...prev.filter((c) => c !== newColor)].slice(0, 6));
+      }
+      onColorChange(newColor);
+      if (tool === "eraser") onToolChange("pen");
+    },
+    [color, onColorChange, tool, onToolChange],
+  );
+
   function getToolBadge(toolValue: DrawTool): string {
     const keys = keyBindings[toolValue as keyof KeyBindings];
     return keys && keys.length > 0 ? keys[0].toUpperCase() : "";
@@ -128,12 +143,15 @@ export function Toolbar({
   const sliderValue = currentIdx !== -1 ? currentIdx : defaultIdx;
 
   // Automatically switch from Fill tool to Pen when brush stroke size changes
-  const handleWidthChange = useCallback((newWidth: number) => {
-    onBrushWidthChange(newWidth);
-    if (tool === "fill") {
-      onToolChange("pen");
-    }
-  }, [onBrushWidthChange, tool, onToolChange]);
+  const handleWidthChange = useCallback(
+    (newWidth: number) => {
+      onBrushWidthChange(newWidth);
+      if (tool === "fill") {
+        onToolChange("pen");
+      }
+    },
+    [onBrushWidthChange, tool, onToolChange],
+  );
 
   // Close brush size popover when clicking outside
   useEffect(() => {
@@ -146,7 +164,7 @@ export function Toolbar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Keyboard shortcuts (tool switching, brush sizing, Ctrl+Z undo) while drawing.
+  // Keyboard shortcuts (tool switching, brush sizing, color swap X, Ctrl+Z undo) while drawing.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
@@ -165,6 +183,14 @@ export function Toolbar({
       }
 
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (key === "x") {
+        const targetColor = prevColorRef.current;
+        prevColorRef.current = color;
+        onColorChange(targetColor);
+        if (tool === "eraser") onToolChange("pen");
+        return;
+      }
 
       if (kb.pen.includes(key)) {
         onToolChange("pen");
@@ -196,7 +222,7 @@ export function Toolbar({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [brushWidth, defaultIdx, handleWidthChange, onToolChange]);
+  }, [brushWidth, color, defaultIdx, handleWidthChange, onColorChange, onToolChange, tool]);
 
   return (
     <div className="toolbar-container">
@@ -282,11 +308,9 @@ export function Toolbar({
               key={c}
               className={`color-swatch${c === color && tool !== "eraser" ? " selected" : ""}`}
               style={{ backgroundColor: c }}
-              onClick={() => {
-                onColorChange(c);
-                if (tool === "eraser") onToolChange("pen");
-              }}
+              onClick={() => handleSelectColor(c)}
               aria-label={`color ${c}`}
+              title={`Color ${c}`}
             />
           ))}
           <label
@@ -297,14 +321,31 @@ export function Toolbar({
             <input
               type="color"
               value={color}
-              onChange={(e) => {
-                onColorChange(e.target.value);
-                if (tool === "eraser") onToolChange("pen");
-              }}
+              onChange={(e) => handleSelectColor(e.target.value)}
               aria-label="Choose custom color"
             />
           </label>
         </div>
+
+        {recentColors.length > 0 && (
+          <>
+            <div className="toolbar-divider" />
+            <div className="toolbar-group recent-colors-group" aria-label="Recent colors" title="Recent colors (Press X to swap color)">
+              <span className="recent-colors-label">Recent:</span>
+              {recentColors.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`color-swatch recent-swatch${c === color && tool !== "eraser" ? " selected" : ""}`}
+                  style={{ backgroundColor: c }}
+                  onClick={() => handleSelectColor(c)}
+                  aria-label={`Recent color ${c}`}
+                  title={`Recent color ${c} (Press X to swap)`}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         <div className="toolbar-divider" />
 
