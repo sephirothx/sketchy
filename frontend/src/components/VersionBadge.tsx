@@ -6,8 +6,11 @@
 // exact match for that commit.
 export function VersionBadge() {
   return (
-    <div className="version-badge" title={`Build date: ${__APP_COMMIT_DATE__}`}>
-      {__APP_COMMIT_SHA__}
+    <div
+      className="version-badge"
+      title={`Commit date: ${__APP_COMMIT_DATE__} | Built: ${__APP_BUILD_TIME__}`}
+    >
+      {__APP_COMMIT_SHA__} ({__APP_BUILD_TIME__})
     </div>
   );
 }
