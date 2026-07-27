@@ -229,6 +229,7 @@ export function GameRoomPage() {
   }
 
   const spectatorsSeeSolution = useGameStore((s) => s.spectatorsSeeSolution);
+  const hideMaskedPrompt = useGameStore((s) => s.hideMaskedPrompt);
   const isDrawerPerson = drawerToken === token;
   const drawerWord = myWord || (maskedWord && !maskedWord.includes("_") ? splitMaskedWord(maskedWord).blanks.trim() : null);
 
@@ -406,6 +407,7 @@ export function GameRoomPage() {
                 isDrawer={amDrawer}
                 canGuess={canGuess}
                 targetWordLengths={splitMaskedWord(maskedWord).counts}
+                hideMaskedPrompt={hideMaskedPrompt}
                 onFocusChange={setIsInputFocused}
               />
             </div>

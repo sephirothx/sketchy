@@ -8,6 +8,7 @@ interface GuessChatProps {
   isDrawer: boolean;
   canGuess: boolean;
   targetWordLengths: string[];
+  hideMaskedPrompt?: boolean;
   onFocusChange?: (focused: boolean) => void;
 }
 
@@ -29,7 +30,14 @@ function letterRunLengths(text: string): number[] {
   return runs;
 }
 
-export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths, onFocusChange }: GuessChatProps) {
+export function GuessChat({
+  messages,
+  isDrawer,
+  canGuess,
+  targetWordLengths,
+  hideMaskedPrompt = false,
+  onFocusChange,
+}: GuessChatProps) {
   const [text, setText] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
@@ -168,6 +176,7 @@ export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths, onF
         <form className="chat-input" onSubmit={handleSubmit}>
           <div className="guess-hint">
             {canGuess &&
+              !hideMaskedPrompt &&
               typedWordLengths.map((count, index) => (
                 <sup key={index} className={hintClass(index)}>
                   {count}
