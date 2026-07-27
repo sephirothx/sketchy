@@ -77,6 +77,26 @@ export function GameRoomPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
+  useEffect(() => {
+    function updateViewport() {
+      const vv = window.visualViewport;
+      const height = vv ? vv.height : window.innerHeight;
+      document.documentElement.style.setProperty("--vv-height", `${height}px`);
+      if (roomState === "playing") {
+        window.scrollTo(0, 0);
+      }
+    }
+    updateViewport();
+    window.visualViewport?.addEventListener("resize", updateViewport);
+    window.visualViewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("resize", updateViewport);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, [roomState, phase]);
+
   const [notification, setNotification] = useState<string | null>(null);
 
   useEffect(() => {
@@ -144,9 +164,11 @@ export function GameRoomPage() {
       ? splitMaskedWord(maskedWord).blanks.trim()
       : null;
 
+  const [isGuessFocused, setIsGuessFocused] = useState(false);
+
   if (joinError) {
     return (
-      <div className="lobby-page">
+      <div className="join-error-container">
         <p className="error-banner">{joinError}</p>
         <button onClick={() => navigate("/")}>Back to lobby</button>
       </div>
@@ -154,7 +176,7 @@ export function GameRoomPage() {
   }
 
   return (
-    <div className="game-room">
+    <div className={`game-room ${isGuessFocused ? "guess-focused" : ""}`}>
       {notification && (
         <div className="modal-overlay" onClick={() => setNotification(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -299,6 +321,7 @@ export function GameRoomPage() {
                 isDrawer={amDrawer}
                 canGuess={canGuess}
                 targetWordLengths={splitMaskedWord(maskedWord).counts}
+                onFocusChange={setIsGuessFocused}
               />
             </div>
           </aside>

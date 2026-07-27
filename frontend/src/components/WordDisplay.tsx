@@ -60,17 +60,21 @@ function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; c
   }
 
   if (counts.length === 0) {
-    return blanksNode;
+    return <span className="word-blanks-text">{blanksNode}</span>;
   }
+
+  const totalLength = counts.reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
+  const isLong = totalLength > 10 || blanks.length > 15;
+
   return (
-    <>
-      {blanksNode}
+    <span className={`masked-container ${isLong ? "is-long" : ""}`}>
       <span className="word-lengths">
         {counts.map((count, index) => (
           <sup key={index}>{count}</sup>
         ))}
       </span>
-    </>
+      <span className="word-blanks-text">{blanksNode}</span>
+    </span>
   );
 }
 

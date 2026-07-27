@@ -193,7 +193,89 @@
 
 @media (max-width: 900px) {
   .game-layout {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .canvas-area {
+    order: 1;
+    width: 100%;
+    gap: 4px;
+  }
+
+  .sidebar-right {
+    order: 2;
+    width: 100%;
+  }
+
+  .sidebar-left {
+    order: 3;
+    width: 100%;
+  }
+
+  .guess-chat {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+
+  .chat-input {
+    order: -1;
+    margin-top: 0;
+    margin-bottom: 4px;
+  }
+
+  .chat-messages {
+    max-height: 180px;
+    min-height: 80px;
+  }
+
+  .round-info {
+    font-size: 13px;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+  }
+
+  /* When text input box is selected on mobile: ONLY it + canvas/masked prompt + top timer info are visible */
+  .game-room.guess-focused .game-header,
+  .game-room.guess-focused .sidebar-left,
+  .game-room.guess-focused .chat-messages,
+  .game-room.guess-focused .save-image-box {
+    display: none !important;
+  }
+
+  .game-room.guess-focused .round-info {
+    display: flex !important;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0 4px;
+    margin-bottom: 2px;
+    color: #64748b;
+  }
+
+  .game-room.guess-focused {
+    padding: 4px 6px;
+  }
+
+  .game-room.guess-focused .game-layout {
+    gap: 4px;
+  }
+
+  .game-room.guess-focused .canvas-area {
+    gap: 2px;
+  }
+
+  .game-room.guess-focused .canvas-stack {
+    max-height: 42vh;
+  }
+
+  .game-room.guess-focused .sidebar-right .sidebar-box {
+    padding: 4px 6px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    margin: 0;
   }
 }
 
@@ -270,71 +352,76 @@
 }
 
 .word-display {
-  min-height: 32px;
-  font-size: 24px;
+  min-height: 28px;
+  font-size: clamp(13px, 3.8vw, 24px);
   font-weight: 700;
   text-align: center;
+  width: 100%;
+  max-width: 100%;
+}
+
+.word-display:not(.choosing) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .word-display.choosing {
   letter-spacing: normal;
   font-size: 16px;
+  white-space: normal;
+  overflow: visible;
+  display: block;
 }
 
 .word-reveal {
   letter-spacing: 1px;
+  max-width: 100%;
 }
 
 .word-masked {
-  /* Preserve the backend's literal space runs (single space between
-     letters, double space between words) instead of the browser
-     collapsing every run down to one space. */
-  white-space: pre-wrap;
-  letter-spacing: 3px;
+  max-width: 100%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
 }
 
-.hint-blank {
-  font: inherit;
-  letter-spacing: inherit;
-  color: #4c6ef5;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
+.masked-container {
+  display: inline-flex;
+  align-items: baseline;
+  max-width: 100%;
 }
 
-.hint-blank:hover:not(:disabled) {
-  color: #364fc7;
+.masked-container .word-blanks-text {
+  order: 1;
+  white-space: pre;
+  letter-spacing: clamp(1px, 0.4vw, 3px);
 }
 
-.hint-blank:disabled {
-  color: inherit;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.hint-price {
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #4c6ef5;
-}
-
-.hint-price strong {
-  font-size: 14px;
-}
-
-.hint-price-warning {
-  font-weight: 600;
-  color: #e03131;
-}
-
-.word-lengths {
+.masked-container .word-lengths {
+  order: 2;
   display: inline-flex;
   gap: 6px;
-  margin-left: 10px;
+  margin-left: 8px;
   vertical-align: super;
   letter-spacing: normal;
+}
+
+.masked-container.is-long {
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.masked-container.is-long .word-lengths {
+  order: 1;
+  margin-left: 0;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.masked-container.is-long .word-blanks-text {
+  order: 2;
 }
 
 .wheel-hint-panel {

@@ -8,6 +8,7 @@ interface GuessChatProps {
   isDrawer: boolean;
   canGuess: boolean;
   targetWordLengths: string[];
+  onFocusChange?: (focused: boolean) => void;
 }
 
 // Mirrors the backend's masked_word() grouping: runs of letters/digits are
@@ -28,7 +29,7 @@ function letterRunLengths(text: string): number[] {
   return runs;
 }
 
-export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths }: GuessChatProps) {
+export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths, onFocusChange }: GuessChatProps) {
   const [text, setText] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -102,6 +103,13 @@ export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths }: G
                 type="search"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onFocus={() => {
+                  onFocusChange?.(true);
+                  if (window.innerWidth <= 900) {
+                    window.scrollTo(0, 0);
+                  }
+                }}
+                onBlur={() => onFocusChange?.(false)}
                 placeholder={canGuess ? "Type your guess..." : "Type a message..."}
                 maxLength={60}
                 autoComplete="off"
