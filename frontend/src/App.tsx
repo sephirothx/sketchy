@@ -5,6 +5,7 @@ import { LobbyBrowserPage } from "./pages/LobbyBrowserPage";
 import { GameRoomPage } from "./pages/GameRoomPage";
 import { VersionBadge } from "./components/VersionBadge";
 import { SettingsModal } from "./components/SettingsModal";
+import { ConfettiCanvas } from "./components/ConfettiCanvas";
 
 function App() {
   useGameSocketListeners();
@@ -17,6 +18,7 @@ function App() {
       </Routes>
       <SettingsModal />
       <VersionBadge />
+      <ConfettiCanvas />
     </BrowserRouter>
   );
 }
