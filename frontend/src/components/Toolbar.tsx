@@ -121,9 +121,11 @@ export function Toolbar({
     return keyStr ? `${name} (${keyStr})` : name;
   }
 
-  // Index of current brush width in snap PRESET_WIDTHS array [2, 4, 6, 8, 12, 16, 24, 32]
+  const labelPrefix = tool === "eraser" ? "Eraser" : "Brush";
+  // Index of current size in snap PRESET_WIDTHS array [2, 4, 6, 8, 12, 16, 24, 32]
   const currentIdx = PRESET_WIDTHS.indexOf(brushWidth);
-  const sliderValue = currentIdx !== -1 ? currentIdx : 2; // default to 6px (index 2)
+  const defaultIdx = tool === "eraser" ? 6 : 2; // default 24px for eraser, 6px for brush
+  const sliderValue = currentIdx !== -1 ? currentIdx : defaultIdx;
 
   // Automatically switch from Fill tool to Pen when brush stroke size changes
   const handleWidthChange = useCallback((newWidth: number) => {
@@ -188,13 +190,13 @@ export function Toolbar({
         if (idx >= 0 && idx < PRESET_WIDTHS.length - 1) {
           handleWidthChange(PRESET_WIDTHS[idx + 1]);
         } else if (idx === -1) {
-          handleWidthChange(PRESET_WIDTHS[2]);
+          handleWidthChange(PRESET_WIDTHS[defaultIdx]);
         }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [brushWidth, handleWidthChange, onToolChange]);
+  }, [brushWidth, defaultIdx, handleWidthChange, onToolChange]);
 
   return (
     <div className="toolbar-container">
@@ -227,8 +229,8 @@ export function Toolbar({
             type="button"
             className={`brush-size-trigger${sizePickerOpen ? " active" : ""}`}
             onClick={() => setSizePickerOpen((prev) => !prev)}
-            aria-label={`Brush size ${brushWidth}px`}
-            title={`Brush size: ${brushWidth}px ([ / ])`}
+            aria-label={`${labelPrefix} size ${brushWidth}px`}
+            title={`${labelPrefix} size: ${brushWidth}px ([ / ])`}
           >
             <span
               style={{
@@ -242,7 +244,7 @@ export function Toolbar({
           </button>
 
           {sizePickerOpen && (
-            <div className="brush-slider-popover" role="dialog" aria-label="Adjust brush size">
+            <div className="brush-slider-popover" role="dialog" aria-label={`Adjust ${labelPrefix.toLowerCase()} size`}>
               <div className="slider-top-preview">
                 <span
                   className="preview-dot"
@@ -264,7 +266,7 @@ export function Toolbar({
                   value={sliderValue}
                   onChange={(e) => handleWidthChange(PRESET_WIDTHS[Number(e.target.value)])}
                   className="vertical-brush-slider"
-                  aria-label="Brush size snapping slider"
+                  aria-label={`${labelPrefix} size snapping slider`}
                 />
               </div>
             </div>
