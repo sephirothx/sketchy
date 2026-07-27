@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { socket } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
+import { triggerConfettiBurst, triggerConfettiShower } from "../lib/confetti";
 import type {
   ChatMessage,
   GameEndedPayload,
@@ -104,6 +105,7 @@ export function useGameSocketListeners() {
     };
 
     const onCorrectGuess = (payload: { token: string; nickname: string; points: number }) => {
+      triggerConfettiBurst();
       store.getState().applyGuessPoints(payload.token, payload.points);
       const pointsSuffix =
         store.getState().scoringMode === "default" ? ` (+${payload.points})` : "";
@@ -117,6 +119,7 @@ export function useGameSocketListeners() {
     };
 
     const onYouGuessedCorrectly = (payload: { word: string }) => {
+      triggerConfettiBurst();
       store.getState().setGuessedWord(payload.word);
     };
 
@@ -140,6 +143,7 @@ export function useGameSocketListeners() {
     };
 
     const onGameEnded = (payload: GameEndedPayload) => {
+      triggerConfettiShower();
       store.getState().endGame(payload);
     };
 

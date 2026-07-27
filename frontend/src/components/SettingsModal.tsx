@@ -23,11 +23,12 @@ function formatKey(key: string): string {
 }
 
 function SettingsModalContent() {
-  const { closeSettings, keyBindings, penCursor, setAllSettings } = useSettingsStore();
+  const { closeSettings, keyBindings, penCursor, confettiEffects, setAllSettings } = useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [draftKeyBindings, setDraftKeyBindings] = useState<KeyBindings>(keyBindings);
   const [draftPenCursor, setDraftPenCursor] = useState<PenCursorStyle>(penCursor);
+  const [draftConfettiEffects, setDraftConfettiEffects] = useState<boolean>(confettiEffects);
   const [activeRebind, setActiveRebind] = useState<{
     action: keyof KeyBindings;
     slotIndex: number;
@@ -78,6 +79,7 @@ function SettingsModalContent() {
     setAllSettings({
       keyBindings: draftKeyBindings,
       penCursor: draftPenCursor,
+      confettiEffects: draftConfettiEffects,
     });
     closeSettings();
   };
@@ -147,6 +149,21 @@ function SettingsModalContent() {
                 </select>
                 <p className="settings-description" style={{ marginTop: "6px" }}>
                   Choose whether the pen tool displays the default crosshair or a circular outline showing its field of action.
+                </p>
+              </div>
+
+              <div className="settings-field" style={{ marginTop: "16px" }}>
+                <label htmlFor="confetti-effects-toggle" className="settings-label" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                  <input
+                    id="confetti-effects-toggle"
+                    type="checkbox"
+                    checked={draftConfettiEffects}
+                    onChange={(e) => setDraftConfettiEffects(e.target.checked)}
+                  />
+                  <span>Confetti Celebration Effects 🎉</span>
+                </label>
+                <p className="settings-description" style={{ marginTop: "6px" }}>
+                  Enable celebratory particle confetti bursts on correct guesses and victory reveals.
                 </p>
               </div>
             </div>

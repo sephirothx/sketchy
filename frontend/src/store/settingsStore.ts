@@ -61,15 +61,27 @@ function loadStoredPenCursor(): PenCursorStyle {
   }
 }
 
+function loadStoredConfetti(): boolean {
+  try {
+    const raw = localStorage.getItem("sketchy_confettieffects");
+    if (raw === "false") return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 interface SettingsStore {
   isSettingsOpen: boolean;
   openSettings: () => void;
   closeSettings: () => void;
   keyBindings: KeyBindings;
   penCursor: PenCursorStyle;
-  setAllSettings: (payload: { keyBindings: KeyBindings; penCursor: PenCursorStyle }) => void;
+  confettiEffects: boolean;
+  setAllSettings: (payload: { keyBindings: KeyBindings; penCursor: PenCursorStyle; confettiEffects?: boolean }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
   setPenCursor: (penCursor: PenCursorStyle) => void;
+  setConfettiEffects: (enabled: boolean) => void;
   resetKeyBindings: () => void;
 }
 
@@ -79,11 +91,13 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   closeSettings: () => set({ isSettingsOpen: false }),
   keyBindings: loadStoredKeyBindings(),
   penCursor: loadStoredPenCursor(),
-  setAllSettings: ({ keyBindings, penCursor }) =>
+  confettiEffects: loadStoredConfetti(),
+  setAllSettings: ({ keyBindings, penCursor, confettiEffects = true }) =>
     set(() => {
       localStorage.setItem("sketchy_keybindings", JSON.stringify(keyBindings));
       localStorage.setItem("sketchy_pencursor", penCursor);
-      return { keyBindings, penCursor };
+      localStorage.setItem("sketchy_confettieffects", String(confettiEffects));
+      return { keyBindings, penCursor, confettiEffects };
     }),
   setKeyBinding: (action, keys) =>
     set((state) => {
@@ -95,6 +109,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_pencursor", penCursor);
       return { penCursor };
+    }),
+  setConfettiEffects: (enabled) =>
+    set(() => {
+      localStorage.setItem("sketchy_confettieffects", String(enabled));
+      return { confettiEffects: enabled };
     }),
   resetKeyBindings: () =>
     set(() => {
