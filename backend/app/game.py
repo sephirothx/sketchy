@@ -154,6 +154,7 @@ class Game:
     revealed_positions: set[int] = field(default_factory=set)
     purchased_hints: dict[str, set[int]] = field(default_factory=dict)  # slot hints ("purchase")
     purchased_letters: dict[str, set[str]] = field(default_factory=dict)  # letter hints ("wheel")
+    _cached_letter_frequencies: dict[str, float] | None = field(default=None, repr=False, compare=False)
 
     @property
     def total_turns(self) -> int:
@@ -383,10 +384,13 @@ class Game:
         among the actual possible solutions, rather than English-language
         letter frequency.
         """
+        if self._cached_letter_frequencies is not None:
+            return self._cached_letter_frequencies
         pool = self.word_pool or WORDS
         counts = Counter(ch for w in pool for ch in w.lower() if ch.isalpha())
         total = sum(counts.values()) or 1
-        return {letter: counts.get(letter, 0) / total for letter in string.ascii_lowercase}
+        self._cached_letter_frequencies = {letter: counts.get(letter, 0) / total for letter in string.ascii_lowercase}
+        return self._cached_letter_frequencies
 
     def letter_price(self, letter: str) -> int:
         """Base cost (before the per-turn escalation in `wheel_hint_cost`) of
