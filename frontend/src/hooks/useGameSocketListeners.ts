@@ -105,7 +105,6 @@ export function useGameSocketListeners() {
     };
 
     const onCorrectGuess = (payload: { token: string; nickname: string; points: number }) => {
-      triggerConfettiBurst();
       store.getState().applyGuessPoints(payload.token, payload.points);
       const pointsSuffix =
         store.getState().scoringMode === "default" ? ` (+${payload.points})` : "";
