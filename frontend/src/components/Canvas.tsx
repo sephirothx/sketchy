@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { socket } from "../lib/socket";
 import { useSettingsStore } from "../store/settingsStore";
@@ -413,6 +413,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     pendingPointsRef.current = [];
     lastPointRef.current = null;
     shapeStartRef.current = null;
+    pointerPosRef.current = null;
     const preview = previewCanvasRef.current;
     const previewCtx = previewCtxRef.current;
     if (preview && previewCtx) previewCtx.clearRect(0, 0, preview.width, preview.height);
@@ -421,7 +422,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -529,7 +530,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       const offscreen = document.createElement("canvas");
       offscreen.width = CANVAS_WIDTH;
       offscreen.height = CANVAS_HEIGHT;
-      const offCtx = offscreen.getContext("2d");
+      const offCtx = offscreen.getContext("2d", { willReadFrequently: true });
       if (!offCtx) return;
       fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -673,9 +674,11 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     e.currentTarget.setPointerCapture(e.pointerId);
 
     const point = getNormalizedPoint(e);
+    pointerPosRef.current = point;
     const showCirclePreview = tool === "eraser" || (tool === "pen" && penCursor === "circle");
     if (showCirclePreview) {
-      setPointerPos(point);
+      clearPreview();
+      drawCircleCursorPreview(point, brushWidth);
     }
     isPointerDownRef.current = true;
     lastPointRef.current = point;
@@ -689,7 +692,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     }
   }
 
-  const [pointerPos, setPointerPos] = useState<StrokePoint | null>(null);
+  const pointerPosRef = useRef<StrokePoint | null>(null);
   const penCursor = useSettingsStore((s) => s.penCursor);
 
   function drawCircleCursorPreview(point: StrokePoint, width: number) {
@@ -711,14 +714,14 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     previewCtx.restore();
   }
 
-  // Clear preview canvas and re-render cursor outline when pointerPos, brushWidth, tool, penCursor, or drawer status changes
+  // Clear preview canvas and re-render cursor outline when brushWidth, tool, penCursor, or drawer status changes
   useEffect(() => {
     const showCirclePreview = isDrawer && (tool === "eraser" || (tool === "pen" && penCursor === "circle"));
     clearPreview();
-    if (showCirclePreview && pointerPos) {
-      drawCircleCursorPreview(pointerPos, brushWidth);
+    if (showCirclePreview && pointerPosRef.current) {
+      drawCircleCursorPreview(pointerPosRef.current, brushWidth);
     }
-  }, [pointerPos, brushWidth, tool, isDrawer, penCursor]);
+  }, [brushWidth, tool, isDrawer, penCursor]);
 
   function handlePointerMove(e: ReactPointerEvent<HTMLCanvasElement>) {
     if (!isDrawer) return;
@@ -728,11 +731,11 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     }
 
     const point = getNormalizedPoint(e);
+    pointerPosRef.current = point;
 
     const showCirclePreview = tool === "eraser" || (tool === "pen" && penCursor === "circle");
 
     if (showCirclePreview) {
-      setPointerPos(point);
       clearPreview();
       drawCircleCursorPreview(point, brushWidth);
     }
@@ -790,7 +793,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   }
 
   function handlePointerLeave(e?: ReactPointerEvent<HTMLCanvasElement>) {
-    setPointerPos(null);
+    pointerPosRef.current = null;
     clearPreview();
     if (isPointerDownRef.current) {
       handlePointerUp(e);
@@ -799,7 +802,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
 
   function handlePointerCancel(e: ReactPointerEvent<HTMLCanvasElement>) {
     if (activePointerIdRef.current === e.pointerId || !e.isPrimary) {
-      setPointerPos(null);
+      pointerPosRef.current = null;
       clearPreview();
       handlePointerUp(e);
     }
