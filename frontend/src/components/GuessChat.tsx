@@ -31,11 +31,41 @@ function letterRunLengths(text: string): number[] {
 
 export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths, onFocusChange }: GuessChatProps) {
   const [text, setText] = useState("");
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [prevMessagesCount, setPrevMessagesCount] = useState(messages.length);
   const listRef = useRef<HTMLDivElement | null>(null);
 
+  if (messages.length !== prevMessagesCount) {
+    setPrevMessagesCount(messages.length);
+    if (isScrolledUp) {
+      setUnreadCount((c) => c + Math.max(0, messages.length - prevMessagesCount));
+    }
+  }
+
+  function handleScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceToBottom <= 30) {
+      setIsScrolledUp(false);
+      setUnreadCount(0);
+    } else {
+      setIsScrolledUp(true);
+    }
+  }
+
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages]);
+    if (!isScrolledUp) {
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+    }
+  }, [messages, isScrolledUp]);
+
+  function scrollToBottom() {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+    setIsScrolledUp(false);
+    setUnreadCount(0);
+  }
 
   // Live letter-run-length hint for the guess currently being typed, e.g.
   // "this is" -> [4, 2], updating as each character is entered.
@@ -66,26 +96,34 @@ export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths, onF
     if (!trimmed) return;
     socket.emit("guess", { text: trimmed });
     setText("");
+    scrollToBottom();
   }
 
   return (
     <div className="guess-chat">
-      <div className="chat-messages" ref={listRef}>
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`chat-message${m.system ? " system" : ""}${m.correct ? " correct" : ""}${m.close ? " close-hint" : ""}${m.restricted ? " restricted" : ""}`}
-          >
-            {m.system || m.close ? (
-              m.text
-            ) : (
-              <>
-                <strong>{m.nickname}: </strong>
-                {m.text}
-              </>
-            )}
-          </div>
-        ))}
+      <div className="chat-messages-container">
+        <div className="chat-messages" ref={listRef} onScroll={handleScroll}>
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              className={`chat-message${m.system ? " system" : ""}${m.correct ? " correct" : ""}${m.close ? " close-hint" : ""}${m.restricted ? " restricted" : ""}`}
+            >
+              {m.system || m.close ? (
+                m.text
+              ) : (
+                <>
+                  <strong>{m.nickname}: </strong>
+                  {m.text}
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+        {isScrolledUp && unreadCount > 0 && (
+          <button type="button" className="chat-scroll-bottom-button" onClick={scrollToBottom}>
+            ↓ {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
+          </button>
+        )}
       </div>
       {!isDrawer && (
         <form className="chat-input" onSubmit={handleSubmit}>
