@@ -52,7 +52,7 @@ export function GameRoomPage() {
   const [brushWidth, setBrushWidth] = useState(6);
   const [tool, setTool] = useState<DrawTool>("pen");
   const [wasDrawer, setWasDrawer] = useState(false);
-  const [isGuessFocused, setIsGuessFocused] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   useEffect(() => {
     if (!code) return;
@@ -98,21 +98,6 @@ export function GameRoomPage() {
     };
   }, [roomState, phase]);
 
-  useEffect(() => {
-    if (isGuessFocused) {
-      document.body.classList.add("guess-focused");
-      document.documentElement.classList.add("guess-focused");
-      window.scrollTo(0, 0);
-    } else {
-      document.body.classList.remove("guess-focused");
-      document.documentElement.classList.remove("guess-focused");
-    }
-    return () => {
-      document.body.classList.remove("guess-focused");
-      document.documentElement.classList.remove("guess-focused");
-    };
-  }, [isGuessFocused]);
-
   const [notification, setNotification] = useState<string | null>(null);
 
   useEffect(() => {
@@ -152,14 +137,59 @@ export function GameRoomPage() {
   const canDrawNow = phase === "drawing" && drawerToken === token;
   const canGuess = phase === "drawing" && !amDrawer && !(me?.isSpectator) && !guessedWord;
 
-  const [prevPhase, setPrevPhase] = useState(phase);
+  // Active guess-focused mode applies ONLY on mobile screens (width <= 900px) when guessing during an active drawing round
+  const isGuessFocused =
+    isInputFocused && canGuess && phase === "drawing" && window.innerWidth <= 900;
 
-  if (phase !== prevPhase || (amDrawer && isGuessFocused)) {
-    setPrevPhase(phase);
-    if (isGuessFocused) {
-      setIsGuessFocused(false);
+  useEffect(() => {
+    function alignGuessFocusedView() {
+      if (window.innerWidth > 900) return;
+      const vv = window.visualViewport;
+      const el = document.querySelector(".game-room.guess-focused") as HTMLElement | null;
+      if (vv && el) {
+        el.style.position = "fixed";
+        el.style.top = `${vv.offsetTop}px`;
+        el.style.left = `${vv.offsetLeft}px`;
+        el.style.width = `${vv.width}px`;
+        el.style.height = `${vv.height}px`;
+      }
     }
-  }
+
+    if (isGuessFocused) {
+      document.body.classList.add("guess-focused");
+      document.documentElement.classList.add("guess-focused");
+      alignGuessFocusedView();
+      window.visualViewport?.addEventListener("resize", alignGuessFocusedView);
+      window.visualViewport?.addEventListener("scroll", alignGuessFocusedView);
+      window.addEventListener("resize", alignGuessFocusedView);
+      return () => {
+        const el = document.querySelector(".game-room") as HTMLElement | null;
+        if (el) {
+          el.style.position = "";
+          el.style.top = "";
+          el.style.left = "";
+          el.style.width = "";
+          el.style.height = "";
+        }
+        window.visualViewport?.removeEventListener("resize", alignGuessFocusedView);
+        window.visualViewport?.removeEventListener("scroll", alignGuessFocusedView);
+        window.removeEventListener("resize", alignGuessFocusedView);
+        document.body.classList.remove("guess-focused");
+        document.documentElement.classList.remove("guess-focused");
+      };
+    } else {
+      const el = document.querySelector(".game-room") as HTMLElement | null;
+      if (el) {
+        el.style.position = "";
+        el.style.top = "";
+        el.style.left = "";
+        el.style.width = "";
+        el.style.height = "";
+      }
+      document.body.classList.remove("guess-focused");
+      document.documentElement.classList.remove("guess-focused");
+    }
+  }, [isGuessFocused]);
 
   // Reset to the default color and tool whenever a new drawing turn starts
   // for this player, instead of carrying over whatever color/tool was last
@@ -344,7 +374,7 @@ export function GameRoomPage() {
                 isDrawer={amDrawer}
                 canGuess={canGuess}
                 targetWordLengths={splitMaskedWord(maskedWord).counts}
-                onFocusChange={setIsGuessFocused}
+                onFocusChange={setIsInputFocused}
               />
             </div>
           </aside>

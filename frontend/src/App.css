@@ -257,25 +257,16 @@
   html.guess-focused,
   body.guess-focused {
     overflow: hidden !important;
-    height: 100% !important;
-    position: fixed !important;
-    width: 100% !important;
-    inset: 0 !important;
     touch-action: none;
   }
 
   .game-room.guess-focused {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100vw;
-    height: var(--vv-height, 100dvh);
-    overflow: hidden;
-    padding: 4px 6px;
     box-sizing: border-box;
+    padding: 4px 6px;
+    overflow: hidden;
     touch-action: manipulation;
+    z-index: 999;
   }
 
   .game-room.guess-focused .game-layout {
