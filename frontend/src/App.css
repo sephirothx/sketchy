@@ -246,7 +246,7 @@
   .guess-chat {
     display: flex;
     flex-direction: column;
-    height: auto;
+    height: auto !important;
   }
 
   .chat-input {
@@ -255,9 +255,15 @@
     margin-bottom: 4px;
   }
 
-  .chat-messages {
-    max-height: 180px;
+  .chat-messages-container {
+    flex: initial;
+    height: auto;
+    max-height: 200px;
     min-height: 80px;
+  }
+
+  .chat-messages {
+    max-height: 200px;
   }
 
   .round-info {
@@ -269,6 +275,7 @@
   /* When text input box is selected on mobile: ONLY it + canvas/masked prompt + top timer info are visible */
   .game-room.guess-focused .game-header,
   .game-room.guess-focused .sidebar-left,
+  .game-room.guess-focused .chat-messages-container,
   .game-room.guess-focused .chat-messages,
   .game-room.guess-focused .save-image-box {
     display: none !important;
