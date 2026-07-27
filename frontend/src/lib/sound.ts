@@ -155,31 +155,8 @@ export function playRoundStartSound() {
   });
 }
 
-/** Soft rising pitch blip for player joining 👥 */
+/** Soft falling pitch blip for player joining 👥 */
 export function playPlayerJoinSound() {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  const masterGain = getVolumeGain(ctx);
-  if (!masterGain) return;
-
-  const now = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-
-  osc.type = "sine";
-  osc.frequency.setValueAtTime(320, now);
-  osc.frequency.exponentialRampToValueAtTime(540, now + 0.08);
-  gain.gain.setValueAtTime(0.4, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-
-  osc.connect(gain);
-  gain.connect(masterGain);
-  osc.start(now);
-  osc.stop(now + 0.08);
-}
-
-/** Soft falling pitch blip for player leaving 👥 */
-export function playPlayerLeaveSound() {
   const ctx = getAudioContext();
   if (!ctx) return;
   const masterGain = getVolumeGain(ctx);
@@ -192,6 +169,29 @@ export function playPlayerLeaveSound() {
   osc.type = "sine";
   osc.frequency.setValueAtTime(540, now);
   osc.frequency.exponentialRampToValueAtTime(320, now + 0.08);
+  gain.gain.setValueAtTime(0.4, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+  osc.connect(gain);
+  gain.connect(masterGain);
+  osc.start(now);
+  osc.stop(now + 0.08);
+}
+
+/** Soft rising pitch blip for player leaving 👥 */
+export function playPlayerLeaveSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const masterGain = getVolumeGain(ctx);
+  if (!masterGain) return;
+
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(320, now);
+  osc.frequency.exponentialRampToValueAtTime(540, now + 0.08);
   gain.gain.setValueAtTime(0.4, now);
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
