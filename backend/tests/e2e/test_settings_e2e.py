@@ -15,7 +15,7 @@ async def test_settings_dialog_pen_cursor_scenario():
     6. Verifies localStorage persists 'sketchy_pencursor' == 'circle'.
     """
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=True, args=['--mute-audio'])
         context = await browser.new_context()
         page = await context.new_page()
 

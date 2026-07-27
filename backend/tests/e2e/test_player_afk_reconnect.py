@@ -15,8 +15,8 @@ async def test_player_afk_and_disconnect_scenario():
     6. Host in Browser 1 sees player count updated or waiting panel state sync.
     """
     async with async_playwright() as p:
-        browser1 = await p.chromium.launch(headless=True)
-        browser2 = await p.chromium.launch(headless=True)
+        browser1 = await p.chromium.launch(headless=True, args=['--mute-audio'])
+        browser2 = await p.chromium.launch(headless=True, args=['--mute-audio'])
 
         context1 = await browser1.new_context()
         context2 = await browser2.new_context()
@@ -30,9 +30,9 @@ async def test_player_afk_and_disconnect_scenario():
             await page1.fill('input[placeholder="Your name"]', "HostPlayer")
             await page1.click('button:has-text("Create room")')
 
-            await page1.wait_for_selector('.room-code')
-            room_code_text = await page1.inner_text('.room-code')
-            code = room_code_text.split("Code:")[1].split("(")[0].strip()
+            await page1.wait_for_selector('.room-copy-button')
+            room_code_text = await page1.inner_text('.room-copy-button')
+            code = room_code_text.split("Code:")[1].strip()
 
             # Step 2: Player joins room via Join by code
             await page2.goto(BASE_URL)
@@ -40,7 +40,7 @@ async def test_player_afk_and_disconnect_scenario():
             await page2.fill('input[placeholder="ABC123"]', code)
             await page2.click('button:has-text("Join by code")')
 
-            await page2.wait_for_selector('.room-code')
+            await page2.wait_for_selector('.room-copy-button')
 
             # Step 3: Host verifies 2 players joined in waiting lobby
             await page1.wait_for_selector('text=Waiting for players... (2 joined)')
