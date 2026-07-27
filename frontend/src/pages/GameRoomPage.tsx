@@ -52,6 +52,7 @@ export function GameRoomPage() {
   const [brushWidth, setBrushWidth] = useState(6);
   const [tool, setTool] = useState<DrawTool>("pen");
   const [wasDrawer, setWasDrawer] = useState(false);
+  const [isGuessFocused, setIsGuessFocused] = useState(false);
 
   useEffect(() => {
     if (!code) return;
@@ -97,6 +98,21 @@ export function GameRoomPage() {
     };
   }, [roomState, phase]);
 
+  useEffect(() => {
+    if (isGuessFocused) {
+      document.body.classList.add("guess-focused");
+      document.documentElement.classList.add("guess-focused");
+      window.scrollTo(0, 0);
+    } else {
+      document.body.classList.remove("guess-focused");
+      document.documentElement.classList.remove("guess-focused");
+    }
+    return () => {
+      document.body.classList.remove("guess-focused");
+      document.documentElement.classList.remove("guess-focused");
+    };
+  }, [isGuessFocused]);
+
   const [notification, setNotification] = useState<string | null>(null);
 
   useEffect(() => {
@@ -136,6 +152,15 @@ export function GameRoomPage() {
   const canDrawNow = phase === "drawing" && drawerToken === token;
   const canGuess = phase === "drawing" && !amDrawer && !(me?.isSpectator) && !guessedWord;
 
+  const [prevPhase, setPrevPhase] = useState(phase);
+
+  if (phase !== prevPhase || (amDrawer && isGuessFocused)) {
+    setPrevPhase(phase);
+    if (isGuessFocused) {
+      setIsGuessFocused(false);
+    }
+  }
+
   // Reset to the default color and tool whenever a new drawing turn starts
   // for this player, instead of carrying over whatever color/tool was last
   // picked. Done during render (rather than an effect) per React's
@@ -163,8 +188,6 @@ export function GameRoomPage() {
       : me?.isSpectator && spectatorsSeeSolution && maskedWord && !maskedWord.includes("_")
       ? splitMaskedWord(maskedWord).blanks.trim()
       : null;
-
-  const [isGuessFocused, setIsGuessFocused] = useState(false);
 
   if (joinError) {
     return (
