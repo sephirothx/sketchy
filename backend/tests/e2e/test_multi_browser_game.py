@@ -16,8 +16,8 @@ async def test_multi_browser_gameplay_scenario():
     7. Both browsers sync in real time over Socket.IO.
     """
     async with async_playwright() as p:
-        browser1 = await p.chromium.launch(headless=True)
-        browser2 = await p.firefox.launch(headless=True)
+        browser1 = await p.chromium.launch(headless=True, args=['--mute-audio'])
+        browser2 = await p.firefox.launch(headless=True, firefox_user_prefs={'media.volume_scale': '0.0'})
 
         context1 = await browser1.new_context()
         context2 = await browser2.new_context()
@@ -32,9 +32,9 @@ async def test_multi_browser_gameplay_scenario():
             await page1.click('button:has-text("Create room")')
 
             # Wait for navigation to room waiting panel
-            await page1.wait_for_selector('.room-code')
-            room_code_text = await page1.inner_text('.room-code')
-            code = room_code_text.split("Code:")[1].split("(")[0].strip()
+            await page1.wait_for_selector('.room-copy-button')
+            room_code_text = await page1.inner_text('.room-copy-button')
+            code = room_code_text.split("Code:")[1].strip()
             assert len(code) > 0
 
             # Step 2: Player joins using room code from Browser 2 (Firefox)
@@ -44,7 +44,7 @@ async def test_multi_browser_gameplay_scenario():
             await page2.click('button:has-text("Join by code")')
 
             # Wait for Browser 2 to enter waiting panel
-            await page2.wait_for_selector('.room-code')
+            await page2.wait_for_selector('.room-copy-button')
 
             # Step 3: Host verifies 2 players joined in waiting panel
             await page1.wait_for_selector('text=Waiting for players... (2 joined)')
