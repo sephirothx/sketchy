@@ -228,6 +228,58 @@ function rasterizePath(
   ctx.putImageData(imageData, x, y);
 }
 
+// Rasterizes a multi-point polyline in a single getImageData / putImageData operation,
+// avoiding N individual canvas readbacks for multi-point draw_move payloads and replay logs.
+function rasterizePolyline(
+  ctx: CanvasRenderingContext2D,
+  points: Point[],
+  radius: number,
+  color: [number, number, number, number],
+): void {
+  if (points.length === 0) return;
+  if (points.length === 1) {
+    rasterizePath(ctx, points, radius, color, false);
+    return;
+  }
+  const bounds = boundsFromPath(points, radius);
+  const x = Math.max(0, Math.floor(bounds.minX));
+  const y = Math.max(0, Math.floor(bounds.minY));
+  const right = Math.min(CANVAS_WIDTH, Math.ceil(bounds.maxX));
+  const bottom = Math.min(CANVAS_HEIGHT, Math.ceil(bounds.maxY));
+  const w = right - x;
+  const h = bottom - y;
+  if (w <= 0 || h <= 0) return;
+
+  const imageData = ctx.getImageData(x, y, w, h);
+  const data = imageData.data;
+  const radiusSquared = radius * radius;
+  const segmentCount = points.length - 1;
+
+  for (let s = 0; s < segmentCount; s++) {
+    const a = points[s];
+    const b = points[s + 1];
+    const segMinX = Math.max(0, Math.floor(Math.min(a.x, b.x) - radius - x));
+    const segMinY = Math.max(0, Math.floor(Math.min(a.y, b.y) - radius - y));
+    const segMaxX = Math.min(w - 1, Math.ceil(Math.max(a.x, b.x) + radius - x));
+    const segMaxY = Math.min(h - 1, Math.ceil(Math.max(a.y, b.y) + radius - y));
+    for (let py = segMinY; py <= segMaxY; py++) {
+      for (let px = segMinX; px <= segMaxX; px++) {
+        const worldX = px + x + 0.5;
+        const worldY = py + y + 0.5;
+        if (distanceToSegmentSquared(worldX, worldY, a.x, a.y, b.x, b.y) <= radiusSquared) {
+          const idx = (py * w + px) * 4;
+          data[idx] = color[0];
+          data[idx + 1] = color[1];
+          data[idx + 2] = color[2];
+          data[idx + 3] = color[3];
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(imageData, x, y);
+}
+
 const ELLIPSE_OUTLINE_SEGMENTS = 96;
 
 // Same inscribed-rectangle geometry as drawShapeOutline (still used as-is
@@ -458,7 +510,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       strokeColor: string,
       strokeWidth: number,
     ) {
-      rasterizePath(ctx, [toPixels(from), toPixels(to)], strokeWidth / 2, hexToRgba(strokeColor), false);
+      rasterizePolyline(ctx, [toPixels(from), toPixels(to)], strokeWidth / 2, hexToRgba(strokeColor));
     }
 
     function drawShapeOn(ctx: CanvasRenderingContext2D, payload: StrokeShapePayload) {
@@ -485,12 +537,16 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     };
 
     const onDrawMove = (payload: StrokeMovePayload) => {
-      for (const point of payload.points) {
-        if (remoteState.last) {
-          drawSegment(remoteState.last, point, remoteState.color, remoteState.width);
+      const ctx = ctxRef.current;
+      if (!ctx || payload.points.length === 0) return;
+      if (remoteState.last) {
+        const polyline: Point[] = [toPixels(remoteState.last)];
+        for (const pt of payload.points) {
+          polyline.push(toPixels(pt));
         }
-        remoteState.last = point;
+        rasterizePolyline(ctx, polyline, remoteState.width / 2, hexToRgba(remoteState.color));
       }
+      remoteState.last = payload.points[payload.points.length - 1];
     };
 
     const onDrawEnd = () => {
@@ -547,9 +603,13 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
           drawSegmentOn(offCtx, last, last, color, width);
         } else if (stroke.event === "draw_move") {
           const p = stroke.payload as StrokeMovePayload;
-          for (const point of p.points) {
-            if (last) drawSegmentOn(offCtx, last, point, color, width);
-            last = point;
+          if (last && p.points.length > 0) {
+            const polyline: Point[] = [toPixels(last)];
+            for (const pt of p.points) {
+              polyline.push(toPixels(pt));
+            }
+            rasterizePolyline(offCtx, polyline, width / 2, hexToRgba(color));
+            last = p.points[p.points.length - 1];
           }
         } else if (stroke.event === "draw_shape") {
           drawShapeOn(offCtx, stroke.payload as StrokeShapePayload);
