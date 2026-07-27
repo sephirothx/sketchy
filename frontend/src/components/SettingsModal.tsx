@@ -23,12 +23,13 @@ function formatKey(key: string): string {
 }
 
 function SettingsModalContent() {
-  const { closeSettings, keyBindings, penCursor, confettiEffects, soundEffects, volume, setAllSettings } =
+  const { closeSettings, keyBindings, penCursor, theme, confettiEffects, soundEffects, volume, setAllSettings } =
     useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [draftKeyBindings, setDraftKeyBindings] = useState<KeyBindings>(keyBindings);
   const [draftPenCursor, setDraftPenCursor] = useState<PenCursorStyle>(penCursor);
+  const [draftTheme, setDraftTheme] = useState<import("../store/settingsStore").AppTheme>(theme);
   const [draftConfettiEffects, setDraftConfettiEffects] = useState<boolean>(confettiEffects);
   const [draftSoundEffects, setDraftSoundEffects] = useState<boolean>(soundEffects);
   const [draftVolume, setDraftVolume] = useState<number>(volume);
@@ -82,6 +83,7 @@ function SettingsModalContent() {
     setAllSettings({
       keyBindings: draftKeyBindings,
       penCursor: draftPenCursor,
+      theme: draftTheme,
       confettiEffects: draftConfettiEffects,
       soundEffects: draftSoundEffects,
       volume: draftVolume,
@@ -132,7 +134,26 @@ function SettingsModalContent() {
         <div className="settings-tab-content">
           {activeTab === "general" && (
             <div className="settings-section">
-              <h4>Audio & Sound Settings</h4>
+              <h4>Appearance</h4>
+              <div className="settings-field" style={{ marginTop: "12px" }}>
+                <label htmlFor="theme-select" className="settings-label">
+                  Theme
+                </label>
+                <select
+                  id="theme-select"
+                  className="settings-select"
+                  value={draftTheme}
+                  onChange={(e) => setDraftTheme(e.target.value as import("../store/settingsStore").AppTheme)}
+                >
+                  <option value="light">Light Theme</option>
+                  <option value="dark">Dark Theme</option>
+                </select>
+                <p className="settings-description" style={{ marginTop: "6px" }}>
+                  Choose between the default light theme and dark theme.
+                </p>
+              </div>
+
+              <h4 style={{ marginTop: "24px" }}>Audio & Sound Settings</h4>
               <div className="settings-field" style={{ marginTop: "12px" }}>
                 <label htmlFor="sound-effects-toggle" className="settings-label" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
                   <input
