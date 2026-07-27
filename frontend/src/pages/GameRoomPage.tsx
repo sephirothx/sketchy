@@ -50,6 +50,7 @@ export function GameRoomPage() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [color, setColor] = useState("#000000");
   const [brushWidth, setBrushWidth] = useState(6);
+  const [eraserWidth, setEraserWidth] = useState(24);
   const [tool, setTool] = useState<DrawTool>("pen");
   const [wasDrawer, setWasDrawer] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -191,6 +192,16 @@ export function GameRoomPage() {
     }
   }, [isGuessFocused]);
 
+  const activeWidth = tool === "eraser" ? eraserWidth : brushWidth;
+
+  function handleWidthChange(newWidth: number) {
+    if (tool === "eraser") {
+      setEraserWidth(newWidth);
+    } else {
+      setBrushWidth(newWidth);
+    }
+  }
+
   // Reset to the default color and tool whenever a new drawing turn starts
   // for this player, instead of carrying over whatever color/tool was last
   // picked. Done during render (rather than an effect) per React's
@@ -201,6 +212,8 @@ export function GameRoomPage() {
     if (amDrawer) {
       setColor("#000000");
       setTool("pen");
+      setBrushWidth(6);
+      setEraserWidth(24);
     }
   }
 
@@ -343,7 +356,7 @@ export function GameRoomPage() {
               ref={canvasRef}
               isDrawer={canDrawNow}
               color={color}
-              brushWidth={brushWidth}
+              brushWidth={activeWidth}
               tool={tool}
               solutionWord={solutionWord}
             />
@@ -360,8 +373,8 @@ export function GameRoomPage() {
               <Toolbar
                 color={color}
                 onColorChange={setColor}
-                brushWidth={brushWidth}
-                onBrushWidthChange={setBrushWidth}
+                brushWidth={activeWidth}
+                onBrushWidthChange={handleWidthChange}
                 tool={tool}
                 onToolChange={setTool}
               />
