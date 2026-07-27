@@ -141,6 +141,9 @@ tabs in the *same* browser profile will share that storage and can behave unexpe
 # Unit & integration tests
 cd backend && .venv/bin/pytest
 
+# Backend performance micro-benchmarks
+backend/.venv/bin/python scripts/benchmark_backend.py
+
 # Multi-browser Playwright E2E tests
 ./scripts/test-e2e.sh
 ```
