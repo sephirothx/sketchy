@@ -71,6 +71,29 @@ function loadStoredConfetti(): boolean {
   }
 }
 
+function loadStoredSoundEffects(): boolean {
+  try {
+    const raw = localStorage.getItem("sketchy_soundeffects");
+    if (raw === "false") return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function loadStoredVolume(): number {
+  try {
+    const raw = localStorage.getItem("sketchy_volume");
+    if (raw !== null) {
+      const parsed = parseFloat(raw);
+      if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 1) return parsed;
+    }
+    return 0.7;
+  } catch {
+    return 0.7;
+  }
+}
+
 interface SettingsStore {
   isSettingsOpen: boolean;
   openSettings: () => void;
@@ -78,10 +101,20 @@ interface SettingsStore {
   keyBindings: KeyBindings;
   penCursor: PenCursorStyle;
   confettiEffects: boolean;
-  setAllSettings: (payload: { keyBindings: KeyBindings; penCursor: PenCursorStyle; confettiEffects?: boolean }) => void;
+  soundEffects: boolean;
+  volume: number;
+  setAllSettings: (payload: {
+    keyBindings: KeyBindings;
+    penCursor: PenCursorStyle;
+    confettiEffects?: boolean;
+    soundEffects?: boolean;
+    volume?: number;
+  }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
   setPenCursor: (penCursor: PenCursorStyle) => void;
   setConfettiEffects: (enabled: boolean) => void;
+  setSoundEffects: (enabled: boolean) => void;
+  setVolume: (volume: number) => void;
   resetKeyBindings: () => void;
 }
 
@@ -92,12 +125,16 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   keyBindings: loadStoredKeyBindings(),
   penCursor: loadStoredPenCursor(),
   confettiEffects: loadStoredConfetti(),
-  setAllSettings: ({ keyBindings, penCursor, confettiEffects = true }) =>
+  soundEffects: loadStoredSoundEffects(),
+  volume: loadStoredVolume(),
+  setAllSettings: ({ keyBindings, penCursor, confettiEffects = true, soundEffects = true, volume = 0.7 }) =>
     set(() => {
       localStorage.setItem("sketchy_keybindings", JSON.stringify(keyBindings));
       localStorage.setItem("sketchy_pencursor", penCursor);
       localStorage.setItem("sketchy_confettieffects", String(confettiEffects));
-      return { keyBindings, penCursor, confettiEffects };
+      localStorage.setItem("sketchy_soundeffects", String(soundEffects));
+      localStorage.setItem("sketchy_volume", String(volume));
+      return { keyBindings, penCursor, confettiEffects, soundEffects, volume };
     }),
   setKeyBinding: (action, keys) =>
     set((state) => {
@@ -114,6 +151,16 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_confettieffects", String(enabled));
       return { confettiEffects: enabled };
+    }),
+  setSoundEffects: (enabled) =>
+    set(() => {
+      localStorage.setItem("sketchy_soundeffects", String(enabled));
+      return { soundEffects: enabled };
+    }),
+  setVolume: (volume) =>
+    set(() => {
+      localStorage.setItem("sketchy_volume", String(volume));
+      return { volume };
     }),
   resetKeyBindings: () =>
     set(() => {

@@ -2,6 +2,14 @@ import { useEffect } from "react";
 import { socket } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import { triggerConfettiBurst, triggerConfettiShower } from "../lib/confetti";
+import {
+  playCloseGuessSound,
+  playCorrectGuessSound,
+  playMyCorrectGuessSound,
+  playPlayerJoinSound,
+  playPlayerLeaveSound,
+  playRoundStartSound,
+} from "../lib/sound";
 import type {
   ChatMessage,
   GameEndedPayload,
@@ -20,6 +28,7 @@ export function useGameSocketListeners() {
     const onRoomState = (payload: RoomStatePayload) => store.getState().setRoomState(payload);
 
     const onPlayerJoined = (payload: { token: string; nickname: string }) => {
+      playPlayerJoinSound();
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
@@ -30,6 +39,7 @@ export function useGameSocketListeners() {
     };
 
     const onPlayerReconnected = (payload: { token: string; nickname: string }) => {
+      playPlayerJoinSound();
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
@@ -40,6 +50,7 @@ export function useGameSocketListeners() {
     };
 
     const onPlayerDisconnected = (payload: { token: string; nickname: string }) => {
+      playPlayerLeaveSound();
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
@@ -50,6 +61,7 @@ export function useGameSocketListeners() {
     };
 
     const onPlayerLeft = () => {
+      playPlayerLeaveSound();
       // room_state is re-emitted by the server right after, so no local patch needed here.
     };
 
@@ -70,6 +82,7 @@ export function useGameSocketListeners() {
       totalRounds: number;
       seconds: number;
     }) => {
+      playRoundStartSound();
       store.getState().startChoosing(payload);
       store.getState().addMessage({
         id: nextMessageId(),
@@ -97,14 +110,21 @@ export function useGameSocketListeners() {
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
     }) => {
+      playRoundStartSound();
       store.getState().startDrawing(payload);
     };
 
     const onChatMessage = (payload: ChatMessage) => {
+      if (payload.close) {
+        playCloseGuessSound();
+      }
       store.getState().addMessage({ ...payload, id: nextMessageId() });
     };
 
     const onCorrectGuess = (payload: { token: string; nickname: string; points: number }) => {
+      if (payload.token !== store.getState().token) {
+        playCorrectGuessSound();
+      }
       store.getState().applyGuessPoints(payload.token, payload.points);
       const pointsSuffix =
         store.getState().scoringMode === "default" ? ` (+${payload.points})` : "";
@@ -119,6 +139,7 @@ export function useGameSocketListeners() {
 
     const onYouGuessedCorrectly = (payload: { word: string }) => {
       triggerConfettiBurst();
+      playMyCorrectGuessSound();
       store.getState().setGuessedWord(payload.word);
     };
 

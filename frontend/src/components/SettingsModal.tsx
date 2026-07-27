@@ -23,12 +23,15 @@ function formatKey(key: string): string {
 }
 
 function SettingsModalContent() {
-  const { closeSettings, keyBindings, penCursor, confettiEffects, setAllSettings } = useSettingsStore();
+  const { closeSettings, keyBindings, penCursor, confettiEffects, soundEffects, volume, setAllSettings } =
+    useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [draftKeyBindings, setDraftKeyBindings] = useState<KeyBindings>(keyBindings);
   const [draftPenCursor, setDraftPenCursor] = useState<PenCursorStyle>(penCursor);
   const [draftConfettiEffects, setDraftConfettiEffects] = useState<boolean>(confettiEffects);
+  const [draftSoundEffects, setDraftSoundEffects] = useState<boolean>(soundEffects);
+  const [draftVolume, setDraftVolume] = useState<number>(volume);
   const [activeRebind, setActiveRebind] = useState<{
     action: keyof KeyBindings;
     slotIndex: number;
@@ -80,6 +83,8 @@ function SettingsModalContent() {
       keyBindings: draftKeyBindings,
       penCursor: draftPenCursor,
       confettiEffects: draftConfettiEffects,
+      soundEffects: draftSoundEffects,
+      volume: draftVolume,
     });
     closeSettings();
   };
@@ -126,8 +131,41 @@ function SettingsModalContent() {
 
         <div className="settings-tab-content">
           {activeTab === "general" && (
-            <div className="tab-placeholder">
-              <p>No general settings available yet.</p>
+            <div className="settings-section">
+              <h4>Audio & Sound Settings</h4>
+              <div className="settings-field" style={{ marginTop: "12px" }}>
+                <label htmlFor="sound-effects-toggle" className="settings-label" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                  <input
+                    id="sound-effects-toggle"
+                    type="checkbox"
+                    checked={draftSoundEffects}
+                    onChange={(e) => setDraftSoundEffects(e.target.checked)}
+                  />
+                  <span>Sound Effects 🔊</span>
+                </label>
+                <p className="settings-description" style={{ marginTop: "6px" }}>
+                  Enable Web Audio chimes for guesses, round start, timer warnings, and player events.
+                </p>
+              </div>
+
+              {draftSoundEffects && (
+                <div className="settings-field" style={{ marginTop: "16px" }}>
+                  <label htmlFor="volume-slider" className="settings-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Master Volume</span>
+                    <span style={{ fontWeight: 600, color: "#2563eb" }}>{Math.round(draftVolume * 100)}%</span>
+                  </label>
+                  <input
+                    id="volume-slider"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={draftVolume}
+                    onChange={(e) => setDraftVolume(parseFloat(e.target.value))}
+                    style={{ width: "100%", marginTop: "8px" }}
+                  />
+                </div>
+              )}
             </div>
           )}
 
