@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 export type PenCursorStyle = "crosshair" | "circle";
+export type AppTheme = "light" | "dark";
 
 export interface KeyBindings {
   pen: string[];
@@ -27,6 +28,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
 };
 
 export const DEFAULT_PEN_CURSOR: PenCursorStyle = "crosshair";
+export const DEFAULT_THEME: AppTheme = "light";
 
 export const ACTION_LABELS: Record<keyof KeyBindings, string> = {
   pen: "Pen Tool",
@@ -39,6 +41,13 @@ export const ACTION_LABELS: Record<keyof KeyBindings, string> = {
   brushIncrease: "Increase Brush Size",
   undo: "Undo Stroke",
 };
+
+export function applyThemeToDocument(theme: AppTheme) {
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  }
+}
 
 function loadStoredKeyBindings(): KeyBindings {
   try {
@@ -58,6 +67,16 @@ function loadStoredPenCursor(): PenCursorStyle {
     return DEFAULT_PEN_CURSOR;
   } catch {
     return DEFAULT_PEN_CURSOR;
+  }
+}
+
+function loadStoredTheme(): AppTheme {
+  try {
+    const raw = localStorage.getItem("sketchy_theme");
+    if (raw === "dark" || raw === "light") return raw;
+    return DEFAULT_THEME;
+  } catch {
+    return DEFAULT_THEME;
   }
 }
 
@@ -100,23 +119,29 @@ interface SettingsStore {
   closeSettings: () => void;
   keyBindings: KeyBindings;
   penCursor: PenCursorStyle;
+  theme: AppTheme;
   confettiEffects: boolean;
   soundEffects: boolean;
   volume: number;
   setAllSettings: (payload: {
     keyBindings: KeyBindings;
     penCursor: PenCursorStyle;
+    theme?: AppTheme;
     confettiEffects?: boolean;
     soundEffects?: boolean;
     volume?: number;
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
   setPenCursor: (penCursor: PenCursorStyle) => void;
+  setTheme: (theme: AppTheme) => void;
   setConfettiEffects: (enabled: boolean) => void;
   setSoundEffects: (enabled: boolean) => void;
   setVolume: (volume: number) => void;
   resetKeyBindings: () => void;
 }
+
+const initialTheme = loadStoredTheme();
+applyThemeToDocument(initialTheme);
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
   isSettingsOpen: false,
@@ -124,17 +149,27 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   closeSettings: () => set({ isSettingsOpen: false }),
   keyBindings: loadStoredKeyBindings(),
   penCursor: loadStoredPenCursor(),
+  theme: initialTheme,
   confettiEffects: loadStoredConfetti(),
   soundEffects: loadStoredSoundEffects(),
   volume: loadStoredVolume(),
-  setAllSettings: ({ keyBindings, penCursor, confettiEffects = true, soundEffects = true, volume = 0.7 }) =>
+  setAllSettings: ({
+    keyBindings,
+    penCursor,
+    theme = "light",
+    confettiEffects = true,
+    soundEffects = true,
+    volume = 0.7,
+  }) =>
     set(() => {
       localStorage.setItem("sketchy_keybindings", JSON.stringify(keyBindings));
       localStorage.setItem("sketchy_pencursor", penCursor);
+      localStorage.setItem("sketchy_theme", theme);
       localStorage.setItem("sketchy_confettieffects", String(confettiEffects));
       localStorage.setItem("sketchy_soundeffects", String(soundEffects));
       localStorage.setItem("sketchy_volume", String(volume));
-      return { keyBindings, penCursor, confettiEffects, soundEffects, volume };
+      applyThemeToDocument(theme);
+      return { keyBindings, penCursor, theme, confettiEffects, soundEffects, volume };
     }),
   setKeyBinding: (action, keys) =>
     set((state) => {
@@ -146,6 +181,12 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_pencursor", penCursor);
       return { penCursor };
+    }),
+  setTheme: (theme) =>
+    set(() => {
+      localStorage.setItem("sketchy_theme", theme);
+      applyThemeToDocument(theme);
+      return { theme };
     }),
   setConfettiEffects: (enabled) =>
     set(() => {
