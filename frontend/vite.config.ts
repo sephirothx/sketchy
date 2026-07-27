@@ -25,11 +25,25 @@ function isWorkingTreeDirty(): boolean {
   }
 }
 
+function getLocalBuildTime(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  const seconds = String(now.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
+const buildTime = getLocalBuildTime()
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   define: {
     __APP_COMMIT_SHA__: JSON.stringify(gitLog('--format=%h') + (isWorkingTreeDirty() ? '*' : '')),
     __APP_COMMIT_DATE__: JSON.stringify(gitLog('--date=short --format=%cd')),
+    __APP_BUILD_TIME__: JSON.stringify(buildTime),
   },
 })
