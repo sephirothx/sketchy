@@ -33,6 +33,10 @@ export function LobbyBrowserPage() {
   const [error, setError] = useState<string | null>(location.state?.error ?? null);
   const [busy, setBusy] = useState(false);
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [hideFullRooms, setHideFullRooms] = useState(false);
+  const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     async function fetchRooms() {
@@ -51,6 +55,22 @@ export function LobbyBrowserPage() {
       clearInterval(interval);
     };
   }, []);
+
+  const filteredRooms = rooms.filter((room) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const nameMatch = room.name.toLowerCase().includes(q);
+      const codeMatch = room.code?.toLowerCase().includes(q);
+      if (!nameMatch && !codeMatch) return false;
+    }
+    if (hideFullRooms && room.playerCount >= room.maxPlayers) {
+      return false;
+    }
+    if (hideInProgressRooms && room.state === "playing") {
+      return false;
+    }
+    return true;
+  });
 
   function requireNickname(): boolean {
     if (!nicknameInput.trim()) {
@@ -324,50 +344,105 @@ export function LobbyBrowserPage() {
       </div>
 
       <section className="panel">
-        <h2>Public rooms</h2>
-        {rooms.length === 0 && <p>No public rooms yet. Create one!</p>}
-        <ul className="room-list">
-          {rooms.map((room) => (
-            <li key={room.id} className="room-row">
-              <span className="room-name">{room.name}</span>
-              <span className="room-meta">
-                {room.playerCount}/{room.maxPlayers} players &middot; {room.state} &middot;{" "}
-                {room.rounds} {room.rounds === 1 ? "round" : "rounds"} &middot;{" "}
-                {room.drawingSeconds}s to draw &middot;{" "}
-                {room.scoringMode === "none" ? "no scoring" : "default scoring"} &middot;{" "}
-                {room.spectatorsSeeSolution ? "spectators see solution" : "spectators see masked word"} &middot;{" "}
-                {room.hideMaskedPrompt ? "hidden prompt" : room.customWordCount > 0
-                  ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " + default"}`
-                  : "default words"}
-                {room.hintMode !== "none" && (
-                  <>
-                    {" "}
-                    &middot;{" "}
-                    {room.hintMode === "checkpoints"
-                      ? "timed hints"
-                      : room.hintMode === "wheel"
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+          <h2>Public rooms</h2>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-muted, #94a3b8)" }}>
+            {rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length} rooms` : "0 rooms"}
+          </span>
+        </div>
+
+        {rooms.length > 0 && (
+          <div
+            className="lobby-filter-bar"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.75rem",
+              alignItems: "center",
+              marginBottom: "1rem",
+              background: "rgba(0,0,0,0.15)",
+              padding: "0.6rem 0.8rem",
+              borderRadius: "8px",
+            }}
+          >
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔍 Search rooms by name or code..."
+              style={{ flex: "1 1 200px", padding: "0.4rem 0.75rem", fontSize: "0.9rem" }}
+            />
+            <label className="checkbox-label" style={{ fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+              <input
+                type="checkbox"
+                checked={hideFullRooms}
+                onChange={(e) => setHideFullRooms(e.target.checked)}
+              />
+              Hide full rooms
+            </label>
+            <label className="checkbox-label" style={{ fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+              <input
+                type="checkbox"
+                checked={hideInProgressRooms}
+                onChange={(e) => setHideInProgressRooms(e.target.checked)}
+              />
+              Hide in-progress rooms
+            </label>
+          </div>
+        )}
+
+        {rooms.length === 0 ? (
+          <p>No public rooms yet. Create one!</p>
+        ) : filteredRooms.length === 0 ? (
+          <p style={{ color: "var(--text-muted, #94a3b8)", fontStyle: "italic" }}>
+            No public rooms match your search criteria.
+          </p>
+        ) : (
+          <ul className="room-list">
+            {filteredRooms.map((room) => (
+              <li key={room.id} className="room-row">
+                <span className="room-name">{room.name}</span>
+                <span className="room-meta">
+                  {room.playerCount}/{room.maxPlayers} players &middot; {room.state} &middot;{" "}
+                  {room.rounds} {room.rounds === 1 ? "round" : "rounds"} &middot;{" "}
+                  {room.drawingSeconds}s to draw &middot;{" "}
+                  {room.scoringMode === "none" ? "no scoring" : "default scoring"} &middot;{" "}
+                  {room.spectatorsSeeSolution ? "spectators see solution" : "spectators see masked word"} &middot;{" "}
+                  {room.hideMaskedPrompt
+                    ? "hidden prompt"
+                    : room.customWordCount > 0
+                    ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " + default"}`
+                    : "default words"}
+                  {room.hintMode !== "none" && (
+                    <>
+                      {" "}
+                      &middot;{" "}
+                      {room.hintMode === "checkpoints"
+                        ? "timed hints"
+                        : room.hintMode === "wheel"
                         ? "buy-a-letter hints"
                         : "buyable hints"}
-                  </>
-                )}
-              </span>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button
-                  disabled={busy || room.playerCount >= room.maxPlayers}
-                  onClick={() => handleJoinRoom(room, false)}
-                >
-                  Join
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => handleJoinRoom(room, true)}
-                >
-                  Spectate
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                    </>
+                  )}
+                </span>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    disabled={busy || room.playerCount >= room.maxPlayers}
+                    onClick={() => handleJoinRoom(room, false)}
+                  >
+                    Join
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => handleJoinRoom(room, true)}
+                  >
+                    Spectate
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

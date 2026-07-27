@@ -148,11 +148,40 @@
 }
 
 .room-code {
-  color: #6b6f76;
+  color: #475569;
   font-size: 14px;
+  font-weight: 500;
 }
 
-.game-header button:not(.header-settings-button) {
+.room-copy-button {
+  background: #ffffff;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.15s ease;
+}
+
+.room-copy-button:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.room-copied-badge {
+  color: #059669;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.game-header-actions button:not(.header-settings-button) {
   background: #e64980;
   color: white;
   border: none;
