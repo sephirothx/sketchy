@@ -5,6 +5,7 @@ import { triggerConfettiBurst, triggerConfettiShower } from "../lib/confetti";
 import {
   playCloseGuessSound,
   playCorrectGuessSound,
+  playMyCorrectGuessSound,
   playPlayerJoinSound,
   playPlayerLeaveSound,
   playRoundStartSound,
@@ -121,7 +122,9 @@ export function useGameSocketListeners() {
     };
 
     const onCorrectGuess = (payload: { token: string; nickname: string; points: number }) => {
-      playCorrectGuessSound();
+      if (payload.token !== store.getState().token) {
+        playCorrectGuessSound();
+      }
       store.getState().applyGuessPoints(payload.token, payload.points);
       const pointsSuffix =
         store.getState().scoringMode === "default" ? ` (+${payload.points})` : "";
@@ -136,6 +139,7 @@ export function useGameSocketListeners() {
 
     const onYouGuessedCorrectly = (payload: { word: string }) => {
       triggerConfettiBurst();
+      playMyCorrectGuessSound();
       store.getState().setGuessedWord(payload.word);
     };
 
