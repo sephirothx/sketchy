@@ -52,6 +52,7 @@ export function GameRoomPage() {
   const [brushWidth, setBrushWidth] = useState(6);
   const [tool, setTool] = useState<DrawTool>("pen");
   const [wasDrawer, setWasDrawer] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   useEffect(() => {
     if (!code) return;
@@ -76,6 +77,26 @@ export function GameRoomPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
+
+  useEffect(() => {
+    function updateViewport() {
+      const vv = window.visualViewport;
+      const height = vv ? vv.height : window.innerHeight;
+      document.documentElement.style.setProperty("--vv-height", `${height}px`);
+      if (roomState === "playing") {
+        window.scrollTo(0, 0);
+      }
+    }
+    updateViewport();
+    window.visualViewport?.addEventListener("resize", updateViewport);
+    window.visualViewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("resize", updateViewport);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, [roomState, phase]);
 
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -116,6 +137,60 @@ export function GameRoomPage() {
   const canDrawNow = phase === "drawing" && drawerToken === token;
   const canGuess = phase === "drawing" && !amDrawer && !(me?.isSpectator) && !guessedWord;
 
+  // Active guess-focused mode applies ONLY on mobile screens (width <= 900px) when guessing during an active drawing round
+  const isGuessFocused =
+    isInputFocused && canGuess && phase === "drawing" && window.innerWidth <= 900;
+
+  useEffect(() => {
+    function alignGuessFocusedView() {
+      if (window.innerWidth > 900) return;
+      const vv = window.visualViewport;
+      const el = document.querySelector(".game-room.guess-focused") as HTMLElement | null;
+      if (vv && el) {
+        el.style.position = "fixed";
+        el.style.top = `${vv.offsetTop}px`;
+        el.style.left = `${vv.offsetLeft}px`;
+        el.style.width = `${vv.width}px`;
+        el.style.height = `${vv.height}px`;
+      }
+    }
+
+    if (isGuessFocused) {
+      document.body.classList.add("guess-focused");
+      document.documentElement.classList.add("guess-focused");
+      alignGuessFocusedView();
+      window.visualViewport?.addEventListener("resize", alignGuessFocusedView);
+      window.visualViewport?.addEventListener("scroll", alignGuessFocusedView);
+      window.addEventListener("resize", alignGuessFocusedView);
+      return () => {
+        const el = document.querySelector(".game-room") as HTMLElement | null;
+        if (el) {
+          el.style.position = "";
+          el.style.top = "";
+          el.style.left = "";
+          el.style.width = "";
+          el.style.height = "";
+        }
+        window.visualViewport?.removeEventListener("resize", alignGuessFocusedView);
+        window.visualViewport?.removeEventListener("scroll", alignGuessFocusedView);
+        window.removeEventListener("resize", alignGuessFocusedView);
+        document.body.classList.remove("guess-focused");
+        document.documentElement.classList.remove("guess-focused");
+      };
+    } else {
+      const el = document.querySelector(".game-room") as HTMLElement | null;
+      if (el) {
+        el.style.position = "";
+        el.style.top = "";
+        el.style.left = "";
+        el.style.width = "";
+        el.style.height = "";
+      }
+      document.body.classList.remove("guess-focused");
+      document.documentElement.classList.remove("guess-focused");
+    }
+  }, [isGuessFocused]);
+
   // Reset to the default color and tool whenever a new drawing turn starts
   // for this player, instead of carrying over whatever color/tool was last
   // picked. Done during render (rather than an effect) per React's
@@ -146,7 +221,7 @@ export function GameRoomPage() {
 
   if (joinError) {
     return (
-      <div className="lobby-page">
+      <div className="join-error-container">
         <p className="error-banner">{joinError}</p>
         <button onClick={() => navigate("/")}>Back to lobby</button>
       </div>
@@ -154,7 +229,7 @@ export function GameRoomPage() {
   }
 
   return (
-    <div className="game-room">
+    <div className={`game-room ${isGuessFocused ? "guess-focused" : ""}`}>
       {notification && (
         <div className="modal-overlay" onClick={() => setNotification(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -299,6 +374,7 @@ export function GameRoomPage() {
                 isDrawer={amDrawer}
                 canGuess={canGuess}
                 targetWordLengths={splitMaskedWord(maskedWord).counts}
+                onFocusChange={setIsInputFocused}
               />
             </div>
           </aside>
