@@ -31,6 +31,10 @@ function letterRunLengths(text: string): number[] {
 
 export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths, onFocusChange }: GuessChatProps) {
   const [text, setText] = useState("");
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
+  const draftTextRef = useRef<string>("");
+
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [prevMessagesCount, setPrevMessagesCount] = useState(messages.length);
@@ -67,6 +71,38 @@ export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths, onF
     setUnreadCount(0);
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowUp") {
+      if (history.length === 0) return;
+      const targetInput = e.currentTarget;
+      if (historyIndex === null && targetInput.selectionStart !== 0 && text.length > 0) {
+        return;
+      }
+      e.preventDefault();
+      if (historyIndex === null) {
+        draftTextRef.current = text;
+        const newIndex = history.length - 1;
+        setHistoryIndex(newIndex);
+        setText(history[newIndex]);
+      } else if (historyIndex > 0) {
+        const newIndex = historyIndex - 1;
+        setHistoryIndex(newIndex);
+        setText(history[newIndex]);
+      }
+    } else if (e.key === "ArrowDown") {
+      if (historyIndex === null) return;
+      e.preventDefault();
+      if (historyIndex < history.length - 1) {
+        const newIndex = historyIndex + 1;
+        setHistoryIndex(newIndex);
+        setText(history[newIndex]);
+      } else {
+        setHistoryIndex(null);
+        setText(draftTextRef.current);
+      }
+    }
+  }
+
   // Live letter-run-length hint for the guess currently being typed, e.g.
   // "this is" -> [4, 2], updating as each character is entered.
   const typedWordLengths = letterRunLengths(text);
@@ -95,6 +131,9 @@ export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths, onF
     const trimmed = text.trim();
     if (!trimmed) return;
     socket.emit("guess", { text: trimmed });
+    setHistory((prev) => (prev.length === 0 || prev[prev.length - 1] !== trimmed ? [...prev, trimmed] : prev));
+    setHistoryIndex(null);
+    draftTextRef.current = "";
     setText("");
     scrollToBottom();
   }
@@ -141,6 +180,7 @@ export function GuessChat({ messages, isDrawer, canGuess, targetWordLengths, onF
                 type="search"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKeyDown}
                 onFocus={() => {
                   onFocusChange?.(true);
                   if (window.innerWidth <= 900) {
