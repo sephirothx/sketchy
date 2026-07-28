@@ -3,6 +3,7 @@ import type { RoomSummary } from "../types";
 interface PublicRoomCardProps {
   room: RoomSummary;
   busy: boolean;
+  pendingMode: "join" | "spectate" | null;
   onJoin: (asSpectator: boolean) => void;
 }
 
@@ -28,7 +29,7 @@ function hintDescription(room: RoomSummary) {
   return "No letter hints";
 }
 
-export function PublicRoomCard({ room, busy, onJoin }: PublicRoomCardProps) {
+export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCardProps) {
   const full = room.isFull || room.playerCount >= room.maxPlayers;
   const primaryLabel = full ? "Spectate" : room.state === "playing" ? "Join in progress" : "Join";
   const badges = exceptionalRules(room);
@@ -61,8 +62,8 @@ export function PublicRoomCard({ room, busy, onJoin }: PublicRoomCardProps) {
         </details>
       </div>
       <div className="public-room-actions">
-        <button type="button" className="public-room-primary-action" disabled={busy} onClick={() => onJoin(full)}>{primaryLabel}</button>
-        {!full && <button type="button" className="public-room-secondary-action" disabled={busy} onClick={() => onJoin(true)}>Spectate</button>}
+        <button type="button" className="public-room-primary-action" disabled={busy} onClick={() => onJoin(full)}>{pendingMode === (full ? "spectate" : "join") ? (full ? "Joining as spectator…" : "Joining…") : primaryLabel}</button>
+        {!full && <button type="button" className="public-room-secondary-action" disabled={busy} onClick={() => onJoin(true)}>{pendingMode === "spectate" ? "Joining as spectator…" : "Spectate"}</button>}
       </div>
     </article>
   );

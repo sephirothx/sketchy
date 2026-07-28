@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomWordsEditor } from "../components/CustomWordsEditor";
 import { analyzeCustomWords } from "../lib/customWords";
-import { emitWithAck } from "../lib/socket";
+import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import type { AckResponse, HintMode, ScoringMode } from "../types";
 
@@ -39,19 +39,24 @@ export function CreateRoomPage() {
     }
     setBusy(true);
     setError(null);
-    const response = await emitWithAck<AckResponse>("create_room", {
-      nickname: trimmedNickname, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
-      customWords: customWords.trim(), customWordsOnly, hintMode, scoringMode,
-      spectatorsSeeSolution, hideMaskedPrompt,
-    });
-    setBusy(false);
-    if (response.ok && response.roomId && response.code && response.token) {
-      setNickname(trimmedNickname);
-      setSession({ roomId: response.roomId, code: response.code, token: response.token });
-      navigate(`/room/${response.code}`);
-      return;
+    try {
+      const response = await emitWithAck<AckResponse>("create_room", {
+        nickname: trimmedNickname, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
+        customWords: customWords.trim(), customWordsOnly, hintMode, scoringMode,
+        spectatorsSeeSolution, hideMaskedPrompt,
+      });
+      if (response.ok && response.roomId && response.code && response.token) {
+        setNickname(trimmedNickname);
+        setSession({ roomId: response.roomId, code: response.code, token: response.token });
+        navigate(`/room/${response.code}`);
+        return;
+      }
+      setError(response.error || "Failed to create room");
+    } catch (createError) {
+      setError(socketRequestErrorMessage(createError, "create the room"));
+    } finally {
+      setBusy(false);
     }
-    setError(response.error || "Failed to create room");
   }
 
   const hintsDisabled = hideMaskedPrompt || scoringMode === "none";

@@ -1,3 +1,58 @@
+/* Global network feedback */
+.connection-status-banner {
+  background: #fffbeb;
+  border-bottom: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 14px;
+  font-weight: 800;
+  left: 0;
+  padding: 9px 16px;
+  position: sticky;
+  right: 0;
+  text-align: center;
+  top: 0;
+  z-index: 1100;
+}
+
+.connection-status-banner.offline { background: #fef2f2; border-bottom-color: #ef4444; color: #991b1b; }
+
+.toast-viewport {
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  left: 50%;
+  max-width: min(440px, calc(100vw - 32px));
+  pointer-events: none;
+  position: fixed;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 1200;
+}
+
+.app-toast {
+  align-items: center;
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
+  color: #1e40af;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 10px;
+  justify-content: space-between;
+  max-width: 100%;
+  padding: 9px 10px 9px 14px;
+  pointer-events: auto;
+}
+
+.app-toast.success { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
+.app-toast.warning { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+.app-toast.error { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+.app-toast button { background: transparent; border: 0; color: inherit; font-size: 18px; line-height: 1; padding: 1px 4px; }
+.app-toast button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
 /* Layout shells */
 .lobby-page {
   max-width: 960px;
@@ -65,6 +120,13 @@ textarea:disabled {
 }
 
 .create-room-lobby-copy { color: #64748b; line-height: 1.45; margin: 8px 0 16px; }
+.lobby-action-error { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; color: #b91c1c; margin: 0 0 16px; padding: 10px 12px; }
+.room-list-loading { color: #64748b; padding: 20px 0; text-align: center; }
+.room-list-error { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; color: #991b1b; padding: 16px; }
+.room-list-error p { margin: 0 0 10px; }
+.room-list-error button,
+.room-list-warning button { background: #fff; border: 1px solid currentColor; border-radius: 6px; color: inherit; font-weight: 700; padding: 7px 11px; }
+.room-list-warning { align-items: center; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; color: #92400e; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 14px; padding: 10px 12px; }
 
 .create-room-page { margin: 0 auto; max-width: 760px; padding: 28px 16px 64px; }
 .back-link { background: transparent; border: 0; color: #2563eb; cursor: pointer; font-size: 14px; font-weight: 700; margin-bottom: 16px; padding: 0; }
@@ -565,30 +627,6 @@ textarea:disabled {
   background: #f8fafc;
   border-color: #94a3b8;
   color: #0f172a;
-}
-
-.invite-copy-toast {
-  background: #ecfdf5;
-  border: 1px solid #6ee7b7;
-  border-radius: 999px;
-  bottom: 22px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
-  color: #047857;
-  font-size: 13px;
-  font-weight: 700;
-  left: 50%;
-  max-width: min(420px, calc(100vw - 32px));
-  padding: 9px 14px;
-  position: fixed;
-  text-align: center;
-  transform: translateX(-50%);
-  z-index: 900;
-}
-
-.invite-copy-toast.error {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #b91c1c;
 }
 
 .game-header-afk-button,
@@ -2388,17 +2426,15 @@ textarea:disabled {
   color: #fff;
 }
 
-[data-theme="dark"] .invite-copy-toast {
-  background: #064e3b;
-  border-color: #059669;
-  color: #a7f3d0;
-}
-
-[data-theme="dark"] .invite-copy-toast.error {
-  background: #451a1a;
-  border-color: #dc2626;
-  color: #fecaca;
-}
+[data-theme="dark"] .app-toast { background: #1e3a8a; border-color: #3b82f6; color: #dbeafe; }
+[data-theme="dark"] .app-toast.success { background: #064e3b; border-color: #059669; color: #a7f3d0; }
+[data-theme="dark"] .app-toast.warning { background: #78350f; border-color: #d97706; color: #fef3c7; }
+[data-theme="dark"] .app-toast.error { background: #451a1a; border-color: #dc2626; color: #fecaca; }
+[data-theme="dark"] .lobby-action-error,
+[data-theme="dark"] .room-list-error { background: #451a1a; border-color: #dc2626; color: #fecaca; }
+[data-theme="dark"] .room-list-warning { background: #78350f; border-color: #d97706; color: #fef3c7; }
+[data-theme="dark"] .room-list-error button,
+[data-theme="dark"] .room-list-warning button { background: #0f172a; }
 
 [data-theme="dark"] .brush-size-trigger.active {
   background: #1e3a8a;

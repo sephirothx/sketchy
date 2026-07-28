@@ -10,18 +10,17 @@ import { RoundEndOverlay } from "../components/RoundEndOverlay";
 import { WaitingRoomPanel } from "../components/WaitingRoomPanel";
 import { GameEndOverlay } from "../components/GameEndOverlay";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
-import { emitWithAck, socket } from "../lib/socket";
+import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
+import { useToast } from "../lib/toast";
 import { splitMaskedWord } from "../lib/maskedWord";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, DrawTool, RoomPreviewResponse, RoomSummary } from "../types";
 
-type EntryStatus = "loading" | "preview" | "joined";
-interface InviteCopyFeedback {
-  kind: "success" | "error";
-  message: string;
-}
+type EntryStatus = "loading" | "preview";
+
+const INVITE_LOADING_DELAY_MS = 250;
 
 function hintModeLabel(room: RoomSummary) {
   if (room.hideMaskedPrompt) return "Prompt details hidden";
@@ -31,9 +30,29 @@ function hintModeLabel(room: RoomSummary) {
   return "No letter hints";
 }
 
+function DelayedInviteLoader() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setVisible(true), INVITE_LOADING_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <main className="invite-card invite-loading-card" aria-live="polite">
+      <div className="invite-loading-spinner" aria-hidden="true" />
+      <h1>Checking your invite…</h1>
+      <p>Loading room details.</p>
+    </main>
+  );
+}
+
 export function GameRoomPage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const { notify } = useToast();
   const openSettings = useSettingsStore((s) => s.openSettings);
 
   const canvasRef = useRef<CanvasRef | null>(null);
@@ -41,6 +60,8 @@ export function GameRoomPage() {
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
   const token = useGameStore((s) => s.token);
+  const activeRoomId = useGameStore((s) => s.roomId);
+  const activeRoomCode = useGameStore((s) => s.code);
   const setSession = useGameStore((s) => s.setSession);
   const getStoredToken = useGameStore((s) => s.getStoredToken);
   const clearStoredToken = useGameStore((s) => s.clearStoredToken);
@@ -74,6 +95,13 @@ export function GameRoomPage() {
   const finalScores = useGameStore((s) => s.finalScores);
   const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
 
+  const normalizedCode = code?.trim().toUpperCase() ?? "";
+  const hasActiveSession = Boolean(
+    token
+      && activeRoomId
+      && activeRoomCode?.toUpperCase() === normalizedCode,
+  );
+
   const [joinError, setJoinError] = useState<string | null>(null);
   const [entryStatus, setEntryStatus] = useState<EntryStatus>("loading");
   const [roomPreview, setRoomPreview] = useState<RoomSummary | null>(null);
@@ -87,8 +115,6 @@ export function GameRoomPage() {
   const [tool, setTool] = useState<DrawTool>("pen");
   const [wasDrawer, setWasDrawer] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState<InviteCopyFeedback | null>(null);
-  const copyFeedbackTimerRef = useRef<number | null>(null);
   const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -104,73 +130,60 @@ export function GameRoomPage() {
     document.body.removeChild(link);
   }
 
-  function showCopyFeedback(feedback: InviteCopyFeedback, duration: number) {
-    if (copyFeedbackTimerRef.current !== null) window.clearTimeout(copyFeedbackTimerRef.current);
-    setCopyFeedback(feedback);
-    copyFeedbackTimerRef.current = window.setTimeout(() => {
-      setCopyFeedback(null);
-      copyFeedbackTimerRef.current = null;
-    }, duration);
-  }
-
   async function handleCopyLink() {
-    setCopyFeedback(null);
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(window.location.href);
-      showCopyFeedback({ kind: "success", message: "Invite link copied." }, 2500);
+      notify("Invite link copied.", "success", 2500);
     } catch {
-      showCopyFeedback(
-        { kind: "error", message: "Couldn’t copy the link. Copy it from the address bar." },
-        5000,
-      );
+      notify("Couldn’t copy the link. Copy it from the address bar.", "error");
     }
   }
 
-  useEffect(() => () => {
-    if (copyFeedbackTimerRef.current !== null) window.clearTimeout(copyFeedbackTimerRef.current);
-  }, []);
-
   useEffect(() => {
-    if (!code) return;
-    const normalizedCode = code.trim().toUpperCase();
+    if (!normalizedCode) return;
+    if (hasActiveSession) return;
+
     let cancelled = false;
 
     async function loadEntry() {
-      const storedToken = getStoredToken(normalizedCode);
-      if (storedToken) {
-        const reconnect = await emitWithAck<AckResponse>("join_room", {
+      try {
+        const storedToken = getStoredToken(normalizedCode);
+        if (storedToken) {
+          const reconnect = await emitWithAck<AckResponse>("join_room", {
+            code: normalizedCode,
+            nickname,
+            token: storedToken,
+          });
+          if (cancelled) return;
+          if (reconnect.ok && reconnect.roomId && reconnect.code && reconnect.token) {
+            setSession({
+              roomId: reconnect.roomId,
+              code: reconnect.code,
+              token: reconnect.token,
+            });
+            return;
+          }
+          if (!reconnect.invalidToken) {
+            setJoinError(reconnect.error || "Could not reconnect to this room");
+            return;
+          }
+          clearStoredToken(normalizedCode);
+          setEntryNotice("Your previous session expired. Choose how you would like to rejoin.");
+        }
+
+        const preview = await emitWithAck<RoomPreviewResponse>("get_room_preview", {
           code: normalizedCode,
-          nickname,
-          token: storedToken,
         });
         if (cancelled) return;
-        if (reconnect.ok && reconnect.roomId && reconnect.code && reconnect.token) {
-          setSession({
-            roomId: reconnect.roomId,
-            code: reconnect.code,
-            token: reconnect.token,
-          });
-          setEntryStatus("joined");
-          return;
+        if (preview.ok && preview.room) {
+          setRoomPreview(preview.room);
+          setEntryStatus("preview");
+        } else {
+          setJoinError(preview.error || "This room is no longer available");
         }
-        if (!reconnect.invalidToken) {
-          setJoinError(reconnect.error || "Could not reconnect to this room");
-          return;
-        }
-        clearStoredToken(normalizedCode);
-        setEntryNotice("Your previous session expired. Choose how you would like to rejoin.");
-      }
-
-      const preview = await emitWithAck<RoomPreviewResponse>("get_room_preview", {
-        code: normalizedCode,
-      });
-      if (cancelled) return;
-      if (preview.ok && preview.room) {
-        setRoomPreview(preview.room);
-        setEntryStatus("preview");
-      } else {
-        setJoinError(preview.error || "This room is no longer available");
+      } catch (loadError) {
+        if (!cancelled) setJoinError(socketRequestErrorMessage(loadError, "load this room"));
       }
     }
     loadEntry();
@@ -178,7 +191,7 @@ export function GameRoomPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  }, [normalizedCode, hasActiveSession]);
 
   async function handleEntryJoin(asSpectator: boolean) {
     const trimmedNickname = nicknameInput.trim();
@@ -190,30 +203,29 @@ export function GameRoomPage() {
 
     setEntryBusy(true);
     setEntryError(null);
-    const response = await emitWithAck<AckResponse>("join_room", {
-      code: code.trim().toUpperCase(),
-      nickname: trimmedNickname,
-      asSpectator,
-    });
-    setEntryBusy(false);
-
-    if (response.ok && response.roomId && response.code && response.token) {
-      setNickname(trimmedNickname);
-      setSession({
-        roomId: response.roomId,
-        code: response.code,
-        token: response.token,
+    try {
+      const response = await emitWithAck<AckResponse>("join_room", {
+        code: code.trim().toUpperCase(),
+        nickname: trimmedNickname,
+        asSpectator,
       });
-      setEntryStatus("joined");
-      return;
-    }
 
-    if (!asSpectator && response.error === "Room is full") {
-      setRoomPreview((current) => current ? { ...current, isFull: true } : current);
-      setEntryError("The player slots just filled up, but you can still spectate.");
-      return;
+      if (response.ok && response.roomId && response.code && response.token) {
+        setNickname(trimmedNickname);
+        setSession({ roomId: response.roomId, code: response.code, token: response.token });
+        return;
+      }
+      if (!asSpectator && response.error === "Room is full") {
+        setRoomPreview((current) => current ? { ...current, isFull: true } : current);
+        setEntryError("The player slots just filled up, but you can still spectate.");
+        return;
+      }
+      setEntryError(response.error || "Could not join this room");
+    } catch (joinRequestError) {
+      setEntryError(socketRequestErrorMessage(joinRequestError, asSpectator ? "join as a spectator" : "join this room"));
+    } finally {
+      setEntryBusy(false);
     }
-    setEntryError(response.error || "Could not join this room");
   }
 
   useEffect(() => {
@@ -236,15 +248,13 @@ export function GameRoomPage() {
     };
   }, [roomState, phase]);
 
-  const [notification, setNotification] = useState<string | null>(null);
-
   useEffect(() => {
     function onKicked(data: { reason?: string }) {
       reset();
-      navigate("/", { state: { error: data?.reason || "You were kicked from the room." } });
+      navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
     }
     function onVotedAfk(data: { message?: string }) {
-      setNotification(data?.message || "You were marked AFK by room vote.");
+      notify(data?.message || "You were marked AFK by room vote.", "warning");
     }
     socket.on("kicked", onKicked);
     socket.on("voted_afk", onVotedAfk);
@@ -252,7 +262,7 @@ export function GameRoomPage() {
       socket.off("kicked", onKicked);
       socket.off("voted_afk", onVotedAfk);
     };
-  }, [navigate, reset]);
+  }, [navigate, notify, reset]);
 
   function performLeave() {
     socket.emit("leave_room");
@@ -279,9 +289,14 @@ export function GameRoomPage() {
   async function handleStartGame() {
     setStartBusy(true);
     setStartError(null);
-    const response = await emitWithAck<AckResponse>("start_game", {});
-    setStartBusy(false);
-    if (!response.ok) setStartError(response.error || "Could not start the game. Please try again.");
+    try {
+      const response = await emitWithAck<AckResponse>("start_game", {});
+      if (!response.ok) setStartError(response.error || "Could not start the game. Please try again.");
+    } catch (startError) {
+      setStartError(socketRequestErrorMessage(startError, "start the game"));
+    } finally {
+      setStartBusy(false);
+    }
   }
 
   const me = players.find((p) => p.token === token);
@@ -386,7 +401,7 @@ export function GameRoomPage() {
       ? splitMaskedWord(maskedWord).blanks.trim()
       : null;
 
-  if (entryStatus !== "joined") {
+  if (!hasActiveSession) {
     return (
       <div className="invite-entry-page">
         <header className="invite-entry-header">
@@ -415,11 +430,7 @@ export function GameRoomPage() {
             </button>
           </main>
         ) : entryStatus === "loading" || !roomPreview ? (
-          <main className="invite-card invite-loading-card" aria-live="polite">
-            <div className="invite-loading-spinner" aria-hidden="true" />
-            <h1>Checking your invite…</h1>
-            <p>Loading room details.</p>
-          </main>
+          <DelayedInviteLoader />
         ) : (
           <main className="invite-card">
             <div className="invite-card-heading">
@@ -554,23 +565,6 @@ export function GameRoomPage() {
             performLeave();
           }}
         />
-      )}
-      {copyFeedback && (
-        <div className={`invite-copy-toast ${copyFeedback.kind}`} role={copyFeedback.kind === "error" ? "alert" : "status"}>
-          {copyFeedback.message}
-        </div>
-      )}
-      {notification && (
-        <div className="modal-overlay" onClick={() => setNotification(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-icon">💤</div>
-            <h3 className="modal-title">Marked as AFK</h3>
-            <p className="modal-body">{notification}</p>
-            <button className="modal-button" onClick={() => setNotification(null)}>
-              OK
-            </button>
-          </div>
-        </div>
       )}
       <header className="game-header">
         <div>

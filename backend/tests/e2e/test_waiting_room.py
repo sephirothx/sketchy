@@ -36,8 +36,19 @@ async def test_waiting_room_explains_rules_and_start_eligibility():
             await player_page.goto(BASE_URL)
             await player_page.fill('input[placeholder="Your name"]', "LobbyPlayer")
             await player_page.fill('input[placeholder="ABC123"]', code)
+            await player_page.evaluate(
+                """() => {
+                    window.__inviteLoaderSeen = false;
+                    new MutationObserver(() => {
+                        if (document.querySelector(".invite-loading-card")) {
+                            window.__inviteLoaderSeen = true;
+                        }
+                    }).observe(document.body, { childList: true, subtree: true });
+                }"""
+            )
             await player_page.click('button:has-text("Join by code")')
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
+            assert not await player_page.evaluate("window.__inviteLoaderSeen")
 
             await host_page.wait_for_selector('text=LobbyPlayer')
             await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
