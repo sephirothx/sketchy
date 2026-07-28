@@ -103,7 +103,11 @@ def test_spectator_can_join_full_room_and_option_in_payload():
     # Spectator can join full room
     spec = rm.add_player(room, "Charlie", is_spectator=True)
     assert spec.is_spectator is True
-    assert room.to_public_summary()["spectatorsSeeSolution"] is True
+    summary = room.to_public_summary()
+    assert summary["spectatorsSeeSolution"] is True
+    assert summary["playerCount"] == 1
+    assert summary["spectatorCount"] == 1
+    assert summary["isFull"] is True
     assert room.to_state_payload()["spectatorsSeeSolution"] is True
     players_payload = room.to_state_payload()["players"]
     assert any(p["nickname"] == "Charlie" and p["isSpectator"] is True for p in players_payload)
@@ -130,7 +134,6 @@ def test_create_room_with_hide_masked_prompt_forces_hints_off():
     assert room.hint_mode == "none"
     assert room.to_public_summary()["hideMaskedPrompt"] is True
     assert room.to_state_payload()["hideMaskedPrompt"] is True
-
 
 
 

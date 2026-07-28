@@ -126,13 +126,17 @@ class Room:
         return self.custom_words + [w for w in WORDS if w.lower() not in seen]
 
     def to_public_summary(self) -> dict:
+        active_players = [p for p in self.players.values() if not p.is_spectator]
+        spectators = [p for p in self.players.values() if p.is_spectator]
         return {
             "id": self.id,
             "code": self.code,
             "name": self.name,
             "isPublic": self.is_public,
-            "playerCount": len(self.connected_players()),
+            "playerCount": len(active_players),
+            "spectatorCount": len(spectators),
             "maxPlayers": self.max_players,
+            "isFull": len(active_players) >= self.max_players,
             "rounds": self.rounds,
             "customWordCount": len(self.custom_words),
             "customWordsOnly": self.custom_words_only,

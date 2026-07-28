@@ -47,6 +47,7 @@ interface GameStore {
   setNickname: (nickname: string) => void;
   setSession: (session: { roomId: string; code: string; token: string }) => void;
   getStoredToken: (code: string) => string | null;
+  clearStoredToken: (code: string) => void;
   setRoomState: (payload: RoomStatePayload) => void;
   addMessage: (message: ChatMessage) => void;
   applyGuessPoints: (token: string, points: number) => void;
@@ -125,6 +126,10 @@ export const useGameStore = create<GameStore>((set) => ({
     set({ roomId, code, token });
   },
   getStoredToken: (code) => localStorage.getItem(`sketchy_token_${code}`),
+  clearStoredToken: (code) => {
+    localStorage.removeItem(`sketchy_token_${code}`);
+    set({ token: null, roomId: null, code: null });
+  },
   setRoomState: (payload) =>
     set({
       roomId: payload.id,
