@@ -144,9 +144,23 @@ cd backend && .venv/bin/pytest
 # Backend performance micro-benchmarks
 backend/.venv/bin/python scripts/benchmark_backend.py
 
+# End-to-end canvas benchmarks (desktop + throttled mobile)
+./scripts/benchmark_canvas.sh
+
+# Faster local iteration on one profile, with optional JSON output
+./scripts/benchmark_canvas.sh --profiles desktop --json-output /tmp/canvas-benchmark.json
+
 # Multi-browser Playwright E2E tests
 ./scripts/test-e2e.sh
 ```
+
+The canvas benchmark starts the built application on an isolated local port
+(`8765` by default), creates a real two-player game, and reports
+drawer-to-observer stroke latency, large-fill latency, Undo/replay latency,
+and the `sync_strokes` WebSocket payload size. Results are diagnostic baselines,
+not CI pass/fail thresholds, because browser timings vary by machine. The
+`mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override the
+port with `PORT=<number>` when needed.
 
 `game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. `events.py` socket event handlers (room lifecycle, word choice, drawing undo/fill/shapes, hint purchases, chat privacy) are covered by asyncio integration tests. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 
