@@ -23,6 +23,7 @@ async def test_settings_dialog_pen_cursor_scenario():
             await page.goto(BASE_URL)
             await page.fill('input[placeholder="Your name"]', "SettingsTester")
             await page.click('button:has-text("Create room")')
+            await page.click('button:has-text("Create room")')
 
             # Open Settings Modal
             await page.wait_for_selector('button.header-settings-button')

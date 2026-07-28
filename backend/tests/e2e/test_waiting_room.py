@@ -16,6 +16,7 @@ async def test_waiting_room_explains_rules_and_start_eligibility():
         try:
             await host_page.goto(BASE_URL)
             await host_page.fill('input[placeholder="Your name"]', "LobbyHost")
+            await host_page.click('button:has-text("Create room")')
             await host_page.fill('input[placeholder="Leave blank for a random name!"]', "Lobby details")
             await host_page.fill('label:has-text("Rounds") input', "2")
             await host_page.fill('label:has-text("Drawing time") input', "90")

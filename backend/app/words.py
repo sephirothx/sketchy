@@ -1,5 +1,6 @@
 """Static word list used for round word selection."""
 import random
+import re
 
 MAX_CUSTOM_WORDS = 10000
 MAX_WORD_LENGTH = 32
@@ -42,7 +43,7 @@ def random_word_choices(
 
 
 def parse_custom_word_list(raw: str) -> list[str]:
-    """Parse a comma-separated string of custom words/expressions into a clean, deduped list.
+    """Parse comma- or newline-separated custom words into a clean, deduped list.
 
     Entries may be multi-word expressions (e.g. "red panda"), not just single
     words. Blank entries and duplicates (case-insensitive) are dropped,
@@ -51,7 +52,7 @@ def parse_custom_word_list(raw: str) -> list[str]:
     """
     seen: set[str] = set()
     words: list[str] = []
-    for part in raw[:MAX_RAW_INPUT_LENGTH].split(","):
+    for part in re.split(r"[,\r\n]+", raw[:MAX_RAW_INPUT_LENGTH]):
         word = part.strip()
         if not word or len(word) > MAX_WORD_LENGTH:
             continue

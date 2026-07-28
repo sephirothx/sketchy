@@ -29,6 +29,7 @@ async def test_player_afk_and_disconnect_scenario():
             await page1.goto(BASE_URL)
             await page1.fill('input[placeholder="Your name"]', "HostPlayer")
             await page1.click('button:has-text("Create room")')
+            await page1.click('button:has-text("Create room")')
 
             await page1.wait_for_selector('.room-copy-button')
             room_code_text = await page1.inner_text('.room-copy-button')
