@@ -547,6 +547,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
 
     @sio.event
+    async def get_room_preview(sid, data):
+        """Return invite-screen metadata without joining or exposing player details."""
+        room = room_manager.get_room_by_code((data or {}).get("code"))
+        if not room:
+            return {"ok": False, "error": "Room not found"}
+        return {"ok": True, "room": room.to_public_summary()}
+
+    @sio.event
     async def join_room(sid, data):
         data = data or {}
         token = data.get("token")
@@ -575,6 +583,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             player = room.players[token]
             await _join_socket_room(sid, room, player, is_reconnect=True)
             return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
+        if token:
+            return {"ok": False, "error": "Your previous room session has expired", "invalidToken": True}
 
         try:
             player = room_manager.add_player(room, nickname, is_spectator=as_spectator)

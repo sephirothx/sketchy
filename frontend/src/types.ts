@@ -19,7 +19,9 @@ export interface RoomSummary {
   name: string;
   isPublic: boolean;
   playerCount: number;
+  spectatorCount: number;
   maxPlayers: number;
+  isFull: boolean;
   rounds: number;
   customWordCount: number;
   customWordsOnly: boolean;
@@ -148,4 +150,9 @@ export interface AckResponse {
   code?: string;
   token?: string;
   error?: string;
+  invalidToken?: boolean;
+}
+
+export interface RoomPreviewResponse extends AckResponse {
+  room?: RoomSummary;
 }

@@ -87,6 +87,61 @@ async def test_create_room_accepts_no_scoring_and_disables_point_purchase_hints(
 
 
 @pytest.mark.asyncio
+async def test_room_preview_returns_private_room_metadata_without_joining():
+    room_manager = RoomManager()
+    room = room_manager.create_room(
+        name="Invite Only",
+        is_public=False,
+        max_players=2,
+        rounds=4,
+        drawing_seconds=90,
+        hint_mode="checkpoints",
+    )
+    room_manager.add_player(room, "Host")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    response = await sio.handlers["/"]["get_room_preview"](
+        "visitor-sid",
+        {"code": room.code.lower()},
+    )
+
+    assert response["ok"] is True
+    assert response["room"]["name"] == "Invite Only"
+    assert response["room"]["isPublic"] is False
+    assert response["room"]["playerCount"] == 1
+    assert response["room"]["maxPlayers"] == 2
+    assert response["room"]["rounds"] == 4
+    assert response["room"]["drawingSeconds"] == 90
+    assert response["room"]["hintMode"] == "checkpoints"
+    assert len(room.players) == 1
+
+
+@pytest.mark.asyncio
+async def test_join_with_expired_token_does_not_create_fallback_player():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=False)
+    room_manager.add_player(room, "Host")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value=None)
+    join_room = sio.handlers["/"]["join_room"]
+
+    response = await join_room(
+        "visitor-sid",
+        {"code": room.code, "token": "expired-token", "nickname": ""},
+    )
+
+    assert response == {
+        "ok": False,
+        "error": "Your previous room session has expired",
+        "invalidToken": True,
+    }
+    assert [player.nickname for player in room.player_list()] == ["Host"]
+
+
+@pytest.mark.asyncio
 async def test_draw_handler_rejects_events_outside_drawing_phase():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -811,7 +866,6 @@ async def test_chatting_removes_afk_status():
     guess = sio.handlers["/"]["guess"]
     await guess("p1-sid", {"text": "hello chat"})
     assert p1.is_afk is False
-
 
 
 

@@ -131,6 +131,297 @@ textarea:disabled {
   padding: 6px 12px;
 }
 
+/* Invite entry */
+.invite-entry-page {
+  min-height: 100vh;
+  padding: 20px 16px 48px;
+}
+
+.invite-entry-header {
+  max-width: 760px;
+  margin: 0 auto 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.invite-brand {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #1c1d21;
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.invite-card {
+  width: min(100%, 680px);
+  margin: 0 auto;
+  padding: 28px;
+  border: 1px solid #dfe1e6;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.09);
+}
+
+.invite-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.invite-card h1 {
+  margin: 2px 0 0;
+  color: #0f172a;
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  line-height: 1.15;
+}
+
+.invite-eyebrow {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.invite-state-badge {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.invite-state-badge.playing {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.invite-room-facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.invite-room-facts > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.invite-room-facts dt {
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.invite-room-facts dd {
+  margin: 0;
+  color: #1e293b;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.invite-rule-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+}
+
+.invite-rule-list li {
+  padding: 6px 9px;
+  border-radius: 7px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.invite-callout,
+.invite-notice,
+.invite-form-error {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.invite-callout {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.invite-notice {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.invite-join-form {
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.invite-join-form label {
+  display: block;
+  margin-bottom: 6px;
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.invite-join-form input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e293b;
+  font: inherit;
+}
+
+.invite-join-form input:focus-visible {
+  border-color: #4c6ef5;
+  outline: 3px solid rgba(76, 110, 245, 0.18);
+  outline-offset: 1px;
+}
+
+.invite-form-error {
+  margin-top: 8px;
+  margin-bottom: 0;
+  padding: 8px 10px;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.invite-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.invite-primary-button,
+.invite-secondary-button {
+  min-height: 44px;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.invite-primary-button {
+  border: 1px solid #4c6ef5;
+  background: #4c6ef5;
+  color: #fff;
+}
+
+.invite-primary-button:hover:not(:disabled) {
+  border-color: #3b5bdb;
+  background: #3b5bdb;
+}
+
+.invite-secondary-button {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.invite-secondary-button:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.invite-action-hint {
+  margin: 9px 0 0;
+  color: #64748b;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.invite-loading-card,
+.invite-unavailable-card {
+  padding-block: 56px;
+  text-align: center;
+}
+
+.invite-loading-card p,
+.invite-unavailable-card p:not(.invite-eyebrow) {
+  color: #64748b;
+}
+
+.invite-loading-spinner {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 18px;
+  border: 3px solid #dbe4ff;
+  border-top-color: #4c6ef5;
+  border-radius: 50%;
+  animation: invite-spin 700ms linear infinite;
+}
+
+.invite-status-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 14px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+@keyframes invite-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 600px) {
+  .invite-entry-page {
+    padding: 14px 12px 32px;
+  }
+
+  .invite-entry-header {
+    margin-bottom: 18px;
+  }
+
+  .invite-card {
+    padding: 20px 16px;
+    border-radius: 12px;
+  }
+
+  .invite-card-heading {
+    gap: 12px;
+  }
+
+  .invite-room-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .invite-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Game room */
 .game-room {
   max-width: 1200px;
@@ -1661,12 +1952,60 @@ textarea:disabled {
   color: #f8fafc;
 }
 
+[data-theme="dark"] .invite-brand,
+[data-theme="dark"] .invite-card h1 {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .invite-card {
+  border-color: #334155;
+  background: #1e293b;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .invite-room-facts > div {
+  border-color: #334155;
+  background: #0f172a;
+}
+
+[data-theme="dark"] .invite-room-facts dd,
+[data-theme="dark"] .invite-join-form label {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .invite-join-form {
+  border-top-color: #334155;
+}
+
+[data-theme="dark"] .invite-join-form input {
+  border-color: #475569;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .invite-secondary-button {
+  border-color: #475569;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .invite-secondary-button:hover:not(:disabled) {
+  border-color: #64748b;
+  background: #334155;
+}
+
 [data-theme="dark"] .subtitle,
 [data-theme="dark"] .field-hint,
 [data-theme="dark"] .room-meta,
 [data-theme="dark"] .room-code,
 [data-theme="dark"] .settings-description {
   color: #94a3b8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invite-loading-spinner {
+    animation-duration: 1400ms;
+  }
 }
 
 [data-theme="dark"] .panel,

@@ -12,7 +12,17 @@ import { splitMaskedWord } from "../lib/maskedWord";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
-import type { AckResponse, DrawTool } from "../types";
+import type { AckResponse, DrawTool, RoomPreviewResponse, RoomSummary } from "../types";
+
+type EntryStatus = "loading" | "preview" | "joined";
+
+function hintModeLabel(room: RoomSummary) {
+  if (room.hideMaskedPrompt) return "Prompt details hidden";
+  if (room.hintMode === "checkpoints") return "Timed letter hints";
+  if (room.hintMode === "purchase") return "Buyable letter hints";
+  if (room.hintMode === "wheel") return "Wheel-style letter hints";
+  return "No letter hints";
+}
 
 export function GameRoomPage() {
   const { code } = useParams<{ code: string }>();
@@ -22,9 +32,11 @@ export function GameRoomPage() {
   const canvasRef = useRef<CanvasRef | null>(null);
 
   const nickname = useGameStore((s) => s.nickname);
+  const setNickname = useGameStore((s) => s.setNickname);
   const token = useGameStore((s) => s.token);
   const setSession = useGameStore((s) => s.setSession);
   const getStoredToken = useGameStore((s) => s.getStoredToken);
+  const clearStoredToken = useGameStore((s) => s.clearStoredToken);
   const reset = useGameStore((s) => s.reset);
 
   const roomState = useGameStore((s) => s.roomState);
@@ -48,6 +60,12 @@ export function GameRoomPage() {
   const finalScores = useGameStore((s) => s.finalScores);
 
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [entryStatus, setEntryStatus] = useState<EntryStatus>("loading");
+  const [roomPreview, setRoomPreview] = useState<RoomSummary | null>(null);
+  const [nicknameInput, setNicknameInput] = useState(nickname);
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const [entryNotice, setEntryNotice] = useState<string | null>(null);
+  const [entryBusy, setEntryBusy] = useState(false);
   const [color, setColor] = useState("#000000");
   const [brushWidth, setBrushWidth] = useState(6);
   const [eraserWidth, setEraserWidth] = useState(24);
@@ -68,27 +86,88 @@ export function GameRoomPage() {
 
   useEffect(() => {
     if (!code) return;
+    const normalizedCode = code.trim().toUpperCase();
     let cancelled = false;
-    async function join() {
-      const storedToken = getStoredToken(code!);
-      const res = await emitWithAck<AckResponse>("join_room", {
-        code,
-        nickname: nickname || "Player",
-        token: storedToken,
+
+    async function loadEntry() {
+      const storedToken = getStoredToken(normalizedCode);
+      if (storedToken) {
+        const reconnect = await emitWithAck<AckResponse>("join_room", {
+          code: normalizedCode,
+          nickname,
+          token: storedToken,
+        });
+        if (cancelled) return;
+        if (reconnect.ok && reconnect.roomId && reconnect.code && reconnect.token) {
+          setSession({
+            roomId: reconnect.roomId,
+            code: reconnect.code,
+            token: reconnect.token,
+          });
+          setEntryStatus("joined");
+          return;
+        }
+        if (!reconnect.invalidToken) {
+          setJoinError(reconnect.error || "Could not reconnect to this room");
+          return;
+        }
+        clearStoredToken(normalizedCode);
+        setEntryNotice("Your previous session expired. Choose how you would like to rejoin.");
+      }
+
+      const preview = await emitWithAck<RoomPreviewResponse>("get_room_preview", {
+        code: normalizedCode,
       });
       if (cancelled) return;
-      if (res.ok && res.roomId && res.code && res.token) {
-        setSession({ roomId: res.roomId, code: res.code, token: res.token });
+      if (preview.ok && preview.room) {
+        setRoomPreview(preview.room);
+        setEntryStatus("preview");
       } else {
-        setJoinError(res.error || "Could not join room");
+        setJoinError(preview.error || "This room is no longer available");
       }
     }
-    join();
+    loadEntry();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
+
+  async function handleEntryJoin(asSpectator: boolean) {
+    const trimmedNickname = nicknameInput.trim();
+    if (!trimmedNickname) {
+      setEntryError("Enter a nickname to continue.");
+      return;
+    }
+    if (!code) return;
+
+    setEntryBusy(true);
+    setEntryError(null);
+    const response = await emitWithAck<AckResponse>("join_room", {
+      code: code.trim().toUpperCase(),
+      nickname: trimmedNickname,
+      asSpectator,
+    });
+    setEntryBusy(false);
+
+    if (response.ok && response.roomId && response.code && response.token) {
+      setNickname(trimmedNickname);
+      setSession({
+        roomId: response.roomId,
+        code: response.code,
+        token: response.token,
+      });
+      setEntryStatus("joined");
+      return;
+    }
+
+    if (!asSpectator && response.error === "Room is full") {
+      setRoomPreview((current) => current ? { ...current, isFull: true } : current);
+      setEntryError("The player slots just filled up, but you can still spectate.");
+      return;
+    }
+    setEntryError(response.error || "Could not join this room");
+  }
 
   useEffect(() => {
     function updateViewport() {
@@ -244,11 +323,155 @@ export function GameRoomPage() {
       ? splitMaskedWord(maskedWord).blanks.trim()
       : null;
 
-  if (joinError) {
+  if (entryStatus !== "joined") {
     return (
-      <div className="join-error-container">
-        <p className="error-banner">{joinError}</p>
-        <button onClick={() => navigate("/")}>Back to lobby</button>
+      <div className="invite-entry-page">
+        <header className="invite-entry-header">
+          <button type="button" className="invite-brand" onClick={() => navigate("/")}>
+            Sketchy
+          </button>
+          <button
+            type="button"
+            className="header-settings-button"
+            onClick={openSettings}
+            title="Game Settings"
+          >
+            <SettingsIcon size={16} />
+            <span>Settings</span>
+          </button>
+        </header>
+
+        {joinError ? (
+          <main className="invite-card invite-unavailable-card">
+            <div className="invite-status-icon" aria-hidden="true">✕</div>
+            <p className="invite-eyebrow">Room {code?.toUpperCase()}</p>
+            <h1>Room unavailable</h1>
+            <p>{joinError}</p>
+            <button type="button" className="invite-primary-button" onClick={() => navigate("/")}>
+              Back to lobby
+            </button>
+          </main>
+        ) : entryStatus === "loading" || !roomPreview ? (
+          <main className="invite-card invite-loading-card" aria-live="polite">
+            <div className="invite-loading-spinner" aria-hidden="true" />
+            <h1>Checking your invite…</h1>
+            <p>Loading room details.</p>
+          </main>
+        ) : (
+          <main className="invite-card">
+            <div className="invite-card-heading">
+              <div>
+                <p className="invite-eyebrow">
+                  {roomPreview.isPublic ? "Public room" : "Private invite"} · {roomPreview.code}
+                </p>
+                <h1>{roomPreview.name}</h1>
+              </div>
+              <span className={`invite-state-badge ${roomPreview.state}`}>
+                {roomPreview.state === "playing" ? "In progress" : "Waiting"}
+              </span>
+            </div>
+
+            <dl className="invite-room-facts">
+              <div>
+                <dt>Players</dt>
+                <dd>
+                  {roomPreview.playerCount}/{roomPreview.maxPlayers}
+                  {roomPreview.isFull ? " · Full" : ""}
+                </dd>
+              </div>
+              <div>
+                <dt>Rounds</dt>
+                <dd>{roomPreview.rounds}</dd>
+              </div>
+              <div>
+                <dt>Draw time</dt>
+                <dd>{roomPreview.drawingSeconds}s</dd>
+              </div>
+              <div>
+                <dt>Scoring</dt>
+                <dd>{roomPreview.scoringMode === "none" ? "Just for fun" : "Points on"}</dd>
+              </div>
+            </dl>
+
+            <ul className="invite-rule-list" aria-label="Room rules">
+              <li>{hintModeLabel(roomPreview)}</li>
+              <li>
+                {roomPreview.spectatorsSeeSolution
+                  ? "Spectators can see the answer"
+                  : "Spectators guess along"}
+              </li>
+              <li>
+                {roomPreview.customWordCount > 0
+                  ? `${roomPreview.customWordCount} custom words${
+                      roomPreview.customWordsOnly ? " only" : " plus defaults"
+                    }`
+                  : "Default word list"}
+              </li>
+            </ul>
+
+            {roomPreview.state === "playing" && (
+              <p className="invite-callout">
+                This game is already in progress. Joining as a player adds you to a future turn.
+              </p>
+            )}
+            {entryNotice && <p className="invite-notice">{entryNotice}</p>}
+
+            <form
+              className="invite-join-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!roomPreview.isFull) void handleEntryJoin(false);
+              }}
+            >
+              <label htmlFor="invite-nickname">Your nickname</label>
+              <input
+                id="invite-nickname"
+                type="text"
+                value={nicknameInput}
+                onChange={(event) => {
+                  setNicknameInput(event.target.value);
+                  setEntryError(null);
+                }}
+                maxLength={20}
+                placeholder="Your name"
+                autoComplete="nickname"
+                autoFocus
+                aria-describedby={entryError ? "invite-entry-error" : undefined}
+              />
+              {entryError && (
+                <p id="invite-entry-error" className="invite-form-error" role="alert">
+                  {entryError}
+                </p>
+              )}
+              <div className="invite-actions">
+                <button
+                  type="submit"
+                  className="invite-primary-button"
+                  disabled={entryBusy || roomPreview.isFull}
+                >
+                  {roomPreview.isFull
+                    ? "Room full"
+                    : entryBusy
+                    ? "Joining…"
+                    : roomPreview.state === "playing"
+                    ? "Join game in progress"
+                    : "Join game"}
+                </button>
+                <button
+                  type="button"
+                  className={roomPreview.isFull ? "invite-primary-button" : "invite-secondary-button"}
+                  disabled={entryBusy}
+                  onClick={() => void handleEntryJoin(true)}
+                >
+                  {entryBusy ? "Joining…" : "Spectate"}
+                </button>
+              </div>
+              {roomPreview.isFull && (
+                <p className="invite-action-hint">Player slots are full. Spectating is still open.</p>
+              )}
+            </form>
+          </main>
+        )}
       </div>
     );
   }
