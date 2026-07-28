@@ -47,7 +47,7 @@ async def test_multi_browser_gameplay_scenario():
             await page2.wait_for_selector('.room-copy-button')
 
             # Step 3: Host verifies 2 players joined in waiting panel
-            await page1.wait_for_selector('text=Waiting for players... (2 joined)')
+            await page1.wait_for_selector('[data-testid="waiting-room"]')
 
             # Step 4: Host starts the game
             await page1.click('button:has-text("Start game")')

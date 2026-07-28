@@ -490,29 +490,38 @@ textarea:disabled {
   padding: 8px 14px;
 }
 
-.waiting-panel {
-  text-align: center;
-  padding: 40px 0;
-}
-
-.waiting-panel button {
-  background: #40c057;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 20px;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.game-end-panel {
-  max-width: 320px;
-  margin: 24px auto 0;
-  background: #fff;
-  border: 1px solid #dfe1e6;
-  border-radius: 10px;
-  padding: 16px 20px;
-}
+.waiting-room { max-width: 940px; margin: 0 auto; padding: 28px 0 48px; }
+.waiting-room-intro, .waiting-card-heading, .waiting-start-card { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+.waiting-room-eyebrow, .waiting-card-kicker { color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 5px; text-transform: uppercase; }
+.waiting-room-intro h1, .waiting-card h2 { color: #1e293b; margin: 0; }
+.waiting-room-intro h1 { font-size: 28px; }
+.waiting-room-subtitle, .waiting-start-hint { color: #64748b; margin: 6px 0 0; }
+.waiting-invite-button { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; color: #1d4ed8; font-weight: 700; padding: 10px 13px; white-space: nowrap; }
+.waiting-invite-button span { color: #059669; margin-left: 8px; }
+.waiting-room-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; margin-top: 20px; }
+.waiting-card { background: #fff; border: 1px solid #dfe1e6; border-radius: 12px; padding: 20px; }
+.waiting-card h2 { font-size: 19px; }
+.waiting-ready-count { background: #f1f5f9; border-radius: 999px; color: #64748b; font-size: 13px; font-weight: 700; padding: 6px 9px; }
+.waiting-ready-count.is-ready { background: #dcfce7; color: #15803d; }
+.waiting-roster-list { list-style: none; margin: 16px 0 0; padding: 0; }
+.waiting-roster-list li { align-items: center; border-top: 1px solid #eef2f7; color: #334155; display: flex; font-weight: 600; justify-content: space-between; padding: 11px 0; }
+.waiting-roster-list li.is-disconnected { color: #94a3b8; }
+.waiting-player-badges { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+.waiting-player-badges em { background: #e0e7ff; border-radius: 999px; color: #4338ca; font-size: 11px; font-style: normal; font-weight: 700; padding: 3px 7px; }
+.waiting-player-badges em.warning { background: #fef3c7; color: #b45309; }
+.waiting-player-badges em.muted { background: #f1f5f9; color: #64748b; }
+.waiting-spectators { border-top: 1px solid #dfe1e6; margin-top: 8px; padding-top: 14px; }
+.waiting-spectators h3 { color: #475569; font-size: 14px; margin: 0; }
+.waiting-rules-list { color: #475569; line-height: 1.45; margin: 14px 0 0; padding-left: 20px; }
+.waiting-rules-list li + li { margin-top: 9px; }
+.waiting-start-card { margin-top: 16px; }
+.waiting-start-error { color: #dc2626; margin: 8px 0 0; }
+.waiting-start-button { background: #16a34a; border: 0; border-radius: 8px; color: #fff; flex: 0 0 auto; font-size: 15px; font-weight: 700; padding: 12px 18px; }
+.waiting-start-button:disabled { background: #94a3b8; cursor: not-allowed; }
+.waiting-results-card { margin-top: 16px; max-width: 480px; }
+.waiting-results-card ol { margin: 14px 0 0; padding-left: 24px; }
+.waiting-results-card li { border-top: 1px solid #eef2f7; display: flex; justify-content: space-between; padding: 8px 0; }
+.waiting-results-card strong { color: #15803d; }
 
 .game-layout {
   display: grid;
@@ -522,6 +531,8 @@ textarea:disabled {
 }
 
 @media (max-width: 900px) {
+  .waiting-room { padding: 20px 0 32px; }
+  .waiting-room-grid { grid-template-columns: 1fr; }
   .game-layout {
     display: flex;
     flex-direction: column;
@@ -2182,6 +2193,39 @@ textarea:disabled {
   border-color: #ef4444;
 }
 
+[data-theme="dark"] .waiting-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .waiting-room-intro h1,
+[data-theme="dark"] .waiting-card h2 {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .waiting-room-eyebrow,
+[data-theme="dark"] .waiting-card-kicker,
+[data-theme="dark"] .waiting-room-subtitle,
+[data-theme="dark"] .waiting-start-hint,
+[data-theme="dark"] .waiting-rules-list,
+[data-theme="dark"] .waiting-spectators h3 {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .waiting-invite-button {
+  background: #172554;
+  border-color: #2563eb;
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .waiting-roster-list li,
+[data-theme="dark"] .waiting-results-card li,
+[data-theme="dark"] .waiting-spectators {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .waiting-roster-list li { color: #e2e8f0; }
+
 /* Chat & Messages in dark mode */
 [data-theme="dark"] .chat-message.system {
   color: #94a3b8;
@@ -2431,4 +2475,16 @@ textarea:disabled {
     background: #1e293b;
     border-color: #334155;
   }
+}
+
+@media (max-width: 600px) {
+  .waiting-room-intro,
+  .waiting-start-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .waiting-invite-button,
+  .waiting-start-button { width: 100%; }
+  .waiting-card { padding: 16px; }
 }

@@ -19,6 +19,9 @@ interface GameStore {
   isPublic: boolean;
   maxPlayers: number;
   rounds: number;
+  customWordCount: number;
+  customWordsOnly: boolean;
+  drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
@@ -108,6 +111,9 @@ export const useGameStore = create<GameStore>((set) => ({
   isPublic: true,
   maxPlayers: 8,
   rounds: 3,
+  customWordCount: 0,
+  customWordsOnly: false,
+  drawingSeconds: 80,
   hintMode: "none" as HintMode,
   scoringMode: "default" as ScoringMode,
   spectatorsSeeSolution: false,
@@ -138,6 +144,9 @@ export const useGameStore = create<GameStore>((set) => ({
       isPublic: payload.isPublic,
       maxPlayers: payload.maxPlayers,
       rounds: payload.rounds,
+      customWordCount: payload.customWordCount,
+      customWordsOnly: payload.customWordsOnly,
+      drawingSeconds: payload.drawingSeconds,
       hintMode: payload.hintMode,
       scoringMode: payload.scoringMode ?? "default",
       spectatorsSeeSolution: payload.spectatorsSeeSolution ?? false,
