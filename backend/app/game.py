@@ -144,6 +144,7 @@ class Game:
     guess_points: dict[str, int] = field(default_factory=dict)
     guess_times: dict[str, float] = field(default_factory=dict)
     strokes: list[dict] = field(default_factory=list)
+    active_path_index: int | None = field(default=None, repr=False, compare=False)
     phase_deadline: float | None = None
     used_words: set[str] = field(default_factory=set)
     word_pool: list[str] | None = None
@@ -236,6 +237,7 @@ class Game:
         self.guess_points = {}
         self.guess_times = {}
         self.strokes = []
+        self.active_path_index = None
         self.letter_positions = []
         self.revealed_positions = set()
         self.purchased_hints = {}
@@ -459,13 +461,40 @@ class Game:
         return True
 
     def record_stroke(self, event: str, payload: dict) -> bool:
-        if len(self.strokes) >= MAX_STROKE_RECORDS:
-            return False
         # If the canvas was previously cleared and a new stroke starts, reset pre-clear history.
         if self.strokes and self.strokes[-1]["event"] == "clear_canvas":
             if event == "clear_canvas":
                 return True
             self.strokes = []
+            self.active_path_index = None
+        if event == "draw_move":
+            if self.active_path_index is None:
+                return False
+            self.strokes[self.active_path_index]["payload"]["points"].extend(
+                payload["points"]
+            )
+            return True
+        if event == "draw_end":
+            if self.active_path_index is None:
+                return False
+            self.active_path_index = None
+            return True
+        if len(self.strokes) >= MAX_STROKE_RECORDS:
+            return False
+        self.active_path_index = None
+        if event == "draw_start":
+            self.strokes.append(
+                {
+                    "event": "draw_path",
+                    "payload": {
+                        "points": [{"x": payload["x"], "y": payload["y"]}],
+                        "color": payload["color"],
+                        "width": payload["width"],
+                    },
+                }
+            )
+            self.active_path_index = len(self.strokes) - 1
+            return True
         self.strokes.append({"event": event, "payload": payload})
         return True
 
@@ -475,29 +504,20 @@ class Game:
             return False
         if self.strokes[-1]["event"] == "clear_canvas":
             return False
+        self.active_path_index = None
         self.strokes.append({"event": "clear_canvas", "payload": {}})
         return True
 
     def undo_last_stroke(self) -> bool:
         """Remove the most recent logical stroke or clear event from the recorded history.
 
-        The canvas is a raster (not vector), so "undoing" means dropping the
-        last stroke's events from the replay log and having every client
-        clear + redraw from what remains (via a fresh sync_strokes). A
-        logical stroke is either a single draw_shape/draw_fill/clear_canvas event,
-        or a draw_start/draw_move*/draw_end run - so this walks backward from the
-        end to find where that run began. Returns False if there was nothing
-        to undo.
+        Each history entry is one complete semantic action, so Undo drops its
+        final entry and clients replay what remains.
         """
         if not self.strokes:
             return False
-        if self.strokes[-1]["event"] in ("draw_shape", "draw_fill", "clear_canvas"):
-            self.strokes.pop()
-            return True
-        start = len(self.strokes) - 1
-        while start >= 0 and self.strokes[start]["event"] != "draw_start":
-            start -= 1
-        self.strokes = self.strokes[:start] if start >= 0 else self.strokes[:-1]
+        self.active_path_index = None
+        self.strokes.pop()
         return True
 
     def submit_guess(self, token: str, text: str) -> tuple[bool, int]:

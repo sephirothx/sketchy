@@ -136,25 +136,22 @@ export interface StrokeShapePayload {
   width: number;
 }
 
-// A flood fill is computed once (locally, on the drawer's own rendered
-// canvas pixels) and its result - the rectangular patch of pixels it
-// changed - is shipped as a base64 PNG so every other client (and late
-// joiners replaying history) renders the exact same pixels, instead of each
-// client re-running the fill algorithm on canvases that could have subtly
-// different anti-aliasing.
 export interface StrokeFillPayload {
-  patchX: number;
-  patchY: number;
-  patchWidth: number;
-  patchHeight: number;
-  patchData: string;
+  x: number;
+  y: number;
+  color: string;
+}
+
+export interface StrokePathPayload {
+  points: StrokePoint[];
+  color: string;
+  width: number;
 }
 
 export interface StrokeRecord {
-  event: "draw_start" | "draw_move" | "draw_end" | "draw_shape" | "draw_fill" | "clear_canvas";
+  event: "draw_path" | "draw_shape" | "draw_fill" | "clear_canvas";
   payload:
-    | StrokeStartPayload
-    | StrokeMovePayload
+    | StrokePathPayload
     | StrokeShapePayload
     | StrokeFillPayload
     | Record<string, never>;

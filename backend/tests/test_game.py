@@ -6,6 +6,10 @@ def make_game(n_players=3, rounds=2):
     return Game(turn_order=tokens, rounds_total=rounds)
 
 
+def pen_start(x=0, y=0):
+    return {"x": x, "y": y, "color": "#000000", "width": 4}
+
+
 def test_start_next_turn_rotates_drawer():
     game = make_game(n_players=3, rounds=2)
     game.start_next_turn()
@@ -241,14 +245,14 @@ def test_record_stroke_respects_history_limit(monkeypatch):
     monkeypatch.setattr("app.game.MAX_STROKE_RECORDS", 1)
     game = make_game()
 
-    assert game.record_stroke("draw_end", {}) is True
-    assert game.record_stroke("draw_end", {}) is False
+    assert game.record_stroke("draw_shape", {"shape": "rectangle"}) is True
+    assert game.record_stroke("draw_shape", {"shape": "ellipse"}) is False
     assert len(game.strokes) == 1
 
 
 def test_undo_last_stroke_removes_entire_pen_stroke():
     game = make_game()
-    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_start", pen_start())
     game.record_stroke("draw_move", {"points": [{"x": 0.1, "y": 0.1}]})
     game.record_stroke("draw_end", {})
     assert game.undo_last_stroke() is True
@@ -257,28 +261,28 @@ def test_undo_last_stroke_removes_entire_pen_stroke():
 
 def test_undo_last_stroke_only_removes_most_recent_stroke():
     game = make_game()
-    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_start", pen_start())
     game.record_stroke("draw_end", {})
-    game.record_stroke("draw_start", {"x": 1, "y": 1})
+    game.record_stroke("draw_start", pen_start(1, 1))
     game.record_stroke("draw_move", {"points": [{"x": 0.2, "y": 0.2}]})
     game.record_stroke("draw_end", {})
     assert game.undo_last_stroke() is True
-    assert [s["event"] for s in game.strokes] == ["draw_start", "draw_end"]
+    assert [s["event"] for s in game.strokes] == ["draw_path"]
 
 
 def test_undo_last_stroke_removes_single_shape_event():
     game = make_game()
-    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_start", pen_start())
     game.record_stroke("draw_end", {})
     game.record_stroke("draw_shape", {"shape": "rectangle"})
     assert game.undo_last_stroke() is True
-    assert [s["event"] for s in game.strokes] == ["draw_start", "draw_end"]
+    assert [s["event"] for s in game.strokes] == ["draw_path"]
 
 
 def test_undo_last_stroke_repeatedly_empties_history():
     game = make_game()
     game.record_stroke("draw_shape", {"shape": "ellipse"})
-    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_start", pen_start())
     game.record_stroke("draw_end", {})
     assert game.undo_last_stroke() is True
     assert game.undo_last_stroke() is True
@@ -288,25 +292,25 @@ def test_undo_last_stroke_repeatedly_empties_history():
 
 def test_clear_canvas_stroke_and_undo_clear():
     game = make_game()
-    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_start", pen_start())
     game.record_stroke("draw_end", {})
     assert game.clear_canvas_stroke() is True
-    assert [s["event"] for s in game.strokes] == ["draw_start", "draw_end", "clear_canvas"]
+    assert [s["event"] for s in game.strokes] == ["draw_path", "clear_canvas"]
 
     # Undo recovers drawing history to before Clear was pressed
     assert game.undo_last_stroke() is True
-    assert [s["event"] for s in game.strokes] == ["draw_start", "draw_end"]
+    assert [s["event"] for s in game.strokes] == ["draw_path"]
 
 
 def test_new_stroke_after_clear_resets_pre_clear_history():
     game = make_game()
-    game.record_stroke("draw_start", {"x": 0, "y": 0})
+    game.record_stroke("draw_start", pen_start())
     game.record_stroke("draw_end", {})
     game.clear_canvas_stroke()
 
     # Starting a new stroke after Clear resets pre-clear history
-    game.record_stroke("draw_start", {"x": 1, "y": 1})
-    assert game.strokes[0]["payload"]["x"] == 1
+    game.record_stroke("draw_start", pen_start(1, 1))
+    assert game.strokes[0]["payload"]["points"][0]["x"] == 1
 
 
 def test_masked_word_returns_unmasked_for_drawer_and_correct_guesser():
@@ -690,5 +694,4 @@ def test_hide_masked_prompt_returns_question_marks():
     # Guesser who answered correctly sees full word
     game.submit_guess("p1", word)
     assert game.masked_word("p1") == word
-
 
