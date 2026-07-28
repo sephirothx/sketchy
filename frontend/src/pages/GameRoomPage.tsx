@@ -8,6 +8,7 @@ import { Timer } from "../components/Timer";
 import { GuessChat } from "../components/GuessChat";
 import { RoundEndOverlay } from "../components/RoundEndOverlay";
 import { WaitingRoomPanel } from "../components/WaitingRoomPanel";
+import { GameEndOverlay } from "../components/GameEndOverlay";
 import { emitWithAck, socket } from "../lib/socket";
 import { splitMaskedWord } from "../lib/maskedWord";
 import { SettingsIcon } from "../components/SettingsIcon";
@@ -66,6 +67,7 @@ export function GameRoomPage() {
   const messages = useGameStore((s) => s.messages);
   const lastRoundResult = useGameStore((s) => s.lastRoundResult);
   const finalScores = useGameStore((s) => s.finalScores);
+  const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
 
   const [joinError, setJoinError] = useState<string | null>(null);
   const [entryStatus, setEntryStatus] = useState<EntryStatus>("loading");
@@ -83,6 +85,17 @@ export function GameRoomPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [lastDrawing, setLastDrawing] = useState<string | null>(null);
+
+  function saveLastDrawing() {
+    if (!lastDrawing) return;
+    const link = document.createElement("a");
+    link.href = lastDrawing;
+    link.download = "sketchy-last-drawing.png";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 
   function handleCopyLink() {
     const url = window.location.href;
@@ -222,6 +235,10 @@ export function GameRoomPage() {
     reset();
     navigate("/");
   }
+
+  useEffect(() => {
+    if (phase === "round_end") setLastDrawing(canvasRef.current?.getImageDataUrl() ?? null);
+  }, [phase]);
 
   function handleToggleAfk() {
     socket.emit("toggle_afk");
@@ -536,14 +553,18 @@ export function GameRoomPage() {
         </div>
       </header>
 
-      {roomState === "waiting" && (
+      {phase === "game_end" && finalScores ? (
+        <GameEndOverlay scores={finalScores} myToken={token} scoringMode={scoringMode} onContinue={dismissGameEnd} />
+      ) : roomState === "waiting" && (
         <WaitingRoomPanel name={name} code={code ?? ""} isPublic={isPublic} maxPlayers={maxPlayers}
           rounds={rounds} drawingSeconds={drawingSeconds} customWordCount={customWordCount}
           customWordsOnly={customWordsOnly} hintMode={hintMode} scoringMode={scoringMode}
           spectatorsSeeSolution={spectatorsSeeSolution} hideMaskedPrompt={hideMaskedPrompt}
           players={players} myToken={token} isHost={isHost} finalScores={finalScores}
           startBusy={startBusy} startError={startError} onStart={() => void handleStartGame()}
-          onCopyInvite={handleCopyLink} copiedLink={copiedLink} />
+          onCopyInvite={handleCopyLink} copiedLink={copiedLink} messages={messages}
+          onLeave={handleLeave}
+          onSaveDrawing={saveLastDrawing} hasDrawing={Boolean(lastDrawing)} />
       )}
 
       {roomState === "playing" && (
@@ -606,8 +627,12 @@ export function GameRoomPage() {
               <RoundEndOverlay
                 word={lastRoundResult.word}
                 drawerToken={lastRoundResult.drawerToken}
+                drawerBonus={lastRoundResult.drawerBonus}
                 guesses={lastRoundResult.guesses}
                 scores={lastRoundResult.scores}
+                myToken={token}
+                seconds={phaseSeconds}
+                startedAt={phaseStartedAt}
                 showScores={scoringMode === "default"}
               />
             )}

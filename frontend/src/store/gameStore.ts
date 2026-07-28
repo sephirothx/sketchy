@@ -80,6 +80,7 @@ interface GameStore {
   }) => void;
   endRound: (payload: RoundEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
+  dismissGameEnd: () => void;
   setError: (error: string | null) => void;
   reset: () => void;
 }
@@ -137,7 +138,7 @@ export const useGameStore = create<GameStore>((set) => ({
     set({ token: null, roomId: null, code: null });
   },
   setRoomState: (payload) =>
-    set({
+    set((state) => ({
       roomId: payload.id,
       code: payload.code,
       name: payload.name,
@@ -152,8 +153,11 @@ export const useGameStore = create<GameStore>((set) => ({
       spectatorsSeeSolution: payload.spectatorsSeeSolution ?? false,
       hideMaskedPrompt: payload.hideMaskedPrompt ?? false,
       roomState: payload.state,
+      finalScores: payload.lastGameScores?.length
+        ? payload.lastGameScores
+        : payload.state === "playing" ? null : state.finalScores,
       players: payload.players,
-    }),
+    })),
   addMessage: (message) => set((s) => ({ messages: [...s.messages.slice(-99), message] })),
   applyGuessPoints: (token, points) =>
     set((s) => ({
@@ -201,12 +205,15 @@ export const useGameStore = create<GameStore>((set) => ({
     set((s) => ({
       phase: "round_end",
       lastRoundResult: payload,
+      phaseSeconds: payload.seconds ?? 0,
+      phaseStartedAt: Date.now(),
       players: s.players.map((p) => {
         const updated = payload.scores.find((sc) => sc.token === p.token);
         return updated ? { ...p, score: updated.score } : p;
       }),
     })),
   endGame: (payload) => set({ phase: "game_end", finalScores: payload.scores, roomState: "waiting" }),
+  dismissGameEnd: () => set({ phase: "idle" }),
   setError: (error) => set({ error }),
   reset: () => set({ token: null, roomId: null, code: null, players: [], ...initialGameFields }),
 }));

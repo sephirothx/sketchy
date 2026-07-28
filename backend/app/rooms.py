@@ -102,6 +102,7 @@ class Room:
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
+    last_game_scores: list[dict] = field(default_factory=list)
 
     def player_list(self) -> list[Player]:
         return list(self.players.values())
@@ -164,6 +165,7 @@ class Room:
             "spectatorsSeeSolution": self.spectators_see_solution,
             "hideMaskedPrompt": self.hide_masked_prompt,
             "state": self.state,
+            "lastGameScores": self.last_game_scores,
             "players": [
                 {
                     "token": p.token,

@@ -48,7 +48,22 @@ export interface RoomStatePayload {
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
   state: "waiting" | "playing";
+  lastGameScores?: ScoreEntry[];
   players: PlayerInfo[];
+}
+
+export interface EditableRoomSettings {
+  name: string;
+  isPublic: boolean;
+  maxPlayers: number;
+  rounds: number;
+  drawingSeconds: number;
+  customWords: string;
+  customWordsOnly: boolean;
+  hintMode: HintMode;
+  scoringMode: ScoringMode;
+  spectatorsSeeSolution: boolean;
+  hideMaskedPrompt: boolean;
 }
 
 export type GamePhase = "idle" | "choosing_word" | "drawing" | "round_end" | "game_end";
@@ -80,6 +95,7 @@ export interface RoundEndedPayload {
   word: string;
   drawerToken: string;
   drawerBonus: number;
+  seconds?: number;
   guesses: {
     token: string;
     nickname: string;
