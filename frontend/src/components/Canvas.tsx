@@ -114,6 +114,27 @@ function colorsEqual(data: Uint8ClampedArray, index: number, target: [number, nu
   );
 }
 
+// Brave's fingerprinting protection can slightly perturb values returned by
+// canvas readback APIs. Those differences are visually imperceptible, but an
+// exact-match flood fill treats every perturbed pixel as a separate region
+// and leaves high-contrast pinholes behind. Keep the tolerance deliberately
+// small: it absorbs readback noise while preserving visibly distinct colors
+// as fill boundaries.
+const FLOOD_FILL_CHANNEL_TOLERANCE = 8;
+
+function colorsMatchForFill(
+  data: Uint8ClampedArray,
+  index: number,
+  target: [number, number, number, number],
+): boolean {
+  return (
+    Math.abs(data[index] - target[0]) <= FLOOD_FILL_CHANNEL_TOLERANCE
+    && Math.abs(data[index + 1] - target[1]) <= FLOOD_FILL_CHANNEL_TOLERANCE
+    && Math.abs(data[index + 2] - target[2]) <= FLOOD_FILL_CHANNEL_TOLERANCE
+    && Math.abs(data[index + 3] - target[3]) <= FLOOD_FILL_CHANNEL_TOLERANCE
+  );
+}
+
 interface Point {
   x: number;
   y: number;
@@ -350,11 +371,14 @@ interface BoundingBox {
 // instead of leaving an unfilled sliver behind. Since every stroke is
 // rasterized directly into pixel data (see rasterizePath) rather than
 // through Canvas 2D's anti-aliased stroke/fill, the canvas only ever
-// contains flat colors, so exact equality is all that's needed - no
-// tolerance, no dilation, no drift on repeated fills. Matching is purely
-// pixel-based, so it naturally respects whatever shape the rendered strokes
-// happen to form - including sub-regions carved out by self-intersecting
-// lines, which have no explicit notion of "closed path" on a raster canvas.
+// contains flat colors. Region matching allows only a small per-channel
+// tolerance to compensate for browsers that deliberately perturb canvas
+// readback values for fingerprinting protection; this avoids noisy holes
+// without dilating the region or changing its geometric boundaries. Matching
+// remains pixel-based, so it naturally respects whatever shape the rendered
+// strokes happen to form - including sub-regions carved out by
+// self-intersecting lines, which have no explicit notion of "closed path" on
+// a raster canvas.
 function floodFillPixels(
   imageData: ImageData,
   startX: number,
@@ -382,7 +406,7 @@ function floodFillPixels(
     const pixelIndex = y * width + x;
     if (visited[pixelIndex]) continue;
     const index = pixelIndex * 4;
-    if (!colorsEqual(data, index, target)) continue;
+    if (!colorsMatchForFill(data, index, target)) continue;
     visited[pixelIndex] = 1;
     data[index] = fillColor[0];
     data[index + 1] = fillColor[1];
