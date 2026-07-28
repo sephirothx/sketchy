@@ -74,10 +74,15 @@ function loadStoredTheme(): AppTheme {
   try {
     const raw = localStorage.getItem("sketchy_theme");
     if (raw === "dark" || raw === "light") return raw;
-    return DEFAULT_THEME;
   } catch {
-    return DEFAULT_THEME;
+    // Fall through to the system preference when storage is unavailable.
   }
+
+  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  return DEFAULT_THEME;
 }
 
 function loadStoredConfetti(): boolean {

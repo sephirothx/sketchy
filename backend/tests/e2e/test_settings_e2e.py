@@ -3,6 +3,38 @@ from playwright.async_api import async_playwright
 
 BASE_URL = "http://localhost:8000"
 
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("color_scheme", "stored_theme", "expected_theme"),
+    [
+        ("dark", None, "dark"),
+        ("light", None, "light"),
+        ("dark", "light", "light"),
+        ("light", "dark", "dark"),
+    ],
+)
+async def test_theme_defaults_to_system_preference_unless_saved(
+    color_scheme, stored_theme, expected_theme
+):
+    """Fresh visitors follow their device; saved choices take precedence."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=['--mute-audio'])
+        context = await browser.new_context(color_scheme=color_scheme)
+        if stored_theme:
+            await context.add_init_script(
+                f"localStorage.setItem('sketchy_theme', '{stored_theme}')"
+            )
+        page = await context.new_page()
+
+        try:
+            await page.goto(BASE_URL)
+            theme = await page.evaluate("() => document.documentElement.dataset.theme")
+            assert theme == expected_theme
+        finally:
+            await context.close()
+            await browser.close()
+
 @pytest.mark.asyncio
 async def test_settings_dialog_pen_cursor_scenario():
     """
