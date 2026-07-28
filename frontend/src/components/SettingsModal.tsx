@@ -149,7 +149,7 @@ function SettingsModalContent() {
                   <option value="dark">Dark Theme</option>
                 </select>
                 <p className="settings-description" style={{ marginTop: "6px" }}>
-                  Choose between the default light theme and dark theme.
+                  First-time visits follow your device preference. Choose a theme here to save your own preference.
                 </p>
               </div>
 
