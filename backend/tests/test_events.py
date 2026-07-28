@@ -136,6 +136,43 @@ async def test_only_host_can_update_waiting_room_settings_and_not_during_game():
 
 
 @pytest.mark.asyncio
+async def test_room_members_can_inspect_custom_words_only_while_waiting():
+    room_manager = RoomManager()
+    room = room_manager.create_room(
+        name="Room",
+        custom_words=["red panda", "apple"],
+        custom_words_only=True,
+    )
+    room_manager.add_player(room, "Host")
+    guest = room_manager.add_player(room, "Guest")
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "token": guest.token}
+    )
+    get_custom_words = sio.handlers["/"]["get_custom_words"]
+
+    response = await get_custom_words("guest-sid", {})
+    assert response == {"ok": True, "words": ["red panda", "apple"]}
+
+    room.state = "playing"
+    playing_response = await get_custom_words("guest-sid", {})
+    assert playing_response["ok"] is False
+    assert "waiting room" in playing_response["error"]
+
+    room.state = "waiting"
+    guest.is_spectator = True
+    spectator_response = await get_custom_words("guest-sid", {})
+    assert spectator_response == {
+        "ok": False,
+        "error": "Only players can view custom words",
+    }
+
+    sio.get_session = AsyncMock(return_value=None)
+    assert (await get_custom_words("outsider-sid", {}))["ok"] is False
+
+
+@pytest.mark.asyncio
 async def test_waiting_spectator_can_become_player_when_space_is_available():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", max_players=2)
@@ -976,6 +1013,4 @@ async def test_chatting_removes_afk_status():
     guess = sio.handlers["/"]["guess"]
     await guess("p1-sid", {"text": "hello chat"})
     assert p1.is_afk is False
-
-
 

@@ -52,6 +52,33 @@ async def test_public_room_cards_explain_status_rules_and_actions():
             await player.fill('input[placeholder="ABC123"]', code)
             await player.click('button:has-text("Join by code")')
             await player.wait_for_selector('[data-testid="waiting-room"]')
+            await player.click('summary:has-text("Inspect 2 custom words")')
+            word_list = player.locator('.waiting-custom-words-list')
+            await word_list.wait_for()
+            assert await word_list.get_by_text("apple", exact=True).is_visible()
+            assert await word_list.get_by_text("pear", exact=True).is_visible()
+            await player.fill(
+                'input[placeholder="Search custom words…"]',
+                "app",
+            )
+            assert await word_list.get_by_text("apple", exact=True).is_visible()
+            assert not await word_list.get_by_text("pear", exact=True).is_visible()
+            await player.fill('input[placeholder="Search custom words…"]', "")
+            await player.get_by_role("button", name="Short", exact=True).click()
+            assert await player.get_by_text("2 of 2 words match", exact=True).is_visible()
+            display_limit = player.get_by_label("Words to display")
+            assert await display_limit.locator("option").all_text_contents() == [
+                "200",
+                "500",
+                "1,000",
+                "2,000",
+                "5,000",
+                "All",
+            ]
+            await display_limit.select_option("all")
+            assert not await host.is_visible(
+                'summary:has-text("Inspect 2 custom words")'
+            )
             await host.wait_for_selector('.waiting-start-button:not([disabled])')
             await host.click('.waiting-start-button')
             await host.wait_for_selector('.game-layout')

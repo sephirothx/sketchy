@@ -567,6 +567,22 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         return {"ok": True, "settings": editable_room_settings(room)}
 
     @sio.event
+    async def get_custom_words(sid, data=None):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("token")) if room and session else None
+        if not room or not player:
+            return {"ok": False, "error": "Not in this room"}
+        if player.is_spectator:
+            return {"ok": False, "error": "Only players can view custom words"}
+        if room.state != "waiting" or room.game:
+            return {
+                "ok": False,
+                "error": "Custom words can only be viewed in the waiting room",
+            }
+        return {"ok": True, "words": list(room.custom_words)}
+
+    @sio.event
     async def update_room_settings(sid, data):
         session = await sio.get_session(sid)
         room = room_manager.get_room(session.get("room_id")) if session else None
