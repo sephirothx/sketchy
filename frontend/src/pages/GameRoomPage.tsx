@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Canvas, type CanvasRef } from "../components/Canvas";
 import { Toolbar } from "../components/Toolbar";
-import { PlayerList } from "../components/PlayerList";
 import { WordDisplay } from "../components/WordDisplay";
 import { Timer } from "../components/Timer";
-import { GuessChat } from "../components/GuessChat";
 import { RoundEndOverlay } from "../components/RoundEndOverlay";
 import { WaitingRoomPanel } from "../components/WaitingRoomPanel";
 import { GameEndOverlay } from "../components/GameEndOverlay";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
+import { RoomChatPanel } from "../components/RoomChatPanel";
+import { RoomPlayersPanel } from "../components/RoomPlayersPanel";
+import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { splitMaskedWord } from "../lib/maskedWord";
@@ -400,6 +401,8 @@ export function GameRoomPage() {
       : me?.isSpectator && spectatorsSeeSolution && maskedWord && !maskedWord.includes("_")
       ? splitMaskedWord(maskedWord).blanks.trim()
       : null;
+  const roomView: RoomShellMode =
+    phase === "game_end" && finalScores ? "game-end" : roomState;
 
   if (!hasActiveSession) {
     return (
@@ -599,31 +602,21 @@ export function GameRoomPage() {
         </div>
       </header>
 
-      {phase === "game_end" && finalScores ? (
-        <GameEndOverlay scores={finalScores} myToken={token} scoringMode={scoringMode} onContinue={dismissGameEnd} />
-      ) : roomState === "waiting" && (
-        <WaitingRoomPanel name={name} code={code ?? ""} isPublic={isPublic} maxPlayers={maxPlayers}
-          rounds={rounds} drawingSeconds={drawingSeconds} customWordCount={customWordCount}
-          customWordsOnly={customWordsOnly} hintMode={hintMode} scoringMode={scoringMode}
-          spectatorsSeeSolution={spectatorsSeeSolution} hideMaskedPrompt={hideMaskedPrompt}
-          players={players} myToken={token} isHost={isHost} finalScores={finalScores}
-          startBusy={startBusy} startError={startError} onStart={() => void handleStartGame()}
-          onCopyInvite={() => void handleCopyLink()} messages={messages}
-          onLeave={handleLeave}
-          onSaveDrawing={saveLastDrawing} hasDrawing={Boolean(lastDrawing)} />
-      )}
-
-      {roomState === "playing" && (
-        <div className="game-layout">
-          <aside className="sidebar-left">
-            <div className="sidebar-box">
-              <PlayerList
-                players={players}
-                drawerToken={drawerToken}
-                myToken={token}
-                showScores={scoringMode === "default"}
-              />
-            </div>
+      <RoomShell
+        mode={roomView}
+        players={
+          <RoomPlayersPanel
+            mode={roomView}
+            players={players}
+            drawerToken={drawerToken}
+            myToken={token}
+            maxPlayers={maxPlayers}
+            showScores={scoringMode === "default"}
+            finalScores={finalScores}
+          />
+        }
+        playerFooter={
+          roomView === "playing" ? (
             <div className="save-image-box">
               <button
                 type="button"
@@ -639,74 +632,107 @@ export function GameRoomPage() {
                 <span>Save Image</span>
               </button>
             </div>
-          </aside>
-          <main className="canvas-area">
-            <div className="round-info">
-              <span>
-                Round {roundNumber}/{totalRounds}
-              </span>
-              {phase !== "round_end" && (
-                <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
-              )}
-            </div>
-            <WordDisplay
-              isDrawer={amDrawer}
-              myWord={myWord}
-              maskedWord={maskedWord}
-              wordChoices={wordChoices}
-              revealedWord={
-                phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord
-              }
+          ) : undefined
+        }
+        main={
+          roomView === "game-end" && finalScores ? (
+            <GameEndOverlay
+              scores={finalScores}
+              myToken={token}
+              scoringMode={scoringMode}
+              onContinue={dismissGameEnd}
+            />
+          ) : roomView === "waiting" ? (
+            <WaitingRoomPanel
+              name={name}
+              isPublic={isPublic}
+              rounds={rounds}
+              drawingSeconds={drawingSeconds}
+              customWordCount={customWordCount}
+              customWordsOnly={customWordsOnly}
               hintMode={hintMode}
-              canBuyHint={phase === "drawing" && !amDrawer && !guessedWord}
-              myScore={me?.score ?? 0}
-              nextHintCost={nextHintCost}
-              letterPrices={letterPrices}
+              scoringMode={scoringMode}
+              spectatorsSeeSolution={spectatorsSeeSolution}
+              hideMaskedPrompt={hideMaskedPrompt}
+              players={players}
+              myToken={token}
+              isHost={isHost}
+              finalScores={finalScores}
+              startBusy={startBusy}
+              startError={startError}
+              onStart={() => void handleStartGame()}
+              onLeave={handleLeave}
+              onSaveDrawing={saveLastDrawing}
+              hasDrawing={Boolean(lastDrawing)}
             />
-            <Canvas
-              ref={canvasRef}
-              isDrawer={canDrawNow}
-              color={color}
-              brushWidth={activeWidth}
-              tool={tool}
-              solutionWord={solutionWord}
-            />
-            {phase === "round_end" && lastRoundResult && (
-              <RoundEndOverlay
-                word={lastRoundResult.word}
-                drawerToken={lastRoundResult.drawerToken}
-                drawerBonus={lastRoundResult.drawerBonus}
-                guesses={lastRoundResult.guesses}
-                scores={lastRoundResult.scores}
-                myToken={token}
-                showScores={scoringMode === "default"}
-              />
-            )}
-            {canDrawNow && (
-              <Toolbar
-                color={color}
-                onColorChange={setColor}
-                brushWidth={activeWidth}
-                onBrushWidthChange={handleWidthChange}
-                tool={tool}
-                onToolChange={setTool}
-              />
-            )}
-          </main>
-          <aside className="sidebar-right">
-            <div className="sidebar-box">
-              <GuessChat
-                messages={messages}
+          ) : (
+            <main className="canvas-area">
+              <div className="round-info">
+                <span>
+                  Round {roundNumber}/{totalRounds}
+                </span>
+                {phase !== "round_end" && (
+                  <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
+                )}
+              </div>
+              <WordDisplay
                 isDrawer={amDrawer}
-                canGuess={canGuess}
-                targetWordLengths={splitMaskedWord(maskedWord).counts}
-                hideMaskedPrompt={hideMaskedPrompt}
-                onFocusChange={setIsInputFocused}
+                myWord={myWord}
+                maskedWord={maskedWord}
+                wordChoices={wordChoices}
+                revealedWord={
+                  phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord
+                }
+                hintMode={hintMode}
+                canBuyHint={phase === "drawing" && !amDrawer && !guessedWord}
+                myScore={me?.score ?? 0}
+                nextHintCost={nextHintCost}
+                letterPrices={letterPrices}
               />
-            </div>
-          </aside>
-        </div>
-      )}
+              <Canvas
+                ref={canvasRef}
+                isDrawer={canDrawNow}
+                color={color}
+                brushWidth={activeWidth}
+                tool={tool}
+                solutionWord={solutionWord}
+              />
+              {phase === "round_end" && lastRoundResult && (
+                <RoundEndOverlay
+                  word={lastRoundResult.word}
+                  drawerToken={lastRoundResult.drawerToken}
+                  drawerBonus={lastRoundResult.drawerBonus}
+                  guesses={lastRoundResult.guesses}
+                  scores={lastRoundResult.scores}
+                  myToken={token}
+                  showScores={scoringMode === "default"}
+                />
+              )}
+              {canDrawNow && (
+                <Toolbar
+                  color={color}
+                  onColorChange={setColor}
+                  brushWidth={activeWidth}
+                  onBrushWidthChange={handleWidthChange}
+                  tool={tool}
+                  onToolChange={setTool}
+                />
+              )}
+            </main>
+          )
+        }
+        chat={
+          <RoomChatPanel
+            messages={messages}
+            mode={roomView}
+            isDrawer={amDrawer}
+            canGuess={canGuess}
+            targetWordLengths={splitMaskedWord(maskedWord).counts}
+            hideMaskedPrompt={hideMaskedPrompt}
+            onFocusChange={setIsInputFocused}
+          />
+        }
+      />
     </div>
   );
 }

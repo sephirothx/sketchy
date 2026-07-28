@@ -49,6 +49,40 @@ async def test_multi_browser_gameplay_scenario():
 
             # Step 3: Host verifies 2 players joined in waiting panel
             await page1.wait_for_selector('[data-testid="waiting-room"]')
+            await page2.fill('.waiting-chat-form input', "Ready for a seamless round")
+            await page2.click('.waiting-chat-form button')
+            await page1.wait_for_selector('text=Ready for a seamless round')
+
+            waiting_regions = await page1.evaluate(
+                """
+                () => {
+                  const players = document.querySelector('[data-testid="room-players-region"]');
+                  const chat = document.querySelector('[data-testid="room-chat-region"]');
+                  window.__persistentRoomRegions = { players, chat };
+                  const rect = (element) => {
+                    const box = element.getBoundingClientRect();
+                    return { x: box.x, y: box.y, width: box.width, height: box.height };
+                  };
+                  return { players: rect(players), chat: rect(chat) };
+                }
+                """
+            )
+            await page1.set_viewport_size({"width": 800, "height": 900})
+            waiting_mobile_order = await page1.evaluate(
+                """
+                () => ({
+                  main: document.querySelector(".room-shell-main").getBoundingClientRect().y,
+                  chat: document.querySelector('[data-testid="room-chat-region"]').getBoundingClientRect().y,
+                  players: document.querySelector('[data-testid="room-players-region"]').getBoundingClientRect().y,
+                })
+                """
+            )
+            assert (
+                waiting_mobile_order["main"]
+                < waiting_mobile_order["chat"]
+                < waiting_mobile_order["players"]
+            )
+            await page1.set_viewport_size({"width": 1280, "height": 720})
 
             # Step 4: Host starts the game
             await page1.click('button:has-text("Start game")')
@@ -60,17 +94,77 @@ async def test_multi_browser_gameplay_scenario():
             # Verify PlayerList rendered on both browsers
             await page1.wait_for_selector('.player-list')
             await page2.wait_for_selector('.player-list')
+            playing_regions = await page1.evaluate(
+                """
+                () => {
+                  const players = document.querySelector('[data-testid="room-players-region"]');
+                  const chat = document.querySelector('[data-testid="room-chat-region"]');
+                  const rect = (element) => {
+                    const box = element.getBoundingClientRect();
+                    return { x: box.x, y: box.y, width: box.width, height: box.height };
+                  };
+                  return {
+                    samePlayers: window.__persistentRoomRegions.players === players,
+                    sameChat: window.__persistentRoomRegions.chat === chat,
+                    players: rect(players),
+                    chat: rect(chat),
+                  };
+                }
+                """
+            )
+            assert playing_regions["samePlayers"]
+            assert playing_regions["sameChat"]
+            for region in ("players", "chat"):
+                for dimension in ("x", "y", "width"):
+                    assert abs(
+                        waiting_regions[region][dimension]
+                        - playing_regions[region][dimension]
+                    ) <= 1
+            assert abs(
+                waiting_regions["chat"]["height"]
+                - playing_regions["chat"]["height"]
+            ) <= 1
+            assert await page1.is_visible('text=Ready for a seamless round')
+            await page1.set_viewport_size({"width": 800, "height": 900})
+            playing_mobile_order = await page1.evaluate(
+                """
+                () => ({
+                  main: document.querySelector(".room-shell-main").getBoundingClientRect().y,
+                  chat: document.querySelector('[data-testid="room-chat-region"]').getBoundingClientRect().y,
+                  players: document.querySelector('[data-testid="room-players-region"]').getBoundingClientRect().y,
+                })
+                """
+            )
+            assert (
+                playing_mobile_order["main"]
+                < playing_mobile_order["chat"]
+                < playing_mobile_order["players"]
+            )
+            await page1.set_viewport_size({"width": 1280, "height": 720})
 
             # Step 5: Identify who is drawer and choose word if prompt choice is present
             drawer_page = page1 if await page1.query_selector('.word-choices') else page2
             guesser_page = page2 if drawer_page == page1 else page1
 
             if await drawer_page.query_selector('.word-choices button'):
+                await drawer_page.evaluate(
+                    """
+                    () => {
+                      window.__wordSelectionErrorSeen = false;
+                      new MutationObserver(() => {
+                        if (document.querySelector('.app-toast.error')) {
+                          window.__wordSelectionErrorSeen = true;
+                        }
+                      }).observe(document.body, { childList: true, subtree: true });
+                    }
+                    """
+                )
                 await drawer_page.click('.word-choices button:first-child')
 
             # Wait for drawing phase
             await drawer_page.wait_for_selector('canvas.drawing-canvas')
             await guesser_page.wait_for_selector('canvas.drawing-canvas')
+            assert not await drawer_page.evaluate("window.__wordSelectionErrorSeen")
 
             # Step 6: Drawer draws on canvas
             canvas = await drawer_page.query_selector('canvas.drawing-canvas')

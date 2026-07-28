@@ -73,7 +73,7 @@ async def test_settings_dialog_pen_cursor_scenario():
             await select_el.select_option('circle')
 
             # Save settings
-            await page.click('button:has-text("Save")')
+            await page.click('.settings-modal-footer button:has-text("Save")')
 
             # Verify modal closed
             await page.wait_for_selector('.settings-modal-card', state='hidden')
