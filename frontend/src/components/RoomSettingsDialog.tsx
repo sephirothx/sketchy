@@ -63,6 +63,6 @@ export function RoomSettingsEditor() {
       </div></details>
     </div>}
     {error && <p className="create-room-error" role="alert">{error}</p>}
-    <div className="room-settings-save"><button type="button" className="waiting-start-button" disabled={loading || busy || analysis.hasErrors} onClick={() => void save()}>{busy ? "Saving…" : "Save settings"}</button></div>
+    <div className="room-settings-save"><button type="button" className="room-settings-save-button" disabled={loading || busy || analysis.hasErrors} onClick={() => void save()}>{busy ? "Saving…" : "Save settings"}</button></div>
   </section>;
 }

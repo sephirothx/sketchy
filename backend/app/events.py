@@ -643,6 +643,38 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
 
     @sio.event
+    async def become_player(sid, data=None):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("token")) if room and session else None
+        if not room or not player:
+            return {"ok": False, "error": "Not in this room"}
+        if room.state != "waiting" or room.game:
+            return {"ok": False, "error": "You can only join as a player from the waiting room"}
+        if not player.is_spectator:
+            return {"ok": False, "error": "You are already a player"}
+
+        active_count = len([candidate for candidate in room.players.values() if not candidate.is_spectator])
+        if active_count >= room.max_players:
+            return {"ok": False, "error": "Player slots are full"}
+
+        player.is_spectator = False
+        player.score = STARTING_SCORE if room.scoring_mode == "default" else 0
+        await sio.emit(
+            "chat_message",
+            {
+                "token": "",
+                "nickname": "",
+                "text": f"{player.nickname} joined as a player.",
+                "correct": False,
+                "system": True,
+            },
+            room=room.id,
+        )
+        await _emit_room_state(room)
+        return {"ok": True}
+
+    @sio.event
     async def leave_room(sid, data=None):
         session = await sio.get_session(sid)
         if not session:
@@ -820,12 +852,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         session = await sio.get_session(sid)
         room = room_manager.get_room(session.get("room_id")) if session else None
         if not room or not room.game:
-            return
+            return {"ok": False, "error": "Game is not ready for word selection"}
         token = session.get("token")
         word = str((data or {}).get("word", ""))
-        if room.game.choose_word(token, word):
-            cancel_phase_timer(room.id)
-            await _begin_drawing(room)
+        if not room.game.choose_word(token, word):
+            return {"ok": False, "error": "That word is no longer available"}
+        cancel_phase_timer(room.id)
+        await _begin_drawing(room)
+        return {"ok": True}
 
     # ------------------------------------------------------------------
     # Drawing

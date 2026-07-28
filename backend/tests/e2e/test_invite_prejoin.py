@@ -25,7 +25,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             await host_page.click('button:has-text("Create room")')
             await host_page.fill('input[placeholder="Leave blank for a random name!"]', "Invite Test Room")
             await host_page.uncheck('label:has-text("Public (listed below)") input')
-            await host_page.fill('label:has-text("Max players") input', "2")
+            await host_page.fill('label:has-text("Max players") input', "3")
             await host_page.click('button:has-text("Create room")')
 
             room_button = await host_page.wait_for_selector(".room-copy-button")
@@ -38,13 +38,43 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             await spectator_page.wait_for_selector("#invite-nickname")
             assert await spectator_page.is_visible("text=Invite Test Room")
             assert await spectator_page.is_visible("text=Private invite")
-            assert await spectator_page.is_visible("text=1/2")
+            assert await spectator_page.is_visible("text=1/3")
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
             # Visitors can explicitly spectate.
             await spectator_page.fill("#invite-nickname", "InviteSpectator")
             await spectator_page.click('button:has-text("Spectate")')
             await spectator_page.wait_for_selector(".room-copy-button")
+            spectator_indicator = host_page.locator('[data-testid="spectator-indicator"]')
+            await spectator_indicator.wait_for()
+            assert await spectator_indicator.locator(
+                ".room-spectator-count"
+            ).inner_text() == "1"
+            spectator_tooltip = host_page.locator('[data-testid="spectator-tooltip"]')
+            assert not await spectator_tooltip.is_visible()
+            await spectator_indicator.hover()
+            await spectator_tooltip.wait_for(state="visible")
+            assert await spectator_tooltip.locator("text=InviteSpectator").is_visible()
+            assert not await host_page.locator(
+                '[data-testid="room-active-players"]'
+            ).locator("text=InviteSpectator").is_visible()
+            spectator_promotion = spectator_page.locator(
+                '[data-testid="spectator-promotion"]'
+            )
+            assert await spectator_promotion.is_visible()
+            assert await spectator_promotion.locator(
+                "text=A player slot is available."
+            ).is_visible()
+            await spectator_promotion.locator(
+                'button:has-text("Join as player")'
+            ).click()
+            await spectator_page.wait_for_selector(
+                '[data-testid="room-active-players"] >> text=InviteSpectator'
+            )
+            await host_page.wait_for_selector(
+                '[data-testid="room-active-players"] >> text=InviteSpectator'
+            )
+            assert not await host_page.is_visible('[data-testid="spectator-indicator"]')
 
             # Visitors can join as a player, and valid stored tokens reconnect on reload.
             await player_page.goto(invite_url)

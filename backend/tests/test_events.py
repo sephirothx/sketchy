@@ -136,6 +136,63 @@ async def test_only_host_can_update_waiting_room_settings_and_not_during_game():
 
 
 @pytest.mark.asyncio
+async def test_waiting_spectator_can_become_player_when_space_is_available():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", max_players=2)
+    room_manager.add_player(room, "Host")
+    spectator = room_manager.add_player(room, "Spectator", is_spectator=True)
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "token": spectator.token}
+    )
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["become_player"]("spectator-sid", {})
+
+    assert response == {"ok": True}
+    assert spectator.is_spectator is False
+    assert spectator.score == STARTING_SCORE
+    assert any(
+        call.args[0] == "room_state"
+        and any(
+            player["token"] == spectator.token and not player["isSpectator"]
+            for player in call.args[1]["players"]
+        )
+        for call in sio.emit.await_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_spectator_cannot_become_player_when_room_is_full_or_playing():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", max_players=2)
+    room_manager.add_player(room, "Host")
+    room_manager.add_player(room, "Player")
+    spectator = room_manager.add_player(room, "Spectator", is_spectator=True)
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "token": spectator.token}
+    )
+    sio.emit = AsyncMock()
+    become_player = sio.handlers["/"]["become_player"]
+
+    full_response = await become_player("spectator-sid", {})
+    assert full_response == {"ok": False, "error": "Player slots are full"}
+    assert spectator.is_spectator is True
+
+    room.players[next(
+        token for token, player in room.players.items()
+        if player.nickname == "Player"
+    )].is_spectator = True
+    room.state = "playing"
+    playing_response = await become_player("spectator-sid", {})
+    assert "waiting room" in playing_response["error"]
+    assert spectator.is_spectator is True
+
+
+@pytest.mark.asyncio
 async def test_room_preview_returns_private_room_metadata_without_joining():
     room_manager = RoomManager()
     room = room_manager.create_room(
@@ -871,7 +928,11 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     sio.emit = AsyncMock()
 
     select_word = sio.handlers["/"]["select_word"]
-    await select_word("drawer-sid", {"word": "banana"})
+    rejected = await select_word("drawer-sid", {"word": "not-a-choice"})
+    assert rejected == {"ok": False, "error": "That word is no longer available"}
+
+    accepted = await select_word("drawer-sid", {"word": "banana"})
+    assert accepted == {"ok": True}
     await asyncio.sleep(0.1)
 
     drawer_hints = [call for call in sio.emit.await_args_list if call.args[0] == "hint_revealed" and call.kwargs.get("to") == "drawer-sid"]
@@ -915,8 +976,6 @@ async def test_chatting_removes_afk_status():
     guess = sio.handlers["/"]["guess"]
     await guess("p1-sid", {"text": "hello chat"})
     assert p1.is_afk is False
-
-
 
 
 
