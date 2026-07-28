@@ -145,6 +145,17 @@ async def test_multi_browser_gameplay_scenario():
             # Step 5: Identify who is drawer and choose word if prompt choice is present
             drawer_page = page1 if await page1.query_selector('.word-choices') else page2
             guesser_page = page2 if drawer_page == page1 else page1
+            drawer_name = "HostAlice" if drawer_page == page1 else "BobGuesser"
+
+            choosing_status = guesser_page.get_by_test_id("choosing-word-status")
+            await choosing_status.wait_for()
+            assert await choosing_status.get_by_text(
+                f"{drawer_name} is choosing a word…",
+                exact=True,
+            ).is_visible()
+            assert not await drawer_page.get_by_test_id(
+                "choosing-word-status"
+            ).is_visible()
 
             if await drawer_page.query_selector('.word-choices button'):
                 await drawer_page.evaluate(
@@ -162,6 +173,7 @@ async def test_multi_browser_gameplay_scenario():
                 await drawer_page.click('.word-choices button:first-child')
 
             # Wait for drawing phase
+            await choosing_status.wait_for(state="detached")
             await drawer_page.wait_for_selector('canvas.drawing-canvas')
             await guesser_page.wait_for_selector('canvas.drawing-canvas')
             assert not await drawer_page.evaluate("window.__wordSelectionErrorSeen")

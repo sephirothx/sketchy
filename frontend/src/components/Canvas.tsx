@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { socket } from "../lib/socket";
 import { useSettingsStore } from "../store/settingsStore";
 import type {
@@ -23,6 +23,7 @@ interface CanvasProps {
   brushWidth: number;
   tool: DrawTool;
   solutionWord?: string | null;
+  overlay?: ReactNode;
 }
 
 function getYYMMDDhhmm(d = new Date()): string {
@@ -432,7 +433,14 @@ export interface CanvasRef {
 }
 
 export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
-  { isDrawer, color, brushWidth, tool, solutionWord = null }: CanvasProps,
+  {
+    isDrawer,
+    color,
+    brushWidth,
+    tool,
+    solutionWord = null,
+    overlay = null,
+  }: CanvasProps,
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -905,6 +913,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
           height={CANVAS_HEIGHT}
           className="preview-canvas"
         />
+        {overlay}
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { RoundEndOverlay } from "../components/RoundEndOverlay";
 import { WaitingRoomPanel } from "../components/WaitingRoomPanel";
 import { GameEndOverlay } from "../components/GameEndOverlay";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
+import { ChoosingWordOverlay } from "../components/ChoosingWordOverlay";
 import { RoomChatPanel } from "../components/RoomChatPanel";
 import { RoomPlayersPanel } from "../components/RoomPlayersPanel";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
@@ -301,6 +302,7 @@ export function GameRoomPage() {
   }
 
   const me = players.find((p) => p.token === token);
+  const drawer = players.find((player) => player.token === drawerToken);
   const isHost = me?.isHost ?? false;
   const amDrawer =
     (phase === "drawing" || phase === "choosing_word") && drawerToken === token;
@@ -696,6 +698,13 @@ export function GameRoomPage() {
                 brushWidth={activeWidth}
                 tool={tool}
                 solutionWord={solutionWord}
+                overlay={
+                  phase === "choosing_word" && !amDrawer ? (
+                    <ChoosingWordOverlay
+                      drawerNickname={drawer?.nickname || "The next player"}
+                    />
+                  ) : null
+                }
               />
               {phase === "round_end" && lastRoundResult && (
                 <RoundEndOverlay
