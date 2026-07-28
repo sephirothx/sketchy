@@ -7,6 +7,7 @@ import { WordDisplay } from "../components/WordDisplay";
 import { Timer } from "../components/Timer";
 import { GuessChat } from "../components/GuessChat";
 import { RoundEndOverlay } from "../components/RoundEndOverlay";
+import { WaitingRoomPanel } from "../components/WaitingRoomPanel";
 import { emitWithAck, socket } from "../lib/socket";
 import { splitMaskedWord } from "../lib/maskedWord";
 import { SettingsIcon } from "../components/SettingsIcon";
@@ -46,6 +47,13 @@ export function GameRoomPage() {
   const maskedWord = useGameStore((s) => s.maskedWord);
   const hintMode = useGameStore((s) => s.hintMode);
   const scoringMode = useGameStore((s) => s.scoringMode);
+  const name = useGameStore((s) => s.name);
+  const isPublic = useGameStore((s) => s.isPublic);
+  const maxPlayers = useGameStore((s) => s.maxPlayers);
+  const rounds = useGameStore((s) => s.rounds);
+  const customWordCount = useGameStore((s) => s.customWordCount);
+  const customWordsOnly = useGameStore((s) => s.customWordsOnly);
+  const drawingSeconds = useGameStore((s) => s.drawingSeconds);
   const nextHintCost = useGameStore((s) => s.nextHintCost);
   const letterPrices = useGameStore((s) => s.letterPrices);
   const myWord = useGameStore((s) => s.myWord);
@@ -73,6 +81,8 @@ export function GameRoomPage() {
   const [wasDrawer, setWasDrawer] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [startBusy, setStartBusy] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   function handleCopyLink() {
     const url = window.location.href;
@@ -217,8 +227,12 @@ export function GameRoomPage() {
     socket.emit("toggle_afk");
   }
 
-  function handleStartGame() {
-    emitWithAck("start_game", {});
+  async function handleStartGame() {
+    setStartBusy(true);
+    setStartError(null);
+    const response = await emitWithAck<AckResponse>("start_game", {});
+    setStartBusy(false);
+    if (!response.ok) setStartError(response.error || "Could not start the game. Please try again.");
   }
 
   const me = players.find((p) => p.token === token);
@@ -523,28 +537,13 @@ export function GameRoomPage() {
       </header>
 
       {roomState === "waiting" && (
-        <div className="waiting-panel">
-          <p>Waiting for players... ({players.length} joined)</p>
-          {isHost && (
-            <button disabled={players.length < 2} onClick={handleStartGame}>
-              Start game
-            </button>
-          )}
-          {finalScores && (
-            <div className="game-end-panel">
-              <h3>{scoringMode === "default" ? "Final scores" : "Game over!"}</h3>
-              {scoringMode === "default" && (
-                <ol>
-                  {finalScores.map((s) => (
-                    <li key={s.token}>
-                      {s.nickname}: {s.score}
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          )}
-        </div>
+        <WaitingRoomPanel name={name} code={code ?? ""} isPublic={isPublic} maxPlayers={maxPlayers}
+          rounds={rounds} drawingSeconds={drawingSeconds} customWordCount={customWordCount}
+          customWordsOnly={customWordsOnly} hintMode={hintMode} scoringMode={scoringMode}
+          spectatorsSeeSolution={spectatorsSeeSolution} hideMaskedPrompt={hideMaskedPrompt}
+          players={players} myToken={token} isHost={isHost} finalScores={finalScores}
+          startBusy={startBusy} startError={startError} onStart={() => void handleStartGame()}
+          onCopyInvite={handleCopyLink} copiedLink={copiedLink} />
       )}
 
       {roomState === "playing" && (

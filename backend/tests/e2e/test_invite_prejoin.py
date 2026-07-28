@@ -38,7 +38,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             assert await spectator_page.is_visible("text=Invite Test Room")
             assert await spectator_page.is_visible("text=Private invite")
             assert await spectator_page.is_visible("text=1/2")
-            await host_page.wait_for_selector("text=Waiting for players... (1 joined)")
+            await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
             # Visitors can explicitly spectate.
             await spectator_page.fill("#invite-nickname", "InviteSpectator")
