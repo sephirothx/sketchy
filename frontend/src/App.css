@@ -567,18 +567,53 @@ textarea:disabled {
   color: #0f172a;
 }
 
-.room-copied-badge {
-  color: #059669;
-  font-weight: 600;
+.invite-copy-toast {
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  border-radius: 999px;
+  bottom: 22px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
+  color: #047857;
   font-size: 13px;
+  font-weight: 700;
+  left: 50%;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 9px 14px;
+  position: fixed;
+  text-align: center;
+  transform: translateX(-50%);
+  z-index: 900;
 }
 
-.game-header-actions button:not(.header-settings-button) {
-  background: #e64980;
-  color: white;
-  border: none;
+.invite-copy-toast.error {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.game-header-afk-button,
+.game-header-leave-button {
   border-radius: 6px;
   padding: 8px 14px;
+  font-weight: 700;
+}
+
+.game-header-afk-button {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.game-header-leave-button {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+}
+
+.game-header-leave-button:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
 }
 
 .waiting-room { max-width: 940px; margin: 0 auto; padding: 28px 0 48px; }
@@ -588,7 +623,6 @@ textarea:disabled {
 .waiting-room-intro h1 { font-size: 28px; }
 .waiting-room-subtitle, .waiting-start-hint { color: #64748b; margin: 6px 0 0; }
 .waiting-invite-button { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; color: #1d4ed8; font-weight: 700; padding: 10px 13px; white-space: nowrap; }
-.waiting-invite-button span { color: #059669; margin-left: 8px; }
 .waiting-room-layout { align-items: start; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 300px; margin-top: 20px; }
 .waiting-room-main { min-width: 0; }
 .waiting-room-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
@@ -1349,18 +1383,6 @@ textarea:disabled {
   border-color: #94a3b8;
 }
 
-.toolbar-action-button.undo-button:hover {
-  background: #eff6ff;
-  color: #2563eb;
-  border-color: #93c5fd;
-}
-
-.toolbar-action-button.clear-button:hover {
-  background: #fef2f2;
-  color: #dc2626;
-  border-color: #fca5a5;
-}
-
 .toolbar-action-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1545,8 +1567,6 @@ textarea:disabled {
   color: #1c2129;
   letter-spacing: 0.5px;
 }
-.round-next-status { align-items: center; color: #64748b; display: flex; font-size: 13px; gap: 4px; justify-content: center; margin: -8px 0 10px; text-align: center; }
-.round-next-status .timer { color: inherit; font-size: inherit; font-weight: 800; }
 .round-personal-result { background: #eff6ff; border-radius: 7px; color: #1e3a8a; margin: 0 0 14px; padding: 8px 10px; text-align: center; }
 .game-end-overlay { align-items: center; background: rgba(15, 23, 42, .82); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 30; }
 .game-end-podium { background: #fff; border-radius: 16px; box-shadow: 0 20px 45px rgba(0, 0, 0, .35); max-height: calc(100vh - 40px); max-width: 520px; overflow-y: auto; padding: 28px; text-align: center; width: 100%; }
@@ -1773,6 +1793,48 @@ textarea:disabled {
 .modal-button:hover {
   background: #3b5bdb;
 }
+
+.confirmation-dialog-icon {
+  align-items: center;
+  background: #fee2e2;
+  border-radius: 999px;
+  color: #b91c1c;
+  display: inline-flex;
+  font-size: 1.25rem;
+  font-weight: 900;
+  height: 42px;
+  justify-content: center;
+  margin-bottom: 12px;
+  width: 42px;
+}
+
+.confirmation-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.confirmation-dialog-actions button {
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 10px 16px;
+}
+
+.confirmation-cancel-button {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.confirmation-danger-button {
+  background: #dc2626;
+  border: 1px solid #dc2626;
+  color: #fff;
+}
+
+.confirmation-danger-button:hover { background: #b91c1c; border-color: #b91c1c; }
+.confirmation-dialog-actions button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
 
 /* Canvas Wrapper & Save Image Bar */
 .canvas-wrapper {
@@ -2308,6 +2370,36 @@ textarea:disabled {
   border-color: #64748b;
 }
 
+[data-theme="dark"] .game-header-afk-button {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .game-header-leave-button {
+  background: #451a1a;
+  border-color: #b91c1c;
+  color: #fecaca;
+}
+
+[data-theme="dark"] .game-header-leave-button:hover {
+  background: #7f1d1d;
+  border-color: #ef4444;
+  color: #fff;
+}
+
+[data-theme="dark"] .invite-copy-toast {
+  background: #064e3b;
+  border-color: #059669;
+  color: #a7f3d0;
+}
+
+[data-theme="dark"] .invite-copy-toast.error {
+  background: #451a1a;
+  border-color: #dc2626;
+  color: #fecaca;
+}
+
 [data-theme="dark"] .brush-size-trigger.active {
   background: #1e3a8a;
   border-color: #3b82f6;
@@ -2341,18 +2433,6 @@ textarea:disabled {
   background: #475569;
   color: #ffffff;
   border-color: #64748b;
-}
-
-[data-theme="dark"] .toolbar-action-button.undo-button:hover {
-  background: #1e3a8a;
-  color: #60a5fa;
-  border-color: #3b82f6;
-}
-
-[data-theme="dark"] .toolbar-action-button.clear-button:hover {
-  background: #451a1a;
-  color: #f87171;
-  border-color: #ef4444;
 }
 
 [data-theme="dark"] .waiting-card {
@@ -2528,6 +2608,17 @@ textarea:disabled {
 
 [data-theme="dark"] .modal-body {
   color: #cbd5e1;
+}
+
+[data-theme="dark"] .confirmation-dialog-icon {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+[data-theme="dark"] .confirmation-cancel-button {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
 }
 
 [data-theme="dark"] .settings-modal-header {

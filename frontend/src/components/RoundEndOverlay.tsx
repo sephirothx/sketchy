@@ -1,14 +1,11 @@
 import { useEffect, useState } from "react";
 import type { RoundEndedPayload, RoundScoreEntry } from "../types";
-import { Timer } from "./Timer";
 
 interface RoundEndOverlayProps {
   word: string;
   drawerToken: string;
   drawerBonus: number;
   myToken: string | null;
-  seconds: number;
-  startedAt: number;
   guesses?: RoundEndedPayload["guesses"];
   scores: RoundScoreEntry[];
   showScores?: boolean;
@@ -37,8 +34,6 @@ export function RoundEndOverlay({
   drawerToken,
   drawerBonus,
   myToken,
-  seconds,
-  startedAt,
   guesses = [],
   scores,
   showScores = true,
@@ -65,7 +60,6 @@ export function RoundEndOverlay({
         <p className="round-end-word">
           The word was <strong>{word}</strong>
         </p>
-        <div className="round-next-status">Next round starts in <Timer totalSeconds={seconds} startedAt={startedAt} /></div>
         {showScores && mine && <p className="round-personal-result">Your round: <strong>{mine.delta >= 0 ? `+${mine.delta}` : mine.delta} points</strong> · now #{mine.newRank}</p>}
         {guesses.length > 0 ? (
           <>
