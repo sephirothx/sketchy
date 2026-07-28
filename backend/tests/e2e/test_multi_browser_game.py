@@ -30,6 +30,7 @@ async def test_multi_browser_gameplay_scenario():
             await page1.goto(BASE_URL)
             await page1.fill('input[placeholder="Your name"]', "HostAlice")
             await page1.click('button:has-text("Create room")')
+            await page1.click('button:has-text("Create room")')
 
             # Wait for navigation to room waiting panel
             await page1.wait_for_selector('.room-copy-button')

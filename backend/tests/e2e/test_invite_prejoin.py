@@ -22,6 +22,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
         try:
             await host_page.goto(BASE_URL)
             await host_page.fill('input[placeholder="Your name"]', "InviteHost")
+            await host_page.click('button:has-text("Create room")')
             await host_page.fill('input[placeholder="Leave blank for a random name!"]', "Invite Test Room")
             await host_page.uncheck('label:has-text("Public (listed below)") input')
             await host_page.fill('label:has-text("Max players") input', "2")
