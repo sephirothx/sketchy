@@ -1,4 +1,5 @@
 import { RoomSettingsEditor } from "./RoomSettingsDialog";
+import { CustomWordsPreview } from "./CustomWordsPreview";
 import type { HintMode, PlayerInfo, ScoreEntry, ScoringMode } from "../types";
 
 interface WaitingRoomPanelProps {
@@ -39,6 +40,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const activePlayers = players.filter((player) => !player.isSpectator);
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
   const host = players.find((player) => player.isHost);
+  const me = players.find((player) => player.token === myToken);
   const canStart = eligiblePlayers.length >= 2;
   const needsPlayers = Math.max(0, 2 - eligiblePlayers.length);
   const rematch = Boolean(finalScores);
@@ -89,6 +91,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 : "Spectators guess along"}
             </li>
           </ul>
+          {props.customWordCount > 0 && !me?.isSpectator && (
+            <CustomWordsPreview count={props.customWordCount} />
+          )}
         </section>
       )}
 
