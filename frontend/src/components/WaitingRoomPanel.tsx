@@ -10,7 +10,7 @@ interface WaitingRoomPanelProps {
   hintMode: HintMode; scoringMode: ScoringMode; spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean; players: PlayerInfo[]; myToken: string | null;
   isHost: boolean; finalScores: ScoreEntry[] | null; startBusy: boolean;
-  startError: string | null; onStart: () => void; onCopyInvite: () => void; copiedLink: boolean;
+  startError: string | null; onStart: () => void; onCopyInvite: () => void;
   messages: ChatMessage[]; onLeave: () => void; onSaveDrawing: () => void; hasDrawing: boolean;
 }
 
@@ -37,7 +37,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         <h1>{props.name}</h1>
         <p className="waiting-room-subtitle">{rematch ? "Last game complete. The lobby is ready for a rematch." : "Get everyone ready before the first round."}</p>
       </div>
-      <button type="button" className="waiting-invite-button" onClick={props.onCopyInvite}>Invite · {props.code}{props.copiedLink && <span>Copied!</span>}</button>
+      <button type="button" className="waiting-invite-button" onClick={props.onCopyInvite}>Invite · {props.code}</button>
     </section>
 
     <div className="waiting-room-layout">

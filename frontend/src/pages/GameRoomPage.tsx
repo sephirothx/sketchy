@@ -9,6 +9,7 @@ import { GuessChat } from "../components/GuessChat";
 import { RoundEndOverlay } from "../components/RoundEndOverlay";
 import { WaitingRoomPanel } from "../components/WaitingRoomPanel";
 import { GameEndOverlay } from "../components/GameEndOverlay";
+import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { emitWithAck, socket } from "../lib/socket";
 import { splitMaskedWord } from "../lib/maskedWord";
 import { SettingsIcon } from "../components/SettingsIcon";
@@ -17,6 +18,10 @@ import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, DrawTool, RoomPreviewResponse, RoomSummary } from "../types";
 
 type EntryStatus = "loading" | "preview" | "joined";
+interface InviteCopyFeedback {
+  kind: "success" | "error";
+  message: string;
+}
 
 function hintModeLabel(room: RoomSummary) {
   if (room.hideMaskedPrompt) return "Prompt details hidden";
@@ -82,7 +87,9 @@ export function GameRoomPage() {
   const [tool, setTool] = useState<DrawTool>("pen");
   const [wasDrawer, setWasDrawer] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<InviteCopyFeedback | null>(null);
+  const copyFeedbackTimerRef = useRef<number | null>(null);
+  const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [lastDrawing, setLastDrawing] = useState<string | null>(null);
@@ -97,15 +104,32 @@ export function GameRoomPage() {
     document.body.removeChild(link);
   }
 
-  function handleCopyLink() {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    }).catch(() => {
-      // fallback if clipboard API fails
-    });
+  function showCopyFeedback(feedback: InviteCopyFeedback, duration: number) {
+    if (copyFeedbackTimerRef.current !== null) window.clearTimeout(copyFeedbackTimerRef.current);
+    setCopyFeedback(feedback);
+    copyFeedbackTimerRef.current = window.setTimeout(() => {
+      setCopyFeedback(null);
+      copyFeedbackTimerRef.current = null;
+    }, duration);
   }
+
+  async function handleCopyLink() {
+    setCopyFeedback(null);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(window.location.href);
+      showCopyFeedback({ kind: "success", message: "Invite link copied." }, 2500);
+    } catch {
+      showCopyFeedback(
+        { kind: "error", message: "Couldn’t copy the link. Copy it from the address bar." },
+        5000,
+      );
+    }
+  }
+
+  useEffect(() => () => {
+    if (copyFeedbackTimerRef.current !== null) window.clearTimeout(copyFeedbackTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!code) return;
@@ -230,10 +254,18 @@ export function GameRoomPage() {
     };
   }, [navigate, reset]);
 
-  function handleLeave() {
+  function performLeave() {
     socket.emit("leave_room");
     reset();
     navigate("/");
+  }
+
+  function handleLeave() {
+    if (roomState === "playing") {
+      setLeaveConfirmationOpen(true);
+      return;
+    }
+    performLeave();
   }
 
   useEffect(() => {
@@ -509,6 +541,25 @@ export function GameRoomPage() {
 
   return (
     <div className={`game-room ${isGuessFocused ? "guess-focused" : ""}`}>
+      {leaveConfirmationOpen && (
+        <ConfirmationDialog
+          title={amDrawer ? "Leave during your turn?" : "Leave active game?"}
+          description={amDrawer
+            ? "You’re the current drawer. Leaving now will interrupt your turn and advance the game for everyone."
+            : "The game is still in progress. You’ll leave the room and give up your place in this game."}
+          confirmLabel="Leave game"
+          onCancel={() => setLeaveConfirmationOpen(false)}
+          onConfirm={() => {
+            setLeaveConfirmationOpen(false);
+            performLeave();
+          }}
+        />
+      )}
+      {copyFeedback && (
+        <div className={`invite-copy-toast ${copyFeedback.kind}`} role={copyFeedback.kind === "error" ? "alert" : "status"}>
+          {copyFeedback.message}
+        </div>
+      )}
       {notification && (
         <div className="modal-overlay" onClick={() => setNotification(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -526,21 +577,22 @@ export function GameRoomPage() {
           <button
             type="button"
             className="room-copy-button"
-            onClick={handleCopyLink}
+            onClick={() => void handleCopyLink()}
             title="Click to copy room invite link"
           >
             <span>Code: {code}</span>
-            {copiedLink && <span className="room-copied-badge">Copied link! ✓</span>}
           </button>
         </div>
         <div className="game-header-actions">
           <button
+            type="button"
+            className="game-header-afk-button"
             style={{ background: me?.isAfk ? "#f59e0b" : undefined, color: me?.isAfk ? "#fff" : undefined }}
             onClick={handleToggleAfk}
           >
             {me?.isAfk ? "AFK 💤" : "AFK"}
           </button>
-          <button onClick={handleLeave}>Leave</button>
+          <button type="button" className="game-header-leave-button" onClick={handleLeave}>Leave</button>
           <button
             type="button"
             className="header-settings-button"
@@ -562,7 +614,7 @@ export function GameRoomPage() {
           spectatorsSeeSolution={spectatorsSeeSolution} hideMaskedPrompt={hideMaskedPrompt}
           players={players} myToken={token} isHost={isHost} finalScores={finalScores}
           startBusy={startBusy} startError={startError} onStart={() => void handleStartGame()}
-          onCopyInvite={handleCopyLink} copiedLink={copiedLink} messages={messages}
+          onCopyInvite={() => void handleCopyLink()} messages={messages}
           onLeave={handleLeave}
           onSaveDrawing={saveLastDrawing} hasDrawing={Boolean(lastDrawing)} />
       )}
@@ -599,7 +651,9 @@ export function GameRoomPage() {
               <span>
                 Round {roundNumber}/{totalRounds}
               </span>
-              <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
+              {phase !== "round_end" && (
+                <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
+              )}
             </div>
             <WordDisplay
               isDrawer={amDrawer}
@@ -631,8 +685,6 @@ export function GameRoomPage() {
                 guesses={lastRoundResult.guesses}
                 scores={lastRoundResult.scores}
                 myToken={token}
-                seconds={phaseSeconds}
-                startedAt={phaseStartedAt}
                 showScores={scoringMode === "default"}
               />
             )}
