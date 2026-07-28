@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, SERVER_URL } from "../lib/socket";
 import { SettingsIcon } from "../components/SettingsIcon";
+import { PublicRoomCard } from "../components/PublicRoomCard";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, HintMode, RoomSummary, ScoringMode } from "../types";
@@ -398,50 +399,11 @@ export function LobbyBrowserPage() {
             No public rooms match your search criteria.
           </p>
         ) : (
-          <ul className="room-list">
+          <div className="room-list">
             {filteredRooms.map((room) => (
-              <li key={room.id} className="room-row">
-                <span className="room-name">{room.name}</span>
-                <span className="room-meta">
-                  {room.playerCount}/{room.maxPlayers} players &middot; {room.state} &middot;{" "}
-                  {room.rounds} {room.rounds === 1 ? "round" : "rounds"} &middot;{" "}
-                  {room.drawingSeconds}s to draw &middot;{" "}
-                  {room.scoringMode === "none" ? "no scoring" : "default scoring"} &middot;{" "}
-                  {room.spectatorsSeeSolution ? "spectators see solution" : "spectators see masked word"} &middot;{" "}
-                  {room.hideMaskedPrompt
-                    ? "hidden prompt"
-                    : room.customWordCount > 0
-                    ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " + default"}`
-                    : "default words"}
-                  {room.hintMode !== "none" && (
-                    <>
-                      {" "}
-                      &middot;{" "}
-                      {room.hintMode === "checkpoints"
-                        ? "timed hints"
-                        : room.hintMode === "wheel"
-                        ? "buy-a-letter hints"
-                        : "buyable hints"}
-                    </>
-                  )}
-                </span>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button
-                    disabled={busy || room.playerCount >= room.maxPlayers}
-                    onClick={() => handleJoinRoom(room, false)}
-                  >
-                    Join
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => handleJoinRoom(room, true)}
-                  >
-                    Spectate
-                  </button>
-                </div>
-              </li>
+              <PublicRoomCard key={room.id} room={room} busy={busy} onJoin={(asSpectator) => void handleJoinRoom(room, asSpectator)} />
             ))}
-          </ul>
+          </div>
         )}
       </section>
     </div>
