@@ -43,6 +43,8 @@ def test_validated_draw_payload_preserves_off_canvas_pointer_path():
         ("draw_start", {"x": 0.5, "y": 0.5, "color": "black", "width": 4}),
         ("draw_move", {"points": []}),
         ("draw_move", {"points": [{"x": float("nan"), "y": 0.5}]}),
+        ("draw_fill", {"x": 1, "y": 0.5, "color": "#000000"}),
+        ("draw_fill", {"x": 0.5, "y": 0.5, "color": "black"}),
         (
             "draw_shape",
             {
@@ -307,8 +309,12 @@ async def test_draw_handler_rejects_events_outside_drawing_phase():
     await draw_start("drawer-sid", payload)
     assert room.game.strokes == [
         {
-            "event": "draw_start",
-            "payload": {"x": 0.2, "y": 0.3, "color": "#000000", "width": 4.0},
+            "event": "draw_path",
+            "payload": {
+                "points": [{"x": 0.2, "y": 0.3}],
+                "color": "#000000",
+                "width": 4.0,
+            },
         }
     ]
 
@@ -588,7 +594,7 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     # Drawer undoes Clear - recovers pre-clear stroke
     await undo_stroke("drawer-sid", {})
     assert len(room.game.strokes) == 1
-    assert room.game.strokes[0]["event"] == "draw_start"
+    assert room.game.strokes[0]["event"] == "draw_path"
 
     timer = events._phase_timers.pop(room.id, None)
     if timer:
@@ -614,40 +620,22 @@ async def test_draw_fill_handler_validation():
     sio.emit = AsyncMock()
     draw_fill = sio.handlers["/"]["draw_fill"]
 
-    # Valid fill payload
-    valid_patch = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
     valid_data = {
-        "patchX": 10,
-        "patchY": 10,
-        "patchWidth": 50,
-        "patchHeight": 50,
-        "patchData": valid_patch,
+        "x": 0.25,
+        "y": 0.75,
+        "color": "#AABBCC",
+        "unexpectedClientData": "not stored",
     }
     await draw_fill("drawer-sid", valid_data)
     assert len(room.game.strokes) == 1
-    assert room.game.strokes[0]["event"] == "draw_fill"
-
-    # Oversized patch data payload (exceeding MAX_FILL_PATCH_CHARS = 300,000)
-    oversized_data = {
-        "patchX": 10,
-        "patchY": 10,
-        "patchWidth": 50,
-        "patchHeight": 50,
-        "patchData": "A" * 300_001,
+    assert room.game.strokes[0] == {
+        "event": "draw_fill",
+        "payload": {"x": 0.25, "y": 0.75, "color": "#aabbcc"},
     }
-    await draw_fill("drawer-sid", oversized_data)
-    assert len(room.game.strokes) == 1  # Not added
 
-    # Out of bounds fill payload (patchX + patchWidth > CANVAS_WIDTH 800)
-    oob_data = {
-        "patchX": 780,
-        "patchY": 10,
-        "patchWidth": 50,
-        "patchHeight": 50,
-        "patchData": valid_patch,
-    }
-    await draw_fill("drawer-sid", oob_data)
-    assert len(room.game.strokes) == 1  # Not added
+    await draw_fill("drawer-sid", {"x": -0.01, "y": 0.5, "color": "#000000"})
+    await draw_fill("drawer-sid", {"x": 0.5, "y": 0.5, "color": "invalid"})
+    assert len(room.game.strokes) == 1
 
     timer = events._phase_timers.pop(room.id, None)
     if timer:
@@ -766,7 +754,16 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
         if call.args[0] == "sync_strokes" and call.kwargs.get("to") == "joiner-sid"
     ]
     assert len(emitted_sync) == 1
-    assert len(emitted_sync[0].args[1]["strokes"]) == 2
+    assert emitted_sync[0].args[1]["strokes"] == [
+        {
+            "event": "draw_path",
+            "payload": {
+                "points": [{"x": 0.1, "y": 0.2}, {"x": 0.3, "y": 0.4}],
+                "color": "#000000",
+                "width": 4,
+            },
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -1013,4 +1010,3 @@ async def test_chatting_removes_afk_status():
     guess = sio.handlers["/"]["guess"]
     await guess("p1-sid", {"text": "hello chat"})
     assert p1.is_afk is False
-

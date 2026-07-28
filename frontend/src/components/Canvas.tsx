@@ -7,6 +7,7 @@ import type {
   ShapeType,
   StrokeFillPayload,
   StrokeMovePayload,
+  StrokePathPayload,
   StrokePoint,
   StrokeRecord,
   StrokeShapePayload,
@@ -354,16 +355,9 @@ function drawShapeOutlinePixels(
   rasterizePath(ctx, shapeOutlinePoints(from, to, shape), strokeWidth / 2, hexToRgba(strokeColor), true);
 }
 
-interface BoundingBox {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
-
 // Stack-based 8-connected flood fill, mutating `imageData.data` in place and
-// returning the bounding box of every pixel it touched (or null if the
-// clicked pixel already exactly matches the fill color). 8-connectivity
+// returning whether it changed any pixels (false when the clicked pixel
+// already exactly matches the fill color). 8-connectivity
 // (orthogonal + diagonal neighbors) is used rather than plain 4-connectivity
 // so that regions which only touch corner-to-corner - e.g. the pinched tip
 // of a triangle, or two areas separated by a thin single-pixel-wide
@@ -384,10 +378,10 @@ function floodFillPixels(
   startX: number,
   startY: number,
   fillColor: [number, number, number, number],
-): BoundingBox | null {
+): boolean {
   const { width, height, data } = imageData;
   const startIndex = (startY * width + startX) * 4;
-  if (colorsEqual(data, startIndex, fillColor)) return null;
+  if (colorsEqual(data, startIndex, fillColor)) return false;
   const target: [number, number, number, number] = [
     data[startIndex],
     data[startIndex + 1],
@@ -397,7 +391,6 @@ function floodFillPixels(
 
   const visited = new Uint8Array(width * height);
   const stack: number[] = [startX, startY];
-  const box: BoundingBox = { minX: startX, minY: startY, maxX: startX, maxY: startY };
 
   while (stack.length > 0) {
     const y = stack.pop()!;
@@ -412,10 +405,6 @@ function floodFillPixels(
     data[index + 1] = fillColor[1];
     data[index + 2] = fillColor[2];
     data[index + 3] = fillColor[3];
-    if (x < box.minX) box.minX = x;
-    if (x > box.maxX) box.maxX = x;
-    if (y < box.minY) box.minY = y;
-    if (y > box.maxY) box.maxY = y;
     stack.push(
       x + 1, y,
       x - 1, y,
@@ -427,28 +416,17 @@ function floodFillPixels(
       x - 1, y - 1,
     );
   }
-  return box;
+  return true;
 }
 
-// Loads a data-URL image (never a network fetch, so this resolves quickly),
-// used so replay (sync_strokes) can await each fill patch in order before
-// applying subsequent strokes on top of it.
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("failed to load fill patch image"));
-    img.src = src;
-  });
-}
-
-async function applyFillPatch(ctx: CanvasRenderingContext2D, payload: StrokeFillPayload): Promise<void> {
-  try {
-    const img = await loadImage(`data:image/png;base64,${payload.patchData}`);
-    ctx.drawImage(img, payload.patchX, payload.patchY);
-  } catch {
-    // A corrupt/undecodable patch shouldn't crash the whole replay - just skip it.
-  }
+function applyFillAction(ctx: CanvasRenderingContext2D, payload: StrokeFillPayload): boolean {
+  const x = Math.floor(payload.x * CANVAS_WIDTH);
+  const y = Math.floor(payload.y * CANVAS_HEIGHT);
+  if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) return false;
+  const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  if (!floodFillPixels(imageData, x, y, hexToRgba(payload.color))) return false;
+  ctx.putImageData(imageData, 0, 0);
+  return true;
 }
 
 export interface CanvasRef {
@@ -596,7 +574,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     const onDrawFill = (payload: StrokeFillPayload) => {
       const ctx = ctxRef.current;
       if (!ctx) return;
-      void applyFillPatch(ctx, payload);
+      applyFillAction(ctx, payload);
     };
 
     const onClearCanvas = () => {
@@ -607,16 +585,12 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       remoteState.last = null;
     };
 
-    const onSyncStrokes = async (payload: { strokes: StrokeRecord[] }) => {
+    const onSyncStrokes = (payload: { strokes: StrokeRecord[] }) => {
       const replayGeneration = ++replayGenerationRef.current;
       // Replay the entire stroke log into an offscreen buffer first, then
       // swap it onto the visible canvas in a single paint. Replaying
-      // directly on the visible canvas (as before) meant clearing it up
-      // front and redrawing stroke-by-stroke while awaiting each fill
-      // patch's async image decode in between - which left the canvas
-      // visibly blank/partial for a frame or more whenever the log
-      // contained a fill, producing a flicker (most noticeable right after
-      // Undo, since undo always triggers a full resync).
+      // directly on the visible canvas would expose a blank/partial frame
+      // during a full replay, most noticeably after Undo.
       const offscreen = document.createElement("canvas");
       offscreen.width = CANVAS_WIDTH;
       offscreen.height = CANVAS_HEIGHT;
@@ -624,37 +598,25 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       if (!offCtx) return;
       fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      let last: StrokePoint | null = null;
-      let color = "#000000";
-      let width = 4;
-
       for (const stroke of payload.strokes) {
-        if (stroke.event === "draw_start") {
-          const p = stroke.payload as StrokeStartPayload;
-          last = { x: p.x, y: p.y };
-          color = p.color;
-          width = p.width;
-          drawSegmentOn(offCtx, last, last, color, width);
-        } else if (stroke.event === "draw_move") {
-          const p = stroke.payload as StrokeMovePayload;
-          if (last && p.points.length > 0) {
-            const polyline: Point[] = [toPixels(last)];
-            for (const pt of p.points) {
-              polyline.push(toPixels(pt));
-            }
-            rasterizePolyline(offCtx, polyline, width / 2, hexToRgba(color));
-            last = p.points[p.points.length - 1];
+        if (stroke.event === "draw_path") {
+          const path = stroke.payload as StrokePathPayload;
+          if (path.points.length > 0) {
+            const points = path.points.map(toPixels);
+            rasterizePath(
+              offCtx,
+              points.length === 1 ? [points[0], points[0]] : points,
+              path.width / 2,
+              hexToRgba(path.color),
+              false,
+            );
           }
         } else if (stroke.event === "draw_shape") {
           drawShapeOn(offCtx, stroke.payload as StrokeShapePayload);
         } else if (stroke.event === "draw_fill") {
-          await applyFillPatch(offCtx, stroke.payload as StrokeFillPayload);
-          if (replayGeneration !== replayGenerationRef.current) return;
+          applyFillAction(offCtx, stroke.payload as StrokeFillPayload);
         } else if (stroke.event === "clear_canvas") {
           fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
-          last = null;
-        } else {
-          last = null;
         }
       }
 
@@ -710,39 +672,13 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     if (preview && previewCtx) previewCtx.clearRect(0, 0, preview.width, preview.height);
   }
 
-  // Flood-fills starting at the clicked pixel, applies the result to the
-  // local canvas immediately, and ships the affected rectangular patch as a
-  // PNG so every other client renders pixel-identical results (see
-  // StrokeFillPayload).
+  // Flood-fills locally, then sends only the semantic action. Other clients
+  // and replay rebuild the result from the same point and color.
   function performFill(point: StrokePoint) {
     const ctx = ctxRef.current;
     if (!ctx) return;
-    const x = Math.floor(point.x * CANVAS_WIDTH);
-    const y = Math.floor(point.y * CANVAS_HEIGHT);
-    if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) return;
-
-    const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    const box = floodFillPixels(imageData, x, y, hexToRgba(color));
-    if (!box) return; // clicked pixel already matches the fill color closely enough
-    ctx.putImageData(imageData, 0, 0);
-
-    const patchWidth = box.maxX - box.minX + 1;
-    const patchHeight = box.maxY - box.minY + 1;
-    const patchCanvas = document.createElement("canvas");
-    patchCanvas.width = patchWidth;
-    patchCanvas.height = patchHeight;
-    const patchCtx = patchCanvas.getContext("2d");
-    if (!patchCtx) return;
-    patchCtx.putImageData(ctx.getImageData(box.minX, box.minY, patchWidth, patchHeight), 0, 0);
-    const patchData = patchCanvas.toDataURL("image/png").split(",")[1] ?? "";
-
-    socket.emit("draw_fill", {
-      patchX: box.minX,
-      patchY: box.minY,
-      patchWidth,
-      patchHeight,
-      patchData,
-    });
+    const payload: StrokeFillPayload = { x: point.x, y: point.y, color };
+    if (applyFillAction(ctx, payload)) socket.emit("draw_fill", payload);
   }
 
   function handlePointerDown(e: ReactPointerEvent<HTMLCanvasElement>) {
