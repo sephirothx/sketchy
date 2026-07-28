@@ -33,8 +33,19 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             await page.select_option('label:has-text("Scoring") select', "none")
             await page.check('label:has-text("Always hide the masked prompt") input')
             assert await page.is_visible('text=Hints are off because the masked prompt is hidden.')
+            await page.evaluate(
+                """() => {
+                    window.__inviteLoaderSeen = false;
+                    new MutationObserver(() => {
+                        if (document.querySelector(".invite-loading-card")) {
+                            window.__inviteLoaderSeen = true;
+                        }
+                    }).observe(document.body, { childList: true, subtree: true });
+                }"""
+            )
             await page.click('.create-room-submit')
             await page.wait_for_selector('[data-testid="waiting-room"]')
+            assert not await page.evaluate("window.__inviteLoaderSeen")
         finally:
             await context.close()
             await browser.close()

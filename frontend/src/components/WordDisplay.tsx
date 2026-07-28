@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
-import { emitWithAck } from "../lib/socket";
+import { useState, type ReactNode } from "react";
+import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { useToast } from "../lib/toast";
 import { splitMaskedWord } from "../lib/maskedWord";
-import type { HintMode } from "../types";
+import type { AckResponse, HintMode } from "../types";
 
 interface WordDisplayProps {
   isDrawer: boolean;
@@ -19,7 +20,7 @@ interface WordDisplayProps {
 // tightly spaced blanks per word, followed by each word's letter count (in
 // order) at the very end. Digits only ever appear in that trailing count
 // list, so splitting on the first digit cleanly separates the two parts.
-function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; cost: number }): ReactNode {
+function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
   const { blanks, counts } = splitMaskedWord(masked);
   let blanksNode: ReactNode = blanks;
 
@@ -44,9 +45,9 @@ function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; c
             key={nodes.length}
             type="button"
             className="hint-blank"
-            disabled={!buyableProps.canAfford}
+            disabled={!buyableProps.canAfford || buyableProps.busy}
             title={`Buy this letter for ${buyableProps.cost} points`}
-            onClick={() => emitWithAck("buy_hint", { slot: currentSlot })}
+            onClick={() => buyableProps.onBuy(currentSlot)}
           >
             _
           </button>,
@@ -90,14 +91,30 @@ export function WordDisplay({
   nextHintCost = null,
   letterPrices = null,
 }: WordDisplayProps) {
+  const { notify } = useToast();
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  async function runAction(key: string, event: string, data: unknown, action: string) {
+    if (pendingAction) return;
+    setPendingAction(key);
+    try {
+      const response = await emitWithAck<AckResponse>(event, data);
+      if (!response.ok) notify(response.error || `Could not ${action}.`, "error");
+    } catch (requestError) {
+      notify(socketRequestErrorMessage(requestError, action), "error");
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   if (isDrawer && wordChoices.length > 0 && !myWord) {
     return (
       <div className="word-display choosing">
         <p>Choose a word to draw:</p>
         <div className="word-choices">
           {wordChoices.map((word) => (
-            <button key={word} onClick={() => emitWithAck("select_word", { word })}>
-              {word}
+            <button key={word} disabled={pendingAction !== null} onClick={() => void runAction(`word:${word}`, "select_word", { word }, "select the word")}>
+              {pendingAction === `word:${word}` ? "Choosing…" : word}
             </button>
           ))}
         </div>
@@ -128,7 +145,12 @@ export function WordDisplay({
         <span className="word-masked">
           {renderMaskedWord(
             maskedWord,
-            canBuy ? { canAfford: myScore >= nextHintCost, cost: nextHintCost } : undefined,
+            canBuy ? {
+              canAfford: myScore >= nextHintCost,
+              cost: nextHintCost,
+              busy: pendingAction !== null,
+              onBuy: (slot) => void runAction(`hint:${slot}`, "buy_hint", { slot }, "buy the hint"),
+            } : undefined,
           )}
         </span>
       )}
@@ -143,9 +165,9 @@ export function WordDisplay({
                   key={letter}
                   type="button"
                   className="wheel-letter-btn"
-                  disabled={myScore < price}
+                  disabled={myScore < price || pendingAction !== null}
                   title={`Buy "${letter.toUpperCase()}" for ${price} points`}
-                  onClick={() => emitWithAck("buy_wheel_letter", { letter })}
+                  onClick={() => void runAction(`letter:${letter}`, "buy_wheel_letter", { letter }, "buy the letter hint")}
                 >
                   {letter.toUpperCase()}
                   <sub>{price}</sub>
@@ -157,4 +179,3 @@ export function WordDisplay({
     </div>
   );
 }
-

@@ -8,9 +8,63 @@ export const socket: Socket = io(SERVER_URL, {
   transports: ["websocket", "polling"],
 });
 
-/** Emit an event and await the server's ack callback. */
-export function emitWithAck<T = AckResponse>(event: string, data: unknown): Promise<T> {
-  return new Promise((resolve) => {
-    socket.emit(event, data, (response: T) => resolve(response));
+export const DEFAULT_ACK_TIMEOUT_MS = 8000;
+
+export type SocketRequestErrorCode = "disconnected" | "timeout";
+
+export class SocketRequestError extends Error {
+  readonly code: SocketRequestErrorCode;
+
+  constructor(code: SocketRequestErrorCode, message: string) {
+    super(message);
+    this.name = "SocketRequestError";
+    this.code = code;
+  }
+}
+
+export function socketRequestErrorMessage(error: unknown, action: string): string {
+  if (error instanceof SocketRequestError) {
+    if (error.code === "disconnected") return `Connection lost while trying to ${action}. Please try again.`;
+    return `The request to ${action} timed out. Please try again.`;
+  }
+  return `Could not ${action}. Please try again.`;
+}
+
+/** Emit an event and await its acknowledgement without allowing callers to hang forever. */
+export function emitWithAck<T = AckResponse>(
+  event: string,
+  data: unknown,
+  options: { timeoutMs?: number } = {},
+): Promise<T> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return Promise.reject(new SocketRequestError("disconnected", "Browser is offline"));
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
+
+    function cleanup() {
+      clearTimeout(timeout);
+      socket.off("disconnect", onDisconnect);
+    }
+
+    function finish(callback: () => void) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    }
+
+    function onDisconnect() {
+      finish(() => reject(new SocketRequestError("disconnected", "Socket disconnected before acknowledgement")));
+    }
+
+    const timeout = setTimeout(() => {
+      finish(() => reject(new SocketRequestError("timeout", `No acknowledgement for ${event}`)));
+    }, timeoutMs);
+
+    socket.on("disconnect", onDisconnect);
+    socket.emit(event, data, (response: T) => finish(() => resolve(response)));
   });
 }

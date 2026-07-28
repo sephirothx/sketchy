@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CustomWordsEditor } from "./CustomWordsEditor";
 import { analyzeCustomWords } from "../lib/customWords";
-import { emitWithAck } from "../lib/socket";
+import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, EditableRoomSettings, HintMode, ScoringMode } from "../types";
 
 const emptySettings: EditableRoomSettings = { name: "", isPublic: true, maxPlayers: 8, rounds: 3, drawingSeconds: 80, customWords: "", customWordsOnly: false, hintMode: "none", scoringMode: "default", spectatorsSeeSolution: false, hideMaskedPrompt: false };
@@ -13,20 +13,35 @@ export function RoomSettingsEditor() {
   const [error, setError] = useState<string | null>(null);
   const analysis = analyzeCustomWords(settings.customWords);
 
-  useEffect(() => { void (async () => {
-    const response = await emitWithAck<{ ok: boolean; error?: string; settings?: EditableRoomSettings }>("get_room_settings", {});
-    if (response.ok && response.settings) setSettings(response.settings);
-    else setError(response.error || "Could not load room settings");
-    setLoading(false);
-  })(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await emitWithAck<{ ok: boolean; error?: string; settings?: EditableRoomSettings }>("get_room_settings", {});
+        if (cancelled) return;
+        if (response.ok && response.settings) setSettings(response.settings);
+        else setError(response.error || "Could not load room settings");
+      } catch (loadError) {
+        if (!cancelled) setError(socketRequestErrorMessage(loadError, "load room settings"));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   function update(patch: Partial<EditableRoomSettings>) { setSettings((current) => ({ ...current, ...patch })); }
   async function save() {
     if (analysis.hasErrors) { setError("Fix custom-word errors before saving."); return; }
     setBusy(true); setError(null);
-    const response = await emitWithAck<AckResponse>("update_room_settings", settings);
-    setBusy(false);
-    if (response.ok) setError(null); else setError(response.error || "Could not save room settings");
+    try {
+      const response = await emitWithAck<AckResponse>("update_room_settings", settings);
+      if (response.ok) setError(null); else setError(response.error || "Could not save room settings");
+    } catch (saveError) {
+      setError(socketRequestErrorMessage(saveError, "save room settings"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return <section className="waiting-card room-settings-editor" aria-labelledby="room-settings-title">

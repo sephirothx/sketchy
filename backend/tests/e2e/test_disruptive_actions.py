@@ -15,6 +15,8 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
         player_context = await browser.new_context()
         host_page = await host_context.new_page()
         player_page = await player_context.new_page()
+        host_page.set_default_timeout(10000)
+        player_page.set_default_timeout(10000)
 
         try:
             await host_page.goto(BASE_URL)
@@ -25,7 +27,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
 
             await host_page.click('.room-copy-button')
             await host_page.wait_for_selector(
-                '.invite-copy-toast.success:has-text("Invite link copied.")'
+                '.app-toast.success:has-text("Invite link copied.")'
             )
 
             await host_page.evaluate(
@@ -38,7 +40,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             )
             await host_page.click('.room-copy-button')
             await host_page.wait_for_selector(
-                '.invite-copy-toast.error:has-text("Couldn’t copy the link")'
+                '.app-toast.error:has-text("Couldn’t copy the link")'
             )
 
             code_text = await host_page.inner_text('.room-copy-button')
@@ -97,6 +99,7 @@ async def test_waiting_room_leave_remains_immediate():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         page = await browser.new_page()
+        page.set_default_timeout(10000)
 
         try:
             await page.goto(BASE_URL)
