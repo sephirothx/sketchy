@@ -1,4 +1,8 @@
 import type { HintMode, PlayerInfo, ScoreEntry, ScoringMode } from "../types";
+import { useState } from "react";
+import { WaitingRoomChat } from "./WaitingRoomChat";
+import { RoomSettingsEditor } from "./RoomSettingsDialog";
+import type { ChatMessage } from "../types";
 
 interface WaitingRoomPanelProps {
   name: string; code: string; isPublic: boolean; maxPlayers: number; rounds: number;
@@ -7,6 +11,7 @@ interface WaitingRoomPanelProps {
   hideMaskedPrompt: boolean; players: PlayerInfo[]; myToken: string | null;
   isHost: boolean; finalScores: ScoreEntry[] | null; startBusy: boolean;
   startError: string | null; onStart: () => void; onCopyInvite: () => void; copiedLink: boolean;
+  messages: ChatMessage[]; onLeave: () => void; onSaveDrawing: () => void; hasDrawing: boolean;
 }
 
 function hintLabel(mode: HintMode, hidden: boolean) {
@@ -23,6 +28,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const canStart = eligiblePlayers.length >= 2;
   const needsPlayers = Math.max(0, 2 - eligiblePlayers.length);
   const rematch = Boolean(finalScores);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return <main className="waiting-room" data-testid="waiting-room">
     <section className="waiting-room-intro">
@@ -34,6 +40,8 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       <button type="button" className="waiting-invite-button" onClick={props.onCopyInvite}>Invite · {props.code}{props.copiedLink && <span>Copied!</span>}</button>
     </section>
 
+    <div className="waiting-room-layout">
+    <div className="waiting-room-main">
     <div className="waiting-room-grid">
       <section className="waiting-card waiting-roster-card" aria-labelledby="waiting-roster-title">
         <div className="waiting-card-heading"><div><p className="waiting-card-kicker">People in room</p><h2 id="waiting-roster-title">Players ({activePlayers.length}/{props.maxPlayers})</h2></div><span className={`waiting-ready-count ${canStart ? "is-ready" : ""}`}>{eligiblePlayers.length} ready</span></div>
@@ -54,9 +62,14 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     </div>
 
     <section className="waiting-card waiting-start-card" aria-live="polite">
-      {isHost ? <><div><p className="waiting-card-kicker">Host controls</p><h2>{rematch ? "Ready for another game?" : "Start when everyone is ready"}</h2><p className="waiting-start-hint">{canStart ? `${eligiblePlayers.length} active players are ready to play.` : `Need ${needsPlayers} more active player${needsPlayers === 1 ? "" : "s"}. Spectators, AFK, and disconnected players do not count.`}</p>{props.startError && <p className="waiting-start-error">{props.startError}</p>}</div><button type="button" className="waiting-start-button" disabled={!canStart || props.startBusy} onClick={props.onStart}>{props.startBusy ? "Starting…" : rematch ? "Start rematch" : "Start game"}</button></> : <div><p className="waiting-card-kicker">Waiting for host</p><h2>{host ? `${host.nickname} will start ${rematch ? "the rematch" : "the game"}` : "Waiting for a host"}</h2><p className="waiting-start-hint">You can invite friends or mark yourself AFK while you wait.</p></div>}
+      {isHost ? <><div><p className="waiting-card-kicker">Host controls</p><h2>{rematch ? "Ready for another game?" : "Start when everyone is ready"}</h2><p className="waiting-start-hint">{canStart ? `${eligiblePlayers.length} active players are ready to play.` : `Need ${needsPlayers} more active player${needsPlayers === 1 ? "" : "s"}. Spectators, AFK, and disconnected players do not count.`}</p>{props.startError && <p className="waiting-start-error">{props.startError}</p>}</div><div className="waiting-host-actions"><button type="button" className="waiting-start-button" disabled={!canStart || props.startBusy} onClick={props.onStart}>{props.startBusy ? "Starting…" : rematch ? "Play again" : "Start game"}</button></div></> : <div><p className="waiting-card-kicker">Waiting for host</p><h2>{host ? `${host.nickname} will start ${rematch ? "the rematch" : "the game"}` : "Waiting for a host"}</h2><p className="waiting-start-hint">You can invite friends or mark yourself AFK while you wait.</p></div>}
     </section>
 
-    {finalScores && <section className="waiting-card waiting-results-card" aria-labelledby="waiting-results-title"><p className="waiting-card-kicker">Previous game</p><h2 id="waiting-results-title">Last game results</h2>{props.scoringMode === "default" ? <ol>{finalScores.map((score) => <li key={score.token}>{score.nickname}<strong>{score.score}</strong></li>)}</ol> : <p>That game ended without scorekeeping.</p>}</section>}
+    {isHost && <details className="waiting-settings-inline" onToggle={(event) => setSettingsOpen(event.currentTarget.open)}><summary>Edit room settings</summary>{settingsOpen && <RoomSettingsEditor />}</details>}
+
+    {finalScores && <section className="waiting-card waiting-results-card" aria-labelledby="waiting-results-title"><p className="waiting-card-kicker">Previous game</p><h2 id="waiting-results-title">{props.scoringMode === "default" ? `${finalScores[0]?.nickname ?? "The room"} wins!` : "Game complete"}</h2>{props.scoringMode === "default" ? <><p className="waiting-placement">Your place: #{Math.max(1, finalScores.findIndex((score) => score.token === myToken) + 1)}</p><ol>{finalScores.map((score, index) => <li key={score.token}><span>{["🥇", "🥈", "🥉"][index] ?? `#${index + 1}`} {score.nickname}{score.token === myToken ? " (you)" : ""}</span><strong>{score.score}</strong></li>)}</ol></> : <p>That game ended without scorekeeping. Thanks for playing!</p>}<div className="waiting-results-actions"><button type="button" onClick={props.onLeave}>Back to lobby</button>{props.hasDrawing && <button type="button" onClick={props.onSaveDrawing}>Save last drawing</button>}</div></section>}
+    </div>
+    <aside className="waiting-room-chat-column"><WaitingRoomChat messages={props.messages} /></aside>
+    </div>
   </main>;
 }

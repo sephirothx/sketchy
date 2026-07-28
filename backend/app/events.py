@@ -124,6 +124,46 @@ def _validated_draw_payload(event_name: str, data) -> dict | None:
 
 
 def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> None:
+    def room_settings_from_data(data: dict, *, fallback: Room | None = None) -> dict:
+        """Normalize room settings for both creation and host edits."""
+        data = data or {}
+        max_players = _clamp(int(data.get("maxPlayers", fallback.max_players if fallback else 8) or 8), 2, 12)
+        rounds = _clamp(int(data.get("rounds", fallback.rounds if fallback else 3) or 3), 1, 10)
+        drawing_seconds = _clamp(int(data.get("drawingSeconds", fallback.drawing_seconds if fallback else DRAWING_SECONDS) or DRAWING_SECONDS), 15, 240)
+        hint_mode = str(data.get("hintMode", fallback.hint_mode if fallback else "none") or "none")
+        scoring_mode = str(data.get("scoringMode", fallback.scoring_mode if fallback else "default") or "default")
+        if hint_mode not in HINT_MODES:
+            hint_mode = "none"
+        if scoring_mode not in SCORING_MODES:
+            scoring_mode = "default"
+        if scoring_mode == "none" and hint_mode in ("purchase", "wheel"):
+            hint_mode = "none"
+        hide_masked_prompt = bool(data.get("hideMaskedPrompt", fallback.hide_masked_prompt if fallback else False))
+        if hide_masked_prompt:
+            hint_mode = "none"
+        return {
+            "name": str(data.get("name", fallback.name if fallback else "") or "").strip()[:40],
+            "is_public": bool(data.get("isPublic", fallback.is_public if fallback else True)),
+            "max_players": max_players,
+            "rounds": rounds,
+            "drawing_seconds": drawing_seconds,
+            "custom_words": parse_custom_word_list(str(data.get("customWords", "") or "")) if "customWords" in data else list(fallback.custom_words if fallback else []),
+            "custom_words_only": bool(data.get("customWordsOnly", fallback.custom_words_only if fallback else False)),
+            "hint_mode": hint_mode,
+            "scoring_mode": scoring_mode,
+            "spectators_see_solution": bool(data.get("spectatorsSeeSolution", fallback.spectators_see_solution if fallback else False)),
+            "hide_masked_prompt": hide_masked_prompt,
+        }
+
+    def editable_room_settings(room: Room) -> dict:
+        return {
+            "name": room.name, "isPublic": room.is_public, "maxPlayers": room.max_players,
+            "rounds": room.rounds, "drawingSeconds": room.drawing_seconds,
+            "customWords": "\n".join(room.custom_words), "customWordsOnly": room.custom_words_only,
+            "hintMode": room.hint_mode, "scoringMode": room.scoring_mode,
+            "spectatorsSeeSolution": room.spectators_see_solution,
+            "hideMaskedPrompt": room.hide_masked_prompt,
+        }
     def cancel_phase_timer(room_id: str) -> None:
         task = _phase_timers.pop(room_id, None)
         if task and not task.done():
@@ -351,6 +391,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 "word": game.word,
                 "drawerToken": game.current_drawer,
                 "drawerBonus": drawer_bonus,
+                "seconds": ROUND_END_SECONDS,
                 "guesses": [
                     {
                         "token": p.token,
@@ -386,14 +427,13 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if game.is_finished():
             room.state = "waiting"
             room.game = None
+            room.last_game_scores = [
+                {"token": p.token, "nickname": p.nickname, "score": p.score}
+                for p in sorted(room.player_list(), key=lambda p: -p.score)
+            ]
             await sio.emit(
                 "game_ended",
-                {
-                    "scores": [
-                        {"token": p.token, "nickname": p.nickname, "score": p.score}
-                        for p in sorted(room.player_list(), key=lambda p: -p.score)
-                    ]
-                },
+                {"scores": room.last_game_scores},
                 room=room.id,
             )
             await _emit_room_state(room)
@@ -508,43 +548,44 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     async def create_room(sid, data):
         data = data or {}
         nickname = str(data.get("nickname", "")).strip()[:20] or "Player"
-        name = str(data.get("name", "")).strip()[:40]
-        is_public = bool(data.get("isPublic", True))
-        max_players = _clamp(int(data.get("maxPlayers", 8) or 8), 2, 12)
-        rounds = _clamp(int(data.get("rounds", 3) or 3), 1, 10)
-        drawing_seconds = _clamp(int(data.get("drawingSeconds", DRAWING_SECONDS) or DRAWING_SECONDS), 15, 240)
-        custom_words = parse_custom_word_list(str(data.get("customWords", "") or ""))
-        custom_words_only = bool(data.get("customWordsOnly", False))
-        hint_mode = str(data.get("hintMode", "none") or "none")
-        if hint_mode not in HINT_MODES:
-            hint_mode = "none"
-        scoring_mode = str(data.get("scoringMode", "default") or "default")
-        if scoring_mode not in SCORING_MODES:
-            scoring_mode = "default"
-        if scoring_mode == "none" and hint_mode in ("purchase", "wheel"):
-            hint_mode = "none"
-
-        spectators_see_solution = bool(data.get("spectatorsSeeSolution", False))
-        hide_masked_prompt = bool(data.get("hideMaskedPrompt", False))
-        if hide_masked_prompt:
-            hint_mode = "none"
+        settings = room_settings_from_data(data)
 
         room = room_manager.create_room(
-            name=name,
-            is_public=is_public,
-            max_players=max_players,
-            rounds=rounds,
-            custom_words=custom_words,
-            custom_words_only=custom_words_only,
-            drawing_seconds=drawing_seconds,
-            hint_mode=hint_mode,
-            scoring_mode=scoring_mode,
-            spectators_see_solution=spectators_see_solution,
-            hide_masked_prompt=hide_masked_prompt,
+            **settings,
         )
         player = room_manager.add_player(room, nickname)
         await _join_socket_room(sid, room, player, is_reconnect=False)
         return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
+
+    @sio.event
+    async def get_room_settings(sid, data=None):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("token")) if room and session else None
+        if not room or not player or not player.is_host:
+            return {"ok": False, "error": "Only the host can view room settings"}
+        return {"ok": True, "settings": editable_room_settings(room)}
+
+    @sio.event
+    async def update_room_settings(sid, data):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("token")) if room and session else None
+        if not room or not player or not player.is_host:
+            return {"ok": False, "error": "Only the host can change room settings"}
+        if room.state != "waiting" or room.game:
+            return {"ok": False, "error": "Settings can only be changed in the waiting room"}
+        settings = room_settings_from_data(data or {}, fallback=room)
+        active_count = len([p for p in room.player_list() if not p.is_spectator])
+        if settings["max_players"] < active_count:
+            return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}
+        if not settings["custom_words"]:
+            settings["custom_words_only"] = False
+        for key, value in settings.items():
+            setattr(room, key, value)
+        await sio.emit("chat_message", {"token": "", "nickname": "", "text": "The host updated the room settings.", "correct": False, "system": True}, room=room.id)
+        await _emit_room_state(room)
+        return {"ok": True}
 
     @sio.event
     async def get_room_preview(sid, data):
@@ -756,6 +797,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if room.state == "playing":
             return {"ok": False, "error": "Game already in progress"}
 
+        room.last_game_scores = []
         for p in room.player_list():
             p.score = 0 if p.is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0)
         room.state = "playing"
@@ -874,6 +916,28 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     # ------------------------------------------------------------------
     # Guessing / chat
     # ------------------------------------------------------------------
+
+    @sio.event
+    async def send_chat(sid, data):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("token")) if room and session else None
+        if not room or not player:
+            return {"ok": False, "error": "Not in a room"}
+        if room.state != "waiting":
+            return {"ok": False, "error": "Waiting-room chat is unavailable during a game"}
+        text = str((data or {}).get("text", "")).strip()[:60]
+        if not text:
+            return {"ok": False, "error": "Message cannot be empty"}
+        if player.is_afk and not player.is_spectator:
+            player.is_afk = False
+            await _emit_room_state(room)
+        await sio.emit(
+            "chat_message",
+            {"token": player.token, "nickname": player.nickname, "text": text, "correct": False, "isSpectator": player.is_spectator},
+            room=room.id,
+        )
+        return {"ok": True}
 
     @sio.event
     async def guess(sid, data):

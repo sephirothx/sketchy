@@ -87,6 +87,55 @@ async def test_create_room_accepts_no_scoring_and_disables_point_purchase_hints(
 
 
 @pytest.mark.asyncio
+async def test_host_can_update_waiting_room_settings_and_chat():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Before", is_public=True, max_players=4)
+    host = room_manager.add_player(room, "Host")
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": host.token})
+    sio.emit = AsyncMock()
+
+    settings = await sio.handlers["/"]["get_room_settings"]("host-sid", {})
+    assert settings["ok"] is True
+    assert settings["settings"]["name"] == "Before"
+
+    response = await sio.handlers["/"]["update_room_settings"](
+        "host-sid",
+        {"name": "After", "rounds": 5, "customWords": "apple\npear", "customWordsOnly": True},
+    )
+    assert response["ok"] is True
+    assert room.name == "After"
+    assert room.rounds == 5
+    assert room.custom_words == ["apple", "pear"]
+    assert room.custom_words_only is True
+
+    chat = await sio.handlers["/"]["send_chat"]("host-sid", {"text": "Ready?"})
+    assert chat["ok"] is True
+    assert any(call.args[0] == "chat_message" and call.args[1]["text"] == "Ready?" for call in sio.emit.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_only_host_can_update_waiting_room_settings_and_not_during_game():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host")
+    guest = room_manager.add_player(room, "Guest")
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    update = sio.handlers["/"]["update_room_settings"]
+
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": guest.token})
+    assert (await update("guest-sid", {"rounds": 4}))["ok"] is False
+
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": host.token})
+    room.state = "playing"
+    assert "waiting room" in (await update("host-sid", {"rounds": 4}))["error"]
+    assert (await sio.handlers["/"]["send_chat"]("host-sid", {"text": "nope"}))["ok"] is False
+
+
+@pytest.mark.asyncio
 async def test_room_preview_returns_private_room_metadata_without_joining():
     room_manager = RoomManager()
     room = room_manager.create_room(
@@ -866,7 +915,6 @@ async def test_chatting_removes_afk_status():
     guess = sio.handlers["/"]["guess"]
     await guess("p1-sid", {"text": "hello chat"})
     assert p1.is_afk is False
-
 
 
 

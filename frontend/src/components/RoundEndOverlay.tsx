@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import type { RoundEndedPayload, RoundScoreEntry } from "../types";
+import { Timer } from "./Timer";
 
 interface RoundEndOverlayProps {
   word: string;
   drawerToken: string;
+  drawerBonus: number;
+  myToken: string | null;
+  seconds: number;
+  startedAt: number;
   guesses?: RoundEndedPayload["guesses"];
   scores: RoundScoreEntry[];
   showScores?: boolean;
@@ -30,6 +35,10 @@ function formatGuessTime(seconds: number) {
 export function RoundEndOverlay({
   word,
   drawerToken,
+  drawerBonus,
+  myToken,
+  seconds,
+  startedAt,
   guesses = [],
   scores,
   showScores = true,
@@ -47,6 +56,7 @@ export function RoundEndOverlay({
   }, []);
 
   const sorted = [...scores].sort((a, b) => a.newRank - b.newRank);
+  const mine = sorted.find((entry) => entry.token === myToken);
 
   return (
     <div className="round-end-overlay">
@@ -55,6 +65,8 @@ export function RoundEndOverlay({
         <p className="round-end-word">
           The word was <strong>{word}</strong>
         </p>
+        <div className="round-next-status">Next round starts in <Timer totalSeconds={seconds} startedAt={startedAt} /></div>
+        {showScores && mine && <p className="round-personal-result">Your round: <strong>{mine.delta >= 0 ? `+${mine.delta}` : mine.delta} points</strong> · now #{mine.newRank}</p>}
         {guesses.length > 0 ? (
           <>
             <h4 className="round-guesses-heading">Correct guesses</h4>
@@ -89,6 +101,7 @@ export function RoundEndOverlay({
                     {entry.token === drawerToken ? "\u270F\uFE0F " : ""}
                     {entry.nickname}
                   </span>
+                  {entry.token === drawerToken && drawerBonus > 0 && <span className="drawer-bonus">🎨 +{drawerBonus}</span>}
                   {change && (
                     <span className={`round-score-change ${change.className}`}>
                       {change.symbol}
@@ -99,6 +112,7 @@ export function RoundEndOverlay({
                     {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                   </span>
                   <span className="round-score-total">{entry.score}</span>
+                  {entry.token === myToken && <span className="round-score-you">You</span>}
                 </li>
               );
             })}

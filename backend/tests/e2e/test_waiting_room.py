@@ -43,6 +43,18 @@ async def test_waiting_room_explains_rules_and_start_eligibility():
             await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
             assert await host_page.is_visible('text=2 active players are ready to play.')
 
+            # The host can revise settings inline before the game, and everyone sees the update.
+            await host_page.click('text=Edit room settings')
+            await host_page.wait_for_selector('.room-settings-editor')
+            await host_page.fill('.room-settings-editor label:has-text("Rounds") input', "4")
+            await host_page.click('.room-settings-editor button:has-text("Save settings")')
+            await player_page.wait_for_selector('text=4 rounds each · 90s to draw')
+
+            # Waiting-room chat is shared before the game starts.
+            await player_page.fill('.waiting-chat-form input', "Hello from the lobby")
+            await player_page.click('.waiting-chat-form button')
+            await host_page.wait_for_selector('text=Hello from the lobby')
+
             await player_page.click('button:has-text("AFK")')
             await host_page.wait_for_selector('text=LobbyPlayer')
             await host_page.wait_for_selector('.waiting-player-badges >> text=AFK')
