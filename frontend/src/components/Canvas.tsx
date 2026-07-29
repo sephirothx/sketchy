@@ -6,6 +6,14 @@ import {
   CANVAS_WIDTH,
   decodeCanvasHistory,
 } from "../lib/canvasHistory";
+import {
+  decodeLiveDrawing,
+  encodeFill,
+  encodePathEnd,
+  encodePathPoints,
+  encodePathStart,
+  encodeShape,
+} from "../lib/liveDrawing";
 import { socket } from "../lib/socket";
 import { useSettingsStore } from "../store/settingsStore";
 import type {
@@ -522,7 +530,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       if (pendingPointsRef.current.length === 0) return;
       const points = pendingPointsRef.current;
       pendingPointsRef.current = [];
-      socket.emit("draw_move", { points });
+      socket.emit("draw", encodePathPoints({ points }));
     }, FLUSH_INTERVAL_MS);
     return () => clearInterval(flushTimer);
   }, []);
@@ -599,6 +607,17 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       remoteState.last = null;
     };
 
+    const onDraw = (payload: unknown) => {
+      const packet = decodeLiveDrawing(payload);
+      if (!packet) return;
+      if (packet.event === "draw_start") onDrawStart(packet.payload);
+      else if (packet.event === "draw_move") onDrawMove(packet.payload);
+      else if (packet.event === "draw_end") onDrawEnd();
+      else if (packet.event === "draw_shape") onDrawShape(packet.payload);
+      else if (packet.event === "draw_fill") onDrawFill(packet.payload);
+      else onClearCanvas();
+    };
+
     const onSyncStrokes = (payload: unknown) => {
       const actions = decodeCanvasHistory(payload);
       if (!actions) return;
@@ -645,22 +664,12 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       remoteState.last = null;
     };
 
-    socket.on("draw_start", onDrawStart);
-    socket.on("draw_move", onDrawMove);
-    socket.on("draw_end", onDrawEnd);
-    socket.on("draw_shape", onDrawShape);
-    socket.on("draw_fill", onDrawFill);
-    socket.on("clear_canvas", onClearCanvas);
+    socket.on("draw", onDraw);
     socket.on("sync_strokes", onSyncStrokes);
     socket.emit("request_sync_strokes");
 
     return () => {
-      socket.off("draw_start", onDrawStart);
-      socket.off("draw_move", onDrawMove);
-      socket.off("draw_end", onDrawEnd);
-      socket.off("draw_shape", onDrawShape);
-      socket.off("draw_fill", onDrawFill);
-      socket.off("clear_canvas", onClearCanvas);
+      socket.off("draw", onDraw);
       socket.off("sync_strokes", onSyncStrokes);
     };
   }, []);
@@ -702,7 +711,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     const ctx = ctxRef.current;
     if (!ctx) return;
     const payload: StrokeFillPayload = { x: point.x, y: point.y, color };
-    if (applyFillAction(ctx, payload)) socket.emit("draw_fill", payload);
+    if (applyFillAction(ctx, payload)) socket.emit("draw", encodeFill(payload));
   }
 
   function handlePointerDown(e: ReactPointerEvent<HTMLCanvasElement>) {
@@ -738,7 +747,15 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     lastPointRef.current = point;
     if (tool === "pen" || tool === "eraser") {
       drawLocalSegment(point, point); // visible dot for a single click/tap
-      socket.emit("draw_start", { x: point.x, y: point.y, color: activeColor, width: brushWidth });
+      socket.emit(
+        "draw",
+        encodePathStart({
+          x: point.x,
+          y: point.y,
+          color: activeColor,
+          width: brushWidth,
+        }),
+      );
     } else if (tool === "fill") {
       performFill(point);
     } else {
@@ -826,10 +843,13 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     if (tool === "pen" || tool === "eraser") {
       lastPointRef.current = null;
       if (pendingPointsRef.current.length > 0) {
-        socket.emit("draw_move", { points: pendingPointsRef.current });
+        socket.emit(
+          "draw",
+          encodePathPoints({ points: pendingPointsRef.current }),
+        );
         pendingPointsRef.current = [];
       }
-      socket.emit("draw_end", {});
+      socket.emit("draw", encodePathEnd());
     } else {
       const start = shapeStartRef.current;
       const end = lastPointRef.current;
@@ -839,7 +859,16 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
         if (ctx) {
           drawShapeOutlinePixels(ctx, start, end, tool, color, brushWidth);
         }
-        socket.emit("draw_shape", { shape: tool, from: start, to: end, color, width: brushWidth });
+        socket.emit(
+          "draw",
+          encodeShape({
+            shape: tool,
+            from: start,
+            to: end,
+            color,
+            width: brushWidth,
+          }),
+        );
       }
       shapeStartRef.current = null;
       lastPointRef.current = null;

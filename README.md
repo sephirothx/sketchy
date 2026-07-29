@@ -143,6 +143,7 @@ cd backend && .venv/bin/pytest
 
 # Backend performance micro-benchmarks
 backend/.venv/bin/python benchmarks/backend.py
+backend/.venv/bin/python benchmarks/live_drawing.py
 
 # End-to-end canvas benchmarks (desktop + throttled mobile)
 ./benchmarks/run_canvas.sh
@@ -219,10 +220,16 @@ so the whole game (UI + API + WebSocket) is served from a single port.
   account. Anyone with the room code can join a public/private room.
 - **Single process**: no horizontal scaling story; one uvicorn worker holds all rooms. Fine for
   small deployments, not for internet-scale traffic.
+- **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO
+  event. Data-bearing path, shape, and fill actions use binary attachments with fixed-width
+  colors, widths, shape IDs, and quarter-pixel signed coordinates. Path-end and clear use
+  their version/action byte directly as a numeric control payload, avoiding Socket.IO's
+  binary-attachment envelope when it would be larger than the action itself. The server
+  rejects malformed, unsupported, unauthorized, and out-of-phase payloads before recording
+  or rebroadcasting them.
 - **Versioned canvas history**: rooms keep drawing actions in a contiguous packed byte buffer
   with compact action offsets, and send replay history in a versioned binary envelope
   containing its action-offset table and packed records. Packed paths use quarter-pixel
   signed 16-bit coordinates and one-byte widths; packed shapes additionally use a one-byte
-  shape enum. Live drawing events remain readable; only reconnect/Undo synchronization uses
-  the binary representation. The frontend retains the versioned `{v, a}` JSON decoder as a
+  shape enum. The frontend retains the versioned `{v, a}` JSON history decoder as a
   compatibility fallback.

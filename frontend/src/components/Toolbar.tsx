@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { encodeClear } from "../lib/liveDrawing";
 import { socket } from "../lib/socket";
 import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
@@ -364,7 +365,7 @@ export function Toolbar({
           </button>
           <button
             className="toolbar-action-button clear-button"
-            onClick={() => socket.emit("clear_canvas", {})}
+            onClick={() => socket.emit("draw", encodeClear())}
             title="Clear canvas"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
