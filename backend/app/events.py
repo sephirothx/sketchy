@@ -909,14 +909,23 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if packet.event == "clear_canvas":
             room.game.clear_canvas_stroke()
             # Clear is not rendered optimistically, so include the drawer.
-            await sio.emit("draw", bytes(data), room=room.id)
+            await sio.emit(
+                "draw",
+                data if isinstance(data, int) else bytes(data),
+                room=room.id,
+            )
             return
         payload = _validated_draw_payload(packet.event, packet.payload)
         if payload is None:
             return
         if not room.game.record_stroke(packet.event, payload):
             return
-        await sio.emit("draw", bytes(data), room=room.id, skip_sid=sid)
+        await sio.emit(
+            "draw",
+            data if isinstance(data, int) else bytes(data),
+            room=room.id,
+            skip_sid=sid,
+        )
 
     @sio.event
     async def undo_stroke(sid, data=None):

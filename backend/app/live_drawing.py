@@ -74,8 +74,8 @@ def _unpack_coordinate(value: int, canvas_size: int) -> float:
     return value / (canvas_size * COORDINATE_SCALE)
 
 
-def encode_live_drawing(event: str, payload: dict | None = None) -> bytes:
-    """Encode one semantic drawing action into a Socket.IO binary attachment."""
+def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
+    """Encode one action as a binary attachment or compact numeric control."""
     payload = payload or {}
     if event == "draw_start":
         width = payload.get("width")
@@ -104,7 +104,7 @@ def encode_live_drawing(event: str, payload: dict | None = None) -> bytes:
             )
         return bytes(frame)
     if event == "draw_end":
-        return bytes((_header(PATH_END_TAG),))
+        return _header(PATH_END_TAG)
     if event == "draw_shape":
         shape = payload.get("shape")
         start = payload.get("from")
@@ -150,15 +150,22 @@ def encode_live_drawing(event: str, payload: dict | None = None) -> bytes:
             min(CANVAS_HEIGHT - 1, int(y * CANVAS_HEIGHT)),
         )
     if event == "clear_canvas":
-        return bytes((_header(CLEAR_TAG),))
+        return _header(CLEAR_TAG)
     raise ValueError("unknown drawing event")
 
 
 def decode_live_drawing(data) -> LiveDrawingPacket:
-    """Validate and decode one live drawing binary frame."""
-    if not isinstance(data, (bytes, bytearray, memoryview)):
-        raise ValueError("live drawing frame must be binary")
-    frame = bytes(data)
+    """Validate and decode one binary action or numeric control payload."""
+    if isinstance(data, int) and not isinstance(data, bool):
+        if not 0 <= data <= 0xFF:
+            raise ValueError("live drawing control is outside byte range")
+        frame = bytes((data,))
+        if data & _HEADER_TAG_MASK not in (PATH_END_TAG, CLEAR_TAG):
+            raise ValueError("data-bearing drawing actions must be binary")
+    elif isinstance(data, (bytes, bytearray, memoryview)):
+        frame = bytes(data)
+    else:
+        raise ValueError("live drawing payload has an unsupported type")
     if not frame:
         raise ValueError("live drawing frame is empty")
     version = frame[0] >> _HEADER_VERSION_SHIFT

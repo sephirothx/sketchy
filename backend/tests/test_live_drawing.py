@@ -12,7 +12,7 @@ from app.live_drawing import decode_live_drawing, encode_live_drawing
             {"points": [{"x": 0.1, "y": 0.2}, {"x": 1.2, "y": -0.1}]},
             9,
         ),
-        ("draw_end", {}, 1),
+        ("draw_end", {}, None),
         (
             "draw_shape",
             {
@@ -25,14 +25,17 @@ from app.live_drawing import decode_live_drawing, encode_live_drawing
             14,
         ),
         ("draw_fill", {"x": 0.25, "y": 0.75, "color": "#fedcba"}, 8),
-        ("clear_canvas", {}, 1),
+        ("clear_canvas", {}, None),
     ],
 )
 def test_live_drawing_round_trip(event, payload, expected_size):
     encoded = encode_live_drawing(event, payload)
     decoded = decode_live_drawing(encoded)
 
-    assert len(encoded) == expected_size
+    if expected_size is None:
+        assert isinstance(encoded, int)
+    else:
+        assert len(encoded) == expected_size
     assert decoded.event == event
     if "color" in payload:
         assert decoded.payload["color"] == payload["color"]
@@ -60,6 +63,9 @@ def test_live_path_coordinates_use_canvas_quarter_pixel_precision():
         b"\x1f",
         b"\x10\x00",
         b"\x11",
+        0x10,
+        0x22,
+        True,
         bytes((0x13, 9)) + bytes(12),
         bytes((0x14,)) + bytes(3) + b"\x20\x03\x00\x00",
         bytes((0x15, 0)),

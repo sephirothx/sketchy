@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Compare legacy JSON drawing events with the #203 binary wire protocol.
+"""Compare legacy JSON drawing events with the #203 hybrid wire protocol.
 
-Socket.IO totals include Engine.IO text/binary packet markers and the standard
-binary-placeholder envelope. WebSocket framing is intentionally excluded.
+Socket.IO totals include Engine.IO packet markers and, for data-bearing binary
+actions, the standard binary-placeholder envelope. WebSocket framing is
+intentionally excluded.
 
 Usage:
   backend/.venv/bin/python benchmarks/live_drawing.py
@@ -29,10 +30,12 @@ def legacy_socketio_bytes(event: str, payload: dict) -> int:
     return len(b"42") + len(json_bytes([event, payload]))
 
 
-def binary_socketio_bytes(frame: bytes) -> int:
+def optimized_socketio_bytes(payload: bytes | int) -> int:
+    if isinstance(payload, int):
+        return len(b"42") + len(json_bytes(["draw", payload]))
     placeholder = ["draw", {"_placeholder": True, "num": 0}]
     envelope_bytes = len(b"451-") + len(json_bytes(placeholder))
-    attachment_bytes = 1 + len(frame)
+    attachment_bytes = 1 + len(payload)
     return envelope_bytes + attachment_bytes
 
 
@@ -93,11 +96,11 @@ def main() -> None:
     ]
 
     print("Live drawing Socket.IO payload benchmark (#203)")
-    print("Action           JSON       Binary     Reduction")
+    print("Action           JSON       Hybrid     Reduction")
     print("-" * 50)
     for label, event, payload in actions:
         before = legacy_socketio_bytes(event, payload)
-        after = binary_socketio_bytes(encode_live_drawing(event, payload))
+        after = optimized_socketio_bytes(encode_live_drawing(event, payload))
         print(f"{label:<12} {before:>8,} B {after:>10,} B {reduction(before, after):>12}")
 
     points = [
@@ -116,14 +119,14 @@ def main() -> None:
         + legacy_socketio_bytes("draw_end", {})
     )
     binary_total = (
-        binary_socketio_bytes(
+        optimized_socketio_bytes(
             encode_live_drawing(
                 "draw_start",
                 {"x": 0.1, "y": 0.2, "color": "#000000", "width": 6},
             )
         )
         + sum(
-            binary_socketio_bytes(
+            optimized_socketio_bytes(
                 encode_live_drawing(
                     "draw_move",
                     {"points": points[index:index + 6]},
@@ -131,7 +134,7 @@ def main() -> None:
             )
             for index in range(0, len(points), 6)
         )
-        + binary_socketio_bytes(encode_live_drawing("draw_end", {}))
+        + optimized_socketio_bytes(encode_live_drawing("draw_end", {}))
     )
     print("-" * 50)
     print(

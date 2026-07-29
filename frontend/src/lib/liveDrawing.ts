@@ -105,8 +105,8 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
   return frame;
 }
 
-export function encodePathEnd(): Uint8Array {
-  return Uint8Array.of(header(PATH_END_TAG));
+export function encodePathEnd(): number {
+  return header(PATH_END_TAG);
 }
 
 export function encodeShape(payload: StrokeShapePayload): Uint8Array {
@@ -145,11 +145,25 @@ export function encodeFill(payload: StrokeFillPayload): Uint8Array {
   return frame;
 }
 
-export function encodeClear(): Uint8Array {
-  return Uint8Array.of(header(CLEAR_TAG));
+export function encodeClear(): number {
+  return header(CLEAR_TAG);
 }
 
 export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
+  if (typeof payload === "number") {
+    if (
+      !Number.isInteger(payload)
+      || payload < 0
+      || payload > 0xff
+      || payload >> 4 !== LIVE_DRAWING_VERSION
+    ) {
+      return null;
+    }
+    const controlTag = payload & 0x0f;
+    if (controlTag === PATH_END_TAG) return { event: "draw_end", payload: {} };
+    if (controlTag === CLEAR_TAG) return { event: "clear_canvas", payload: {} };
+    return null;
+  }
   const view = dataView(payload);
   if (!view || view.byteLength < 1 || view.getUint8(0) >> 4 !== LIVE_DRAWING_VERSION) {
     return null;

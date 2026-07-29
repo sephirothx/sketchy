@@ -15,7 +15,7 @@ test("live drawing frames round-trip with compact fixed sizes", () => {
   const cases = [
     [encodePathStart({ x: 0.25, y: 0.75, color: "#aabbcc", width: 4 }), "draw_start", 9],
     [encodePathPoints({ points: [{ x: 0.1, y: 0.2 }, { x: 1.2, y: -0.1 }] }), "draw_move", 9],
-    [encodePathEnd(), "draw_end", 1],
+    [encodePathEnd(), "draw_end", null],
     [encodeShape({
       shape: "ellipse",
       from: { x: 0.1, y: 0.2 },
@@ -24,11 +24,12 @@ test("live drawing frames round-trip with compact fixed sizes", () => {
       width: 64,
     }), "draw_shape", 14],
     [encodeFill({ x: 0.25, y: 0.75, color: "#fedcba" }), "draw_fill", 8],
-    [encodeClear(), "clear_canvas", 1],
+    [encodeClear(), "clear_canvas", null],
   ];
 
   for (const [frame, event, size] of cases) {
-    assert.equal(frame.byteLength, size);
+    if (size === null) assert.equal(typeof frame, "number");
+    else assert.equal(frame.byteLength, size);
     assert.equal(decodeLiveDrawing(frame)?.event, event);
   }
 });
@@ -40,6 +41,8 @@ test("decoder accepts ArrayBuffer and rejects malformed frames", () => {
   assert.equal(decodeLiveDrawing(Uint8Array.of(0x20)), null);
   assert.equal(decodeLiveDrawing(Uint8Array.of(0x11)), null);
   assert.equal(decodeLiveDrawing(Uint8Array.of(0x15, 0)), null);
+  assert.equal(decodeLiveDrawing(0x10), null);
+  assert.equal(decodeLiveDrawing(0x22), null);
 });
 
 test("fill coordinates preserve the addressed canvas pixel", () => {
