@@ -142,13 +142,13 @@ tabs in the *same* browser profile will share that storage and can behave unexpe
 cd backend && .venv/bin/pytest
 
 # Backend performance micro-benchmarks
-backend/.venv/bin/python scripts/benchmark_backend.py
+backend/.venv/bin/python benchmarks/backend.py
 
 # End-to-end canvas benchmarks (desktop + throttled mobile)
-./scripts/benchmark_canvas.sh
+./benchmarks/run_canvas.sh
 
 # Faster local iteration on one profile, with optional JSON output
-./scripts/benchmark_canvas.sh --profiles desktop --json-output /tmp/canvas-benchmark.json
+./benchmarks/run_canvas.sh --profiles desktop --json-output /tmp/canvas-benchmark.json
 
 # Multi-browser Playwright E2E tests
 ./scripts/test-e2e.sh
