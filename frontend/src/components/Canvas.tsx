@@ -1,5 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import {
+  CANVAS_COORDINATE_SCALE,
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH,
+  decodeCanvasHistory,
+} from "../lib/canvasHistory";
 import { socket } from "../lib/socket";
 import { useSettingsStore } from "../store/settingsStore";
 import type {
@@ -7,15 +13,11 @@ import type {
   ShapeType,
   StrokeFillPayload,
   StrokeMovePayload,
-  StrokePathPayload,
   StrokePoint,
-  StrokeRecord,
   StrokeShapePayload,
   StrokeStartPayload,
 } from "../types";
 
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 600;
 const FLUSH_INTERVAL_MS = 40;
 
 interface CanvasProps {
@@ -419,14 +421,26 @@ function floodFillPixels(
   return true;
 }
 
-function applyFillAction(ctx: CanvasRenderingContext2D, payload: StrokeFillPayload): boolean {
-  const x = Math.floor(payload.x * CANVAS_WIDTH);
-  const y = Math.floor(payload.y * CANVAS_HEIGHT);
+function applyFillAtPixel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+): boolean {
   if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) return false;
   const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  if (!floodFillPixels(imageData, x, y, hexToRgba(payload.color))) return false;
+  if (!floodFillPixels(imageData, x, y, hexToRgba(color))) return false;
   ctx.putImageData(imageData, 0, 0);
   return true;
+}
+
+function applyFillAction(ctx: CanvasRenderingContext2D, payload: StrokeFillPayload): boolean {
+  return applyFillAtPixel(
+    ctx,
+    Math.floor(payload.x * CANVAS_WIDTH),
+    Math.floor(payload.y * CANVAS_HEIGHT),
+    payload.color,
+  );
 }
 
 export interface CanvasRef {
@@ -585,7 +599,9 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       remoteState.last = null;
     };
 
-    const onSyncStrokes = (payload: { strokes: StrokeRecord[] }) => {
+    const onSyncStrokes = (payload: unknown) => {
+      const actions = decodeCanvasHistory(payload);
+      if (!actions) return;
       const replayGeneration = ++replayGenerationRef.current;
       // Replay the entire stroke log into an offscreen buffer first, then
       // swap it onto the visible canvas in a single paint. Replaying
@@ -598,24 +614,24 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       if (!offCtx) return;
       fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      for (const stroke of payload.strokes) {
-        if (stroke.event === "draw_path") {
-          const path = stroke.payload as StrokePathPayload;
-          if (path.points.length > 0) {
-            const points = path.points.map(toPixels);
+      for (const action of actions) {
+        if (action.kind === "path") {
+          if (action.points.length > 0) {
             rasterizePath(
               offCtx,
-              points.length === 1 ? [points[0], points[0]] : points,
-              path.width / 2,
-              hexToRgba(path.color),
+              action.points.length === 1
+                ? [action.points[0], action.points[0]]
+                : action.points,
+              action.width / 2,
+              hexToRgba(action.color),
               false,
             );
           }
-        } else if (stroke.event === "draw_shape") {
-          drawShapeOn(offCtx, stroke.payload as StrokeShapePayload);
-        } else if (stroke.event === "draw_fill") {
-          applyFillAction(offCtx, stroke.payload as StrokeFillPayload);
-        } else if (stroke.event === "clear_canvas") {
+        } else if (action.kind === "shape") {
+          drawShapeOn(offCtx, action.payload);
+        } else if (action.kind === "fill") {
+          applyFillAtPixel(offCtx, action.x, action.y, action.color);
+        } else {
           fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
         }
       }
@@ -653,8 +669,16 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) / rect.width,
-      y: (e.clientY - rect.top) / rect.height,
+      x: Math.round(
+        ((e.clientX - rect.left) / rect.width)
+          * CANVAS_WIDTH
+          * CANVAS_COORDINATE_SCALE,
+      ) / (CANVAS_WIDTH * CANVAS_COORDINATE_SCALE),
+      y: Math.round(
+        ((e.clientY - rect.top) / rect.height)
+          * CANVAS_HEIGHT
+          * CANVAS_COORDINATE_SCALE,
+      ) / (CANVAS_HEIGHT * CANVAS_COORDINATE_SCALE),
     };
   }
 

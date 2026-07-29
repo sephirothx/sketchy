@@ -6,6 +6,13 @@ import pytest
 import socketio
 
 from app import events
+from app.canvas_history import (
+    ClearAction,
+    FillAction,
+    PathAction,
+    decode_binary_canvas_history,
+    encode_canvas_history,
+)
 from app.events import _validated_draw_payload, register_handlers
 from app.game import DRAWING_SECONDS, Game
 from app.rooms import STARTING_SCORE, RoomManager
@@ -15,7 +22,7 @@ def test_validated_draw_payload_normalizes_a_pen_start():
     assert _validated_draw_payload(
         "draw_start",
         {"x": 0, "y": 1, "color": "#AABBCC", "width": 4},
-    ) == {"x": 0.0, "y": 1.0, "color": "#aabbcc", "width": 4.0}
+    ) == {"x": 0.0, "y": 1.0, "color": "#aabbcc", "width": 4}
 
 
 def test_validated_draw_payload_preserves_off_canvas_pointer_path():
@@ -40,6 +47,7 @@ def test_validated_draw_payload_preserves_off_canvas_pointer_path():
     "event_name,payload",
     [
         ("draw_start", {"x": -1_000_001, "y": 0.5, "color": "#000000", "width": 4}),
+        ("draw_start", {"x": 0.5, "y": 0.5, "color": "#000000", "width": 4.5}),
         ("draw_start", {"x": 0.5, "y": 0.5, "color": "black", "width": 4}),
         ("draw_move", {"points": []}),
         ("draw_move", {"points": [{"x": float("nan"), "y": 0.5}]}),
@@ -303,19 +311,12 @@ async def test_draw_handler_rejects_events_outside_drawing_phase():
     payload = {"x": 0.2, "y": 0.3, "color": "#000000", "width": 4}
 
     await draw_start("drawer-sid", payload)
-    assert room.game.strokes == []
+    assert room.game.drawing_history == []
 
     room.game.force_word_choice()
     await draw_start("drawer-sid", payload)
-    assert room.game.strokes == [
-        {
-            "event": "draw_path",
-            "payload": {
-                "points": [{"x": 0.2, "y": 0.3}],
-                "color": "#000000",
-                "width": 4.0,
-            },
-        }
+    assert room.game.drawing_history == [
+        PathAction(points=[(0.2, 0.3)], color=0, width=4.0)
     ]
 
 
@@ -569,32 +570,32 @@ async def test_undo_stroke_and_clear_canvas_handlers():
 
     # Drawer draws a stroke
     await draw_start("drawer-sid", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4})
-    assert len(room.game.strokes) == 1
+    assert len(room.game.drawing_history) == 1
 
     # Guesser attempting to undo should be ignored
     await undo_stroke("guesser-sid", {})
-    assert len(room.game.strokes) == 1
+    assert len(room.game.drawing_history) == 1
 
     # Drawer undoes the stroke
     await undo_stroke("drawer-sid", {})
-    assert len(room.game.strokes) == 0
+    assert len(room.game.drawing_history) == 0
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
     assert "sync_strokes" in emitted_events
 
     # Drawer draws again then clears canvas
     await draw_start("drawer-sid", {"x": 0.2, "y": 0.2, "color": "#ff0000", "width": 4})
-    assert len(room.game.strokes) == 1
+    assert len(room.game.drawing_history) == 1
 
     await clear_canvas("drawer-sid", {})
-    assert len(room.game.strokes) == 2
-    assert room.game.strokes[-1]["event"] == "clear_canvas"
+    assert len(room.game.drawing_history) == 2
+    assert isinstance(room.game.drawing_history[-1], ClearAction)
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
     assert "clear_canvas" in emitted_events
 
     # Drawer undoes Clear - recovers pre-clear stroke
     await undo_stroke("drawer-sid", {})
-    assert len(room.game.strokes) == 1
-    assert room.game.strokes[0]["event"] == "draw_path"
+    assert len(room.game.drawing_history) == 1
+    assert isinstance(room.game.drawing_history[0], PathAction)
 
     timer = events._phase_timers.pop(room.id, None)
     if timer:
@@ -627,15 +628,15 @@ async def test_draw_fill_handler_validation():
         "unexpectedClientData": "not stored",
     }
     await draw_fill("drawer-sid", valid_data)
-    assert len(room.game.strokes) == 1
-    assert room.game.strokes[0] == {
-        "event": "draw_fill",
-        "payload": {"x": 0.25, "y": 0.75, "color": "#aabbcc"},
-    }
-
+    assert len(room.game.drawing_history) == 1
+    assert room.game.drawing_history[0] == FillAction(
+        x=200,
+        y=450,
+        color=0xAABBCC,
+    )
     await draw_fill("drawer-sid", {"x": -0.01, "y": 0.5, "color": "#000000"})
     await draw_fill("drawer-sid", {"x": 0.5, "y": 0.5, "color": "invalid"})
-    assert len(room.game.strokes) == 1
+    assert len(room.game.drawing_history) == 1
 
     timer = events._phase_timers.pop(room.id, None)
     if timer:
@@ -754,16 +755,11 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
         if call.args[0] == "sync_strokes" and call.kwargs.get("to") == "joiner-sid"
     ]
     assert len(emitted_sync) == 1
-    assert emitted_sync[0].args[1]["strokes"] == [
-        {
-            "event": "draw_path",
-            "payload": {
-                "points": [{"x": 0.1, "y": 0.2}, {"x": 0.3, "y": 0.4}],
-                "color": "#000000",
-                "width": 4,
-            },
-        }
-    ]
+    decoded = decode_binary_canvas_history(emitted_sync[0].args[1])
+    assert encode_canvas_history(decoded) == {
+        "v": 1,
+        "a": [[0, 0, 4, 0.1, 0.2, 0.3, 0.4]],
+    }
 
 
 @pytest.mark.asyncio
