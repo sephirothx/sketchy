@@ -17,6 +17,7 @@ from app.game import (
     Game,
     Phase,
 )
+from app.live_drawing import decode_live_drawing, encode_live_drawing
 from app.rooms import Player, Room, RoomFullError, RoomManager, STARTING_SCORE
 from app.words import parse_custom_word_list
 
@@ -313,7 +314,11 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         choices = game.start_next_turn(afk_tokens)
         game.set_phase_deadline(CHOOSE_WORD_SECONDS)
         drawer = room.players.get(game.current_drawer)
-        await sio.emit("clear_canvas", {}, room=room.id)
+        await sio.emit(
+            "draw",
+            encode_live_drawing("clear_canvas"),
+            room=room.id,
+        )
         await sio.emit(
             "turn_starting",
             {
@@ -888,7 +893,12 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     # Drawing
     # ------------------------------------------------------------------
 
-    async def _broadcast_drawer_event(sid, event_name, data):
+    @sio.event
+    async def draw(sid, data):
+        try:
+            packet = decode_live_drawing(data)
+        except ValueError:
+            return
         session = await sio.get_session(sid)
         room = room_manager.get_room(session.get("room_id")) if session else None
         if not room or not room.game:
@@ -896,45 +906,17 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         token = session.get("token")
         if token != room.game.current_drawer or room.game.phase != Phase.DRAWING:
             return
-        payload = _validated_draw_payload(event_name, data)
-        if payload is None or not room.game.record_stroke(event_name, payload):
+        if packet.event == "clear_canvas":
+            room.game.clear_canvas_stroke()
+            # Clear is not rendered optimistically, so include the drawer.
+            await sio.emit("draw", bytes(data), room=room.id)
             return
-        await sio.emit(event_name, payload, room=room.id, skip_sid=sid)
-
-    @sio.event
-    async def draw_start(sid, data):
-        await _broadcast_drawer_event(sid, "draw_start", data)
-
-    @sio.event
-    async def draw_move(sid, data):
-        await _broadcast_drawer_event(sid, "draw_move", data)
-
-    @sio.event
-    async def draw_end(sid, data):
-        await _broadcast_drawer_event(sid, "draw_end", data)
-
-    @sio.event
-    async def draw_shape(sid, data):
-        await _broadcast_drawer_event(sid, "draw_shape", data)
-
-    @sio.event
-    async def draw_fill(sid, data):
-        await _broadcast_drawer_event(sid, "draw_fill", data)
-
-    @sio.event
-    async def clear_canvas(sid, data=None):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room or not room.game:
+        payload = _validated_draw_payload(packet.event, packet.payload)
+        if payload is None:
             return
-        token = session.get("token")
-        if token != room.game.current_drawer:
+        if not room.game.record_stroke(packet.event, payload):
             return
-        room.game.clear_canvas_stroke()
-        # Unlike draw_start/move/end (where the drawer already renders locally as they
-        # draw), the drawer has no local-only clear feedback, so broadcast to everyone
-        # in the room including the sender.
-        await sio.emit("clear_canvas", {}, room=room.id)
+        await sio.emit("draw", bytes(data), room=room.id, skip_sid=sid)
 
     @sio.event
     async def undo_stroke(sid, data=None):

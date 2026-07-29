@@ -10,11 +10,13 @@ from app.canvas_history import (
     ClearAction,
     FillAction,
     PathAction,
+    ShapeAction,
     decode_binary_canvas_history,
     encode_canvas_history,
 )
 from app.events import _validated_draw_payload, register_handlers
 from app.game import DRAWING_SECONDS, Game
+from app.live_drawing import encode_live_drawing
 from app.rooms import STARTING_SCORE, RoomManager
 
 
@@ -307,17 +309,81 @@ async def test_draw_handler_rejects_events_outside_drawing_phase():
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
     sio.emit = AsyncMock()
-    draw_start = sio.handlers["/"]["draw_start"]
+    draw = sio.handlers["/"]["draw"]
     payload = {"x": 0.2, "y": 0.3, "color": "#000000", "width": 4}
 
-    await draw_start("drawer-sid", payload)
+    await draw("drawer-sid", encode_live_drawing("draw_start", payload))
     assert room.game.drawing_history == []
 
     room.game.force_word_choice()
-    await draw_start("drawer-sid", payload)
+    await draw("drawer-sid", encode_live_drawing("draw_start", payload))
     assert room.game.drawing_history == [
         PathAction(points=[(0.2, 0.3)], color=0, width=4.0)
     ]
+
+
+@pytest.mark.asyncio
+async def test_draw_handler_records_and_rebroadcasts_every_binary_action():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    room_manager.add_player(room, "Guesser")
+    room.game = Game(turn_order=list(room.players))
+    room.game.start_next_turn()
+    room.game.force_word_choice()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "token": drawer.token}
+    )
+    sio.emit = AsyncMock()
+    draw = sio.handlers["/"]["draw"]
+    actions = [
+        (
+            "draw_start",
+            {"x": 0.1, "y": 0.2, "color": "#112233", "width": 5},
+        ),
+        (
+            "draw_move",
+            {"points": [{"x": 0.2, "y": 0.3}, {"x": 0.3, "y": 0.4}]},
+        ),
+        ("draw_end", {}),
+        (
+            "draw_shape",
+            {
+                "shape": "triangle",
+                "from": {"x": 0.2, "y": 0.2},
+                "to": {"x": 0.7, "y": 0.8},
+                "color": "#445566",
+                "width": 8,
+            },
+        ),
+        (
+            "draw_fill",
+            {"x": 0.5, "y": 0.5, "color": "#abcdef"},
+        ),
+    ]
+
+    frames = [encode_live_drawing(event, payload) for event, payload in actions]
+    for frame in frames:
+        await draw("drawer-sid", frame)
+
+    assert len(room.game.drawing_history) == 3
+    assert isinstance(room.game.drawing_history[0], PathAction)
+    assert len(room.game.drawing_history[0].points) == 3
+    assert isinstance(room.game.drawing_history[1], ShapeAction)
+    assert isinstance(room.game.drawing_history[2], FillAction)
+    broadcasts = [
+        call
+        for call in sio.emit.await_args_list
+        if call.args[0] == "draw"
+    ]
+    assert [call.args[1] for call in broadcasts] == frames
+    assert all(call.kwargs.get("skip_sid") == "drawer-sid" for call in broadcasts)
+
+    await draw("drawer-sid", b"\x11")
+    assert len(room.game.drawing_history) == 3
 
 
 @pytest.mark.asyncio
@@ -564,12 +630,17 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
 
-    draw_start = sio.handlers["/"]["draw_start"]
+    draw = sio.handlers["/"]["draw"]
     undo_stroke = sio.handlers["/"]["undo_stroke"]
-    clear_canvas = sio.handlers["/"]["clear_canvas"]
 
     # Drawer draws a stroke
-    await draw_start("drawer-sid", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4})
+    await draw(
+        "drawer-sid",
+        encode_live_drawing(
+            "draw_start",
+            {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4},
+        ),
+    )
     assert len(room.game.drawing_history) == 1
 
     # Guesser attempting to undo should be ignored
@@ -583,14 +654,20 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     assert "sync_strokes" in emitted_events
 
     # Drawer draws again then clears canvas
-    await draw_start("drawer-sid", {"x": 0.2, "y": 0.2, "color": "#ff0000", "width": 4})
+    await draw(
+        "drawer-sid",
+        encode_live_drawing(
+            "draw_start",
+            {"x": 0.2, "y": 0.2, "color": "#ff0000", "width": 4},
+        ),
+    )
     assert len(room.game.drawing_history) == 1
 
-    await clear_canvas("drawer-sid", {})
+    await draw("drawer-sid", encode_live_drawing("clear_canvas"))
     assert len(room.game.drawing_history) == 2
     assert isinstance(room.game.drawing_history[-1], ClearAction)
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
-    assert "clear_canvas" in emitted_events
+    assert "draw" in emitted_events
 
     # Drawer undoes Clear - recovers pre-clear stroke
     await undo_stroke("drawer-sid", {})
@@ -619,23 +696,23 @@ async def test_draw_fill_handler_validation():
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
     sio.emit = AsyncMock()
-    draw_fill = sio.handlers["/"]["draw_fill"]
+    draw = sio.handlers["/"]["draw"]
 
     valid_data = {
         "x": 0.25,
         "y": 0.75,
         "color": "#AABBCC",
-        "unexpectedClientData": "not stored",
     }
-    await draw_fill("drawer-sid", valid_data)
+    await draw("drawer-sid", encode_live_drawing("draw_fill", valid_data))
     assert len(room.game.drawing_history) == 1
     assert room.game.drawing_history[0] == FillAction(
         x=200,
         y=450,
         color=0xAABBCC,
     )
-    await draw_fill("drawer-sid", {"x": -0.01, "y": 0.5, "color": "#000000"})
-    await draw_fill("drawer-sid", {"x": 0.5, "y": 0.5, "color": "invalid"})
+    # Out-of-bounds and malformed binary frames are ignored.
+    await draw("drawer-sid", bytes.fromhex("1400000020030000"))
+    await draw("drawer-sid", b"\x14")
     assert len(room.game.drawing_history) == 1
 
     timer = events._phase_timers.pop(room.id, None)
