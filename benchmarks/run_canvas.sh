@@ -43,5 +43,5 @@ if ! curl -fsS "$BASE_URL/api/health" >/dev/null; then
 fi
 
 log "Running real-time canvas browser profiles"
-"$BACKEND_DIR/.venv/bin/python" "$ROOT_DIR/scripts/benchmark_canvas.py" \
+"$BACKEND_DIR/.venv/bin/python" "$ROOT_DIR/benchmarks/canvas.py" \
   --base-url "$BASE_URL" "$@"

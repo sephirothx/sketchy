@@ -8,7 +8,7 @@ Measures execution time and ops/sec for key backend operations:
 - Room state payload serialization
 
 Usage:
-  backend/.venv/bin/python scripts/benchmark_backend.py
+  backend/.venv/bin/python benchmarks/backend.py
 """
 
 from __future__ import annotations

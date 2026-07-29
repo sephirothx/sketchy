@@ -2,7 +2,7 @@
 """Compare #197 semantic JSON history with the compact #198 representation.
 
 Usage:
-  backend/.venv/bin/python scripts/benchmark_canvas_history.py
+  backend/.venv/bin/python benchmarks/canvas_history.py
 """
 from __future__ import annotations
 

@@ -4,7 +4,8 @@
 The benchmark creates a two-player room and exercises the production UI and
 Socket.IO path. It intentionally reports measurements instead of asserting
 thresholds: this is a baseline tool for comparing performance changes across
-machines and browser profiles, not a timing-sensitive CI test.
+machines and browser profiles, not a timing-sensitive CI test. Prefer running
+it through ``benchmarks/run_canvas.sh``.
 """
 
 from __future__ import annotations
