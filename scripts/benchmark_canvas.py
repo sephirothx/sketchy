@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
 import math
 import statistics
@@ -126,7 +127,7 @@ async def create_game(
     browser: Browser,
     profile: BrowserProfile,
     base_url: str,
-) -> tuple[BrowserContext, BrowserContext, Page, Page, list[str]]:
+) -> tuple[BrowserContext, BrowserContext, Page, Page, list[tuple[int, str]]]:
     context_options: dict[str, Any] = {
         "viewport": profile.viewport,
         "is_mobile": profile.is_mobile,
@@ -136,7 +137,7 @@ async def create_game(
     observer_context = await browser.new_context(**context_options)
     drawer = await drawer_context.new_page()
     observer = await observer_context.new_page()
-    websocket_frames: list[str] = []
+    websocket_frames: list[tuple[int, str]] = []
 
     await set_cpu_throttle(drawer_context, drawer, profile.cpu_throttle_rate)
     await set_cpu_throttle(observer_context, observer, profile.cpu_throttle_rate)
@@ -145,7 +146,10 @@ async def create_game(
     observer_cdp.on(
         "Network.webSocketFrameReceived",
         lambda event: websocket_frames.append(
-            str(event.get("response", {}).get("payloadData", ""))
+            (
+                int(event.get("response", {}).get("opcode", 1)),
+                str(event.get("response", {}).get("payloadData", "")),
+            )
         ),
     )
 
@@ -256,13 +260,18 @@ async def benchmark_profile(
         await wait_for_canvas_pixel(observer, *last_pixel, (255, 255, 255))
         undo_replay_ms = (time.perf_counter() - undo_started) * 1000
 
-        sync_frames = [
-            frame for frame in websocket_frames if '"sync_strokes"' in frame
-        ]
-        sync_frame_bytes = max(
-            (len(frame.encode("utf-8")) for frame in sync_frames),
-            default=0,
-        )
+        sync_frame_bytes = 0
+        for index, (opcode, payload) in enumerate(websocket_frames):
+            if opcode != 1 or '"sync_strokes"' not in payload:
+                continue
+            candidate_bytes = len(payload.encode("utf-8"))
+            for attachment_opcode, attachment in websocket_frames[index + 1:]:
+                if attachment_opcode == 2:
+                    candidate_bytes += len(base64.b64decode(attachment))
+                    break
+                if attachment_opcode == 1:
+                    break
+            sync_frame_bytes = max(sync_frame_bytes, candidate_bytes)
         if sync_frame_bytes == 0:
             raise RuntimeError("Did not capture a sync_strokes WebSocket frame")
 

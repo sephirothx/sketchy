@@ -189,6 +189,41 @@ async def test_multi_browser_gameplay_scenario():
             await drawer_page.mouse.move(box["x"] + 200, box["y"] + 200)
             await drawer_page.mouse.up()
 
+            # Undo sends the complete drawing history as a binary payload.
+            # Verify the observer first receives the live stroke and then
+            # replays the empty packed history after Undo.
+            await guesser_page.wait_for_function(
+                """
+                () => {
+                  const canvas = document.querySelector('canvas.drawing-canvas');
+                  const data = canvas.getContext('2d').getImageData(
+                    0, 0, canvas.width, canvas.height
+                  ).data;
+                  for (let index = 0; index < data.length; index += 4) {
+                    if (data[index] !== 255 || data[index + 1] !== 255
+                        || data[index + 2] !== 255) return true;
+                  }
+                  return false;
+                }
+                """
+            )
+            await drawer_page.click("button.undo-button")
+            await guesser_page.wait_for_function(
+                """
+                () => {
+                  const canvas = document.querySelector('canvas.drawing-canvas');
+                  const data = canvas.getContext('2d').getImageData(
+                    0, 0, canvas.width, canvas.height
+                  ).data;
+                  for (let index = 0; index < data.length; index += 4) {
+                    if (data[index] !== 255 || data[index + 1] !== 255
+                        || data[index + 2] !== 255) return false;
+                  }
+                  return true;
+                }
+                """
+            )
+
             # Step 7: Guesser submits a guess in chat
             await guesser_page.fill('.chat-input input', 'apple')
             await guesser_page.keyboard.press('Enter')

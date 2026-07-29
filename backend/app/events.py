@@ -30,7 +30,7 @@ MAX_BRUSH_WIDTH = 64
 # Those off-canvas points are required to clip the same segment at the canvas
 # edge for remote clients. Keep a generous finite bound to reject pathological
 # payloads without restricting normal pointer movement across the viewport.
-MAX_NORMALIZED_COORDINATE_MAGNITUDE = 1_000_000
+MAX_NORMALIZED_COORDINATE_MAGNITUDE = 8
 DRAW_SHAPES = frozenset(("rectangle", "ellipse", "triangle"))
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -70,12 +70,17 @@ def _draw_point(value) -> dict | None:
     return {"x": x, "y": y} if x is not None and y is not None else None
 
 
-def _draw_style(data: dict) -> tuple[str, float] | None:
+def _draw_style(data: dict) -> tuple[str, int] | None:
     color = data.get("color")
     width = _draw_number(data.get("width"), 1, MAX_BRUSH_WIDTH)
-    if not isinstance(color, str) or not HEX_COLOR_PATTERN.fullmatch(color) or width is None:
+    if (
+        not isinstance(color, str)
+        or not HEX_COLOR_PATTERN.fullmatch(color)
+        or width is None
+        or not width.is_integer()
+    ):
         return None
-    return color.lower(), width
+    return color.lower(), int(width)
 
 
 def _validated_draw_payload(event_name: str, data) -> dict | None:
@@ -269,7 +274,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 _turn_payload(room.game, player, room.spectators_see_solution),
                 to=sid,
             )
-            await sio.emit("sync_strokes", {"strokes": room.game.strokes}, to=sid)
+            await sio.emit("sync_strokes", room.game.canvas_sync_payload(), to=sid)
             if player.token == room.game.current_drawer:
                 if room.game.phase == Phase.CHOOSING_WORD:
                     await sio.emit(
@@ -945,7 +950,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             # everyone (including the drawer, who already rendered it
             # locally) is a full clear + replay of what remains - reusing
             # the same sync_strokes event used to catch up new joiners.
-            await sio.emit("sync_strokes", {"strokes": room.game.strokes}, room=room.id)
+            await sio.emit("sync_strokes", room.game.canvas_sync_payload(), room=room.id)
 
     # ------------------------------------------------------------------
     # Guessing / chat
@@ -1188,5 +1193,5 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not session:
             return
         room = room_manager.get_room(session.get("room_id"))
-        if room and room.game and room.game.strokes:
-            await sio.emit("sync_strokes", {"strokes": room.game.strokes}, to=sid)
+        if room and room.game and room.game.drawing_history:
+            await sio.emit("sync_strokes", room.game.canvas_sync_payload(), to=sid)

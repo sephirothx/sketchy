@@ -1,3 +1,9 @@
+from app.canvas_history import (
+    ClearAction,
+    FillAction,
+    PathAction,
+    decode_binary_canvas_history,
+)
 from app.game import DRAWING_SECONDS, Game, Phase
 
 
@@ -8,6 +14,16 @@ def make_game(n_players=3, rounds=2):
 
 def pen_start(x=0, y=0):
     return {"x": x, "y": y, "color": "#000000", "width": 4}
+
+
+def shape_payload(shape="rectangle"):
+    return {
+        "shape": shape,
+        "from": {"x": 0.1, "y": 0.2},
+        "to": {"x": 0.8, "y": 0.9},
+        "color": "#000000",
+        "width": 4,
+    }
 
 
 def test_start_next_turn_rotates_drawer():
@@ -245,9 +261,28 @@ def test_record_stroke_respects_history_limit(monkeypatch):
     monkeypatch.setattr("app.game.MAX_STROKE_RECORDS", 1)
     game = make_game()
 
-    assert game.record_stroke("draw_shape", {"shape": "rectangle"}) is True
-    assert game.record_stroke("draw_shape", {"shape": "ellipse"}) is False
-    assert len(game.strokes) == 1
+    assert game.record_stroke("draw_shape", shape_payload()) is True
+    assert game.record_stroke("draw_shape", shape_payload("ellipse")) is False
+    assert len(game.drawing_history) == 1
+
+
+def test_record_stroke_respects_total_path_point_limit(monkeypatch):
+    monkeypatch.setattr("app.game.MAX_CANVAS_POINTS", 3)
+    game = make_game()
+
+    assert game.record_stroke("draw_start", pen_start()) is True
+    assert game.record_stroke(
+        "draw_move",
+        {"points": [{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]},
+    )
+    assert game.record_stroke(
+        "draw_move",
+        {"points": [{"x": 0.3, "y": 0.3}]},
+    ) is False
+    assert game.canvas_point_count == 3
+
+    assert game.undo_last_stroke() is True
+    assert game.canvas_point_count == 0
 
 
 def test_undo_last_stroke_removes_entire_pen_stroke():
@@ -256,7 +291,7 @@ def test_undo_last_stroke_removes_entire_pen_stroke():
     game.record_stroke("draw_move", {"points": [{"x": 0.1, "y": 0.1}]})
     game.record_stroke("draw_end", {})
     assert game.undo_last_stroke() is True
-    assert game.strokes == []
+    assert game.drawing_history == []
 
 
 def test_undo_last_stroke_only_removes_most_recent_stroke():
@@ -267,26 +302,26 @@ def test_undo_last_stroke_only_removes_most_recent_stroke():
     game.record_stroke("draw_move", {"points": [{"x": 0.2, "y": 0.2}]})
     game.record_stroke("draw_end", {})
     assert game.undo_last_stroke() is True
-    assert [s["event"] for s in game.strokes] == ["draw_path"]
+    assert all(isinstance(action, PathAction) for action in game.drawing_history)
 
 
 def test_undo_last_stroke_removes_single_shape_event():
     game = make_game()
     game.record_stroke("draw_start", pen_start())
     game.record_stroke("draw_end", {})
-    game.record_stroke("draw_shape", {"shape": "rectangle"})
+    game.record_stroke("draw_shape", shape_payload())
     assert game.undo_last_stroke() is True
-    assert [s["event"] for s in game.strokes] == ["draw_path"]
+    assert all(isinstance(action, PathAction) for action in game.drawing_history)
 
 
 def test_undo_last_stroke_repeatedly_empties_history():
     game = make_game()
-    game.record_stroke("draw_shape", {"shape": "ellipse"})
+    game.record_stroke("draw_shape", shape_payload("ellipse"))
     game.record_stroke("draw_start", pen_start())
     game.record_stroke("draw_end", {})
     assert game.undo_last_stroke() is True
     assert game.undo_last_stroke() is True
-    assert game.strokes == []
+    assert game.drawing_history == []
     assert game.undo_last_stroke() is False
 
 
@@ -295,11 +330,12 @@ def test_clear_canvas_stroke_and_undo_clear():
     game.record_stroke("draw_start", pen_start())
     game.record_stroke("draw_end", {})
     assert game.clear_canvas_stroke() is True
-    assert [s["event"] for s in game.strokes] == ["draw_path", "clear_canvas"]
+    assert isinstance(game.drawing_history[0], PathAction)
+    assert isinstance(game.drawing_history[1], ClearAction)
 
     # Undo recovers drawing history to before Clear was pressed
     assert game.undo_last_stroke() is True
-    assert [s["event"] for s in game.strokes] == ["draw_path"]
+    assert all(isinstance(action, PathAction) for action in game.drawing_history)
 
 
 def test_new_stroke_after_clear_resets_pre_clear_history():
@@ -310,7 +346,27 @@ def test_new_stroke_after_clear_resets_pre_clear_history():
 
     # Starting a new stroke after Clear resets pre-clear history
     game.record_stroke("draw_start", pen_start(1, 1))
-    assert game.strokes[0]["payload"]["points"][0]["x"] == 1
+    assert isinstance(game.drawing_history[0], PathAction)
+    assert game.drawing_history[0].points[0][0] == 1
+
+
+def test_sync_payload_round_trip_preserves_replay_and_undo_actions():
+    game = make_game()
+    game.record_stroke("draw_start", {**pen_start(), "color": "#ffffff"})
+    game.record_stroke("draw_move", {"points": [{"x": 0.2, "y": 0.3}]})
+    game.record_stroke("draw_end", {})
+    game.record_stroke("draw_shape", shape_payload("triangle"))
+    game.record_stroke(
+        "draw_fill",
+        {"x": 0.999, "y": 0.999, "color": "#123456"},
+    )
+    game.clear_canvas_stroke()
+
+    assert decode_binary_canvas_history(
+        game.canvas_sync_payload()
+    ) == game.drawing_history
+    assert game.undo_last_stroke() is True
+    assert game.drawing_history[-1] == FillAction(x=799, y=599, color=0x123456)
 
 
 def test_masked_word_returns_unmasked_for_drawer_and_correct_guesser():
@@ -694,4 +750,3 @@ def test_hide_masked_prompt_returns_question_marks():
     # Guesser who answered correctly sees full word
     game.submit_guess("p1", word)
     assert game.masked_word("p1") == word
-

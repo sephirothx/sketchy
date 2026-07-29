@@ -142,19 +142,9 @@ export interface StrokeFillPayload {
   color: string;
 }
 
-export interface StrokePathPayload {
-  points: StrokePoint[];
-  color: string;
-  width: number;
-}
-
-export interface StrokeRecord {
-  event: "draw_path" | "draw_shape" | "draw_fill" | "clear_canvas";
-  payload:
-    | StrokePathPayload
-    | StrokeShapePayload
-    | StrokeFillPayload
-    | Record<string, never>;
+export interface CanvasSyncPayload {
+  v: number;
+  a: unknown[];
 }
 
 export interface AckResponse {

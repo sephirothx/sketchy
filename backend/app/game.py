@@ -14,6 +14,15 @@ from dataclasses import dataclass, field
 from enum import Enum
 from itertools import groupby
 
+from app.canvas_history import (
+    CANVAS_HEIGHT,
+    CANVAS_WIDTH,
+    MAX_CANVAS_ACTIONS,
+    MAX_CANVAS_POINTS,
+    PATH_TAG,
+    PackedCanvasHistory,
+    color_to_int,
+)
 from app.words import WORDS, random_word_choices
 
 CHOOSE_WORD_SECONDS = 15
@@ -21,7 +30,7 @@ DRAWING_SECONDS = 80
 ROUND_END_SECONDS = 5
 MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
-MAX_STROKE_RECORDS = 20_000
+MAX_STROKE_RECORDS = MAX_CANVAS_ACTIONS
 SCORING_MODES = ("none", "default")
 
 # Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter / Game.buy_wheel_letter):
@@ -143,8 +152,9 @@ class Game:
     correct_guessers: set[str] = field(default_factory=set)
     guess_points: dict[str, int] = field(default_factory=dict)
     guess_times: dict[str, float] = field(default_factory=dict)
-    strokes: list[dict] = field(default_factory=list)
+    drawing_history: PackedCanvasHistory = field(default_factory=PackedCanvasHistory)
     active_path_index: int | None = field(default=None, repr=False, compare=False)
+    canvas_point_count: int = field(default=0, repr=False, compare=False)
     phase_deadline: float | None = None
     used_words: set[str] = field(default_factory=set)
     word_pool: list[str] | None = None
@@ -236,8 +246,9 @@ class Game:
         self.correct_guessers = set()
         self.guess_points = {}
         self.guess_times = {}
-        self.strokes = []
+        self.drawing_history.clear()
         self.active_path_index = None
+        self.canvas_point_count = 0
         self.letter_positions = []
         self.revealed_positions = set()
         self.purchased_hints = {}
@@ -462,51 +473,71 @@ class Game:
 
     def record_stroke(self, event: str, payload: dict) -> bool:
         # If the canvas was previously cleared and a new stroke starts, reset pre-clear history.
-        if self.strokes and self.strokes[-1]["event"] == "clear_canvas":
+        if self.drawing_history.last_is_clear():
             if event == "clear_canvas":
                 return True
-            self.strokes = []
+            self.drawing_history.clear()
             self.active_path_index = None
+            self.canvas_point_count = 0
         if event == "draw_move":
             if self.active_path_index is None:
                 return False
-            self.strokes[self.active_path_index]["payload"]["points"].extend(
-                payload["points"]
+            if self.canvas_point_count + len(payload["points"]) > MAX_CANVAS_POINTS:
+                return False
+            self.drawing_history.extend_path(
+                self.active_path_index,
+                [(point["x"], point["y"]) for point in payload["points"]],
             )
+            self.canvas_point_count += len(payload["points"])
             return True
         if event == "draw_end":
             if self.active_path_index is None:
                 return False
             self.active_path_index = None
             return True
-        if len(self.strokes) >= MAX_STROKE_RECORDS:
+        if len(self.drawing_history) >= MAX_STROKE_RECORDS:
             return False
         self.active_path_index = None
         if event == "draw_start":
-            self.strokes.append(
-                {
-                    "event": "draw_path",
-                    "payload": {
-                        "points": [{"x": payload["x"], "y": payload["y"]}],
-                        "color": payload["color"],
-                        "width": payload["width"],
-                    },
-                }
+            if self.canvas_point_count >= MAX_CANVAS_POINTS:
+                return False
+            self.active_path_index = self.drawing_history.append_path(
+                [(payload["x"], payload["y"])],
+                color=color_to_int(payload["color"]),
+                width=payload["width"],
             )
-            self.active_path_index = len(self.strokes) - 1
+            self.canvas_point_count += 1
             return True
-        self.strokes.append({"event": event, "payload": payload})
+        if event == "draw_shape":
+            self.drawing_history.append_shape(
+                shape=payload["shape"],
+                start=(payload["from"]["x"], payload["from"]["y"]),
+                end=(payload["to"]["x"], payload["to"]["y"]),
+                color=color_to_int(payload["color"]),
+                width=payload["width"],
+            )
+        elif event == "draw_fill":
+            self.drawing_history.append_fill(
+                x=min(CANVAS_WIDTH - 1, int(payload["x"] * CANVAS_WIDTH)),
+                y=min(CANVAS_HEIGHT - 1, int(payload["y"] * CANVAS_HEIGHT)),
+                color=color_to_int(payload["color"]),
+            )
+        else:
+            return False
         return True
 
     def clear_canvas_stroke(self) -> bool:
         """Record a clear_canvas event in stroke history, allowing undo to restore pre-clear history."""
-        if not self.strokes:
+        if not self.drawing_history:
             return False
-        if self.strokes[-1]["event"] == "clear_canvas":
+        if self.drawing_history.last_is_clear():
             return False
         self.active_path_index = None
-        self.strokes.append({"event": "clear_canvas", "payload": {}})
+        self.drawing_history.append_clear()
         return True
+
+    def canvas_sync_payload(self) -> bytes:
+        return self.drawing_history.binary_payload()
 
     def undo_last_stroke(self) -> bool:
         """Remove the most recent logical stroke or clear event from the recorded history.
@@ -514,10 +545,12 @@ class Game:
         Each history entry is one complete semantic action, so Undo drops its
         final entry and clients replay what remains.
         """
-        if not self.strokes:
+        if not self.drawing_history:
             return False
         self.active_path_index = None
-        self.strokes.pop()
+        removed = self.drawing_history.pop()
+        if removed.tag == PATH_TAG:
+            self.canvas_point_count -= removed.point_count
         return True
 
     def submit_guess(self, token: str, text: str) -> tuple[bool, int]:
