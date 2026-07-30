@@ -30,8 +30,9 @@ export function RoomPlayersPanel({
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
   const canPromoteSelf = mode === "waiting" && me?.isSpectator;
   const playerSpaceAvailable = activePlayers.length < maxPlayers;
+  const showFinalStandings = mode !== "playing" && Boolean(finalScores) && showScores;
   const displayPlayers =
-    mode === "game-end" && finalScores
+    showFinalStandings && finalScores
       ? activePlayers
           .map((player) => ({
             ...player,
@@ -62,7 +63,7 @@ export function RoomPlayersPanel({
       <div className="room-panel-heading">
         <div>
           <p className="room-panel-kicker">
-            {mode === "game-end" ? "Final standings" : "People in room"}
+            {showFinalStandings ? "Final standings" : "People in room"}
           </p>
           <h2 id="room-players-title">
             Players ({activePlayers.length}/{maxPlayers})
@@ -114,8 +115,8 @@ export function RoomPlayersPanel({
           players={displayPlayers}
           drawerToken={mode === "playing" ? drawerToken : null}
           myToken={myToken}
-          showScores={mode !== "waiting" && showScores}
-          variant={mode === "game-end" && !showScores ? "waiting" : mode}
+          showScores={showScores && (mode !== "waiting" || showFinalStandings)}
+          variant={showFinalStandings ? "game-end" : mode === "game-end" ? "waiting" : mode}
           allowVoting={mode === "playing"}
           votingPopulation={players}
         />

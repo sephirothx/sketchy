@@ -85,7 +85,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await second_guesser.fill(".chat-input input", second_word)
             await second_guesser.keyboard.press("Enter")
 
-            view_drawings = host.get_by_role("button", name="View drawings (2)")
+            view_drawings = host.get_by_role("button", name="View drawings", exact=True)
             await view_drawings.wait_for(timeout=12_000)
             await view_drawings.click()
 
@@ -118,6 +118,28 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             assert await host.get_by_text("1 of 2", exact=True).is_visible()
             await host.get_by_role("button", name="Back").click()
             assert await host.get_by_text("Game complete", exact=True).is_visible()
+            await host.get_by_role(
+                "button",
+                name="Continue to waiting room",
+            ).click()
+            await host.locator('[data-testid="waiting-room"]').wait_for()
+            assert not await host.get_by_text("Previous game", exact=True).is_visible()
+            assert await host.get_by_text("Final standings", exact=True).is_visible()
+            assert await host.locator(".room-players-panel .player-placement").count() == 2
+            assert await host.locator(".room-players-panel .player-score").count() == 2
+            assert await host.get_by_role(
+                "button",
+                name="View drawings",
+                exact=True,
+            ).is_visible()
+            assert not await host.get_by_role(
+                "button",
+                name="Save last drawing",
+            ).is_visible()
+            assert not await host.get_by_role(
+                "button",
+                name="Back to lobby",
+            ).is_visible()
         finally:
             await host_context.close()
             await guest_context.close()

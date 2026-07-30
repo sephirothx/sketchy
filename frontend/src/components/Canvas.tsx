@@ -487,7 +487,6 @@ function applyFillAction(ctx: CanvasRenderingContext2D, payload: StrokeFillPaylo
 
 export interface CanvasRef {
   saveImage: () => void;
-  getImageDataUrl: () => string | null;
 }
 
 export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
@@ -594,7 +593,6 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
 
   useImperativeHandle(ref, () => ({
     saveImage: handleSaveImage,
-    getImageDataUrl: () => canvasRef.current?.toDataURL("image/png") ?? null,
   }));
 
   // If the turn ends (isDrawer flips to false) while the drawer is still

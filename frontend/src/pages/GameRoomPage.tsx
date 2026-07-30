@@ -123,18 +123,7 @@ export function GameRoomPage() {
   const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-  const [lastDrawing, setLastDrawing] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
-
-  function saveLastDrawing() {
-    if (!lastDrawing) return;
-    const link = document.createElement("a");
-    link.href = lastDrawing;
-    link.download = "sketchy-last-drawing.png";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
 
   async function handleCopyLink() {
     try {
@@ -285,10 +274,6 @@ export function GameRoomPage() {
     }
     performLeave();
   }
-
-  useEffect(() => {
-    if (phase === "round_end") setLastDrawing(canvasRef.current?.getImageDataUrl() ?? null);
-  }, [phase]);
 
   function handleToggleAfk() {
     socket.emit("toggle_afk");
@@ -677,9 +662,6 @@ export function GameRoomPage() {
               startBusy={startBusy}
               startError={startError}
               onStart={() => void handleStartGame()}
-              onLeave={handleLeave}
-              onSaveDrawing={saveLastDrawing}
-              hasDrawing={Boolean(lastDrawing)}
               drawingCount={drawingRecap.length}
               onViewDrawings={() => setRecapOpen(true)}
             />

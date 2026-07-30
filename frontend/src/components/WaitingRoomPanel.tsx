@@ -20,9 +20,6 @@ interface WaitingRoomPanelProps {
   startBusy: boolean;
   startError: string | null;
   onStart: () => void;
-  onLeave: () => void;
-  onSaveDrawing: () => void;
-  hasDrawing: boolean;
   drawingCount: number;
   onViewDrawings: () => void;
 }
@@ -61,6 +58,15 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               : "Get everyone ready before the first round."}
           </p>
         </div>
+        {finalScores && (
+          <div className="waiting-room-actions">
+            {props.drawingCount > 0 && (
+              <button type="button" onClick={props.onViewDrawings}>
+                View drawings
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
       {isHost ? (
@@ -138,58 +144,6 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         )}
       </section>
 
-      {finalScores && (
-        <section
-          className="waiting-card waiting-results-card"
-          aria-labelledby="waiting-results-title"
-        >
-          <p className="waiting-card-kicker">Previous game</p>
-          <h2 id="waiting-results-title">
-            {props.scoringMode === "default"
-              ? <><span className="colored-player-name" style={{ color: finalScores[0]?.nameColor }}>{finalScores[0]?.nickname ?? "The room"}</span> wins!</>
-              : "Game complete"}
-          </h2>
-          {props.scoringMode === "default" ? (
-            <>
-              <p className="waiting-placement">
-                Your place: #
-                {Math.max(1, finalScores.findIndex((score) => score.token === myToken) + 1)}
-              </p>
-              <ol>
-                {finalScores.map((score, index) => (
-                  <li key={score.token}>
-                    <span>
-                      {["🥇", "🥈", "🥉"][index] ?? `#${index + 1}`}{" "}
-                      <span className="colored-player-name" style={{ color: score.nameColor }}>
-                        {score.nickname}
-                      </span>
-                      {score.token === myToken ? " (you)" : ""}
-                    </span>
-                    <strong>{score.score}</strong>
-                  </li>
-                ))}
-              </ol>
-            </>
-          ) : (
-            <p>That game ended without scorekeeping. Thanks for playing!</p>
-          )}
-          <div className="waiting-results-actions">
-            <button type="button" onClick={props.onLeave}>
-              Back to lobby
-            </button>
-            {props.hasDrawing && (
-              <button type="button" onClick={props.onSaveDrawing}>
-                Save last drawing
-              </button>
-            )}
-            {props.drawingCount > 0 && (
-              <button type="button" onClick={props.onViewDrawings}>
-                View drawings ({props.drawingCount})
-              </button>
-            )}
-          </div>
-        </section>
-      )}
     </main>
   );
 }
