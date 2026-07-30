@@ -309,6 +309,11 @@ export function GameRoomPage() {
     }
   }
 
+  function handleViewDrawingsFromGameEnd() {
+    dismissGameEnd();
+    setRecapOpen(true);
+  }
+
   const me = players.find((p) => p.token === token);
   const drawer = players.find((player) => player.token === drawerToken);
   const isHost = me?.isHost ?? false;
@@ -657,7 +662,7 @@ export function GameRoomPage() {
               scoringMode={scoringMode}
               onContinue={dismissGameEnd}
               drawingCount={drawingRecap.length}
-              onViewDrawings={() => setRecapOpen(true)}
+              onViewDrawings={handleViewDrawingsFromGameEnd}
             />
           ) : roomView === "waiting" ? (
             <WaitingRoomPanel

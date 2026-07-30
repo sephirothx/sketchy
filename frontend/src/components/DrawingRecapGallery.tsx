@@ -112,7 +112,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
               Download drawing
             </button>
             <button type="button" className="drawing-recap-close" onClick={onClose}>
-              Back
+              Close
             </button>
           </div>
         </header>
