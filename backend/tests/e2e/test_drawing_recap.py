@@ -95,6 +95,10 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
                 "No drawing was captured for this turn.",
                 exact=True,
             ).is_visible()
+            async with host.expect_download() as first_download_info:
+                await host.get_by_role("button", name="Download drawing").click()
+            first_download = await first_download_info.value
+            assert first_word in first_download.suggested_filename
 
             await host.get_by_role("button", name="Next").click()
             assert await host.get_by_text("2 of 2", exact=True).is_visible()
@@ -105,6 +109,10 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             )
             await empty_notice.wait_for()
             assert await empty_notice.is_visible()
+            async with host.expect_download() as second_download_info:
+                await host.get_by_role("button", name="Download drawing").click()
+            second_download = await second_download_info.value
+            assert second_word in second_download.suggested_filename
 
             await host.get_by_role("button", name="Previous").click()
             assert await host.get_by_text("1 of 2", exact=True).is_visible()

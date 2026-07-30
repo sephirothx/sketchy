@@ -1973,7 +1973,10 @@ textarea:disabled {
 .drawing-recap-kicker { color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: .08em; margin: 0; text-transform: uppercase; }
 .drawing-recap-header h1 { color: #1e293b; font-size: 26px; margin: 4px 0; }
 .drawing-recap-meta { color: #64748b; margin: 0; }
-.drawing-recap-close, .drawing-recap-navigation button, .drawing-recap-status button { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 800; padding: 9px 13px; }
+.drawing-recap-header-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.drawing-recap-close, .drawing-recap-download, .drawing-recap-navigation button, .drawing-recap-status button { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 800; padding: 9px 13px; }
+.drawing-recap-download { background: #4c6ef5; border-color: #4c6ef5; color: #fff; }
+.drawing-recap-download:disabled { cursor: not-allowed; opacity: .5; }
 .drawing-recap-canvas { align-items: center; aspect-ratio: 4 / 3; background: #f8fafc; border-radius: 10px; display: flex; justify-content: center; overflow: hidden; width: 100%; }
 .drawing-recap-canvas .canvas-wrapper, .drawing-recap-canvas .canvas-stack { max-width: none; width: 100%; }
 .drawing-recap-canvas .canvas-stack { border: 0; border-radius: 0; }
@@ -3006,6 +3009,7 @@ textarea:disabled {
 [data-theme="dark"] .drawing-recap-meta,
 [data-theme="dark"] .drawing-recap-status { color: #94a3b8; }
 [data-theme="dark"] .drawing-recap-close,
+[data-theme="dark"] .drawing-recap-download,
 [data-theme="dark"] .drawing-recap-navigation button,
 [data-theme="dark"] .drawing-recap-status button {
   background: #334155;
@@ -3350,7 +3354,7 @@ textarea:disabled {
   .room-settings-fields { grid-template-columns: 1fr; }
   .drawing-recap-card { border-radius: 12px; padding: 14px; }
   .drawing-recap-header { align-items: stretch; flex-direction: column; }
-  .drawing-recap-close { align-self: flex-start; }
+  .drawing-recap-header-actions { align-self: stretch; flex-wrap: wrap; }
 }
 
 @media (max-width: 900px) {

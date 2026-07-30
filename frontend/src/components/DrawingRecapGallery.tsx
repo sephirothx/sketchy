@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Canvas } from "./Canvas";
+import { Canvas, type CanvasRef } from "./Canvas";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
@@ -16,6 +16,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
   const [error, setError] = useState<string | null>(null);
   const cacheRef = useRef(new Map<number, DecodedCanvasAction[]>());
   const loadGenerationRef = useRef(0);
+  const canvasRef = useRef<CanvasRef | null>(null);
   const entry = entries[position];
 
   const changePosition = useCallback((nextPosition: number) => {
@@ -108,9 +109,19 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
               {" · "}Round {entry.roundNumber} · Turn {entry.turnNumber}
             </p>
           </div>
-          <button type="button" className="drawing-recap-close" onClick={onClose}>
-            Back
-          </button>
+          <div className="drawing-recap-header-actions">
+            <button
+              type="button"
+              className="drawing-recap-download"
+              disabled={actions === null || Boolean(error)}
+              onClick={() => canvasRef.current?.saveImage()}
+            >
+              Download drawing
+            </button>
+            <button type="button" className="drawing-recap-close" onClick={onClose}>
+              Back
+            </button>
+          </div>
         </header>
 
         <div className="drawing-recap-canvas" aria-busy={actions === null && !error}>
@@ -123,6 +134,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
             <p className="drawing-recap-status">Loading drawing…</p>
           ) : (
             <Canvas
+              ref={canvasRef}
               isDrawer={false}
               color="#000000"
               brushWidth={4}
