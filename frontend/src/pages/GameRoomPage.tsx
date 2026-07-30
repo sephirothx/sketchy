@@ -60,6 +60,7 @@ export function GameRoomPage() {
   const nameColor = useSettingsStore((s) => s.nameColor);
 
   const canvasRef = useRef<CanvasRef | null>(null);
+  const exitingRoomRef = useRef(false);
 
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
@@ -138,6 +139,7 @@ export function GameRoomPage() {
   useEffect(() => {
     if (!normalizedCode) return;
     if (hasActiveSession) return;
+    if (exitingRoomRef.current) return;
 
     let cancelled = false;
 
@@ -247,6 +249,8 @@ export function GameRoomPage() {
 
   useEffect(() => {
     function onKicked(data: { reason?: string }) {
+      exitingRoomRef.current = true;
+      clearStoredToken(normalizedCode);
       reset();
       navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
     }
@@ -259,9 +263,11 @@ export function GameRoomPage() {
       socket.off("kicked", onKicked);
       socket.off("voted_afk", onVotedAfk);
     };
-  }, [navigate, notify, reset]);
+  }, [clearStoredToken, navigate, normalizedCode, notify, reset]);
 
   function performLeave() {
+    exitingRoomRef.current = true;
+    clearStoredToken(normalizedCode);
     socket.emit("leave_room");
     reset();
     navigate("/");
