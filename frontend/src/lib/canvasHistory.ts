@@ -3,6 +3,7 @@ import type {
   ShapeType,
   StrokeShapePayload,
 } from "../types";
+import type { LiveDrawingPacket } from "./liveDrawing";
 
 export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
@@ -33,6 +34,139 @@ export type DecodedCanvasAction =
   | { kind: "shape"; payload: StrokeShapePayload }
   | { kind: "fill"; color: string; x: number; y: number }
   | { kind: "clear" };
+
+export type CanvasUndoPayload = [fromRevision: number, toRevision: number];
+
+function isRevision(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+/**
+ * Semantic drawing history mirrored from the authoritative server history.
+ *
+ * Live Socket.IO drawing events are ordered, so clients can advance the same
+ * revision locally without adding metadata to every drawing packet. Full sync
+ * seeds the revision on join/reconnect; Undo verifies it before mutating.
+ */
+export class ClientCanvasHistory {
+  actions: DecodedCanvasAction[] = [];
+  revision: number | null = null;
+  private activePath: Extract<DecodedCanvasAction, { kind: "path" }> | null = null;
+
+  replace(actions: DecodedCanvasAction[], revision: unknown): boolean {
+    if (!isRevision(revision)) return false;
+    this.actions = actions;
+    this.revision = revision;
+    this.activePath = null;
+    return true;
+  }
+
+  reset(revision: unknown): boolean {
+    if (!isRevision(revision)) return false;
+    this.actions = [];
+    this.revision = revision;
+    this.activePath = null;
+    return true;
+  }
+
+  apply(packet: LiveDrawingPacket): boolean {
+    if (packet.event === "draw_move") {
+      if (!this.activePath && this.actions.at(-1)?.kind === "path") {
+        this.activePath = this.actions.at(-1) as Extract<
+          DecodedCanvasAction,
+          { kind: "path" }
+        >;
+      }
+      if (!this.activePath) return false;
+      this.activePath.points.push(
+        ...packet.payload.points.map((point) => ({
+          x: point.x * CANVAS_WIDTH,
+          y: point.y * CANVAS_HEIGHT,
+        })),
+      );
+      return true;
+    }
+    if (packet.event === "draw_end") {
+      if (!this.activePath && this.actions.at(-1)?.kind === "path") {
+        this.activePath = this.actions.at(-1) as Extract<
+          DecodedCanvasAction,
+          { kind: "path" }
+        >;
+      }
+      if (!this.activePath) return false;
+      this.activePath = null;
+      return true;
+    }
+    if (packet.event === "clear_canvas") {
+      if (this.actions.length === 0 || this.actions.at(-1)?.kind === "clear") {
+        return false;
+      }
+      this.actions.push({ kind: "clear" });
+      this.activePath = null;
+      this.advanceRevision();
+      return true;
+    }
+
+    // Starting a new action after Clear permanently discards the pre-clear
+    // history, matching Game.record_stroke on the server.
+    if (this.actions.at(-1)?.kind === "clear") this.actions = [];
+    this.activePath = null;
+
+    if (packet.event === "draw_start") {
+      const action: Extract<DecodedCanvasAction, { kind: "path" }> = {
+        kind: "path",
+        color: packet.payload.color,
+        width: packet.payload.width,
+        points: [{
+          x: packet.payload.x * CANVAS_WIDTH,
+          y: packet.payload.y * CANVAS_HEIGHT,
+        }],
+      };
+      this.actions.push(action);
+      this.activePath = action;
+    } else if (packet.event === "draw_shape") {
+      this.actions.push({
+        kind: "shape",
+        payload: {
+          ...packet.payload,
+          from: { ...packet.payload.from },
+          to: { ...packet.payload.to },
+        },
+      });
+    } else {
+      this.actions.push({
+        kind: "fill",
+        color: packet.payload.color,
+        x: Math.min(CANVAS_WIDTH - 1, Math.floor(packet.payload.x * CANVAS_WIDTH)),
+        y: Math.min(CANVAS_HEIGHT - 1, Math.floor(packet.payload.y * CANVAS_HEIGHT)),
+      });
+    }
+    this.advanceRevision();
+    return true;
+  }
+
+  undo(payload: unknown): boolean {
+    if (
+      !Array.isArray(payload)
+      || payload.length !== 2
+      || !isRevision(payload[0])
+      || !isRevision(payload[1])
+      || payload[1] !== payload[0] + 1
+      || this.revision !== payload[0]
+      || this.actions.length === 0
+    ) {
+      return false;
+    }
+    this.actions.pop();
+    this.activePath = null;
+    this.revision = payload[1];
+    return true;
+  }
+
+  private advanceRevision(): void {
+    if (this.revision !== null) this.revision += 1;
+  }
+}
 
 function isNumberBetween(value: unknown, low: number, high: number): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= low && value <= high;

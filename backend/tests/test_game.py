@@ -257,6 +257,36 @@ def test_undo_last_stroke_with_no_strokes():
     assert game.undo_last_stroke() is False
 
 
+def test_canvas_revision_advances_only_for_semantic_history_changes():
+    game = make_game()
+    assert game.canvas_revision == 0
+
+    game.start_next_turn()
+    assert game.canvas_revision == 1
+
+    assert game.record_stroke("draw_start", pen_start()) is True
+    assert game.canvas_revision == 2
+    assert game.record_stroke(
+        "draw_move",
+        {"points": [{"x": 0.1, "y": 0.1}]},
+    ) is True
+    assert game.record_stroke("draw_end", {}) is True
+    assert game.canvas_revision == 2
+
+    assert game.record_stroke("draw_shape", shape_payload()) is True
+    assert game.canvas_revision == 3
+    assert game.clear_canvas_stroke() is True
+    assert game.canvas_revision == 4
+    assert game.undo_last_stroke() is True
+    assert game.canvas_revision == 5
+    assert game.undo_last_stroke() is True
+    assert game.canvas_revision == 6
+    assert game.undo_last_stroke() is True
+    assert game.canvas_revision == 7
+    assert game.undo_last_stroke() is False
+    assert game.canvas_revision == 7
+
+
 def test_record_stroke_respects_history_limit(monkeypatch):
     monkeypatch.setattr("app.game.MAX_STROKE_RECORDS", 1)
     game = make_game()

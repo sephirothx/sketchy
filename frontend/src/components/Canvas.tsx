@@ -4,8 +4,10 @@ import {
   CANVAS_COORDINATE_SCALE,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  ClientCanvasHistory,
   decodeCanvasHistory,
 } from "../lib/canvasHistory";
+import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import {
   decodeLiveDrawing,
   encodeFill,
@@ -477,6 +479,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   const lastPointRef = useRef<StrokePoint | null>(null);
   const shapeStartRef = useRef<StrokePoint | null>(null);
   const replayGenerationRef = useRef(0);
+  const historyRef = useRef(new ClientCanvasHistory());
 
   useImperativeHandle(ref, () => ({
     saveImage: handleSaveImage,
@@ -610,6 +613,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     const onDraw = (payload: unknown) => {
       const packet = decodeLiveDrawing(payload);
       if (!packet) return;
+      historyRef.current.apply(packet);
       if (packet.event === "draw_start") onDrawStart(packet.payload);
       else if (packet.event === "draw_move") onDrawMove(packet.payload);
       else if (packet.event === "draw_end") onDrawEnd();
@@ -618,9 +622,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       else onClearCanvas();
     };
 
-    const onSyncStrokes = (payload: unknown) => {
-      const actions = decodeCanvasHistory(payload);
-      if (!actions) return;
+    const replayActions = (actions: DecodedCanvasAction[]) => {
       const replayGeneration = ++replayGenerationRef.current;
       // Replay the entire stroke log into an offscreen buffer first, then
       // swap it onto the visible canvas in a single paint. Replaying
@@ -664,13 +666,39 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       remoteState.last = null;
     };
 
+    const onSyncStrokes = (payload: unknown, revision: unknown) => {
+      const actions = decodeCanvasHistory(payload);
+      if (!actions || !historyRef.current.replace(actions, revision)) return;
+      replayActions(actions);
+    };
+
+    const onUndoStroke = (payload: unknown) => {
+      if (!historyRef.current.undo(payload)) {
+        socket.emit("request_sync_strokes");
+        return;
+      }
+      replayActions(historyRef.current.actions);
+    };
+
+    const onCanvasReset = (revision: unknown) => {
+      if (!historyRef.current.reset(revision)) {
+        socket.emit("request_sync_strokes");
+        return;
+      }
+      onClearCanvas();
+    };
+
     socket.on("draw", onDraw);
     socket.on("sync_strokes", onSyncStrokes);
+    socket.on("canvas_undo", onUndoStroke);
+    socket.on("canvas_reset", onCanvasReset);
     socket.emit("request_sync_strokes");
 
     return () => {
       socket.off("draw", onDraw);
       socket.off("sync_strokes", onSyncStrokes);
+      socket.off("canvas_undo", onUndoStroke);
+      socket.off("canvas_reset", onCanvasReset);
     };
   }, []);
 
@@ -711,7 +739,10 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     const ctx = ctxRef.current;
     if (!ctx) return;
     const payload: StrokeFillPayload = { x: point.x, y: point.y, color };
-    if (applyFillAction(ctx, payload)) socket.emit("draw", encodeFill(payload));
+    if (applyFillAction(ctx, payload)) {
+      historyRef.current.apply({ event: "draw_fill", payload });
+      socket.emit("draw", encodeFill(payload));
+    }
   }
 
   function handlePointerDown(e: ReactPointerEvent<HTMLCanvasElement>) {
@@ -747,6 +778,15 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     lastPointRef.current = point;
     if (tool === "pen" || tool === "eraser") {
       drawLocalSegment(point, point); // visible dot for a single click/tap
+      historyRef.current.apply({
+        event: "draw_start",
+        payload: {
+          x: point.x,
+          y: point.y,
+          color: activeColor,
+          width: brushWidth,
+        },
+      });
       socket.emit(
         "draw",
         encodePathStart({
@@ -818,6 +858,10 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point);
       lastPointRef.current = point;
       pendingPointsRef.current.push(point);
+      historyRef.current.apply({
+        event: "draw_move",
+        payload: { points: [point] },
+      });
     } else {
       lastPointRef.current = point;
       const previewCtx = previewCtxRef.current;
@@ -849,6 +893,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
         );
         pendingPointsRef.current = [];
       }
+      historyRef.current.apply({ event: "draw_end", payload: {} });
       socket.emit("draw", encodePathEnd());
     } else {
       const start = shapeStartRef.current;
@@ -859,6 +904,16 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
         if (ctx) {
           drawShapeOutlinePixels(ctx, start, end, tool, color, brushWidth);
         }
+        historyRef.current.apply({
+          event: "draw_shape",
+          payload: {
+            shape: tool,
+            from: start,
+            to: end,
+            color,
+            width: brushWidth,
+          },
+        });
         socket.emit(
           "draw",
           encodeShape({

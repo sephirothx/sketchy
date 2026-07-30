@@ -189,9 +189,9 @@ async def test_multi_browser_gameplay_scenario():
             await drawer_page.mouse.move(box["x"] + 200, box["y"] + 200)
             await drawer_page.mouse.up()
 
-            # Undo sends the complete drawing history as a binary payload.
-            # Verify the observer first receives the live stroke and then
-            # replays the empty packed history after Undo.
+            # Both the drawer and observer cache the semantic stroke. Undo is
+            # then applied incrementally and both canvases replay their local
+            # cache without a full history broadcast.
             await guesser_page.wait_for_function(
                 """
                 () => {
@@ -208,8 +208,7 @@ async def test_multi_browser_gameplay_scenario():
                 """
             )
             await drawer_page.click("button.undo-button")
-            await guesser_page.wait_for_function(
-                """
+            canvas_is_blank = """
                 () => {
                   const canvas = document.querySelector('canvas.drawing-canvas');
                   const data = canvas.getContext('2d').getImageData(
@@ -221,7 +220,10 @@ async def test_multi_browser_gameplay_scenario():
                   }
                   return true;
                 }
-                """
+            """
+            await guesser_page.wait_for_function(canvas_is_blank)
+            await drawer_page.wait_for_function(
+                canvas_is_blank,
             )
 
             # Step 7: Guesser submits a guess in chat

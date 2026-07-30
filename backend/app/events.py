@@ -263,6 +263,15 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     async def _emit_room_state(room: Room) -> None:
         await sio.emit("room_state", room.to_state_payload(), room=room.id)
 
+    async def _emit_canvas_sync(room: Room, sid: str) -> None:
+        if not room.game:
+            return
+        await sio.emit(
+            "sync_strokes",
+            (room.game.canvas_sync_payload(), room.game.canvas_revision),
+            to=sid,
+        )
+
     async def _join_socket_room(sid: str, room: Room, player, is_reconnect: bool) -> None:
         player.sid = sid
         player.connected = True
@@ -282,7 +291,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 _turn_payload(room.game, player, room.spectators_see_solution),
                 to=sid,
             )
-            await sio.emit("sync_strokes", room.game.canvas_sync_payload(), to=sid)
+            await _emit_canvas_sync(room, sid)
             if player.token == room.game.current_drawer:
                 if room.game.phase == Phase.CHOOSING_WORD:
                     await sio.emit(
@@ -321,11 +330,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         choices = game.start_next_turn(afk_tokens)
         game.set_phase_deadline(CHOOSE_WORD_SECONDS)
         drawer = room.players.get(game.current_drawer)
-        await sio.emit(
-            "draw",
-            encode_live_drawing("clear_canvas"),
-            room=room.id,
-        )
+        await sio.emit("canvas_reset", game.canvas_revision, room=room.id)
         await sio.emit(
             "turn_starting",
             {
@@ -948,7 +953,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if token != room.game.current_drawer or room.game.phase != Phase.DRAWING:
             return
         if packet.event == "clear_canvas":
-            room.game.clear_canvas_stroke()
+            if not room.game.clear_canvas_stroke():
+                return
             # Clear is not rendered optimistically, so include the drawer.
             await sio.emit(
                 "draw",
@@ -978,11 +984,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if token != room.game.current_drawer:
             return
         if room.game.undo_last_stroke():
-            # The canvas is a raster, so the only way to "undo" a stroke for
-            # everyone (including the drawer, who already rendered it
-            # locally) is a full clear + replay of what remains - reusing
-            # the same sync_strokes event used to catch up new joiners.
-            await sio.emit("sync_strokes", room.game.canvas_sync_payload(), room=room.id)
+            await sio.emit(
+                "canvas_undo",
+                [
+                    room.game.canvas_revision - 1,
+                    room.game.canvas_revision,
+                ],
+                room=room.id,
+            )
 
     # ------------------------------------------------------------------
     # Guessing / chat
@@ -1225,5 +1234,5 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not session:
             return
         room = room_manager.get_room(session.get("room_id"))
-        if room and room.game and room.game.drawing_history:
-            await sio.emit("sync_strokes", room.game.canvas_sync_payload(), to=sid)
+        if room and room.game:
+            await _emit_canvas_sync(room, sid)

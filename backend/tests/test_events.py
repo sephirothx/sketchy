@@ -687,10 +687,22 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     assert len(room.game.drawing_history) == 1
 
     # Drawer undoes the stroke
+    revision_before_undo = room.game.canvas_revision
     await undo_stroke("drawer-sid", {})
     assert len(room.game.drawing_history) == 0
-    emitted_events = [call.args[0] for call in sio.emit.await_args_list]
-    assert "sync_strokes" in emitted_events
+    undo_events = [
+        call for call in sio.emit.await_args_list
+        if call.args[0] == "canvas_undo"
+    ]
+    assert len(undo_events) == 1
+    assert undo_events[0].args[1] == [
+        revision_before_undo,
+        revision_before_undo + 1,
+    ]
+    assert not any(
+        call.args[0] == "sync_strokes"
+        for call in sio.emit.await_args_list
+    )
 
     # Drawer draws again then clears canvas
     await draw(
@@ -871,11 +883,40 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
         if call.args[0] == "sync_strokes" and call.kwargs.get("to") == "joiner-sid"
     ]
     assert len(emitted_sync) == 1
-    decoded = decode_binary_canvas_history(emitted_sync[0].args[1])
+    history_payload, revision = emitted_sync[0].args[1]
+    decoded = decode_binary_canvas_history(history_payload)
+    assert revision == room.game.canvas_revision
     assert encode_canvas_history(decoded) == {
         "v": 1,
         "a": [[0, 0, 4, 0.1, 0.2, 0.3, 0.4]],
     }
+
+
+@pytest.mark.asyncio
+async def test_request_sync_strokes_seeds_empty_history_revision():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    player = room_manager.add_player(room, "Player")
+    player.sid = "player-sid"
+    room.game = Game(turn_order=[player.token])
+    room.game.start_next_turn()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "token": player.token},
+    )
+    sio.emit = AsyncMock()
+
+    await sio.handlers["/"]["request_sync_strokes"]("player-sid")
+
+    sync_call = next(
+        call for call in sio.emit.await_args_list
+        if call.args[0] == "sync_strokes"
+    )
+    history_payload, revision = sync_call.args[1]
+    assert decode_binary_canvas_history(history_payload) == []
+    assert revision == room.game.canvas_revision
 
 
 @pytest.mark.asyncio
