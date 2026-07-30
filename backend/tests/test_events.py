@@ -20,6 +20,10 @@ from app.live_drawing import encode_live_drawing
 from app.rooms import STARTING_SCORE, RoomManager
 
 
+def canvas_action(game: Game, sequence: int) -> list[int]:
+    return [game.canvas_generation, sequence]
+
+
 def test_validated_draw_payload_normalizes_a_pen_start():
     assert _validated_draw_payload(
         "draw_start",
@@ -351,11 +355,19 @@ async def test_draw_handler_rejects_events_outside_drawing_phase():
     draw = sio.handlers["/"]["draw"]
     payload = {"x": 0.2, "y": 0.3, "color": "#000000", "width": 4}
 
-    await draw("drawer-sid", encode_live_drawing("draw_start", payload), 1)
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", payload),
+        canvas_action(room.game, 1),
+    )
     assert room.game.drawing_history == []
 
     room.game.force_word_choice()
-    await draw("drawer-sid", encode_live_drawing("draw_start", payload), 1)
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", payload),
+        canvas_action(room.game, 1),
+    )
     assert room.game.drawing_history == [
         PathAction(points=[(0.2, 0.3)], color=0, width=4.0)
     ]
@@ -410,7 +422,11 @@ async def test_draw_handler_records_and_rebroadcasts_every_binary_action():
         await draw(
             "drawer-sid",
             frame,
-            next(sequences) if event in {"draw_start", "draw_shape", "draw_fill"} else None,
+            (
+                canvas_action(room.game, next(sequences))
+                if event in {"draw_start", "draw_shape", "draw_fill"}
+                else None
+            ),
         )
 
     assert len(room.game.drawing_history) == 3
@@ -455,25 +471,60 @@ async def test_draw_handler_requests_gaps_and_accepts_retransmission():
         {"x": 0.3, "y": 0.4, "color": "#445566"},
     )
 
-    await draw("drawer-sid", second, 2)
+    await draw("drawer-sid", second, canvas_action(room.game, 2))
     assert room.game.drawing_history == []
     sio.emit.assert_any_await(
         "request_canvas_actions",
-        [1, 2],
+        [room.game.canvas_generation, 1, 2],
         to="drawer-sid",
     )
 
-    await draw("drawer-sid", first, 1)
-    await draw("drawer-sid", second, 2)
+    await draw("drawer-sid", first, canvas_action(room.game, 1))
+    await draw("drawer-sid", second, canvas_action(room.game, 2))
 
     assert len(room.game.drawing_history) == 2
     assert room.game.canvas_sequence == 2
     commits = [
-        call.args[1][0]
+        call.args[1][1]
         for call in sio.emit.await_args_list
         if call.args[0] == "canvas_commit"
     ]
     assert commits[-2:] == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_draw_handler_rejects_actions_from_a_previous_canvas_generation():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    room.game = Game(turn_order=[drawer.token])
+    room.game.start_next_turn(canvas_generation=1)
+    room.game.start_next_turn(canvas_generation=2)
+    room.game.force_word_choice()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "token": drawer.token},
+    )
+    sio.emit = AsyncMock()
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing(
+            "draw_fill",
+            {"x": 0.1, "y": 0.2, "color": "#112233"},
+        ),
+        [1, 1],
+    )
+
+    assert room.game.drawing_history == []
+    assert room.game.canvas_sequence == 0
+    assert any(
+        call.args[0] == "sync_strokes" and call.kwargs.get("to") == "drawer-sid"
+        for call in sio.emit.await_args_list
+    )
 
 
 @pytest.mark.asyncio
@@ -503,11 +554,19 @@ async def test_retransmitted_committed_path_is_idempotent():
     end = encode_live_drawing("draw_end")
 
     for frame, sequence in ((start, 1), (move, None), (end, None)):
-        await draw("drawer-sid", frame, sequence)
+        await draw(
+            "drawer-sid",
+            frame,
+            canvas_action(room.game, sequence) if sequence else None,
+        )
     committed_history = room.game.canvas_sync_payload()
 
     for frame, sequence in ((start, 1), (move, None), (end, None)):
-        await draw("drawer-sid", frame, sequence)
+        await draw(
+            "drawer-sid",
+            frame,
+            canvas_action(room.game, sequence) if sequence else None,
+        )
 
     assert room.game.canvas_sequence == 1
     assert room.game.canvas_sync_payload() == committed_history
@@ -538,9 +597,9 @@ async def test_retransmitted_incomplete_path_restarts_the_semantic_action():
         {"points": [{"x": 0.3, "y": 0.4}]},
     )
 
-    await draw("drawer-sid", start, 1)
+    await draw("drawer-sid", start, canvas_action(room.game, 1))
     await draw("drawer-sid", move)
-    await draw("drawer-sid", start, 1)
+    await draw("drawer-sid", start, canvas_action(room.game, 1))
     await draw("drawer-sid", move)
     await draw("drawer-sid", encode_live_drawing("draw_end"))
 
@@ -575,11 +634,16 @@ async def test_undo_hash_mismatch_sends_authoritative_sync():
             "draw_fill",
             {"x": 0.1, "y": 0.2, "color": "#112233"},
         ),
-        1,
+        canvas_action(room.game, 1),
     )
     response = await undo(
         "drawer-sid",
-        [2, room.game.canvas_revision, room.game.canvas_hash ^ 1],
+        [
+            room.game.canvas_generation,
+            2,
+            room.game.canvas_revision,
+            room.game.canvas_hash ^ 1,
+        ],
     )
 
     assert response == {"ok": False, "error": "Canvas history is out of sync"}
@@ -844,7 +908,7 @@ async def test_undo_stroke_and_clear_canvas_handlers():
             "draw_start",
             {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4},
         ),
-        1,
+        canvas_action(room.game, 1),
     )
     await draw("drawer-sid", encode_live_drawing("draw_end"))
     assert len(room.game.drawing_history) == 1
@@ -857,7 +921,12 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     revision_before_undo = room.game.canvas_revision
     await undo_stroke(
         "drawer-sid",
-        [2, room.game.canvas_revision, room.game.canvas_hash],
+        [
+            room.game.canvas_generation,
+            2,
+            room.game.canvas_revision,
+            room.game.canvas_hash,
+        ],
     )
     assert len(room.game.drawing_history) == 0
     undo_events = [
@@ -865,7 +934,8 @@ async def test_undo_stroke_and_clear_canvas_handlers():
         if call.args[0] == "canvas_undo"
     ]
     assert len(undo_events) == 1
-    assert undo_events[0].args[1][:3] == [
+    assert undo_events[0].args[1][:4] == [
+        room.game.canvas_generation,
         2,
         revision_before_undo,
         revision_before_undo + 1,
@@ -882,12 +952,16 @@ async def test_undo_stroke_and_clear_canvas_handlers():
             "draw_start",
             {"x": 0.2, "y": 0.2, "color": "#ff0000", "width": 4},
         ),
-        3,
+        canvas_action(room.game, 3),
     )
     await draw("drawer-sid", encode_live_drawing("draw_end"))
     assert len(room.game.drawing_history) == 1
 
-    await draw("drawer-sid", encode_live_drawing("clear_canvas"), 4)
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("clear_canvas"),
+        canvas_action(room.game, 4),
+    )
     assert len(room.game.drawing_history) == 2
     assert isinstance(room.game.drawing_history[-1], ClearAction)
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
@@ -896,7 +970,12 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     # Drawer undoes Clear - recovers pre-clear stroke
     await undo_stroke(
         "drawer-sid",
-        [5, room.game.canvas_revision, room.game.canvas_hash],
+        [
+            room.game.canvas_generation,
+            5,
+            room.game.canvas_revision,
+            room.game.canvas_hash,
+        ],
     )
     assert len(room.game.drawing_history) == 1
     assert isinstance(room.game.drawing_history[0], PathAction)
@@ -930,7 +1009,11 @@ async def test_draw_fill_handler_validation():
         "y": 0.75,
         "color": "#AABBCC",
     }
-    await draw("drawer-sid", encode_live_drawing("draw_fill", valid_data), 1)
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_fill", valid_data),
+        canvas_action(room.game, 1),
+    )
     assert len(room.game.drawing_history) == 1
     assert room.game.drawing_history[0] == FillAction(
         x=200,
@@ -1059,9 +1142,12 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
         if call.args[0] == "sync_strokes" and call.kwargs.get("to") == "joiner-sid"
     ]
     assert len(emitted_sync) == 1
-    history_payload, revision, sequence, history_hash = emitted_sync[0].args[1]
+    history_payload, revision, generation, sequence, history_hash = (
+        emitted_sync[0].args[1]
+    )
     decoded = decode_binary_canvas_history(history_payload)
     assert revision == room.game.canvas_revision
+    assert generation == room.game.canvas_generation
     assert sequence == room.game.canvas_sequence
     assert history_hash == room.game.canvas_hash
     assert encode_canvas_history(decoded) == {
@@ -1092,9 +1178,10 @@ async def test_request_sync_strokes_seeds_empty_history_revision():
         call for call in sio.emit.await_args_list
         if call.args[0] == "sync_strokes"
     )
-    history_payload, revision, sequence, history_hash = sync_call.args[1]
+    history_payload, revision, generation, sequence, history_hash = sync_call.args[1]
     assert decode_binary_canvas_history(history_payload) == []
     assert revision == room.game.canvas_revision
+    assert generation == room.game.canvas_generation
     assert sequence == 0
     assert history_hash == 0
 

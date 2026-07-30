@@ -43,13 +43,20 @@ type DrawingFrame = number | Uint8Array;
 type PendingCanvasMutation =
   | {
     kind: "draw";
+    generation: number;
     frames: DrawingFrame[];
     expectedRevision: number | null;
     expectedHash: number | null;
   }
   | {
     kind: "undo";
-    request: [sequence: number, fromRevision: number, fromHash: number];
+    generation: number;
+    request: [
+      generation: number,
+      sequence: number,
+      fromRevision: number,
+      fromHash: number,
+    ];
     expectedRevision: number;
     expectedHash: number;
   };
@@ -523,16 +530,21 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     isPath = false,
   ): number | null => {
     const sequence = allocateSequence();
-    if (sequence === null) return null;
+    const generation = historyRef.current.generation;
+    if (sequence === null || generation === null) {
+      socket.emit("request_sync_strokes");
+      return null;
+    }
     const history = historyRef.current;
     pendingMutationsRef.current.set(sequence, {
       kind: "draw",
+      generation,
       frames: [frame],
       expectedRevision: isPath ? null : history.revision,
       expectedHash: isPath ? null : history.historyHash,
     });
     activeOutgoingSequenceRef.current = isPath ? sequence : null;
-    socket.emit("draw", frame, sequence);
+    socket.emit("draw", frame, [generation, sequence]);
     return sequence;
   }, [allocateSequence]);
 
@@ -563,6 +575,20 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     }
     socket.emit("request_sync_strokes");
   }, []);
+
+  const finalizeActivePath = useCallback((): void => {
+    if (activeOutgoingSequenceRef.current === null) return;
+    if (pendingPointsRef.current.length > 0) {
+      sendPathFrame(encodePathPoints({ points: pendingPointsRef.current }));
+      pendingPointsRef.current = [];
+    }
+    historyRef.current.apply({ event: "draw_end", payload: {} });
+    sendPathFrame(encodePathEnd());
+    finishPathAction();
+    activePointerIdRef.current = null;
+    isPointerDownRef.current = false;
+    lastPointRef.current = null;
+  }, [finishPathAction, sendPathFrame]);
 
   useImperativeHandle(ref, () => ({
     saveImage: handleSaveImage,
@@ -752,19 +778,37 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     const onSyncStrokes = (
       payload: unknown,
       revision: unknown,
+      generation: unknown,
       sequence: unknown,
       historyHash: unknown,
     ) => {
       const actions = decodeCanvasHistory(payload);
       if (
         !actions
-        || !historyRef.current.replace(actions, revision, sequence, historyHash)
+        || !historyRef.current.replace(
+          actions,
+          revision,
+          generation,
+          sequence,
+          historyHash,
+        )
       ) {
         requestAuthoritativeSync();
         return;
       }
       activeOutgoingSequenceRef.current = null;
+      const committedGeneration = historyRef.current.generation!;
       const committedSequence = historyRef.current.sequence!;
+      if (
+        [...pendingMutationsRef.current.values()].some(
+          (pending) => pending.generation !== committedGeneration,
+        )
+      ) {
+        pendingMutationsRef.current.clear();
+        nextSequenceRef.current = committedSequence + 1;
+        replayActions(actions);
+        return;
+      }
       for (const pendingSequence of pendingMutationsRef.current.keys()) {
         if (pendingSequence <= committedSequence) {
           pendingMutationsRef.current.delete(pendingSequence);
@@ -815,7 +859,9 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
             socket.emit(
               "draw",
               frame,
-              index === 0 ? pendingSequence : undefined,
+              index === 0
+                ? [pending.generation, pendingSequence]
+                : undefined,
             );
           });
         } else {
@@ -832,7 +878,13 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       }
       if (!recoveryValid) {
         pendingMutationsRef.current.clear();
-        historyRef.current.replace(actions, revision, sequence, historyHash);
+        historyRef.current.replace(
+          actions,
+          revision,
+          generation,
+          sequence,
+          historyHash,
+        );
         nextSequenceRef.current = committedSequence + 1;
         replayActions(actions);
         return;
@@ -844,7 +896,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     };
 
     const onCanvasCommit = (payload: unknown) => {
-      const sequence = Array.isArray(payload) ? payload[0] : null;
+      const sequence = Array.isArray(payload) ? payload[1] : null;
       const pending = typeof sequence === "number"
         ? pendingMutationsRef.current.get(sequence)
         : undefined;
@@ -863,7 +915,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     };
 
     const onUndoStroke = (payload: unknown) => {
-      const sequence = Array.isArray(payload) ? payload[0] : null;
+      const sequence = Array.isArray(payload) ? payload[1] : null;
       const pending = typeof sequence === "number"
         ? pendingMutationsRef.current.get(sequence)
         : undefined;
@@ -885,14 +937,16 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     const onRequestCanvasActions = (payload: unknown) => {
       if (
         !Array.isArray(payload)
-        || payload.length !== 2
+        || payload.length !== 3
         || !Number.isSafeInteger(payload[0])
         || !Number.isSafeInteger(payload[1])
+        || !Number.isSafeInteger(payload[2])
+        || payload[0] !== historyRef.current.generation
       ) {
         requestAuthoritativeSync();
         return;
       }
-      for (let sequence = payload[0]; sequence <= payload[1]; sequence++) {
+      for (let sequence = payload[1]; sequence <= payload[2]; sequence++) {
         const pending = pendingMutationsRef.current.get(sequence);
         if (!pending) {
           requestAuthoritativeSync();
@@ -903,7 +957,11 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
           continue;
         }
         pending.frames.forEach((frame, index) => {
-          socket.emit("draw", frame, index === 0 ? sequence : undefined);
+          socket.emit(
+            "draw",
+            frame,
+            index === 0 ? [pending.generation, sequence] : undefined,
+          );
         });
       }
     };
@@ -920,6 +978,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     };
 
     const requestUndo = () => {
+      finalizeActivePath();
       const sequence = allocateSequence();
       if (sequence === null) return;
       const request = historyRef.current.prepareUndo(sequence);
@@ -929,6 +988,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       }
       pendingMutationsRef.current.set(sequence, {
         kind: "undo",
+        generation: request[0],
         request,
         expectedRevision: historyRef.current.revision!,
         expectedHash: historyRef.current.historyHash!,
@@ -944,6 +1004,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     };
 
     const requestClear = () => {
+      finalizeActivePath();
       if (!historyRef.current.apply({ event: "clear_canvas", payload: {} })) return;
       onClearCanvas();
       beginDrawAction(encodeClear());
@@ -970,6 +1031,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   }, [
     allocateSequence,
     beginDrawAction,
+    finalizeActivePath,
     requestAuthoritativeSync,
   ]);
 

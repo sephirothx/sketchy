@@ -149,6 +149,17 @@ def _canvas_sequence(value) -> int | None:
     return value
 
 
+def _canvas_action_identity(value) -> tuple[int, int] | None:
+    if (
+        not isinstance(value, list)
+        or len(value) != 2
+        or (generation := _canvas_sequence(value[0])) is None
+        or (sequence := _canvas_sequence(value[1])) is None
+    ):
+        return None
+    return generation, sequence
+
+
 def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> None:
     def room_settings_from_data(data: dict, *, fallback: Room | None = None) -> dict:
         """Normalize room settings for both creation and host edits."""
@@ -282,6 +293,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             (
                 room.game.canvas_sync_payload(),
                 room.game.canvas_revision,
+                room.game.canvas_generation,
                 room.game.canvas_sequence,
                 room.game.canvas_hash,
             ),
@@ -302,9 +314,20 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         revision, history_hash, mutation = commit
         event = "canvas_undo" if mutation == "undo" else "canvas_commit"
         payload = (
-            [sequence, revision - 1, revision, history_hash]
+            [
+                room.game.canvas_generation,
+                sequence,
+                revision - 1,
+                revision,
+                history_hash,
+            ]
             if mutation == "undo"
-            else [sequence, revision, history_hash]
+            else [
+                room.game.canvas_generation,
+                sequence,
+                revision,
+                history_hash,
+            ]
         )
         await sio.emit(
             event,
@@ -314,13 +337,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         )
 
     async def _request_canvas_actions(
+        room: Room,
         sid: str,
         expected: int,
         received: int,
     ) -> None:
         await sio.emit(
             "request_canvas_actions",
-            [expected, received],
+            [room.game.canvas_generation, expected, received],
             to=sid,
         )
 
@@ -379,12 +403,21 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         game = room.game
         assert game is not None
         afk_tokens = {p.token for p in room.player_list() if p.is_afk}
-        choices = game.start_next_turn(afk_tokens)
+        room.canvas_generation += 1
+        choices = game.start_next_turn(
+            afk_tokens,
+            canvas_generation=room.canvas_generation,
+        )
         game.set_phase_deadline(CHOOSE_WORD_SECONDS)
         drawer = room.players.get(game.current_drawer)
         await sio.emit(
             "canvas_reset",
-            [game.canvas_revision, game.canvas_sequence, game.canvas_hash],
+            [
+                game.canvas_revision,
+                game.canvas_generation,
+                game.canvas_sequence,
+                game.canvas_hash,
+            ],
             room=room.id,
         )
         await sio.emit(
@@ -996,7 +1029,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     # ------------------------------------------------------------------
 
     @sio.event
-    async def draw(sid, data, sequence_data=None):
+    async def draw(sid, data, action_identity=None):
         try:
             packet = decode_live_drawing(data)
         except ValueError:
@@ -1014,9 +1047,15 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             "draw_fill",
             "clear_canvas",
         }
-        sequence = _canvas_sequence(sequence_data) if starts_action else None
+        identity = _canvas_action_identity(action_identity) if starts_action else None
+        generation, sequence = identity if identity else (None, None)
         if starts_action:
-            if sequence is None:
+            if generation is None or sequence is None:
+                return
+            if generation != room.game.canvas_generation:
+                if packet.event == "draw_start":
+                    room.game.discarding_draw_sequence = True
+                await _emit_canvas_sync(room, sid)
                 return
             if room.game.active_draw_sequence is not None:
                 if (
@@ -1027,6 +1066,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 else:
                     expected_sequence = room.game.canvas_sequence + 1
                     await _request_canvas_actions(
+                        room,
                         sid,
                         expected_sequence,
                         sequence,
@@ -1042,6 +1082,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 if packet.event == "draw_start":
                     room.game.discarding_draw_sequence = True
                 await _request_canvas_actions(
+                    room,
                     sid,
                     expected_sequence,
                     sequence,
@@ -1099,16 +1140,20 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return {"ok": False, "error": "Only the drawer can undo"}
         if (
             not isinstance(data, list)
-            or len(data) != 3
-            or (sequence := _canvas_sequence(data[0])) is None
-            or isinstance(data[1], bool)
-            or not isinstance(data[1], int)
-            or data[1] < 0
+            or len(data) != 4
+            or (generation := _canvas_sequence(data[0])) is None
+            or (sequence := _canvas_sequence(data[1])) is None
             or isinstance(data[2], bool)
             or not isinstance(data[2], int)
-            or not 0 <= data[2] <= 0xFFFFFFFF
+            or data[2] < 0
+            or isinstance(data[3], bool)
+            or not isinstance(data[3], int)
+            or not 0 <= data[3] <= 0xFFFFFFFF
         ):
             return {"ok": False, "error": "Invalid Undo request"}
+        if generation != room.game.canvas_generation:
+            await _emit_canvas_sync(room, sid)
+            return {"ok": False, "error": "Canvas generation is out of date"}
         if sequence <= room.game.canvas_sequence:
             commit = room.game.canvas_commit(sequence)
             if commit and commit[2] == "undo":
@@ -1117,9 +1162,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return {"ok": False, "error": "Sequence already committed"}
         expected_sequence = room.game.canvas_sequence + 1
         if sequence != expected_sequence:
-            await _request_canvas_actions(sid, expected_sequence, sequence)
+            await _request_canvas_actions(
+                room,
+                sid,
+                expected_sequence,
+                sequence,
+            )
             return {"ok": False, "error": "Drawing actions are out of sequence"}
-        if data[1] != room.game.canvas_revision or data[2] != room.game.canvas_hash:
+        if data[2] != room.game.canvas_revision or data[3] != room.game.canvas_hash:
             await _emit_canvas_sync(room, sid)
             return {"ok": False, "error": "Canvas history is out of sync"}
         if room.game.undo_last_stroke():

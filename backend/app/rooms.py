@@ -127,6 +127,7 @@ class Room:
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
+    canvas_generation: int = 0
     last_game_scores: list[dict] = field(default_factory=list)
 
     def player_list(self) -> list[Player]:

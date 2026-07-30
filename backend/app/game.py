@@ -157,6 +157,7 @@ class Game:
     guess_times: dict[str, float] = field(default_factory=dict)
     drawing_history: PackedCanvasHistory = field(default_factory=PackedCanvasHistory)
     canvas_revision: int = 0
+    canvas_generation: int = 0
     canvas_sequence: int = 0
     canvas_hashes: list[int] = field(default_factory=list, repr=False, compare=False)
     canvas_commits: list[tuple[int, int, str]] = field(default_factory=list, repr=False, compare=False)
@@ -241,7 +242,12 @@ class Game:
             return 0.0
         return max(0.0, self.phase_deadline - time.monotonic())
 
-    def start_next_turn(self, afk_tokens: set[str] | None = None) -> list[str]:
+    def start_next_turn(
+        self,
+        afk_tokens: set[str] | None = None,
+        *,
+        canvas_generation: int | None = None,
+    ) -> list[str]:
         """Advance to the next drawer and offer word choices."""
         self.turn_index += 1
         if afk_tokens:
@@ -257,6 +263,11 @@ class Game:
         self.guess_times = {}
         self.drawing_history.clear()
         self.canvas_revision += 1
+        self.canvas_generation = (
+            canvas_generation
+            if canvas_generation is not None
+            else self.canvas_generation + 1
+        )
         self.canvas_sequence = 0
         self.canvas_hashes.clear()
         self.canvas_commits.clear()
