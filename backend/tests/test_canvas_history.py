@@ -7,6 +7,7 @@ from app.canvas_history import (
     PackedCanvasHistory,
     PathAction,
     ShapeAction,
+    canvas_history_hash,
     color_to_hex,
     color_to_int,
     decode_binary_canvas_history,
@@ -136,6 +137,22 @@ def test_packed_canvas_history_extends_and_pops_a_path_semantically():
     assert history == []
     assert history.data == bytearray()
     assert len(history.offsets) == 0
+
+
+def test_canvas_history_crc32_matches_frontend_canonical_encoding():
+    history = PackedCanvasHistory()
+    history.append_path([(0.1, 0.2), (0.3, 0.4)], color=0xAABBCC, width=4)
+    history.append_shape(
+        shape="ellipse",
+        start=(0.2, 0.3),
+        end=(0.8, 0.9),
+        color=0x102030,
+        width=8,
+    )
+    history.append_fill(x=799, y=599, color=0xFFFFFF)
+    history.append_clear()
+
+    assert canvas_history_hash(history) == 0x0C816F97
 
 
 @pytest.mark.parametrize(
