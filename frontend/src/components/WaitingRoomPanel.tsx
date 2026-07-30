@@ -23,6 +23,8 @@ interface WaitingRoomPanelProps {
   onLeave: () => void;
   onSaveDrawing: () => void;
   hasDrawing: boolean;
+  drawingCount: number;
+  onViewDrawings: () => void;
 }
 
 function hintLabel(mode: HintMode, hidden: boolean) {
@@ -178,6 +180,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             {props.hasDrawing && (
               <button type="button" onClick={props.onSaveDrawing}>
                 Save last drawing
+              </button>
+            )}
+            {props.drawingCount > 0 && (
+              <button type="button" onClick={props.onViewDrawings}>
+                View drawings ({props.drawingCount})
               </button>
             )}
           </div>

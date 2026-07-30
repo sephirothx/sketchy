@@ -109,6 +109,33 @@ class Player:
     afk_votes: set[str] = field(default_factory=set)
 
 
+@dataclass(frozen=True, slots=True)
+class DrawingRecapEntry:
+    round_number: int
+    turn_number: int
+    drawer_token: str
+    drawer_nickname: str
+    drawer_name_color: str | None
+    word: str
+    action_count: int
+    canvas_history: bytes
+
+    def metadata(self, index: int) -> dict:
+        return {
+            "index": index,
+            "roundNumber": self.round_number,
+            "turnNumber": self.turn_number,
+            "drawerToken": self.drawer_token,
+            "drawerNickname": self.drawer_nickname,
+            "drawerNameColor": self.drawer_name_color,
+            "word": self.word,
+            "actionCount": self.action_count,
+        }
+
+    def payload(self, index: int) -> dict:
+        return {**self.metadata(index), "canvas": self.canvas_history}
+
+
 @dataclass
 class Room:
     id: str
@@ -129,12 +156,19 @@ class Room:
     game: Optional[Game] = None
     canvas_generation: int = 0
     last_game_scores: list[dict] = field(default_factory=list)
+    last_game_drawings: list[DrawingRecapEntry] = field(default_factory=list)
 
     def player_list(self) -> list[Player]:
         return list(self.players.values())
 
     def connected_players(self) -> list[Player]:
         return [p for p in self.players.values() if p.connected]
+
+    def drawing_recap_metadata(self) -> list[dict]:
+        return [
+            drawing.metadata(index)
+            for index, drawing in enumerate(self.last_game_drawings)
+        ]
 
     def effective_word_pool(self) -> list[str] | None:
         """Return the word pool a Game should draw from, or None for the default list.
@@ -192,6 +226,11 @@ class Room:
             "hideMaskedPrompt": self.hide_masked_prompt,
             "state": self.state,
             "lastGameScores": self.last_game_scores,
+            "lastGameDrawings": (
+                self.drawing_recap_metadata()
+                if self.state == "waiting"
+                else []
+            ),
             "players": [
                 {
                     "token": p.token,

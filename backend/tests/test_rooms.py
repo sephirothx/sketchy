@@ -1,4 +1,5 @@
-from app.rooms import NAME_COLOR_PATTERN, RoomFullError, RoomManager
+from app.canvas_history import encode_canvas_history
+from app.rooms import DrawingRecapEntry, NAME_COLOR_PATTERN, RoomFullError, RoomManager
 
 
 def test_create_room_generates_unique_code():
@@ -146,4 +147,37 @@ def test_create_room_with_hide_masked_prompt_forces_hints_off():
     assert room.to_public_summary()["hideMaskedPrompt"] is True
     assert room.to_state_payload()["hideMaskedPrompt"] is True
 
+
+def test_room_payload_exposes_only_recap_metadata_while_waiting():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+    drawer = rm.add_player(room, "Drawer")
+    room.last_game_drawings.append(
+        DrawingRecapEntry(
+            round_number=1,
+            turn_number=1,
+            drawer_token=drawer.token,
+            drawer_nickname=drawer.nickname,
+            drawer_name_color=drawer.name_color,
+            word="apple",
+            action_count=0,
+            canvas_history=encode_canvas_history([]),
+        )
+    )
+
+    payload = room.to_state_payload()
+    assert payload["lastGameDrawings"] == [{
+        "index": 0,
+        "roundNumber": 1,
+        "turnNumber": 1,
+        "drawerToken": drawer.token,
+        "drawerNickname": "Drawer",
+        "drawerNameColor": drawer.name_color,
+        "word": "apple",
+        "actionCount": 0,
+    }]
+    assert "canvas" not in payload["lastGameDrawings"][0]
+
+    room.state = "playing"
+    assert room.to_state_payload()["lastGameDrawings"] == []
 

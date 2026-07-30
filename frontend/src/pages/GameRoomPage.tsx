@@ -7,6 +7,7 @@ import { Timer } from "../components/Timer";
 import { RoundEndOverlay } from "../components/RoundEndOverlay";
 import { WaitingRoomPanel } from "../components/WaitingRoomPanel";
 import { GameEndOverlay } from "../components/GameEndOverlay";
+import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { ChoosingWordOverlay } from "../components/ChoosingWordOverlay";
 import { RoomChatPanel } from "../components/RoomChatPanel";
@@ -96,6 +97,7 @@ export function GameRoomPage() {
   const messages = useGameStore((s) => s.messages);
   const lastRoundResult = useGameStore((s) => s.lastRoundResult);
   const finalScores = useGameStore((s) => s.finalScores);
+  const drawingRecap = useGameStore((s) => s.drawingRecap);
   const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
 
   const normalizedCode = code?.trim().toUpperCase() ?? "";
@@ -122,6 +124,7 @@ export function GameRoomPage() {
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [lastDrawing, setLastDrawing] = useState<string | null>(null);
+  const [recapOpen, setRecapOpen] = useState(false);
 
   function saveLastDrawing() {
     if (!lastDrawing) return;
@@ -292,6 +295,7 @@ export function GameRoomPage() {
   }
 
   async function handleStartGame() {
+    setRecapOpen(false);
     setStartBusy(true);
     setStartError(null);
     try {
@@ -640,12 +644,19 @@ export function GameRoomPage() {
           ) : undefined
         }
         main={
-          roomView === "game-end" && finalScores ? (
+          recapOpen && drawingRecap.length > 0 ? (
+            <DrawingRecapGallery
+              entries={drawingRecap}
+              onClose={() => setRecapOpen(false)}
+            />
+          ) : roomView === "game-end" && finalScores ? (
             <GameEndOverlay
               scores={finalScores}
               myToken={token}
               scoringMode={scoringMode}
               onContinue={dismissGameEnd}
+              drawingCount={drawingRecap.length}
+              onViewDrawings={() => setRecapOpen(true)}
             />
           ) : roomView === "waiting" ? (
             <WaitingRoomPanel
@@ -669,6 +680,8 @@ export function GameRoomPage() {
               onLeave={handleLeave}
               onSaveDrawing={saveLastDrawing}
               hasDrawing={Boolean(lastDrawing)}
+              drawingCount={drawingRecap.length}
+              onViewDrawings={() => setRecapOpen(true)}
             />
           ) : (
             <main className="canvas-area">

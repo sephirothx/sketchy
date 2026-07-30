@@ -19,6 +19,7 @@ from app.game import (
 )
 from app.live_drawing import decode_live_drawing, encode_live_drawing
 from app.rooms import (
+    DrawingRecapEntry,
     Player,
     Room,
     RoomFullError,
@@ -480,6 +481,18 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         drawer = room.players.get(game.current_drawer)
         if drawer:
             drawer.score += drawer_bonus
+        room.last_game_drawings.append(
+            DrawingRecapEntry(
+                round_number=game.round_number,
+                turn_number=len(room.last_game_drawings) + 1,
+                drawer_token=game.current_drawer or "",
+                drawer_nickname=drawer.nickname if drawer else "Unknown player",
+                drawer_name_color=drawer.name_color if drawer else None,
+                word=game.word or "",
+                action_count=len(game.drawing_history),
+                canvas_history=game.canvas_sync_payload(),
+            )
+        )
 
         # Build a per-player score breakdown for this round: how many points
         # each player just earned (guess points, or the drawer's bonus), plus
@@ -554,7 +567,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             ]
             await sio.emit(
                 "game_ended",
-                {"scores": room.last_game_scores},
+                {
+                    "scores": room.last_game_scores,
+                    "drawings": room.drawing_recap_metadata(),
+                },
                 room=room.id,
             )
             await _emit_room_state(room)
@@ -706,6 +722,25 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 "error": "Custom words can only be viewed in the waiting room",
             }
         return {"ok": True, "words": list(room.custom_words)}
+
+    @sio.event
+    async def get_recap_drawing(sid, data):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("token")) if room and session else None
+        index = data.get("index") if isinstance(data, dict) else None
+        if not room or not player:
+            return {"ok": False, "error": "Not in this room"}
+        if (
+            isinstance(index, bool)
+            or not isinstance(index, int)
+            or not 0 <= index < len(room.last_game_drawings)
+        ):
+            return {"ok": False, "error": "Drawing not found"}
+        return {
+            "ok": True,
+            "drawing": room.last_game_drawings[index].payload(index),
+        }
 
     @sio.event
     async def update_room_settings(sid, data):
@@ -993,6 +1028,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return {"ok": False, "error": "Game already in progress"}
 
         room.last_game_scores = []
+        room.last_game_drawings = []
         for p in room.player_list():
             p.score = 0 if p.is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0)
         room.state = "playing"
