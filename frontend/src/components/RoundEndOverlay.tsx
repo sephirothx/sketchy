@@ -67,7 +67,12 @@ export function RoundEndOverlay({
             <ol className="round-guesses-list">
               {guesses.map((guess) => (
                 <li key={guess.token}>
-                  <span>{guess.nickname}</span>
+                  <span
+                    className="colored-player-name"
+                    style={{ color: guess.nameColor }}
+                  >
+                    {guess.nickname}
+                  </span>
                   <time>{formatGuessTime(guess.seconds)}</time>
                 </li>
               ))}
@@ -93,7 +98,12 @@ export function RoundEndOverlay({
                   <span className="round-score-rank">#{entry.newRank}</span>
                   <span className="round-score-name">
                     {entry.token === drawerToken ? "\u270F\uFE0F " : ""}
-                    {entry.nickname}
+                    <span
+                      className="colored-player-name"
+                      style={{ color: entry.nameColor }}
+                    >
+                      {entry.nickname}
+                    </span>
                   </span>
                   {entry.token === drawerToken && drawerBonus > 0 && <span className="drawer-bonus">🎨 +{drawerBonus}</span>}
                   {change && (

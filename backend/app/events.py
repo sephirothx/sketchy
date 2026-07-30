@@ -18,7 +18,14 @@ from app.game import (
     Phase,
 )
 from app.live_drawing import decode_live_drawing, encode_live_drawing
-from app.rooms import Player, Room, RoomFullError, RoomManager, STARTING_SCORE
+from app.rooms import (
+    Player,
+    Room,
+    RoomFullError,
+    RoomManager,
+    STARTING_SCORE,
+    normalize_name_color,
+)
 from app.words import parse_custom_word_list
 
 logger = logging.getLogger("sketchy.events")
@@ -324,6 +331,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             {
                 "drawerToken": game.current_drawer,
                 "drawerNickname": drawer.nickname if drawer else "",
+                "drawerNameColor": drawer.name_color if drawer else "",
                 "roundNumber": game.round_number,
                 "totalRounds": game.rounds_total,
                 "seconds": CHOOSE_WORD_SECONDS,
@@ -408,6 +416,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                     {
                         "token": p.token,
                         "nickname": p.nickname,
+                        "nameColor": p.name_color,
                         "seconds": game.guess_times[p.token],
                     }
                     for p in sorted(
@@ -420,6 +429,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                     {
                         "token": p.token,
                         "nickname": p.nickname,
+                        "nameColor": p.name_color,
                         "score": p.score,
                         "delta": deltas[p.token],
                         "previousRank": previous_ranks[p.token],
@@ -440,7 +450,12 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             room.state = "waiting"
             room.game = None
             room.last_game_scores = [
-                {"token": p.token, "nickname": p.nickname, "score": p.score}
+                {
+                    "token": p.token,
+                    "nickname": p.nickname,
+                    "nameColor": p.name_color,
+                    "score": p.score,
+                }
                 for p in sorted(room.player_list(), key=lambda p: -p.score)
             ]
             await sio.emit(
@@ -565,7 +580,11 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         room = room_manager.create_room(
             **settings,
         )
-        player = room_manager.add_player(room, nickname)
+        player = room_manager.add_player(
+            room,
+            nickname,
+            name_color=normalize_name_color(data.get("nameColor")),
+        )
         await _join_socket_room(sid, room, player, is_reconnect=False)
         return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
 
@@ -630,6 +649,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         room_id = data.get("roomId")
         code = data.get("code")
         nickname = str(data.get("nickname", "")).strip()[:20] or "Player"
+        name_color = normalize_name_color(data.get("nameColor"))
         as_spectator = bool(data.get("asSpectator", False))
 
         room = room_manager.get_room(room_id) or room_manager.get_room_by_code(code)
@@ -650,13 +670,20 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
         if token and token in room.players:
             player = room.players[token]
+            if name_color:
+                player.name_color = name_color
             await _join_socket_room(sid, room, player, is_reconnect=True)
             return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
         if token:
             return {"ok": False, "error": "Your previous room session has expired", "invalidToken": True}
 
         try:
-            player = room_manager.add_player(room, nickname, is_spectator=as_spectator)
+            player = room_manager.add_player(
+                room,
+                nickname,
+                is_spectator=as_spectator,
+                name_color=name_color,
+            )
         except RoomFullError:
             return {"ok": False, "error": "Room is full"}
 
@@ -669,6 +696,20 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
         await _join_socket_room(sid, room, player, is_reconnect=False)
         return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
+
+    @sio.event
+    async def update_player_settings(sid, data):
+        session = await sio.get_session(sid)
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("token")) if room and session else None
+        if not room or not player:
+            return {"ok": False, "error": "Not in this room"}
+        name_color = normalize_name_color((data or {}).get("nameColor"))
+        if not name_color:
+            return {"ok": False, "error": "Invalid player name color"}
+        player.name_color = name_color
+        await _emit_room_state(room)
+        return {"ok": True}
 
     @sio.event
     async def become_player(sid, data=None):

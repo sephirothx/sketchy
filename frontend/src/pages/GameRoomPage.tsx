@@ -56,6 +56,7 @@ export function GameRoomPage() {
   const navigate = useNavigate();
   const { notify } = useToast();
   const openSettings = useSettingsStore((s) => s.openSettings);
+  const nameColor = useSettingsStore((s) => s.nameColor);
 
   const canvasRef = useRef<CanvasRef | null>(null);
 
@@ -155,6 +156,7 @@ export function GameRoomPage() {
           const reconnect = await emitWithAck<AckResponse>("join_room", {
             code: normalizedCode,
             nickname,
+            nameColor,
             token: storedToken,
           });
           if (cancelled) return;
@@ -209,6 +211,7 @@ export function GameRoomPage() {
       const response = await emitWithAck<AckResponse>("join_room", {
         code: code.trim().toUpperCase(),
         nickname: trimmedNickname,
+        nameColor,
         asSpectator,
       });
 
@@ -702,6 +705,7 @@ export function GameRoomPage() {
                   phase === "choosing_word" && !amDrawer ? (
                     <ChoosingWordOverlay
                       drawerNickname={drawer?.nickname || "The next player"}
+                      drawerNameColor={drawer?.nameColor}
                     />
                   ) : null
                 }
@@ -733,6 +737,7 @@ export function GameRoomPage() {
         chat={
           <RoomChatPanel
             messages={messages}
+            players={players}
             mode={roomView}
             isDrawer={amDrawer}
             canGuess={canGuess}

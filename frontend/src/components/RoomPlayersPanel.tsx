@@ -94,7 +94,13 @@ export function RoomPlayersPanel({
                 <ul>
                   {spectators.map((spectator) => (
                     <li key={spectator.token}>
-                      {spectator.nickname}{spectator.token === myToken ? " (you)" : ""}
+                      <span
+                        className="colored-player-name"
+                        style={{ color: spectator.nameColor }}
+                      >
+                        {spectator.nickname}
+                      </span>
+                      {spectator.token === myToken ? " (you)" : ""}
                     </li>
                   ))}
                 </ul>

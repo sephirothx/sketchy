@@ -1,6 +1,7 @@
 export interface PlayerInfo {
   token: string;
   nickname: string;
+  nameColor?: string;
   score: number;
   connected: boolean;
   isHost: boolean;
@@ -70,7 +71,9 @@ export type GamePhase = "idle" | "choosing_word" | "drawing" | "round_end" | "ga
 
 export interface ChatMessage {
   id: string;
+  token?: string;
   nickname: string;
+  nameColor?: string;
   text: string;
   correct: boolean;
   system?: boolean;
@@ -82,6 +85,7 @@ export interface ChatMessage {
 export interface ScoreEntry {
   token: string;
   nickname: string;
+  nameColor?: string;
   score: number;
 }
 
@@ -99,6 +103,7 @@ export interface RoundEndedPayload {
   guesses: {
     token: string;
     nickname: string;
+    nameColor?: string;
     seconds: number;
   }[];
   scores: RoundScoreEntry[];

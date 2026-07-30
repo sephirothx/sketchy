@@ -1,9 +1,11 @@
 interface ChoosingWordOverlayProps {
   drawerNickname: string;
+  drawerNameColor?: string;
 }
 
 export function ChoosingWordOverlay({
   drawerNickname,
+  drawerNameColor,
 }: ChoosingWordOverlayProps) {
   return (
     <div
@@ -20,7 +22,13 @@ export function ChoosingWordOverlay({
         </div>
         <p className="choosing-word-kicker">Next turn</p>
         <p className="choosing-word-message">
-          <strong>{drawerNickname}</strong> is choosing a word…
+          <strong
+            className="colored-player-name"
+            style={{ color: drawerNameColor }}
+          >
+            {drawerNickname}
+          </strong>{" "}
+          is choosing a word…
         </p>
         <p className="choosing-word-hint">
           Drawing will begin as soon as they choose.

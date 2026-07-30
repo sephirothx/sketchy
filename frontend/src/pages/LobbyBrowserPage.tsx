@@ -19,6 +19,7 @@ export function LobbyBrowserPage() {
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
   const openSettings = useSettingsStore((s) => s.openSettings);
+  const nameColor = useSettingsStore((s) => s.nameColor);
   const setSession = useGameStore((s) => s.setSession);
 
   const [nicknameInput, setNicknameInput] = useState(nickname);
@@ -137,6 +138,7 @@ export function LobbyBrowserPage() {
     try {
       const res = await emitWithAck<AckResponse>("join_room", {
         nickname: nicknameInput.trim(),
+        nameColor,
         asSpectator,
         ...target,
       });

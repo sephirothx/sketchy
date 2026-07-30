@@ -3,10 +3,12 @@ import { SettingsIcon } from "./SettingsIcon";
 import {
   ACTION_LABELS,
   DEFAULT_KEY_BINDINGS,
+  randomNameColor,
   type KeyBindings,
   type PenCursorStyle,
   useSettingsStore,
 } from "../store/settingsStore";
+import { socket } from "../lib/socket";
 
 type SettingsTab = "general" | "game" | "shortcuts";
 
@@ -23,7 +25,7 @@ function formatKey(key: string): string {
 }
 
 function SettingsModalContent() {
-  const { closeSettings, keyBindings, penCursor, theme, confettiEffects, soundEffects, volume, setAllSettings } =
+  const { closeSettings, keyBindings, penCursor, theme, confettiEffects, soundEffects, volume, nameColor, setAllSettings } =
     useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
@@ -33,6 +35,7 @@ function SettingsModalContent() {
   const [draftConfettiEffects, setDraftConfettiEffects] = useState<boolean>(confettiEffects);
   const [draftSoundEffects, setDraftSoundEffects] = useState<boolean>(soundEffects);
   const [draftVolume, setDraftVolume] = useState<number>(volume);
+  const [draftNameColor, setDraftNameColor] = useState<string>(nameColor);
   const [activeRebind, setActiveRebind] = useState<{
     action: keyof KeyBindings;
     slotIndex: number;
@@ -87,7 +90,9 @@ function SettingsModalContent() {
       confettiEffects: draftConfettiEffects,
       soundEffects: draftSoundEffects,
       volume: draftVolume,
+      nameColor: draftNameColor,
     });
+    socket.emit("update_player_settings", { nameColor: draftNameColor });
     closeSettings();
   };
 
@@ -150,6 +155,32 @@ function SettingsModalContent() {
                 </select>
                 <p className="settings-description" style={{ marginTop: "6px" }}>
                   First-time visits follow your device preference. Choose a theme here to save your own preference.
+                </p>
+              </div>
+
+              <div className="settings-field name-color-setting">
+                <label htmlFor="name-color-input" className="settings-label">
+                  Player name color
+                </label>
+                <div className="name-color-controls">
+                  <input
+                    id="name-color-input"
+                    type="color"
+                    value={draftNameColor}
+                    onChange={(event) => setDraftNameColor(event.target.value)}
+                    aria-label="Player name color"
+                  />
+                  <strong style={{ color: draftNameColor }}>Your colored name</strong>
+                  <button
+                    type="button"
+                    className="name-color-randomize"
+                    onClick={() => setDraftNameColor(randomNameColor(draftNameColor))}
+                  >
+                    Randomize
+                  </button>
+                </div>
+                <p className="settings-description">
+                  This color is visible to everyone in rooms you join.
                 </p>
               </div>
 

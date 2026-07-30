@@ -99,6 +99,45 @@ async def test_create_room_accepts_no_scoring_and_disables_point_purchase_hints(
 
 
 @pytest.mark.asyncio
+async def test_player_name_color_is_created_and_can_be_updated_live():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value=None)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid",
+        {
+            "nickname": "Host",
+            "name": "Room",
+            "nameColor": "#AABBCC",
+        },
+    )
+    room = room_manager.get_room(response["roomId"])
+    assert room is not None
+    player = room.players[response["token"]]
+    assert player.name_color == "#aabbcc"
+    assert room.to_state_payload()["players"][0]["nameColor"] == "#aabbcc"
+
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "token": player.token}
+    )
+    update = sio.handlers["/"]["update_player_settings"]
+    assert await update("host-sid", {"nameColor": "#123ABC"}) == {"ok": True}
+    assert player.name_color == "#123abc"
+    assert sio.emit.await_args_list[-1].args[0] == "room_state"
+
+    assert await update("host-sid", {"nameColor": "red"}) == {
+        "ok": False,
+        "error": "Invalid player name color",
+    }
+    assert player.name_color == "#123abc"
+
+
+@pytest.mark.asyncio
 async def test_host_can_update_waiting_room_settings_and_chat():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Before", is_public=True, max_players=4)
