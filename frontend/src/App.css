@@ -1966,6 +1966,25 @@ textarea:disabled {
 .game-end-scoreboard strong { color: #15803d; }
 .game-end-no-score { color: #475569; line-height: 1.5; }
 .game-end-podium button { background: #4c6ef5; border: 0; border-radius: 8px; color: #fff; font-weight: 800; margin-top: 18px; padding: 11px 16px; }
+.game-end-actions { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; }
+.drawing-recap { display: flex; justify-content: center; padding: 8px 0 32px; width: 100%; }
+.drawing-recap-card { background: #fff; border: 1px solid #dfe1e6; border-radius: 16px; box-shadow: 0 8px 24px rgba(15, 23, 42, .12); box-sizing: border-box; max-width: 880px; padding: 22px; width: 100%; }
+.drawing-recap-header { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 16px; }
+.drawing-recap-kicker { color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: .08em; margin: 0; text-transform: uppercase; }
+.drawing-recap-header h1 { color: #1e293b; font-size: 26px; margin: 4px 0; }
+.drawing-recap-meta { color: #64748b; margin: 0; }
+.drawing-recap-close, .drawing-recap-navigation button, .drawing-recap-status button { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 800; padding: 9px 13px; }
+.drawing-recap-canvas { align-items: center; aspect-ratio: 4 / 3; background: #f8fafc; border-radius: 10px; display: flex; justify-content: center; overflow: hidden; width: 100%; }
+.drawing-recap-canvas .canvas-wrapper, .drawing-recap-canvas .canvas-stack { max-width: none; width: 100%; }
+.drawing-recap-canvas .canvas-stack { border: 0; border-radius: 0; }
+.drawing-recap-status { color: #64748b; text-align: center; }
+.drawing-recap-status p { margin: 0 0 10px; }
+.drawing-recap-empty { background: #f8fafc; border-radius: 8px; color: #64748b; margin: 10px 0 0; padding: 9px 12px; text-align: center; }
+.drawing-recap-navigation { align-items: center; display: grid; gap: 12px; grid-template-columns: 1fr auto 1fr; margin-top: 16px; }
+.drawing-recap-navigation button:first-child { justify-self: start; }
+.drawing-recap-navigation button:last-child { justify-self: end; }
+.drawing-recap-navigation button:disabled { cursor: not-allowed; opacity: .45; }
+.drawing-recap-navigation strong { color: #334155; font-size: 14px; }
 .drawer-bonus { color: #a16207; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .round-score-you { background: #dbeafe; border-radius: 999px; color: #1d4ed8; font-size: 11px; font-weight: 800; padding: 3px 6px; }
 
@@ -2976,6 +2995,28 @@ textarea:disabled {
   box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
 }
 
+[data-theme="dark"] .drawing-recap-card {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+
+[data-theme="dark"] .drawing-recap-header h1 { color: #f8fafc; }
+[data-theme="dark"] .drawing-recap-kicker,
+[data-theme="dark"] .drawing-recap-meta,
+[data-theme="dark"] .drawing-recap-status { color: #94a3b8; }
+[data-theme="dark"] .drawing-recap-close,
+[data-theme="dark"] .drawing-recap-navigation button,
+[data-theme="dark"] .drawing-recap-status button {
+  background: #334155;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .drawing-recap-canvas,
+[data-theme="dark"] .drawing-recap-empty { background: #0f172a; }
+[data-theme="dark"] .drawing-recap-empty { color: #94a3b8; }
+[data-theme="dark"] .drawing-recap-navigation strong { color: #e2e8f0; }
+
 [data-theme="dark"] .game-end-scoreboard li {
   border-color: #334155;
   color: #e2e8f0;
@@ -3307,6 +3348,9 @@ textarea:disabled {
   .room-settings-save-button { width: 100%; }
   .waiting-card { padding: 16px; }
   .room-settings-fields { grid-template-columns: 1fr; }
+  .drawing-recap-card { border-radius: 12px; padding: 14px; }
+  .drawing-recap-header { align-items: stretch; flex-direction: column; }
+  .drawing-recap-close { align-self: flex-start; }
 }
 
 @media (max-width: 900px) {

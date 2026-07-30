@@ -17,7 +17,7 @@ from app.canvas_history import (
 from app.events import _validated_draw_payload, register_handlers
 from app.game import DRAWING_SECONDS, Game
 from app.live_drawing import encode_live_drawing
-from app.rooms import STARTING_SCORE, RoomManager
+from app.rooms import DrawingRecapEntry, STARTING_SCORE, RoomManager
 
 
 def canvas_action(game: Game, sequence: int) -> list[int]:
@@ -762,6 +762,152 @@ async def test_simultaneous_final_guesses_end_round_once():
     )
     assert {guess["nickname"] for guess in round_ended_payload["guesses"]} == {"One", "Two"}
     assert all(0 <= guess["seconds"] <= DRAWING_SECONDS for guess in round_ended_payload["guesses"])
+
+    timer = events._phase_timers.pop(room.id)
+    timer.cancel()
+    with suppress(asyncio.CancelledError):
+        await timer
+
+
+@pytest.mark.asyncio
+async def test_finished_drawing_turn_is_captured_for_recap():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer", name_color="#123abc")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+    room.state = "playing"
+    room.game = Game(
+        turn_order=[drawer.token, guesser.token],
+        rounds_total=1,
+        word_pool=["apple"],
+    )
+    room.game.start_next_turn()
+    room.game.choose_word(drawer.token, "apple")
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        drawer.sid: {"room_id": room.id, "token": drawer.token},
+        guesser.sid: {"room_id": room.id, "token": guesser.token},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions[sid])
+    sio.emit = AsyncMock()
+
+    await sio.handlers["/"]["draw"](
+        drawer.sid,
+        encode_live_drawing(
+            "draw_fill",
+            {"x": 0.25, "y": 0.5, "color": "#123456"},
+        ),
+        canvas_action(room.game, 1),
+    )
+    await sio.handlers["/"]["guess"](guesser.sid, {"text": "apple"})
+
+    assert len(room.last_game_drawings) == 1
+    recap = room.last_game_drawings[0]
+    assert recap.round_number == 1
+    assert recap.turn_number == 1
+    assert recap.drawer_token == drawer.token
+    assert recap.drawer_nickname == "Drawer"
+    assert recap.drawer_name_color == "#123abc"
+    assert recap.word == "apple"
+    assert recap.action_count == 1
+    assert decode_binary_canvas_history(recap.canvas_history) == [
+        FillAction(x=200, y=300, color=0x123456),
+    ]
+
+    timer = events._phase_timers.pop(room.id)
+    timer.cancel()
+    with suppress(asyncio.CancelledError):
+        await timer
+
+
+@pytest.mark.asyncio
+async def test_recap_drawing_can_be_fetched_without_mutating_history():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    player = room_manager.add_player(room, "Player")
+    canvas = encode_canvas_history([ClearAction()])
+    room.last_game_drawings.append(
+        DrawingRecapEntry(
+            round_number=2,
+            turn_number=4,
+            drawer_token=player.token,
+            drawer_nickname=player.nickname,
+            drawer_name_color=player.name_color,
+            word="tree",
+            action_count=1,
+            canvas_history=canvas,
+        )
+    )
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "token": player.token},
+    )
+    get_drawing = sio.handlers["/"]["get_recap_drawing"]
+
+    response = await get_drawing("player-sid", {"index": 0})
+
+    assert response["ok"] is True
+    assert response["drawing"] == {
+        "index": 0,
+        "roundNumber": 2,
+        "turnNumber": 4,
+        "drawerToken": player.token,
+        "drawerNickname": "Player",
+        "drawerNameColor": player.name_color,
+        "word": "tree",
+        "actionCount": 1,
+        "canvas": canvas,
+    }
+    assert room.last_game_drawings[0].canvas_history == canvas
+    assert await get_drawing("player-sid", {"index": 1}) == {
+        "ok": False,
+        "error": "Drawing not found",
+    }
+    assert await get_drawing("player-sid", {"index": True}) == {
+        "ok": False,
+        "error": "Drawing not found",
+    }
+
+
+@pytest.mark.asyncio
+async def test_starting_new_game_clears_previous_drawing_recap():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host")
+    guest = room_manager.add_player(room, "Guest")
+    host.sid = "host-sid"
+    guest.sid = "guest-sid"
+    room.last_game_drawings.append(
+        DrawingRecapEntry(
+            round_number=1,
+            turn_number=1,
+            drawer_token=host.token,
+            drawer_nickname=host.nickname,
+            drawer_name_color=host.name_color,
+            word="old",
+            action_count=0,
+            canvas_history=encode_canvas_history([]),
+        )
+    )
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "token": host.token},
+    )
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["start_game"](host.sid)
+
+    assert response == {"ok": True}
+    assert room.last_game_drawings == []
 
     timer = events._phase_timers.pop(room.id)
     timer.cancel()

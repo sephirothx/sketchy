@@ -68,6 +68,7 @@ interface CanvasProps {
   tool: DrawTool;
   solutionWord?: string | null;
   overlay?: ReactNode;
+  snapshotActions?: DecodedCanvasAction[] | null;
 }
 
 function getYYMMDDhhmm(d = new Date()): string {
@@ -497,6 +498,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     tool,
     solutionWord = null,
     overlay = null,
+    snapshotActions = null,
   }: CanvasProps,
   ref
 ) {
@@ -1010,6 +1012,13 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       beginDrawAction(encodeClear());
     };
 
+    if (snapshotActions) {
+      replayActions(snapshotActions);
+      return () => {
+        replayGenerationRef.current += 1;
+      };
+    }
+
     socket.on("draw", onDraw);
     socket.on("sync_strokes", onSyncStrokes);
     socket.on("canvas_commit", onCanvasCommit);
@@ -1033,6 +1042,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     beginDrawAction,
     finalizeActivePath,
     requestAuthoritativeSync,
+    snapshotActions,
   ]);
 
   function getNormalizedPoint(e: ReactPointerEvent<HTMLCanvasElement>): StrokePoint {

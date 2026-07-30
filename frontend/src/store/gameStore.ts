@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   ChatMessage,
+  DrawingRecapMetadata,
   GameEndedPayload,
   GamePhase,
   HintMode,
@@ -45,6 +46,7 @@ interface GameStore {
   messages: ChatMessage[];
   lastRoundResult: RoundEndedPayload | null;
   finalScores: GameEndedPayload["scores"] | null;
+  drawingRecap: DrawingRecapMetadata[];
   error: string | null;
 
   setNickname: (nickname: string) => void;
@@ -101,6 +103,7 @@ const initialGameFields = {
   messages: [] as ChatMessage[],
   lastRoundResult: null as RoundEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
+  drawingRecap: [] as DrawingRecapMetadata[],
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -156,6 +159,7 @@ export const useGameStore = create<GameStore>((set) => ({
       finalScores: payload.lastGameScores?.length
         ? payload.lastGameScores
         : payload.state === "playing" ? null : state.finalScores,
+      drawingRecap: payload.lastGameDrawings ?? state.drawingRecap,
       players: payload.players,
     })),
   addMessage: (message) => set((s) => ({ messages: [...s.messages.slice(-99), message] })),
@@ -212,7 +216,12 @@ export const useGameStore = create<GameStore>((set) => ({
         return updated ? { ...p, score: updated.score } : p;
       }),
     })),
-  endGame: (payload) => set({ phase: "game_end", finalScores: payload.scores, roomState: "waiting" }),
+  endGame: (payload) => set({
+    phase: "game_end",
+    finalScores: payload.scores,
+    drawingRecap: payload.drawings ?? [],
+    roomState: "waiting",
+  }),
   dismissGameEnd: () => set({ phase: "idle" }),
   setError: (error) => set({ error }),
   reset: () => set({ token: null, roomId: null, code: null, players: [], ...initialGameFields }),

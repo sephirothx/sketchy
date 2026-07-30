@@ -50,6 +50,7 @@ export interface RoomStatePayload {
   hideMaskedPrompt: boolean;
   state: "waiting" | "playing";
   lastGameScores?: ScoreEntry[];
+  lastGameDrawings?: DrawingRecapMetadata[];
   players: PlayerInfo[];
 }
 
@@ -111,6 +112,26 @@ export interface RoundEndedPayload {
 
 export interface GameEndedPayload {
   scores: ScoreEntry[];
+  drawings: DrawingRecapMetadata[];
+}
+
+export interface DrawingRecapMetadata {
+  index: number;
+  roundNumber: number;
+  turnNumber: number;
+  drawerToken: string;
+  drawerNickname: string;
+  drawerNameColor?: string;
+  word: string;
+  actionCount: number;
+}
+
+export interface DrawingRecapEntry extends DrawingRecapMetadata {
+  canvas: unknown;
+}
+
+export interface DrawingRecapResponse extends AckResponse {
+  drawing?: DrawingRecapEntry;
 }
 
 export interface StrokePoint {
