@@ -151,6 +151,40 @@ def test_submit_guess_correct_awards_points_and_ignores_drawer():
     assert points_again == 0
 
 
+def test_submit_guess_ignores_canonically_decomposable_diacritics():
+    cases = (
+        ("il tempo è denaro", "il tempo e denaro"),
+        ("cafe", "CAFÉ"),
+        ("cafe\u0301", "  CAFE  "),
+    )
+    for answer, guess in cases:
+        game = Game(turn_order=["drawer", "guesser"], word_pool=[answer])
+        game.start_next_turn()
+        game.force_word_choice()
+        game.set_phase_deadline(DRAWING_SECONDS)
+
+        correct, points = game.submit_guess("guesser", guess)
+
+        assert correct is True
+        assert points > 0
+
+
+def test_submit_guess_keeps_letters_without_canonical_ascii_decomposition_distinct():
+    cases = (
+        ("smørrebrød", "smorrebrod"),
+        ("łódź", "lodz"),
+    )
+    for answer, guess in cases:
+        game = Game(turn_order=["drawer", "guesser"], word_pool=[answer])
+        game.start_next_turn()
+        game.force_word_choice()
+
+        correct, points = game.submit_guess("guesser", guess)
+
+        assert correct is False
+        assert points == 0
+
+
 def test_submit_guess_records_elapsed_guess_time():
     game = make_game(n_players=2)
     game.start_next_turn()
@@ -670,6 +704,12 @@ def test_guess_hint_exact_match_returns_none():
     game = make_close_guess_game("testing")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     assert game.guess_hint(guesser, "testing") is None
+
+
+def test_guess_hint_treats_accent_only_difference_as_exact_match():
+    game = make_close_guess_game("café")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.guess_hint(guesser, "cafe") is None
 
 
 def test_guess_hint_rejects_drawer_and_correct_guessers():

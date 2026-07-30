@@ -9,6 +9,7 @@ import random
 import re
 import string
 import time
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum
@@ -86,9 +87,20 @@ class Phase(str, Enum):
 
 
 def _normalize(text: str) -> str:
-    """Collapse whitespace and lowercase, so multi-word expressions match
-    regardless of extra/irregular spacing in the guesser's input (e.g. "red  panda")."""
-    return " ".join(text.split()).lower()
+    """Normalize guesses while preserving letters without canonical ASCII forms.
+
+    Whitespace and case differences are ignored as before. Canonically
+    decomposable diacritics are stripped so, for example, "è" matches "e".
+    Letters such as "ø" and "ł" remain distinct because Unicode NFD does not
+    decompose them into ASCII letters.
+    """
+    collapsed = " ".join(text.split()).lower()
+    decomposed = unicodedata.normalize("NFD", collapsed)
+    return "".join(
+        character
+        for character in decomposed
+        if not unicodedata.combining(character)
+    )
 
 
 def _damerau_levenshtein(a: str, b: str) -> int:
