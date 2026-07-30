@@ -140,6 +140,33 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
                 "button",
                 name="Back to lobby",
             ).is_visible()
+
+            # A non-host viewing the previous recap when the host starts a
+            # rematch must not reopen the gallery when that rematch ends.
+            await guest.get_by_role(
+                "button",
+                name="View drawings",
+                exact=True,
+            ).click()
+            await guest.get_by_text("Drawing recap", exact=True).wait_for()
+
+            await host.get_by_role("button", name="Play again").click()
+            await guest.get_by_text("Drawing recap", exact=True).wait_for(
+                state="detached",
+            )
+
+            for _ in range(2):
+                _, guesser, word = await choose_word(pages)
+                await guesser.fill(".chat-input input", word)
+                await guesser.keyboard.press("Enter")
+
+            await guest.get_by_text("Game complete", exact=True).wait_for(
+                timeout=12_000,
+            )
+            assert not await guest.get_by_text(
+                "Drawing recap",
+                exact=True,
+            ).is_visible()
         finally:
             await host_context.close()
             await guest_context.close()

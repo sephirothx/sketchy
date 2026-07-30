@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas, type CanvasRef } from "./Canvas";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
-import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
+import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import type { DrawingRecapMetadata, DrawingRecapResponse } from "../types";
 
 interface DrawingRecapGalleryProps {
@@ -81,13 +81,6 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [changePosition, entries.length, onClose, position]);
-
-  useEffect(() => {
-    socket.on("game_started", onClose);
-    return () => {
-      socket.off("game_started", onClose);
-    };
-  }, [onClose]);
 
   if (!entry) return null;
 
