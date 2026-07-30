@@ -153,6 +153,7 @@ class Game:
     guess_points: dict[str, int] = field(default_factory=dict)
     guess_times: dict[str, float] = field(default_factory=dict)
     drawing_history: PackedCanvasHistory = field(default_factory=PackedCanvasHistory)
+    canvas_revision: int = 0
     active_path_index: int | None = field(default=None, repr=False, compare=False)
     canvas_point_count: int = field(default=0, repr=False, compare=False)
     phase_deadline: float | None = None
@@ -247,6 +248,7 @@ class Game:
         self.guess_points = {}
         self.guess_times = {}
         self.drawing_history.clear()
+        self.canvas_revision += 1
         self.active_path_index = None
         self.canvas_point_count = 0
         self.letter_positions = []
@@ -507,6 +509,7 @@ class Game:
                 width=payload["width"],
             )
             self.canvas_point_count += 1
+            self.canvas_revision += 1
             return True
         if event == "draw_shape":
             self.drawing_history.append_shape(
@@ -524,6 +527,7 @@ class Game:
             )
         else:
             return False
+        self.canvas_revision += 1
         return True
 
     def clear_canvas_stroke(self) -> bool:
@@ -534,6 +538,7 @@ class Game:
             return False
         self.active_path_index = None
         self.drawing_history.append_clear()
+        self.canvas_revision += 1
         return True
 
     def canvas_sync_payload(self) -> bytes:
@@ -551,6 +556,7 @@ class Game:
         removed = self.drawing_history.pop()
         if removed.tag == PATH_TAG:
             self.canvas_point_count -= removed.point_count
+        self.canvas_revision += 1
         return True
 
     def submit_guess(self, token: str, text: str) -> tuple[bool, int]:
