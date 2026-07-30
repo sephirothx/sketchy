@@ -368,14 +368,9 @@ def color_to_int(color: str) -> int:
 def color_to_hex(color: int) -> str:
     return f"#{color:06x}"
 
-
-def _wire_number(value: float) -> int | float:
-    return int(value) if value.is_integer() else value
-
-
 def encode_canvas_action(action: CanvasAction) -> list:
     if isinstance(action, PathAction):
-        encoded = [PATH_TAG, action.color, _wire_number(action.width)]
+        encoded = [PATH_TAG, action.color, action.width]
         for x, y in action.points:
             encoded.extend((x, y))
         return encoded
@@ -384,7 +379,7 @@ def encode_canvas_action(action: CanvasAction) -> list:
             SHAPE_TAG,
             SHAPE_IDS[action.shape],
             action.color,
-            _wire_number(action.width),
+            action.width,
             action.start[0],
             action.start[1],
             action.end[0],
