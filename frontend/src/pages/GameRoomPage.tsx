@@ -126,6 +126,16 @@ export function GameRoomPage() {
   const [startError, setStartError] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
 
+  useEffect(() => {
+    function closeRecapForNewGame() {
+      setRecapOpen(false);
+    }
+    socket.on("game_started", closeRecapForNewGame);
+    return () => {
+      socket.off("game_started", closeRecapForNewGame);
+    };
+  }, []);
+
   async function handleCopyLink() {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
