@@ -87,6 +87,12 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
 
             view_drawings = host.get_by_role("button", name="View drawings", exact=True)
             await view_drawings.wait_for(timeout=12_000)
+            continue_to_waiting = host.get_by_role(
+                "button",
+                name="Continue to waiting room · 10s",
+                exact=True,
+            )
+            await continue_to_waiting.wait_for()
             await view_drawings.click()
 
             assert await host.get_by_text("1 of 2", exact=True).is_visible()
@@ -116,12 +122,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
 
             await host.get_by_role("button", name="Previous").click()
             assert await host.get_by_text("1 of 2", exact=True).is_visible()
-            await host.get_by_role("button", name="Back").click()
-            assert await host.get_by_text("Game complete", exact=True).is_visible()
-            await host.get_by_role(
-                "button",
-                name="Continue to waiting room",
-            ).click()
+            await host.get_by_role("button", name="Close").click()
             await host.locator('[data-testid="waiting-room"]').wait_for()
             assert not await host.get_by_text("Previous game", exact=True).is_visible()
             assert await host.get_by_text("Final standings", exact=True).is_visible()

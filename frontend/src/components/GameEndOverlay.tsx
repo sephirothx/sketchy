@@ -11,7 +11,7 @@ interface GameEndOverlayProps {
 }
 
 const PODIUM = ["🥇", "🥈", "🥉"];
-const DISPLAY_SECONDS = 6;
+const DISPLAY_SECONDS = 10;
 
 export function GameEndOverlay({
   scores,
