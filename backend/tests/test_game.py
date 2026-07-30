@@ -287,6 +287,32 @@ def test_canvas_revision_advances_only_for_semantic_history_changes():
     assert game.canvas_revision == 7
 
 
+def test_canvas_sequence_commits_crc32_and_undo_uses_prefix_hash():
+    game = make_game()
+    game.record_stroke("draw_shape", shape_payload())
+    first_hash = game.canvas_hash
+    assert game.commit_canvas_sequence(1) == (
+        game.canvas_revision,
+        first_hash,
+        "action",
+    )
+
+    game.record_stroke(
+        "draw_fill",
+        {"x": 0.25, "y": 0.75, "color": "#abcdef"},
+    )
+    assert game.canvas_hash != first_hash
+    assert game.commit_canvas_sequence(2)[1] == game.canvas_hash
+
+    assert game.undo_last_stroke() is True
+    assert game.canvas_hash == first_hash
+    assert game.commit_canvas_sequence(3, "undo") == (
+        game.canvas_revision,
+        first_hash,
+        "undo",
+    )
+
+
 def test_record_stroke_respects_history_limit(monkeypatch):
     monkeypatch.setattr("app.game.MAX_STROKE_RECORDS", 1)
     game = make_game()

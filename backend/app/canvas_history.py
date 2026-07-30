@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import struct
+import zlib
 from array import array
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -36,6 +37,9 @@ _FILL_ACTION = struct.Struct("<B3sHH")
 _CLEAR_ACTION = struct.Struct("<B")
 _BINARY_HEADER = struct.Struct("<4sBH")
 _BINARY_OFFSET = struct.Struct("<I")
+_HASH_RECORD_LENGTH = struct.Struct("<I")
+
+HISTORY_HASH_INITIAL = 0
 
 
 @dataclass(slots=True)
@@ -175,6 +179,16 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
     def clear(self) -> None:
         self.data.clear()
         del self.offsets[:]
+
+    def record_bytes(self, index: int) -> memoryview:
+        """Return the canonical packed bytes for one semantic action."""
+        if index < 0:
+            index += len(self)
+        if not 0 <= index < len(self):
+            raise IndexError("canvas action index out of range")
+        start = self.offsets[index]
+        end = self.offsets[index + 1] if index + 1 < len(self) else len(self.data)
+        return memoryview(self.data)[start:end]
 
     def append_path(
         self,
@@ -332,6 +346,19 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
         self.offsets.pop()
         del self.data[start:]
         return PoppedCanvasAction(tag=tag, point_count=point_count)
+
+
+def extend_history_hash(previous: int, record: bytes | bytearray | memoryview) -> int:
+    """Hash one length-delimited canonical action onto a history prefix."""
+    value = zlib.crc32(_HASH_RECORD_LENGTH.pack(len(record)), previous)
+    return zlib.crc32(record, value)
+
+
+def canvas_history_hash(history: PackedCanvasHistory) -> int:
+    value = HISTORY_HASH_INITIAL
+    for index in range(len(history)):
+        value = extend_history_hash(value, history.record_bytes(index))
+    return value
 
 
 def color_to_int(color: str) -> int:
