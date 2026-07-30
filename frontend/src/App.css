@@ -2418,6 +2418,44 @@ textarea:disabled {
   margin-bottom: 20px;
 }
 
+.name-color-controls {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.name-color-controls input[type="color"] {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  height: 38px;
+  padding: 3px;
+  width: 52px;
+}
+
+.name-color-randomize {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #334155;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 11px;
+}
+
+.name-color-randomize:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.colored-player-name {
+  font-weight: 700;
+}
+
 .settings-label {
   font-size: 14px;
   font-weight: 600;
@@ -2640,6 +2678,13 @@ textarea:disabled {
 [data-theme="dark"] .panel input:not([type]),
 [data-theme="dark"] .panel select,
 [data-theme="dark"] .settings-select {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .name-color-controls input[type="color"],
+[data-theme="dark"] .name-color-randomize {
   background: #0f172a;
   border-color: #475569;
   color: #f8fafc;

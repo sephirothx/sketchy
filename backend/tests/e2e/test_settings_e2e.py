@@ -65,6 +65,9 @@ async def test_settings_dialog_pen_cursor_scenario():
             await page.wait_for_selector('.settings-modal-card')
             assert await page.is_visible('text=Settings')
 
+            # Choose a player name color in General settings.
+            await page.locator("#name-color-input").fill("#22aa66")
+
             # Click Game tab
             await page.click('button[role="tab"]:has-text("Game")')
 
@@ -81,6 +84,16 @@ async def test_settings_dialog_pen_cursor_scenario():
             # Verify localStorage
             stored_cursor = await page.evaluate("() => localStorage.getItem('sketchy_pencursor')")
             assert stored_cursor == "circle"
+            stored_name_color = await page.evaluate("() => localStorage.getItem('sketchy_namecolor')")
+            assert stored_name_color == "#22aa66"
+
+            # Saving settings updates the shared room state without rejoining.
+            await page.wait_for_function(
+                """() => {
+                    const name = document.querySelector('.player-name .colored-player-name');
+                    return name && getComputedStyle(name).color === 'rgb(34, 170, 102)';
+                }"""
+            )
 
         finally:
             await context.close()

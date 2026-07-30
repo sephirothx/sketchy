@@ -71,7 +71,9 @@ export function PlayerList({
               <span className="player-name">
                 {variant === "game-end" && <span className="player-placement">{index < 3 ? ["🥇", "🥈", "🥉"][index] : `#${index + 1}`}</span>}
                 {p.token === drawerToken ? "\u270F\uFE0F " : ""}
-                {p.nickname}
+                <span className="colored-player-name" style={{ color: p.nameColor }}>
+                  {p.nickname}
+                </span>
                 {isMe ? " (you)" : ""}
                 {totalActiveVotes > 0 && (
                   <span

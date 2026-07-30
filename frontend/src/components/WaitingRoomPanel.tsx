@@ -126,7 +126,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             <p className="waiting-card-kicker">Waiting for host</p>
             <h2>
               {host
-                ? `${host.nickname} will start ${rematch ? "the rematch" : "the game"}`
+                ? <><span className="colored-player-name" style={{ color: host.nameColor }}>{host.nickname}</span> will start {rematch ? "the rematch" : "the game"}</>
                 : "Waiting for a host"}
             </h2>
             <p className="waiting-start-hint">
@@ -144,7 +144,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           <p className="waiting-card-kicker">Previous game</p>
           <h2 id="waiting-results-title">
             {props.scoringMode === "default"
-              ? `${finalScores[0]?.nickname ?? "The room"} wins!`
+              ? <><span className="colored-player-name" style={{ color: finalScores[0]?.nameColor }}>{finalScores[0]?.nickname ?? "The room"}</span> wins!</>
               : "Game complete"}
           </h2>
           {props.scoringMode === "default" ? (
@@ -157,7 +157,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 {finalScores.map((score, index) => (
                   <li key={score.token}>
                     <span>
-                      {["🥇", "🥈", "🥉"][index] ?? `#${index + 1}`} {score.nickname}
+                      {["🥇", "🥈", "🥉"][index] ?? `#${index + 1}`}{" "}
+                      <span className="colored-player-name" style={{ color: score.nameColor }}>
+                        {score.nickname}
+                      </span>
                       {score.token === myToken ? " (you)" : ""}
                     </span>
                     <strong>{score.score}</strong>

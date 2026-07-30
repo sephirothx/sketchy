@@ -4,6 +4,7 @@ import { CustomWordsEditor } from "../components/CustomWordsEditor";
 import { analyzeCustomWords } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
+import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, HintMode, ScoringMode } from "../types";
 
 export function CreateRoomPage() {
@@ -11,6 +12,7 @@ export function CreateRoomPage() {
   const storedNickname = useGameStore((state) => state.nickname);
   const setNickname = useGameStore((state) => state.setNickname);
   const setSession = useGameStore((state) => state.setSession);
+  const nameColor = useSettingsStore((state) => state.nameColor);
   const [nickname, setNicknameInput] = useState(storedNickname);
   const [roomName, setRoomName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
@@ -41,7 +43,7 @@ export function CreateRoomPage() {
     setError(null);
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
-        nickname: trimmedNickname, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
+        nickname: trimmedNickname, nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customWords: customWords.trim(), customWordsOnly, hintMode, scoringMode,
         spectatorsSeeSolution, hideMaskedPrompt,
       });

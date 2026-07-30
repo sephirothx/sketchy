@@ -23,8 +23,8 @@ export function GameEndOverlay({ scores, myToken, scoringMode, onContinue }: Gam
   return <main className="game-end-overlay" aria-labelledby="game-end-title" aria-live="polite">
     <section className="game-end-podium">
       <p className="game-end-kicker">Game complete</p>
-      <h1 id="game-end-title">{scoringMode === "default" ? `${scores[0]?.nickname ?? "The room"} takes the crown!` : "A great round of drawing"}</h1>
-      {scoringMode === "default" ? <><p className="game-end-placement">Your placement: #{Math.max(1, placement)}</p><ol className="game-end-scoreboard">{scores.map((score, index) => <li key={score.token} className={score.token === myToken ? "is-you" : ""}><span>{PODIUM[index] ?? `#${index + 1}`} {score.nickname}{score.token === myToken ? " (you)" : ""}</span><strong>{score.score}</strong></li>)}</ol></> : <p className="game-end-no-score">No scores this time—just a room full of sketches and guesses.</p>}
+      <h1 id="game-end-title">{scoringMode === "default" ? <><span className="colored-player-name" style={{ color: scores[0]?.nameColor }}>{scores[0]?.nickname ?? "The room"}</span> takes the crown!</> : "A great round of drawing"}</h1>
+      {scoringMode === "default" ? <><p className="game-end-placement">Your placement: #{Math.max(1, placement)}</p><ol className="game-end-scoreboard">{scores.map((score, index) => <li key={score.token} className={score.token === myToken ? "is-you" : ""}><span>{PODIUM[index] ?? `#${index + 1}`} <span className="colored-player-name" style={{ color: score.nameColor }}>{score.nickname}</span>{score.token === myToken ? " (you)" : ""}</span><strong>{score.score}</strong></li>)}</ol></> : <p className="game-end-no-score">No scores this time—just a room full of sketches and guesses.</p>}
       <button type="button" onClick={onContinue}>Continue to waiting room · {remaining}s</button>
     </section>
   </main>;

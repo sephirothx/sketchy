@@ -118,7 +118,14 @@ export function useGameSocketListeners() {
       if (payload.close) {
         playCloseGuessSound();
       }
-      store.getState().addMessage({ ...payload, id: nextMessageId() });
+      const nameColor = store.getState().players.find(
+        (player) => player.token === payload.token,
+      )?.nameColor;
+      store.getState().addMessage({
+        ...payload,
+        nameColor: payload.nameColor ?? nameColor,
+        id: nextMessageId(),
+      });
     };
 
     const onCorrectGuess = (payload: { token: string; nickname: string; points: number }) => {

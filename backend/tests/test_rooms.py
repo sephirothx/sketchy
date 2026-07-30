@@ -1,4 +1,4 @@
-from app.rooms import RoomFullError, RoomManager
+from app.rooms import NAME_COLOR_PATTERN, RoomFullError, RoomManager
 
 
 def test_create_room_generates_unique_code():
@@ -16,6 +16,17 @@ def test_add_player_first_is_host():
     p2 = rm.add_player(room, "Bob")
     assert p1.is_host is True
     assert p2.is_host is False
+
+
+def test_add_player_uses_requested_name_color_or_random_default():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+
+    chosen = rm.add_player(room, "Alice", name_color="#AABBCC")
+    generated = rm.add_player(room, "Bob", name_color="not-a-color")
+
+    assert chosen.name_color == "#aabbcc"
+    assert NAME_COLOR_PATTERN.fullmatch(generated.name_color)
 
 
 def test_add_player_respects_max_players():
@@ -134,6 +145,5 @@ def test_create_room_with_hide_masked_prompt_forces_hints_off():
     assert room.hint_mode == "none"
     assert room.to_public_summary()["hideMaskedPrompt"] is True
     assert room.to_state_payload()["hideMaskedPrompt"] is True
-
 
 

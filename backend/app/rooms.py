@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import re
 import string
 import uuid
 from dataclasses import dataclass, field
@@ -11,6 +12,29 @@ from app.game import DRAWING_SECONDS, Game
 from app.words import WORDS
 
 STARTING_SCORE = 50
+
+NAME_COLORS: tuple[str, ...] = (
+    "#e11d48",
+    "#c2410c",
+    "#a16207",
+    "#15803d",
+    "#0f766e",
+    "#0369a1",
+    "#4f46e5",
+    "#7e22ce",
+    "#be185d",
+)
+NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def normalize_name_color(value: object) -> str | None:
+    if not isinstance(value, str) or not NAME_COLOR_PATTERN.fullmatch(value):
+        return None
+    return value.lower()
+
+
+def generate_random_name_color() -> str:
+    return random.choice(NAME_COLORS)
 
 ROOM_NAME_ADJECTIVES: tuple[str, ...] = (
     "The Sketchy",
@@ -74,6 +98,7 @@ class RoomFullError(Exception):
 class Player:
     token: str
     nickname: str
+    name_color: str = field(default_factory=generate_random_name_color)
     sid: Optional[str] = None
     score: int = STARTING_SCORE
     connected: bool = True
@@ -170,6 +195,7 @@ class Room:
                 {
                     "token": p.token,
                     "nickname": p.nickname,
+                    "nameColor": p.name_color,
                     "score": p.score,
                     "connected": p.connected,
                     "isHost": p.is_host,
@@ -248,7 +274,13 @@ class RoomManager:
     def list_public_rooms(self) -> list[dict]:
         return [r.to_public_summary() for r in self.rooms.values() if r.is_public]
 
-    def add_player(self, room: Room, nickname: str, is_spectator: bool = False) -> Player:
+    def add_player(
+        self,
+        room: Room,
+        nickname: str,
+        is_spectator: bool = False,
+        name_color: str | None = None,
+    ) -> Player:
         active_players = [p for p in room.players.values() if not p.is_spectator]
         if not is_spectator and len(active_players) >= room.max_players:
             raise RoomFullError("Room is full")
@@ -256,6 +288,7 @@ class RoomManager:
         player = Player(
             token=token,
             nickname=nickname,
+            name_color=normalize_name_color(name_color) or generate_random_name_color(),
             score=0 if is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0),
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
-import type { AckResponse, ChatMessage } from "../types";
+import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 
 interface RoomChatPanelProps {
   messages: ChatMessage[];
+  players: PlayerInfo[];
   mode: "waiting" | "playing" | "game-end";
   isDrawer: boolean;
   canGuess: boolean;
@@ -30,6 +31,7 @@ function letterRunLengths(text: string): number[] {
 
 export function RoomChatPanel({
   messages,
+  players,
   mode,
   isDrawer,
   canGuess,
@@ -205,7 +207,16 @@ export function RoomChatPanel({
                   message.text
                 ) : (
                   <>
-                    <strong>{message.nickname}: </strong>
+                    <strong
+                      className="colored-player-name"
+                      style={{
+                        color: message.nameColor
+                          ?? players.find((player) => player.token === message.token)
+                            ?.nameColor,
+                      }}
+                    >
+                      {message.nickname}:{" "}
+                    </strong>
                     {message.text}
                   </>
                 )}

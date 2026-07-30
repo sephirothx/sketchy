@@ -29,6 +29,22 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
 
 export const DEFAULT_PEN_CURSOR: PenCursorStyle = "crosshair";
 export const DEFAULT_THEME: AppTheme = "light";
+export const NAME_COLOR_PALETTE = [
+  "#e11d48",
+  "#c2410c",
+  "#a16207",
+  "#15803d",
+  "#0f766e",
+  "#0369a1",
+  "#4f46e5",
+  "#7e22ce",
+  "#be185d",
+] as const;
+
+export function randomNameColor(exclude?: string): string {
+  const choices = NAME_COLOR_PALETTE.filter((color) => color !== exclude);
+  return choices[Math.floor(Math.random() * choices.length)] ?? NAME_COLOR_PALETTE[0];
+}
 
 export const ACTION_LABELS: Record<keyof KeyBindings, string> = {
   pen: "Pen Tool",
@@ -118,6 +134,18 @@ function loadStoredVolume(): number {
   }
 }
 
+function loadStoredNameColor(): string {
+  try {
+    const raw = localStorage.getItem("sketchy_namecolor");
+    if (raw && /^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+    const generated = randomNameColor();
+    localStorage.setItem("sketchy_namecolor", generated);
+    return generated;
+  } catch {
+    return randomNameColor();
+  }
+}
+
 interface SettingsStore {
   isSettingsOpen: boolean;
   openSettings: () => void;
@@ -128,6 +156,7 @@ interface SettingsStore {
   confettiEffects: boolean;
   soundEffects: boolean;
   volume: number;
+  nameColor: string;
   setAllSettings: (payload: {
     keyBindings: KeyBindings;
     penCursor: PenCursorStyle;
@@ -135,6 +164,7 @@ interface SettingsStore {
     confettiEffects?: boolean;
     soundEffects?: boolean;
     volume?: number;
+    nameColor: string;
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
   setPenCursor: (penCursor: PenCursorStyle) => void;
@@ -158,6 +188,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   confettiEffects: loadStoredConfetti(),
   soundEffects: loadStoredSoundEffects(),
   volume: loadStoredVolume(),
+  nameColor: loadStoredNameColor(),
   setAllSettings: ({
     keyBindings,
     penCursor,
@@ -165,6 +196,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     confettiEffects = true,
     soundEffects = true,
     volume = 0.7,
+    nameColor,
   }) =>
     set(() => {
       localStorage.setItem("sketchy_keybindings", JSON.stringify(keyBindings));
@@ -173,8 +205,17 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_confettieffects", String(confettiEffects));
       localStorage.setItem("sketchy_soundeffects", String(soundEffects));
       localStorage.setItem("sketchy_volume", String(volume));
+      localStorage.setItem("sketchy_namecolor", nameColor);
       applyThemeToDocument(theme);
-      return { keyBindings, penCursor, theme, confettiEffects, soundEffects, volume };
+      return {
+        keyBindings,
+        penCursor,
+        theme,
+        confettiEffects,
+        soundEffects,
+        volume,
+        nameColor,
+      };
     }),
   setKeyBinding: (action, keys) =>
     set((state) => {
