@@ -100,6 +100,16 @@ async def test_waiting_room_leave_remains_immediate():
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         page = await browser.new_page()
         page.set_default_timeout(10000)
+        await page.add_init_script(
+            """
+            window.__sentSocketFrames = [];
+            const originalSend = WebSocket.prototype.send;
+            WebSocket.prototype.send = function(data) {
+              if (typeof data === "string") window.__sentSocketFrames.push(data);
+              return originalSend.call(this, data);
+            };
+            """
+        )
 
         try:
             await page.goto(BASE_URL)
@@ -108,8 +118,18 @@ async def test_waiting_room_leave_remains_immediate():
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')
 
+            room_code = (await page.inner_text(".room-copy-button")).split("Code:")[1].strip()
+            await page.evaluate("window.__sentSocketFrames = []")
             await page.click('.game-header-leave-button')
             await page.wait_for_url(f"{BASE_URL}/")
             assert not await page.is_visible('[role="alertdialog"]')
+            await page.wait_for_timeout(100)
+            sent_frames = await page.evaluate("window.__sentSocketFrames")
+            assert sum('"leave_room"' in frame for frame in sent_frames) == 1
+            assert not any('"join_room"' in frame for frame in sent_frames)
+            assert await page.evaluate(
+                "(code) => localStorage.getItem(`sketchy_token_${code}`)",
+                room_code,
+            ) is None
         finally:
             await browser.close()
