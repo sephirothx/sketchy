@@ -37,7 +37,7 @@ export function GameEndOverlay({
       <div className="game-end-actions">
         {drawingCount > 0 && (
           <button type="button" onClick={onViewDrawings}>
-            View drawings ({drawingCount})
+            View drawings
           </button>
         )}
         <button type="button" onClick={onContinue}>Continue to waiting room · {remaining}s</button>

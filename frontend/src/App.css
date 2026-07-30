@@ -661,6 +661,8 @@ textarea:disabled {
 .waiting-room-intro h1, .waiting-card h2 { color: #1e293b; margin: 0; }
 .waiting-room-intro h1 { font-size: 28px; }
 .waiting-room-subtitle, .waiting-start-hint { color: #64748b; margin: 6px 0 0; }
+.waiting-room-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.waiting-room-actions button { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 7px; color: #334155; font-weight: 700; padding: 9px 12px; }
 .waiting-invite-button { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; color: #1d4ed8; font-weight: 700; padding: 10px 13px; white-space: nowrap; }
 .waiting-room-layout { align-items: start; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 300px; margin-top: 20px; }
 .waiting-room-main { min-width: 0; }
@@ -712,13 +714,6 @@ textarea:disabled {
 .waiting-start-button:disabled { background: #94a3b8; cursor: not-allowed; }
 .room-settings-save-button { background: #2563eb; border: 0; border-radius: 8px; color: #fff; font-size: 14px; font-weight: 700; padding: 10px 14px; }
 .room-settings-save-button:disabled { background: #94a3b8; cursor: not-allowed; }
-.waiting-results-card { margin-top: 16px; max-width: 480px; }
-.waiting-results-card ol { margin: 14px 0 0; padding-left: 24px; }
-.waiting-results-card li { border-top: 1px solid #eef2f7; display: flex; justify-content: space-between; padding: 8px 0; }
-.waiting-results-card strong { color: #15803d; }
-.waiting-placement { color: #1d4ed8; font-weight: 800; margin: 10px 0 0; }
-.waiting-results-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.waiting-results-actions button { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 7px; color: #334155; font-weight: 700; padding: 8px 11px; }
 .waiting-room-chat-column { min-width: 0; position: sticky; top: 16px; }
 .waiting-chat { box-sizing: border-box; display: flex; flex-direction: column; margin: 0; }
 .waiting-chat .chat-messages-container { margin-top: 12px; }
@@ -2985,9 +2980,14 @@ textarea:disabled {
 }
 
 [data-theme="dark"] .waiting-roster-list li,
-[data-theme="dark"] .waiting-results-card li,
 [data-theme="dark"] .waiting-spectators {
   border-color: #334155;
+}
+
+[data-theme="dark"] .waiting-room-actions button {
+  background: #334155;
+  border-color: #475569;
+  color: #e2e8f0;
 }
 
 [data-theme="dark"] .waiting-roster-list li { color: #e2e8f0; }
@@ -3352,6 +3352,7 @@ textarea:disabled {
   .room-settings-save-button { width: 100%; }
   .waiting-card { padding: 16px; }
   .room-settings-fields { grid-template-columns: 1fr; }
+  .waiting-room-actions { justify-content: flex-start; width: 100%; }
   .drawing-recap-card { border-radius: 12px; padding: 14px; }
   .drawing-recap-header { align-items: stretch; flex-direction: column; }
   .drawing-recap-header-actions { align-self: stretch; flex-wrap: wrap; }
