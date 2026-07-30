@@ -6,10 +6,11 @@ import {
   ClientCanvasHistory,
 } from "../src/lib/canvasHistory.ts";
 
-function replace(history, actions, revision, sequence = 0) {
+function replace(history, actions, revision, sequence = 0, generation = 1) {
   return history.replace(
     actions,
     revision,
+    generation,
     sequence,
     calculateCanvasHistoryHash(actions),
   );
@@ -58,17 +59,17 @@ test("client history preserves Clear undo and discards it on a new action", () =
   });
   const shapeHash = history.historyHash;
   assert.equal(
-    history.confirmAction([1, history.revision, history.historyHash]),
+    history.confirmAction([1, 1, history.revision, history.historyHash]),
     true,
   );
   history.apply({ event: "clear_canvas", payload: {} });
   assert.equal(
-    history.confirmAction([2, history.revision, history.historyHash]),
+    history.confirmAction([1, 2, history.revision, history.historyHash]),
     true,
   );
 
   assert.equal(history.actions.length, 2);
-  assert.equal(history.confirmUndo([3, 5, 6, shapeHash]), true);
+  assert.equal(history.confirmUndo([1, 3, 5, 6, shapeHash]), true);
   assert.equal(history.actions.length, 1);
   assert.equal(history.actions[0].kind, "shape");
 
@@ -89,7 +90,7 @@ test("stale incremental Undo is rejected for full-sync recovery", () => {
   const history = new ClientCanvasHistory();
   replace(history, [{ kind: "clear" }], 7);
 
-  assert.equal(history.confirmUndo([1, 5, 6, 0]), false);
+  assert.equal(history.confirmUndo([1, 1, 5, 6, 0]), false);
   assert.equal(history.revision, 7);
   assert.deepEqual(history.actions, [{ kind: "clear" }]);
 });
@@ -146,15 +147,15 @@ test("optimistic Undo is confirmed by sequence, revision, and CRC32", () => {
   assert.equal(replace(history, actions, 5, 7), true);
   const request = history.prepareUndo(8);
 
-  assert.deepEqual(request, [8, 5, initialHash]);
+  assert.deepEqual(request, [1, 8, 5, initialHash]);
   assert.equal(history.revision, 6);
   assert.equal(history.historyHash, 0);
-  assert.equal(history.confirmUndo([8, 5, 6, 0], 6, 0), true);
+  assert.equal(history.confirmUndo([1, 8, 5, 6, 0], 6, 0), true);
   assert.equal(history.sequence, 8);
 });
 
 test("full sync rejects a mismatched CRC32", () => {
   const history = new ClientCanvasHistory();
-  assert.equal(history.replace([{ kind: "clear" }], 1, 1, 123), false);
+  assert.equal(history.replace([{ kind: "clear" }], 1, 1, 1, 123), false);
   assert.equal(history.revision, null);
 });

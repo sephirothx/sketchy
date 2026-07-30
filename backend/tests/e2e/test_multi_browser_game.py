@@ -226,6 +226,28 @@ async def test_multi_browser_gameplay_scenario():
                 canvas_is_blank,
             )
 
+            # Undo while the pointer is still down must first finalize the
+            # active path; otherwise the path and Undo sequences can deadlock.
+            await drawer_page.mouse.move(box["x"] + 120, box["y"] + 120)
+            await drawer_page.mouse.down()
+            await drawer_page.mouse.move(box["x"] + 220, box["y"] + 220)
+            await drawer_page.keyboard.press("Control+z")
+            await drawer_page.mouse.up()
+            await guesser_page.wait_for_function(canvas_is_blank)
+            await drawer_page.wait_for_function(canvas_is_blank)
+
+            # Clear has the same active-path requirement. Invoke the button
+            # without moving the pointer away from the canvas first.
+            await drawer_page.mouse.move(box["x"] + 140, box["y"] + 140)
+            await drawer_page.mouse.down()
+            await drawer_page.mouse.move(box["x"] + 240, box["y"] + 240)
+            await drawer_page.evaluate(
+                "document.querySelector('button.clear-button').click()"
+            )
+            await drawer_page.mouse.up()
+            await guesser_page.wait_for_function(canvas_is_blank)
+            await drawer_page.wait_for_function(canvas_is_blank)
+
             # Step 7: Guesser submits a guess in chat
             await guesser_page.fill('.chat-input input', 'apple')
             await guesser_page.keyboard.press('Enter')

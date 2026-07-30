@@ -131,6 +131,7 @@ function isRevision(value: unknown): value is number {
 export class ClientCanvasHistory {
   actions: DecodedCanvasAction[] = [];
   revision: number | null = null;
+  generation: number | null = null;
   sequence: number | null = null;
   historyHash: number | null = null;
   private activePath: Extract<DecodedCanvasAction, { kind: "path" }> | null = null;
@@ -139,11 +140,14 @@ export class ClientCanvasHistory {
   replace(
     actions: DecodedCanvasAction[],
     revision: unknown,
+    generation: unknown,
     sequence: unknown,
     historyHash: unknown,
   ): boolean {
     if (
       !isRevision(revision)
+      || !isRevision(generation)
+      || generation === 0
       || !isRevision(sequence)
       || !isRevision(historyHash)
       || historyHash > 0xffffffff
@@ -155,6 +159,7 @@ export class ClientCanvasHistory {
     if ((prefixHashes.at(-1) ?? 0) !== historyHash) return false;
     this.actions = actions;
     this.revision = revision;
+    this.generation = generation;
     this.sequence = sequence;
     this.historyHash = historyHash;
     this.prefixHashes = prefixHashes;
@@ -165,13 +170,16 @@ export class ClientCanvasHistory {
   reset(payload: unknown): boolean {
     if (
       !Array.isArray(payload)
-      || payload.length !== 3
+      || payload.length !== 4
       || !isRevision(payload[0])
-      || payload[1] !== 0
+      || !isRevision(payload[1])
+      || payload[1] === 0
       || payload[2] !== 0
+      || payload[3] !== 0
     ) return false;
     this.actions = [];
     this.revision = payload[0];
+    this.generation = payload[1];
     this.sequence = 0;
     this.historyHash = 0;
     this.prefixHashes = [];
@@ -264,16 +272,23 @@ export class ClientCanvasHistory {
 
   prepareUndo(
     sequence: number,
-  ): [sequence: number, fromRevision: number, fromHash: number] | null {
+  ): [
+    generation: number,
+    sequence: number,
+    fromRevision: number,
+    fromHash: number,
+  ] | null {
     if (
       this.revision === null
+      || this.generation === null
       || this.sequence === null
       || this.historyHash === null
       || !isRevision(sequence)
       || sequence <= this.sequence
       || this.actions.length === 0
     ) return null;
-    const request: [number, number, number] = [
+    const request: [number, number, number, number] = [
+      this.generation,
       sequence,
       this.revision,
       this.historyHash,
@@ -293,19 +308,22 @@ export class ClientCanvasHistory {
   ): boolean {
     if (
       !Array.isArray(payload)
-      || payload.length !== 3
+      || payload.length !== 4
       || !isRevision(payload[0])
       || !isRevision(payload[1])
       || !isRevision(payload[2])
-      || payload[2] > 0xffffffff
+      || !isRevision(payload[3])
+      || payload[3] > 0xffffffff
+      || this.generation === null
       || this.sequence === null
-      || payload[0] !== this.sequence + 1
-      || payload[1] !== expectedRevision
-      || payload[2] !== expectedHash
+      || payload[0] !== this.generation
+      || payload[1] !== this.sequence + 1
+      || payload[2] !== expectedRevision
+      || payload[3] !== expectedHash
     ) {
       return false;
     }
-    this.sequence = payload[0];
+    this.sequence = payload[1];
     return true;
   }
 
@@ -316,38 +334,41 @@ export class ClientCanvasHistory {
   ): boolean {
     if (
       !Array.isArray(payload)
-      || payload.length !== 4
+      || payload.length !== 5
       || !isRevision(payload[0])
       || !isRevision(payload[1])
       || !isRevision(payload[2])
       || !isRevision(payload[3])
-      || payload[3] > 0xffffffff
-      || payload[2] !== payload[1] + 1
+      || !isRevision(payload[4])
+      || payload[4] > 0xffffffff
+      || payload[3] !== payload[2] + 1
+      || this.generation === null
       || this.sequence === null
-      || payload[0] !== this.sequence + 1
+      || payload[0] !== this.generation
+      || payload[1] !== this.sequence + 1
     ) return false;
 
     if (expectedRevision !== undefined || expectedHash !== undefined) {
       if (
-        payload[2] !== expectedRevision
-        || payload[3] !== expectedHash
+        payload[3] !== expectedRevision
+        || payload[4] !== expectedHash
       ) return false;
-      this.sequence = payload[0];
+      this.sequence = payload[1];
       return true;
     }
 
-    if (this.revision === payload[1]) {
+    if (this.revision === payload[2]) {
       if (this.actions.length === 0) return false;
       this.actions.pop();
       this.prefixHashes.length = this.actions.length;
       this.historyHash = this.prefixHashes.at(-1) ?? 0;
-      this.revision = payload[2];
+      this.revision = payload[3];
       this.activePath = null;
-    } else if (this.revision !== payload[2]) {
+    } else if (this.revision !== payload[3]) {
       return false;
     }
-    if (this.historyHash !== payload[3]) return false;
-    this.sequence = payload[0];
+    if (this.historyHash !== payload[4]) return false;
+    this.sequence = payload[1];
     return true;
   }
 
