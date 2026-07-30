@@ -14,7 +14,7 @@ from app.canvas_history import (
     decode_binary_canvas_history,
     encode_canvas_history,
 )
-from app.events import _validated_draw_payload, register_handlers
+from app.events import register_handlers
 from app.game import DRAWING_SECONDS, Game
 from app.live_drawing import encode_live_drawing
 from app.rooms import DrawingRecapEntry, STARTING_SCORE, RoomManager
@@ -24,55 +24,6 @@ def canvas_action(game: Game, sequence: int) -> list[int]:
     return [game.canvas_generation, sequence]
 
 
-def test_validated_draw_payload_normalizes_a_pen_start():
-    assert _validated_draw_payload(
-        "draw_start",
-        {"x": 0, "y": 1, "color": "#AABBCC", "width": 4},
-    ) == {"x": 0.0, "y": 1.0, "color": "#aabbcc", "width": 4}
-
-
-def test_validated_draw_payload_preserves_off_canvas_pointer_path():
-    payload = {
-        "points": [
-            {"x": 0.9, "y": 0.5},
-            {"x": 1.2, "y": 0.6},
-            {"x": 0.8, "y": 0.7},
-        ]
-    }
-
-    assert _validated_draw_payload("draw_move", payload) == {
-        "points": [
-            {"x": 0.9, "y": 0.5},
-            {"x": 1.2, "y": 0.6},
-            {"x": 0.8, "y": 0.7},
-        ]
-    }
-
-
-@pytest.mark.parametrize(
-    "event_name,payload",
-    [
-        ("draw_start", {"x": -1_000_001, "y": 0.5, "color": "#000000", "width": 4}),
-        ("draw_start", {"x": 0.5, "y": 0.5, "color": "#000000", "width": 4.5}),
-        ("draw_start", {"x": 0.5, "y": 0.5, "color": "black", "width": 4}),
-        ("draw_move", {"points": []}),
-        ("draw_move", {"points": [{"x": float("nan"), "y": 0.5}]}),
-        ("draw_fill", {"x": 1, "y": 0.5, "color": "#000000"}),
-        ("draw_fill", {"x": 0.5, "y": 0.5, "color": "black"}),
-        (
-            "draw_shape",
-            {
-                "shape": "square",
-                "from": {"x": 0.1, "y": 0.1},
-                "to": {"x": 0.9, "y": 0.9},
-                "color": "#000000",
-                "width": 4,
-            },
-        ),
-    ],
-)
-def test_validated_draw_payload_rejects_malformed_input(event_name, payload):
-    assert _validated_draw_payload(event_name, payload) is None
 
 
 @pytest.mark.asyncio

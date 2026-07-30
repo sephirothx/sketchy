@@ -52,7 +52,7 @@ function crc32(bytes: Uint8Array, previous = 0): number {
   return (value ^ 0xffffffff) >>> 0;
 }
 
-function colorBytes(color: string): [number, number, number] {
+export function colorBytes(color: string): [number, number, number] {
   const value = Number.parseInt(color.slice(1), 16);
   return [(value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff];
 }
@@ -502,7 +502,7 @@ function decodeJsonCanvasHistory(payload: unknown): DecodedCanvasAction[] | null
   return decoded;
 }
 
-function binaryDataView(payload: unknown): DataView | null {
+export function binaryDataView(payload: unknown): DataView | null {
   if (payload instanceof ArrayBuffer) return new DataView(payload);
   if (ArrayBuffer.isView(payload)) {
     return new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
@@ -510,7 +510,7 @@ function binaryDataView(payload: unknown): DataView | null {
   return null;
 }
 
-function binaryColor(view: DataView, offset: number): string {
+export function binaryColor(view: DataView, offset: number): string {
   const color = (
     view.getUint8(offset) * 0x10000
     + view.getUint8(offset + 1) * 0x100

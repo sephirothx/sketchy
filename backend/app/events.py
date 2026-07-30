@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
-import re
 
 import socketio
 
@@ -33,15 +31,6 @@ logger = logging.getLogger("sketchy.events")
 
 RECONNECT_GRACE_SECONDS = 30
 
-MAX_POINTS_PER_MOVE = 256
-MAX_BRUSH_WIDTH = 64
-# Pointer capture keeps reporting movement after the cursor leaves the canvas.
-# Those off-canvas points are required to clip the same segment at the canvas
-# edge for remote clients. Keep a generous finite bound to reject pathological
-# payloads without restricting normal pointer movement across the viewport.
-MAX_NORMALIZED_COORDINATE_MAGNITUDE = 8
-DRAW_SHAPES = frozenset(("rectangle", "ellipse", "triangle"))
-HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 MAX_CANVAS_SEQUENCE = 2**31 - 1
 
 # Per-room asyncio task driving the current phase's timeout (choosing/drawing/round-end).
@@ -55,89 +44,6 @@ _disconnect_timers: dict[str, asyncio.Task] = {}
 
 def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, value))
-
-
-def _draw_number(value, low: float, high: float) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    number = float(value)
-    return number if math.isfinite(number) and low <= number <= high else None
-
-
-def _draw_point(value) -> dict | None:
-    if not isinstance(value, dict):
-        return None
-    x = _draw_number(
-        value.get("x"),
-        -MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-        MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-    )
-    y = _draw_number(
-        value.get("y"),
-        -MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-        MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-    )
-    return {"x": x, "y": y} if x is not None and y is not None else None
-
-
-def _draw_style(data: dict) -> tuple[str, int] | None:
-    color = data.get("color")
-    width = _draw_number(data.get("width"), 1, MAX_BRUSH_WIDTH)
-    if (
-        not isinstance(color, str)
-        or not HEX_COLOR_PATTERN.fullmatch(color)
-        or width is None
-        or not width.is_integer()
-    ):
-        return None
-    return color.lower(), int(width)
-
-
-def _validated_draw_payload(event_name: str, data) -> dict | None:
-    if event_name == "draw_end":
-        return {}
-    if not isinstance(data, dict):
-        return None
-    if event_name == "draw_start":
-        point = _draw_point(data)
-        style = _draw_style(data)
-        if not point or not style:
-            return None
-        color, width = style
-        return {**point, "color": color, "width": width}
-    if event_name == "draw_move":
-        points = data.get("points")
-        if not isinstance(points, list) or not 1 <= len(points) <= MAX_POINTS_PER_MOVE:
-            return None
-        validated_points = []
-        for point in points:
-            validated_point = _draw_point(point)
-            if validated_point is None:
-                return None
-            validated_points.append(validated_point)
-        return {"points": validated_points}
-    if event_name == "draw_shape":
-        shape = data.get("shape")
-        start = _draw_point(data.get("from"))
-        end = _draw_point(data.get("to"))
-        style = _draw_style(data)
-        if not isinstance(shape, str) or shape not in DRAW_SHAPES or not start or not end or not style:
-            return None
-        color, width = style
-        return {"shape": shape, "from": start, "to": end, "color": color, "width": width}
-    if event_name == "draw_fill":
-        point = _draw_point(data)
-        color = data.get("color")
-        if (
-            not point
-            or not 0 <= point["x"] < 1
-            or not 0 <= point["y"] < 1
-            or not isinstance(color, str)
-            or not HEX_COLOR_PATTERN.fullmatch(color)
-        ):
-            return None
-        return {**point, "color": color.lower()}
-    return None
 
 
 def _canvas_sequence(value) -> int | None:
@@ -445,7 +351,6 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         game = room.game
         assert game is not None
         game.set_phase_deadline(game.drawing_seconds)
-        schedule_hint_checkpoints(room)
         for p in room.player_list():
             if not p.sid:
                 continue
@@ -576,6 +481,39 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             await _emit_room_state(room)
         else:
             await _start_turn(room)
+
+    def _privileged_sids(
+        room: Room,
+        game: Game,
+        *,
+        exclude_sid: str | None = None,
+    ) -> list[str]:
+        """Return sids of players who may see restricted in-round chat:
+        the drawer, all correct guessers, and all spectators.
+        """
+        return [
+            p.sid
+            for p in room.player_list()
+            if p.sid
+            and p.sid != exclude_sid
+            and (
+                p.token in game.correct_guessers
+                or p.token == game.current_drawer
+                or p.is_spectator
+            )
+        ]
+
+    async def _end_round_if_all_guessed(room: Room) -> None:
+        """End the drawing phase early when every eligible guesser has guessed correctly."""
+        game = room.game
+        if not game or game.phase != Phase.DRAWING:
+            return
+        guesser_count = len([
+            p for p in room.connected_players()
+            if p.token != game.current_drawer and not p.is_spectator and not p.is_afk
+        ])
+        if game.all_guessed(guesser_count):
+            await _end_round(room)
 
     async def _on_phase_timeout(room: Room) -> None:
         game = room.game
@@ -917,13 +855,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                     await _start_turn(room)
                 elif room.game.phase == Phase.DRAWING:
                     await _end_round(room)
-            elif room.game.phase == Phase.DRAWING:
-                guesser_count = len([
-                    p for p in room.connected_players()
-                    if p.token != room.game.current_drawer and not p.is_spectator and not p.is_afk
-                ])
-                if room.game.all_guessed(guesser_count):
-                    await _end_round(room)
+            else:
+                await _end_round_if_all_guessed(room)
 
         return {"ok": True, "isAfk": player.is_afk}
 
@@ -995,13 +928,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                             await _start_turn(room)
                         elif room.game.phase == Phase.DRAWING:
                             await _end_round(room)
-                    elif room.game.phase == Phase.DRAWING:
-                        guesser_count = len([
-                            p for p in room.connected_players()
-                            if p.token != room.game.current_drawer and not p.is_spectator and not p.is_afk
-                        ])
-                        if room.game.all_guessed(guesser_count):
-                            await _end_round(room)
+                    else:
+                        await _end_round_if_all_guessed(room)
                 await _emit_room_state(room)
                 return {"ok": True, "action": "afk", "executed": True}
 
@@ -1140,10 +1068,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             room.game.commit_canvas_sequence(sequence)
             await _emit_canvas_commit(room, sequence)
             return
-        payload = _validated_draw_payload(packet.event, packet.payload)
-        if payload is None:
-            return
-        if not room.game.record_stroke(packet.event, payload):
+        if not room.game.record_stroke(packet.event, packet.payload):
             return
         if packet.event == "draw_start":
             room.game.discarding_draw_sequence = False
@@ -1268,12 +1193,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         # Spectators and players who have already guessed correctly can chat,
         # but their messages are restricted to the drawer, other correct guessers, and spectators.
         if player.is_spectator:
-            in_the_know = [
-                p.sid
-                for p in room.player_list()
-                if p.sid and (p.token in game.correct_guessers or p.token == game.current_drawer or p.is_spectator)
-            ]
-            for target_sid in in_the_know:
+            for target_sid in _privileged_sids(room, game):
                 await sio.emit(
                     "chat_message",
                     {
@@ -1289,12 +1209,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return
 
         if player.token in game.correct_guessers:
-            in_the_know = [
-                p.sid
-                for p in room.player_list()
-                if p.sid and (p.token in game.correct_guessers or p.token == game.current_drawer or p.is_spectator)
-            ]
-            for target_sid in in_the_know:
+            for target_sid in _privileged_sids(room, game):
                 await sio.emit(
                     "chat_message",
                     {
@@ -1331,14 +1246,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                     },
                     to=sid,
                 )
-                in_the_know = [
-                    p.sid
-                    for p in room.player_list()
-                    if p.sid
-                    and p.sid != sid
-                    and (p.token in game.correct_guessers or p.token == game.current_drawer or p.is_spectator)
-                ]
-                for target_sid in in_the_know:
+                for target_sid in _privileged_sids(room, game, exclude_sid=sid):
                     await sio.emit(
                         "chat_message",
                         {"token": player.token, "nickname": player.nickname, "text": text, "correct": False},
@@ -1359,21 +1267,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             room=room.id,
         )
         await sio.emit("you_guessed_correctly", {"word": game.word}, to=player.sid)
-        in_the_know = [
-            p.sid
-            for p in room.player_list()
-            if p.sid and (p.token in game.correct_guessers or p.token == game.current_drawer or p.is_spectator)
-        ]
-        for target_sid in in_the_know:
+        for target_sid in _privileged_sids(room, game):
             await sio.emit(
                 "chat_message",
                 {"token": player.token, "nickname": player.nickname, "text": text, "correct": True},
                 to=target_sid,
             )
 
-        guesser_count = len([p for p in room.connected_players() if p.token != game.current_drawer and not p.is_spectator])
-        if game.all_guessed(guesser_count):
-            await _end_round(room)
+        await _end_round_if_all_guessed(room)
 
     @sio.event
     async def buy_hint(sid, data):

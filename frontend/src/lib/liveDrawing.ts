@@ -2,6 +2,9 @@ import {
   CANVAS_COORDINATE_SCALE,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  binaryColor,
+  binaryDataView,
+  colorBytes,
 } from "./canvasHistory.ts";
 import type {
   StrokeFillPayload,
@@ -34,27 +37,9 @@ function header(tag: number): number {
   return (LIVE_DRAWING_VERSION << 4) | tag;
 }
 
-function dataView(payload: unknown): DataView | null {
-  if (payload instanceof ArrayBuffer) return new DataView(payload);
-  if (ArrayBuffer.isView(payload)) {
-    return new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
-  }
-  return null;
-}
-
-function colorBytes(color: string): [number, number, number] {
-  if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error("Invalid drawing color");
-  const value = Number.parseInt(color.slice(1), 16);
-  return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
-}
-
-function readColor(view: DataView, offset: number): string {
-  const value = (
-    view.getUint8(offset) * 0x10000
-    + view.getUint8(offset + 1) * 0x100
-    + view.getUint8(offset + 2)
-  );
-  return `#${value.toString(16).padStart(6, "0")}`;
+function writeColor(view: DataView, offset: number, color: string): void {
+  const bytes = colorBytes(color);
+  bytes.forEach((byte, index) => view.setUint8(offset + index, byte));
 }
 
 function packedCoordinate(value: number, canvasSize: number): number {
@@ -67,11 +52,6 @@ function packedCoordinate(value: number, canvasSize: number): number {
 
 function unpackedCoordinate(value: number, canvasSize: number): number {
   return value / (canvasSize * CANVAS_COORDINATE_SCALE);
-}
-
-function writeColor(view: DataView, offset: number, color: string): void {
-  const bytes = colorBytes(color);
-  bytes.forEach((byte, index) => view.setUint8(offset + index, byte));
 }
 
 function validWidth(width: number): boolean {
@@ -164,7 +144,7 @@ export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
     if (controlTag === CLEAR_TAG) return { event: "clear_canvas", payload: {} };
     return null;
   }
-  const view = dataView(payload);
+  const view = binaryDataView(payload);
   if (!view || view.byteLength < 1 || view.getUint8(0) >> 4 !== LIVE_DRAWING_VERSION) {
     return null;
   }
@@ -175,7 +155,7 @@ export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
     return {
       event: "draw_start",
       payload: {
-        color: readColor(view, 1),
+        color: binaryColor(view, 1),
         width,
         x: unpackedCoordinate(view.getInt16(5, true), CANVAS_WIDTH),
         y: unpackedCoordinate(view.getInt16(7, true), CANVAS_HEIGHT),
@@ -211,7 +191,7 @@ export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
       event: "draw_shape",
       payload: {
         shape,
-        color: readColor(view, 2),
+        color: binaryColor(view, 2),
         width,
         from: {
           x: unpackedCoordinate(view.getInt16(6, true), CANVAS_WIDTH),
@@ -232,7 +212,7 @@ export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
     return {
       event: "draw_fill",
       payload: {
-        color: readColor(view, 1),
+        color: binaryColor(view, 1),
         x: x / CANVAS_WIDTH,
         y: y / CANVAS_HEIGHT,
       },
