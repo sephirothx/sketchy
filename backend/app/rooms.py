@@ -2,15 +2,50 @@
 from __future__ import annotations
 
 import random
+import re
 import string
 import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
-from app.game import DRAWING_SECONDS, Game
+from app.game import Game
 from app.words import WORDS
 
 STARTING_SCORE = 50
+DEFAULT_ROOM_DRAWING_SECONDS = 90
+DEFAULT_ROOM_HINT_MODE = "checkpoints"
+DRAWING_TIME_OPTIONS = (15, 30, 60, 90, 120, 180, 240, 300)
+MAX_PLAYERS_MIN = 2
+MAX_PLAYERS_MAX = 16
+
+
+def nearest_drawing_seconds(value: int) -> int:
+    """Snap a drawing-time request onto the allowed preset list."""
+    return min(DRAWING_TIME_OPTIONS, key=lambda option: (abs(option - value), option))
+
+
+NAME_COLORS: tuple[str, ...] = (
+    "#e11d48",
+    "#c2410c",
+    "#a16207",
+    "#15803d",
+    "#0f766e",
+    "#0369a1",
+    "#4f46e5",
+    "#7e22ce",
+    "#be185d",
+)
+NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def normalize_name_color(value: object) -> str | None:
+    if not isinstance(value, str) or not NAME_COLOR_PATTERN.fullmatch(value):
+        return None
+    return value.lower()
+
+
+def generate_random_name_color() -> str:
+    return random.choice(NAME_COLORS)
 
 ROOM_NAME_ADJECTIVES: tuple[str, ...] = (
     "The Sketchy",
@@ -74,6 +109,7 @@ class RoomFullError(Exception):
 class Player:
     token: str
     nickname: str
+    name_color: str = field(default_factory=generate_random_name_color)
     sid: Optional[str] = None
     score: int = STARTING_SCORE
     connected: bool = True
@@ -82,6 +118,33 @@ class Player:
     is_afk: bool = False
     kick_votes: set[str] = field(default_factory=set)
     afk_votes: set[str] = field(default_factory=set)
+
+
+@dataclass(frozen=True, slots=True)
+class DrawingRecapEntry:
+    round_number: int
+    turn_number: int
+    drawer_token: str
+    drawer_nickname: str
+    drawer_name_color: str | None
+    word: str
+    action_count: int
+    canvas_history: bytes
+
+    def metadata(self, index: int) -> dict:
+        return {
+            "index": index,
+            "roundNumber": self.round_number,
+            "turnNumber": self.turn_number,
+            "drawerToken": self.drawer_token,
+            "drawerNickname": self.drawer_nickname,
+            "drawerNameColor": self.drawer_name_color,
+            "word": self.word,
+            "actionCount": self.action_count,
+        }
+
+    def payload(self, index: int) -> dict:
+        return {**self.metadata(index), "canvas": self.canvas_history}
 
 
 @dataclass
@@ -94,20 +157,29 @@ class Room:
     rounds: int
     custom_words: list[str] = field(default_factory=list)
     custom_words_only: bool = False
-    drawing_seconds: int = DRAWING_SECONDS
-    hint_mode: str = "none"
+    drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS
+    hint_mode: str = DEFAULT_ROOM_HINT_MODE
     scoring_mode: str = "default"
     spectators_see_solution: bool = False
     hide_masked_prompt: bool = False
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
+    canvas_generation: int = 0
+    last_game_scores: list[dict] = field(default_factory=list)
+    last_game_drawings: list[DrawingRecapEntry] = field(default_factory=list)
 
     def player_list(self) -> list[Player]:
         return list(self.players.values())
 
     def connected_players(self) -> list[Player]:
         return [p for p in self.players.values() if p.connected]
+
+    def drawing_recap_metadata(self) -> list[dict]:
+        return [
+            drawing.metadata(index)
+            for index, drawing in enumerate(self.last_game_drawings)
+        ]
 
     def effective_word_pool(self) -> list[str] | None:
         """Return the word pool a Game should draw from, or None for the default list.
@@ -126,13 +198,17 @@ class Room:
         return self.custom_words + [w for w in WORDS if w.lower() not in seen]
 
     def to_public_summary(self) -> dict:
+        active_players = [p for p in self.players.values() if not p.is_spectator]
+        spectators = [p for p in self.players.values() if p.is_spectator]
         return {
             "id": self.id,
             "code": self.code,
             "name": self.name,
             "isPublic": self.is_public,
-            "playerCount": len(self.connected_players()),
+            "playerCount": len(active_players),
+            "spectatorCount": len(spectators),
             "maxPlayers": self.max_players,
+            "isFull": len(active_players) >= self.max_players,
             "rounds": self.rounds,
             "customWordCount": len(self.custom_words),
             "customWordsOnly": self.custom_words_only,
@@ -160,10 +236,17 @@ class Room:
             "spectatorsSeeSolution": self.spectators_see_solution,
             "hideMaskedPrompt": self.hide_masked_prompt,
             "state": self.state,
+            "lastGameScores": self.last_game_scores,
+            "lastGameDrawings": (
+                self.drawing_recap_metadata()
+                if self.state == "waiting"
+                else []
+            ),
             "players": [
                 {
                     "token": p.token,
                     "nickname": p.nickname,
+                    "nameColor": p.name_color,
                     "score": p.score,
                     "connected": p.connected,
                     "isHost": p.is_host,
@@ -189,8 +272,8 @@ class RoomManager:
         rounds: int = 3,
         custom_words: list[str] | None = None,
         custom_words_only: bool = False,
-        drawing_seconds: int = DRAWING_SECONDS,
-        hint_mode: str = "none",
+        drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS,
+        hint_mode: str = DEFAULT_ROOM_HINT_MODE,
         scoring_mode: str = "default",
         spectators_see_solution: bool = False,
         hide_masked_prompt: bool = False,
@@ -242,7 +325,13 @@ class RoomManager:
     def list_public_rooms(self) -> list[dict]:
         return [r.to_public_summary() for r in self.rooms.values() if r.is_public]
 
-    def add_player(self, room: Room, nickname: str, is_spectator: bool = False) -> Player:
+    def add_player(
+        self,
+        room: Room,
+        nickname: str,
+        is_spectator: bool = False,
+        name_color: str | None = None,
+    ) -> Player:
         active_players = [p for p in room.players.values() if not p.is_spectator]
         if not is_spectator and len(active_players) >= room.max_players:
             raise RoomFullError("Room is full")
@@ -250,6 +339,7 @@ class RoomManager:
         player = Player(
             token=token,
             nickname=nickname,
+            name_color=normalize_name_color(name_color) or generate_random_name_color(),
             score=0 if is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0),
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,

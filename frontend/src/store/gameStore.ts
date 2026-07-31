@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   ChatMessage,
+  DrawingRecapMetadata,
   GameEndedPayload,
   GamePhase,
   HintMode,
@@ -19,6 +20,9 @@ interface GameStore {
   isPublic: boolean;
   maxPlayers: number;
   rounds: number;
+  customWordCount: number;
+  customWordsOnly: boolean;
+  drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
@@ -42,11 +46,13 @@ interface GameStore {
   messages: ChatMessage[];
   lastRoundResult: RoundEndedPayload | null;
   finalScores: GameEndedPayload["scores"] | null;
+  drawingRecap: DrawingRecapMetadata[];
   error: string | null;
 
   setNickname: (nickname: string) => void;
   setSession: (session: { roomId: string; code: string; token: string }) => void;
   getStoredToken: (code: string) => string | null;
+  clearStoredToken: (code: string) => void;
   setRoomState: (payload: RoomStatePayload) => void;
   addMessage: (message: ChatMessage) => void;
   applyGuessPoints: (token: string, points: number) => void;
@@ -76,6 +82,7 @@ interface GameStore {
   }) => void;
   endRound: (payload: RoundEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
+  dismissGameEnd: () => void;
   setError: (error: string | null) => void;
   reset: () => void;
 }
@@ -96,6 +103,7 @@ const initialGameFields = {
   messages: [] as ChatMessage[],
   lastRoundResult: null as RoundEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
+  drawingRecap: [] as DrawingRecapMetadata[],
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -107,7 +115,10 @@ export const useGameStore = create<GameStore>((set) => ({
   isPublic: true,
   maxPlayers: 8,
   rounds: 3,
-  hintMode: "none" as HintMode,
+  customWordCount: 0,
+  customWordsOnly: false,
+  drawingSeconds: 90,
+  hintMode: "checkpoints" as HintMode,
   scoringMode: "default" as ScoringMode,
   spectatorsSeeSolution: false,
   hideMaskedPrompt: false,
@@ -125,21 +136,32 @@ export const useGameStore = create<GameStore>((set) => ({
     set({ roomId, code, token });
   },
   getStoredToken: (code) => localStorage.getItem(`sketchy_token_${code}`),
+  clearStoredToken: (code) => {
+    localStorage.removeItem(`sketchy_token_${code}`);
+    set({ token: null, roomId: null, code: null });
+  },
   setRoomState: (payload) =>
-    set({
+    set((state) => ({
       roomId: payload.id,
       code: payload.code,
       name: payload.name,
       isPublic: payload.isPublic,
       maxPlayers: payload.maxPlayers,
       rounds: payload.rounds,
+      customWordCount: payload.customWordCount,
+      customWordsOnly: payload.customWordsOnly,
+      drawingSeconds: payload.drawingSeconds,
       hintMode: payload.hintMode,
       scoringMode: payload.scoringMode ?? "default",
       spectatorsSeeSolution: payload.spectatorsSeeSolution ?? false,
       hideMaskedPrompt: payload.hideMaskedPrompt ?? false,
       roomState: payload.state,
+      finalScores: payload.lastGameScores?.length
+        ? payload.lastGameScores
+        : payload.state === "playing" ? null : state.finalScores,
+      drawingRecap: payload.lastGameDrawings ?? state.drawingRecap,
       players: payload.players,
-    }),
+    })),
   addMessage: (message) => set((s) => ({ messages: [...s.messages.slice(-99), message] })),
   applyGuessPoints: (token, points) =>
     set((s) => ({
@@ -187,12 +209,20 @@ export const useGameStore = create<GameStore>((set) => ({
     set((s) => ({
       phase: "round_end",
       lastRoundResult: payload,
+      phaseSeconds: payload.seconds ?? 0,
+      phaseStartedAt: Date.now(),
       players: s.players.map((p) => {
         const updated = payload.scores.find((sc) => sc.token === p.token);
         return updated ? { ...p, score: updated.score } : p;
       }),
     })),
-  endGame: (payload) => set({ phase: "game_end", finalScores: payload.scores, roomState: "waiting" }),
+  endGame: (payload) => set({
+    phase: "game_end",
+    finalScores: payload.scores,
+    drawingRecap: payload.drawings ?? [],
+    roomState: "waiting",
+  }),
+  dismissGameEnd: () => set({ phase: "idle" }),
   setError: (error) => set({ error }),
   reset: () => set({ token: null, roomId: null, code: null, players: [], ...initialGameFields }),
 }));

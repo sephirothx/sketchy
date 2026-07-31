@@ -9,11 +9,24 @@ import random
 import re
 import string
 import time
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum
 from itertools import groupby
 
+from app.canvas_history import (
+    CANVAS_HEIGHT,
+    CANVAS_WIDTH,
+    HISTORY_HASH_INITIAL,
+    MAX_CANVAS_ACTIONS,
+    MAX_CANVAS_POINTS,
+    PATH_TAG,
+    PackedCanvasHistory,
+    canvas_history_hash,
+    color_to_int,
+    extend_history_hash,
+)
 from app.words import WORDS, random_word_choices
 
 CHOOSE_WORD_SECONDS = 15
@@ -21,7 +34,7 @@ DRAWING_SECONDS = 80
 ROUND_END_SECONDS = 5
 MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
-MAX_STROKE_RECORDS = 20_000
+MAX_STROKE_RECORDS = MAX_CANVAS_ACTIONS
 SCORING_MODES = ("none", "default")
 
 # Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter / Game.buy_wheel_letter):
@@ -74,9 +87,20 @@ class Phase(str, Enum):
 
 
 def _normalize(text: str) -> str:
-    """Collapse whitespace and lowercase, so multi-word expressions match
-    regardless of extra/irregular spacing in the guesser's input (e.g. "red  panda")."""
-    return " ".join(text.split()).lower()
+    """Normalize guesses while preserving letters without canonical ASCII forms.
+
+    Whitespace and case differences are ignored as before. Canonically
+    decomposable diacritics are stripped so, for example, "è" matches "e".
+    Letters such as "ø" and "ł" remain distinct because Unicode NFD does not
+    decompose them into ASCII letters.
+    """
+    collapsed = " ".join(text.split()).lower()
+    decomposed = unicodedata.normalize("NFD", collapsed)
+    return "".join(
+        character
+        for character in decomposed
+        if not unicodedata.combining(character)
+    )
 
 
 def _damerau_levenshtein(a: str, b: str) -> int:
@@ -143,7 +167,16 @@ class Game:
     correct_guessers: set[str] = field(default_factory=set)
     guess_points: dict[str, int] = field(default_factory=dict)
     guess_times: dict[str, float] = field(default_factory=dict)
-    strokes: list[dict] = field(default_factory=list)
+    drawing_history: PackedCanvasHistory = field(default_factory=PackedCanvasHistory)
+    canvas_revision: int = 0
+    canvas_generation: int = 0
+    canvas_sequence: int = 0
+    canvas_hashes: list[int] = field(default_factory=list, repr=False, compare=False)
+    canvas_commits: list[tuple[int, int, str]] = field(default_factory=list, repr=False, compare=False)
+    active_draw_sequence: int | None = field(default=None, repr=False, compare=False)
+    discarding_draw_sequence: bool = field(default=False, repr=False, compare=False)
+    active_path_index: int | None = field(default=None, repr=False, compare=False)
+    canvas_point_count: int = field(default=0, repr=False, compare=False)
     phase_deadline: float | None = None
     used_words: set[str] = field(default_factory=set)
     word_pool: list[str] | None = None
@@ -221,7 +254,12 @@ class Game:
             return 0.0
         return max(0.0, self.phase_deadline - time.monotonic())
 
-    def start_next_turn(self, afk_tokens: set[str] | None = None) -> list[str]:
+    def start_next_turn(
+        self,
+        afk_tokens: set[str] | None = None,
+        *,
+        canvas_generation: int | None = None,
+    ) -> list[str]:
         """Advance to the next drawer and offer word choices."""
         self.turn_index += 1
         if afk_tokens:
@@ -235,7 +273,20 @@ class Game:
         self.correct_guessers = set()
         self.guess_points = {}
         self.guess_times = {}
-        self.strokes = []
+        self.drawing_history.clear()
+        self.canvas_revision += 1
+        self.canvas_generation = (
+            canvas_generation
+            if canvas_generation is not None
+            else self.canvas_generation + 1
+        )
+        self.canvas_sequence = 0
+        self.canvas_hashes.clear()
+        self.canvas_commits.clear()
+        self.active_draw_sequence = None
+        self.discarding_draw_sequence = False
+        self.active_path_index = None
+        self.canvas_point_count = 0
         self.letter_positions = []
         self.revealed_positions = set()
         self.purchased_hints = {}
@@ -459,45 +510,162 @@ class Game:
         return True
 
     def record_stroke(self, event: str, payload: dict) -> bool:
-        if len(self.strokes) >= MAX_STROKE_RECORDS:
-            return False
         # If the canvas was previously cleared and a new stroke starts, reset pre-clear history.
-        if self.strokes and self.strokes[-1]["event"] == "clear_canvas":
+        if self.drawing_history.last_is_clear():
             if event == "clear_canvas":
                 return True
-            self.strokes = []
-        self.strokes.append({"event": event, "payload": payload})
+            self.drawing_history.clear()
+            self.canvas_hashes.clear()
+            self.active_path_index = None
+            self.canvas_point_count = 0
+        if event == "draw_move":
+            if self.active_path_index is None:
+                return False
+            if self.canvas_point_count + len(payload["points"]) > MAX_CANVAS_POINTS:
+                return False
+            self.drawing_history.extend_path(
+                self.active_path_index,
+                [(point["x"], point["y"]) for point in payload["points"]],
+            )
+            self.canvas_point_count += len(payload["points"])
+            return True
+        if event == "draw_end":
+            if self.active_path_index is None:
+                return False
+            self.active_path_index = None
+            self._finalize_history_action()
+            return True
+        if len(self.drawing_history) >= MAX_STROKE_RECORDS:
+            return False
+        self.active_path_index = None
+        if event == "draw_start":
+            if self.canvas_point_count >= MAX_CANVAS_POINTS:
+                return False
+            self.active_path_index = self.drawing_history.append_path(
+                [(payload["x"], payload["y"])],
+                color=color_to_int(payload["color"]),
+                width=payload["width"],
+            )
+            self.canvas_point_count += 1
+            self.canvas_revision += 1
+            return True
+        if event == "draw_shape":
+            self.drawing_history.append_shape(
+                shape=payload["shape"],
+                start=(payload["from"]["x"], payload["from"]["y"]),
+                end=(payload["to"]["x"], payload["to"]["y"]),
+                color=color_to_int(payload["color"]),
+                width=payload["width"],
+            )
+        elif event == "draw_fill":
+            self.drawing_history.append_fill(
+                x=min(CANVAS_WIDTH - 1, int(payload["x"] * CANVAS_WIDTH)),
+                y=min(CANVAS_HEIGHT - 1, int(payload["y"] * CANVAS_HEIGHT)),
+                color=color_to_int(payload["color"]),
+            )
+        else:
+            return False
+        self.canvas_revision += 1
+        self._finalize_history_action()
         return True
 
     def clear_canvas_stroke(self) -> bool:
         """Record a clear_canvas event in stroke history, allowing undo to restore pre-clear history."""
-        if not self.strokes:
+        if not self.drawing_history:
             return False
-        if self.strokes[-1]["event"] == "clear_canvas":
+        if self.drawing_history.last_is_clear():
             return False
-        self.strokes.append({"event": "clear_canvas", "payload": {}})
+        self.active_path_index = None
+        self.drawing_history.append_clear()
+        self.canvas_revision += 1
+        self._finalize_history_action()
+        return True
+
+    def canvas_sync_payload(self) -> bytes:
+        return self.drawing_history.binary_payload()
+
+    @property
+    def canvas_hash(self) -> int:
+        if len(self.canvas_hashes) == len(self.drawing_history):
+            return self.canvas_hashes[-1] if self.canvas_hashes else HISTORY_HASH_INITIAL
+        return canvas_history_hash(self.drawing_history)
+
+    def _finalize_history_action(self) -> None:
+        if not self.drawing_history:
+            return
+        # A full sync may hash an in-progress final path without committing it
+        # into this prefix stack. Finalization always derives from the prior
+        # committed action and replaces any stale final prefix.
+        expected_prefixes = len(self.drawing_history) - 1
+        if len(self.canvas_hashes) != expected_prefixes:
+            self.canvas_hashes.clear()
+            value = HISTORY_HASH_INITIAL
+            for index in range(len(self.drawing_history)):
+                value = extend_history_hash(
+                    value,
+                    self.drawing_history.record_bytes(index),
+                )
+                self.canvas_hashes.append(value)
+            return
+        previous = (
+            self.canvas_hashes[-1]
+            if self.canvas_hashes
+            else HISTORY_HASH_INITIAL
+        )
+        self.canvas_hashes.append(
+            extend_history_hash(
+                previous,
+                self.drawing_history.record_bytes(-1),
+            )
+        )
+
+    def commit_canvas_sequence(
+        self,
+        sequence: int,
+        mutation: str = "action",
+    ) -> tuple[int, int, str]:
+        if sequence != self.canvas_sequence + 1:
+            raise ValueError("canvas sequence is not the next expected value")
+        self.canvas_sequence = sequence
+        commit = (self.canvas_revision, self.canvas_hash, mutation)
+        self.canvas_commits.append(commit)
+        return commit
+
+    def canvas_commit(self, sequence: int) -> tuple[int, int, str] | None:
+        if not 1 <= sequence <= len(self.canvas_commits):
+            return None
+        return self.canvas_commits[sequence - 1]
+
+    def restart_active_path(self) -> bool:
+        """Discard an uncommitted path so its semantic action can be replayed."""
+        if (
+            self.active_path_index is None
+            or self.active_path_index != len(self.drawing_history) - 1
+        ):
+            return False
+        removed = self.drawing_history.pop()
+        if removed.tag != PATH_TAG:
+            return False
+        self.canvas_point_count -= removed.point_count
+        self.canvas_revision -= 1
+        del self.canvas_hashes[len(self.drawing_history):]
+        self.active_path_index = None
         return True
 
     def undo_last_stroke(self) -> bool:
         """Remove the most recent logical stroke or clear event from the recorded history.
 
-        The canvas is a raster (not vector), so "undoing" means dropping the
-        last stroke's events from the replay log and having every client
-        clear + redraw from what remains (via a fresh sync_strokes). A
-        logical stroke is either a single draw_shape/draw_fill/clear_canvas event,
-        or a draw_start/draw_move*/draw_end run - so this walks backward from the
-        end to find where that run began. Returns False if there was nothing
-        to undo.
+        Each history entry is one complete semantic action, so Undo drops its
+        final entry and clients replay what remains.
         """
-        if not self.strokes:
+        if not self.drawing_history:
             return False
-        if self.strokes[-1]["event"] in ("draw_shape", "draw_fill", "clear_canvas"):
-            self.strokes.pop()
-            return True
-        start = len(self.strokes) - 1
-        while start >= 0 and self.strokes[start]["event"] != "draw_start":
-            start -= 1
-        self.strokes = self.strokes[:start] if start >= 0 else self.strokes[:-1]
+        self.active_path_index = None
+        removed = self.drawing_history.pop()
+        del self.canvas_hashes[len(self.drawing_history):]
+        if removed.tag == PATH_TAG:
+            self.canvas_point_count -= removed.point_count
+        self.canvas_revision += 1
         return True
 
     def submit_guess(self, token: str, text: str) -> tuple[bool, int]:

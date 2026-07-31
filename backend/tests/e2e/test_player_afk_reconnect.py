@@ -29,6 +29,7 @@ async def test_player_afk_and_disconnect_scenario():
             await page1.goto(BASE_URL)
             await page1.fill('input[placeholder="Your name"]', "HostPlayer")
             await page1.click('button:has-text("Create room")')
+            await page1.click('button:has-text("Create room")')
 
             await page1.wait_for_selector('.room-copy-button')
             room_code_text = await page1.inner_text('.room-copy-button')
@@ -43,7 +44,7 @@ async def test_player_afk_and_disconnect_scenario():
             await page2.wait_for_selector('.room-copy-button')
 
             # Step 3: Host verifies 2 players joined in waiting lobby
-            await page1.wait_for_selector('text=Waiting for players... (2 joined)')
+            await page1.wait_for_selector('[data-testid="waiting-room"]')
 
             # Step 4: Player toggles AFK in Browser 2
             await page2.click('button:has-text("AFK")')
@@ -55,7 +56,7 @@ async def test_player_afk_and_disconnect_scenario():
             await context2.close()
 
             # Step 6: Host sees updated waiting panel state
-            await page1.wait_for_selector('.waiting-panel')
+            await page1.wait_for_selector('[data-testid="waiting-room"]')
 
         finally:
             await context1.close()

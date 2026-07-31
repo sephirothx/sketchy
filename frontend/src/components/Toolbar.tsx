@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { socket } from "../lib/socket";
+import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
 import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 
@@ -178,7 +178,7 @@ export function Toolbar({
         (kb.undo && kb.undo.includes(key));
       if (isUndo) {
         e.preventDefault();
-        socket.emit("undo_stroke", {});
+        requestCanvasUndo();
         return;
       }
 
@@ -353,7 +353,7 @@ export function Toolbar({
         <div className="toolbar-group toolbar-actions" aria-label="Canvas actions">
           <button
             className="toolbar-action-button undo-button"
-            onClick={() => socket.emit("undo_stroke", {})}
+            onClick={requestCanvasUndo}
             title="Undo last stroke (Ctrl+Z)"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -364,7 +364,7 @@ export function Toolbar({
           </button>
           <button
             className="toolbar-action-button clear-button"
-            onClick={() => socket.emit("clear_canvas", {})}
+            onClick={requestCanvasClear}
             title="Clear canvas"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

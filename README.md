@@ -142,11 +142,26 @@ tabs in the *same* browser profile will share that storage and can behave unexpe
 cd backend && .venv/bin/pytest
 
 # Backend performance micro-benchmarks
-backend/.venv/bin/python scripts/benchmark_backend.py
+backend/.venv/bin/python benchmarks/backend.py
+backend/.venv/bin/python benchmarks/live_drawing.py
+
+# End-to-end canvas benchmarks (desktop + throttled mobile)
+./benchmarks/run_canvas.sh
+
+# Faster local iteration on one profile, with optional JSON output
+./benchmarks/run_canvas.sh --profiles desktop --json-output /tmp/canvas-benchmark.json
 
 # Multi-browser Playwright E2E tests
 ./scripts/test-e2e.sh
 ```
+
+The canvas benchmark starts the built application on an isolated local port
+(`8765` by default), creates a real two-player game, and reports
+drawer-to-observer stroke latency, large-fill latency, Undo/replay latency,
+and the `sync_strokes` WebSocket payload size. Results are diagnostic baselines,
+not CI pass/fail thresholds, because browser timings vary by machine. The
+`mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override the
+port with `PORT=<number>` when needed.
 
 `game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. `events.py` socket event handlers (room lifecycle, word choice, drawing undo/fill/shapes, hint purchases, chat privacy) are covered by asyncio integration tests. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 
@@ -205,3 +220,16 @@ so the whole game (UI + API + WebSocket) is served from a single port.
   account. Anyone with the room code can join a public/private room.
 - **Single process**: no horizontal scaling story; one uvicorn worker holds all rooms. Fine for
   small deployments, not for internet-scale traffic.
+- **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO
+  event. Data-bearing path, shape, and fill actions use binary attachments with fixed-width
+  colors, widths, shape IDs, and quarter-pixel signed coordinates. Path-end and clear use
+  their version/action byte directly as a numeric control payload, avoiding Socket.IO's
+  binary-attachment envelope when it would be larger than the action itself. The server
+  rejects malformed, unsupported, unauthorized, and out-of-phase payloads before recording
+  or rebroadcasting them.
+- **Versioned canvas history**: rooms keep drawing actions in a contiguous packed byte buffer
+  with compact action offsets, and send replay history in a versioned binary envelope
+  containing its action-offset table and packed records. Packed paths use quarter-pixel
+  signed 16-bit coordinates and one-byte widths; packed shapes additionally use a one-byte
+  shape enum. The frontend retains the versioned `{v, a}` JSON history decoder as a
+  compatibility fallback.

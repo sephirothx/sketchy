@@ -4,6 +4,8 @@ import type { RoundEndedPayload, RoundScoreEntry } from "../types";
 interface RoundEndOverlayProps {
   word: string;
   drawerToken: string;
+  drawerBonus: number;
+  myToken: string | null;
   guesses?: RoundEndedPayload["guesses"];
   scores: RoundScoreEntry[];
   showScores?: boolean;
@@ -30,6 +32,8 @@ function formatGuessTime(seconds: number) {
 export function RoundEndOverlay({
   word,
   drawerToken,
+  drawerBonus,
+  myToken,
   guesses = [],
   scores,
   showScores = true,
@@ -47,6 +51,7 @@ export function RoundEndOverlay({
   }, []);
 
   const sorted = [...scores].sort((a, b) => a.newRank - b.newRank);
+  const mine = sorted.find((entry) => entry.token === myToken);
 
   return (
     <div className="round-end-overlay">
@@ -55,13 +60,19 @@ export function RoundEndOverlay({
         <p className="round-end-word">
           The word was <strong>{word}</strong>
         </p>
+        {showScores && mine && <p className="round-personal-result">Your round: <strong>{mine.delta >= 0 ? `+${mine.delta}` : mine.delta} points</strong> · now #{mine.newRank}</p>}
         {guesses.length > 0 ? (
           <>
             <h4 className="round-guesses-heading">Correct guesses</h4>
             <ol className="round-guesses-list">
               {guesses.map((guess) => (
                 <li key={guess.token}>
-                  <span>{guess.nickname}</span>
+                  <span
+                    className="colored-player-name"
+                    style={{ color: guess.nameColor }}
+                  >
+                    {guess.nickname}
+                  </span>
                   <time>{formatGuessTime(guess.seconds)}</time>
                 </li>
               ))}
@@ -87,8 +98,14 @@ export function RoundEndOverlay({
                   <span className="round-score-rank">#{entry.newRank}</span>
                   <span className="round-score-name">
                     {entry.token === drawerToken ? "\u270F\uFE0F " : ""}
-                    {entry.nickname}
+                    <span
+                      className="colored-player-name"
+                      style={{ color: entry.nameColor }}
+                    >
+                      {entry.nickname}
+                    </span>
                   </span>
+                  {entry.token === drawerToken && drawerBonus > 0 && <span className="drawer-bonus">🎨 +{drawerBonus}</span>}
                   {change && (
                     <span className={`round-score-change ${change.className}`}>
                       {change.symbol}
@@ -99,6 +116,7 @@ export function RoundEndOverlay({
                     {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                   </span>
                   <span className="round-score-total">{entry.score}</span>
+                  {entry.token === myToken && <span className="round-score-you">You</span>}
                 </li>
               );
             })}

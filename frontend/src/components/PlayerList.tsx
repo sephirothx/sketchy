@@ -7,11 +7,22 @@ interface PlayerListProps {
   drawerToken: string | null;
   myToken?: string | null;
   showScores?: boolean;
+  variant?: "waiting" | "playing" | "game-end";
+  allowVoting?: boolean;
+  votingPopulation?: PlayerInfo[];
 }
 
-export function PlayerList({ players, drawerToken, myToken, showScores = true }: PlayerListProps) {
+export function PlayerList({
+  players,
+  drawerToken,
+  myToken,
+  showScores = true,
+  variant = "playing",
+  allowVoting = true,
+  votingPopulation = players,
+}: PlayerListProps) {
   const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
-  const connectedPlayers = players.filter((p) => p.connected);
+  const connectedPlayers = votingPopulation.filter((p) => p.connected);
   const [openMenuToken, setOpenMenuToken] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -32,7 +43,7 @@ export function PlayerList({ players, drawerToken, myToken, showScores = true }:
 
   return (
     <ul className="player-list">
-      {sorted.map((p) => {
+      {sorted.map((p, index) => {
         const isMe = p.token === myToken;
         const requiredVotes = Math.floor(connectedPlayers.length / 2) + 1;
         const kickVotes = (p.kickVotes || []).filter((v) => connectedPlayers.some((cp) => cp.token === v));
@@ -45,25 +56,25 @@ export function PlayerList({ players, drawerToken, myToken, showScores = true }:
         return (
           <li
             key={p.token}
-            className={`player-row${p.connected ? "" : " disconnected"}${!isMe && p.connected ? " clickable" : ""}`}
+            className={`player-row${p.connected ? "" : " disconnected"}${allowVoting && !isMe && p.connected ? " clickable" : ""}`}
             style={{
               position: "relative",
             }}
-            title={!isMe && p.connected ? "Click to vote AFK or Kick player" : undefined}
+            title={allowVoting && !isMe && p.connected ? "Click to vote AFK or Kick player" : undefined}
             onClick={() => {
-              if (!isMe && p.connected) {
+              if (allowVoting && !isMe && p.connected) {
                 setOpenMenuToken(isMenuOpen ? null : p.token);
               }
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
               <span className="player-name">
+                {variant === "game-end" && <span className="player-placement">{index < 3 ? ["🥇", "🥈", "🥉"][index] : `#${index + 1}`}</span>}
                 {p.token === drawerToken ? "\u270F\uFE0F " : ""}
-                {p.nickname}
-                {p.isHost ? " \u2605" : ""}
-                {p.isSpectator ? " 👁️" : ""}
-                {p.isAfk ? " 💤" : ""}
-                {!p.connected ? " (disconnected)" : ""}
+                <span className="colored-player-name" style={{ color: p.nameColor }}>
+                  {p.nickname}
+                </span>
+                {isMe ? " (you)" : ""}
                 {totalActiveVotes > 0 && (
                   <span
                     style={{
@@ -81,10 +92,15 @@ export function PlayerList({ players, drawerToken, myToken, showScores = true }:
                   </span>
                 )}
               </span>
+              <span className="waiting-player-badges">
+                {p.isHost && <em>Host</em>}
+                {p.isAfk && <em className="warning">AFK</em>}
+                {!p.connected && <em className="muted">Disconnected</em>}
+              </span>
               {showScores && <span className="player-score">{p.score}</span>}
             </div>
 
-            {isMenuOpen && !isMe && p.connected && (
+            {allowVoting && isMenuOpen && !isMe && p.connected && (
               <div
                 ref={menuRef}
                 className="player-vote-menu"

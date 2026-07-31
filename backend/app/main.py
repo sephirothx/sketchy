@@ -5,9 +5,28 @@ import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
 
 from app import events
 from app.state import room_manager
+
+
+class SPAStaticFiles(StaticFiles):
+    """Serve the SPA for extensionless client routes while preserving real 404s."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except HTTPException as exc:
+            is_client_route = (
+                exc.status_code == 404
+                and not path.startswith("api/")
+                and not Path(path).suffix
+            )
+            if not is_client_route:
+                raise
+            return await super().get_response("index.html", scope)
+
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 events.register_handlers(sio, room_manager)
@@ -35,6 +54,6 @@ async def list_public_rooms():
 # (single-port self-hosting). No-op during development when the folder is absent.
 _frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if _frontend_dist.is_dir():
-    api.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
+    api.mount("/", SPAStaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
 
 app = socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io")

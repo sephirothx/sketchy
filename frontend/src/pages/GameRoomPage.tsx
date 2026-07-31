@@ -2,29 +2,74 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Canvas, type CanvasRef } from "../components/Canvas";
 import { Toolbar } from "../components/Toolbar";
-import { PlayerList } from "../components/PlayerList";
 import { WordDisplay } from "../components/WordDisplay";
 import { Timer } from "../components/Timer";
-import { GuessChat } from "../components/GuessChat";
 import { RoundEndOverlay } from "../components/RoundEndOverlay";
-import { emitWithAck, socket } from "../lib/socket";
+import { WaitingRoomPanel } from "../components/WaitingRoomPanel";
+import { GameEndOverlay } from "../components/GameEndOverlay";
+import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
+import { ConfirmationDialog } from "../components/ConfirmationDialog";
+import { ChoosingWordOverlay } from "../components/ChoosingWordOverlay";
+import { RoomChatPanel } from "../components/RoomChatPanel";
+import { RoomPlayersPanel } from "../components/RoomPlayersPanel";
+import { RoomShell, type RoomShellMode } from "../components/RoomShell";
+import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
+import { useToast } from "../lib/toast";
 import { splitMaskedWord } from "../lib/maskedWord";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
-import type { AckResponse, DrawTool } from "../types";
+import type { AckResponse, DrawTool, RoomPreviewResponse, RoomSummary } from "../types";
+
+type EntryStatus = "loading" | "preview";
+
+const INVITE_LOADING_DELAY_MS = 250;
+
+function hintModeLabel(room: RoomSummary) {
+  if (room.hideMaskedPrompt) return "Prompt details hidden";
+  if (room.hintMode === "checkpoints") return "Timed letter hints";
+  if (room.hintMode === "purchase") return "Buyable letter hints";
+  if (room.hintMode === "wheel") return "Wheel-style letter hints";
+  return "No letter hints";
+}
+
+function DelayedInviteLoader() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setVisible(true), INVITE_LOADING_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <main className="invite-card invite-loading-card" aria-live="polite">
+      <div className="invite-loading-spinner" aria-hidden="true" />
+      <h1>Checking your invite…</h1>
+      <p>Loading room details.</p>
+    </main>
+  );
+}
 
 export function GameRoomPage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const { notify } = useToast();
   const openSettings = useSettingsStore((s) => s.openSettings);
+  const nameColor = useSettingsStore((s) => s.nameColor);
 
   const canvasRef = useRef<CanvasRef | null>(null);
+  const exitingRoomRef = useRef(false);
 
   const nickname = useGameStore((s) => s.nickname);
+  const setNickname = useGameStore((s) => s.setNickname);
   const token = useGameStore((s) => s.token);
+  const activeRoomId = useGameStore((s) => s.roomId);
+  const activeRoomCode = useGameStore((s) => s.code);
   const setSession = useGameStore((s) => s.setSession);
   const getStoredToken = useGameStore((s) => s.getStoredToken);
+  const clearStoredToken = useGameStore((s) => s.clearStoredToken);
   const reset = useGameStore((s) => s.reset);
 
   const roomState = useGameStore((s) => s.roomState);
@@ -34,6 +79,13 @@ export function GameRoomPage() {
   const maskedWord = useGameStore((s) => s.maskedWord);
   const hintMode = useGameStore((s) => s.hintMode);
   const scoringMode = useGameStore((s) => s.scoringMode);
+  const name = useGameStore((s) => s.name);
+  const isPublic = useGameStore((s) => s.isPublic);
+  const maxPlayers = useGameStore((s) => s.maxPlayers);
+  const rounds = useGameStore((s) => s.rounds);
+  const customWordCount = useGameStore((s) => s.customWordCount);
+  const customWordsOnly = useGameStore((s) => s.customWordsOnly);
+  const drawingSeconds = useGameStore((s) => s.drawingSeconds);
   const nextHintCost = useGameStore((s) => s.nextHintCost);
   const letterPrices = useGameStore((s) => s.letterPrices);
   const myWord = useGameStore((s) => s.myWord);
@@ -46,49 +98,144 @@ export function GameRoomPage() {
   const messages = useGameStore((s) => s.messages);
   const lastRoundResult = useGameStore((s) => s.lastRoundResult);
   const finalScores = useGameStore((s) => s.finalScores);
+  const drawingRecap = useGameStore((s) => s.drawingRecap);
+  const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
+
+  const normalizedCode = code?.trim().toUpperCase() ?? "";
+  const hasActiveSession = Boolean(
+    token
+      && activeRoomId
+      && activeRoomCode?.toUpperCase() === normalizedCode,
+  );
 
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [entryStatus, setEntryStatus] = useState<EntryStatus>("loading");
+  const [roomPreview, setRoomPreview] = useState<RoomSummary | null>(null);
+  const [nicknameInput, setNicknameInput] = useState(nickname);
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const [entryNotice, setEntryNotice] = useState<string | null>(null);
+  const [entryBusy, setEntryBusy] = useState(false);
   const [color, setColor] = useState("#000000");
   const [brushWidth, setBrushWidth] = useState(6);
   const [eraserWidth, setEraserWidth] = useState(24);
   const [tool, setTool] = useState<DrawTool>("pen");
   const [wasDrawer, setWasDrawer] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
+  const [startBusy, setStartBusy] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [recapOpen, setRecapOpen] = useState(false);
 
-  function handleCopyLink() {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    }).catch(() => {
-      // fallback if clipboard API fails
-    });
+  useEffect(() => {
+    function closeRecapForNewGame() {
+      setRecapOpen(false);
+    }
+    socket.on("game_started", closeRecapForNewGame);
+    return () => {
+      socket.off("game_started", closeRecapForNewGame);
+    };
+  }, []);
+
+  async function handleCopyLink() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(window.location.href);
+      notify("Invite link copied.", "success", 2500);
+    } catch {
+      notify("Couldn’t copy the link. Copy it from the address bar.", "error");
+    }
   }
 
   useEffect(() => {
-    if (!code) return;
+    if (!normalizedCode) return;
+    if (hasActiveSession) return;
+    if (exitingRoomRef.current) return;
+
     let cancelled = false;
-    async function join() {
-      const storedToken = getStoredToken(code!);
-      const res = await emitWithAck<AckResponse>("join_room", {
-        code,
-        nickname: nickname || "Player",
-        token: storedToken,
-      });
-      if (cancelled) return;
-      if (res.ok && res.roomId && res.code && res.token) {
-        setSession({ roomId: res.roomId, code: res.code, token: res.token });
-      } else {
-        setJoinError(res.error || "Could not join room");
+
+    async function loadEntry() {
+      try {
+        const storedToken = getStoredToken(normalizedCode);
+        if (storedToken) {
+          const reconnect = await emitWithAck<AckResponse>("join_room", {
+            code: normalizedCode,
+            nickname,
+            nameColor,
+            token: storedToken,
+          });
+          if (cancelled) return;
+          if (reconnect.ok && reconnect.roomId && reconnect.code && reconnect.token) {
+            setSession({
+              roomId: reconnect.roomId,
+              code: reconnect.code,
+              token: reconnect.token,
+            });
+            return;
+          }
+          if (!reconnect.invalidToken) {
+            setJoinError(reconnect.error || "Could not reconnect to this room");
+            return;
+          }
+          clearStoredToken(normalizedCode);
+          setEntryNotice("Your previous session expired. Choose how you would like to rejoin.");
+        }
+
+        const preview = await emitWithAck<RoomPreviewResponse>("get_room_preview", {
+          code: normalizedCode,
+        });
+        if (cancelled) return;
+        if (preview.ok && preview.room) {
+          setRoomPreview(preview.room);
+          setEntryStatus("preview");
+        } else {
+          setJoinError(preview.error || "This room is no longer available");
+        }
+      } catch (loadError) {
+        if (!cancelled) setJoinError(socketRequestErrorMessage(loadError, "load this room"));
       }
     }
-    join();
+    loadEntry();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  }, [normalizedCode, hasActiveSession]);
+
+  async function handleEntryJoin(asSpectator: boolean) {
+    const trimmedNickname = nicknameInput.trim();
+    if (!trimmedNickname) {
+      setEntryError("Enter a nickname to continue.");
+      return;
+    }
+    if (!code) return;
+
+    setEntryBusy(true);
+    setEntryError(null);
+    try {
+      const response = await emitWithAck<AckResponse>("join_room", {
+        code: code.trim().toUpperCase(),
+        nickname: trimmedNickname,
+        nameColor,
+        asSpectator,
+      });
+
+      if (response.ok && response.roomId && response.code && response.token) {
+        setNickname(trimmedNickname);
+        setSession({ roomId: response.roomId, code: response.code, token: response.token });
+        return;
+      }
+      if (!asSpectator && response.error === "Room is full") {
+        setRoomPreview((current) => current ? { ...current, isFull: true } : current);
+        setEntryError("The player slots just filled up, but you can still spectate.");
+        return;
+      }
+      setEntryError(response.error || "Could not join this room");
+    } catch (joinRequestError) {
+      setEntryError(socketRequestErrorMessage(joinRequestError, asSpectator ? "join as a spectator" : "join this room"));
+    } finally {
+      setEntryBusy(false);
+    }
+  }
 
   useEffect(() => {
     function updateViewport() {
@@ -110,15 +257,15 @@ export function GameRoomPage() {
     };
   }, [roomState, phase]);
 
-  const [notification, setNotification] = useState<string | null>(null);
-
   useEffect(() => {
     function onKicked(data: { reason?: string }) {
+      exitingRoomRef.current = true;
+      clearStoredToken(normalizedCode);
       reset();
-      navigate("/", { state: { error: data?.reason || "You were kicked from the room." } });
+      navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
     }
     function onVotedAfk(data: { message?: string }) {
-      setNotification(data?.message || "You were marked AFK by room vote.");
+      notify(data?.message || "You were marked AFK by room vote.", "warning");
     }
     socket.on("kicked", onKicked);
     socket.on("voted_afk", onVotedAfk);
@@ -126,23 +273,49 @@ export function GameRoomPage() {
       socket.off("kicked", onKicked);
       socket.off("voted_afk", onVotedAfk);
     };
-  }, [navigate, reset]);
+  }, [clearStoredToken, navigate, normalizedCode, notify, reset]);
 
-  function handleLeave() {
+  function performLeave() {
+    exitingRoomRef.current = true;
+    clearStoredToken(normalizedCode);
     socket.emit("leave_room");
     reset();
     navigate("/");
+  }
+
+  function handleLeave() {
+    if (roomState === "playing") {
+      setLeaveConfirmationOpen(true);
+      return;
+    }
+    performLeave();
   }
 
   function handleToggleAfk() {
     socket.emit("toggle_afk");
   }
 
-  function handleStartGame() {
-    emitWithAck("start_game", {});
+  async function handleStartGame() {
+    setRecapOpen(false);
+    setStartBusy(true);
+    setStartError(null);
+    try {
+      const response = await emitWithAck<AckResponse>("start_game", {});
+      if (!response.ok) setStartError(response.error || "Could not start the game. Please try again.");
+    } catch (startError) {
+      setStartError(socketRequestErrorMessage(startError, "start the game"));
+    } finally {
+      setStartBusy(false);
+    }
+  }
+
+  function handleViewDrawingsFromGameEnd() {
+    dismissGameEnd();
+    setRecapOpen(true);
   }
 
   const me = players.find((p) => p.token === token);
+  const drawer = players.find((player) => player.token === drawerToken);
   const isHost = me?.isHost ?? false;
   const amDrawer =
     (phase === "drawing" || phase === "choosing_word") && drawerToken === token;
@@ -243,50 +416,195 @@ export function GameRoomPage() {
       : me?.isSpectator && spectatorsSeeSolution && maskedWord && !maskedWord.includes("_")
       ? splitMaskedWord(maskedWord).blanks.trim()
       : null;
+  const roomView: RoomShellMode =
+    phase === "game_end" && finalScores ? "game-end" : roomState;
 
-  if (joinError) {
+  if (!hasActiveSession) {
     return (
-      <div className="join-error-container">
-        <p className="error-banner">{joinError}</p>
-        <button onClick={() => navigate("/")}>Back to lobby</button>
+      <div className="invite-entry-page">
+        <header className="invite-entry-header">
+          <button type="button" className="invite-brand" onClick={() => navigate("/")}>
+            Sketchy
+          </button>
+          <button
+            type="button"
+            className="header-settings-button"
+            onClick={openSettings}
+            title="Game Settings"
+          >
+            <SettingsIcon size={16} />
+            <span>Settings</span>
+          </button>
+        </header>
+
+        {joinError ? (
+          <main className="invite-card invite-unavailable-card">
+            <div className="invite-status-icon" aria-hidden="true">✕</div>
+            <p className="invite-eyebrow">Room {code?.toUpperCase()}</p>
+            <h1>Room unavailable</h1>
+            <p>{joinError}</p>
+            <button type="button" className="invite-primary-button" onClick={() => navigate("/")}>
+              Back to lobby
+            </button>
+          </main>
+        ) : entryStatus === "loading" || !roomPreview ? (
+          <DelayedInviteLoader />
+        ) : (
+          <main className="invite-card">
+            <div className="invite-card-heading">
+              <div>
+                <p className="invite-eyebrow">
+                  {roomPreview.isPublic ? "Public room" : "Private invite"} · {roomPreview.code}
+                </p>
+                <h1>{roomPreview.name}</h1>
+              </div>
+              <span className={`invite-state-badge ${roomPreview.state}`}>
+                {roomPreview.state === "playing" ? "In progress" : "Waiting"}
+              </span>
+            </div>
+
+            <dl className="invite-room-facts">
+              <div>
+                <dt>Players</dt>
+                <dd>
+                  {roomPreview.playerCount}/{roomPreview.maxPlayers}
+                  {roomPreview.isFull ? " · Full" : ""}
+                </dd>
+              </div>
+              <div>
+                <dt>Rounds</dt>
+                <dd>{roomPreview.rounds}</dd>
+              </div>
+              <div>
+                <dt>Draw time</dt>
+                <dd>{roomPreview.drawingSeconds}s</dd>
+              </div>
+              <div>
+                <dt>Scoring</dt>
+                <dd>{roomPreview.scoringMode === "none" ? "Just for fun" : "Points on"}</dd>
+              </div>
+            </dl>
+
+            <ul className="invite-rule-list" aria-label="Room rules">
+              <li>{hintModeLabel(roomPreview)}</li>
+              <li>
+                {roomPreview.spectatorsSeeSolution
+                  ? "Spectators can see the answer"
+                  : "Spectators guess along"}
+              </li>
+              <li>
+                {roomPreview.customWordCount > 0
+                  ? `${roomPreview.customWordCount} custom words${
+                      roomPreview.customWordsOnly ? " only" : " plus defaults"
+                    }`
+                  : "Default word list"}
+              </li>
+            </ul>
+
+            {roomPreview.state === "playing" && (
+              <p className="invite-callout">
+                This game is already in progress. Joining as a player adds you to a future turn.
+              </p>
+            )}
+            {entryNotice && <p className="invite-notice">{entryNotice}</p>}
+
+            <form
+              className="invite-join-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!roomPreview.isFull) void handleEntryJoin(false);
+              }}
+            >
+              <label htmlFor="invite-nickname">Your nickname</label>
+              <input
+                id="invite-nickname"
+                type="text"
+                value={nicknameInput}
+                onChange={(event) => {
+                  setNicknameInput(event.target.value);
+                  setEntryError(null);
+                }}
+                maxLength={20}
+                placeholder="Your name"
+                autoComplete="nickname"
+                autoFocus
+                aria-describedby={entryError ? "invite-entry-error" : undefined}
+              />
+              {entryError && (
+                <p id="invite-entry-error" className="invite-form-error" role="alert">
+                  {entryError}
+                </p>
+              )}
+              <div className="invite-actions">
+                <button
+                  type="submit"
+                  className="invite-primary-button"
+                  disabled={entryBusy || roomPreview.isFull}
+                >
+                  {roomPreview.isFull
+                    ? "Room full"
+                    : entryBusy
+                    ? "Joining…"
+                    : roomPreview.state === "playing"
+                    ? "Join game in progress"
+                    : "Join game"}
+                </button>
+                <button
+                  type="button"
+                  className={roomPreview.isFull ? "invite-primary-button" : "invite-secondary-button"}
+                  disabled={entryBusy}
+                  onClick={() => void handleEntryJoin(true)}
+                >
+                  {entryBusy ? "Joining…" : "Spectate"}
+                </button>
+              </div>
+              {roomPreview.isFull && (
+                <p className="invite-action-hint">Player slots are full. Spectating is still open.</p>
+              )}
+            </form>
+          </main>
+        )}
       </div>
     );
   }
 
   return (
     <div className={`game-room ${isGuessFocused ? "guess-focused" : ""}`}>
-      {notification && (
-        <div className="modal-overlay" onClick={() => setNotification(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-icon">💤</div>
-            <h3 className="modal-title">Marked as AFK</h3>
-            <p className="modal-body">{notification}</p>
-            <button className="modal-button" onClick={() => setNotification(null)}>
-              OK
-            </button>
-          </div>
-        </div>
+      {leaveConfirmationOpen && (
+        <ConfirmationDialog
+          title={amDrawer ? "Leave during your turn?" : "Leave active game?"}
+          description={amDrawer
+            ? "You’re the current drawer. Leaving now will interrupt your turn and advance the game for everyone."
+            : "The game is still in progress. You’ll leave the room and give up your place in this game."}
+          confirmLabel="Leave game"
+          onCancel={() => setLeaveConfirmationOpen(false)}
+          onConfirm={() => {
+            setLeaveConfirmationOpen(false);
+            performLeave();
+          }}
+        />
       )}
       <header className="game-header">
         <div>
           <button
             type="button"
             className="room-copy-button"
-            onClick={handleCopyLink}
+            onClick={() => void handleCopyLink()}
             title="Click to copy room invite link"
           >
             <span>Code: {code}</span>
-            {copiedLink && <span className="room-copied-badge">Copied link! ✓</span>}
           </button>
         </div>
         <div className="game-header-actions">
           <button
+            type="button"
+            className="game-header-afk-button"
             style={{ background: me?.isAfk ? "#f59e0b" : undefined, color: me?.isAfk ? "#fff" : undefined }}
             onClick={handleToggleAfk}
           >
             {me?.isAfk ? "AFK 💤" : "AFK"}
           </button>
-          <button onClick={handleLeave}>Leave</button>
+          <button type="button" className="game-header-leave-button" onClick={handleLeave}>Leave</button>
           <button
             type="button"
             className="header-settings-button"
@@ -299,42 +617,21 @@ export function GameRoomPage() {
         </div>
       </header>
 
-      {roomState === "waiting" && (
-        <div className="waiting-panel">
-          <p>Waiting for players... ({players.length} joined)</p>
-          {isHost && (
-            <button disabled={players.length < 2} onClick={handleStartGame}>
-              Start game
-            </button>
-          )}
-          {finalScores && (
-            <div className="game-end-panel">
-              <h3>{scoringMode === "default" ? "Final scores" : "Game over!"}</h3>
-              {scoringMode === "default" && (
-                <ol>
-                  {finalScores.map((s) => (
-                    <li key={s.token}>
-                      {s.nickname}: {s.score}
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {roomState === "playing" && (
-        <div className="game-layout">
-          <aside className="sidebar-left">
-            <div className="sidebar-box">
-              <PlayerList
-                players={players}
-                drawerToken={drawerToken}
-                myToken={token}
-                showScores={scoringMode === "default"}
-              />
-            </div>
+      <RoomShell
+        mode={roomView}
+        players={
+          <RoomPlayersPanel
+            mode={roomView}
+            players={players}
+            drawerToken={drawerToken}
+            myToken={token}
+            maxPlayers={maxPlayers}
+            showScores={scoringMode === "default"}
+            finalScores={finalScores}
+          />
+        }
+        playerFooter={
+          roomView === "playing" ? (
             <div className="save-image-box">
               <button
                 type="button"
@@ -350,70 +647,122 @@ export function GameRoomPage() {
                 <span>Save Image</span>
               </button>
             </div>
-          </aside>
-          <main className="canvas-area">
-            <div className="round-info">
-              <span>
-                Round {roundNumber}/{totalRounds}
-              </span>
-              <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
-            </div>
-            <WordDisplay
-              isDrawer={amDrawer}
-              myWord={myWord}
-              maskedWord={maskedWord}
-              wordChoices={wordChoices}
-              revealedWord={
-                phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord
-              }
+          ) : undefined
+        }
+        main={
+          recapOpen && drawingRecap.length > 0 ? (
+            <DrawingRecapGallery
+              entries={drawingRecap}
+              onClose={() => setRecapOpen(false)}
+            />
+          ) : roomView === "game-end" && finalScores ? (
+            <GameEndOverlay
+              scores={finalScores}
+              myToken={token}
+              scoringMode={scoringMode}
+              onContinue={dismissGameEnd}
+              drawingCount={drawingRecap.length}
+              onViewDrawings={handleViewDrawingsFromGameEnd}
+            />
+          ) : roomView === "waiting" ? (
+            <WaitingRoomPanel
+              name={name}
+              isPublic={isPublic}
+              rounds={rounds}
+              drawingSeconds={drawingSeconds}
+              customWordCount={customWordCount}
+              customWordsOnly={customWordsOnly}
               hintMode={hintMode}
-              canBuyHint={phase === "drawing" && !amDrawer && !guessedWord}
-              myScore={me?.score ?? 0}
-              nextHintCost={nextHintCost}
-              letterPrices={letterPrices}
+              scoringMode={scoringMode}
+              spectatorsSeeSolution={spectatorsSeeSolution}
+              hideMaskedPrompt={hideMaskedPrompt}
+              players={players}
+              myToken={token}
+              isHost={isHost}
+              finalScores={finalScores}
+              startBusy={startBusy}
+              startError={startError}
+              onStart={() => void handleStartGame()}
+              drawingCount={drawingRecap.length}
+              onViewDrawings={() => setRecapOpen(true)}
             />
-            <Canvas
-              ref={canvasRef}
-              isDrawer={canDrawNow}
-              color={color}
-              brushWidth={activeWidth}
-              tool={tool}
-              solutionWord={solutionWord}
-            />
-            {phase === "round_end" && lastRoundResult && (
-              <RoundEndOverlay
-                word={lastRoundResult.word}
-                drawerToken={lastRoundResult.drawerToken}
-                guesses={lastRoundResult.guesses}
-                scores={lastRoundResult.scores}
-                showScores={scoringMode === "default"}
-              />
-            )}
-            {canDrawNow && (
-              <Toolbar
-                color={color}
-                onColorChange={setColor}
-                brushWidth={activeWidth}
-                onBrushWidthChange={handleWidthChange}
-                tool={tool}
-                onToolChange={setTool}
-              />
-            )}
-          </main>
-          <aside className="sidebar-right">
-            <div className="sidebar-box">
-              <GuessChat
-                messages={messages}
+          ) : (
+            <main className="canvas-area">
+              <div className="round-info">
+                <span>
+                  Round {roundNumber}/{totalRounds}
+                </span>
+                {phase !== "round_end" && (
+                  <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
+                )}
+              </div>
+              <WordDisplay
                 isDrawer={amDrawer}
-                canGuess={canGuess}
-                targetWordLengths={splitMaskedWord(maskedWord).counts}
-                hideMaskedPrompt={hideMaskedPrompt}
-                onFocusChange={setIsInputFocused}
+                myWord={myWord}
+                maskedWord={maskedWord}
+                wordChoices={wordChoices}
+                revealedWord={
+                  phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord
+                }
+                hintMode={hintMode}
+                canBuyHint={phase === "drawing" && !amDrawer && !guessedWord}
+                myScore={me?.score ?? 0}
+                nextHintCost={nextHintCost}
+                letterPrices={letterPrices}
               />
-            </div>
-          </aside>
-        </div>
-      )}
+              <Canvas
+                ref={canvasRef}
+                isDrawer={canDrawNow}
+                color={color}
+                brushWidth={activeWidth}
+                tool={tool}
+                solutionWord={solutionWord}
+                overlay={
+                  phase === "choosing_word" && !amDrawer ? (
+                    <ChoosingWordOverlay
+                      drawerNickname={drawer?.nickname || "The next player"}
+                      drawerNameColor={drawer?.nameColor}
+                    />
+                  ) : null
+                }
+              />
+              {phase === "round_end" && lastRoundResult && (
+                <RoundEndOverlay
+                  word={lastRoundResult.word}
+                  drawerToken={lastRoundResult.drawerToken}
+                  drawerBonus={lastRoundResult.drawerBonus}
+                  guesses={lastRoundResult.guesses}
+                  scores={lastRoundResult.scores}
+                  myToken={token}
+                  showScores={scoringMode === "default"}
+                />
+              )}
+              {canDrawNow && (
+                <Toolbar
+                  color={color}
+                  onColorChange={setColor}
+                  brushWidth={activeWidth}
+                  onBrushWidthChange={handleWidthChange}
+                  tool={tool}
+                  onToolChange={setTool}
+                />
+              )}
+            </main>
+          )
+        }
+        chat={
+          <RoomChatPanel
+            messages={messages}
+            players={players}
+            mode={roomView}
+            isDrawer={amDrawer}
+            canGuess={canGuess}
+            targetWordLengths={splitMaskedWord(maskedWord).counts}
+            hideMaskedPrompt={hideMaskedPrompt}
+            onFocusChange={setIsInputFocused}
+          />
+        }
+      />
     </div>
   );
 }

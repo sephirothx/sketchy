@@ -1,4 +1,5 @@
-from app.rooms import RoomFullError, RoomManager
+from app.canvas_history import encode_canvas_history
+from app.rooms import DrawingRecapEntry, NAME_COLOR_PATTERN, RoomFullError, RoomManager
 
 
 def test_create_room_generates_unique_code():
@@ -9,6 +10,25 @@ def test_create_room_generates_unique_code():
     assert len(room1.code) == 6
 
 
+def test_create_room_uses_default_drawing_time_and_hint_mode():
+    rm = RoomManager()
+    room = rm.create_room(name="Room", is_public=True)
+    assert room.max_players == 8
+    assert room.rounds == 3
+    assert room.drawing_seconds == 90
+    assert room.hint_mode == "checkpoints"
+
+
+def test_nearest_drawing_seconds_snaps_to_allowed_presets():
+    from app.rooms import nearest_drawing_seconds
+
+    assert nearest_drawing_seconds(90) == 90
+    assert nearest_drawing_seconds(100) == 90
+    assert nearest_drawing_seconds(250) == 240
+    assert nearest_drawing_seconds(280) == 300
+    assert nearest_drawing_seconds(1) == 15
+
+
 def test_add_player_first_is_host():
     rm = RoomManager()
     room = rm.create_room(name="Room", is_public=True)
@@ -16,6 +36,17 @@ def test_add_player_first_is_host():
     p2 = rm.add_player(room, "Bob")
     assert p1.is_host is True
     assert p2.is_host is False
+
+
+def test_add_player_uses_requested_name_color_or_random_default():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+
+    chosen = rm.add_player(room, "Alice", name_color="#AABBCC")
+    generated = rm.add_player(room, "Bob", name_color="not-a-color")
+
+    assert chosen.name_color == "#aabbcc"
+    assert NAME_COLOR_PATTERN.fullmatch(generated.name_color)
 
 
 def test_add_player_respects_max_players():
@@ -103,7 +134,11 @@ def test_spectator_can_join_full_room_and_option_in_payload():
     # Spectator can join full room
     spec = rm.add_player(room, "Charlie", is_spectator=True)
     assert spec.is_spectator is True
-    assert room.to_public_summary()["spectatorsSeeSolution"] is True
+    summary = room.to_public_summary()
+    assert summary["spectatorsSeeSolution"] is True
+    assert summary["playerCount"] == 1
+    assert summary["spectatorCount"] == 1
+    assert summary["isFull"] is True
     assert room.to_state_payload()["spectatorsSeeSolution"] is True
     players_payload = room.to_state_payload()["players"]
     assert any(p["nickname"] == "Charlie" and p["isSpectator"] is True for p in players_payload)
@@ -132,5 +167,36 @@ def test_create_room_with_hide_masked_prompt_forces_hints_off():
     assert room.to_state_payload()["hideMaskedPrompt"] is True
 
 
+def test_room_payload_exposes_only_recap_metadata_while_waiting():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+    drawer = rm.add_player(room, "Drawer")
+    room.last_game_drawings.append(
+        DrawingRecapEntry(
+            round_number=1,
+            turn_number=1,
+            drawer_token=drawer.token,
+            drawer_nickname=drawer.nickname,
+            drawer_name_color=drawer.name_color,
+            word="apple",
+            action_count=0,
+            canvas_history=encode_canvas_history([]),
+        )
+    )
 
+    payload = room.to_state_payload()
+    assert payload["lastGameDrawings"] == [{
+        "index": 0,
+        "roundNumber": 1,
+        "turnNumber": 1,
+        "drawerToken": drawer.token,
+        "drawerNickname": "Drawer",
+        "drawerNameColor": drawer.name_color,
+        "word": "apple",
+        "actionCount": 0,
+    }]
+    assert "canvas" not in payload["lastGameDrawings"][0]
+
+    room.state = "playing"
+    assert room.to_state_payload()["lastGameDrawings"] == []
 

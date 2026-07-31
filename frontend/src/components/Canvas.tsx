@@ -1,6 +1,30 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
-import { socket } from "../lib/socket";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import {
+  CANVAS_COORDINATE_SCALE,
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH,
+  ClientCanvasHistory,
+  decodeCanvasHistory,
+} from "../lib/canvasHistory";
+import type { DecodedCanvasAction } from "../lib/canvasHistory";
+import { registerCanvasCommandHandlers } from "../lib/canvasCommands";
+import {
+  encodeClear,
+  decodeLiveDrawing,
+  encodeFill,
+  encodePathEnd,
+  encodePathPoints,
+  encodePathStart,
+  encodeShape,
+} from "../lib/liveDrawing";
+import { emitWithAck, socket } from "../lib/socket";
 import { useSettingsStore } from "../store/settingsStore";
 import type {
   DrawTool,
@@ -8,14 +32,34 @@ import type {
   StrokeFillPayload,
   StrokeMovePayload,
   StrokePoint,
-  StrokeRecord,
   StrokeShapePayload,
   StrokeStartPayload,
 } from "../types";
 
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 600;
 const FLUSH_INTERVAL_MS = 40;
+const MAX_PENDING_CANVAS_ACTIONS = 256;
+
+type DrawingFrame = number | Uint8Array;
+type PendingCanvasMutation =
+  | {
+    kind: "draw";
+    generation: number;
+    frames: DrawingFrame[];
+    expectedRevision: number | null;
+    expectedHash: number | null;
+  }
+  | {
+    kind: "undo";
+    generation: number;
+    request: [
+      generation: number,
+      sequence: number,
+      fromRevision: number,
+      fromHash: number,
+    ];
+    expectedRevision: number;
+    expectedHash: number;
+  };
 
 interface CanvasProps {
   isDrawer: boolean;
@@ -23,6 +67,8 @@ interface CanvasProps {
   brushWidth: number;
   tool: DrawTool;
   solutionWord?: string | null;
+  overlay?: ReactNode;
+  snapshotActions?: DecodedCanvasAction[] | null;
 }
 
 function getYYMMDDhhmm(d = new Date()): string {
@@ -110,6 +156,27 @@ function colorsEqual(data: Uint8ClampedArray, index: number, target: [number, nu
     data[index + 1] === target[1] &&
     data[index + 2] === target[2] &&
     data[index + 3] === target[3]
+  );
+}
+
+// Brave's fingerprinting protection can slightly perturb values returned by
+// canvas readback APIs. Those differences are visually imperceptible, but an
+// exact-match flood fill treats every perturbed pixel as a separate region
+// and leaves high-contrast pinholes behind. Keep the tolerance deliberately
+// small: it absorbs readback noise while preserving visibly distinct colors
+// as fill boundaries.
+const FLOOD_FILL_CHANNEL_TOLERANCE = 8;
+
+function colorsMatchForFill(
+  data: Uint8ClampedArray,
+  index: number,
+  target: [number, number, number, number],
+): boolean {
+  return (
+    Math.abs(data[index] - target[0]) <= FLOOD_FILL_CHANNEL_TOLERANCE
+    && Math.abs(data[index + 1] - target[1]) <= FLOOD_FILL_CHANNEL_TOLERANCE
+    && Math.abs(data[index + 2] - target[2]) <= FLOOD_FILL_CHANNEL_TOLERANCE
+    && Math.abs(data[index + 3] - target[3]) <= FLOOD_FILL_CHANNEL_TOLERANCE
   );
 }
 
@@ -332,16 +399,9 @@ function drawShapeOutlinePixels(
   rasterizePath(ctx, shapeOutlinePoints(from, to, shape), strokeWidth / 2, hexToRgba(strokeColor), true);
 }
 
-interface BoundingBox {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
-
 // Stack-based 8-connected flood fill, mutating `imageData.data` in place and
-// returning the bounding box of every pixel it touched (or null if the
-// clicked pixel already exactly matches the fill color). 8-connectivity
+// returning whether it changed any pixels (false when the clicked pixel
+// already exactly matches the fill color). 8-connectivity
 // (orthogonal + diagonal neighbors) is used rather than plain 4-connectivity
 // so that regions which only touch corner-to-corner - e.g. the pinched tip
 // of a triangle, or two areas separated by a thin single-pixel-wide
@@ -349,20 +409,23 @@ interface BoundingBox {
 // instead of leaving an unfilled sliver behind. Since every stroke is
 // rasterized directly into pixel data (see rasterizePath) rather than
 // through Canvas 2D's anti-aliased stroke/fill, the canvas only ever
-// contains flat colors, so exact equality is all that's needed - no
-// tolerance, no dilation, no drift on repeated fills. Matching is purely
-// pixel-based, so it naturally respects whatever shape the rendered strokes
-// happen to form - including sub-regions carved out by self-intersecting
-// lines, which have no explicit notion of "closed path" on a raster canvas.
+// contains flat colors. Region matching allows only a small per-channel
+// tolerance to compensate for browsers that deliberately perturb canvas
+// readback values for fingerprinting protection; this avoids noisy holes
+// without dilating the region or changing its geometric boundaries. Matching
+// remains pixel-based, so it naturally respects whatever shape the rendered
+// strokes happen to form - including sub-regions carved out by
+// self-intersecting lines, which have no explicit notion of "closed path" on
+// a raster canvas.
 function floodFillPixels(
   imageData: ImageData,
   startX: number,
   startY: number,
   fillColor: [number, number, number, number],
-): BoundingBox | null {
+): boolean {
   const { width, height, data } = imageData;
   const startIndex = (startY * width + startX) * 4;
-  if (colorsEqual(data, startIndex, fillColor)) return null;
+  if (colorsEqual(data, startIndex, fillColor)) return false;
   const target: [number, number, number, number] = [
     data[startIndex],
     data[startIndex + 1],
@@ -372,7 +435,6 @@ function floodFillPixels(
 
   const visited = new Uint8Array(width * height);
   const stack: number[] = [startX, startY];
-  const box: BoundingBox = { minX: startX, minY: startY, maxX: startX, maxY: startY };
 
   while (stack.length > 0) {
     const y = stack.pop()!;
@@ -381,16 +443,12 @@ function floodFillPixels(
     const pixelIndex = y * width + x;
     if (visited[pixelIndex]) continue;
     const index = pixelIndex * 4;
-    if (!colorsEqual(data, index, target)) continue;
+    if (!colorsMatchForFill(data, index, target)) continue;
     visited[pixelIndex] = 1;
     data[index] = fillColor[0];
     data[index + 1] = fillColor[1];
     data[index + 2] = fillColor[2];
     data[index + 3] = fillColor[3];
-    if (x < box.minX) box.minX = x;
-    if (x > box.maxX) box.maxX = x;
-    if (y < box.minY) box.minY = y;
-    if (y > box.maxY) box.maxY = y;
     stack.push(
       x + 1, y,
       x - 1, y,
@@ -402,28 +460,29 @@ function floodFillPixels(
       x - 1, y - 1,
     );
   }
-  return box;
+  return true;
 }
 
-// Loads a data-URL image (never a network fetch, so this resolves quickly),
-// used so replay (sync_strokes) can await each fill patch in order before
-// applying subsequent strokes on top of it.
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("failed to load fill patch image"));
-    img.src = src;
-  });
+function applyFillAtPixel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+): boolean {
+  if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) return false;
+  const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  if (!floodFillPixels(imageData, x, y, hexToRgba(color))) return false;
+  ctx.putImageData(imageData, 0, 0);
+  return true;
 }
 
-async function applyFillPatch(ctx: CanvasRenderingContext2D, payload: StrokeFillPayload): Promise<void> {
-  try {
-    const img = await loadImage(`data:image/png;base64,${payload.patchData}`);
-    ctx.drawImage(img, payload.patchX, payload.patchY);
-  } catch {
-    // A corrupt/undecodable patch shouldn't crash the whole replay - just skip it.
-  }
+function applyFillAction(ctx: CanvasRenderingContext2D, payload: StrokeFillPayload): boolean {
+  return applyFillAtPixel(
+    ctx,
+    Math.floor(payload.x * CANVAS_WIDTH),
+    Math.floor(payload.y * CANVAS_HEIGHT),
+    payload.color,
+  );
 }
 
 export interface CanvasRef {
@@ -431,7 +490,15 @@ export interface CanvasRef {
 }
 
 export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
-  { isDrawer, color, brushWidth, tool, solutionWord = null }: CanvasProps,
+  {
+    isDrawer,
+    color,
+    brushWidth,
+    tool,
+    solutionWord = null,
+    overlay = null,
+    snapshotActions = null,
+  }: CanvasProps,
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -444,6 +511,93 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   const lastPointRef = useRef<StrokePoint | null>(null);
   const shapeStartRef = useRef<StrokePoint | null>(null);
   const replayGenerationRef = useRef(0);
+  const historyRef = useRef(new ClientCanvasHistory());
+  const nextSequenceRef = useRef(1);
+  const pendingMutationsRef = useRef(new Map<number, PendingCanvasMutation>());
+  const activeOutgoingSequenceRef = useRef<number | null>(null);
+  const syncInFlightRef = useRef(false);
+  const syncQueuedRef = useRef(false);
+
+  const allocateSequence = useCallback((): number | null => {
+    if (pendingMutationsRef.current.size >= MAX_PENDING_CANVAS_ACTIONS) {
+      socket.emit("request_sync_strokes");
+      return null;
+    }
+    const sequence = nextSequenceRef.current;
+    nextSequenceRef.current += 1;
+    return sequence;
+  }, []);
+
+  const beginDrawAction = useCallback((
+    frame: DrawingFrame,
+    isPath = false,
+  ): number | null => {
+    const sequence = allocateSequence();
+    const generation = historyRef.current.generation;
+    if (sequence === null || generation === null) {
+      socket.emit("request_sync_strokes");
+      return null;
+    }
+    const history = historyRef.current;
+    pendingMutationsRef.current.set(sequence, {
+      kind: "draw",
+      generation,
+      frames: [frame],
+      expectedRevision: isPath ? null : history.revision,
+      expectedHash: isPath ? null : history.historyHash,
+    });
+    activeOutgoingSequenceRef.current = isPath ? sequence : null;
+    socket.emit("draw", frame, [generation, sequence]);
+    return sequence;
+  }, [allocateSequence]);
+
+  const sendPathFrame = useCallback((frame: DrawingFrame): void => {
+    const sequence = activeOutgoingSequenceRef.current;
+    if (sequence === null) return;
+    const pending = pendingMutationsRef.current.get(sequence);
+    if (!pending || pending.kind !== "draw") return;
+    pending.frames.push(frame);
+    socket.emit("draw", frame);
+  }, []);
+
+  const finishPathAction = useCallback((): void => {
+    const sequence = activeOutgoingSequenceRef.current;
+    if (sequence === null) return;
+    const pending = pendingMutationsRef.current.get(sequence);
+    if (pending?.kind === "draw") {
+      pending.expectedRevision = historyRef.current.revision;
+      pending.expectedHash = historyRef.current.historyHash;
+    }
+    activeOutgoingSequenceRef.current = null;
+  }, []);
+
+  const requestAuthoritativeSync = useCallback((discardPending = true): void => {
+    if (discardPending) {
+      pendingMutationsRef.current.clear();
+      activeOutgoingSequenceRef.current = null;
+    }
+    if (syncInFlightRef.current) {
+      syncQueuedRef.current = true;
+      return;
+    }
+    syncInFlightRef.current = true;
+    syncQueuedRef.current = false;
+    socket.emit("request_sync_strokes");
+  }, []);
+
+  const finalizeActivePath = useCallback((): void => {
+    if (activeOutgoingSequenceRef.current === null) return;
+    if (pendingPointsRef.current.length > 0) {
+      sendPathFrame(encodePathPoints({ points: pendingPointsRef.current }));
+      pendingPointsRef.current = [];
+    }
+    historyRef.current.apply({ event: "draw_end", payload: {} });
+    sendPathFrame(encodePathEnd());
+    finishPathAction();
+    activePointerIdRef.current = null;
+    isPointerDownRef.current = false;
+    lastPointRef.current = null;
+  }, [finishPathAction, sendPathFrame]);
 
   useImperativeHandle(ref, () => ({
     saveImage: handleSaveImage,
@@ -496,10 +650,10 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       if (pendingPointsRef.current.length === 0) return;
       const points = pendingPointsRef.current;
       pendingPointsRef.current = [];
-      socket.emit("draw_move", { points });
+      sendPathFrame(encodePathPoints({ points }));
     }, FLUSH_INTERVAL_MS);
     return () => clearInterval(flushTimer);
-  }, []);
+  }, [sendPathFrame]);
 
   // Render strokes coming from the current drawer (remote to this client).
   useEffect(() => {
@@ -562,7 +716,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     const onDrawFill = (payload: StrokeFillPayload) => {
       const ctx = ctxRef.current;
       if (!ctx) return;
-      void applyFillPatch(ctx, payload);
+      applyFillAction(ctx, payload);
     };
 
     const onClearCanvas = () => {
@@ -573,16 +727,24 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       remoteState.last = null;
     };
 
-    const onSyncStrokes = async (payload: { strokes: StrokeRecord[] }) => {
+    const onDraw = (payload: unknown) => {
+      const packet = decodeLiveDrawing(payload);
+      if (!packet) return;
+      historyRef.current.apply(packet);
+      if (packet.event === "draw_start") onDrawStart(packet.payload);
+      else if (packet.event === "draw_move") onDrawMove(packet.payload);
+      else if (packet.event === "draw_end") onDrawEnd();
+      else if (packet.event === "draw_shape") onDrawShape(packet.payload);
+      else if (packet.event === "draw_fill") onDrawFill(packet.payload);
+      else onClearCanvas();
+    };
+
+    const replayActions = (actions: DecodedCanvasAction[]) => {
       const replayGeneration = ++replayGenerationRef.current;
       // Replay the entire stroke log into an offscreen buffer first, then
       // swap it onto the visible canvas in a single paint. Replaying
-      // directly on the visible canvas (as before) meant clearing it up
-      // front and redrawing stroke-by-stroke while awaiting each fill
-      // patch's async image decode in between - which left the canvas
-      // visibly blank/partial for a frame or more whenever the log
-      // contained a fill, producing a flicker (most noticeable right after
-      // Undo, since undo always triggers a full resync).
+      // directly on the visible canvas would expose a blank/partial frame
+      // during a full replay, most noticeably after Undo.
       const offscreen = document.createElement("canvas");
       offscreen.width = CANVAS_WIDTH;
       offscreen.height = CANVAS_HEIGHT;
@@ -590,37 +752,25 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       if (!offCtx) return;
       fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      let last: StrokePoint | null = null;
-      let color = "#000000";
-      let width = 4;
-
-      for (const stroke of payload.strokes) {
-        if (stroke.event === "draw_start") {
-          const p = stroke.payload as StrokeStartPayload;
-          last = { x: p.x, y: p.y };
-          color = p.color;
-          width = p.width;
-          drawSegmentOn(offCtx, last, last, color, width);
-        } else if (stroke.event === "draw_move") {
-          const p = stroke.payload as StrokeMovePayload;
-          if (last && p.points.length > 0) {
-            const polyline: Point[] = [toPixels(last)];
-            for (const pt of p.points) {
-              polyline.push(toPixels(pt));
-            }
-            rasterizePolyline(offCtx, polyline, width / 2, hexToRgba(color));
-            last = p.points[p.points.length - 1];
+      for (const action of actions) {
+        if (action.kind === "path") {
+          if (action.points.length > 0) {
+            rasterizePath(
+              offCtx,
+              action.points.length === 1
+                ? [action.points[0], action.points[0]]
+                : action.points,
+              action.width / 2,
+              hexToRgba(action.color),
+              false,
+            );
           }
-        } else if (stroke.event === "draw_shape") {
-          drawShapeOn(offCtx, stroke.payload as StrokeShapePayload);
-        } else if (stroke.event === "draw_fill") {
-          await applyFillPatch(offCtx, stroke.payload as StrokeFillPayload);
-          if (replayGeneration !== replayGenerationRef.current) return;
-        } else if (stroke.event === "clear_canvas") {
-          fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
-          last = null;
+        } else if (action.kind === "shape") {
+          drawShapeOn(offCtx, action.payload);
+        } else if (action.kind === "fill") {
+          applyFillAtPixel(offCtx, action.x, action.y, action.color);
         } else {
-          last = null;
+          fillWhite(offCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
         }
       }
 
@@ -633,32 +783,324 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       remoteState.last = null;
     };
 
-    socket.on("draw_start", onDrawStart);
-    socket.on("draw_move", onDrawMove);
-    socket.on("draw_end", onDrawEnd);
-    socket.on("draw_shape", onDrawShape);
-    socket.on("draw_fill", onDrawFill);
-    socket.on("clear_canvas", onClearCanvas);
+    const onSyncStrokes = (
+      payload: unknown,
+      revision: unknown,
+      generation: unknown,
+      sequence: unknown,
+      historyHash: unknown,
+    ) => {
+      syncInFlightRef.current = false;
+      const actions = decodeCanvasHistory(payload);
+      if (
+        !actions
+        || !historyRef.current.replace(
+          actions,
+          revision,
+          generation,
+          sequence,
+          historyHash,
+        )
+      ) {
+        requestAuthoritativeSync();
+        return;
+      }
+      activeOutgoingSequenceRef.current = null;
+      const committedGeneration = historyRef.current.generation!;
+      const committedSequence = historyRef.current.sequence!;
+      if (
+        [...pendingMutationsRef.current.values()].some(
+          (pending) => pending.generation !== committedGeneration,
+        )
+      ) {
+        pendingMutationsRef.current.clear();
+        nextSequenceRef.current = committedSequence + 1;
+        replayActions(actions);
+        if (syncQueuedRef.current) {
+          syncQueuedRef.current = false;
+          requestAuthoritativeSync();
+        }
+        return;
+      }
+      for (const pendingSequence of pendingMutationsRef.current.keys()) {
+        if (pendingSequence <= committedSequence) {
+          pendingMutationsRef.current.delete(pendingSequence);
+        }
+      }
+      // Never retransmit in-progress paths after a full sync — under a slow
+      // link that multiplies into thousands of draw_move frames.
+      for (const [pendingSequence, pending] of [...pendingMutationsRef.current.entries()]) {
+        if (pending.kind !== "draw") continue;
+        const incomplete = (
+          pending.frames.length > 0
+          && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
+          && decodeLiveDrawing(pending.frames.at(-1)!)?.event !== "draw_end"
+        );
+        if (incomplete) {
+          pendingMutationsRef.current.delete(pendingSequence);
+        }
+      }
+      const pendingSequences = [...pendingMutationsRef.current.keys()]
+        .sort((left, right) => left - right);
+      if (
+        pendingSequences.some(
+          (pendingSequence, index) =>
+            pendingSequence !== committedSequence + index + 1,
+        )
+      ) {
+        pendingMutationsRef.current.clear();
+        nextSequenceRef.current = committedSequence + 1;
+        replayActions(actions);
+        if (syncQueuedRef.current) {
+          syncQueuedRef.current = false;
+          requestAuthoritativeSync();
+        }
+        return;
+      }
+
+      let recoveryValid = true;
+      for (const pendingSequence of pendingSequences) {
+        const pending = pendingMutationsRef.current.get(pendingSequence)!;
+        if (pending.kind === "draw") {
+          for (const frame of pending.frames) {
+            const packet = decodeLiveDrawing(frame);
+            if (!packet || !historyRef.current.apply(packet)) {
+              recoveryValid = false;
+              break;
+            }
+          }
+          if (!recoveryValid) break;
+          pending.expectedRevision = historyRef.current.revision;
+          pending.expectedHash = historyRef.current.historyHash;
+          pending.frames.forEach((frame, index) => {
+            socket.emit(
+              "draw",
+              frame,
+              index === 0
+                ? [pending.generation, pendingSequence]
+                : undefined,
+            );
+          });
+        } else {
+          const request = historyRef.current.prepareUndo(pendingSequence);
+          if (!request) {
+            recoveryValid = false;
+            break;
+          }
+          pending.request = request;
+          pending.expectedRevision = historyRef.current.revision!;
+          pending.expectedHash = historyRef.current.historyHash!;
+          socket.emit("undo_stroke", request);
+        }
+      }
+      if (!recoveryValid) {
+        pendingMutationsRef.current.clear();
+        historyRef.current.replace(
+          actions,
+          revision,
+          generation,
+          sequence,
+          historyHash,
+        );
+        nextSequenceRef.current = committedSequence + 1;
+        replayActions(actions);
+        if (syncQueuedRef.current) {
+          syncQueuedRef.current = false;
+          requestAuthoritativeSync();
+        }
+        return;
+      }
+      nextSequenceRef.current = (
+        pendingSequences.at(-1) ?? committedSequence
+      ) + 1;
+      replayActions(historyRef.current.actions);
+      if (syncQueuedRef.current) {
+        syncQueuedRef.current = false;
+        requestAuthoritativeSync();
+      }
+    };
+
+    const onCanvasCommit = (payload: unknown) => {
+      const sequence = Array.isArray(payload) ? payload[1] : null;
+      const pending = typeof sequence === "number"
+        ? pendingMutationsRef.current.get(sequence)
+        : undefined;
+      const valid = pending?.kind === "draw"
+        ? historyRef.current.confirmAction(
+          payload,
+          pending.expectedRevision,
+          pending.expectedHash,
+        )
+        : historyRef.current.confirmAction(payload);
+      if (!valid) {
+        requestAuthoritativeSync();
+        return;
+      }
+      pendingMutationsRef.current.delete(sequence);
+    };
+
+    const onUndoStroke = (payload: unknown) => {
+      const sequence = Array.isArray(payload) ? payload[1] : null;
+      const pending = typeof sequence === "number"
+        ? pendingMutationsRef.current.get(sequence)
+        : undefined;
+      const valid = pending?.kind === "undo"
+        ? historyRef.current.confirmUndo(
+          payload,
+          pending.expectedRevision,
+          pending.expectedHash,
+        )
+        : historyRef.current.confirmUndo(payload);
+      if (!valid) {
+        requestAuthoritativeSync();
+        return;
+      }
+      pendingMutationsRef.current.delete(sequence);
+      replayActions(historyRef.current.actions);
+    };
+
+    const onRequestCanvasActions = (payload: unknown) => {
+      if (
+        !Array.isArray(payload)
+        || payload.length !== 3
+        || !Number.isSafeInteger(payload[0])
+        || !Number.isSafeInteger(payload[1])
+        || !Number.isSafeInteger(payload[2])
+        || payload[0] !== historyRef.current.generation
+      ) {
+        requestAuthoritativeSync();
+        return;
+      }
+      for (let sequence = payload[1]; sequence <= payload[2]; sequence++) {
+        const pending = pendingMutationsRef.current.get(sequence);
+        if (!pending) {
+          requestAuthoritativeSync();
+          return;
+        }
+        if (pending.kind === "undo") {
+          socket.emit("undo_stroke", pending.request);
+          continue;
+        }
+        const incomplete = (
+          pending.frames.length > 0
+          && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
+          && decodeLiveDrawing(pending.frames.at(-1)!)?.event !== "draw_end"
+        );
+        // Incomplete paths are dropped rather than replayed point-by-point.
+        if (incomplete) {
+          pendingMutationsRef.current.delete(sequence);
+          if (activeOutgoingSequenceRef.current === sequence) {
+            activeOutgoingSequenceRef.current = null;
+          }
+          continue;
+        }
+        pending.frames.forEach((frame, index) => {
+          socket.emit(
+            "draw",
+            frame,
+            index === 0 ? [pending.generation, sequence] : undefined,
+          );
+        });
+      }
+    };
+
+    const onCanvasReset = (payload: unknown) => {
+      if (!historyRef.current.reset(payload)) {
+        requestAuthoritativeSync();
+        return;
+      }
+      pendingMutationsRef.current.clear();
+      activeOutgoingSequenceRef.current = null;
+      nextSequenceRef.current = 1;
+      onClearCanvas();
+    };
+
+    const isPaintingStroke = () => (
+      isPointerDownRef.current || activeOutgoingSequenceRef.current !== null
+    );
+
+    const requestUndo = () => {
+      // Ignore Undo/Clear while a stroke is in progress — avoids sequence races
+      // on slow links without needing a cancel-draw protocol.
+      if (isPaintingStroke()) return;
+      const sequence = allocateSequence();
+      if (sequence === null) return;
+      const request = historyRef.current.prepareUndo(sequence);
+      if (!request) {
+        nextSequenceRef.current -= 1;
+        return;
+      }
+      pendingMutationsRef.current.set(sequence, {
+        kind: "undo",
+        generation: request[0],
+        request,
+        expectedRevision: historyRef.current.revision!,
+        expectedHash: historyRef.current.historyHash!,
+      });
+      replayActions(historyRef.current.actions);
+      void emitWithAck<{ ok: boolean; error?: string }>("undo_stroke", request)
+        .then((response) => {
+          if (!response?.ok && response?.error !== "Drawing actions are out of sequence") {
+            requestAuthoritativeSync();
+          }
+        })
+        .catch(() => requestAuthoritativeSync(false));
+    };
+
+    const requestClear = () => {
+      if (isPaintingStroke()) return;
+      if (!historyRef.current.apply({ event: "clear_canvas", payload: {} })) return;
+      onClearCanvas();
+      beginDrawAction(encodeClear());
+    };
+
+    if (snapshotActions) {
+      replayActions(snapshotActions);
+      return () => {
+        replayGenerationRef.current += 1;
+      };
+    }
+
+    socket.on("draw", onDraw);
     socket.on("sync_strokes", onSyncStrokes);
+    socket.on("canvas_commit", onCanvasCommit);
+    socket.on("canvas_undo", onUndoStroke);
+    socket.on("request_canvas_actions", onRequestCanvasActions);
+    socket.on("canvas_reset", onCanvasReset);
+    registerCanvasCommandHandlers({ clear: requestClear, undo: requestUndo });
     socket.emit("request_sync_strokes");
 
     return () => {
-      socket.off("draw_start", onDrawStart);
-      socket.off("draw_move", onDrawMove);
-      socket.off("draw_end", onDrawEnd);
-      socket.off("draw_shape", onDrawShape);
-      socket.off("draw_fill", onDrawFill);
-      socket.off("clear_canvas", onClearCanvas);
+      socket.off("draw", onDraw);
       socket.off("sync_strokes", onSyncStrokes);
+      socket.off("canvas_commit", onCanvasCommit);
+      socket.off("canvas_undo", onUndoStroke);
+      socket.off("request_canvas_actions", onRequestCanvasActions);
+      socket.off("canvas_reset", onCanvasReset);
+      registerCanvasCommandHandlers(null);
     };
-  }, []);
+  }, [
+    allocateSequence,
+    beginDrawAction,
+    finalizeActivePath,
+    requestAuthoritativeSync,
+    snapshotActions,
+  ]);
 
   function getNormalizedPoint(e: ReactPointerEvent<HTMLCanvasElement>): StrokePoint {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) / rect.width,
-      y: (e.clientY - rect.top) / rect.height,
+      x: Math.round(
+        ((e.clientX - rect.left) / rect.width)
+          * CANVAS_WIDTH
+          * CANVAS_COORDINATE_SCALE,
+      ) / (CANVAS_WIDTH * CANVAS_COORDINATE_SCALE),
+      y: Math.round(
+        ((e.clientY - rect.top) / rect.height)
+          * CANVAS_HEIGHT
+          * CANVAS_COORDINATE_SCALE,
+      ) / (CANVAS_HEIGHT * CANVAS_COORDINATE_SCALE),
     };
   }
 
@@ -676,39 +1118,16 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     if (preview && previewCtx) previewCtx.clearRect(0, 0, preview.width, preview.height);
   }
 
-  // Flood-fills starting at the clicked pixel, applies the result to the
-  // local canvas immediately, and ships the affected rectangular patch as a
-  // PNG so every other client renders pixel-identical results (see
-  // StrokeFillPayload).
+  // Flood-fills locally, then sends only the semantic action. Other clients
+  // and replay rebuild the result from the same point and color.
   function performFill(point: StrokePoint) {
     const ctx = ctxRef.current;
     if (!ctx) return;
-    const x = Math.floor(point.x * CANVAS_WIDTH);
-    const y = Math.floor(point.y * CANVAS_HEIGHT);
-    if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) return;
-
-    const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    const box = floodFillPixels(imageData, x, y, hexToRgba(color));
-    if (!box) return; // clicked pixel already matches the fill color closely enough
-    ctx.putImageData(imageData, 0, 0);
-
-    const patchWidth = box.maxX - box.minX + 1;
-    const patchHeight = box.maxY - box.minY + 1;
-    const patchCanvas = document.createElement("canvas");
-    patchCanvas.width = patchWidth;
-    patchCanvas.height = patchHeight;
-    const patchCtx = patchCanvas.getContext("2d");
-    if (!patchCtx) return;
-    patchCtx.putImageData(ctx.getImageData(box.minX, box.minY, patchWidth, patchHeight), 0, 0);
-    const patchData = patchCanvas.toDataURL("image/png").split(",")[1] ?? "";
-
-    socket.emit("draw_fill", {
-      patchX: box.minX,
-      patchY: box.minY,
-      patchWidth,
-      patchHeight,
-      patchData,
-    });
+    const payload: StrokeFillPayload = { x: point.x, y: point.y, color };
+    if (applyFillAction(ctx, payload)) {
+      historyRef.current.apply({ event: "draw_fill", payload });
+      beginDrawAction(encodeFill(payload));
+    }
   }
 
   function handlePointerDown(e: ReactPointerEvent<HTMLCanvasElement>) {
@@ -744,7 +1163,24 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     lastPointRef.current = point;
     if (tool === "pen" || tool === "eraser") {
       drawLocalSegment(point, point); // visible dot for a single click/tap
-      socket.emit("draw_start", { x: point.x, y: point.y, color: activeColor, width: brushWidth });
+      historyRef.current.apply({
+        event: "draw_start",
+        payload: {
+          x: point.x,
+          y: point.y,
+          color: activeColor,
+          width: brushWidth,
+        },
+      });
+      beginDrawAction(
+        encodePathStart({
+          x: point.x,
+          y: point.y,
+          color: activeColor,
+          width: brushWidth,
+        }),
+        true,
+      );
     } else if (tool === "fill") {
       performFill(point);
     } else {
@@ -807,6 +1243,10 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point);
       lastPointRef.current = point;
       pendingPointsRef.current.push(point);
+      historyRef.current.apply({
+        event: "draw_move",
+        payload: { points: [point] },
+      });
     } else {
       lastPointRef.current = point;
       const previewCtx = previewCtxRef.current;
@@ -832,10 +1272,12 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     if (tool === "pen" || tool === "eraser") {
       lastPointRef.current = null;
       if (pendingPointsRef.current.length > 0) {
-        socket.emit("draw_move", { points: pendingPointsRef.current });
+        sendPathFrame(encodePathPoints({ points: pendingPointsRef.current }));
         pendingPointsRef.current = [];
       }
-      socket.emit("draw_end", {});
+      historyRef.current.apply({ event: "draw_end", payload: {} });
+      sendPathFrame(encodePathEnd());
+      finishPathAction();
     } else {
       const start = shapeStartRef.current;
       const end = lastPointRef.current;
@@ -845,7 +1287,25 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
         if (ctx) {
           drawShapeOutlinePixels(ctx, start, end, tool, color, brushWidth);
         }
-        socket.emit("draw_shape", { shape: tool, from: start, to: end, color, width: brushWidth });
+        historyRef.current.apply({
+          event: "draw_shape",
+          payload: {
+            shape: tool,
+            from: start,
+            to: end,
+            color,
+            width: brushWidth,
+          },
+        });
+        beginDrawAction(
+          encodeShape({
+            shape: tool,
+            from: start,
+            to: end,
+            color,
+            width: brushWidth,
+          }),
+        );
       }
       shapeStartRef.current = null;
       lastPointRef.current = null;
@@ -903,6 +1363,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
           height={CANVAS_HEIGHT}
           className="preview-canvas"
         />
+        {overlay}
       </div>
     </div>
   );

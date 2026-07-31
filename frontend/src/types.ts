@@ -1,6 +1,7 @@
 export interface PlayerInfo {
   token: string;
   nickname: string;
+  nameColor?: string;
   score: number;
   connected: boolean;
   isHost: boolean;
@@ -19,7 +20,9 @@ export interface RoomSummary {
   name: string;
   isPublic: boolean;
   playerCount: number;
+  spectatorCount: number;
   maxPlayers: number;
+  isFull: boolean;
   rounds: number;
   customWordCount: number;
   customWordsOnly: boolean;
@@ -46,14 +49,32 @@ export interface RoomStatePayload {
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
   state: "waiting" | "playing";
+  lastGameScores?: ScoreEntry[];
+  lastGameDrawings?: DrawingRecapMetadata[];
   players: PlayerInfo[];
+}
+
+export interface EditableRoomSettings {
+  name: string;
+  isPublic: boolean;
+  maxPlayers: number;
+  rounds: number;
+  drawingSeconds: number;
+  customWords: string;
+  customWordsOnly: boolean;
+  hintMode: HintMode;
+  scoringMode: ScoringMode;
+  spectatorsSeeSolution: boolean;
+  hideMaskedPrompt: boolean;
 }
 
 export type GamePhase = "idle" | "choosing_word" | "drawing" | "round_end" | "game_end";
 
 export interface ChatMessage {
   id: string;
+  token?: string;
   nickname: string;
+  nameColor?: string;
   text: string;
   correct: boolean;
   system?: boolean;
@@ -65,6 +86,7 @@ export interface ChatMessage {
 export interface ScoreEntry {
   token: string;
   nickname: string;
+  nameColor?: string;
   score: number;
 }
 
@@ -78,9 +100,11 @@ export interface RoundEndedPayload {
   word: string;
   drawerToken: string;
   drawerBonus: number;
+  seconds?: number;
   guesses: {
     token: string;
     nickname: string;
+    nameColor?: string;
     seconds: number;
   }[];
   scores: RoundScoreEntry[];
@@ -88,6 +112,26 @@ export interface RoundEndedPayload {
 
 export interface GameEndedPayload {
   scores: ScoreEntry[];
+  drawings: DrawingRecapMetadata[];
+}
+
+export interface DrawingRecapMetadata {
+  index: number;
+  roundNumber: number;
+  turnNumber: number;
+  drawerToken: string;
+  drawerNickname: string;
+  drawerNameColor?: string;
+  word: string;
+  actionCount: number;
+}
+
+export interface DrawingRecapEntry extends DrawingRecapMetadata {
+  canvas: unknown;
+}
+
+export interface DrawingRecapResponse extends AckResponse {
+  drawing?: DrawingRecapEntry;
 }
 
 export interface StrokePoint {
@@ -118,28 +162,15 @@ export interface StrokeShapePayload {
   width: number;
 }
 
-// A flood fill is computed once (locally, on the drawer's own rendered
-// canvas pixels) and its result - the rectangular patch of pixels it
-// changed - is shipped as a base64 PNG so every other client (and late
-// joiners replaying history) renders the exact same pixels, instead of each
-// client re-running the fill algorithm on canvases that could have subtly
-// different anti-aliasing.
 export interface StrokeFillPayload {
-  patchX: number;
-  patchY: number;
-  patchWidth: number;
-  patchHeight: number;
-  patchData: string;
+  x: number;
+  y: number;
+  color: string;
 }
 
-export interface StrokeRecord {
-  event: "draw_start" | "draw_move" | "draw_end" | "draw_shape" | "draw_fill" | "clear_canvas";
-  payload:
-    | StrokeStartPayload
-    | StrokeMovePayload
-    | StrokeShapePayload
-    | StrokeFillPayload
-    | Record<string, never>;
+export interface CanvasSyncPayload {
+  v: number;
+  a: unknown[];
 }
 
 export interface AckResponse {
@@ -148,4 +179,10 @@ export interface AckResponse {
   code?: string;
   token?: string;
   error?: string;
+  invalidToken?: boolean;
+  needsRebind?: boolean;
+}
+
+export interface RoomPreviewResponse extends AckResponse {
+  room?: RoomSummary;
 }
