@@ -3,16 +3,14 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-function nearestOption(value: number, options: readonly number[]): number {
-  return options.reduce((best, option) =>
-    Math.abs(option - value) < Math.abs(best - value) ? option : best,
-  );
-}
-
 function stepDiscrete(value: number, direction: -1 | 1, options: readonly number[]): number {
-  const current = options.includes(value) ? value : nearestOption(value, options);
-  const index = options.indexOf(current);
-  return options[index + direction] ?? current;
+  if (direction === 1) {
+    return options.find((option) => option > value) ?? options[options.length - 1];
+  }
+  for (let index = options.length - 1; index >= 0; index -= 1) {
+    if (options[index] < value) return options[index];
+  }
+  return options[0];
 }
 
 interface InputNumberProps {
@@ -32,15 +30,13 @@ export function InputNumber({
   max = 100,
   options,
 }: InputNumberProps) {
-  const atMin = options ? value <= options[0] : value <= min;
-  const atMax = options ? value >= options[options.length - 1] : value >= max;
+  const low = options ? options[0] : min;
+  const high = options ? options[options.length - 1] : max;
+  const atMin = value <= low;
+  const atMax = value >= high;
 
   function commit(raw: number) {
-    if (options) {
-      onChange(nearestOption(clampInt(raw, options[0], options[options.length - 1]), options));
-      return;
-    }
-    onChange(clampInt(raw, min, max));
+    onChange(clampInt(raw, low, high));
   }
 
   return (
@@ -52,7 +48,7 @@ export function InputNumber({
           aria-label={`Decrease ${label}`}
           disabled={atMin}
           onClick={() =>
-            onChange(options ? stepDiscrete(value, -1, options) : clampInt(value - 1, min, max))
+            onChange(options ? stepDiscrete(value, -1, options) : clampInt(value - 1, low, high))
           }
         >
           −
@@ -60,8 +56,8 @@ export function InputNumber({
         <input
           type="number"
           inputMode="numeric"
-          min={options ? options[0] : min}
-          max={options ? options[options.length - 1] : max}
+          min={low}
+          max={high}
           step={1}
           value={value}
           aria-label={label}
@@ -79,7 +75,7 @@ export function InputNumber({
           aria-label={`Increase ${label}`}
           disabled={atMax}
           onClick={() =>
-            onChange(options ? stepDiscrete(value, 1, options) : clampInt(value + 1, min, max))
+            onChange(options ? stepDiscrete(value, 1, options) : clampInt(value + 1, low, high))
           }
         >
           +
