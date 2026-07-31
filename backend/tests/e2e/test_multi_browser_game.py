@@ -126,20 +126,31 @@ async def test_multi_browser_gameplay_scenario():
             ) <= 1
             assert await page1.is_visible('text=Ready for a seamless round')
             await page1.set_viewport_size({"width": 800, "height": 900})
-            playing_mobile_order = await page1.evaluate(
+            playing_mobile_layout = await page1.evaluate(
                 """
-                () => ({
-                  main: document.querySelector(".room-shell-main").getBoundingClientRect().y,
-                  chat: document.querySelector('[data-testid="room-chat-region"]').getBoundingClientRect().y,
-                  players: document.querySelector('[data-testid="room-players-region"]').getBoundingClientRect().y,
-                })
+                () => {
+                  const players = document.querySelector('[data-testid="room-players-region"]');
+                  return {
+                    main: document.querySelector(".room-shell-main").getBoundingClientRect().y,
+                    chat: document.querySelector('[data-testid="room-chat-region"]').getBoundingClientRect().y,
+                    playersDisplay: players ? getComputedStyle(players).display : null,
+                    headerActionsWidth: document.querySelector(".game-header-actions")?.scrollWidth ?? 0,
+                    headerActionsClient: document.querySelector(".game-header-actions")?.clientWidth ?? 0,
+                  };
+                }
                 """
             )
+            assert playing_mobile_layout["main"] < playing_mobile_layout["chat"]
+            assert playing_mobile_layout["playersDisplay"] == "none"
             assert (
-                playing_mobile_order["main"]
-                < playing_mobile_order["chat"]
-                < playing_mobile_order["players"]
+                playing_mobile_layout["headerActionsWidth"]
+                <= playing_mobile_layout["headerActionsClient"] + 1
             )
+            await page1.click('[data-testid="open-players-drawer"]')
+            await page1.wait_for_selector('[data-testid="players-drawer"]')
+            assert await page1.is_visible('[data-testid="players-drawer"] .player-list')
+            await page1.click('.players-drawer-close')
+            await page1.wait_for_selector('[data-testid="players-drawer"]', state="detached")
             await page1.set_viewport_size({"width": 1280, "height": 720})
 
             # Step 5: Identify who is drawer and choose word if prompt choice is present
@@ -177,6 +188,35 @@ async def test_multi_browser_gameplay_scenario():
             await drawer_page.wait_for_selector('canvas.drawing-canvas')
             await guesser_page.wait_for_selector('canvas.drawing-canvas')
             assert not await drawer_page.evaluate("window.__wordSelectionErrorSeen")
+
+            # Mobile drawing toolbar: touch-sized chips in portrait and landscape
+            await drawer_page.set_viewport_size({"width": 390, "height": 844})
+            mobile_toolbar = await drawer_page.evaluate(
+                """
+                () => {
+                  const strip = document.querySelector('[data-testid="toolbar-mobile"]');
+                  if (!strip) return null;
+                  const chips = [...strip.querySelectorAll('.toolbar-mobile-chip')];
+                  return {
+                    chipSizes: chips.map((chip) => {
+                      const box = chip.getBoundingClientRect();
+                      return { width: box.width, height: box.height };
+                    }),
+                    saveInHeader: Boolean(document.querySelector('.game-header-save-button')),
+                  };
+                }
+                """
+            )
+            assert mobile_toolbar is not None
+            assert mobile_toolbar["saveInHeader"]
+            assert len(mobile_toolbar["chipSizes"]) >= 5
+            assert all(
+                size["width"] >= 40 and size["height"] >= 40
+                for size in mobile_toolbar["chipSizes"]
+            )
+            await drawer_page.set_viewport_size({"width": 844, "height": 390})
+            assert await drawer_page.query_selector('[data-testid="toolbar-mobile"]')
+            await drawer_page.set_viewport_size({"width": 1280, "height": 720})
 
             # Step 6: Drawer draws on canvas
             canvas = await drawer_page.query_selector('canvas.drawing-canvas')

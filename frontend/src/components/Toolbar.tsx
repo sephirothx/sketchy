@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
 import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
@@ -24,6 +25,8 @@ const COLOR_PAIRS: readonly (readonly [string, string])[] = [
 const COLORS = COLOR_PAIRS.flat();
 
 const PRESET_WIDTHS = [2, 4, 6, 8, 12, 16, 24, 32];
+
+type MobilePanel = "tool" | "color" | "size" | null;
 
 const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
   {
@@ -96,6 +99,25 @@ interface ToolbarProps {
   onToolChange: (tool: DrawTool) => void;
 }
 
+function UndoIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7v6h6" />
+      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+    </svg>
+  );
+}
+
+function ClearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </svg>
+  );
+}
+
 export function Toolbar({
   color,
   onColorChange,
@@ -104,10 +126,13 @@ export function Toolbar({
   tool,
   onToolChange,
 }: ToolbarProps) {
+  const isMobile = useMediaQuery("(max-width: 900px)");
   const isCustomColor = !COLORS.includes(color);
   const activeColor = tool === "eraser" ? "#6c757d" : color;
   const [sizePickerOpen, setSizePickerOpen] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
   const sizePickerRef = useRef<HTMLDivElement | null>(null);
+  const mobileToolbarRef = useRef<HTMLDivElement | null>(null);
   const keyBindings = useSettingsStore((s) => s.keyBindings);
 
   const prevColorRef = useRef<string>("#ffffff");
@@ -137,12 +162,11 @@ export function Toolbar({
   }
 
   const labelPrefix = tool === "eraser" ? "Eraser" : "Brush";
-  // Index of current size in snap PRESET_WIDTHS array [2, 4, 6, 8, 12, 16, 24, 32]
   const currentIdx = PRESET_WIDTHS.indexOf(brushWidth);
-  const defaultIdx = tool === "eraser" ? 6 : 2; // default 24px for eraser, 6px for brush
+  const defaultIdx = tool === "eraser" ? 6 : 2;
   const sliderValue = currentIdx !== -1 ? currentIdx : defaultIdx;
+  const activeTool = TOOLS.find((t) => t.value === tool) ?? TOOLS[0];
 
-  // Automatically switch from Fill tool to Pen when brush stroke size changes
   const handleWidthChange = useCallback(
     (newWidth: number) => {
       onBrushWidthChange(newWidth);
@@ -153,18 +177,34 @@ export function Toolbar({
     [onBrushWidthChange, tool, onToolChange],
   );
 
-  // Close brush size popover when clicking outside
+  const toggleMobilePanel = useCallback((panel: Exclude<MobilePanel, null>) => {
+    setMobilePanel((prev) => (prev === panel ? null : panel));
+  }, []);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (sizePickerRef.current && !sizePickerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (sizePickerRef.current && !sizePickerRef.current.contains(target)) {
         setSizePickerOpen(false);
+      }
+      if (mobileToolbarRef.current && !mobileToolbarRef.current.contains(target)) {
+        setMobilePanel(null);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setSizePickerOpen(false);
+        setMobilePanel(null);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
-  // Keyboard shortcuts (tool switching, brush sizing, color swap X, Ctrl+Z undo) while drawing.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
@@ -224,158 +264,294 @@ export function Toolbar({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [brushWidth, color, defaultIdx, handleWidthChange, onColorChange, onToolChange, tool]);
 
-  return (
-    <div className="toolbar-container">
-      <div className="toolbar">
-        {/* Tool selector group */}
-        <div className="toolbar-group toolbar-tools" aria-label="Drawing tools">
-          {TOOLS.map((t) => {
-            const label = getToolLabel(t.value, t.name);
-            const badge = getToolBadge(t.value);
-            return (
-              <button
-                key={t.value}
-                className={`tool-button${t.value === tool ? " selected" : ""}`}
-                onClick={() => onToolChange(t.value)}
-                aria-label={label}
-                title={label}
-              >
-                <span className="tool-glyph">{t.glyph}</span>
-                {badge && <span className="shortcut-badge">{badge}</span>}
-              </button>
-            );
-          })}
-        </div>
+  const sizePreview = (
+    <span
+      style={{
+        width: Math.max(5, Math.min(20, brushWidth * 0.65 + 3)),
+        height: Math.max(5, Math.min(20, brushWidth * 0.65 + 3)),
+        backgroundColor: activeColor,
+      }}
+      className="width-dot"
+    />
+  );
 
-        <div className="toolbar-divider" />
+  const sizeSlider = (
+    <div className="brush-slider-popover" role="dialog" aria-label={`Adjust ${labelPrefix.toLowerCase()} size`}>
+      <div className="slider-top-preview">
+        <span
+          className="preview-dot"
+          style={{
+            width: Math.max(4, Math.min(26, brushWidth * 0.7 + 3)),
+            height: Math.max(4, Math.min(26, brushWidth * 0.7 + 3)),
+            backgroundColor: activeColor,
+          }}
+        />
+        <span className="preview-readout">{brushWidth}px</span>
+      </div>
+      <div className="slider-track-wrapper">
+        <input
+          type="range"
+          min="0"
+          max={PRESET_WIDTHS.length - 1}
+          step="1"
+          value={sliderValue}
+          onChange={(e) => handleWidthChange(PRESET_WIDTHS[Number(e.target.value)])}
+          className="vertical-brush-slider"
+          aria-label={`${labelPrefix} size snapping slider`}
+        />
+      </div>
+    </div>
+  );
 
-        {/* Single Brush Size Dropdown with Snapping Vertical Slider */}
-        <div className="toolbar-group brush-size-dropdown" ref={sizePickerRef}>
-          <button
-            type="button"
-            className={`brush-size-trigger${sizePickerOpen ? " active" : ""}`}
-            onClick={() => setSizePickerOpen((prev) => !prev)}
-            aria-label={`${labelPrefix} size ${brushWidth}px`}
-            title={`${labelPrefix} size: ${brushWidth}px ([ / ])`}
-          >
-            <span
-              style={{
-                width: Math.max(5, Math.min(20, brushWidth * 0.65 + 3)),
-                height: Math.max(5, Math.min(20, brushWidth * 0.65 + 3)),
-                backgroundColor: activeColor,
-              }}
-              className="width-dot"
-            />
-            <span className="size-text-readout">{brushWidth}px</span>
-          </button>
+  if (isMobile) {
+    return (
+      <div className="toolbar-container toolbar-mobile" ref={mobileToolbarRef} data-testid="toolbar-mobile">
+          <div className="toolbar toolbar-mobile-strip" role="toolbar" aria-label="Drawing tools">
+            <button
+              type="button"
+              className={`toolbar-mobile-chip toolbar-mobile-tool-chip${mobilePanel === "tool" ? " active" : ""}`}
+              aria-label={`Choose tool, current: ${activeTool.name}`}
+              aria-expanded={mobilePanel === "tool"}
+              title="Choose tool"
+              onClick={() => toggleMobilePanel("tool")}
+            >
+              <span className="tool-glyph">{activeTool.glyph}</span>
+              <span className="toolbar-mobile-chip-caret" aria-hidden="true">▾</span>
+            </button>
 
-          {sizePickerOpen && (
-            <div className="brush-slider-popover" role="dialog" aria-label={`Adjust ${labelPrefix.toLowerCase()} size`}>
-              <div className="slider-top-preview">
-                <span
-                  className="preview-dot"
-                  style={{
-                    width: Math.max(4, Math.min(26, brushWidth * 0.7 + 3)),
-                    height: Math.max(4, Math.min(26, brushWidth * 0.7 + 3)),
-                    backgroundColor: activeColor,
-                  }}
-                />
-                <span className="preview-readout">{brushWidth}px</span>
-              </div>
+            <button
+              type="button"
+              className={`toolbar-mobile-chip toolbar-mobile-color-chip${mobilePanel === "color" ? " active" : ""}`}
+              aria-label={`Choose color, current ${color}`}
+              aria-expanded={mobilePanel === "color"}
+              title="Choose color"
+              onClick={() => toggleMobilePanel("color")}
+            >
+              <span className="toolbar-mobile-swatch" style={{ backgroundColor: activeColor }} />
+              <span className="toolbar-mobile-chip-caret" aria-hidden="true">▾</span>
+            </button>
 
-              <div className="slider-track-wrapper">
-                <input
-                  type="range"
-                  min="0"
-                  max={PRESET_WIDTHS.length - 1}
-                  step="1"
-                  value={sliderValue}
-                  onChange={(e) => handleWidthChange(PRESET_WIDTHS[Number(e.target.value)])}
-                  className="vertical-brush-slider"
-                  aria-label={`${labelPrefix} size snapping slider`}
-                />
+            <button
+              type="button"
+              className={`toolbar-mobile-chip${mobilePanel === "size" ? " active" : ""}`}
+              aria-label={`${labelPrefix} size ${brushWidth}px`}
+              aria-expanded={mobilePanel === "size"}
+              onClick={() => toggleMobilePanel("size")}
+            >
+              {sizePreview}
+              <span className="size-text-readout">{brushWidth}</span>
+            </button>
+
+            <span className="toolbar-mobile-sep" aria-hidden="true" />
+
+            <button
+              type="button"
+              className="toolbar-mobile-chip"
+              aria-label="Undo last stroke"
+              title="Undo"
+              onClick={requestCanvasUndo}
+            >
+              <UndoIcon />
+            </button>
+            <button
+              type="button"
+              className="toolbar-mobile-chip toolbar-mobile-clear"
+              aria-label="Clear canvas"
+              title="Clear canvas"
+              onClick={requestCanvasClear}
+            >
+              <ClearIcon />
+            </button>
+          </div>
+
+          {mobilePanel === "tool" && (
+            <div className="toolbar-mobile-popover" role="dialog" aria-label="Choose tool">
+              <div className="toolbar-mobile-tools">
+                {TOOLS.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    className={`tool-button toolbar-mobile-tool${t.value === tool ? " selected" : ""}`}
+                    aria-label={t.name}
+                    onClick={() => {
+                      onToolChange(t.value);
+                      setMobilePanel(null);
+                    }}
+                  >
+                    <span className="tool-glyph">{t.glyph}</span>
+                  </button>
+                ))}
               </div>
             </div>
           )}
-        </div>
 
-        <div className="toolbar-divider" />
-
-        {/* Color Palette group */}
-        <div className="toolbar-group toolbar-colors" aria-label="Color palette">
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              className={`color-swatch${c === color && tool !== "eraser" ? " selected" : ""}`}
-              style={{ backgroundColor: c }}
-              onClick={() => handleSelectColor(c)}
-              aria-label={`color ${c}`}
-              title={`Color ${c}`}
-            />
-          ))}
-          <label
-            className={`color-swatch color-swatch-custom${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
-            style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
-            title="Choose custom color"
-          >
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => handleSelectColor(e.target.value)}
-              aria-label="Choose custom color"
-            />
-          </label>
-        </div>
-
-        {recentColors.length > 0 && (
-          <>
-            <div className="toolbar-divider" />
-            <div className="toolbar-group recent-colors-group" aria-label="Recent colors" title="Recent colors (Press X to swap color)">
-              <span className="recent-colors-label">Recent:</span>
-              {recentColors.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`color-swatch recent-swatch${c === color && tool !== "eraser" ? " selected" : ""}`}
-                  style={{ backgroundColor: c }}
-                  onClick={() => handleSelectColor(c)}
-                  aria-label={`Recent color ${c}`}
-                  title={`Recent color ${c} (Press X to swap)`}
-                />
-              ))}
+          {mobilePanel === "color" && (
+            <div className="toolbar-mobile-popover" role="dialog" aria-label="Choose color">
+              <div className="toolbar-mobile-colors">
+                {COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`color-swatch toolbar-mobile-swatch-btn${c === color && tool !== "eraser" ? " selected" : ""}`}
+                    style={{ backgroundColor: c }}
+                    aria-label={`color ${c}`}
+                    onClick={() => {
+                      handleSelectColor(c);
+                      setMobilePanel(null);
+                    }}
+                  />
+                ))}
+                <label
+                  className={`color-swatch color-swatch-custom toolbar-mobile-swatch-btn${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
+                  style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
+                  title="Choose custom color"
+                >
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={(e) => {
+                      handleSelectColor(e.target.value);
+                      setMobilePanel(null);
+                    }}
+                    aria-label="Choose custom color"
+                  />
+                </label>
+              </div>
+              {recentColors.length > 0 && (
+                <div className="toolbar-mobile-recent" aria-label="Recent colors">
+                  {recentColors.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`color-swatch toolbar-mobile-swatch-btn${c === color && tool !== "eraser" ? " selected" : ""}`}
+                      style={{ backgroundColor: c }}
+                      aria-label={`Recent color ${c}`}
+                      onClick={() => {
+                        handleSelectColor(c);
+                        setMobilePanel(null);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          </>
-        )}
+          )}
 
-        <div className="toolbar-divider" />
+          {mobilePanel === "size" && (
+            <div className="toolbar-mobile-popover toolbar-mobile-size-popover">
+              {sizeSlider}
+            </div>
+          )}
+      </div>
+    );
+  }
 
-        {/* Canvas action buttons */}
-        <div className="toolbar-group toolbar-actions" aria-label="Canvas actions">
-          <button
-            className="toolbar-action-button undo-button"
-            onClick={requestCanvasUndo}
-            title="Undo last stroke (Ctrl+Z)"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 7v6h6" />
-              <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
-            </svg>
-            <span>Undo</span>
-          </button>
-          <button
-            className="toolbar-action-button clear-button"
-            onClick={requestCanvasClear}
-            title="Clear canvas"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 6h18" />
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-            </svg>
-            <span>Clear</span>
-          </button>
+  return (
+    <div className="toolbar-container">
+        <div className="toolbar">
+          <div className="toolbar-group toolbar-tools" aria-label="Drawing tools">
+            {TOOLS.map((t) => {
+              const label = getToolLabel(t.value, t.name);
+              const badge = getToolBadge(t.value);
+              return (
+                <button
+                  key={t.value}
+                  className={`tool-button${t.value === tool ? " selected" : ""}`}
+                  onClick={() => onToolChange(t.value)}
+                  aria-label={label}
+                  title={label}
+                >
+                  <span className="tool-glyph">{t.glyph}</span>
+                  {badge && <span className="shortcut-badge">{badge}</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="toolbar-divider" />
+
+          <div className="toolbar-group brush-size-dropdown" ref={sizePickerRef}>
+            <button
+              type="button"
+              className={`brush-size-trigger${sizePickerOpen ? " active" : ""}`}
+              onClick={() => setSizePickerOpen((prev) => !prev)}
+              aria-label={`${labelPrefix} size ${brushWidth}px`}
+              title={`${labelPrefix} size: ${brushWidth}px ([ / ])`}
+            >
+              {sizePreview}
+              <span className="size-text-readout">{brushWidth}px</span>
+            </button>
+            {sizePickerOpen && sizeSlider}
+          </div>
+
+          <div className="toolbar-divider" />
+
+          <div className="toolbar-group toolbar-colors" aria-label="Color palette">
+            {COLORS.map((c) => (
+              <button
+                key={c}
+                className={`color-swatch${c === color && tool !== "eraser" ? " selected" : ""}`}
+                style={{ backgroundColor: c }}
+                onClick={() => handleSelectColor(c)}
+                aria-label={`color ${c}`}
+                title={`Color ${c}`}
+              />
+            ))}
+            <label
+              className={`color-swatch color-swatch-custom${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
+              style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
+              title="Choose custom color"
+            >
+              <input
+                type="color"
+                value={color}
+                onChange={(e) => handleSelectColor(e.target.value)}
+                aria-label="Choose custom color"
+              />
+            </label>
+          </div>
+
+          {recentColors.length > 0 && (
+            <>
+              <div className="toolbar-divider" />
+              <div className="toolbar-group recent-colors-group" aria-label="Recent colors" title="Recent colors (Press X to swap color)">
+                <span className="recent-colors-label">Recent:</span>
+                {recentColors.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`color-swatch recent-swatch${c === color && tool !== "eraser" ? " selected" : ""}`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => handleSelectColor(c)}
+                    aria-label={`Recent color ${c}`}
+                    title={`Recent color ${c} (Press X to swap)`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="toolbar-divider" />
+
+          <div className="toolbar-group toolbar-actions" aria-label="Canvas actions">
+            <button
+              className="toolbar-action-button undo-button"
+              onClick={requestCanvasUndo}
+              title="Undo last stroke (Ctrl+Z)"
+            >
+              <UndoIcon />
+              <span>Undo</span>
+            </button>
+            <button
+              className="toolbar-action-button clear-button"
+              onClick={requestCanvasClear}
+              title="Clear canvas"
+            >
+              <ClearIcon />
+              <span>Clear</span>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
   );
 }

@@ -127,9 +127,19 @@ export function GameRoomPage() {
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
+  const [playersDrawerOpen, setPlayersDrawerOpen] = useState(false);
   const isMobile = useMediaQuery("(max-width: 900px)");
 
   useVisualViewportCssVars();
+
+  useEffect(() => {
+    if (!playersDrawerOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setPlayersDrawerOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [playersDrawerOpen]);
 
   useEffect(() => {
     function closeRecapForNewGame() {
@@ -311,6 +321,10 @@ export function GameRoomPage() {
   const isGuessFocused =
     isInputFocused && canGuess && phase === "drawing" && isMobile;
 
+  if (isInputFocused && (!canGuess || phase !== "drawing")) {
+    setIsInputFocused(false);
+  }
+
   const activeWidth = tool === "eraser" ? eraserWidth : brushWidth;
 
   function handleWidthChange(newWidth: number) {
@@ -353,6 +367,10 @@ export function GameRoomPage() {
       : null;
   const roomView: RoomShellMode =
     phase === "game_end" && finalScores ? "game-end" : roomState;
+
+  if (playersDrawerOpen && (roomView !== "playing" || !isMobile)) {
+    setPlayersDrawerOpen(false);
+  }
 
   if (!hasActiveSession) {
     return (
@@ -522,7 +540,7 @@ export function GameRoomPage() {
         />
       )}
       <header className="game-header">
-        <div>
+        <div className="game-header-start">
           <button
             type="button"
             className="room-copy-button"
@@ -531,6 +549,26 @@ export function GameRoomPage() {
           >
             <span>Code: {code}</span>
           </button>
+          {roomView === "playing" && isMobile && (
+            <button
+              type="button"
+              className="game-header-players-button"
+              onClick={() => setPlayersDrawerOpen(true)}
+              aria-label="View players"
+              title="View players"
+              data-testid="open-players-drawer"
+            >
+              <span className="header-action-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              </span>
+              <span className="header-action-label">Players</span>
+            </button>
+          )}
         </div>
         <div className="game-header-actions">
           <button
@@ -538,21 +576,96 @@ export function GameRoomPage() {
             className="game-header-afk-button"
             style={{ background: me?.isAfk ? "#f59e0b" : undefined, color: me?.isAfk ? "#fff" : undefined }}
             onClick={handleToggleAfk}
+            aria-label={me?.isAfk ? "Back from AFK" : "Go AFK"}
+            title={me?.isAfk ? "Back from AFK" : "Go AFK"}
           >
-            {me?.isAfk ? "AFK 💤" : "AFK"}
+            <span className="header-action-icon" aria-hidden="true">{me?.isAfk ? "💤" : "AFK"}</span>
+            <span className="header-action-label">{me?.isAfk ? "AFK 💤" : "AFK"}</span>
           </button>
-          <button type="button" className="game-header-leave-button" onClick={handleLeave}>Leave</button>
+          <button
+            type="button"
+            className="game-header-leave-button"
+            onClick={handleLeave}
+            aria-label="Leave room"
+            title="Leave room"
+          >
+            <span className="header-action-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </span>
+            <span className="header-action-label">Leave</span>
+          </button>
+          {roomView === "playing" && (
+            <button
+              type="button"
+              className="save-image-button game-header-save-button"
+              onClick={() => canvasRef.current?.saveImage()}
+              aria-label="Save image"
+              title="Save drawn image to file"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span className="header-action-label">Save</span>
+            </button>
+          )}
           <button
             type="button"
             className="header-settings-button"
             onClick={openSettings}
             title="Game Settings"
+            aria-label="Game Settings"
           >
             <SettingsIcon size={16} />
-            <span>Settings</span>
+            <span className="header-action-label">Settings</span>
           </button>
         </div>
       </header>
+
+      {playersDrawerOpen && (
+        <div
+          className="players-drawer-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPlayersDrawerOpen(false);
+          }}
+        >
+          <aside
+            className="players-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Players in room"
+            data-testid="players-drawer"
+          >
+            <div className="players-drawer-header">
+              <h2>Players</h2>
+              <button
+                type="button"
+                className="players-drawer-close"
+                onClick={() => setPlayersDrawerOpen(false)}
+                aria-label="Close players"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="players-drawer-body sidebar-box">
+              <RoomPlayersPanel
+                mode={roomView}
+                players={players}
+                drawerToken={drawerToken}
+                myToken={token}
+                maxPlayers={maxPlayers}
+                showScores={scoringMode === "default"}
+                finalScores={finalScores}
+              />
+            </div>
+          </aside>
+        </div>
+      )}
 
       <RoomShell
         mode={roomView}
@@ -566,25 +679,6 @@ export function GameRoomPage() {
             showScores={scoringMode === "default"}
             finalScores={finalScores}
           />
-        }
-        playerFooter={
-          roomView === "playing" ? (
-            <div className="save-image-box">
-              <button
-                type="button"
-                className="save-image-button"
-                onClick={() => canvasRef.current?.saveImage()}
-                title="Save drawn image to file"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                <span>Save Image</span>
-              </button>
-            </div>
-          ) : undefined
         }
         main={
           recapOpen && drawingRecap.length > 0 ? (
@@ -694,6 +788,7 @@ export function GameRoomPage() {
             mode={roomView}
             isDrawer={amDrawer}
             canGuess={canGuess}
+            myToken={token}
             targetWordLengths={splitMaskedWord(maskedWord).counts}
             hideMaskedPrompt={hideMaskedPrompt}
             onFocusChange={setIsInputFocused}

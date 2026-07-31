@@ -5,12 +5,11 @@ export type RoomShellMode = "waiting" | "playing" | "game-end";
 interface RoomShellProps {
   mode: RoomShellMode;
   players: ReactNode;
-  playerFooter?: ReactNode;
   main: ReactNode;
   chat: ReactNode;
 }
 
-export function RoomShell({ mode, players, playerFooter, main, chat }: RoomShellProps) {
+export function RoomShell({ mode, players, main, chat }: RoomShellProps) {
   return (
     <div
       className={`room-shell room-shell-${mode}${mode === "playing" ? " game-layout" : ""}`}
@@ -18,7 +17,6 @@ export function RoomShell({ mode, players, playerFooter, main, chat }: RoomShell
     >
       <aside className="sidebar-left room-shell-players" data-testid="room-players-region">
         <div className="sidebar-box room-shell-panel">{players}</div>
-        {playerFooter}
       </aside>
 
       <div className="room-shell-main">
