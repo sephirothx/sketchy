@@ -1,7 +1,8 @@
 import { create } from "zustand";
 
 export type PenCursorStyle = "crosshair" | "circle";
-export type AppTheme = "light" | "dark";
+export type AppTheme = "light" | "dark" | "system";
+export type ResolvedTheme = "light" | "dark";
 
 export interface KeyBindings {
   pen: string[];
@@ -28,7 +29,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
 };
 
 export const DEFAULT_PEN_CURSOR: PenCursorStyle = "crosshair";
-export const DEFAULT_THEME: AppTheme = "light";
+export const DEFAULT_THEME: AppTheme = "system";
 export const NAME_COLOR_PALETTE = [
   "#e11d48",
   "#c2410c",
@@ -58,11 +59,22 @@ export const ACTION_LABELS: Record<keyof KeyBindings, string> = {
   undo: "Undo Stroke",
 };
 
-export function applyThemeToDocument(theme: AppTheme) {
-  if (typeof document !== "undefined") {
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
+export function getSystemTheme(): ResolvedTheme {
+  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
+  return "light";
+}
+
+export function resolveTheme(theme: AppTheme): ResolvedTheme {
+  return theme === "system" ? getSystemTheme() : theme;
+}
+
+export function applyThemeToDocument(theme: AppTheme) {
+  if (typeof document === "undefined") return;
+  const resolved = resolveTheme(theme);
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.style.colorScheme = resolved;
 }
 
 function loadStoredKeyBindings(): KeyBindings {
@@ -89,13 +101,9 @@ function loadStoredPenCursor(): PenCursorStyle {
 function loadStoredTheme(): AppTheme {
   try {
     const raw = localStorage.getItem("sketchy_theme");
-    if (raw === "dark" || raw === "light") return raw;
+    if (raw === "dark" || raw === "light" || raw === "system") return raw;
   } catch {
-    // Fall through to the system preference when storage is unavailable.
-  }
-
-  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    // Fall through to the default system preference when storage is unavailable.
   }
 
   return DEFAULT_THEME;
@@ -192,7 +200,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   setAllSettings: ({
     keyBindings,
     penCursor,
-    theme = "light",
+    theme = DEFAULT_THEME,
     confettiEffects = true,
     soundEffects = true,
     volume = 0.7,
@@ -255,3 +263,17 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       return { keyBindings: DEFAULT_KEY_BINDINGS };
     }),
 }));
+
+if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  const syncSystemTheme = () => {
+    if (useSettingsStore.getState().theme === "system") {
+      applyThemeToDocument("system");
+    }
+  };
+  if (typeof media.addEventListener === "function") {
+    media.addEventListener("change", syncSystemTheme);
+  } else if (typeof media.addListener === "function") {
+    media.addListener(syncSystemTheme);
+  }
+}

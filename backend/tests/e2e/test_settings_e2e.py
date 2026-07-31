@@ -10,6 +10,8 @@ BASE_URL = "http://localhost:8000"
     [
         ("dark", None, "dark"),
         ("light", None, "light"),
+        ("dark", "system", "dark"),
+        ("light", "system", "light"),
         ("dark", "light", "light"),
         ("light", "dark", "dark"),
     ],
@@ -42,7 +44,7 @@ async def test_settings_dialog_pen_cursor_scenario():
     1. Opens Lobby page, creates a room.
     2. Opens Settings dialog via header button.
     3. Navigates to 'Game' tab.
-    4. Selects 'Circular Outline (matching brush size)' option.
+    4. Selects 'Outline' brush cursor option.
     5. Clicks Save.
     6. Verifies localStorage persists 'sketchy_pencursor' == 'circle'.
     """
@@ -71,9 +73,9 @@ async def test_settings_dialog_pen_cursor_scenario():
             # Click Game tab
             await page.click('button[role="tab"]:has-text("Game")')
 
-            # Select Pen Cursor Style option
-            select_el = await page.wait_for_selector('select#pen-cursor-style')
-            await select_el.select_option('circle')
+            # Select Outline brush cursor style
+            brush_cursor = page.get_by_role("group", name="Brush cursor style")
+            await brush_cursor.get_by_role("button", name="Outline").click()
 
             # Save settings
             await page.click('.settings-modal-footer button:has-text("Save")')

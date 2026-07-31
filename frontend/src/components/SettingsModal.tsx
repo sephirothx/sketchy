@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { SettingsIcon } from "./SettingsIcon";
+import { FieldHint, SegmentedControl, Switch } from "./RoomSetupControls";
 import {
   ACTION_LABELS,
   DEFAULT_KEY_BINDINGS,
   randomNameColor,
+  type AppTheme,
   type KeyBindings,
   type PenCursorStyle,
   useSettingsStore,
@@ -16,6 +18,17 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
   { id: "game", label: "Game" },
   { id: "shortcuts", label: "Keyboard Shortcuts" },
+];
+
+const THEME_OPTIONS: { value: AppTheme; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+];
+
+const BRUSH_CURSOR_OPTIONS: { value: PenCursorStyle; label: string }[] = [
+  { value: "crosshair", label: "Crosshair" },
+  { value: "circle", label: "Outline" },
 ];
 
 function formatKey(key: string): string {
@@ -31,7 +44,7 @@ function SettingsModalContent() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [draftKeyBindings, setDraftKeyBindings] = useState<KeyBindings>(keyBindings);
   const [draftPenCursor, setDraftPenCursor] = useState<PenCursorStyle>(penCursor);
-  const [draftTheme, setDraftTheme] = useState<import("../store/settingsStore").AppTheme>(theme);
+  const [draftTheme, setDraftTheme] = useState<AppTheme>(theme);
   const [draftConfettiEffects, setDraftConfettiEffects] = useState<boolean>(confettiEffects);
   const [draftSoundEffects, setDraftSoundEffects] = useState<boolean>(soundEffects);
   const [draftVolume, setDraftVolume] = useState<number>(volume);
@@ -139,122 +152,93 @@ function SettingsModalContent() {
         <div className="settings-tab-content">
           {activeTab === "general" && (
             <div className="settings-section">
-              <h4>Appearance</h4>
-              <div className="settings-field" style={{ marginTop: "12px" }}>
-                <label htmlFor="theme-select" className="settings-label">
-                  Theme
-                </label>
-                <select
-                  id="theme-select"
-                  className="settings-select"
+              <div className="settings-fields">
+                <h4 className="settings-fields-heading">Appearance</h4>
+                <SegmentedControl
+                  label="Theme"
+                  showLabel
+                  hint="Follow your device preference, or lock Light / Dark."
                   value={draftTheme}
-                  onChange={(e) => setDraftTheme(e.target.value as import("../store/settingsStore").AppTheme)}
-                >
-                  <option value="light">Light Theme</option>
-                  <option value="dark">Dark Theme</option>
-                </select>
-                <p className="settings-description" style={{ marginTop: "6px" }}>
-                  First-time visits follow your device preference. Choose a theme here to save your own preference.
-                </p>
-              </div>
+                  options={THEME_OPTIONS}
+                  onChange={setDraftTheme}
+                />
 
-              <div className="settings-field name-color-setting">
-                <label htmlFor="name-color-input" className="settings-label">
-                  Player name color
-                </label>
-                <div className="name-color-controls">
-                  <input
-                    id="name-color-input"
-                    type="color"
-                    value={draftNameColor}
-                    onChange={(event) => setDraftNameColor(event.target.value)}
-                    aria-label="Player name color"
-                  />
-                  <strong style={{ color: draftNameColor }}>Your colored name</strong>
-                  <button
-                    type="button"
-                    className="name-color-randomize"
-                    onClick={() => setDraftNameColor(randomNameColor(draftNameColor))}
-                  >
-                    Randomize
-                  </button>
+                <div className="settings-labeled-field name-color-setting">
+                  <span className="settings-labeled-field-label">
+                    Player name color
+                    <FieldHint hint="This color is visible to everyone in rooms you join." />
+                  </span>
+                  <div className="name-color-controls">
+                    <input
+                      id="name-color-input"
+                      type="color"
+                      value={draftNameColor}
+                      onChange={(event) => setDraftNameColor(event.target.value)}
+                      aria-label="Player name color"
+                    />
+                    <strong style={{ color: draftNameColor }}>Your colored name</strong>
+                    <button
+                      type="button"
+                      className="name-color-randomize"
+                      onClick={() => setDraftNameColor(randomNameColor(draftNameColor))}
+                    >
+                      Randomize
+                    </button>
+                  </div>
                 </div>
-                <p className="settings-description">
-                  This color is visible to everyone in rooms you join.
-                </p>
-              </div>
 
-              <h4 style={{ marginTop: "24px" }}>Audio & Sound Settings</h4>
-              <div className="settings-field" style={{ marginTop: "12px" }}>
-                <label htmlFor="sound-effects-toggle" className="settings-label" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                  <input
-                    id="sound-effects-toggle"
-                    type="checkbox"
-                    checked={draftSoundEffects}
-                    onChange={(e) => setDraftSoundEffects(e.target.checked)}
-                  />
-                  <span>Sound Effects 🔊</span>
-                </label>
-                <p className="settings-description" style={{ marginTop: "6px" }}>
-                  Enable Web Audio chimes for guesses, round start, timer warnings, and player events.
-                </p>
-              </div>
+                <h4 className="settings-fields-heading">Audio</h4>
+                <Switch
+                  label="Sound effects"
+                  hint="Enable Web Audio chimes for guesses, round start, timer warnings, and player events."
+                  checked={draftSoundEffects}
+                  onChange={setDraftSoundEffects}
+                />
 
-              {draftSoundEffects && (
-                <div className="settings-field" style={{ marginTop: "16px" }}>
-                  <label htmlFor="volume-slider" className="settings-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>Master Volume</span>
-                    <span style={{ fontWeight: 600, color: "#2563eb" }}>{Math.round(draftVolume * 100)}%</span>
-                  </label>
-                  <input
-                    id="volume-slider"
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={draftVolume}
-                    onChange={(e) => setDraftVolume(parseFloat(e.target.value))}
-                    style={{ width: "100%", marginTop: "8px" }}
-                  />
-                </div>
-              )}
+                {draftSoundEffects && (
+                  <div className="settings-labeled-field">
+                    <span className="settings-labeled-field-label">Master volume</span>
+                    <div
+                      className="settings-volume-control"
+                      style={{ ["--volume-progress" as string]: `${draftVolume * 100}%` }}
+                    >
+                      <input
+                        id="volume-slider"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={draftVolume}
+                        onChange={(e) => setDraftVolume(parseFloat(e.target.value))}
+                        aria-label="Master volume"
+                      />
+                      <span className="settings-volume-value">{Math.round(draftVolume * 100)}%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {activeTab === "game" && (
             <div className="settings-section">
-              <h4>Game Settings</h4>
-              <div className="settings-field" style={{ marginTop: "12px" }}>
-                <label htmlFor="pen-cursor-style" className="settings-label">
-                  Pen Cursor Style
-                </label>
-                <select
-                  id="pen-cursor-style"
-                  className="settings-select"
+              <div className="settings-fields">
+                <h4 className="settings-fields-heading">Game</h4>
+                <SegmentedControl
+                  label="Brush cursor style"
+                  showLabel
+                  hint="Choose whether the brush shows a crosshair or a circular outline matching brush size."
                   value={draftPenCursor}
-                  onChange={(e) => setDraftPenCursor(e.target.value as PenCursorStyle)}
-                >
-                  <option value="crosshair">Default Crosshair</option>
-                  <option value="circle">Circular Outline (matching brush size)</option>
-                </select>
-                <p className="settings-description" style={{ marginTop: "6px" }}>
-                  Choose whether the pen tool displays the default crosshair or a circular outline showing its field of action.
-                </p>
-              </div>
+                  options={BRUSH_CURSOR_OPTIONS}
+                  onChange={setDraftPenCursor}
+                />
 
-              <div className="settings-field" style={{ marginTop: "16px" }}>
-                <label htmlFor="confetti-effects-toggle" className="settings-label" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                  <input
-                    id="confetti-effects-toggle"
-                    type="checkbox"
-                    checked={draftConfettiEffects}
-                    onChange={(e) => setDraftConfettiEffects(e.target.checked)}
-                  />
-                  <span>Confetti Celebration Effects 🎉</span>
-                </label>
-                <p className="settings-description" style={{ marginTop: "6px" }}>
-                  Enable celebratory particle confetti bursts on correct guesses and victory reveals.
-                </p>
+                <Switch
+                  label="Confetti celebration effects"
+                  hint="Enable celebratory particle confetti bursts on correct guesses and victory reveals."
+                  checked={draftConfettiEffects}
+                  onChange={setDraftConfettiEffects}
+                />
               </div>
             </div>
           )}
