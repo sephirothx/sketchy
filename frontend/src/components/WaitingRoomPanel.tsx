@@ -25,11 +25,11 @@ interface WaitingRoomPanelProps {
 }
 
 function hintLabel(mode: HintMode, hidden: boolean) {
-  if (hidden) return "Prompt details hidden";
+  if (hidden) return "Blanks hidden from guessers";
   return ({
     checkpoints: "Timed letter hints",
-    purchase: "Buyable letter hints",
-    wheel: "Wheel-style letter hints",
+    purchase: "Buy letters with points",
+    wheel: "Wheel of Fortune letter buys",
     none: "No letter hints",
   })[mode];
 }
@@ -95,7 +95,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             </li>
             <li>
               {props.spectatorsSeeSolution
-                ? "Spectators can see the solution"
+                ? "Spectators can see the prompt"
                 : "Spectators guess along"}
             </li>
           </ul>

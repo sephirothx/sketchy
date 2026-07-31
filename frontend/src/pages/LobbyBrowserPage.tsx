@@ -113,7 +113,7 @@ export function LobbyBrowserPage() {
   }
 
   function handleOpenCreateRoom() {
-    if (nicknameInput.trim()) setNickname(nicknameInput.trim());
+    if (!requireNickname()) return;
     navigate("/create");
   }
 

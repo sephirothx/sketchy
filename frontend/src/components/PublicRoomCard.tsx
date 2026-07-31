@@ -15,17 +15,17 @@ function exceptionalRules(room: RoomSummary) {
     rules.push(room.customWordsOnly ? "Custom words only" : `${room.customWordCount} custom words`);
   }
   if (room.hintMode !== "none") {
-    rules.push(room.hintMode === "checkpoints" ? "Timed hints" : room.hintMode === "wheel" ? "Buy-a-letter hints" : "Buyable hints");
+    rules.push(room.hintMode === "checkpoints" ? "Timed hints" : room.hintMode === "wheel" ? "Wheel of Fortune" : "Buy letters");
   }
-  if (room.spectatorsSeeSolution) rules.push("Spectators see word");
+  if (room.spectatorsSeeSolution) rules.push("Spectators see prompt");
   return rules;
 }
 
 function hintDescription(room: RoomSummary) {
   if (room.hideMaskedPrompt) return "Prompt details are hidden and hints are off";
   if (room.hintMode === "checkpoints") return "Timed letter hints";
-  if (room.hintMode === "purchase") return "Players can buy letter hints";
-  if (room.hintMode === "wheel") return "Players can buy full letters";
+  if (room.hintMode === "purchase") return "Players can buy letter positions";
+  if (room.hintMode === "wheel") return "Players can buy letters (Wheel of Fortune)";
   return "No letter hints";
 }
 
@@ -57,7 +57,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
             <li>{room.scoringMode === "default" ? "Default scoring" : "No scorekeeping"}</li>
             <li>{hintDescription(room)}</li>
             <li>{room.customWordCount > 0 ? (room.customWordsOnly ? `${room.customWordCount} custom words only` : `${room.customWordCount} custom words plus the default list`) : "Built-in word list"}</li>
-            <li>{room.spectatorsSeeSolution ? "Spectators can see the solution" : "Spectators see the masked prompt"}</li>
+            <li>{room.spectatorsSeeSolution ? "Spectators can see the prompt" : "Spectators see the masked prompt"}</li>
           </ul>
         </details>
       </div>

@@ -8,10 +8,21 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
-from app.game import DRAWING_SECONDS, Game
+from app.game import Game
 from app.words import WORDS
 
 STARTING_SCORE = 50
+DEFAULT_ROOM_DRAWING_SECONDS = 90
+DEFAULT_ROOM_HINT_MODE = "checkpoints"
+DRAWING_TIME_OPTIONS = (15, 30, 60, 90, 120, 180, 240, 300)
+MAX_PLAYERS_MIN = 2
+MAX_PLAYERS_MAX = 16
+
+
+def nearest_drawing_seconds(value: int) -> int:
+    """Snap a drawing-time request onto the allowed preset list."""
+    return min(DRAWING_TIME_OPTIONS, key=lambda option: (abs(option - value), option))
+
 
 NAME_COLORS: tuple[str, ...] = (
     "#e11d48",
@@ -146,8 +157,8 @@ class Room:
     rounds: int
     custom_words: list[str] = field(default_factory=list)
     custom_words_only: bool = False
-    drawing_seconds: int = DRAWING_SECONDS
-    hint_mode: str = "none"
+    drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS
+    hint_mode: str = DEFAULT_ROOM_HINT_MODE
     scoring_mode: str = "default"
     spectators_see_solution: bool = False
     hide_masked_prompt: bool = False
@@ -261,8 +272,8 @@ class RoomManager:
         rounds: int = 3,
         custom_words: list[str] | None = None,
         custom_words_only: bool = False,
-        drawing_seconds: int = DRAWING_SECONDS,
-        hint_mode: str = "none",
+        drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS,
+        hint_mode: str = DEFAULT_ROOM_HINT_MODE,
         scoring_mode: str = "default",
         spectators_see_solution: bool = False,
         hide_masked_prompt: bool = False,

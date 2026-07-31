@@ -10,6 +10,25 @@ def test_create_room_generates_unique_code():
     assert len(room1.code) == 6
 
 
+def test_create_room_uses_default_drawing_time_and_hint_mode():
+    rm = RoomManager()
+    room = rm.create_room(name="Room", is_public=True)
+    assert room.max_players == 8
+    assert room.rounds == 3
+    assert room.drawing_seconds == 90
+    assert room.hint_mode == "checkpoints"
+
+
+def test_nearest_drawing_seconds_snaps_to_allowed_presets():
+    from app.rooms import nearest_drawing_seconds
+
+    assert nearest_drawing_seconds(90) == 90
+    assert nearest_drawing_seconds(100) == 90
+    assert nearest_drawing_seconds(250) == 240
+    assert nearest_drawing_seconds(280) == 300
+    assert nearest_drawing_seconds(1) == 15
+
+
 def test_add_player_first_is_host():
     rm = RoomManager()
     room = rm.create_room(name="Room", is_public=True)

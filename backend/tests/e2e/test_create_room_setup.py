@@ -17,7 +17,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             await page.click('button:has-text("Create room")')
             await page.wait_for_url(f"{BASE_URL}/create")
             assert not await page.is_visible('#custom-words')
-            assert await page.input_value('input[placeholder="Your name"]') == "SetupHost"
+            assert not await page.locator('label:has-text("Nickname")').count()
 
             await page.fill('input[placeholder="Leave blank for a random name!"]', "Setup room")
             await page.click('text=Advanced settings')
@@ -30,9 +30,9 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             await page.fill('#custom-words', "apple\nred panda\nAPPLE")
             assert await page.is_visible('text=2 usable custom words')
             await page.check('label:has-text("Only use custom words") input')
-            await page.select_option('label:has-text("Scoring") select', "none")
-            await page.check('label:has-text("Always hide the masked prompt") input')
-            assert await page.is_visible('text=Hints are off because the masked prompt is hidden.')
+            await page.get_by_role("button", name="Just for fun").click()
+            await page.check('label:has-text("Hide blanks") input')
+            assert await page.is_visible('text=Hints are off because blanks are hidden.')
             await page.evaluate(
                 """() => {
                     window.__inviteLoaderSeen = false;

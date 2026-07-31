@@ -1,10 +1,39 @@
 import { useEffect, useState } from "react";
 import { CustomWordsEditor } from "./CustomWordsEditor";
+import {
+  ChoiceChips,
+  InputNumber,
+  SegmentedControl,
+  Switch,
+} from "./RoomSetupControls";
+import {
+  DEFAULT_DRAWING_SECONDS,
+  DEFAULT_HINT_MODE,
+  DRAWING_TIME_OPTIONS,
+  HINT_OPTIONS,
+  MAX_PLAYERS_MAX,
+  MAX_PLAYERS_MIN,
+  ROUNDS_MAX,
+  ROUNDS_MIN,
+  SCORING_OPTIONS,
+} from "../lib/roomSetup";
 import { analyzeCustomWords } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, EditableRoomSettings, HintMode, ScoringMode } from "../types";
 
-const emptySettings: EditableRoomSettings = { name: "", isPublic: true, maxPlayers: 8, rounds: 3, drawingSeconds: 80, customWords: "", customWordsOnly: false, hintMode: "none", scoringMode: "default", spectatorsSeeSolution: false, hideMaskedPrompt: false };
+const emptySettings: EditableRoomSettings = {
+  name: "",
+  isPublic: true,
+  maxPlayers: 8,
+  rounds: 3,
+  drawingSeconds: DEFAULT_DRAWING_SECONDS,
+  customWords: "",
+  customWordsOnly: false,
+  hintMode: DEFAULT_HINT_MODE,
+  scoringMode: "default",
+  spectatorsSeeSolution: false,
+  hideMaskedPrompt: false,
+};
 
 export function RoomSettingsEditor() {
   const [settings, setSettings] = useState<EditableRoomSettings>(emptySettings);
@@ -47,19 +76,56 @@ export function RoomSettingsEditor() {
   return <section className="waiting-card room-settings-editor" aria-labelledby="room-settings-title">
     <div className="room-settings-editor-heading"><p className="waiting-card-kicker">Host settings</p><h2 id="room-settings-title">Edit room settings</h2></div>
     {loading ? <p>Loading settings…</p> : <div className="room-settings-fields">
-      <label>Room name<input value={settings.name} onChange={(event) => update({ name: event.target.value })} maxLength={40} /></label>
-      <label className="checkbox-label"><input type="checkbox" checked={settings.isPublic} onChange={(event) => update({ isPublic: event.target.checked })} />Public (listed below)</label>
-      <label>Max players<input type="number" min={2} max={12} value={settings.maxPlayers} onChange={(event) => update({ maxPlayers: Number(event.target.value) })} /></label>
-      <label>Rounds<input type="number" min={1} max={10} value={settings.rounds} onChange={(event) => update({ rounds: Number(event.target.value) })} /></label>
-      <label>Drawing time (seconds)<input type="number" min={15} max={240} value={settings.drawingSeconds} onChange={(event) => update({ drawingSeconds: Number(event.target.value) })} /></label>
+      <div className="create-room-name-row">
+        <label className="create-room-name-field">Room name<input value={settings.name} onChange={(event) => update({ name: event.target.value })} maxLength={40} /></label>
+        <SegmentedControl
+          label="Visibility"
+          value={settings.isPublic ? "public" : "private"}
+          onChange={(value) => update({ isPublic: value === "public" })}
+          options={[
+            { value: "public", label: "Public" },
+            { value: "private", label: "Private" },
+          ]}
+        />
+      </div>
+      <InputNumber label="Max players" value={settings.maxPlayers} min={MAX_PLAYERS_MIN} max={MAX_PLAYERS_MAX} onChange={(maxPlayers) => update({ maxPlayers })} />
+      <InputNumber label="Rounds" value={settings.rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={(rounds) => update({ rounds })} />
+      <InputNumber label="Drawing time (seconds)" value={settings.drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={(drawingSeconds) => update({ drawingSeconds })} />
       <details><summary>Advanced settings</summary><div className="room-settings-advanced">
-        <label>Scoring<select value={settings.scoringMode} onChange={(event) => { const scoringMode = event.target.value as ScoringMode; update({ scoringMode, hintMode: scoringMode === "none" && ["purchase", "wheel"].includes(settings.hintMode) ? "none" : settings.hintMode }); }}><option value="default">Default scoring</option><option value="none">No scoring</option></select></label>
-        <label>Hint letters<select value={settings.hintMode} disabled={settings.hideMaskedPrompt} onChange={(event) => update({ hintMode: event.target.value as HintMode })}><option value="none">Off</option><option value="checkpoints">Timed hints</option><option value="purchase" disabled={settings.scoringMode === "none"}>Buyable hints</option><option value="wheel" disabled={settings.scoringMode === "none"}>Buy full letters</option></select></label>
-        {settings.hideMaskedPrompt && <p className="setting-dependency">Hints are off because the masked prompt is hidden.</p>}
-        <label className="checkbox-label"><input type="checkbox" checked={settings.spectatorsSeeSolution} onChange={(event) => update({ spectatorsSeeSolution: event.target.checked })} />Allow spectators to see the word</label>
-        <label className="checkbox-label"><input type="checkbox" checked={settings.hideMaskedPrompt} onChange={(event) => update({ hideMaskedPrompt: event.target.checked, hintMode: event.target.checked ? "none" : settings.hintMode })} />Always hide the masked prompt from guessers</label>
+        <Switch label="Allow spectators to see the prompt" checked={settings.spectatorsSeeSolution} onChange={(spectatorsSeeSolution) => update({ spectatorsSeeSolution })} />
+        <Switch
+          label="Hide blanks"
+          checked={settings.hideMaskedPrompt}
+          onChange={(hideMaskedPrompt) => update({ hideMaskedPrompt, hintMode: hideMaskedPrompt ? "none" : settings.hintMode })}
+        />
+        <ChoiceChips
+          label="Scoring"
+          value={settings.scoringMode}
+          onChange={(scoringMode: ScoringMode) => update({
+            scoringMode,
+            hintMode: scoringMode === "none" && ["purchase", "wheel"].includes(settings.hintMode) ? "none" : settings.hintMode,
+          })}
+          options={SCORING_OPTIONS}
+        />
+        <ChoiceChips
+          label="Hints"
+          value={settings.hintMode}
+          disabled={settings.hideMaskedPrompt}
+          onChange={(hintMode: HintMode) => update({ hintMode })}
+          options={HINT_OPTIONS.map((option) => ({
+            ...option,
+            disabled: settings.scoringMode === "none" && (option.value === "purchase" || option.value === "wheel"),
+          }))}
+        />
+        {settings.hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
         <CustomWordsEditor value={settings.customWords} onChange={(customWords) => update({ customWords, customWordsOnly: analyzeCustomWords(customWords).usableCount > 0 && !analyzeCustomWords(customWords).hasErrors ? settings.customWordsOnly : false })} />
-        <label className="checkbox-label"><input type="checkbox" checked={settings.customWordsOnly} disabled={analysis.usableCount === 0 || analysis.hasErrors} onChange={(event) => update({ customWordsOnly: event.target.checked })} />Only use custom words</label>
+        <Switch
+          label="Only use custom words"
+          hint="Add a usable custom word to enable this option."
+          checked={settings.customWordsOnly}
+          disabled={analysis.usableCount === 0 || analysis.hasErrors}
+          onChange={(customWordsOnly) => update({ customWordsOnly })}
+        />
       </div></details>
     </div>}
     {error && <p className="create-room-error" role="alert">{error}</p>}
