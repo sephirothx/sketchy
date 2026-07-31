@@ -515,6 +515,8 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   const nextSequenceRef = useRef(1);
   const pendingMutationsRef = useRef(new Map<number, PendingCanvasMutation>());
   const activeOutgoingSequenceRef = useRef<number | null>(null);
+  const syncInFlightRef = useRef(false);
+  const syncQueuedRef = useRef(false);
 
   const allocateSequence = useCallback((): number | null => {
     if (pendingMutationsRef.current.size >= MAX_PENDING_CANVAS_ACTIONS) {
@@ -574,6 +576,12 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       pendingMutationsRef.current.clear();
       activeOutgoingSequenceRef.current = null;
     }
+    if (syncInFlightRef.current) {
+      syncQueuedRef.current = true;
+      return;
+    }
+    syncInFlightRef.current = true;
+    syncQueuedRef.current = false;
     socket.emit("request_sync_strokes");
   }, []);
 
@@ -782,6 +790,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       sequence: unknown,
       historyHash: unknown,
     ) => {
+      syncInFlightRef.current = false;
       const actions = decodeCanvasHistory(payload);
       if (
         !actions
@@ -807,10 +816,27 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
         pendingMutationsRef.current.clear();
         nextSequenceRef.current = committedSequence + 1;
         replayActions(actions);
+        if (syncQueuedRef.current) {
+          syncQueuedRef.current = false;
+          requestAuthoritativeSync();
+        }
         return;
       }
       for (const pendingSequence of pendingMutationsRef.current.keys()) {
         if (pendingSequence <= committedSequence) {
+          pendingMutationsRef.current.delete(pendingSequence);
+        }
+      }
+      // Never retransmit in-progress paths after a full sync — under a slow
+      // link that multiplies into thousands of draw_move frames.
+      for (const [pendingSequence, pending] of [...pendingMutationsRef.current.entries()]) {
+        if (pending.kind !== "draw") continue;
+        const incomplete = (
+          pending.frames.length > 0
+          && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
+          && decodeLiveDrawing(pending.frames.at(-1)!)?.event !== "draw_end"
+        );
+        if (incomplete) {
           pendingMutationsRef.current.delete(pendingSequence);
         }
       }
@@ -825,6 +851,10 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
         pendingMutationsRef.current.clear();
         nextSequenceRef.current = committedSequence + 1;
         replayActions(actions);
+        if (syncQueuedRef.current) {
+          syncQueuedRef.current = false;
+          requestAuthoritativeSync();
+        }
         return;
       }
 
@@ -832,29 +862,16 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       for (const pendingSequence of pendingSequences) {
         const pending = pendingMutationsRef.current.get(pendingSequence)!;
         if (pending.kind === "draw") {
-          let isIncompletePath = false;
           for (const frame of pending.frames) {
             const packet = decodeLiveDrawing(frame);
             if (!packet || !historyRef.current.apply(packet)) {
               recoveryValid = false;
               break;
             }
-            isIncompletePath = (
-              pending.frames.length > 0
-              && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
-              && packet.event !== "draw_end"
-            );
           }
           if (!recoveryValid) break;
-          pending.expectedRevision = isIncompletePath
-            ? null
-            : historyRef.current.revision;
-          pending.expectedHash = isIncompletePath
-            ? null
-            : historyRef.current.historyHash;
-          if (isIncompletePath) {
-            activeOutgoingSequenceRef.current = pendingSequence;
-          }
+          pending.expectedRevision = historyRef.current.revision;
+          pending.expectedHash = historyRef.current.historyHash;
           pending.frames.forEach((frame, index) => {
             socket.emit(
               "draw",
@@ -887,12 +904,20 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
         );
         nextSequenceRef.current = committedSequence + 1;
         replayActions(actions);
+        if (syncQueuedRef.current) {
+          syncQueuedRef.current = false;
+          requestAuthoritativeSync();
+        }
         return;
       }
       nextSequenceRef.current = (
         pendingSequences.at(-1) ?? committedSequence
       ) + 1;
       replayActions(historyRef.current.actions);
+      if (syncQueuedRef.current) {
+        syncQueuedRef.current = false;
+        requestAuthoritativeSync();
+      }
     };
 
     const onCanvasCommit = (payload: unknown) => {
@@ -956,6 +981,19 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
           socket.emit("undo_stroke", pending.request);
           continue;
         }
+        const incomplete = (
+          pending.frames.length > 0
+          && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
+          && decodeLiveDrawing(pending.frames.at(-1)!)?.event !== "draw_end"
+        );
+        // Incomplete paths are dropped rather than replayed point-by-point.
+        if (incomplete) {
+          pendingMutationsRef.current.delete(sequence);
+          if (activeOutgoingSequenceRef.current === sequence) {
+            activeOutgoingSequenceRef.current = null;
+          }
+          continue;
+        }
         pending.frames.forEach((frame, index) => {
           socket.emit(
             "draw",
@@ -977,8 +1015,14 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
       onClearCanvas();
     };
 
+    const isPaintingStroke = () => (
+      isPointerDownRef.current || activeOutgoingSequenceRef.current !== null
+    );
+
     const requestUndo = () => {
-      finalizeActivePath();
+      // Ignore Undo/Clear while a stroke is in progress — avoids sequence races
+      // on slow links without needing a cancel-draw protocol.
+      if (isPaintingStroke()) return;
       const sequence = allocateSequence();
       if (sequence === null) return;
       const request = historyRef.current.prepareUndo(sequence);
@@ -1004,7 +1048,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     };
 
     const requestClear = () => {
-      finalizeActivePath();
+      if (isPaintingStroke()) return;
       if (!historyRef.current.apply({ event: "clear_canvas", payload: {} })) return;
       onClearCanvas();
       beginDrawAction(encodeClear());

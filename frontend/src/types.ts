@@ -180,6 +180,7 @@ export interface AckResponse {
   token?: string;
   error?: string;
   invalidToken?: boolean;
+  needsRebind?: boolean;
 }
 
 export interface RoomPreviewResponse extends AckResponse {

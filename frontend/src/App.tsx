@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
+import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
 import { LobbyBrowserPage } from "./pages/LobbyBrowserPage";
 import { CreateRoomPage } from "./pages/CreateRoomPage";
 import { GameRoomPage } from "./pages/GameRoomPage";
@@ -12,6 +13,7 @@ import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
 
 function App() {
   useGameSocketListeners();
+  useRoomSessionReconnect();
 
   return (
     <ToastProvider>

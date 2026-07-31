@@ -1,40 +1,65 @@
 import { useEffect, useState } from "react";
 import { socket } from "../lib/socket";
+import {
+  getRoomBindingStatus,
+  subscribeRoomBinding,
+  type RoomBindingStatus,
+} from "../lib/roomSessionBinding";
 
-type ConnectionStatus = "connected" | "offline" | "reconnecting";
+type ConnectionStatus = "connected" | "offline" | "reconnecting" | "failed";
+
+function resolveStatus(
+  online: boolean,
+  socketConnected: boolean,
+  binding: RoomBindingStatus,
+): ConnectionStatus {
+  if (!online) return "offline";
+  if (!socketConnected) return "reconnecting";
+  if (binding === "rejoining") return "reconnecting";
+  if (binding === "failed") return "failed";
+  return "connected";
+}
 
 export function ConnectionStatusBanner() {
-  const [status, setStatus] = useState<ConnectionStatus>(
-    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connected",
+  const [status, setStatus] = useState<ConnectionStatus>(() =>
+    resolveStatus(
+      typeof navigator === "undefined" || navigator.onLine,
+      socket.connected,
+      getRoomBindingStatus(),
+    ),
   );
 
   useEffect(() => {
-    const onConnect = () => setStatus("connected");
-    const onDisconnect = () => setStatus(navigator.onLine ? "reconnecting" : "offline");
-    const onConnectError = () => setStatus(navigator.onLine ? "reconnecting" : "offline");
-    const onOffline = () => setStatus("offline");
-    const onOnline = () => setStatus(socket.connected ? "connected" : "reconnecting");
+    const refresh = () => {
+      setStatus(resolveStatus(navigator.onLine, socket.connected, getRoomBindingStatus()));
+    };
 
-    socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
-    socket.on("connect_error", onConnectError);
-    window.addEventListener("offline", onOffline);
-    window.addEventListener("online", onOnline);
+    const unsubscribeBinding = subscribeRoomBinding(refresh);
+
+    socket.on("connect", refresh);
+    socket.on("disconnect", refresh);
+    socket.on("connect_error", refresh);
+    window.addEventListener("offline", refresh);
+    window.addEventListener("online", refresh);
+    refresh();
     return () => {
-      socket.off("connect", onConnect);
-      socket.off("disconnect", onDisconnect);
-      socket.off("connect_error", onConnectError);
-      window.removeEventListener("offline", onOffline);
-      window.removeEventListener("online", onOnline);
+      socket.off("connect", refresh);
+      socket.off("disconnect", refresh);
+      socket.off("connect_error", refresh);
+      window.removeEventListener("offline", refresh);
+      window.removeEventListener("online", refresh);
+      unsubscribeBinding();
     };
   }, []);
 
   if (status === "connected") return null;
   return (
-    <div className={`connection-status-banner ${status}`} role="status" aria-live="polite">
+    <div className={`connection-status-banner ${status === "failed" ? "reconnecting" : status}`} role="status" aria-live="polite">
       {status === "offline"
         ? "You’re offline. Check your connection; Sketchy will reconnect automatically."
-        : "Connection lost — reconnecting…"}
+        : status === "failed"
+          ? "Couldn’t restore your room session. Reload the page to rejoin."
+          : "Connection lost — reconnecting…"}
     </div>
   );
 }
