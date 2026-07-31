@@ -1,6 +1,11 @@
 :root {
   color-scheme: light;
   font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  --vv-height: 100dvh;
+  --vv-width: 100%;
+  --vv-offset-top: 0px;
+  --vv-offset-left: 0px;
+  --app-height: 100dvh;
 }
 
 * {
@@ -14,7 +19,7 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 button {

@@ -51,6 +51,15 @@ export function RoomChatPanel({
   const [prevMessagesCount, setPrevMessagesCount] = useState(messages.length);
   const draftTextRef = useRef("");
   const listRef = useRef<HTMLDivElement | null>(null);
+  const blurTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current != null) {
+        window.clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (previousInputPurpose !== inputPurpose) {
     setPreviousInputPurpose(inputPurpose);
@@ -255,10 +264,21 @@ export function RoomChatPanel({
                 onChange={(event) => setText(event.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={() => {
+                  if (blurTimeoutRef.current != null) {
+                    window.clearTimeout(blurTimeoutRef.current);
+                    blurTimeoutRef.current = null;
+                  }
                   onFocusChange?.(true);
-                  if (window.innerWidth <= 900) window.scrollTo(0, 0);
                 }}
-                onBlur={() => onFocusChange?.(false)}
+                onBlur={() => {
+                  if (blurTimeoutRef.current != null) {
+                    window.clearTimeout(blurTimeoutRef.current);
+                  }
+                  blurTimeoutRef.current = window.setTimeout(() => {
+                    blurTimeoutRef.current = null;
+                    onFocusChange?.(false);
+                  }, 150);
+                }}
                 placeholder={
                   mode === "playing" && canGuess ? "Type your guess..." : "Type a message..."
                 }

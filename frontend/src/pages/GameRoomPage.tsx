@@ -13,6 +13,8 @@ import { ChoosingWordOverlay } from "../components/ChoosingWordOverlay";
 import { RoomChatPanel } from "../components/RoomChatPanel";
 import { RoomPlayersPanel } from "../components/RoomPlayersPanel";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { splitMaskedWord } from "../lib/maskedWord";
@@ -125,6 +127,9 @@ export function GameRoomPage() {
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 900px)");
+
+  useVisualViewportCssVars();
 
   useEffect(() => {
     function closeRecapForNewGame() {
@@ -238,26 +243,6 @@ export function GameRoomPage() {
   }
 
   useEffect(() => {
-    function updateViewport() {
-      const vv = window.visualViewport;
-      const height = vv ? vv.height : window.innerHeight;
-      document.documentElement.style.setProperty("--vv-height", `${height}px`);
-      if (roomState === "playing") {
-        window.scrollTo(0, 0);
-      }
-    }
-    updateViewport();
-    window.visualViewport?.addEventListener("resize", updateViewport);
-    window.visualViewport?.addEventListener("scroll", updateViewport);
-    window.addEventListener("resize", updateViewport);
-    return () => {
-      window.visualViewport?.removeEventListener("resize", updateViewport);
-      window.visualViewport?.removeEventListener("scroll", updateViewport);
-      window.removeEventListener("resize", updateViewport);
-    };
-  }, [roomState, phase]);
-
-  useEffect(() => {
     function onKicked(data: { reason?: string }) {
       exitingRoomRef.current = true;
       clearStoredToken(normalizedCode);
@@ -322,59 +307,9 @@ export function GameRoomPage() {
   const canDrawNow = phase === "drawing" && drawerToken === token;
   const canGuess = phase === "drawing" && !amDrawer && !(me?.isSpectator) && !guessedWord;
 
-  // Active guess-focused mode applies ONLY on mobile screens (width <= 900px) when guessing during an active drawing round
+  // Density mode only: hide chrome while guessing on mobile. Positioning stays on the stable vv-pinned shell.
   const isGuessFocused =
-    isInputFocused && canGuess && phase === "drawing" && window.innerWidth <= 900;
-
-  useEffect(() => {
-    function alignGuessFocusedView() {
-      if (window.innerWidth > 900) return;
-      const vv = window.visualViewport;
-      const el = document.querySelector(".game-room.guess-focused") as HTMLElement | null;
-      if (vv && el) {
-        el.style.position = "fixed";
-        el.style.top = `${vv.offsetTop}px`;
-        el.style.left = `${vv.offsetLeft}px`;
-        el.style.width = `${vv.width}px`;
-        el.style.height = `${vv.height}px`;
-      }
-    }
-
-    if (isGuessFocused) {
-      document.body.classList.add("guess-focused");
-      document.documentElement.classList.add("guess-focused");
-      alignGuessFocusedView();
-      window.visualViewport?.addEventListener("resize", alignGuessFocusedView);
-      window.visualViewport?.addEventListener("scroll", alignGuessFocusedView);
-      window.addEventListener("resize", alignGuessFocusedView);
-      return () => {
-        const el = document.querySelector(".game-room") as HTMLElement | null;
-        if (el) {
-          el.style.position = "";
-          el.style.top = "";
-          el.style.left = "";
-          el.style.width = "";
-          el.style.height = "";
-        }
-        window.visualViewport?.removeEventListener("resize", alignGuessFocusedView);
-        window.visualViewport?.removeEventListener("scroll", alignGuessFocusedView);
-        window.removeEventListener("resize", alignGuessFocusedView);
-        document.body.classList.remove("guess-focused");
-        document.documentElement.classList.remove("guess-focused");
-      };
-    } else {
-      const el = document.querySelector(".game-room") as HTMLElement | null;
-      if (el) {
-        el.style.position = "";
-        el.style.top = "";
-        el.style.left = "";
-        el.style.width = "";
-        el.style.height = "";
-      }
-      document.body.classList.remove("guess-focused");
-      document.documentElement.classList.remove("guess-focused");
-    }
-  }, [isGuessFocused]);
+    isInputFocused && canGuess && phase === "drawing" && isMobile;
 
   const activeWidth = tool === "eraser" ? eraserWidth : brushWidth;
 
@@ -569,7 +504,9 @@ export function GameRoomPage() {
   }
 
   return (
-    <div className={`game-room ${isGuessFocused ? "guess-focused" : ""}`}>
+    <div
+      className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}`}
+    >
       {leaveConfirmationOpen && (
         <ConfirmationDialog
           title={amDrawer ? "Leave during your turn?" : "Leave active game?"}

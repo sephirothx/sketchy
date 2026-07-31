@@ -1232,11 +1232,117 @@ textarea:disabled {
     margin-bottom: 2px;
   }
 
-  /* When text input box is selected on mobile: ONLY it + canvas/masked prompt + top timer info are visible */
+  /*
+   * Stable mobile playing shell: always pinned to visualViewport.
+   * Guess-focused only changes density — never position scheme — so focus/blur
+   * does not remount layout or fight keyboard scroll.
+   *
+   * Unfocused: scroll the shell; canvas keeps a width-based 4:3 size so drawing
+   * stays usable. Focused: lock overflow and let canvas fill freed space.
+   */
+  .game-room.game-room-playing {
+    position: fixed;
+    top: var(--vv-offset-top, 0px);
+    left: var(--vv-offset-left, 0px);
+    width: var(--vv-width, 100%);
+    height: var(--vv-height, 100dvh);
+    max-width: none;
+    margin: 0;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: none;
+    z-index: 1;
+  }
+
+  .game-room.game-room-playing .game-header {
+    flex: 0 0 auto;
+    margin-bottom: 8px;
+  }
+
+  .game-room.game-room-playing .room-shell {
+    flex: 0 0 auto;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .game-room.game-room-playing .room-shell-main {
+    flex: 0 0 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .game-room.game-room-playing .room-shell-main-transition {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .game-room.game-room-playing .canvas-area {
+    gap: 4px;
+    align-items: center;
+  }
+
+  .game-room.game-room-playing .round-info,
+  .game-room.game-room-playing .word-display {
+    flex: 0 0 auto;
+  }
+
+  /* Width-first 4:3 — do not flex-shrink against chat/players */
+  .game-room.game-room-playing .canvas-stack {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    margin-inline: auto;
+  }
+
+  .game-room.game-room-playing .toolbar-container {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .game-room.game-room-playing .room-shell-chat,
+  .game-room.game-room-playing .room-shell-players {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+
+  /* Kill desktop chat height so it cannot steal the canvas */
+  .game-room.game-room-playing .room-chat-panel.guess-chat,
+  .game-room.game-room-playing .guess-chat {
+    height: auto !important;
+    max-height: none;
+    flex: 0 0 auto;
+  }
+
+  .game-room.game-room-playing .chat-messages-container {
+    flex: 0 1 auto;
+    max-height: 140px;
+    min-height: 0;
+  }
+
+  .game-room.game-room-playing .chat-messages {
+    flex: 0 1 auto;
+    max-height: 140px;
+    min-height: 0;
+  }
+
+  /* Density mode: hide chrome; fill vv with canvas + word + input */
+  .game-room.guess-focused {
+    padding: 4px 6px;
+    overflow: hidden;
+  }
+
   .game-room.guess-focused .game-header,
   .game-room.guess-focused .sidebar-left,
+  .game-room.guess-focused .room-chat-heading,
   .game-room.guess-focused .chat-messages-container,
   .game-room.guess-focused .chat-messages,
+  .game-room.guess-focused .chat-scroll-bottom-button,
   .game-room.guess-focused .save-image-box {
     display: none !important;
   }
@@ -1250,31 +1356,53 @@ textarea:disabled {
     color: #64748b;
   }
 
-  html.guess-focused,
-  body.guess-focused {
-    overflow: hidden !important;
-    touch-action: none;
-  }
-
-  .game-room.guess-focused {
-    position: fixed;
-    box-sizing: border-box;
-    padding: 4px 6px;
-    overflow: hidden;
-    touch-action: manipulation;
-    z-index: 999;
-  }
-
   .game-room.guess-focused .room-shell {
+    flex: 1 1 auto;
+    min-height: 0;
     gap: 4px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .game-room.guess-focused .room-shell-main {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .game-room.guess-focused .room-shell-main-transition {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
   }
 
   .game-room.guess-focused .canvas-area {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
     gap: 2px;
+    overflow: hidden;
+    container-type: size;
   }
 
   .game-room.guess-focused .canvas-stack {
-    max-height: 42vh;
+    flex: 0 1 auto;
+    min-height: 0;
+    width: 100%;
+    width: min(100%, calc(100cqh * 4 / 3));
+    max-width: 100%;
+    max-height: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+
+  .game-room.guess-focused .room-shell-chat {
+    flex: 0 0 auto;
+  }
+
+  .game-room.guess-focused .guess-chat {
+    max-height: none;
+    height: auto !important;
   }
 
   .game-room.guess-focused .sidebar-right .sidebar-box {
@@ -1283,6 +1411,10 @@ textarea:disabled {
     background: #ffffff;
     border: 1px solid #cbd5e1;
     margin: 0;
+  }
+
+  .game-room.guess-focused .chat-input {
+    margin-bottom: 0;
   }
 }
 
