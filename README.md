@@ -109,11 +109,13 @@ run each independently.
 ```bash
 cd backend
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements.txt      # runtime only
+# .venv/bin/pip install -r requirements-dev.txt  # runtime + pytest/Playwright
 .venv/bin/uvicorn app.main:app --port 8000
 ```
 
 Runs on http://localhost:8000. `GET /api/health` should return `{"status": "ok"}`.
+Install `requirements-dev.txt` instead when you plan to run unit, integration, or E2E tests.
 
 ### Frontend
 
@@ -138,8 +140,11 @@ tabs in the *same* browser profile will share that storage and can behave unexpe
 ### Running tests
 
 ```bash
+# Install test/dev deps once (pytest, Playwright, …)
+cd backend && .venv/bin/pip install -r requirements-dev.txt
+
 # Unit & integration tests
-cd backend && .venv/bin/pytest
+.venv/bin/pytest
 
 # Backend performance micro-benchmarks
 backend/.venv/bin/python benchmarks/backend.py
@@ -151,7 +156,8 @@ backend/.venv/bin/python benchmarks/live_drawing.py
 # Faster local iteration on one profile, with optional JSON output
 ./benchmarks/run_canvas.sh --profiles desktop --json-output /tmp/canvas-benchmark.json
 
-# Multi-browser Playwright E2E tests
+# Multi-browser Playwright E2E tests (install browsers once first)
+backend/.venv/bin/python -m playwright install chromium firefox
 ./scripts/test-e2e.sh
 ```
 

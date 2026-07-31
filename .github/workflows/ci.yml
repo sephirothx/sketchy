@@ -27,9 +27,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
 
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-dev.txt
 
       - run: pytest -q
 
@@ -74,7 +76,7 @@ jobs:
       - name: Create backend virtualenv and install dependencies
         run: |
           python -m venv backend/.venv
-          backend/.venv/bin/pip install -q -r backend/requirements.txt
+          backend/.venv/bin/pip install -q -r backend/requirements-dev.txt
 
       - name: Install Playwright browsers
         run: backend/.venv/bin/python -m playwright install --with-deps chromium firefox
