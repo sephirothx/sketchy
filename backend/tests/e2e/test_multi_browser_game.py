@@ -226,18 +226,33 @@ async def test_multi_browser_gameplay_scenario():
                 canvas_is_blank,
             )
 
-            # Undo while the pointer is still down must first finalize the
-            # active path; otherwise the path and Undo sequences can deadlock.
+            canvas_has_ink = """
+                () => {
+                  const canvas = document.querySelector('canvas.drawing-canvas');
+                  const data = canvas.getContext('2d').getImageData(
+                    0, 0, canvas.width, canvas.height
+                  ).data;
+                  for (let index = 0; index < data.length; index += 4) {
+                    if (data[index] !== 255 || data[index + 1] !== 255
+                        || data[index + 2] !== 255) return true;
+                  }
+                  return false;
+                }
+            """
+
+            # Undo/Clear while the pointer is down are ignored so mid-stroke
+            # actions cannot race sequence recovery on slow links.
             await drawer_page.mouse.move(box["x"] + 120, box["y"] + 120)
             await drawer_page.mouse.down()
             await drawer_page.mouse.move(box["x"] + 220, box["y"] + 220)
             await drawer_page.keyboard.press("Control+z")
             await drawer_page.mouse.up()
+            await guesser_page.wait_for_function(canvas_has_ink)
+            await drawer_page.wait_for_function(canvas_has_ink)
+            await drawer_page.click("button.undo-button")
             await guesser_page.wait_for_function(canvas_is_blank)
             await drawer_page.wait_for_function(canvas_is_blank)
 
-            # Clear has the same active-path requirement. Invoke the button
-            # without moving the pointer away from the canvas first.
             await drawer_page.mouse.move(box["x"] + 140, box["y"] + 140)
             await drawer_page.mouse.down()
             await drawer_page.mouse.move(box["x"] + 240, box["y"] + 240)
@@ -245,6 +260,9 @@ async def test_multi_browser_gameplay_scenario():
                 "document.querySelector('button.clear-button').click()"
             )
             await drawer_page.mouse.up()
+            await guesser_page.wait_for_function(canvas_has_ink)
+            await drawer_page.wait_for_function(canvas_has_ink)
+            await drawer_page.click("button.clear-button")
             await guesser_page.wait_for_function(canvas_is_blank)
             await drawer_page.wait_for_function(canvas_is_blank)
 

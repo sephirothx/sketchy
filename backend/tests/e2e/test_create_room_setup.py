@@ -16,6 +16,10 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             await page.fill('input[placeholder="Your name"]', "SetupHost")
             await page.click('button:has-text("Create room")')
             await page.wait_for_url(f"{BASE_URL}/create")
+            # History updates before React finishes the route swap; wait for the
+            # create page before asserting lobby controls are gone.
+            await page.wait_for_selector(".create-room-page")
+            await page.locator(".lobby-page").wait_for(state="detached")
             assert not await page.is_visible('#custom-words')
             assert not await page.locator('label:has-text("Nickname")').count()
 
