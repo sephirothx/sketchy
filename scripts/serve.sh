@@ -62,8 +62,8 @@ if [[ ! -x "$VENV_PY" ]]; then
   python3 -m venv "$BACKEND_DIR/.venv"
 fi
 
-log "Installing backend dependencies"
-"$VENV_PIP" install -q -r "$BACKEND_DIR/requirements.txt"
+log "Installing backend dependencies (including test/dev)"
+"$VENV_PIP" install -q -r "$BACKEND_DIR/requirements-dev.txt"
 
 # --- Frontend build ----------------------------------------------------------
 if [[ "$SKIP_BUILD" == true ]]; then
