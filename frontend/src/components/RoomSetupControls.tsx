@@ -13,6 +13,27 @@ function stepDiscrete(value: number, direction: -1 | 1, options: readonly number
   return options[0];
 }
 
+export function FieldHint({ hint }: { hint: string }) {
+  return (
+    <span className="m3-switch-hint-wrap">
+      <button
+        type="button"
+        className="m3-switch-hint"
+        aria-label={hint}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+      >
+        ?
+      </button>
+      <span className="m3-switch-hint-tooltip" role="tooltip">
+        {hint}
+      </span>
+    </span>
+  );
+}
+
 interface InputNumberProps {
   label: string;
   value: number;
@@ -90,6 +111,8 @@ interface SegmentedControlProps<T extends string> {
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
+  hint?: string;
+  showLabel?: boolean;
 }
 
 export function SegmentedControl<T extends string>({
@@ -97,32 +120,46 @@ export function SegmentedControl<T extends string>({
   value,
   options,
   onChange,
+  hint,
+  showLabel = false,
 }: SegmentedControlProps<T>) {
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
 
+  const control = (
+    <div
+      className="segmented-control"
+      role="group"
+      aria-label={label}
+      style={{
+        ["--segment-index" as string]: selectedIndex,
+        ["--segment-count" as string]: options.length,
+      }}
+    >
+      <span className="segmented-control-thumb" aria-hidden="true" />
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!showLabel) {
+    return <div className="segmented-control-field">{control}</div>;
+  }
+
   return (
-    <div className="segmented-control-field">
-      <div
-        className="segmented-control"
-        role="group"
-        aria-label={label}
-        style={{
-          ["--segment-index" as string]: selectedIndex,
-          ["--segment-count" as string]: options.length,
-        }}
-      >
-        <span className="segmented-control-thumb" aria-hidden="true" />
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={value === option.value}
-            onClick={() => onChange(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+    <div className="segmented-control-field is-labeled">
+      <span className="segmented-control-label">
+        {label}
+        {hint ? <FieldHint hint={hint} /> : null}
+      </span>
+      {control}
     </div>
   );
 }
@@ -197,24 +234,7 @@ export function Switch({ label, hint, checked, disabled = false, onChange }: Swi
       />
       <span className="m3-switch-text">
         {label}
-        {hint && (
-          <span className="m3-switch-hint-wrap">
-            <button
-              type="button"
-              className="m3-switch-hint"
-              aria-label={hint}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-            >
-              ?
-            </button>
-            <span className="m3-switch-hint-tooltip" role="tooltip">
-              {hint}
-            </span>
-          </span>
-        )}
+        {hint ? <FieldHint hint={hint} /> : null}
       </span>
       <span className="m3-switch-track" aria-hidden="true">
         <span className="m3-switch-thumb" />
