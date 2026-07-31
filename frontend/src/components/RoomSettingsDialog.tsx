@@ -2,19 +2,21 @@ import { useEffect, useState } from "react";
 import { CustomWordsEditor } from "./CustomWordsEditor";
 import {
   ChoiceChips,
+  InputNumber,
+  SegmentedControl,
+  Switch,
+} from "./RoomSetupControls";
+import {
   DEFAULT_DRAWING_SECONDS,
   DEFAULT_HINT_MODE,
   DRAWING_TIME_OPTIONS,
   HINT_OPTIONS,
-  InputNumber,
   MAX_PLAYERS_MAX,
   MAX_PLAYERS_MIN,
   ROUNDS_MAX,
   ROUNDS_MIN,
   SCORING_OPTIONS,
-  SegmentedControl,
-  Switch,
-} from "./RoomSetupControls";
+} from "../lib/roomSetup";
 import { analyzeCustomWords } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, EditableRoomSettings, HintMode, ScoringMode } from "../types";

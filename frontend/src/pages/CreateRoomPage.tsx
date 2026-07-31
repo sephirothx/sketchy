@@ -3,19 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { CustomWordsEditor } from "../components/CustomWordsEditor";
 import {
   ChoiceChips,
+  InputNumber,
+  SegmentedControl,
+  Switch,
+} from "../components/RoomSetupControls";
+import {
   DEFAULT_DRAWING_SECONDS,
   DEFAULT_HINT_MODE,
   DRAWING_TIME_OPTIONS,
   HINT_OPTIONS,
-  InputNumber,
   MAX_PLAYERS_MAX,
   MAX_PLAYERS_MIN,
   ROUNDS_MAX,
   ROUNDS_MIN,
   SCORING_OPTIONS,
-  SegmentedControl,
-  Switch,
-} from "../components/RoomSetupControls";
+} from "../lib/roomSetup";
 import { analyzeCustomWords } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
