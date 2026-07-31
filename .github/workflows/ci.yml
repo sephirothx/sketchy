@@ -77,7 +77,7 @@ jobs:
           backend/.venv/bin/pip install -q -r backend/requirements.txt
 
       - name: Install Playwright browsers
-        run: backend/.venv/bin/playwright install --with-deps chromium firefox
+        run: backend/.venv/bin/python -m playwright install --with-deps chromium firefox
 
       - name: Install frontend dependencies
         run: npm ci
