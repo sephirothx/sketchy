@@ -116,6 +116,13 @@ async def test_host_can_update_waiting_room_settings_and_chat():
     assert room.custom_words == ["apple", "pear"]
     assert room.custom_words_only is True
 
+    response = await sio.handlers["/"]["update_room_settings"](
+        "host-sid", {"drawingSeconds": 300, "maxPlayers": 16},
+    )
+    assert response["ok"] is True
+    assert room.drawing_seconds == 300
+    assert room.max_players == 16
+
     chat = await sio.handlers["/"]["send_chat"]("host-sid", {"text": "Ready?"})
     assert chat["ok"] is True
     assert any(call.args[0] == "chat_message" and call.args[1]["text"] == "Ready?" for call in sio.emit.await_args_list)

@@ -7,7 +7,6 @@ import logging
 import socketio
 
 from app.game import (
-    DRAWING_SECONDS,
     CHOOSE_WORD_SECONDS,
     HINT_MODES,
     ROUND_END_SECONDS,
@@ -17,12 +16,17 @@ from app.game import (
 )
 from app.live_drawing import decode_live_drawing, encode_live_drawing
 from app.rooms import (
+    DEFAULT_ROOM_DRAWING_SECONDS,
+    DEFAULT_ROOM_HINT_MODE,
     DrawingRecapEntry,
+    MAX_PLAYERS_MAX,
+    MAX_PLAYERS_MIN,
     Player,
     Room,
     RoomFullError,
     RoomManager,
     STARTING_SCORE,
+    nearest_drawing_seconds,
     normalize_name_color,
 )
 from app.words import parse_custom_word_list
@@ -71,10 +75,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     def room_settings_from_data(data: dict, *, fallback: Room | None = None) -> dict:
         """Normalize room settings for both creation and host edits."""
         data = data or {}
-        max_players = _clamp(int(data.get("maxPlayers", fallback.max_players if fallback else 8) or 8), 2, 12)
+        max_players = _clamp(int(data.get("maxPlayers", fallback.max_players if fallback else 8) or 8), MAX_PLAYERS_MIN, MAX_PLAYERS_MAX)
         rounds = _clamp(int(data.get("rounds", fallback.rounds if fallback else 3) or 3), 1, 10)
-        drawing_seconds = _clamp(int(data.get("drawingSeconds", fallback.drawing_seconds if fallback else DRAWING_SECONDS) or DRAWING_SECONDS), 15, 240)
-        hint_mode = str(data.get("hintMode", fallback.hint_mode if fallback else "none") or "none")
+        drawing_seconds = nearest_drawing_seconds(int(data.get("drawingSeconds", fallback.drawing_seconds if fallback else DEFAULT_ROOM_DRAWING_SECONDS) or DEFAULT_ROOM_DRAWING_SECONDS))
+        hint_mode = str(data.get("hintMode", fallback.hint_mode if fallback else DEFAULT_ROOM_HINT_MODE) or DEFAULT_ROOM_HINT_MODE)
         scoring_mode = str(data.get("scoringMode", fallback.scoring_mode if fallback else "default") or "default")
         if hint_mode not in HINT_MODES:
             hint_mode = "none"
