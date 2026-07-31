@@ -645,6 +645,135 @@ async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase()
 
 
 @pytest.mark.asyncio
+async def test_already_joined_socket_resyncs_active_drawing_state():
+    """Soft health checks must refresh game state even when the sid is unchanged."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=list(room.players))
+    room.game.start_next_turn()
+    room.game.force_word_choice()
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.emit = AsyncMock()
+    join_room = sio.handlers["/"]["join_room"]
+
+    response = await join_room(
+        "drawer-sid",
+        {"code": room.code, "token": drawer.token, "nickname": drawer.nickname},
+    )
+
+    emitted_events = [call.args[0] for call in sio.emit.await_args_list]
+    assert response == {"ok": True, "roomId": room.id, "code": room.code, "token": drawer.token}
+    assert "sync_game" in emitted_events
+    assert "you_are_drawing" in emitted_events
+    assert "player_reconnected" not in emitted_events
+    assert "player_joined" not in emitted_events
+
+
+@pytest.mark.asyncio
+async def test_already_joined_socket_resyncs_round_end_overlay():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.token, guesser.token])
+    room.game.start_next_turn()
+    room.game.force_word_choice()
+    room.game.guess_points[guesser.token] = 200
+    room.game.guess_times[guesser.token] = 12.0
+    assert room.game.end_round() is not None
+    room.game.set_phase_deadline(5)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.emit = AsyncMock()
+    join_room = sio.handlers["/"]["join_room"]
+
+    response = await join_room(
+        "drawer-sid",
+        {"code": room.code, "token": drawer.token, "nickname": drawer.nickname},
+    )
+
+    round_ended_calls = [call for call in sio.emit.await_args_list if call.args[0] == "round_ended"]
+    assert response["ok"] is True
+    assert round_ended_calls
+    assert round_ended_calls[0].kwargs.get("to") == "drawer-sid"
+    assert round_ended_calls[0].args[1]["word"] == room.game.word
+
+
+@pytest.mark.asyncio
+async def test_session_ping_reports_phase_or_needs_rebind():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=list(room.players))
+    room.game.start_next_turn()
+    room.game.force_word_choice()
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    session_ping = sio.handlers["/"]["session_ping"]
+
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    ok = await session_ping("drawer-sid")
+    assert ok[0] == 1
+    assert ok[1] == 2  # drawing
+    assert ok[2] == room.game.round_number
+    assert isinstance(ok[3], int)
+    assert ok[4] == room.game.canvas_generation
+    assert ok[5] == room.game.canvas_sequence
+
+    sio.get_session = AsyncMock(return_value=None)
+    missing = await session_ping("ghost-sid")
+    assert missing == [0]
+
+
+@pytest.mark.asyncio
+async def test_soft_already_joined_skips_canvas_sync():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=list(room.players))
+    room.game.start_next_turn()
+    room.game.force_word_choice()
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.emit = AsyncMock()
+    join_room = sio.handlers["/"]["join_room"]
+
+    response = await join_room(
+        "drawer-sid",
+        {"code": room.code, "token": drawer.token, "nickname": drawer.nickname, "soft": True},
+    )
+
+    emitted_events = [call.args[0] for call in sio.emit.await_args_list]
+    assert response["ok"] is True
+    assert "sync_game" in emitted_events
+    assert "sync_strokes" not in emitted_events
+
+
+@pytest.mark.asyncio
 async def test_explicit_drawer_leave_starts_next_survivor_turn():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True, rounds=2)

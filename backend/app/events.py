@@ -259,6 +259,34 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             to=sid,
         )
 
+    async def _sync_player_view(sid: str, room: Room, player, *, sync_canvas: bool = True) -> None:
+        """Push authoritative game/canvas state to one socket (join or soft resync)."""
+        game = room.game
+        if not game:
+            return
+        if game.phase in (Phase.CHOOSING_WORD, Phase.DRAWING):
+            await sio.emit(
+                "sync_game",
+                _turn_payload(game, player, room.spectators_see_solution),
+                to=sid,
+            )
+            if sync_canvas:
+                await _emit_canvas_sync(room, sid)
+            if player.token == game.current_drawer:
+                if game.phase == Phase.CHOOSING_WORD:
+                    await sio.emit(
+                        "your_word_choices",
+                        {
+                            "choices": game.word_choices,
+                            "seconds": round(game.remaining_seconds()),
+                        },
+                        to=sid,
+                    )
+                elif sync_canvas:
+                    await sio.emit("you_are_drawing", {"word": game.word}, to=sid)
+        elif game.phase == Phase.ROUND_END:
+            await sio.emit("round_ended", _round_ended_payload(room), to=sid)
+
     async def _join_socket_room(sid: str, room: Room, player, is_reconnect: bool) -> None:
         player.sid = sid
         player.connected = True
@@ -272,25 +300,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             {"token": player.token, "nickname": player.nickname},
             room=room.id,
         )
-        if room.game and room.game.phase in (Phase.CHOOSING_WORD, Phase.DRAWING):
-            await sio.emit(
-                "sync_game",
-                _turn_payload(room.game, player, room.spectators_see_solution),
-                to=sid,
-            )
-            await _emit_canvas_sync(room, sid)
-            if player.token == room.game.current_drawer:
-                if room.game.phase == Phase.CHOOSING_WORD:
-                    await sio.emit(
-                        "your_word_choices",
-                        {
-                            "choices": room.game.word_choices,
-                            "seconds": round(room.game.remaining_seconds()),
-                        },
-                        to=sid,
-                    )
-                else:
-                    await sio.emit("you_are_drawing", {"word": room.game.word}, to=sid)
+        await _sync_player_view(sid, room, player)
 
     def _turn_payload(game: Game, player: Player | None = None, spectators_see_solution: bool = False) -> dict:
         token = player.token if player else None
@@ -403,11 +413,22 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             )
         )
 
-        # Build a per-player score breakdown for this round: how many points
-        # each player just earned (guess points, or the drawer's bonus), plus
-        # their leaderboard rank before/after those points were applied, so
-        # the client can show a "you moved up 2 places" style overtake.
+        await sio.emit(
+            "round_ended",
+            _round_ended_payload(room, drawer_bonus=drawer_bonus),
+            room=room.id,
+        )
+        schedule_phase_timer(room, ROUND_END_SECONDS)
+        return True
+
+    def _round_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
+        game = room.game
+        assert game is not None
         players = room.player_list()
+        # guess_points remain available through ROUND_END, so reconnects can
+        # rebuild the same overlay the room originally received.
+        if drawer_bonus is None:
+            drawer_bonus = sum(game.guess_points.values())
         deltas = {
             p.token: game.guess_points.get(p.token, 0)
             + (drawer_bonus if p.token == game.current_drawer else 0)
@@ -420,44 +441,37 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         }
         new_ranked = sorted(players, key=lambda p: -p.score)
         new_ranks = {p.token: rank for rank, p in enumerate(new_ranked, start=1)}
-
-        await sio.emit(
-            "round_ended",
-            {
-                "word": game.word,
-                "drawerToken": game.current_drawer,
-                "drawerBonus": drawer_bonus,
-                "seconds": ROUND_END_SECONDS,
-                "guesses": [
-                    {
-                        "token": p.token,
-                        "nickname": p.nickname,
-                        "nameColor": p.name_color,
-                        "seconds": game.guess_times[p.token],
-                    }
-                    for p in sorted(
-                        players,
-                        key=lambda player: game.guess_times.get(player.token, float("inf")),
-                    )
-                    if p.token in game.guess_times
-                ],
-                "scores": [
-                    {
-                        "token": p.token,
-                        "nickname": p.nickname,
-                        "nameColor": p.name_color,
-                        "score": p.score,
-                        "delta": deltas[p.token],
-                        "previousRank": previous_ranks[p.token],
-                        "newRank": new_ranks[p.token],
-                    }
-                    for p in new_ranked
-                ],
-            },
-            room=room.id,
-        )
-        schedule_phase_timer(room, ROUND_END_SECONDS)
-        return True
+        return {
+            "word": game.word,
+            "drawerToken": game.current_drawer,
+            "drawerBonus": drawer_bonus,
+            "seconds": round(game.remaining_seconds()) if game.phase_deadline else ROUND_END_SECONDS,
+            "guesses": [
+                {
+                    "token": p.token,
+                    "nickname": p.nickname,
+                    "nameColor": p.name_color,
+                    "seconds": game.guess_times[p.token],
+                }
+                for p in sorted(
+                    players,
+                    key=lambda player: game.guess_times.get(player.token, float("inf")),
+                )
+                if p.token in game.guess_times
+            ],
+            "scores": [
+                {
+                    "token": p.token,
+                    "nickname": p.nickname,
+                    "nameColor": p.name_color,
+                    "score": p.score,
+                    "delta": deltas[p.token],
+                    "previousRank": previous_ranks[p.token],
+                    "newRank": new_ranks[p.token],
+                }
+                for p in new_ranked
+            ],
+        }
 
     async def _finish_or_next(room: Room) -> None:
         game = room.game
@@ -737,6 +751,16 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         # in this room, just confirm it rather than reprocessing the join.
         already_joined = await _existing_player_for_sid(sid, room.id)
         if already_joined:
+            already_joined.sid = sid
+            already_joined.connected = True
+            cancel_disconnect_timer(already_joined.token)
+            # Soft checks (heartbeat/visibility) must not dump full canvas history.
+            await _sync_player_view(
+                sid,
+                room,
+                already_joined,
+                sync_canvas=not bool(data.get("soft")),
+            )
             return {"ok": True, "roomId": room.id, "code": room.code, "token": already_joined.token}
 
         if token and token in room.players:
@@ -767,6 +791,30 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
         await _join_socket_room(sid, room, player, is_reconnect=False)
         return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
+
+    @sio.event
+    async def session_ping(sid, data=None):
+        """Compact liveness check: [1, phase, round, remaining, gen, seq] or [0]."""
+        session = await sio.get_session(sid) if sid else None
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("token")) if room and session else None
+        if not room or not player:
+            return [0]
+        game = room.game
+        phase = {
+            Phase.CHOOSING_WORD: 1,
+            Phase.DRAWING: 2,
+            Phase.ROUND_END: 3,
+            Phase.GAME_END: 4,
+        }.get(game.phase, 0) if game else 0
+        return [
+            1,
+            phase,
+            game.round_number if game else 0,
+            round(game.remaining_seconds()) if game else 0,
+            game.canvas_generation if game else 0,
+            game.canvas_sequence if game else 0,
+        ]
 
     @sio.event
     async def update_player_settings(sid, data):
