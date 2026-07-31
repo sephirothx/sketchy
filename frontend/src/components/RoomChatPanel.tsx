@@ -9,10 +9,17 @@ interface RoomChatPanelProps {
   mode: "waiting" | "playing" | "game-end";
   isDrawer: boolean;
   canGuess: boolean;
+  myToken?: string | null;
   targetWordLengths: string[];
   hideMaskedPrompt?: boolean;
   onFocusChange?: (focused: boolean) => void;
 }
+
+type GuessFlash = {
+  id: string;
+  text: string;
+  kind: "close" | "miss" | "info" | "error";
+};
 
 function letterRunLengths(text: string): number[] {
   const runs: number[] = [];
@@ -35,6 +42,7 @@ export function RoomChatPanel({
   mode,
   isDrawer,
   canGuess,
+  myToken = null,
   targetWordLengths,
   hideMaskedPrompt = false,
   onFocusChange,
@@ -49,8 +57,43 @@ export function RoomChatPanel({
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [prevMessagesCount, setPrevMessagesCount] = useState(messages.length);
+  const [guessFlash, setGuessFlash] = useState<GuessFlash | null>(null);
+  const [flashSourceId, setFlashSourceId] = useState<string | null>(null);
   const draftTextRef = useRef("");
   const listRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const blurTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current != null) {
+        window.clearTimeout(blurTimeoutRef.current);
+      }
+      // Input may unmount when becoming drawer — clear stale focus so guess-focused
+      // does not stick across turns with a closed keyboard.
+      onFocusChange?.(false);
+    };
+  }, [onFocusChange]);
+
+  useEffect(() => {
+    if (!canGuess || isDrawer) {
+      if (blurTimeoutRef.current != null) {
+        window.clearTimeout(blurTimeoutRef.current);
+        blurTimeoutRef.current = null;
+      }
+      inputRef.current?.blur();
+      onFocusChange?.(false);
+    }
+  }, [canGuess, isDrawer, onFocusChange]);
+
+  useEffect(() => {
+    if (!guessFlash) return;
+    const flashId = guessFlash.id;
+    const timeout = window.setTimeout(() => {
+      setGuessFlash((current) => (current?.id === flashId ? null : current));
+    }, 3200);
+    return () => window.clearTimeout(timeout);
+  }, [guessFlash]);
 
   if (previousInputPurpose !== inputPurpose) {
     setPreviousInputPurpose(inputPurpose);
@@ -59,10 +102,37 @@ export function RoomChatPanel({
     setError(null);
   }
 
+  if ((!canGuess || isDrawer) && guessFlash) {
+    setGuessFlash(null);
+  }
+
   if (messages.length !== prevMessagesCount) {
     setPrevMessagesCount(messages.length);
     if (isScrolledUp) {
       setUnreadCount((count) => count + Math.max(0, messages.length - prevMessagesCount));
+    }
+  }
+
+  const newestMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  if (newestMessage && newestMessage.id !== flashSourceId) {
+    setFlashSourceId(newestMessage.id);
+    if (mode === "playing" && canGuess) {
+      let flash: GuessFlash | null = null;
+      if (newestMessage.close) {
+        flash = { id: newestMessage.id, text: newestMessage.text, kind: "close" };
+      } else if (newestMessage.restricted && (!newestMessage.token || newestMessage.token === myToken)) {
+        flash = { id: newestMessage.id, text: newestMessage.text, kind: "miss" };
+      } else if (
+        newestMessage.token === myToken
+        && !newestMessage.system
+        && !newestMessage.correct
+        && !newestMessage.close
+      ) {
+        flash = { id: newestMessage.id, text: newestMessage.text, kind: "miss" };
+      }
+      if (flash) {
+        setGuessFlash(flash);
+      }
     }
   }
 
@@ -237,6 +307,22 @@ export function RoomChatPanel({
           className={`chat-input${mode === "waiting" ? " waiting-chat-form" : ""}`}
           onSubmit={(event) => void handleSubmit(event)}
         >
+          {guessFlash && (
+            <p
+              className={`guess-focus-flash guess-focus-flash-${guessFlash.kind}`}
+              role="status"
+              aria-live="polite"
+              data-testid="guess-focus-flash"
+            >
+              {guessFlash.kind === "close" ? guessFlash.text : guessFlash.kind === "miss" ? (
+                <>
+                  <span className="guess-focus-flash-label">Sent:</span> {guessFlash.text}
+                </>
+              ) : (
+                guessFlash.text
+              )}
+            </p>
+          )}
           <div className="guess-hint">
             {mode === "playing"
               && canGuess
@@ -250,15 +336,27 @@ export function RoomChatPanel({
           <div className="chat-input-row">
             <div className="chat-input-box">
               <input
+                ref={inputRef}
                 type="search"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={() => {
+                  if (blurTimeoutRef.current != null) {
+                    window.clearTimeout(blurTimeoutRef.current);
+                    blurTimeoutRef.current = null;
+                  }
                   onFocusChange?.(true);
-                  if (window.innerWidth <= 900) window.scrollTo(0, 0);
                 }}
-                onBlur={() => onFocusChange?.(false)}
+                onBlur={() => {
+                  if (blurTimeoutRef.current != null) {
+                    window.clearTimeout(blurTimeoutRef.current);
+                  }
+                  blurTimeoutRef.current = window.setTimeout(() => {
+                    blurTimeoutRef.current = null;
+                    onFocusChange?.(false);
+                  }, 150);
+                }}
                 placeholder={
                   mode === "playing" && canGuess ? "Type your guess..." : "Type a message..."
                 }
