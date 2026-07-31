@@ -48,7 +48,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await guest.click('button:has-text("Join by code")')
             await guest.locator('[data-testid="waiting-room"]').wait_for()
 
-            await host.get_by_label("Rounds").fill("1")
+            await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await host.locator(".room-settings-editor details").click()
             await host.locator("#custom-words").fill("apple\ntree")
             await host.get_by_label("Only use custom words").check()

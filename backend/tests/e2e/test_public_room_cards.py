@@ -28,7 +28,7 @@ async def test_public_room_cards_explain_status_rules_and_actions():
             await host.click('text=Advanced settings')
             await host.fill('#custom-words', "apple, pear")
             await host.check('label:has-text("Only use custom words") input')
-            await host.get_by_role("button", { name: "Just for fun" }).click()
+            await host.get_by_role("button", name="Just for fun").click()
             await host.click('button:has-text("Create room")')
             await host.wait_for_selector('[data-testid="waiting-room"]')
             code = (await host.inner_text('.room-copy-button')).split("Code:")[1].strip()

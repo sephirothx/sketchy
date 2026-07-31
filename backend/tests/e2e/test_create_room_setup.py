@@ -30,7 +30,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             await page.fill('#custom-words', "apple\nred panda\nAPPLE")
             assert await page.is_visible('text=2 usable custom words')
             await page.check('label:has-text("Only use custom words") input')
-            await page.get_by_role("button", { name: "Just for fun" }).click()
+            await page.get_by_role("button", name="Just for fun").click()
             await page.check('label:has-text("Hide blanks") input')
             assert await page.is_visible('text=Hints are off because blanks are hidden.')
             await page.evaluate(
