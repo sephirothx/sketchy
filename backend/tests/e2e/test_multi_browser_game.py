@@ -189,8 +189,10 @@ async def test_multi_browser_gameplay_scenario():
             await guesser_page.wait_for_selector('canvas.drawing-canvas')
             assert not await drawer_page.evaluate("window.__wordSelectionErrorSeen")
 
-            # Mobile drawing toolbar: touch-sized chips in portrait and landscape
+            # Mobile drawing toolbar: touch-sized chips in portrait and landscape.
+            # Wait for the media-query-driven remount after each viewport resize.
             await drawer_page.set_viewport_size({"width": 390, "height": 844})
+            await drawer_page.wait_for_selector('[data-testid="toolbar-mobile"]')
             mobile_toolbar = await drawer_page.evaluate(
                 """
                 () => {
@@ -215,7 +217,7 @@ async def test_multi_browser_gameplay_scenario():
                 for size in mobile_toolbar["chipSizes"]
             )
             await drawer_page.set_viewport_size({"width": 844, "height": 390})
-            assert await drawer_page.query_selector('[data-testid="toolbar-mobile"]')
+            await drawer_page.wait_for_selector('[data-testid="toolbar-mobile"]')
             await drawer_page.set_viewport_size({"width": 1280, "height": 720})
 
             # Step 6: Drawer draws on canvas
