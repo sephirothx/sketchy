@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, SERVER_URL, socketRequestErrorMessage } from "../lib/socket";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { PublicRoomCard } from "../components/PublicRoomCard";
+import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, RoomSummary } from "../types";
@@ -160,7 +161,6 @@ export function LobbyBrowserPage() {
       <div className="lobby-header">
         <div>
           <h1>Sketchy</h1>
-          <p className="subtitle">An online multiplayer drawing &amp; guessing game</p>
         </div>
         <button
           type="button"
@@ -302,6 +302,7 @@ export function LobbyBrowserPage() {
           </div>
         )}
       </section>
+      <VersionBadge />
     </div>
   );
 }

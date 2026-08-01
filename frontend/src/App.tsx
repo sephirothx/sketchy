@@ -5,7 +5,6 @@ import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
 import { LobbyBrowserPage } from "./pages/LobbyBrowserPage";
 import { CreateRoomPage } from "./pages/CreateRoomPage";
 import { GameRoomPage } from "./pages/GameRoomPage";
-import { VersionBadge } from "./components/VersionBadge";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
@@ -25,7 +24,6 @@ function App() {
           <Route path="/room/:code" element={<GameRoomPage />} />
         </Routes>
         <SettingsModal />
-        <VersionBadge />
         <ConfettiCanvas />
       </BrowserRouter>
     </ToastProvider>

@@ -64,11 +64,6 @@
   margin-bottom: 0;
 }
 
-.subtitle {
-  color: #6b6f76;
-  margin-top: 4px;
-}
-
 .panel {
   background: #fff;
   border: 1px solid #dfe1e6;
@@ -3896,7 +3891,6 @@ textarea:disabled {
   background: #334155;
 }
 
-[data-theme="dark"] .subtitle,
 [data-theme="dark"] .field-hint,
 [data-theme="dark"] .room-meta,
 [data-theme="dark"] .room-code,
