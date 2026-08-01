@@ -167,9 +167,10 @@ export function LobbyBrowserPage() {
           className="header-settings-button"
           onClick={openSettings}
           title="Game Settings"
+          aria-label="Game Settings"
         >
           <SettingsIcon size={16} />
-          <span>Settings</span>
+          <span className="header-action-label">Settings</span>
         </button>
       </div>
 
