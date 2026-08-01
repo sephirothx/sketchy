@@ -467,12 +467,15 @@ textarea:disabled {
   background: #fff;
   transform: translateX(20px);
 }
-.m3-switch-label:hover:not(.is-disabled) input:not(:checked) ~ .m3-switch-track .m3-switch-thumb {
-  background: #5f6368;
-}
-.m3-switch-label:hover:not(.is-disabled) input:checked ~ .m3-switch-track {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+/* Only apply hover polish on real hover devices — touch leaves :hover stuck after tap */
+@media (hover: hover) and (pointer: fine) {
+  .m3-switch-label:hover:not(.is-disabled) input:not(:checked) ~ .m3-switch-track .m3-switch-thumb {
+    background: #5f6368;
+  }
+  .m3-switch-label:hover:not(.is-disabled) input:checked ~ .m3-switch-track {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+  }
 }
 
 @media (max-width: 600px) {
@@ -496,10 +499,83 @@ textarea:disabled {
   .advanced-settings summary span { display: block; margin: 4px 0 0; }
   .create-room-submit { width: 100%; }
   .segmented-control:not(.room-choice-segmented) { grid-auto-columns: minmax(88px, 1fr); width: fit-content; }
-  .room-choice-segmented {
+
+  /* Hints ChoiceChips: 2x2 on narrow screens (thumb assumes a single row) */
+  .room-choice-group {
     max-width: 100%;
-    overflow-x: auto;
-    width: max-content;
+  }
+  .room-choice-segmented,
+  .advanced-settings-content .segmented-control.room-choice-segmented,
+  .room-settings-advanced .segmented-control.room-choice-segmented {
+    /* Same outer radius as the single-line pill (~37px tall), not height/2 of the 2x2 */
+    border-radius: 18.5px;
+    box-sizing: border-box;
+    grid-auto-columns: unset;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 100%;
+    overflow-x: visible;
+    width: 100%;
+  }
+  .room-choice-segmented .segmented-control-thumb {
+    display: none;
+  }
+  .room-choice-segmented button {
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+  .room-choice-segmented button[aria-pressed="true"] {
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+    color: #1e293b;
+  }
+  [data-theme="dark"] .room-choice-segmented button[aria-pressed="true"] {
+    background: #1e293b;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    color: #f8fafc;
+  }
+
+  /* Stack InputNumber / labeled segmented rows; keep switches on one line */
+  .create-room-card .input-number-field,
+  .room-settings-fields .input-number-field,
+  .create-room-card .segmented-control-field.is-labeled,
+  .room-settings-fields .segmented-control-field.is-labeled,
+  .advanced-settings-content .segmented-control-field.is-labeled,
+  .room-settings-advanced .segmented-control-field.is-labeled {
+    align-items: flex-start;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .create-room-card .input-number-field > span,
+  .room-settings-fields .input-number-field > span,
+  .create-room-card .segmented-control-label,
+  .room-settings-fields .segmented-control-label,
+  .advanced-settings-content .segmented-control-label,
+  .room-settings-advanced .segmented-control-label {
+    flex: none;
+    white-space: normal;
+    width: auto;
+  }
+
+  .create-room-card .m3-switch-label,
+  .room-settings-fields .m3-switch-label,
+  .advanced-settings-content .m3-switch-label,
+  .room-settings-advanced .m3-switch-label {
+    align-items: center;
+    flex-direction: row;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .create-room-card .m3-switch-text,
+  .room-settings-fields .m3-switch-text,
+  .advanced-settings-content .m3-switch-text,
+  .room-settings-advanced .m3-switch-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    width: auto;
   }
 }
 
@@ -3504,26 +3580,116 @@ textarea:disabled {
 }
 
 @media (max-width: 600px) {
+  .modal-overlay:has(.settings-modal-card) {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: 16px 0;
+  }
+
+  .settings-tabs {
+    flex-wrap: nowrap;
+    gap: 0;
+    min-width: 0;
+  }
+
+  .settings-tab-button {
+    flex: 0 1 auto;
+    font-size: 12px;
+    min-width: 0;
+    padding: 8px 6px;
+    white-space: nowrap;
+  }
+
+  .settings-modal-card {
+    max-height: min(90dvh, 90vh);
+    overflow-y: auto;
+    padding: 20px 14px;
+    width: calc(100% - 20px);
+  }
+
   .settings-fields {
     grid-template-columns: 1fr;
   }
 
-  .settings-fields > .m3-switch-label,
-  .settings-fields > .segmented-control-field.is-labeled,
-  .settings-fields > .settings-labeled-field {
-    align-items: start;
-    grid-template-columns: 1fr;
-    row-gap: 8px;
+  /* Switches: label and track on one row */
+  .settings-fields > .m3-switch-label {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    grid-template-columns: unset;
+    justify-content: space-between;
+    width: 100%;
   }
 
-  .settings-fields .m3-switch-text,
+  .settings-fields > .m3-switch-label .m3-switch-text {
+    flex: 1 1 auto;
+    grid-column: auto;
+    min-width: 0;
+    white-space: normal;
+    width: auto;
+  }
+
+  .settings-fields > .m3-switch-label .m3-switch-track {
+    flex: 0 0 auto;
+    grid-column: auto;
+  }
+
+  /* Wide controls: label above control */
+  .settings-fields > .segmented-control-field.is-labeled,
+  .settings-fields > .settings-labeled-field {
+    align-items: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    grid-template-columns: unset;
+  }
+
   .settings-fields .segmented-control-label,
   .settings-fields .settings-labeled-field-label {
+    grid-column: auto;
     white-space: normal;
+    width: auto;
+  }
+
+  .settings-fields .segmented-control,
+  .settings-fields .name-color-controls,
+  .settings-fields .settings-volume-control {
+    grid-column: auto;
+    justify-self: unset;
+    max-width: 100%;
+  }
+
+  .settings-fields .segmented-control {
+    grid-auto-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .settings-fields .segmented-control button {
+    padding: 8px 10px;
   }
 
   .settings-volume-control {
     max-width: none;
+  }
+
+  /* Color + preview + Randomize stay on one line */
+  .settings-fields .name-color-controls {
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .settings-fields .name-color-controls .colored-player-name,
+  .settings-fields .name-color-controls > strong {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .settings-fields .name-color-randomize {
+    flex: 0 0 auto;
   }
 }
 
