@@ -25,6 +25,14 @@ body {
 button {
   font-family: inherit;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Switches are <label>s; kill the same tap flash on touch devices */
+.m3-switch-label,
+.segmented-control,
+.room-choice-group {
+  -webkit-tap-highlight-color: transparent;
 }
 
 button:disabled,

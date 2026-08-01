@@ -467,12 +467,15 @@ textarea:disabled {
   background: #fff;
   transform: translateX(20px);
 }
-.m3-switch-label:hover:not(.is-disabled) input:not(:checked) ~ .m3-switch-track .m3-switch-thumb {
-  background: #5f6368;
-}
-.m3-switch-label:hover:not(.is-disabled) input:checked ~ .m3-switch-track {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+/* Only apply hover polish on real hover devices — touch leaves :hover stuck after tap */
+@media (hover: hover) and (pointer: fine) {
+  .m3-switch-label:hover:not(.is-disabled) input:not(:checked) ~ .m3-switch-track .m3-switch-thumb {
+    background: #5f6368;
+  }
+  .m3-switch-label:hover:not(.is-disabled) input:checked ~ .m3-switch-track {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+  }
 }
 
 @media (max-width: 600px) {
