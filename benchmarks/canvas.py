@@ -13,8 +13,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import binascii
 import json
 import math
+import re
 import statistics
 import time
 from dataclasses import asdict, dataclass
@@ -64,6 +66,58 @@ PROFILES = {
     ),
 }
 
+WebSocketFrame = tuple[int, str]
+
+
+def socketio_event_name(opcode: int, payload: str) -> str | None:
+    """Return the event name from a text Socket.IO frame, if it has one."""
+    if opcode != 1:
+        return None
+    array_start = payload.find("[")
+    if array_start < 0:
+        return None
+    try:
+        packet = json.loads(payload[array_start:])
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(packet, list) or not packet or not isinstance(packet[0], str):
+        return None
+    return packet[0]
+
+
+def socketio_event_frame_bytes(
+    frames: list[WebSocketFrame],
+    event_name: str,
+) -> int:
+    """Return the largest wire payload for a captured Socket.IO event."""
+    largest = 0
+    for index, (opcode, payload) in enumerate(frames):
+        if socketio_event_name(opcode, payload) != event_name:
+            continue
+        candidate_bytes = len(payload.encode("utf-8"))
+        for attachment_opcode, attachment in frames[index + 1:]:
+            if attachment_opcode == 2:
+                try:
+                    candidate_bytes += len(base64.b64decode(attachment, validate=True))
+                except (binascii.Error, ValueError):
+                    candidate_bytes += len(attachment.encode("utf-8"))
+                continue
+            if attachment_opcode == 1:
+                break
+        largest = max(largest, candidate_bytes)
+    return largest
+
+
+def captured_socketio_events(frames: list[WebSocketFrame]) -> list[str]:
+    """List captured Socket.IO event names for actionable diagnostics."""
+    return sorted(
+        {
+            event_name
+            for opcode, payload in frames
+            if (event_name := socketio_event_name(opcode, payload)) is not None
+        }
+    )
+
 
 def percentile(values: list[float], fraction: float) -> float:
     if not values:
@@ -111,6 +165,33 @@ async def canvas_point(page: Page, normalized_x: float, normalized_y: float) -> 
     )
 
 
+async def select_drawing_tool(page: Page, name: str) -> None:
+    """Select a drawing tool through either desktop or mobile controls."""
+    tool = page.get_by_role(
+        "button",
+        name=re.compile(rf"^{re.escape(name)}(?: \(|$)"),
+    )
+    if await tool.count() and await tool.first.is_visible():
+        await tool.first.click()
+        return
+
+    await page.get_by_role("button", name=re.compile(r"^Choose tool, current:")).click()
+    await page.get_by_role("dialog", name="Choose tool").get_by_role(
+        "button",
+        name=name,
+        exact=True,
+    ).click()
+
+
+async def click_canvas_action(page: Page, action: str) -> None:
+    """Click Undo or Clear through either desktop or mobile controls."""
+    accessible_name = {
+        "Undo": re.compile(r"^Undo(?: last stroke)?$"),
+        "Clear": re.compile(r"^Clear(?: canvas)?$"),
+    }[action]
+    await page.get_by_role("button", name=accessible_name).click()
+
+
 async def draw_stroke(
     drawer: Page,
     start: tuple[float, float],
@@ -128,7 +209,7 @@ async def create_game(
     browser: Browser,
     profile: BrowserProfile,
     base_url: str,
-) -> tuple[BrowserContext, BrowserContext, Page, Page, list[tuple[int, str]]]:
+) -> tuple[BrowserContext, BrowserContext, Page, Page, list[WebSocketFrame]]:
     context_options: dict[str, Any] = {
         "viewport": profile.viewport,
         "is_mobile": profile.is_mobile,
@@ -138,7 +219,7 @@ async def create_game(
     observer_context = await browser.new_context(**context_options)
     drawer = await drawer_context.new_page()
     observer = await observer_context.new_page()
-    websocket_frames: list[tuple[int, str]] = []
+    websocket_frames: list[WebSocketFrame] = []
 
     await set_cpu_throttle(drawer_context, drawer, profile.cpu_throttle_rate)
     await set_cpu_throttle(observer_context, observer, profile.cpu_throttle_rate)
@@ -202,7 +283,7 @@ async def benchmark_profile(
     try:
         # A fill of the untouched white canvas exercises the worst common fill
         # region while using the same toolbar and pointer path as a player.
-        await drawer.locator('button[aria-label^="Fill"]').click()
+        await select_drawing_tool(drawer, "Fill")
         fill_x, fill_y = await canvas_point(drawer, 0.5, 0.5)
         fill_started = time.perf_counter()
         await drawer.mouse.click(fill_x, fill_y)
@@ -216,14 +297,14 @@ async def benchmark_profile(
 
         # Clear the fill and start a new pen stroke. record_stroke deliberately
         # discards pre-clear history when that next stroke begins.
-        await drawer.locator("button.clear-button").click()
+        await click_canvas_action(drawer, "Clear")
         await wait_for_canvas_pixel(
             observer,
             CANVAS_WIDTH // 2,
             CANVAS_HEIGHT // 2,
             (255, 255, 255),
         )
-        await drawer.locator('button[aria-label^="Pen"]').click()
+        await select_drawing_tool(drawer, "Pen")
 
         stroke_latencies: list[float] = []
         for index in range(stroke_samples):
@@ -255,26 +336,25 @@ async def benchmark_profile(
             await draw_stroke(drawer, start, end, steps=2)
         await wait_for_canvas_pixel(observer, *last_pixel, (0, 0, 0))
 
+        # Reloading the observer triggers the same authoritative full-history
+        # synchronization used after reconnects. Keep this measurement separate
+        # from Undo, which now uses the incremental canvas_undo protocol event.
         websocket_frames.clear()
+        await observer.reload()
+        await observer.wait_for_selector("canvas.drawing-canvas")
+        await wait_for_canvas_pixel(observer, *last_pixel, (0, 0, 0))
+        sync_frame_bytes = socketio_event_frame_bytes(websocket_frames, "sync_strokes")
+        if sync_frame_bytes == 0:
+            observed = ", ".join(captured_socketio_events(websocket_frames)) or "none"
+            raise RuntimeError(
+                "Did not capture a sync_strokes WebSocket frame after observer reload; "
+                f"observed Socket.IO events: {observed}"
+            )
+
         undo_started = time.perf_counter()
-        await drawer.locator("button.undo-button").click()
+        await click_canvas_action(drawer, "Undo")
         await wait_for_canvas_pixel(observer, *last_pixel, (255, 255, 255))
         undo_replay_ms = (time.perf_counter() - undo_started) * 1000
-
-        sync_frame_bytes = 0
-        for index, (opcode, payload) in enumerate(websocket_frames):
-            if opcode != 1 or '"sync_strokes"' not in payload:
-                continue
-            candidate_bytes = len(payload.encode("utf-8"))
-            for attachment_opcode, attachment in websocket_frames[index + 1:]:
-                if attachment_opcode == 2:
-                    candidate_bytes += len(base64.b64decode(attachment))
-                    break
-                if attachment_opcode == 1:
-                    break
-            sync_frame_bytes = max(sync_frame_bytes, candidate_bytes)
-        if sync_frame_bytes == 0:
-            raise RuntimeError("Did not capture a sync_strokes WebSocket frame")
 
         return BenchmarkResult(
             profile=profile.name,
