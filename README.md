@@ -46,9 +46,9 @@ flowchart LR
 - **Everything else** — creating/joining rooms, starting the game, choosing words, drawing,
   guessing, chat — goes through Socket.IO events. There's no REST endpoint for room creation;
   players need a live socket connection anyway, so it's simpler to do it all over the socket.
-- **No accounts**: a player is a nickname + a client-generated UUID token, stored in
-  `localStorage` per room code (`sketchy_token_<code>`), used to reconnect within the grace
-  period.
+- **No accounts**: the server assigns each player a public `playerId` plus a private reconnect
+  secret. Only the secret is stored in `localStorage` per room code
+  (`sketchy_reconnect_secret_<code>`), and it is never included in shared room or game payloads.
 
 ## Tech stack
 
@@ -134,8 +134,9 @@ VITE_SERVER_URL=http://localhost:8000
 ```
 
 Open the dev server URL in two separate browser profiles/incognito windows to test with
-multiple players — this app persists a per-room session token in `localStorage`, so multiple
-tabs in the *same* browser profile will share that storage and can behave unexpectedly.
+multiple players — this app persists a per-room reconnect secret in `localStorage`, so
+multiple tabs in the *same* browser profile will share that credential and reconnect as the
+same player.
 
 ### Running tests
 
@@ -211,8 +212,9 @@ so the whole game (UI + API + WebSocket) is served from a single port.
 
 ### Reconnection & disconnection
 
-- On disconnect, a player has 30 seconds to reconnect (with their stored token) and keep their
-  score, connection, and place in the turn order.
+- On disconnect, a player has 30 seconds to reconnect with their private stored secret and keep
+  their score and place in the turn order. A successful reconnect replaces the player's active
+  socket, so the superseded socket can no longer issue commands.
 - If the drawer disconnects and doesn't return in time, their turn is skipped and evicted from
   the rotation.
 - If everyone disconnects, the room is cleaned up.
@@ -222,8 +224,9 @@ so the whole game (UI + API + WebSocket) is served from a single port.
 - **No persistence**: all state lives in process memory. Restarting the backend clears every
   room. This is intentional for the "self-hosted for a group of friends" scale — no DB/Redis
   ops overhead.
-- **No auth**: reconnection relies on a client-side token in `localStorage`, not a password or
-  account. Anyone with the room code can join a public/private room.
+- **No accounts**: reconnection uses a bearer-style secret in `localStorage`, not a password or
+  user account. The public player ID is safe to broadcast but cannot be used to reconnect.
+  Anyone with the room code can still join a public/private room as a new player or spectator.
 - **Single process**: no horizontal scaling story; one uvicorn worker holds all rooms. Fine for
   small deployments, not for internet-scale traffic.
 - **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO

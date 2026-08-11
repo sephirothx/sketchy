@@ -10,10 +10,16 @@ import type {
   RoundEndedPayload,
   ScoringMode,
 } from "../types";
+import {
+  clearReconnectSecret,
+  readReconnectSecret,
+  writeReconnectSecret,
+} from "../lib/sessionCredentials";
 
 interface GameStore {
   nickname: string;
-  token: string | null;
+  playerId: string | null;
+  reconnectSecret: string | null;
   roomId: string | null;
   code: string | null;
   name: string;
@@ -31,7 +37,7 @@ interface GameStore {
   players: PlayerInfo[];
 
   phase: GamePhase;
-  drawerToken: string | null;
+  drawerId: string | null;
   maskedWord: string;
   myWord: string | null;
   guessedWord: string | null;
@@ -50,21 +56,26 @@ interface GameStore {
   error: string | null;
 
   setNickname: (nickname: string) => void;
-  setSession: (session: { roomId: string; code: string; token: string }) => void;
-  getStoredToken: (code: string) => string | null;
-  clearStoredToken: (code: string) => void;
+  setSession: (session: {
+    roomId: string;
+    code: string;
+    playerId: string;
+    reconnectSecret: string;
+  }) => void;
+  getStoredReconnectSecret: (code: string) => string | null;
+  clearStoredReconnectSecret: (code: string) => void;
   setRoomState: (payload: RoomStatePayload) => void;
   addMessage: (message: ChatMessage) => void;
-  applyGuessPoints: (token: string, points: number) => void;
+  applyGuessPoints: (playerId: string, points: number) => void;
   startChoosing: (payload: {
-    drawerToken: string;
+    drawerId: string;
     roundNumber: number;
     totalRounds: number;
     seconds: number;
   }) => void;
   setMyWordChoices: (choices: string[], seconds: number) => void;
   startDrawing: (payload: {
-    drawerToken: string;
+    drawerId: string;
     maskedWord: string;
     roundNumber: number;
     totalRounds: number;
@@ -89,7 +100,7 @@ interface GameStore {
 
 const initialGameFields = {
   phase: "idle" as GamePhase,
-  drawerToken: null as string | null,
+  drawerId: null as string | null,
   maskedWord: "",
   myWord: null as string | null,
   guessedWord: null as string | null,
@@ -108,7 +119,8 @@ const initialGameFields = {
 
 export const useGameStore = create<GameStore>((set) => ({
   nickname: localStorage.getItem("sketchy_nickname") || "",
-  token: null,
+  playerId: null,
+  reconnectSecret: null,
   roomId: null,
   code: null,
   name: "",
@@ -131,14 +143,14 @@ export const useGameStore = create<GameStore>((set) => ({
     localStorage.setItem("sketchy_nickname", nickname);
     set({ nickname });
   },
-  setSession: ({ roomId, code, token }) => {
-    localStorage.setItem(`sketchy_token_${code}`, token);
-    set({ roomId, code, token });
+  setSession: ({ roomId, code, playerId, reconnectSecret }) => {
+    writeReconnectSecret(localStorage, code, reconnectSecret);
+    set({ roomId, code, playerId, reconnectSecret });
   },
-  getStoredToken: (code) => localStorage.getItem(`sketchy_token_${code}`),
-  clearStoredToken: (code) => {
-    localStorage.removeItem(`sketchy_token_${code}`);
-    set({ token: null, roomId: null, code: null });
+  getStoredReconnectSecret: (code) => readReconnectSecret(localStorage, code),
+  clearStoredReconnectSecret: (code) => {
+    clearReconnectSecret(localStorage, code);
+    set({ playerId: null, reconnectSecret: null, roomId: null, code: null });
   },
   setRoomState: (payload) =>
     set((state) => ({
@@ -163,14 +175,14 @@ export const useGameStore = create<GameStore>((set) => ({
       players: payload.players,
     })),
   addMessage: (message) => set((s) => ({ messages: [...s.messages.slice(-99), message] })),
-  applyGuessPoints: (token, points) =>
+  applyGuessPoints: (playerId, points) =>
     set((s) => ({
-      players: s.players.map((p) => (p.token === token ? { ...p, score: p.score + points } : p)),
+      players: s.players.map((p) => (p.playerId === playerId ? { ...p, score: p.score + points } : p)),
     })),
-  startChoosing: ({ drawerToken, roundNumber, totalRounds, seconds }) =>
+  startChoosing: ({ drawerId, roundNumber, totalRounds, seconds }) =>
     set({
       phase: "choosing_word",
-      drawerToken,
+      drawerId,
       roundNumber,
       totalRounds,
       phaseSeconds: seconds,
@@ -183,10 +195,10 @@ export const useGameStore = create<GameStore>((set) => ({
     }),
   setMyWordChoices: (choices, seconds) =>
     set({ wordChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
-  startDrawing: ({ drawerToken, maskedWord, roundNumber, totalRounds, seconds, hintCost, letterPrices }) =>
+  startDrawing: ({ drawerId, maskedWord, roundNumber, totalRounds, seconds, hintCost, letterPrices }) =>
     set({
       phase: "drawing",
-      drawerToken,
+      drawerId,
       maskedWord,
       roundNumber,
       totalRounds,
@@ -212,7 +224,7 @@ export const useGameStore = create<GameStore>((set) => ({
       phaseSeconds: payload.seconds ?? 0,
       phaseStartedAt: Date.now(),
       players: s.players.map((p) => {
-        const updated = payload.scores.find((sc) => sc.token === p.token);
+        const updated = payload.scores.find((sc) => sc.playerId === p.playerId);
         return updated ? { ...p, score: updated.score } : p;
       }),
     })),
@@ -224,5 +236,5 @@ export const useGameStore = create<GameStore>((set) => ({
   }),
   dismissGameEnd: () => set({ phase: "idle" }),
   setError: (error) => set({ error }),
-  reset: () => set({ token: null, roomId: null, code: null, players: [], ...initialGameFields }),
+  reset: () => set({ playerId: null, reconnectSecret: null, roomId: null, code: null, players: [], ...initialGameFields }),
 }));

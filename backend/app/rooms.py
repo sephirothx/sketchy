@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import random
 import re
+import secrets
 import string
 import uuid
 from dataclasses import dataclass, field
@@ -107,7 +108,8 @@ class RoomFullError(Exception):
 
 @dataclass
 class Player:
-    token: str
+    id: str
+    reconnect_secret: str
     nickname: str
     name_color: str = field(default_factory=generate_random_name_color)
     sid: Optional[str] = None
@@ -124,7 +126,7 @@ class Player:
 class DrawingRecapEntry:
     round_number: int
     turn_number: int
-    drawer_token: str
+    drawer_id: str
     drawer_nickname: str
     drawer_name_color: str | None
     word: str
@@ -136,7 +138,7 @@ class DrawingRecapEntry:
             "index": index,
             "roundNumber": self.round_number,
             "turnNumber": self.turn_number,
-            "drawerToken": self.drawer_token,
+            "drawerId": self.drawer_id,
             "drawerNickname": self.drawer_nickname,
             "drawerNameColor": self.drawer_name_color,
             "word": self.word,
@@ -244,7 +246,7 @@ class Room:
             ),
             "players": [
                 {
-                    "token": p.token,
+                    "playerId": p.id,
                     "nickname": p.nickname,
                     "nameColor": p.name_color,
                     "score": p.score,
@@ -335,23 +337,38 @@ class RoomManager:
         active_players = [p for p in room.players.values() if not p.is_spectator]
         if not is_spectator and len(active_players) >= room.max_players:
             raise RoomFullError("Room is full")
-        token = str(uuid.uuid4())
+        player_id = str(uuid.uuid4())
         player = Player(
-            token=token,
+            id=player_id,
+            reconnect_secret=secrets.token_urlsafe(32),
             nickname=nickname,
             name_color=normalize_name_color(name_color) or generate_random_name_color(),
             score=0 if is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0),
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,
         )
-        room.players[token] = player
+        room.players[player_id] = player
         return player
 
-    def remove_player(self, room: Room, token: str) -> None:
-        room.players.pop(token, None)
+    def get_player_by_reconnect_secret(
+        self, room: Room, reconnect_secret: object
+    ) -> Player | None:
+        if not isinstance(reconnect_secret, str) or not reconnect_secret:
+            return None
+        return next(
+            (
+                player
+                for player in room.players.values()
+                if secrets.compare_digest(player.reconnect_secret, reconnect_secret)
+            ),
+            None,
+        )
+
+    def remove_player(self, room: Room, player_id: str) -> None:
+        room.players.pop(player_id, None)
         for p in room.players.values():
-            p.kick_votes.discard(token)
-            p.afk_votes.discard(token)
+            p.kick_votes.discard(player_id)
+            p.afk_votes.discard(player_id)
         self._promote_new_host_if_needed(room)
 
     def _promote_new_host_if_needed(self, room: Room) -> None:

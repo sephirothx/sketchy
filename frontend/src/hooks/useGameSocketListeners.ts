@@ -27,7 +27,7 @@ export function useGameSocketListeners() {
 
     const onRoomState = (payload: RoomStatePayload) => store.getState().setRoomState(payload);
 
-    const onPlayerJoined = (payload: { token: string; nickname: string }) => {
+    const onPlayerJoined = (payload: { playerId: string; nickname: string }) => {
       playPlayerJoinSound();
       store.getState().addMessage({
         id: nextMessageId(),
@@ -38,7 +38,7 @@ export function useGameSocketListeners() {
       });
     };
 
-    const onPlayerReconnected = (payload: { token: string; nickname: string }) => {
+    const onPlayerReconnected = (payload: { playerId: string; nickname: string }) => {
       playPlayerJoinSound();
       store.getState().addMessage({
         id: nextMessageId(),
@@ -49,7 +49,7 @@ export function useGameSocketListeners() {
       });
     };
 
-    const onPlayerDisconnected = (payload: { token: string; nickname: string }) => {
+    const onPlayerDisconnected = (payload: { playerId: string; nickname: string }) => {
       playPlayerLeaveSound();
       store.getState().addMessage({
         id: nextMessageId(),
@@ -76,7 +76,7 @@ export function useGameSocketListeners() {
     };
 
     const onTurnStarting = (payload: {
-      drawerToken: string;
+      drawerId: string;
       drawerNickname: string;
       roundNumber: number;
       totalRounds: number;
@@ -102,7 +102,7 @@ export function useGameSocketListeners() {
     };
 
     const onTurnStarted = (payload: {
-      drawerToken: string;
+      drawerId: string;
       maskedWord: string;
       roundNumber: number;
       totalRounds: number;
@@ -119,7 +119,7 @@ export function useGameSocketListeners() {
         playCloseGuessSound();
       }
       const nameColor = store.getState().players.find(
-        (player) => player.token === payload.token,
+        (player) => player.playerId === payload.playerId,
       )?.nameColor;
       store.getState().addMessage({
         ...payload,
@@ -128,11 +128,11 @@ export function useGameSocketListeners() {
       });
     };
 
-    const onCorrectGuess = (payload: { token: string; nickname: string; points: number }) => {
-      if (payload.token !== store.getState().token) {
+    const onCorrectGuess = (payload: { playerId: string; nickname: string; points: number }) => {
+      if (payload.playerId !== store.getState().playerId) {
         playCorrectGuessSound();
       }
-      store.getState().applyGuessPoints(payload.token, payload.points);
+      store.getState().applyGuessPoints(payload.playerId, payload.points);
       const pointsSuffix =
         store.getState().scoringMode === "default" ? ` (+${payload.points})` : "";
       store.getState().addMessage({
@@ -176,7 +176,7 @@ export function useGameSocketListeners() {
 
     const onSyncGame = (payload: {
       phase: string;
-      drawerToken: string | null;
+      drawerId: string | null;
       maskedWord: string;
       roundNumber: number;
       totalRounds: number;
@@ -186,14 +186,14 @@ export function useGameSocketListeners() {
     }) => {
       if (payload.phase === "choosing_word") {
         store.getState().startChoosing({
-          drawerToken: payload.drawerToken || "",
+          drawerId: payload.drawerId || "",
           roundNumber: payload.roundNumber,
           totalRounds: payload.totalRounds,
           seconds: payload.remainingSeconds,
         });
       } else if (payload.phase === "drawing") {
         store.getState().startDrawing({
-          drawerToken: payload.drawerToken || "",
+          drawerId: payload.drawerId || "",
           maskedWord: payload.maskedWord,
           roundNumber: payload.roundNumber,
           totalRounds: payload.totalRounds,

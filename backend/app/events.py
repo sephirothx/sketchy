@@ -42,7 +42,7 @@ _phase_timers: dict[str, asyncio.Task] = {}
 # Per-room list of asyncio tasks that reveal checkpoint hint letters during drawing.
 # Kept separate from _phase_timers so canceling one never cancels the other.
 _hint_timers: dict[str, list[asyncio.Task]] = {}
-# Per-player-token asyncio task that evicts a disconnected player after a grace period.
+# Per-player-ID asyncio task that evicts a disconnected player after a grace period.
 _disconnect_timers: dict[str, asyncio.Task] = {}
 
 
@@ -176,7 +176,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                         if not p.sid:
                             continue
                         masked = game.masked_word(
-                            p.token,
+                            p.id,
                             is_spectator=p.is_spectator,
                             spectators_see_solution=room.spectators_see_solution,
                         )
@@ -272,7 +272,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             )
             if sync_canvas:
                 await _emit_canvas_sync(room, sid)
-            if player.token == game.current_drawer:
+            if player.id == game.current_drawer:
                 if game.phase == Phase.CHOOSING_WORD:
                     await sio.emit(
                         "your_word_choices",
@@ -288,26 +288,39 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             await sio.emit("round_ended", _round_ended_payload(room), to=sid)
 
     async def _join_socket_room(sid: str, room: Room, player, is_reconnect: bool) -> None:
+        superseded_sid = player.sid if player.sid != sid else None
         player.sid = sid
         player.connected = True
-        await sio.save_session(sid, {"room_id": room.id, "token": player.token})
+        await sio.save_session(sid, {"room_id": room.id, "player_id": player.id})
         await sio.enter_room(sid, room.id)
-        cancel_disconnect_timer(player.token)
+        if superseded_sid:
+            await sio.disconnect(superseded_sid)
+        cancel_disconnect_timer(player.id)
         await _emit_room_state(room)
         event_name = "player_reconnected" if is_reconnect else "player_joined"
         await sio.emit(
             event_name,
-            {"token": player.token, "nickname": player.nickname},
+            {"playerId": player.id, "nickname": player.nickname},
             room=room.id,
         )
         await _sync_player_view(sid, room, player)
 
+    def _session_ack(room: Room, player: Player) -> dict:
+        """Private create/join acknowledgement for the owning socket only."""
+        return {
+            "ok": True,
+            "roomId": room.id,
+            "code": room.code,
+            "playerId": player.id,
+            "reconnectSecret": player.reconnect_secret,
+        }
+
     def _turn_payload(game: Game, player: Player | None = None, spectators_see_solution: bool = False) -> dict:
-        token = player.token if player else None
+        token = player.id if player else None
         is_spec = player.is_spectator if player else False
         return {
             "phase": game.phase.value,
-            "drawerToken": game.current_drawer,
+            "drawerId": game.current_drawer,
             "maskedWord": game.masked_word(
                 token,
                 is_spectator=is_spec,
@@ -323,7 +336,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     async def _start_turn(room: Room) -> None:
         game = room.game
         assert game is not None
-        afk_tokens = {p.token for p in room.player_list() if p.is_afk}
+        afk_tokens = {p.id for p in room.player_list() if p.is_afk}
         room.canvas_generation += 1
         choices = game.start_next_turn(
             afk_tokens,
@@ -344,7 +357,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         await sio.emit(
             "turn_starting",
             {
-                "drawerToken": game.current_drawer,
+                "drawerId": game.current_drawer,
                 "drawerNickname": drawer.nickname if drawer else "",
                 "drawerNameColor": drawer.name_color if drawer else "",
                 "roundNumber": game.round_number,
@@ -371,17 +384,17 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             await sio.emit(
                 "turn_started",
                 {
-                    "drawerToken": game.current_drawer,
+                    "drawerId": game.current_drawer,
                     "maskedWord": game.masked_word(
-                        p.token,
+                        p.id,
                         is_spectator=p.is_spectator,
                         spectators_see_solution=room.spectators_see_solution,
                     ),
                     "roundNumber": game.round_number,
                     "totalRounds": game.rounds_total,
                     "seconds": game.drawing_seconds,
-                    "hintCost": game.hint_cost(p.token),
-                    "letterPrices": game.wheel_letter_prices(p.token) if game.hint_mode == "wheel" else None,
+                    "hintCost": game.hint_cost(p.id),
+                    "letterPrices": game.wheel_letter_prices(p.id) if game.hint_mode == "wheel" else None,
                 },
                 to=p.sid,
             )
@@ -404,7 +417,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             DrawingRecapEntry(
                 round_number=game.round_number,
                 turn_number=len(room.last_game_drawings) + 1,
-                drawer_token=game.current_drawer or "",
+                drawer_id=game.current_drawer or "",
                 drawer_nickname=drawer.nickname if drawer else "Unknown player",
                 drawer_name_color=drawer.name_color if drawer else None,
                 word=game.word or "",
@@ -430,44 +443,44 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if drawer_bonus is None:
             drawer_bonus = sum(game.guess_points.values())
         deltas = {
-            p.token: game.guess_points.get(p.token, 0)
-            + (drawer_bonus if p.token == game.current_drawer else 0)
+            p.id: game.guess_points.get(p.id, 0)
+            + (drawer_bonus if p.id == game.current_drawer else 0)
             for p in players
         }
-        previous_scores = {p.token: p.score - deltas[p.token] for p in players}
+        previous_scores = {p.id: p.score - deltas[p.id] for p in players}
         previous_ranks = {
-            p.token: rank
-            for rank, p in enumerate(sorted(players, key=lambda p: -previous_scores[p.token]), start=1)
+            p.id: rank
+            for rank, p in enumerate(sorted(players, key=lambda p: -previous_scores[p.id]), start=1)
         }
         new_ranked = sorted(players, key=lambda p: -p.score)
-        new_ranks = {p.token: rank for rank, p in enumerate(new_ranked, start=1)}
+        new_ranks = {p.id: rank for rank, p in enumerate(new_ranked, start=1)}
         return {
             "word": game.word,
-            "drawerToken": game.current_drawer,
+            "drawerId": game.current_drawer,
             "drawerBonus": drawer_bonus,
             "seconds": round(game.remaining_seconds()) if game.phase_deadline else ROUND_END_SECONDS,
             "guesses": [
                 {
-                    "token": p.token,
+                    "playerId": p.id,
                     "nickname": p.nickname,
                     "nameColor": p.name_color,
-                    "seconds": game.guess_times[p.token],
+                    "seconds": game.guess_times[p.id],
                 }
                 for p in sorted(
                     players,
-                    key=lambda player: game.guess_times.get(player.token, float("inf")),
+                    key=lambda player: game.guess_times.get(player.id, float("inf")),
                 )
-                if p.token in game.guess_times
+                if p.id in game.guess_times
             ],
             "scores": [
                 {
-                    "token": p.token,
+                    "playerId": p.id,
                     "nickname": p.nickname,
                     "nameColor": p.name_color,
                     "score": p.score,
-                    "delta": deltas[p.token],
-                    "previousRank": previous_ranks[p.token],
-                    "newRank": new_ranks[p.token],
+                    "delta": deltas[p.id],
+                    "previousRank": previous_ranks[p.id],
+                    "newRank": new_ranks[p.id],
                 }
                 for p in new_ranked
             ],
@@ -481,7 +494,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             room.game = None
             room.last_game_scores = [
                 {
-                    "token": p.token,
+                    "playerId": p.id,
                     "nickname": p.nickname,
                     "nameColor": p.name_color,
                     "score": p.score,
@@ -515,8 +528,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             if p.sid
             and p.sid != exclude_sid
             and (
-                p.token in game.correct_guessers
-                or p.token == game.current_drawer
+                p.id in game.correct_guessers
+                or p.id == game.current_drawer
                 or p.is_spectator
             )
         ]
@@ -528,7 +541,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return
         guesser_count = len([
             p for p in room.connected_players()
-            if p.token != game.current_drawer and not p.is_spectator and not p.is_afk
+            if p.id != game.current_drawer and not p.is_spectator and not p.is_afk
         ])
         if game.all_guessed(guesser_count):
             await _end_round(room)
@@ -559,7 +572,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not session:
             return
         room = room_manager.get_room(session.get("room_id"))
-        token = session.get("token")
+        token = session.get("player_id")
         if not room or not token or token not in room.players:
             return
         player = room.players[token]
@@ -577,7 +590,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             p.kick_votes.discard(token)
             p.afk_votes.discard(token)
         await sio.emit(
-            "player_disconnected", {"token": token, "nickname": player.nickname}, room=room.id
+            "player_disconnected", {"playerId": token, "nickname": player.nickname}, room=room.id
         )
         await _emit_room_state(room)
 
@@ -590,7 +603,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             if not still_present or still_present.connected:
                 return
             room_manager.remove_player(room, token)
-            await sio.emit("player_left", {"token": token}, room=room.id)
+            await sio.emit("player_left", {"playerId": token}, room=room.id)
             if not room.connected_players():
                 cancel_phase_timer(room.id)
                 cancel_hint_timers(room.id)
@@ -635,7 +648,17 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         existing_room = room_manager.get_room(room_id)
         if not existing_room:
             return None
-        return existing_room.players.get(session.get("token"))
+        player = existing_room.players.get(session.get("player_id"))
+        return player if player and player.sid == sid and player.connected else None
+
+    async def require_current_player(sid: str) -> tuple[Room, Player] | None:
+        """Resolve an authenticated room member and reject superseded sockets."""
+        session = await sio.get_session(sid) if sid else None
+        room = room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("player_id")) if room and session else None
+        if not room or not player or not player.connected or player.sid != sid:
+            return None
+        return room, player
 
     @sio.event
     async def create_room(sid, data):
@@ -652,24 +675,22 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             name_color=normalize_name_color(data.get("nameColor")),
         )
         await _join_socket_room(sid, room, player, is_reconnect=False)
-        return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
+        return _session_ack(room, player)
 
     @sio.event
     async def get_room_settings(sid, data=None):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        player = room.players.get(session.get("token")) if room and session else None
-        if not room or not player or not player.is_host:
+        current = await require_current_player(sid)
+        if not current or not current[1].is_host:
             return {"ok": False, "error": "Only the host can view room settings"}
+        room, _ = current
         return {"ok": True, "settings": editable_room_settings(room)}
 
     @sio.event
     async def get_custom_words(sid, data=None):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        player = room.players.get(session.get("token")) if room and session else None
-        if not room or not player:
+        current = await require_current_player(sid)
+        if not current:
             return {"ok": False, "error": "Not in this room"}
+        room, player = current
         if player.is_spectator:
             return {"ok": False, "error": "Only players can view custom words"}
         if room.state != "waiting" or room.game:
@@ -681,12 +702,11 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def get_recap_drawing(sid, data):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        player = room.players.get(session.get("token")) if room and session else None
         index = data.get("index") if isinstance(data, dict) else None
-        if not room or not player:
+        current = await require_current_player(sid)
+        if not current:
             return {"ok": False, "error": "Not in this room"}
+        room, _ = current
         if (
             isinstance(index, bool)
             or not isinstance(index, int)
@@ -700,11 +720,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def update_room_settings(sid, data):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        player = room.players.get(session.get("token")) if room and session else None
-        if not room or not player or not player.is_host:
+        current = await require_current_player(sid)
+        if not current or not current[1].is_host:
             return {"ok": False, "error": "Only the host can change room settings"}
+        room, _ = current
         if room.state != "waiting" or room.game:
             return {"ok": False, "error": "Settings can only be changed in the waiting room"}
         settings = room_settings_from_data(data or {}, fallback=room)
@@ -715,7 +734,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             settings["custom_words_only"] = False
         for key, value in settings.items():
             setattr(room, key, value)
-        await sio.emit("chat_message", {"token": "", "nickname": "", "text": "The host updated the room settings.", "correct": False, "system": True}, room=room.id)
+        await sio.emit("chat_message", {"playerId": "", "nickname": "", "text": "The host updated the room settings.", "correct": False, "system": True}, room=room.id)
         await _emit_room_state(room)
         return {"ok": True}
 
@@ -730,7 +749,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
     @sio.event
     async def join_room(sid, data):
         data = data or {}
-        token = data.get("token")
+        reconnect_secret = data.get("reconnectSecret")
         room_id = data.get("roomId")
         code = data.get("code")
         nickname = str(data.get("nickname", "")).strip()[:20] or "Player"
@@ -753,7 +772,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if already_joined:
             already_joined.sid = sid
             already_joined.connected = True
-            cancel_disconnect_timer(already_joined.token)
+            cancel_disconnect_timer(already_joined.id)
             # Soft checks (heartbeat/visibility) must not dump full canvas history.
             await _sync_player_view(
                 sid,
@@ -761,16 +780,16 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 already_joined,
                 sync_canvas=not bool(data.get("soft")),
             )
-            return {"ok": True, "roomId": room.id, "code": room.code, "token": already_joined.token}
+            return _session_ack(room, already_joined)
 
-        if token and token in room.players:
-            player = room.players[token]
+        player = room_manager.get_player_by_reconnect_secret(room, reconnect_secret)
+        if player:
             if name_color:
                 player.name_color = name_color
             await _join_socket_room(sid, room, player, is_reconnect=True)
-            return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
-        if token:
-            return {"ok": False, "error": "Your previous room session has expired", "invalidToken": True}
+            return _session_ack(room, player)
+        if reconnect_secret:
+            return {"ok": False, "error": "Your previous room session has expired", "invalidReconnectSecret": True}
 
         try:
             player = room_manager.add_player(
@@ -787,19 +806,18 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         # (appended to the end, so everyone already playing keeps their
         # relative order) rather than blocking the join entirely.
         if room.game and not player.is_spectator:
-            room.game.add_player_to_rotation(player.token)
+            room.game.add_player_to_rotation(player.id)
 
         await _join_socket_room(sid, room, player, is_reconnect=False)
-        return {"ok": True, "roomId": room.id, "code": room.code, "token": player.token}
+        return _session_ack(room, player)
 
     @sio.event
     async def session_ping(sid, data=None):
         """Compact liveness check: [1, phase, round, remaining, gen, seq] or [0]."""
-        session = await sio.get_session(sid) if sid else None
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        player = room.players.get(session.get("token")) if room and session else None
-        if not room or not player:
+        current = await require_current_player(sid)
+        if not current:
             return [0]
+        room, _ = current
         game = room.game
         phase = {
             Phase.CHOOSING_WORD: 1,
@@ -818,11 +836,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def update_player_settings(sid, data):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        player = room.players.get(session.get("token")) if room and session else None
-        if not room or not player:
+        current = await require_current_player(sid)
+        if not current:
             return {"ok": False, "error": "Not in this room"}
+        room, player = current
         name_color = normalize_name_color((data or {}).get("nameColor"))
         if not name_color:
             return {"ok": False, "error": "Invalid player name color"}
@@ -832,11 +849,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def become_player(sid, data=None):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        player = room.players.get(session.get("token")) if room and session else None
-        if not room or not player:
+        current = await require_current_player(sid)
+        if not current:
             return {"ok": False, "error": "Not in this room"}
+        room, player = current
         if room.state != "waiting" or room.game:
             return {"ok": False, "error": "You can only join as a player from the waiting room"}
         if not player.is_spectator:
@@ -851,7 +867,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         await sio.emit(
             "chat_message",
             {
-                "token": "",
+                "playerId": "",
                 "nickname": "",
                 "text": f"{player.nickname} joined as a player.",
                 "correct": False,
@@ -864,15 +880,12 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def leave_room(sid, data=None):
-        session = await sio.get_session(sid)
-        if not session:
+        current = await require_current_player(sid)
+        if not current:
             return
-        room = room_manager.get_room(session.get("room_id"))
-        token = session.get("token")
-        if not room or not token:
-            return
-        cancel_disconnect_timer(token)
-        room_manager.remove_player(room, token)
+        room, player = current
+        cancel_disconnect_timer(player.id)
+        room_manager.remove_player(room, player.id)
         await sio.leave_room(sid, room.id)
         await sio.save_session(sid, {})
         if not room.connected_players():
@@ -880,19 +893,16 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             cancel_hint_timers(room.id)
             room_manager.remove_room_if_empty(room.id)
         else:
-            await _remove_player_from_game(room, token)
-            await sio.emit("player_left", {"token": token}, room=room.id)
+            await _remove_player_from_game(room, player.id)
+            await sio.emit("player_left", {"playerId": player.id}, room=room.id)
             await _emit_room_state(room)
 
     @sio.event
     async def toggle_afk(sid, data=None):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room:
-            return {"ok": False, "error": "Not in a room"}
-        player = room.players.get(session.get("token"))
-        if not player:
+        current = await require_current_player(sid)
+        if not current:
             return {"ok": False, "error": "Not in this room"}
+        room, player = current
 
         target_afk = not player.is_afk
         if data and "afk" in data:
@@ -902,7 +912,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         await _emit_room_state(room)
 
         if room.game and room.state == "playing":
-            if player.is_afk and player.token == room.game.current_drawer:
+            if player.is_afk and player.id == room.game.current_drawer:
                 if room.game.phase == Phase.CHOOSING_WORD:
                     await _start_turn(room)
                 elif room.game.phase == Phase.DRAWING:
@@ -914,21 +924,18 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def vote_player(sid, data):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room:
-            return {"ok": False, "error": "Not in a room"}
-        voter = room.players.get(session.get("token"))
-        if not voter:
+        current = await require_current_player(sid)
+        if not current:
             return {"ok": False, "error": "Not in this room"}
+        room, voter = current
 
-        target_token = (data or {}).get("targetToken")
+        target_token = (data or {}).get("targetPlayerId")
         action = (data or {}).get("action")
         if not target_token or action not in ("kick", "afk"):
             return {"ok": False, "error": "Invalid vote parameter"}
 
         target = room.players.get(target_token)
-        if not target or target.token == voter.token:
+        if not target or target.id == voter.id:
             return {"ok": False, "error": "Cannot vote on yourself or non-existent player"}
 
         target.kick_votes = {v for v in target.kick_votes if v in room.players and room.players[v].connected}
@@ -937,32 +944,32 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         required_votes = (len(connected_players) // 2) + 1
 
         if action == "kick":
-            if voter.token in target.kick_votes:
-                target.kick_votes.remove(voter.token)
+            if voter.id in target.kick_votes:
+                target.kick_votes.remove(voter.id)
             else:
-                target.kick_votes.add(voter.token)
+                target.kick_votes.add(voter.id)
 
             if len(target.kick_votes) >= required_votes:
                 target_sid = target.sid
-                room_manager.remove_player(room, target.token)
+                room_manager.remove_player(room, target.id)
                 if target_sid:
                     await sio.emit("kicked", {"reason": "You were kicked from the room by vote."}, to=target_sid)
                     await sio.leave_room(target_sid, room.id)
                 await sio.emit(
                     "chat_message",
-                    {"token": "", "nickname": "", "text": f"{target.nickname} was kicked by vote.", "correct": False, "system": True},
+                    {"playerId": "", "nickname": "", "text": f"{target.nickname} was kicked by vote.", "correct": False, "system": True},
                     room=room.id,
                 )
                 if room.game and room.state == "playing":
-                    await _remove_player_from_game(room, target.token)
+                    await _remove_player_from_game(room, target.id)
                 await _emit_room_state(room)
                 return {"ok": True, "action": "kick", "executed": True}
 
         elif action == "afk":
-            if voter.token in target.afk_votes:
-                target.afk_votes.remove(voter.token)
+            if voter.id in target.afk_votes:
+                target.afk_votes.remove(voter.id)
             else:
-                target.afk_votes.add(voter.token)
+                target.afk_votes.add(voter.id)
 
             if len(target.afk_votes) >= required_votes:
                 target.is_afk = True
@@ -971,11 +978,11 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                     await sio.emit("voted_afk", {"message": "You were marked AFK by room vote."}, to=target.sid)
                 await sio.emit(
                     "chat_message",
-                    {"token": "", "nickname": "", "text": f"{target.nickname} was marked AFK by vote.", "correct": False, "system": True},
+                    {"playerId": "", "nickname": "", "text": f"{target.nickname} was marked AFK by vote.", "correct": False, "system": True},
                     room=room.id,
                 )
                 if room.game and room.state == "playing":
-                    if target.token == room.game.current_drawer:
+                    if target.id == room.game.current_drawer:
                         if room.game.phase == Phase.CHOOSING_WORD:
                             await _start_turn(room)
                         elif room.game.phase == Phase.DRAWING:
@@ -994,13 +1001,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def start_game(sid, data=None):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room:
-            return {"ok": False, "error": "Not in a room"}
-        player = room.players.get(session.get("token"))
-        if not player or not player.is_host:
+        current = await require_current_player(sid)
+        if not current or not current[1].is_host:
             return {"ok": False, "error": "Only the host can start the game"}
+        room, _ = current
         active_players = [p for p in room.connected_players() if not p.is_spectator and not p.is_afk]
         if len(active_players) < 2:
             return {"ok": False, "error": "Need at least 2 active non-AFK players to start"}
@@ -1013,7 +1017,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             p.score = 0 if p.is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0)
         room.state = "playing"
         room.game = Game(
-            turn_order=[p.token for p in active_players],
+            turn_order=[p.id for p in active_players],
             rounds_total=room.rounds,
             word_pool=room.effective_word_pool(),
             drawing_seconds=room.drawing_seconds,
@@ -1028,13 +1032,12 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def select_word(sid, data):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room or not room.game:
+        current = await require_current_player(sid)
+        if not current or not current[0].game:
             return {"ok": False, "error": "Game is not ready for word selection"}
-        token = session.get("token")
+        room, player = current
         word = str((data or {}).get("word", ""))
-        if not room.game.choose_word(token, word):
+        if not room.game.choose_word(player.id, word):
             return {"ok": False, "error": "That word is no longer available"}
         cancel_phase_timer(room.id)
         await _begin_drawing(room)
@@ -1050,12 +1053,11 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             packet = decode_live_drawing(data)
         except ValueError:
             return
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room or not room.game:
+        current = await require_current_player(sid)
+        if not current or not current[0].game:
             return
-        token = session.get("token")
-        if token != room.game.current_drawer or room.game.phase != Phase.DRAWING:
+        room, player = current
+        if player.id != room.game.current_drawer or room.game.phase != Phase.DRAWING:
             return
         starts_action = packet.event in {
             "draw_start",
@@ -1144,12 +1146,11 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def undo_stroke(sid, data=None):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room or not room.game:
+        current = await require_current_player(sid)
+        if not current or not current[0].game:
             return
-        token = session.get("token")
-        if token != room.game.current_drawer:
+        room, player = current
+        if player.id != room.game.current_drawer:
             return {"ok": False, "error": "Only the drawer can undo"}
         if (
             not isinstance(data, list)
@@ -1197,11 +1198,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def send_chat(sid, data):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        player = room.players.get(session.get("token")) if room and session else None
-        if not room or not player:
+        current = await require_current_player(sid)
+        if not current:
             return {"ok": False, "error": "Not in a room"}
+        room, player = current
         if room.state != "waiting":
             return {"ok": False, "error": "Waiting-room chat is unavailable during a game"}
         text = str((data or {}).get("text", "")).strip()[:60]
@@ -1212,20 +1212,17 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             await _emit_room_state(room)
         await sio.emit(
             "chat_message",
-            {"token": player.token, "nickname": player.nickname, "text": text, "correct": False, "isSpectator": player.is_spectator},
+            {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False, "isSpectator": player.is_spectator},
             room=room.id,
         )
         return {"ok": True}
 
     @sio.event
     async def guess(sid, data):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room or not room.game:
+        current = await require_current_player(sid)
+        if not current or not current[0].game:
             return
-        player = room.players.get(session.get("token"))
-        if not player:
-            return
+        room, player = current
         text = str((data or {}).get("text", "")).strip()
         if not text:
             return
@@ -1249,7 +1246,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 await sio.emit(
                     "chat_message",
                     {
-                        "token": player.token,
+                        "playerId": player.id,
                         "nickname": player.nickname,
                         "text": text,
                         "correct": False,
@@ -1260,12 +1257,12 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 )
             return
 
-        if player.token in game.correct_guessers:
+        if player.id in game.correct_guessers:
             for target_sid in _privileged_sids(room, game):
                 await sio.emit(
                     "chat_message",
                     {
-                        "token": player.token,
+                        "playerId": player.id,
                         "nickname": player.nickname,
                         "text": text,
                         "correct": False,
@@ -1275,22 +1272,22 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 )
             return
 
-        correct, points = game.submit_guess(player.token, text)
+        correct, points = game.submit_guess(player.id, text)
         if not correct:
-            hint = game.guess_hint(player.token, text)
+            hint = game.guess_hint(player.id, text)
             if hint:
                 hint_text = f'"{text}" is very close!' if hint == "close" else "Some words are correct"
                 # The guesser should always see their own guess, even when it's
                 # not broadcast to the rest of the room.
                 await sio.emit(
                     "chat_message",
-                    {"token": player.token, "nickname": player.nickname, "text": text, "correct": False},
+                    {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False},
                     to=sid,
                 )
                 await sio.emit(
                     "chat_message",
                     {
-                        "token": player.token,
+                        "playerId": player.id,
                         "nickname": player.nickname,
                         "text": hint_text,
                         "correct": False,
@@ -1301,13 +1298,13 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                 for target_sid in _privileged_sids(room, game, exclude_sid=sid):
                     await sio.emit(
                         "chat_message",
-                        {"token": player.token, "nickname": player.nickname, "text": text, "correct": False},
+                        {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False},
                         to=target_sid,
                     )
             else:
                 await sio.emit(
                     "chat_message",
-                    {"token": player.token, "nickname": player.nickname, "text": text, "correct": False},
+                    {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False},
                     room=room.id,
                 )
             return
@@ -1315,14 +1312,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         player.score += points
         await sio.emit(
             "correct_guess",
-            {"token": player.token, "nickname": player.nickname, "points": points},
+            {"playerId": player.id, "nickname": player.nickname, "points": points},
             room=room.id,
         )
         await sio.emit("you_guessed_correctly", {"word": game.word}, to=player.sid)
         for target_sid in _privileged_sids(room, game):
             await sio.emit(
                 "chat_message",
-                {"token": player.token, "nickname": player.nickname, "text": text, "correct": True},
+                {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": True},
                 to=target_sid,
             )
 
@@ -1330,30 +1327,27 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def buy_hint(sid, data):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room or not room.game:
+        current = await require_current_player(sid)
+        if not current or not current[0].game:
             return {"ok": False, "error": "Not in an active game"}
+        room, player = current
         game = room.game
         if game.hint_mode != "purchase":
             return {"ok": False, "error": "Hint purchasing is disabled in this room"}
-        player = room.players.get(session.get("token"))
-        if not player:
-            return {"ok": False, "error": "Not in this room"}
         try:
             slot = int((data or {}).get("slot"))
         except (TypeError, ValueError):
             return {"ok": False, "error": "Invalid hint"}
-        cost = game.hint_cost(player.token)
+        cost = game.hint_cost(player.id)
         if player.score < cost:
             return {"ok": False, "error": "Not enough points"}
-        if not game.buy_hint_letter(player.token, slot):
+        if not game.buy_hint_letter(player.id, slot):
             return {"ok": False, "error": "Hint unavailable"}
 
         player.score -= cost
         await sio.emit(
             "hint_revealed",
-            {"maskedWord": game.masked_word(player.token), "hintCost": game.hint_cost(player.token)},
+            {"maskedWord": game.masked_word(player.id), "hintCost": game.hint_cost(player.id)},
             to=sid,
         )
         await _emit_room_state(room)
@@ -1361,23 +1355,20 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def buy_wheel_letter(sid, data):
-        session = await sio.get_session(sid)
-        room = room_manager.get_room(session.get("room_id")) if session else None
-        if not room or not room.game:
+        current = await require_current_player(sid)
+        if not current or not current[0].game:
             return {"ok": False, "error": "Not in an active game"}
+        room, player = current
         game = room.game
         if game.hint_mode != "wheel":
             return {"ok": False, "error": "Letter buying is disabled in this room"}
-        player = room.players.get(session.get("token"))
-        if not player:
-            return {"ok": False, "error": "Not in this room"}
         letter = str((data or {}).get("letter", "")).strip().lower()
         if len(letter) != 1 or not letter.isalpha():
             return {"ok": False, "error": "Invalid letter"}
-        cost = game.wheel_hint_cost(player.token, letter)
+        cost = game.wheel_hint_cost(player.id, letter)
         if player.score < cost:
             return {"ok": False, "error": "Not enough points"}
-        if not game.buy_wheel_letter(player.token, letter):
+        if not game.buy_wheel_letter(player.id, letter):
             return {"ok": False, "error": "Letter unavailable"}
 
         player.score -= cost
@@ -1385,8 +1376,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         await sio.emit(
             "hint_revealed",
             {
-                "maskedWord": game.masked_word(player.token),
-                "letterPrices": game.wheel_letter_prices(player.token),
+                "maskedWord": game.masked_word(player.id),
+                "letterPrices": game.wheel_letter_prices(player.id),
             },
             to=sid,
         )
@@ -1396,7 +1387,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             feedback = f"You bought '{letter.upper()}' for {cost} pts - not in the word."
         await sio.emit(
             "chat_message",
-            {"token": "", "nickname": "", "text": feedback, "correct": False, "system": True},
+            {"playerId": "", "nickname": "", "text": feedback, "correct": False, "system": True},
             to=sid,
         )
         await _emit_room_state(room)
@@ -1404,9 +1395,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
     @sio.event
     async def request_sync_strokes(sid):
-        session = await sio.get_session(sid) if sid else None
-        if not session:
-            return
-        room = room_manager.get_room(session.get("room_id"))
-        if room and room.game:
+        current = await require_current_player(sid)
+        if current and current[0].game:
+            room, _ = current
             await _emit_canvas_sync(room, sid)

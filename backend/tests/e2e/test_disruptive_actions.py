@@ -128,7 +128,7 @@ async def test_waiting_room_leave_remains_immediate():
             assert sum('"leave_room"' in frame for frame in sent_frames) == 1
             assert not any('"join_room"' in frame for frame in sent_frames)
             assert await page.evaluate(
-                "(code) => localStorage.getItem(`sketchy_token_${code}`)",
+                "(code) => localStorage.getItem(`sketchy_reconnect_secret_${code}`)",
                 room_code,
             ) is None
         finally:

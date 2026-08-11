@@ -24,6 +24,151 @@ def canvas_action(game: Game, sequence: int) -> list[int]:
     return [game.canvas_generation, sequence]
 
 
+def contains_secret(value, secret: str) -> bool:
+    if value == secret:
+        return True
+    if isinstance(value, dict):
+        return any(
+            key in {"reconnectSecret", "reconnect_secret"}
+            or contains_secret(item, secret)
+            for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple, set)):
+        return any(contains_secret(item, secret) for item in value)
+    return False
+
+
+@pytest.mark.asyncio
+async def test_public_player_ids_are_broadcast_but_reconnect_secrets_are_private():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value=None)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid", {"nickname": "Host", "name": "Room"}
+    )
+    room = room_manager.get_room(response["roomId"])
+    assert room is not None
+    host = room.players[response["playerId"]]
+    assert response["playerId"] == host.id
+    assert response["reconnectSecret"] == host.reconnect_secret
+    assert host.id != host.reconnect_secret
+
+    room.last_game_scores = [
+        {
+            "playerId": host.id,
+            "nickname": host.nickname,
+            "nameColor": host.name_color,
+            "score": host.score,
+        }
+    ]
+    room.last_game_drawings.append(
+        DrawingRecapEntry(
+            round_number=1,
+            turn_number=1,
+            drawer_id=host.id,
+            drawer_nickname=host.nickname,
+            drawer_name_color=host.name_color,
+            word="apple",
+            action_count=0,
+            canvas_history=encode_canvas_history([]),
+        )
+    )
+    host.kick_votes.add(host.id)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": host.id}
+    )
+    assert await sio.handlers["/"]["send_chat"](
+        "host-sid", {"text": "hello"}
+    ) == {"ok": True}
+
+    shared_payloads = [
+        room.to_state_payload(),
+        room.to_public_summary(),
+        room.drawing_recap_metadata(),
+        *[call.args[1] for call in sio.emit.await_args_list if len(call.args) > 1],
+    ]
+    assert any(
+        player["playerId"] == host.id
+        for player in room.to_state_payload()["players"]
+    )
+    assert all(not contains_secret(payload, host.reconnect_secret) for payload in shared_payloads)
+
+
+@pytest.mark.asyncio
+async def test_reconnect_supersedes_old_socket_and_rejects_stale_host_commands():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    host = room_manager.add_player(room, "Host")
+    host.sid = "old-sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value=None)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.disconnect = AsyncMock()
+    sio.emit = AsyncMock()
+
+    impersonation = await sio.handlers["/"]["join_room"](
+        "attacker-sid",
+        {"code": room.code, "reconnectSecret": host.id},
+    )
+    assert impersonation["ok"] is False
+    assert impersonation["invalidReconnectSecret"] is True
+    assert host.sid == "old-sid"
+
+    response = await sio.handlers["/"]["join_room"](
+        "new-sid",
+        {"code": room.code, "reconnectSecret": host.reconnect_secret},
+    )
+
+    assert response["ok"] is True
+    assert response["playerId"] == host.id
+    assert host.sid == "new-sid"
+    sio.disconnect.assert_awaited_once_with("old-sid")
+
+    sio.get_session = AsyncMock(
+        side_effect=lambda sid: {"room_id": room.id, "player_id": host.id}
+    )
+    update_settings = sio.handlers["/"]["update_room_settings"]
+    stale = await update_settings("old-sid", {"rounds": 4})
+    current = await update_settings("new-sid", {"rounds": 4})
+    assert stale["ok"] is False
+    assert current == {"ok": True}
+    assert room.rounds == 4
+
+
+@pytest.mark.asyncio
+async def test_session_player_id_cannot_impersonate_another_active_player():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    host = room_manager.add_player(room, "Host")
+    guest = room_manager.add_player(room, "Guest")
+    host.sid = "host-sid"
+    guest.sid = "guest-sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": guest.id}
+    )
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["send_chat"](
+        "attacker-sid", {"text": "forged"}
+    )
+    assert response["ok"] is False
+    assert not any(
+        call.args[0] == "chat_message" and call.args[1].get("text") == "forged"
+        for call in sio.emit.await_args_list
+    )
+
+
 
 
 @pytest.mark.asyncio
@@ -73,12 +218,12 @@ async def test_player_name_color_is_created_and_can_be_updated_live():
     )
     room = room_manager.get_room(response["roomId"])
     assert room is not None
-    player = room.players[response["token"]]
+    player = room.players[response["playerId"]]
     assert player.name_color == "#aabbcc"
     assert room.to_state_payload()["players"][0]["nameColor"] == "#aabbcc"
 
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": player.token}
+        return_value={"room_id": room.id, "player_id": player.id}
     )
     update = sio.handlers["/"]["update_player_settings"]
     assert await update("host-sid", {"nameColor": "#123ABC"}) == {"ok": True}
@@ -97,9 +242,10 @@ async def test_host_can_update_waiting_room_settings_and_chat():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Before", is_public=True, max_players=4)
     host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": host.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": host.id})
     sio.emit = AsyncMock()
 
     settings = await sio.handlers["/"]["get_room_settings"]("host-sid", {})
@@ -134,15 +280,16 @@ async def test_only_host_can_update_waiting_room_settings_and_not_during_game():
     room = room_manager.create_room(name="Room", is_public=True)
     host = room_manager.add_player(room, "Host")
     guest = room_manager.add_player(room, "Guest")
+    host.sid, guest.sid = "host-sid", "guest-sid"
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.emit = AsyncMock()
     update = sio.handlers["/"]["update_room_settings"]
 
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": guest.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guest.id})
     assert (await update("guest-sid", {"rounds": 4}))["ok"] is False
 
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": host.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": host.id})
     room.state = "playing"
     assert "waiting room" in (await update("host-sid", {"rounds": 4}))["error"]
     assert (await sio.handlers["/"]["send_chat"]("host-sid", {"text": "nope"}))["ok"] is False
@@ -158,10 +305,11 @@ async def test_room_members_can_inspect_custom_words_only_while_waiting():
     )
     room_manager.add_player(room, "Host")
     guest = room_manager.add_player(room, "Guest")
+    guest.sid = "guest-sid"
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": guest.token}
+        return_value={"room_id": room.id, "player_id": guest.id}
     )
     get_custom_words = sio.handlers["/"]["get_custom_words"]
 
@@ -191,10 +339,11 @@ async def test_waiting_spectator_can_become_player_when_space_is_available():
     room = room_manager.create_room(name="Room", max_players=2)
     room_manager.add_player(room, "Host")
     spectator = room_manager.add_player(room, "Spectator", is_spectator=True)
+    spectator.sid = "spectator-sid"
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": spectator.token}
+        return_value={"room_id": room.id, "player_id": spectator.id}
     )
     sio.emit = AsyncMock()
 
@@ -206,7 +355,7 @@ async def test_waiting_spectator_can_become_player_when_space_is_available():
     assert any(
         call.args[0] == "room_state"
         and any(
-            player["token"] == spectator.token and not player["isSpectator"]
+            player["playerId"] == spectator.id and not player["isSpectator"]
             for player in call.args[1]["players"]
         )
         for call in sio.emit.await_args_list
@@ -220,10 +369,11 @@ async def test_spectator_cannot_become_player_when_room_is_full_or_playing():
     room_manager.add_player(room, "Host")
     room_manager.add_player(room, "Player")
     spectator = room_manager.add_player(room, "Spectator", is_spectator=True)
+    spectator.sid = "spectator-sid"
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": spectator.token}
+        return_value={"room_id": room.id, "player_id": spectator.id}
     )
     sio.emit = AsyncMock()
     become_player = sio.handlers["/"]["become_player"]
@@ -274,7 +424,7 @@ async def test_room_preview_returns_private_room_metadata_without_joining():
 
 
 @pytest.mark.asyncio
-async def test_join_with_expired_token_does_not_create_fallback_player():
+async def test_join_with_expired_reconnect_secret_does_not_create_fallback_player():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=False)
     room_manager.add_player(room, "Host")
@@ -286,13 +436,13 @@ async def test_join_with_expired_token_does_not_create_fallback_player():
 
     response = await join_room(
         "visitor-sid",
-        {"code": room.code, "token": "expired-token", "nickname": ""},
+        {"code": room.code, "reconnectSecret": "expired-secret", "nickname": ""},
     )
 
     assert response == {
         "ok": False,
         "error": "Your previous room session has expired",
-        "invalidToken": True,
+        "invalidReconnectSecret": True,
     }
     assert [player.nickname for player in room.player_list()] == ["Host"]
 
@@ -302,13 +452,14 @@ async def test_draw_handler_rejects_events_outside_drawing_phase():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     drawer = room_manager.add_player(room, "Drawer")
+    drawer.sid = "drawer-sid"
     room_manager.add_player(room, "Guesser")
     room.game = Game(turn_order=list(room.players))
     room.game.start_next_turn()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
     sio.emit = AsyncMock()
     draw = sio.handlers["/"]["draw"]
     payload = {"x": 0.2, "y": 0.3, "color": "#000000", "width": 4}
@@ -336,6 +487,7 @@ async def test_draw_handler_records_and_rebroadcasts_every_binary_action():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     drawer = room_manager.add_player(room, "Drawer")
+    drawer.sid = "drawer-sid"
     room_manager.add_player(room, "Guesser")
     room.game = Game(turn_order=list(room.players))
     room.game.start_next_turn()
@@ -344,7 +496,7 @@ async def test_draw_handler_records_and_rebroadcasts_every_binary_action():
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": drawer.token}
+        return_value={"room_id": room.id, "player_id": drawer.id}
     )
     sio.emit = AsyncMock()
     draw = sio.handlers["/"]["draw"]
@@ -409,14 +561,15 @@ async def test_draw_handler_requests_gaps_and_accepts_retransmission():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     drawer = room_manager.add_player(room, "Drawer")
-    room.game = Game(turn_order=[drawer.token])
+    drawer.sid = "drawer-sid"
+    room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn()
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": drawer.token},
+        return_value={"room_id": room.id, "player_id": drawer.id},
     )
     sio.emit = AsyncMock()
     draw = sio.handlers["/"]["draw"]
@@ -455,7 +608,8 @@ async def test_draw_handler_rejects_actions_from_a_previous_canvas_generation():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     drawer = room_manager.add_player(room, "Drawer")
-    room.game = Game(turn_order=[drawer.token])
+    drawer.sid = "drawer-sid"
+    room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=1)
     room.game.start_next_turn(canvas_generation=2)
     room.game.force_word_choice()
@@ -463,7 +617,7 @@ async def test_draw_handler_rejects_actions_from_a_previous_canvas_generation():
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": drawer.token},
+        return_value={"room_id": room.id, "player_id": drawer.id},
     )
     sio.emit = AsyncMock()
     draw = sio.handlers["/"]["draw"]
@@ -490,14 +644,15 @@ async def test_retransmitted_committed_path_is_idempotent():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     drawer = room_manager.add_player(room, "Drawer")
-    room.game = Game(turn_order=[drawer.token])
+    drawer.sid = "drawer-sid"
+    room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn()
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": drawer.token},
+        return_value={"room_id": room.id, "player_id": drawer.id},
     )
     sio.emit = AsyncMock()
     draw = sio.handlers["/"]["draw"]
@@ -535,14 +690,15 @@ async def test_retransmitted_incomplete_path_restarts_the_semantic_action():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     drawer = room_manager.add_player(room, "Drawer")
-    room.game = Game(turn_order=[drawer.token])
+    drawer.sid = "drawer-sid"
+    room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn()
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": drawer.token},
+        return_value={"room_id": room.id, "player_id": drawer.id},
     )
     sio.emit = AsyncMock()
     draw = sio.handlers["/"]["draw"]
@@ -573,14 +729,15 @@ async def test_undo_hash_mismatch_sends_authoritative_sync():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     drawer = room_manager.add_player(room, "Drawer")
-    room.game = Game(turn_order=[drawer.token])
+    drawer.sid = "drawer-sid"
+    room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn()
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": drawer.token},
+        return_value={"room_id": room.id, "player_id": drawer.id},
     )
     sio.emit = AsyncMock()
     draw = sio.handlers["/"]["draw"]
@@ -634,7 +791,11 @@ async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase()
 
     response = await join_room(
         "new-sid",
-        {"code": room.code, "token": drawer.token, "nickname": drawer.nickname},
+        {
+            "code": room.code,
+            "reconnectSecret": drawer.reconnect_secret,
+            "nickname": drawer.nickname,
+        },
     )
 
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
@@ -660,17 +821,23 @@ async def test_already_joined_socket_resyncs_active_drawing_state():
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
     sio.emit = AsyncMock()
     join_room = sio.handlers["/"]["join_room"]
 
     response = await join_room(
         "drawer-sid",
-        {"code": room.code, "token": drawer.token, "nickname": drawer.nickname},
+        {"code": room.code, "nickname": drawer.nickname},
     )
 
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
-    assert response == {"ok": True, "roomId": room.id, "code": room.code, "token": drawer.token}
+    assert response == {
+        "ok": True,
+        "roomId": room.id,
+        "code": room.code,
+        "playerId": drawer.id,
+        "reconnectSecret": drawer.reconnect_secret,
+    }
     assert "sync_game" in emitted_events
     assert "you_are_drawing" in emitted_events
     assert "player_reconnected" not in emitted_events
@@ -686,23 +853,23 @@ async def test_already_joined_socket_resyncs_round_end_overlay():
     drawer.sid = "drawer-sid"
     guesser.sid = "guesser-sid"
     room.state = "playing"
-    room.game = Game(turn_order=[drawer.token, guesser.token])
+    room.game = Game(turn_order=[drawer.id, guesser.id])
     room.game.start_next_turn()
     room.game.force_word_choice()
-    room.game.guess_points[guesser.token] = 200
-    room.game.guess_times[guesser.token] = 12.0
+    room.game.guess_points[guesser.id] = 200
+    room.game.guess_times[guesser.id] = 12.0
     assert room.game.end_round() is not None
     room.game.set_phase_deadline(5)
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
     sio.emit = AsyncMock()
     join_room = sio.handlers["/"]["join_room"]
 
     response = await join_room(
         "drawer-sid",
-        {"code": room.code, "token": drawer.token, "nickname": drawer.nickname},
+        {"code": room.code, "nickname": drawer.nickname},
     )
 
     round_ended_calls = [call for call in sio.emit.await_args_list if call.args[0] == "round_ended"]
@@ -729,7 +896,7 @@ async def test_session_ping_reports_phase_or_needs_rebind():
     register_handlers(sio, room_manager)
     session_ping = sio.handlers["/"]["session_ping"]
 
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
     ok = await session_ping("drawer-sid")
     assert ok[0] == 1
     assert ok[1] == 2  # drawing
@@ -758,13 +925,13 @@ async def test_soft_already_joined_skips_canvas_sync():
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
     sio.emit = AsyncMock()
     join_room = sio.handlers["/"]["join_room"]
 
     response = await join_room(
         "drawer-sid",
-        {"code": room.code, "token": drawer.token, "nickname": drawer.nickname, "soft": True},
+        {"code": room.code, "nickname": drawer.nickname, "soft": True},
     )
 
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
@@ -788,7 +955,7 @@ async def test_explicit_drawer_leave_starts_next_survivor_turn():
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
     sio.leave_room = AsyncMock()
     sio.save_session = AsyncMock()
     sio.emit = AsyncMock()
@@ -796,7 +963,7 @@ async def test_explicit_drawer_leave_starts_next_survivor_turn():
 
     await leave_room(drawer.sid)
 
-    assert room.game.current_drawer == next_player.token
+    assert room.game.current_drawer == next_player.id
     assert room.game.phase.value == "choosing_word"
     assert room.game.round_number == 1
 
@@ -813,7 +980,7 @@ async def test_simultaneous_final_guesses_end_round_once():
     players = [room_manager.add_player(room, name) for name in ("Drawer", "One", "Two")]
     for index, player in enumerate(players):
         player.sid = f"sid-{index}"
-    room.game = Game(turn_order=[player.token for player in players], rounds_total=2)
+    room.game = Game(turn_order=[player.id for player in players], rounds_total=2)
     room.game.start_next_turn()
     room.game.force_word_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
@@ -822,7 +989,7 @@ async def test_simultaneous_final_guesses_end_round_once():
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        player.sid: {"room_id": room.id, "token": player.token}
+        player.sid: {"room_id": room.id, "player_id": player.id}
         for player in players
     }
 
@@ -866,19 +1033,19 @@ async def test_finished_drawing_turn_is_captured_for_recap():
     guesser.sid = "guesser-sid"
     room.state = "playing"
     room.game = Game(
-        turn_order=[drawer.token, guesser.token],
+        turn_order=[drawer.id, guesser.id],
         rounds_total=1,
         word_pool=["apple"],
     )
     room.game.start_next_turn()
-    room.game.choose_word(drawer.token, "apple")
+    room.game.choose_word(drawer.id, "apple")
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        drawer.sid: {"room_id": room.id, "token": drawer.token},
-        guesser.sid: {"room_id": room.id, "token": guesser.token},
+        drawer.sid: {"room_id": room.id, "player_id": drawer.id},
+        guesser.sid: {"room_id": room.id, "player_id": guesser.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions[sid])
     sio.emit = AsyncMock()
@@ -897,7 +1064,7 @@ async def test_finished_drawing_turn_is_captured_for_recap():
     recap = room.last_game_drawings[0]
     assert recap.round_number == 1
     assert recap.turn_number == 1
-    assert recap.drawer_token == drawer.token
+    assert recap.drawer_id == drawer.id
     assert recap.drawer_nickname == "Drawer"
     assert recap.drawer_name_color == "#123abc"
     assert recap.word == "apple"
@@ -917,12 +1084,13 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     player = room_manager.add_player(room, "Player")
+    player.sid = "player-sid"
     canvas = encode_canvas_history([ClearAction()])
     room.last_game_drawings.append(
         DrawingRecapEntry(
             round_number=2,
             turn_number=4,
-            drawer_token=player.token,
+            drawer_id=player.id,
             drawer_nickname=player.nickname,
             drawer_name_color=player.name_color,
             word="tree",
@@ -934,7 +1102,7 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": player.token},
+        return_value={"room_id": room.id, "player_id": player.id},
     )
     get_drawing = sio.handlers["/"]["get_recap_drawing"]
 
@@ -945,7 +1113,7 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
         "index": 0,
         "roundNumber": 2,
         "turnNumber": 4,
-        "drawerToken": player.token,
+        "drawerId": player.id,
         "drawerNickname": "Player",
         "drawerNameColor": player.name_color,
         "word": "tree",
@@ -975,7 +1143,7 @@ async def test_starting_new_game_clears_previous_drawing_recap():
         DrawingRecapEntry(
             round_number=1,
             turn_number=1,
-            drawer_token=host.token,
+            drawer_id=host.id,
             drawer_nickname=host.nickname,
             drawer_name_color=host.name_color,
             word="old",
@@ -987,7 +1155,7 @@ async def test_starting_new_game_clears_previous_drawing_recap():
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": host.token},
+        return_value={"room_id": room.id, "player_id": host.id},
     )
     sio.emit = AsyncMock()
 
@@ -1012,18 +1180,18 @@ async def test_buy_hint_purchase_mode():
     guesser.sid = "guesser-sid"
 
     room.game = Game(
-        turn_order=[drawer.token, guesser.token],
+        turn_order=[drawer.id, guesser.id],
         hint_mode="purchase",
         word_pool=["apple"],
     )
     room.game.start_next_turn()
-    room.game.choose_word(drawer.token, "apple")
+    room.game.choose_word(drawer.id, "apple")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        "drawer-sid": {"room_id": room.id, "token": drawer.token},
-        "guesser-sid": {"room_id": room.id, "token": guesser.token},
+        "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
+        "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
@@ -1039,7 +1207,7 @@ async def test_buy_hint_purchase_mode():
     assert res["ok"] is True
     assert res["cost"] == 12
     assert guesser.score == initial_score - 12
-    assert 0 in room.game.purchased_hints[guesser.token]
+    assert 0 in room.game.purchased_hints[guesser.id]
 
     # Check hint_revealed event emission
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
@@ -1067,16 +1235,16 @@ async def test_buy_wheel_letter():
     drawer.sid = "drawer-sid"
 
     room.game = Game(
-        turn_order=[drawer.token, guesser.token],
+        turn_order=[drawer.id, guesser.id],
         hint_mode="wheel",
         word_pool=["banana"],
     )
     room.game.start_next_turn()
-    room.game.choose_word(drawer.token, "banana")
+    room.game.choose_word(drawer.id, "banana")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": guesser.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
     sio.emit = AsyncMock()
     buy_wheel_letter = sio.handlers["/"]["buy_wheel_letter"]
 
@@ -1091,7 +1259,7 @@ async def test_buy_wheel_letter():
     assert res["ok"] is True
     assert res["found"] == 3
     assert guesser.score < initial_score
-    assert "a" in room.game.purchased_letters[guesser.token]
+    assert "a" in room.game.purchased_letters[guesser.id]
 
     # Attempting to buy the same letter again should fail
     dup_res = await buy_wheel_letter("guesser-sid", {"letter": "a"})
@@ -1118,15 +1286,15 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     drawer.sid = "drawer-sid"
     guesser.sid = "guesser-sid"
 
-    room.game = Game(turn_order=[drawer.token, guesser.token])
+    room.game = Game(turn_order=[drawer.id, guesser.id])
     room.game.start_next_turn()
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        "drawer-sid": {"room_id": room.id, "token": drawer.token},
-        "guesser-sid": {"room_id": room.id, "token": guesser.token},
+        "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
+        "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
@@ -1227,13 +1395,13 @@ async def test_draw_fill_handler_validation():
     drawer = room_manager.add_player(room, "Drawer")
     drawer.sid = "drawer-sid"
 
-    room.game = Game(turn_order=[drawer.token])
+    room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn()
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value={"room_id": room.id, "token": drawer.token})
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
     sio.emit = AsyncMock()
     draw = sio.handlers["/"]["draw"]
 
@@ -1277,19 +1445,19 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
     guesser2.sid = "guesser2-sid"
 
     room.game = Game(
-        turn_order=[drawer.token, guesser1.token, guesser2.token],
+        turn_order=[drawer.id, guesser1.id, guesser2.id],
         word_pool=["panda"],
     )
     room.game.start_next_turn()
-    room.game.choose_word(drawer.token, "panda")
+    room.game.choose_word(drawer.id, "panda")
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        "drawer-sid": {"room_id": room.id, "token": drawer.token},
-        "guesser1-sid": {"room_id": room.id, "token": guesser1.token},
-        "guesser2-sid": {"room_id": room.id, "token": guesser2.token},
+        "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
+        "guesser1-sid": {"room_id": room.id, "player_id": guesser1.id},
+        "guesser2-sid": {"room_id": room.id, "player_id": guesser2.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
@@ -1316,7 +1484,7 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
 
     # Guesser1 guesses correctly ("panda")
     await guess("guesser1-sid", {"text": "panda"})
-    assert guesser1.token in room.game.correct_guessers
+    assert guesser1.id in room.game.correct_guessers
 
     sio.emit.reset_mock()
 
@@ -1347,7 +1515,7 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
     drawer = room_manager.add_player(room, "Drawer")
     drawer.sid = "drawer-sid"
 
-    room.game = Game(turn_order=[drawer.token], rounds_total=1)
+    room.game = Game(turn_order=[drawer.id], rounds_total=1)
     room.game.start_next_turn()
     room.game.force_word_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
@@ -1362,7 +1530,7 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sessions = {"joiner-sid": {"room_id": room.id, "token": joiner.token}}
+    sessions = {"joiner-sid": {"room_id": room.id, "player_id": joiner.id}}
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
 
@@ -1395,13 +1563,13 @@ async def test_request_sync_strokes_seeds_empty_history_revision():
     room = room_manager.create_room(name="Room", is_public=True)
     player = room_manager.add_player(room, "Player")
     player.sid = "player-sid"
-    room.game = Game(turn_order=[player.token])
+    room.game = Game(turn_order=[player.id])
     room.game.start_next_turn()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "token": player.token},
+        return_value={"room_id": room.id, "player_id": player.id},
     )
     sio.emit = AsyncMock()
 
@@ -1430,26 +1598,26 @@ async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
     guesser.sid = "guesser-sid"
     spectator.sid = "spec-sid"
 
-    room.game = Game(turn_order=[drawer.token, guesser.token], rounds_total=1)
+    room.game = Game(turn_order=[drawer.id, guesser.id], rounds_total=1)
     room.game.start_next_turn()
     room.game._set_word("apple")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        "drawer-sid": {"room_id": room.id, "token": drawer.token},
-        "guesser-sid": {"room_id": room.id, "token": guesser.token},
-        "spec-sid": {"room_id": room.id, "token": spectator.token},
+        "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
+        "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
+        "spec-sid": {"room_id": room.id, "player_id": spectator.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
 
     # Spectator masked word is unmasked because spectators_see_solution=True
-    spec_masked = room.game.masked_word(spectator.token, is_spectator=spectator.is_spectator, spectators_see_solution=room.spectators_see_solution)
+    spec_masked = room.game.masked_word(spectator.id, is_spectator=spectator.is_spectator, spectators_see_solution=room.spectators_see_solution)
     assert spec_masked == "apple"
 
     # Active guesser masked word is masked
-    guesser_masked = room.game.masked_word(guesser.token, is_spectator=guesser.is_spectator, spectators_see_solution=room.spectators_see_solution)
+    guesser_masked = room.game.masked_word(guesser.id, is_spectator=guesser.is_spectator, spectators_see_solution=room.spectators_see_solution)
     assert guesser_masked != "apple"
 
     # Spectator sends chat message
@@ -1479,16 +1647,16 @@ async def test_toggle_afk_socket_handler_and_not_waited_for():
     p1.sid, p2.sid, p3.sid = "p1-sid", "p2-sid", "p3-sid"
 
     room.state = "playing"
-    room.game = Game(turn_order=[p1.token, p2.token, p3.token], rounds_total=1)
+    room.game = Game(turn_order=[p1.id, p2.id, p3.id], rounds_total=1)
     room.game.start_next_turn()
     room.game._set_word("banana")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        "p1-sid": {"room_id": room.id, "token": p1.token},
-        "p2-sid": {"room_id": room.id, "token": p2.token},
-        "p3-sid": {"room_id": room.id, "token": p3.token},
+        "p1-sid": {"room_id": room.id, "player_id": p1.id},
+        "p2-sid": {"room_id": room.id, "player_id": p2.id},
+        "p3-sid": {"room_id": room.id, "player_id": p3.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
@@ -1525,9 +1693,9 @@ async def test_vote_kick_and_vote_afk_socket_handlers():
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        "p1-sid": {"room_id": room.id, "token": p1.token},
-        "p2-sid": {"room_id": room.id, "token": p2.token},
-        "p3-sid": {"room_id": room.id, "token": p3.token},
+        "p1-sid": {"room_id": room.id, "player_id": p1.id},
+        "p2-sid": {"room_id": room.id, "player_id": p2.id},
+        "p3-sid": {"room_id": room.id, "player_id": p3.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
@@ -1535,28 +1703,28 @@ async def test_vote_kick_and_vote_afk_socket_handlers():
     vote_player = sio.handlers["/"]["vote_player"]
 
     # P1 votes to AFK P2 (required = 2 votes because 2 other connected players)
-    res1 = await vote_player("p1-sid", {"targetToken": p2.token, "action": "afk"})
+    res1 = await vote_player("p1-sid", {"targetPlayerId": p2.id, "action": "afk"})
     assert res1["ok"] is True
     assert res1["executed"] is False
-    assert p1.token in p2.afk_votes
+    assert p1.id in p2.afk_votes
     assert p2.is_afk is False
 
     # P3 votes to AFK P2 -> threshold reached -> P2 is marked AFK
-    res2 = await vote_player("p3-sid", {"targetToken": p2.token, "action": "afk"})
+    res2 = await vote_player("p3-sid", {"targetPlayerId": p2.id, "action": "afk"})
     assert res2["ok"] is True
     assert res2["executed"] is True
     assert p2.is_afk is True
 
     # P1 votes to Kick P2
-    res3 = await vote_player("p1-sid", {"targetToken": p2.token, "action": "kick"})
+    res3 = await vote_player("p1-sid", {"targetPlayerId": p2.id, "action": "kick"})
     assert res3["ok"] is True
     assert res3["executed"] is False
 
     # P3 votes to Kick P2 -> threshold reached -> P2 is kicked
-    res4 = await vote_player("p3-sid", {"targetToken": p2.token, "action": "kick"})
+    res4 = await vote_player("p3-sid", {"targetPlayerId": p2.id, "action": "kick"})
     assert res4["ok"] is True
     assert res4["executed"] is True
-    assert p2.token not in room.players
+    assert p2.id not in room.players
 
     # Emitted kicked event to P2
     kicked_calls = [call for call in sio.emit.await_args_list if call.args[0] == "kicked" and call.kwargs.get("to") == "p2-sid"]
@@ -1575,9 +1743,9 @@ async def test_votes_removed_when_player_leaves_or_disconnects():
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        "p1-sid": {"room_id": room.id, "token": p1.token},
-        "p2-sid": {"room_id": room.id, "token": p2.token},
-        "p3-sid": {"room_id": room.id, "token": p3.token},
+        "p1-sid": {"room_id": room.id, "player_id": p1.id},
+        "p2-sid": {"room_id": room.id, "player_id": p2.id},
+        "p3-sid": {"room_id": room.id, "player_id": p3.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
@@ -1586,12 +1754,12 @@ async def test_votes_removed_when_player_leaves_or_disconnects():
     disconnect = sio.handlers["/"]["disconnect"]
 
     # P1 votes to AFK P2
-    await vote_player("p1-sid", {"targetToken": p2.token, "action": "afk"})
-    assert p1.token in p2.afk_votes
+    await vote_player("p1-sid", {"targetPlayerId": p2.id, "action": "afk"})
+    assert p1.id in p2.afk_votes
 
     # P1 disconnects -> P1's votes are removed from P2
     await disconnect("p1-sid")
-    assert p1.token not in p2.afk_votes
+    assert p1.id not in p2.afk_votes
 
 
 @pytest.mark.asyncio
@@ -1602,14 +1770,14 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     guesser = room_manager.add_player(room, "Guesser")
     drawer.sid, guesser.sid = "drawer-sid", "guesser-sid"
 
-    room.game = Game(turn_order=[drawer.token, guesser.token], word_pool=["banana"], rounds_total=1, hint_mode="checkpoints", drawing_seconds=0.05)
+    room.game = Game(turn_order=[drawer.id, guesser.id], word_pool=["banana"], rounds_total=1, hint_mode="checkpoints", drawing_seconds=0.05)
     room.game.start_next_turn()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        "drawer-sid": {"room_id": room.id, "token": drawer.token},
-        "guesser-sid": {"room_id": room.id, "token": guesser.token},
+        "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
+        "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
@@ -1648,14 +1816,14 @@ async def test_chatting_removes_afk_status():
     p1.is_afk = True
 
     room.state = "playing"
-    room.game = Game(turn_order=[p1.token, p2.token], rounds_total=1)
+    room.game = Game(turn_order=[p1.id, p2.id], rounds_total=1)
     room.game.start_next_turn()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
     sessions = {
-        "p1-sid": {"room_id": room.id, "token": p1.token},
-        "p2-sid": {"room_id": room.id, "token": p2.token},
+        "p1-sid": {"room_id": room.id, "player_id": p1.id},
+        "p2-sid": {"room_id": room.id, "player_id": p2.id},
     }
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()

@@ -3,7 +3,7 @@ import type { ScoreEntry, ScoringMode } from "../types";
 
 interface GameEndOverlayProps {
   scores: ScoreEntry[];
-  myToken: string | null;
+  myPlayerId: string | null;
   scoringMode: ScoringMode;
   onContinue: () => void;
   drawingCount: number;
@@ -15,7 +15,7 @@ const DISPLAY_SECONDS = 10;
 
 export function GameEndOverlay({
   scores,
-  myToken,
+  myPlayerId,
   scoringMode,
   onContinue,
   drawingCount,
@@ -28,12 +28,12 @@ export function GameEndOverlay({
     return () => { clearTimeout(timeout); clearInterval(interval); };
   }, [onContinue]);
 
-  const placement = scores.findIndex((score) => score.token === myToken) + 1;
+  const placement = scores.findIndex((score) => score.playerId === myPlayerId) + 1;
   return <main className="game-end-overlay" aria-labelledby="game-end-title" aria-live="polite">
     <section className="game-end-podium">
       <p className="game-end-kicker">Game complete</p>
       <h1 id="game-end-title">{scoringMode === "default" ? <><span className="colored-player-name" style={{ color: scores[0]?.nameColor }}>{scores[0]?.nickname ?? "The room"}</span> takes the crown!</> : "A great round of drawing"}</h1>
-      {scoringMode === "default" ? <><p className="game-end-placement">Your placement: #{Math.max(1, placement)}</p><ol className="game-end-scoreboard">{scores.map((score, index) => <li key={score.token} className={score.token === myToken ? "is-you" : ""}><span>{PODIUM[index] ?? `#${index + 1}`} <span className="colored-player-name" style={{ color: score.nameColor }}>{score.nickname}</span>{score.token === myToken ? " (you)" : ""}</span><strong>{score.score}</strong></li>)}</ol></> : <p className="game-end-no-score">No scores this time—just a room full of sketches and guesses.</p>}
+      {scoringMode === "default" ? <><p className="game-end-placement">Your placement: #{Math.max(1, placement)}</p><ol className="game-end-scoreboard">{scores.map((score, index) => <li key={score.playerId} className={score.playerId === myPlayerId ? "is-you" : ""}><span>{PODIUM[index] ?? `#${index + 1}`} <span className="colored-player-name" style={{ color: score.nameColor }}>{score.nickname}</span>{score.playerId === myPlayerId ? " (you)" : ""}</span><strong>{score.score}</strong></li>)}</ol></> : <p className="game-end-no-score">No scores this time—just a room full of sketches and guesses.</p>}
       <div className="game-end-actions">
         {drawingCount > 0 && (
           <button type="button" onClick={onViewDrawings}>
