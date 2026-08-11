@@ -6,8 +6,8 @@ import { PlayerList } from "./PlayerList";
 interface RoomPlayersPanelProps {
   mode: "waiting" | "playing" | "game-end";
   players: PlayerInfo[];
-  drawerToken: string | null;
-  myToken: string | null;
+  drawerId: string | null;
+  myPlayerId: string | null;
   maxPlayers: number;
   showScores: boolean;
   finalScores: ScoreEntry[] | null;
@@ -16,8 +16,8 @@ interface RoomPlayersPanelProps {
 export function RoomPlayersPanel({
   mode,
   players,
-  drawerToken,
-  myToken,
+  drawerId,
+  myPlayerId,
   maxPlayers,
   showScores,
   finalScores,
@@ -26,7 +26,7 @@ export function RoomPlayersPanel({
   const [promotionError, setPromotionError] = useState<string | null>(null);
   const activePlayers = players.filter((player) => !player.isSpectator);
   const spectators = players.filter((player) => player.isSpectator);
-  const me = players.find((player) => player.token === myToken);
+  const me = players.find((player) => player.playerId === myPlayerId);
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
   const canPromoteSelf = mode === "waiting" && me?.isSpectator;
   const playerSpaceAvailable = activePlayers.length < maxPlayers;
@@ -37,7 +37,7 @@ export function RoomPlayersPanel({
           .map((player) => ({
             ...player,
             score:
-              finalScores.find((score) => score.token === player.token)?.score ?? player.score,
+              finalScores.find((score) => score.playerId === player.playerId)?.score ?? player.score,
           }))
           .sort((a, b) => b.score - a.score)
       : activePlayers;
@@ -94,14 +94,14 @@ export function RoomPlayersPanel({
                 <strong>Spectators ({spectators.length})</strong>
                 <ul>
                   {spectators.map((spectator) => (
-                    <li key={spectator.token}>
+                    <li key={spectator.playerId}>
                       <span
                         className="colored-player-name"
                         style={{ color: spectator.nameColor }}
                       >
                         {spectator.nickname}
                       </span>
-                      {spectator.token === myToken ? " (you)" : ""}
+                      {spectator.playerId === myPlayerId ? " (you)" : ""}
                     </li>
                   ))}
                 </ul>
@@ -113,8 +113,8 @@ export function RoomPlayersPanel({
       <div data-testid="room-active-players">
         <PlayerList
           players={displayPlayers}
-          drawerToken={mode === "playing" ? drawerToken : null}
-          myToken={myToken}
+          drawerId={mode === "playing" ? drawerId : null}
+          myPlayerId={myPlayerId}
           showScores={showScores && (mode !== "waiting" || showFinalStandings)}
           variant={showFinalStandings ? "game-end" : mode === "game-end" ? "waiting" : mode}
           allowVoting={mode === "playing"}

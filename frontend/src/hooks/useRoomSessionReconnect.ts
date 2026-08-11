@@ -42,8 +42,8 @@ export function useRoomSessionReconnect() {
     let consecutiveHeartbeatFailures = 0;
 
     async function joinWithSession(soft = false) {
-      const { token, roomId, code, nickname } = useGameStore.getState();
-      if (!token || !code) {
+      const { reconnectSecret, roomId, code, nickname } = useGameStore.getState();
+      if (!reconnectSecret || !code) {
         setRoomBindingStatus("ready");
         return;
       }
@@ -53,21 +53,28 @@ export function useRoomSessionReconnect() {
         roomId,
         nickname,
         nameColor,
-        token,
+        reconnectSecret,
         soft,
       });
       if (cancelled) return;
-      if (response.ok && response.roomId && response.code && response.token) {
+      if (
+        response.ok
+        && response.roomId
+        && response.code
+        && response.playerId
+        && response.reconnectSecret
+      ) {
         useGameStore.getState().setSession({
           roomId: response.roomId,
           code: response.code,
-          token: response.token,
+          playerId: response.playerId,
+          reconnectSecret: response.reconnectSecret,
         });
         setRoomBindingStatus("ready");
         return;
       }
-      if (response.invalidToken) {
-        useGameStore.getState().clearStoredToken(code);
+      if (response.invalidReconnectSecret) {
+        useGameStore.getState().clearStoredReconnectSecret(code);
         useGameStore.getState().reset();
         setRoomBindingStatus("failed");
         return;
@@ -79,8 +86,8 @@ export function useRoomSessionReconnect() {
       options: { forceTransportRestart?: boolean; soft?: boolean } = {},
     ) {
       const { forceTransportRestart = false, soft = false } = options;
-      const { token, code } = useGameStore.getState();
-      if (!token || !code) {
+      const { reconnectSecret, code } = useGameStore.getState();
+      if (!reconnectSecret || !code) {
         setRoomBindingStatus("ready");
         return;
       }
@@ -117,8 +124,8 @@ export function useRoomSessionReconnect() {
     }
 
     function onConnect() {
-      const { token, code } = useGameStore.getState();
-      if (!token || !code) {
+      const { reconnectSecret, code } = useGameStore.getState();
+      if (!reconnectSecret || !code) {
         setRoomBindingStatus("ready");
         return;
       }
@@ -126,21 +133,21 @@ export function useRoomSessionReconnect() {
     }
 
     function onDisconnect() {
-      const { token, code } = useGameStore.getState();
-      if (token && code) setRoomBindingStatus("rejoining");
+      const { reconnectSecret, code } = useGameStore.getState();
+      if (reconnectSecret && code) setRoomBindingStatus("rejoining");
     }
 
     function onVisibility() {
       if (document.visibilityState !== "visible") return;
-      const { token, code, phase, roomState } = useGameStore.getState();
-      if (!token || !code) return;
+      const { reconnectSecret, code, phase, roomState } = useGameStore.getState();
+      if (!reconnectSecret || !code) return;
       if (!ACTIVE_PHASES.has(phase) && roomState !== "playing") return;
       queueRebind({ soft: true });
     }
 
     function checkPhaseStall() {
       const state = useGameStore.getState();
-      if (!state.token || !state.code) return;
+      if (!state.playerId || !state.code) return;
       if (!ACTIVE_PHASES.has(state.phase)) return;
       if (!state.phaseSeconds || !state.phaseStartedAt) return;
       const remainingMs = state.phaseSeconds * 1000 - (Date.now() - state.phaseStartedAt);
@@ -154,7 +161,7 @@ export function useRoomSessionReconnect() {
       if (cancelled || heartbeatInFlight || inFlight) return;
       if (document.visibilityState === "hidden") return;
       const state = useGameStore.getState();
-      if (!state.token || !state.code) return;
+      if (!state.playerId || !state.code) return;
       if (!ACTIVE_PHASES.has(state.phase) && state.roomState !== "playing") return;
       if (!socket.connected) {
         queueRebind({ forceTransportRestart: true });

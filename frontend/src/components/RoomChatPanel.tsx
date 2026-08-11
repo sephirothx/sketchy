@@ -9,7 +9,7 @@ interface RoomChatPanelProps {
   mode: "waiting" | "playing" | "game-end";
   isDrawer: boolean;
   canGuess: boolean;
-  myToken?: string | null;
+  myPlayerId?: string | null;
   targetWordLengths: string[];
   hideMaskedPrompt?: boolean;
   onFocusChange?: (focused: boolean) => void;
@@ -42,7 +42,7 @@ export function RoomChatPanel({
   mode,
   isDrawer,
   canGuess,
-  myToken = null,
+  myPlayerId = null,
   targetWordLengths,
   hideMaskedPrompt = false,
   onFocusChange,
@@ -120,10 +120,10 @@ export function RoomChatPanel({
       let flash: GuessFlash | null = null;
       if (newestMessage.close) {
         flash = { id: newestMessage.id, text: newestMessage.text, kind: "close" };
-      } else if (newestMessage.restricted && (!newestMessage.token || newestMessage.token === myToken)) {
+      } else if (newestMessage.restricted && (!newestMessage.playerId || newestMessage.playerId === myPlayerId)) {
         flash = { id: newestMessage.id, text: newestMessage.text, kind: "miss" };
       } else if (
-        newestMessage.token === myToken
+        newestMessage.playerId === myPlayerId
         && !newestMessage.system
         && !newestMessage.correct
         && !newestMessage.close
@@ -281,7 +281,7 @@ export function RoomChatPanel({
                       className="colored-player-name"
                       style={{
                         color: message.nameColor
-                          ?? players.find((player) => player.token === message.token)
+                          ?? players.find((player) => player.playerId === message.playerId)
                             ?.nameColor,
                       }}
                     >

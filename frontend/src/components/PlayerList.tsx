@@ -4,8 +4,8 @@ import { socket } from "../lib/socket";
 
 interface PlayerListProps {
   players: PlayerInfo[];
-  drawerToken: string | null;
-  myToken?: string | null;
+  drawerId: string | null;
+  myPlayerId?: string | null;
   showScores?: boolean;
   variant?: "waiting" | "playing" | "game-end";
   allowVoting?: boolean;
@@ -14,8 +14,8 @@ interface PlayerListProps {
 
 export function PlayerList({
   players,
-  drawerToken,
-  myToken,
+  drawerId,
+  myPlayerId,
   showScores = true,
   variant = "playing",
   allowVoting = true,
@@ -36,26 +36,26 @@ export function PlayerList({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function handleVote(targetToken: string, action: "kick" | "afk") {
-    socket.emit("vote_player", { targetToken, action });
+  function handleVote(targetPlayerId: string, action: "kick" | "afk") {
+    socket.emit("vote_player", { targetPlayerId, action });
     setOpenMenuToken(null);
   }
 
   return (
     <ul className="player-list">
       {sorted.map((p, index) => {
-        const isMe = p.token === myToken;
+        const isMe = p.playerId === myPlayerId;
         const requiredVotes = Math.floor(connectedPlayers.length / 2) + 1;
-        const kickVotes = (p.kickVotes || []).filter((v) => connectedPlayers.some((cp) => cp.token === v));
-        const afkVotes = (p.afkVotes || []).filter((v) => connectedPlayers.some((cp) => cp.token === v));
-        const hasVotedKick = myToken ? kickVotes.includes(myToken) : false;
-        const hasVotedAfk = myToken ? afkVotes.includes(myToken) : false;
+        const kickVotes = (p.kickVotes || []).filter((v) => connectedPlayers.some((cp) => cp.playerId === v));
+        const afkVotes = (p.afkVotes || []).filter((v) => connectedPlayers.some((cp) => cp.playerId === v));
+        const hasVotedKick = myPlayerId ? kickVotes.includes(myPlayerId) : false;
+        const hasVotedAfk = myPlayerId ? afkVotes.includes(myPlayerId) : false;
         const totalActiveVotes = Math.max(kickVotes.length, afkVotes.length);
-        const isMenuOpen = openMenuToken === p.token;
+        const isMenuOpen = openMenuToken === p.playerId;
 
         return (
           <li
-            key={p.token}
+            key={p.playerId}
             className={`player-row${p.connected ? "" : " disconnected"}${allowVoting && !isMe && p.connected ? " clickable" : ""}`}
             style={{
               position: "relative",
@@ -63,14 +63,14 @@ export function PlayerList({
             title={allowVoting && !isMe && p.connected ? "Click to vote AFK or Kick player" : undefined}
             onClick={() => {
               if (allowVoting && !isMe && p.connected) {
-                setOpenMenuToken(isMenuOpen ? null : p.token);
+                setOpenMenuToken(isMenuOpen ? null : p.playerId);
               }
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
               <span className="player-name">
                 {variant === "game-end" && <span className="player-placement">{index < 3 ? ["🥇", "🥈", "🥉"][index] : `#${index + 1}`}</span>}
-                {p.token === drawerToken ? "\u270F\uFE0F " : ""}
+                {p.playerId === drawerId ? "\u270F\uFE0F " : ""}
                 <span className="colored-player-name" style={{ color: p.nameColor }}>
                   {p.nickname}
                 </span>
@@ -134,7 +134,7 @@ export function PlayerList({
                       cursor: "pointer",
                       textAlign: "left",
                     }}
-                    onClick={() => handleVote(p.token, "afk")}
+                    onClick={() => handleVote(p.playerId, "afk")}
                   >
                     {hasVotedAfk ? "✓ " : ""}Vote AFK ({afkVotes.length}/{requiredVotes})
                   </button>
@@ -150,7 +150,7 @@ export function PlayerList({
                     cursor: "pointer",
                     textAlign: "left",
                   }}
-                  onClick={() => handleVote(p.token, "kick")}
+                  onClick={() => handleVote(p.playerId, "kick")}
                 >
                   {hasVotedKick ? "✓ " : ""}Vote Kick ({kickVotes.length}/{requiredVotes})
                 </button>

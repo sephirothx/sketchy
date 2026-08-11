@@ -143,8 +143,8 @@ export function LobbyBrowserPage() {
         asSpectator,
         ...target,
       });
-      if (res.ok && res.roomId && res.code && res.token) {
-        setSession({ roomId: res.roomId, code: res.code, token: res.token });
+      if (res.ok && res.roomId && res.code && res.playerId && res.reconnectSecret) {
+        setSession({ roomId: res.roomId, code: res.code, playerId: res.playerId, reconnectSecret: res.reconnectSecret });
         navigate(`/room/${res.code}`);
       } else {
         setError(res.error || "Failed to join room");

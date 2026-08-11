@@ -65,8 +65,8 @@ def test_remove_player_promotes_new_host():
     room = rm.create_room(name="Room", is_public=True)
     p1 = rm.add_player(room, "Alice")
     p2 = rm.add_player(room, "Bob")
-    rm.remove_player(room, p1.token)
-    assert room.players[p2.token].is_host is True
+    rm.remove_player(room, p1.id)
+    assert room.players[p2.id].is_host is True
 
 
 def test_list_public_rooms_excludes_private():
@@ -150,12 +150,12 @@ def test_remove_player_cleans_up_votes():
     p1 = rm.add_player(room, "Alice")
     p2 = rm.add_player(room, "Bob")
 
-    p2.kick_votes.add(p1.token)
-    p2.afk_votes.add(p1.token)
+    p2.kick_votes.add(p1.id)
+    p2.afk_votes.add(p1.id)
 
-    rm.remove_player(room, p1.token)
-    assert p1.token not in p2.kick_votes
-    assert p1.token not in p2.afk_votes
+    rm.remove_player(room, p1.id)
+    assert p1.id not in p2.kick_votes
+    assert p1.id not in p2.afk_votes
 
 
 def test_create_room_with_hide_masked_prompt_forces_hints_off():
@@ -175,7 +175,7 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
         DrawingRecapEntry(
             round_number=1,
             turn_number=1,
-            drawer_token=drawer.token,
+            drawer_id=drawer.id,
             drawer_nickname=drawer.nickname,
             drawer_name_color=drawer.name_color,
             word="apple",
@@ -189,7 +189,7 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
         "index": 0,
         "roundNumber": 1,
         "turnNumber": 1,
-        "drawerToken": drawer.token,
+        "drawerId": drawer.id,
         "drawerNickname": "Drawer",
         "drawerNameColor": drawer.name_color,
         "word": "apple",

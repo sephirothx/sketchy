@@ -14,7 +14,7 @@ interface WaitingRoomPanelProps {
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
   players: PlayerInfo[];
-  myToken: string | null;
+  myPlayerId: string | null;
   isHost: boolean;
   finalScores: ScoreEntry[] | null;
   startBusy: boolean;
@@ -35,11 +35,11 @@ function hintLabel(mode: HintMode, hidden: boolean) {
 }
 
 export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
-  const { players, myToken, isHost, finalScores } = props;
+  const { players, myPlayerId, isHost, finalScores } = props;
   const activePlayers = players.filter((player) => !player.isSpectator);
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
   const host = players.find((player) => player.isHost);
-  const me = players.find((player) => player.token === myToken);
+  const me = players.find((player) => player.playerId === myPlayerId);
   const canStart = eligiblePlayers.length >= 2;
   const needsPlayers = Math.max(0, 2 - eligiblePlayers.length);
   const rematch = Boolean(finalScores);

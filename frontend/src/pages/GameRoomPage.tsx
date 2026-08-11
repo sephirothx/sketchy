@@ -66,18 +66,18 @@ export function GameRoomPage() {
 
   const nickname = useGameStore((s) => s.nickname);
   const setNickname = useGameStore((s) => s.setNickname);
-  const token = useGameStore((s) => s.token);
+  const playerId = useGameStore((s) => s.playerId);
   const activeRoomId = useGameStore((s) => s.roomId);
   const activeRoomCode = useGameStore((s) => s.code);
   const setSession = useGameStore((s) => s.setSession);
-  const getStoredToken = useGameStore((s) => s.getStoredToken);
-  const clearStoredToken = useGameStore((s) => s.clearStoredToken);
+  const getStoredReconnectSecret = useGameStore((s) => s.getStoredReconnectSecret);
+  const clearStoredReconnectSecret = useGameStore((s) => s.clearStoredReconnectSecret);
   const reset = useGameStore((s) => s.reset);
 
   const roomState = useGameStore((s) => s.roomState);
   const players = useGameStore((s) => s.players);
   const phase = useGameStore((s) => s.phase);
-  const drawerToken = useGameStore((s) => s.drawerToken);
+  const drawerId = useGameStore((s) => s.drawerId);
   const maskedWord = useGameStore((s) => s.maskedWord);
   const hintMode = useGameStore((s) => s.hintMode);
   const scoringMode = useGameStore((s) => s.scoringMode);
@@ -105,7 +105,7 @@ export function GameRoomPage() {
 
   const normalizedCode = code?.trim().toUpperCase() ?? "";
   const hasActiveSession = Boolean(
-    token
+    playerId
       && activeRoomId
       && activeRoomCode?.toUpperCase() === normalizedCode,
   );
@@ -170,28 +170,29 @@ export function GameRoomPage() {
 
     async function loadEntry() {
       try {
-        const storedToken = getStoredToken(normalizedCode);
-        if (storedToken) {
+        const storedReconnectSecret = getStoredReconnectSecret(normalizedCode);
+        if (storedReconnectSecret) {
           const reconnect = await emitWithAck<AckResponse>("join_room", {
             code: normalizedCode,
             nickname,
             nameColor,
-            token: storedToken,
+            reconnectSecret: storedReconnectSecret,
           });
           if (cancelled) return;
-          if (reconnect.ok && reconnect.roomId && reconnect.code && reconnect.token) {
+          if (reconnect.ok && reconnect.roomId && reconnect.code && reconnect.playerId && reconnect.reconnectSecret) {
             setSession({
               roomId: reconnect.roomId,
               code: reconnect.code,
-              token: reconnect.token,
+              playerId: reconnect.playerId,
+              reconnectSecret: reconnect.reconnectSecret,
             });
             return;
           }
-          if (!reconnect.invalidToken) {
+          if (!reconnect.invalidReconnectSecret) {
             setJoinError(reconnect.error || "Could not reconnect to this room");
             return;
           }
-          clearStoredToken(normalizedCode);
+          clearStoredReconnectSecret(normalizedCode);
           setEntryNotice("Your previous session expired. Choose how you would like to rejoin.");
         }
 
@@ -234,9 +235,9 @@ export function GameRoomPage() {
         asSpectator,
       });
 
-      if (response.ok && response.roomId && response.code && response.token) {
+      if (response.ok && response.roomId && response.code && response.playerId && response.reconnectSecret) {
         setNickname(trimmedNickname);
-        setSession({ roomId: response.roomId, code: response.code, token: response.token });
+        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId, reconnectSecret: response.reconnectSecret });
         return;
       }
       if (!asSpectator && response.error === "Room is full") {
@@ -255,7 +256,7 @@ export function GameRoomPage() {
   useEffect(() => {
     function onKicked(data: { reason?: string }) {
       exitingRoomRef.current = true;
-      clearStoredToken(normalizedCode);
+      clearStoredReconnectSecret(normalizedCode);
       reset();
       navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
     }
@@ -268,11 +269,11 @@ export function GameRoomPage() {
       socket.off("kicked", onKicked);
       socket.off("voted_afk", onVotedAfk);
     };
-  }, [clearStoredToken, navigate, normalizedCode, notify, reset]);
+  }, [clearStoredReconnectSecret, navigate, normalizedCode, notify, reset]);
 
   function performLeave() {
     exitingRoomRef.current = true;
-    clearStoredToken(normalizedCode);
+    clearStoredReconnectSecret(normalizedCode);
     socket.emit("leave_room");
     reset();
     navigate("/");
@@ -309,12 +310,12 @@ export function GameRoomPage() {
     setRecapOpen(true);
   }
 
-  const me = players.find((p) => p.token === token);
-  const drawer = players.find((player) => player.token === drawerToken);
+  const me = players.find((p) => p.playerId === playerId);
+  const drawer = players.find((player) => player.playerId === drawerId);
   const isHost = me?.isHost ?? false;
   const amDrawer =
-    (phase === "drawing" || phase === "choosing_word") && drawerToken === token;
-  const canDrawNow = phase === "drawing" && drawerToken === token;
+    (phase === "drawing" || phase === "choosing_word") && drawerId === playerId;
+  const canDrawNow = phase === "drawing" && drawerId === playerId;
   const canGuess = phase === "drawing" && !amDrawer && !(me?.isSpectator) && !guessedWord;
 
   // Density mode only: hide chrome while guessing on mobile. Positioning stays on the stable vv-pinned shell.
@@ -352,7 +353,7 @@ export function GameRoomPage() {
 
   const spectatorsSeeSolution = useGameStore((s) => s.spectatorsSeeSolution);
   const hideMaskedPrompt = useGameStore((s) => s.hideMaskedPrompt);
-  const isDrawerPerson = drawerToken === token;
+  const isDrawerPerson = drawerId === playerId;
   const drawerWord = myWord || (maskedWord && !maskedWord.includes("_") ? splitMaskedWord(maskedWord).blanks.trim() : null);
 
   const solutionWord =
@@ -656,8 +657,8 @@ export function GameRoomPage() {
               <RoomPlayersPanel
                 mode={roomView}
                 players={players}
-                drawerToken={drawerToken}
-                myToken={token}
+                drawerId={drawerId}
+                myPlayerId={playerId}
                 maxPlayers={maxPlayers}
                 showScores={scoringMode === "default"}
                 finalScores={finalScores}
@@ -673,8 +674,8 @@ export function GameRoomPage() {
           <RoomPlayersPanel
             mode={roomView}
             players={players}
-            drawerToken={drawerToken}
-            myToken={token}
+            drawerId={drawerId}
+            myPlayerId={playerId}
             maxPlayers={maxPlayers}
             showScores={scoringMode === "default"}
             finalScores={finalScores}
@@ -689,7 +690,7 @@ export function GameRoomPage() {
           ) : roomView === "game-end" && finalScores ? (
             <GameEndOverlay
               scores={finalScores}
-              myToken={token}
+              myPlayerId={playerId}
               scoringMode={scoringMode}
               onContinue={dismissGameEnd}
               drawingCount={drawingRecap.length}
@@ -708,7 +709,7 @@ export function GameRoomPage() {
               spectatorsSeeSolution={spectatorsSeeSolution}
               hideMaskedPrompt={hideMaskedPrompt}
               players={players}
-              myToken={token}
+              myPlayerId={playerId}
               isHost={isHost}
               finalScores={finalScores}
               startBusy={startBusy}
@@ -760,11 +761,11 @@ export function GameRoomPage() {
               {phase === "round_end" && lastRoundResult && (
                 <RoundEndOverlay
                   word={lastRoundResult.word}
-                  drawerToken={lastRoundResult.drawerToken}
+                  drawerId={lastRoundResult.drawerId}
                   drawerBonus={lastRoundResult.drawerBonus}
                   guesses={lastRoundResult.guesses}
                   scores={lastRoundResult.scores}
-                  myToken={token}
+                  myPlayerId={playerId}
                   showScores={scoringMode === "default"}
                 />
               )}
@@ -788,7 +789,7 @@ export function GameRoomPage() {
             mode={roomView}
             isDrawer={amDrawer}
             canGuess={canGuess}
-            myToken={token}
+            myPlayerId={playerId}
             targetWordLengths={splitMaskedWord(maskedWord).counts}
             hideMaskedPrompt={hideMaskedPrompt}
             onFocusChange={setIsInputFocused}

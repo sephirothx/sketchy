@@ -1,5 +1,5 @@
 export interface PlayerInfo {
-  token: string;
+  playerId: string;
   nickname: string;
   nameColor?: string;
   score: number;
@@ -72,7 +72,7 @@ export type GamePhase = "idle" | "choosing_word" | "drawing" | "round_end" | "ga
 
 export interface ChatMessage {
   id: string;
-  token?: string;
+  playerId?: string;
   nickname: string;
   nameColor?: string;
   text: string;
@@ -84,7 +84,7 @@ export interface ChatMessage {
 }
 
 export interface ScoreEntry {
-  token: string;
+  playerId: string;
   nickname: string;
   nameColor?: string;
   score: number;
@@ -98,11 +98,11 @@ export interface RoundScoreEntry extends ScoreEntry {
 
 export interface RoundEndedPayload {
   word: string;
-  drawerToken: string;
+  drawerId: string;
   drawerBonus: number;
   seconds?: number;
   guesses: {
-    token: string;
+    playerId: string;
     nickname: string;
     nameColor?: string;
     seconds: number;
@@ -119,7 +119,7 @@ export interface DrawingRecapMetadata {
   index: number;
   roundNumber: number;
   turnNumber: number;
-  drawerToken: string;
+  drawerId: string;
   drawerNickname: string;
   drawerNameColor?: string;
   word: string;
@@ -177,9 +177,10 @@ export interface AckResponse {
   ok: boolean;
   roomId?: string;
   code?: string;
-  token?: string;
+  playerId?: string;
+  reconnectSecret?: string;
   error?: string;
-  invalidToken?: boolean;
+  invalidReconnectSecret?: boolean;
   needsRebind?: boolean;
 }
 
