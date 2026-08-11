@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import suppress
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import socketio
@@ -17,7 +17,9 @@ from app.canvas_history import (
 from app.events import register_handlers
 from app.game import DRAWING_SECONDS, Game
 from app.live_drawing import encode_live_drawing
+from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import DrawingRecapEntry, STARTING_SCORE, RoomManager
+from app.words import MAX_WORD_LENGTH
 
 
 def canvas_action(game: Game, sequence: int) -> list[int]:
@@ -272,6 +274,131 @@ async def test_host_can_update_waiting_room_settings_and_chat():
     chat = await sio.handlers["/"]["send_chat"]("host-sid", {"text": "Ready?"})
     assert chat["ok"] is True
     assert any(call.args[0] == "chat_message" and call.args[1]["text"] == "Ready?" for call in sio.emit.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_waiting_chat_rejects_oversized_message_without_broadcast():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": host.id}
+    )
+    sio.emit = AsyncMock()
+
+    send_chat = sio.handlers["/"]["send_chat"]
+    accepted = await send_chat("host-sid", {"text": "x" * MAX_CHAT_MESSAGE_LENGTH})
+    rejected = await send_chat(
+        "host-sid",
+        {"text": "x" * (MAX_CHAT_MESSAGE_LENGTH + 1)},
+    )
+
+    assert accepted == {"ok": True}
+    assert rejected["ok"] is False
+    chat_messages = [
+        call for call in sio.emit.await_args_list if call.args[0] == "chat_message"
+    ]
+    assert len(chat_messages) == 1
+    assert len(chat_messages[0].args[1]["text"]) == MAX_CHAT_MESSAGE_LENGTH
+
+
+@pytest.mark.asyncio
+async def test_active_message_limit_rejects_before_processing_or_broadcast():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+    guesser.is_afk = True
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, guesser.id], word_pool=["panda"])
+    room.game.start_next_turn()
+    room.game.choose_word(drawer.id, "panda")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": guesser.id}
+    )
+    sio.emit = AsyncMock()
+    guess = sio.handlers["/"]["guess"]
+
+    with (
+        patch.object(Game, "submit_guess") as submit_guess,
+        patch.object(Game, "guess_hint") as guess_hint,
+    ):
+        rejected = await guess(
+            "guesser-sid",
+            {"text": "x" * (MAX_CHAT_MESSAGE_LENGTH + 1)},
+        )
+
+    assert rejected["ok"] is False
+    submit_guess.assert_not_called()
+    guess_hint.assert_not_called()
+    sio.emit.assert_not_awaited()
+    assert guesser.is_afk is True
+
+    sio.emit.reset_mock()
+    with (
+        patch.object(Game, "submit_guess") as submit_guess,
+        patch.object(Game, "guess_hint") as guess_hint,
+    ):
+        accepted = await guess(
+            "guesser-sid",
+            {"text": "x" * MAX_CHAT_MESSAGE_LENGTH},
+        )
+
+    assert accepted is None
+    submit_guess.assert_not_called()
+    guess_hint.assert_not_called()
+    assert any(
+        call.args[0] == "chat_message"
+        and call.args[1]["text"] == "x" * MAX_CHAT_MESSAGE_LENGTH
+        and call.kwargs.get("room") == room.id
+        for call in sio.emit.await_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_only_messages_within_word_limit_are_processed_as_guesses():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, guesser.id], word_pool=["panda"])
+    room.game.start_next_turn()
+    room.game.choose_word(drawer.id, "panda")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": guesser.id}
+    )
+    sio.emit = AsyncMock()
+    guess = sio.handlers["/"]["guess"]
+
+    with (
+        patch.object(Game, "submit_guess", return_value=(False, 0)) as submit_guess,
+        patch.object(Game, "guess_hint", return_value=None) as guess_hint,
+    ):
+        await guess("guesser-sid", {"text": "x" * MAX_WORD_LENGTH})
+        await guess("guesser-sid", {"text": "x" * (MAX_WORD_LENGTH + 1)})
+
+    submit_guess.assert_called_once_with(guesser.id, "x" * MAX_WORD_LENGTH)
+    guess_hint.assert_called_once_with(guesser.id, "x" * MAX_WORD_LENGTH)
+    assert any(
+        call.args[0] == "chat_message"
+        and call.args[1]["text"] == "x" * (MAX_WORD_LENGTH + 1)
+        and call.kwargs.get("room") == room.id
+        for call in sio.emit.await_args_list
+    )
 
 
 @pytest.mark.asyncio

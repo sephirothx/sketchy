@@ -27,7 +27,7 @@ from app.canvas_history import (
     color_to_int,
     extend_history_hash,
 )
-from app.words import WORDS, random_word_choices
+from app.words import MAX_WORD_LENGTH, WORDS, random_word_choices
 
 CHOOSE_WORD_SECONDS = 15
 DRAWING_SECONDS = 80
@@ -103,39 +103,51 @@ def _normalize(text: str) -> str:
     )
 
 
-def _damerau_levenshtein(a: str, b: str) -> int:
-    """Damerau-Levenshtein edit distance (optimal string alignment variant):
-    minimum single-character insertions, deletions, substitutions, or
+def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
+    """Bounded Damerau-Levenshtein distance (optimal string alignment variant).
+
+    Returns ``max_distance + 1`` when the distance exceeds the requested
+    bound. Only the diagonal band that could still produce an in-bound result
+    is evaluated, and only three sparse rows are retained for adjacent
+    transpositions.
+
+    The distance counts single-character insertions, deletions, substitutions, or
     transpositions of two adjacent characters to turn `a` into `b`.
 
     Counting adjacent transpositions as a single edit (rather than two
     substitutions) matters for a guessing game, since swapped letters are one
     of the most common typos (e.g. "hte" for "the").
     """
+    over_limit = max_distance + 1
     if a == b:
         return 0
+    if abs(len(a) - len(b)) > max_distance:
+        return over_limit
     if not a:
-        return len(b)
+        return len(b) if len(b) <= max_distance else over_limit
     if not b:
-        return len(a)
+        return len(a) if len(a) <= max_distance else over_limit
     len_a, len_b = len(a), len(b)
-    # Full matrix (rather than a rolling row) since the transposition check
-    # needs the row from two steps back, not just the previous one.
-    rows = [[0] * (len_b + 1) for _ in range(len_a + 1)]
-    for i in range(len_a + 1):
-        rows[i][0] = i
-    for j in range(len_b + 1):
-        rows[0][j] = j
+
+    previous_previous: dict[int, int] = {}
+    previous = {j: j for j in range(min(len_b, max_distance) + 1)}
     for i, ch_a in enumerate(a, start=1):
-        for j, ch_b in enumerate(b, start=1):
-            insert_cost = rows[i][j - 1] + 1
-            delete_cost = rows[i - 1][j] + 1
-            substitute_cost = rows[i - 1][j - 1] + (ch_a != ch_b)
+        current: dict[int, int] = {}
+        first_column = max(0, i - max_distance)
+        last_column = min(len_b, i + max_distance)
+        if first_column == 0:
+            current[0] = i
+        for j in range(max(1, first_column), last_column + 1):
+            ch_b = b[j - 1]
+            insert_cost = current.get(j - 1, over_limit) + 1
+            delete_cost = previous.get(j, over_limit) + 1
+            substitute_cost = previous.get(j - 1, over_limit) + (ch_a != ch_b)
             best = min(insert_cost, delete_cost, substitute_cost)
             if i > 1 and j > 1 and ch_a == b[j - 2] and a[i - 2] == ch_b:
-                best = min(best, rows[i - 2][j - 2] + 1)
-            rows[i][j] = best
-    return rows[len_a][len_b]
+                best = min(best, previous_previous.get(j - 2, over_limit) + 1)
+            current[j] = min(best, over_limit)
+        previous_previous, previous = previous, current
+    return previous.get(len_b, over_limit)
 
 
 def _is_close_pair(guess: str, target: str) -> bool:
@@ -146,7 +158,13 @@ def _is_close_pair(guess: str, target: str) -> bool:
     """
     if len(target) < 3 or len(guess) < 2 or guess == target:
         return False
-    distance = _damerau_levenshtein(guess, target)
+    if abs(len(guess) - len(target)) > CLOSE_GUESS_MAX_DISTANCE:
+        return False
+    distance = _bounded_damerau_levenshtein(
+        guess,
+        target,
+        CLOSE_GUESS_MAX_DISTANCE,
+    )
     if distance == 1:
         return True
     if distance <= CLOSE_GUESS_MAX_DISTANCE:
@@ -673,6 +691,8 @@ class Game:
             return False, 0
         if token == self.current_drawer or token in self.correct_guessers:
             return False, 0
+        if len(text) > MAX_WORD_LENGTH:
+            return False, 0
         normalized_guess = _normalize(text)
         normalized_word = _normalize(self.word)
         if normalized_guess != normalized_word:
@@ -704,6 +724,8 @@ class Game:
         if not self.word:
             return None
         if token == self.current_drawer or token in self.correct_guessers:
+            return None
+        if len(text) > MAX_WORD_LENGTH:
             return None
         guess = _normalize(text)
         word = _normalize(self.word)

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { MAX_WORD_LENGTH } from "../lib/customWords";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 
@@ -227,6 +228,7 @@ export function RoomChatPanel({
   }
 
   const typedWordLengths = letterRunLengths(text);
+  const showLiveLetterCounts = text.trim().length <= MAX_WORD_LENGTH;
   const activeIndex =
     text.length > 0 && /[\p{L}\p{N}]/u.test(text[text.length - 1])
       ? typedWordLengths.length - 1
@@ -327,6 +329,7 @@ export function RoomChatPanel({
             {mode === "playing"
               && canGuess
               && !hideMaskedPrompt
+              && showLiveLetterCounts
               && typedWordLengths.map((count, index) => (
                 <sup key={index} className={hintClass(index)}>
                   {count}
@@ -360,7 +363,7 @@ export function RoomChatPanel({
                 placeholder={
                   mode === "playing" && canGuess ? "Type your guess..." : "Type a message..."
                 }
-                maxLength={60}
+                maxLength={500}
                 autoComplete="off"
               />
             </div>
