@@ -4,7 +4,14 @@ from app.canvas_history import (
     PathAction,
     decode_binary_canvas_history,
 )
-from app.game import DRAWING_SECONDS, Game, Phase
+from app.game import (
+    CLOSE_GUESS_MAX_DISTANCE,
+    DRAWING_SECONDS,
+    Game,
+    Phase,
+    _bounded_damerau_levenshtein,
+)
+from app.words import MAX_WORD_LENGTH
 
 
 def make_game(n_players=3, rounds=2):
@@ -691,6 +698,33 @@ def test_guess_hint_counts_transposition_as_one_edit():
     game = make_close_guess_game("elephant")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     assert game.guess_hint(guesser, "elpehant") == "close"
+
+
+def test_bounded_edit_distance_returns_sentinel_outside_useful_band():
+    sentinel = CLOSE_GUESS_MAX_DISTANCE + 1
+    assert _bounded_damerau_levenshtein("panda", "padna", 2) == 1
+    assert _bounded_damerau_levenshtein("panda", "pandemonium", 2) == sentinel
+    assert _bounded_damerau_levenshtein("x" * 60, "y" * 60, 2) == sentinel
+
+
+def test_largest_guess_uses_bounded_edit_distance_memory():
+    import tracemalloc
+
+    guess = "x" * MAX_WORD_LENGTH
+    target = "y" * MAX_WORD_LENGTH
+    tracemalloc.start()
+    try:
+        _bounded_damerau_levenshtein(
+            guess,
+            target,
+            CLOSE_GUESS_MAX_DISTANCE,
+        )
+        _, peak_bytes = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    # Three distance-2 sparse rows should stay far below a full 61x61 matrix.
+    assert peak_bytes < 16 * 1024
 
 
 def test_guess_hint_distance_between_2_and_5_uses_similarity_ratio():

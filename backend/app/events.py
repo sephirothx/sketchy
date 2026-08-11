@@ -15,6 +15,7 @@ from app.game import (
     Phase,
 )
 from app.live_drawing import decode_live_drawing, encode_live_drawing
+from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import (
     DEFAULT_ROOM_DRAWING_SECONDS,
     DEFAULT_ROOM_HINT_MODE,
@@ -29,7 +30,7 @@ from app.rooms import (
     nearest_drawing_seconds,
     normalize_name_color,
 )
-from app.words import parse_custom_word_list
+from app.words import MAX_WORD_LENGTH, parse_custom_word_list
 
 logger = logging.getLogger("sketchy.events")
 
@@ -1204,7 +1205,13 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         room, player = current
         if room.state != "waiting":
             return {"ok": False, "error": "Waiting-room chat is unavailable during a game"}
-        text = str((data or {}).get("text", "")).strip()[:60]
+        raw_text = str((data or {}).get("text", ""))
+        if len(raw_text) > MAX_CHAT_MESSAGE_LENGTH:
+            return {
+                "ok": False,
+                "error": f"Message cannot exceed {MAX_CHAT_MESSAGE_LENGTH} characters",
+            }
+        text = raw_text.strip()
         if not text:
             return {"ok": False, "error": "Message cannot be empty"}
         if player.is_afk and not player.is_spectator:
@@ -1223,7 +1230,13 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not current or not current[0].game:
             return
         room, player = current
-        text = str((data or {}).get("text", "")).strip()
+        raw_text = str((data or {}).get("text", ""))
+        if len(raw_text) > MAX_CHAT_MESSAGE_LENGTH:
+            return {
+                "ok": False,
+                "error": f"Message cannot exceed {MAX_CHAT_MESSAGE_LENGTH} characters",
+            }
+        text = raw_text.strip()
         if not text:
             return
 
@@ -1270,6 +1283,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                     },
                     to=target_sid,
                 )
+            return
+
+        if len(text) > MAX_WORD_LENGTH:
+            await sio.emit(
+                "chat_message",
+                {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False},
+                room=room.id,
+            )
             return
 
         correct, points = game.submit_guess(player.id, text)
