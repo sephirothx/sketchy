@@ -178,11 +178,11 @@ def register_handlers(
         await sio.emit(
             "sync_strokes",
             (
-                room.game.canvas_sync_payload(),
-                room.game.canvas_revision,
-                room.game.canvas_generation,
-                room.game.canvas_sequence,
-                room.game.canvas_hash,
+                room.game.canvas.sync_payload(),
+                room.game.canvas.revision,
+                room.game.canvas.generation,
+                room.game.canvas.sequence,
+                room.game.canvas.hash,
             ),
             to=sid,
         )
@@ -195,14 +195,14 @@ def register_handlers(
     ) -> None:
         if not room.game:
             return
-        commit = room.game.canvas_commit(sequence)
+        commit = room.game.canvas.get_commit(sequence)
         if not commit:
             return
         revision, history_hash, mutation = commit
         event = "canvas_undo" if mutation == "undo" else "canvas_commit"
         payload = (
             [
-                room.game.canvas_generation,
+                room.game.canvas.generation,
                 sequence,
                 revision - 1,
                 revision,
@@ -210,7 +210,7 @@ def register_handlers(
             ]
             if mutation == "undo"
             else [
-                room.game.canvas_generation,
+                room.game.canvas.generation,
                 sequence,
                 revision,
                 history_hash,
@@ -231,7 +231,7 @@ def register_handlers(
     ) -> None:
         await sio.emit(
             "request_canvas_actions",
-            [room.game.canvas_generation, expected, received],
+            [room.game.canvas.generation, expected, received],
             to=sid,
         )
 
@@ -313,20 +313,19 @@ def register_handlers(
         game = room.game
         assert game is not None
         afk_tokens = {p.id for p in room.player_list() if p.is_afk}
-        room.canvas_generation += 1
         choices = game.start_next_turn(
             afk_tokens,
-            canvas_generation=room.canvas_generation,
+            canvas_generation=room.allocate_canvas_generation(),
         )
         game.set_phase_deadline(CHOOSE_WORD_SECONDS)
         drawer = room.players.get(game.current_drawer)
         await sio.emit(
             "canvas_reset",
             [
-                game.canvas_revision,
-                game.canvas_generation,
-                game.canvas_sequence,
-                game.canvas_hash,
+                game.canvas.revision,
+                game.canvas.generation,
+                game.canvas.sequence,
+                game.canvas.hash,
             ],
             room=room.id,
         )
@@ -397,8 +396,8 @@ def register_handlers(
                 drawer_nickname=drawer.nickname if drawer else "Unknown player",
                 drawer_name_color=drawer.name_color if drawer else None,
                 word=game.word or "",
-                action_count=len(game.drawing_history),
-                canvas_history=game.canvas_sync_payload(),
+                action_count=len(game.canvas.history),
+                canvas_history=game.canvas.sync_payload(),
             )
         )
 
@@ -828,8 +827,8 @@ def register_handlers(
             phase,
             game.round_number if game else 0,
             round(game.remaining_seconds()) if game else 0,
-            game.canvas_generation if game else 0,
-            game.canvas_sequence if game else 0,
+            game.canvas.generation if game else 0,
+            game.canvas.sequence if game else 0,
         ]
 
     @sio.event
@@ -1095,19 +1094,19 @@ def register_handlers(
         if starts_action:
             if generation is None or sequence is None:
                 return
-            if generation != room.game.canvas_generation:
+            if generation != room.game.canvas.generation:
                 if packet.event == "draw_start":
-                    room.game.discarding_draw_sequence = True
+                    room.game.canvas.discarding_draw_sequence = True
                 await _emit_canvas_sync(room, sid)
                 return
-            if room.game.active_draw_sequence is not None:
+            if room.game.canvas.active_draw_sequence is not None:
                 if (
                     packet.event == "draw_start"
-                    and sequence == room.game.active_draw_sequence
+                    and sequence == room.game.canvas.active_draw_sequence
                 ):
-                    room.game.restart_active_path()
+                    room.game.canvas.restart_active_path()
                 else:
-                    expected_sequence = room.game.canvas_sequence + 1
+                    expected_sequence = room.game.canvas.sequence + 1
                     await _request_canvas_actions(
                         room,
                         sid,
@@ -1115,15 +1114,15 @@ def register_handlers(
                         sequence,
                     )
                     return
-            if sequence <= room.game.canvas_sequence:
+            if sequence <= room.game.canvas.sequence:
                 if packet.event == "draw_start":
-                    room.game.discarding_draw_sequence = True
+                    room.game.canvas.discarding_draw_sequence = True
                 await _emit_canvas_commit(room, sequence, to=sid)
                 return
-            expected_sequence = room.game.canvas_sequence + 1
+            expected_sequence = room.game.canvas.sequence + 1
             if sequence != expected_sequence:
                 if packet.event == "draw_start":
-                    room.game.discarding_draw_sequence = True
+                    room.game.canvas.discarding_draw_sequence = True
                 await _request_canvas_actions(
                     room,
                     sid,
@@ -1131,12 +1130,12 @@ def register_handlers(
                     sequence,
                 )
                 return
-        elif room.game.discarding_draw_sequence:
+        elif room.game.canvas.discarding_draw_sequence:
             if packet.event == "draw_end":
-                room.game.discarding_draw_sequence = False
+                room.game.canvas.discarding_draw_sequence = False
             return
         if packet.event == "clear_canvas":
-            if not room.game.clear_canvas_stroke():
+            if not room.game.canvas.clear_canvas_stroke():
                 return
             await sio.emit(
                 "draw",
@@ -1144,14 +1143,14 @@ def register_handlers(
                 room=room.id,
                 skip_sid=sid,
             )
-            room.game.commit_canvas_sequence(sequence)
+            room.game.canvas.commit_sequence(sequence)
             await _emit_canvas_commit(room, sequence)
             return
-        if not room.game.record_stroke(packet.event, packet.payload):
+        if not room.game.canvas.record_stroke(packet.event, packet.payload):
             return
         if packet.event == "draw_start":
-            room.game.discarding_draw_sequence = False
-            room.game.active_draw_sequence = sequence
+            room.game.canvas.discarding_draw_sequence = False
+            room.game.canvas.active_draw_sequence = sequence
         await sio.emit(
             "draw",
             payload.wire_data,
@@ -1159,14 +1158,14 @@ def register_handlers(
             skip_sid=sid,
         )
         if packet.event == "draw_end":
-            active_sequence = room.game.active_draw_sequence
+            active_sequence = room.game.canvas.active_draw_sequence
             if active_sequence is None:
                 return
-            room.game.active_draw_sequence = None
-            room.game.commit_canvas_sequence(active_sequence)
+            room.game.canvas.active_draw_sequence = None
+            room.game.canvas.commit_sequence(active_sequence)
             await _emit_canvas_commit(room, active_sequence)
         elif packet.event in {"draw_shape", "draw_fill"}:
-            room.game.commit_canvas_sequence(sequence)
+            room.game.canvas.commit_sequence(sequence)
             await _emit_canvas_commit(room, sequence)
 
     @sio.event
@@ -1183,16 +1182,16 @@ def register_handlers(
             return {"ok": False, "error": "Only the drawer can undo"}
         generation = payload.generation
         sequence = payload.sequence
-        if generation != room.game.canvas_generation:
+        if generation != room.game.canvas.generation:
             await _emit_canvas_sync(room, sid)
             return {"ok": False, "error": "Canvas generation is out of date"}
-        if sequence <= room.game.canvas_sequence:
-            commit = room.game.canvas_commit(sequence)
+        if sequence <= room.game.canvas.sequence:
+            commit = room.game.canvas.get_commit(sequence)
             if commit and commit[2] == "undo":
                 await _emit_canvas_commit(room, sequence, to=sid)
                 return {"ok": True}
             return {"ok": False, "error": "Sequence already committed"}
-        expected_sequence = room.game.canvas_sequence + 1
+        expected_sequence = room.game.canvas.sequence + 1
         if sequence != expected_sequence:
             await _request_canvas_actions(
                 room,
@@ -1201,11 +1200,11 @@ def register_handlers(
                 sequence,
             )
             return {"ok": False, "error": "Drawing actions are out of sequence"}
-        if payload.revision != room.game.canvas_revision or payload.history_hash != room.game.canvas_hash:
+        if payload.revision != room.game.canvas.revision or payload.history_hash != room.game.canvas.hash:
             await _emit_canvas_sync(room, sid)
             return {"ok": False, "error": "Canvas history is out of sync"}
-        if room.game.undo_last_stroke():
-            room.game.commit_canvas_sequence(sequence, "undo")
+        if room.game.canvas.undo_last_stroke():
+            room.game.canvas.commit_sequence(sequence, "undo")
             await _emit_canvas_commit(room, sequence)
             return {"ok": True}
         return {"ok": False, "error": "Nothing to undo"}

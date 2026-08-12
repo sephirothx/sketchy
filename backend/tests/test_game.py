@@ -35,11 +35,11 @@ def shape_payload(shape="rectangle"):
 
 def test_start_next_turn_rotates_drawer():
     game = make_game(n_players=3, rounds=2)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p0"
     game.choose_word(game.current_drawer, game.word_choices[0])
     game.end_round()
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p1"
 
 
@@ -47,46 +47,46 @@ def test_total_turns_and_finished():
     game = make_game(n_players=3, rounds=2)
     assert game.total_turns == 6
     for _ in range(6):
-        game.start_next_turn()
+        game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.is_finished() is True
 
 
 def test_adding_player_mid_round_preserves_current_and_next_drawer():
     game = make_game(n_players=3, rounds=2)
-    game.start_next_turn()
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p1"
 
     game.add_player_to_rotation("late")
 
     assert game.current_drawer == "p1"
     assert game.round_number == 1
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p2"
 
 
 def test_removing_non_drawer_preserves_current_and_next_drawer():
     game = make_game(n_players=3, rounds=2)
-    game.start_next_turn()
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p1"
 
     assert game.remove_player_from_rotation("p0") is False
 
     assert game.current_drawer == "p1"
     assert game.round_number == 1
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p2"
 
 
 def test_removing_drawer_positions_cursor_before_next_survivor():
     game = make_game(n_players=3, rounds=2)
-    game.start_next_turn()
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p1"
 
     assert game.remove_player_from_rotation("p1") is True
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
 
     assert game.current_drawer == "p2"
     assert game.round_number == 1
@@ -94,7 +94,7 @@ def test_removing_drawer_positions_cursor_before_next_survivor():
 
 def test_choose_word_rejects_wrong_player():
     game = make_game()
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     other_player = "p1"
     assert game.choose_word(other_player, game.word_choices[0]) is False
     assert game.phase == Phase.CHOOSING_WORD
@@ -102,13 +102,13 @@ def test_choose_word_rejects_wrong_player():
 
 def test_choose_word_rejects_invalid_word():
     game = make_game()
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.choose_word(game.current_drawer, "not-a-choice") is False
 
 
 def test_force_word_choice_picks_first_option():
     game = make_game()
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     first_choice = game.word_choices[0]
     game.force_word_choice()
     assert game.word == first_choice
@@ -117,7 +117,7 @@ def test_force_word_choice_picks_first_option():
 
 def test_masked_word_reveals_length_only():
     game = make_game()
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
     word = game.word
     expected = "_" * len(word) + f"  {len(word)}"
@@ -127,20 +127,20 @@ def test_masked_word_reveals_length_only():
 def test_masked_word_shows_spaces_and_special_characters():
     game = make_game(n_players=1, rounds=1)
     game.word_pool = ["red panda"]
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.force_word_choice()
     assert game.masked_word() == "___  _____  3 5"
 
     game2 = make_game(n_players=1, rounds=1)
     game2.word_pool = ["spider-man"]
-    game2.start_next_turn()
+    game2.start_next_turn(canvas_generation=game2.canvas.generation + 1)
     game2.force_word_choice()
     assert game2.masked_word() == "______-___  6 3"
 
 
 def test_submit_guess_correct_awards_points_and_ignores_drawer():
     game = make_game(n_players=3)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
 
@@ -166,7 +166,7 @@ def test_submit_guess_ignores_canonically_decomposable_diacritics():
     )
     for answer, guess in cases:
         game = Game(turn_order=["drawer", "guesser"], word_pool=[answer])
-        game.start_next_turn()
+        game.start_next_turn(canvas_generation=game.canvas.generation + 1)
         game.force_word_choice()
         game.set_phase_deadline(DRAWING_SECONDS)
 
@@ -183,7 +183,7 @@ def test_submit_guess_keeps_letters_without_canonical_ascii_decomposition_distin
     )
     for answer, guess in cases:
         game = Game(turn_order=["drawer", "guesser"], word_pool=[answer])
-        game.start_next_turn()
+        game.start_next_turn(canvas_generation=game.canvas.generation + 1)
         game.force_word_choice()
 
         correct, points = game.submit_guess("guesser", guess)
@@ -194,7 +194,7 @@ def test_submit_guess_keeps_letters_without_canonical_ascii_decomposition_distin
 
 def test_submit_guess_records_elapsed_guess_time():
     game = make_game(n_players=2)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
     game.remaining_seconds = lambda: DRAWING_SECONDS - 12.5
     guesser = next(token for token in game.turn_order if token != game.current_drawer)
@@ -207,7 +207,7 @@ def test_submit_guess_records_elapsed_guess_time():
 
 def test_submit_guess_wrong_word():
     game = make_game()
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
     correct, points = game.submit_guess("p1", "definitely-wrong")
@@ -217,7 +217,7 @@ def test_submit_guess_wrong_word():
 
 def test_no_scoring_marks_correct_guesses_without_awarding_points():
     game = Game(turn_order=["drawer", "guesser"], scoring_mode="none")
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
 
@@ -231,7 +231,7 @@ def test_no_scoring_marks_correct_guesses_without_awarding_points():
 
 def test_end_round_awards_drawer_bonus_per_guesser():
     game = make_game(n_players=3)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
     others = [t for t in game.turn_order if t != game.current_drawer]
@@ -244,7 +244,7 @@ def test_end_round_awards_drawer_bonus_per_guesser():
 
 def test_end_round_is_idempotent():
     game = make_game(n_players=3)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
@@ -259,7 +259,7 @@ def test_end_round_bonus_shrinks_when_drawer_stalls_before_drawing():
     smaller bonus, not the same flat amount - otherwise stalling with an easy word
     to suppress guessers' scores would be free for the drawer."""
     game = make_game(n_players=3)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
     others = [t for t in game.turn_order if t != game.current_drawer]
 
@@ -271,7 +271,7 @@ def test_end_round_bonus_shrinks_when_drawer_stalls_before_drawing():
 
     # Compare against drawing immediately (full time remaining for guesses).
     game2 = make_game(n_players=3)
-    game2.start_next_turn()
+    game2.start_next_turn(canvas_generation=game2.canvas.generation + 1)
     game2.choose_word(game2.current_drawer, game2.word_choices[0])
     others2 = [t for t in game2.turn_order if t != game2.current_drawer]
     game2.set_phase_deadline(DRAWING_SECONDS)
@@ -284,7 +284,7 @@ def test_end_round_bonus_shrinks_when_drawer_stalls_before_drawing():
 
 def test_all_guessed():
     game = make_game(n_players=3)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
     others = [t for t in game.turn_order if t != game.current_drawer]
     assert game.all_guessed(len(others)) is False
@@ -295,180 +295,180 @@ def test_all_guessed():
 
 def test_undo_last_stroke_with_no_strokes():
     game = make_game()
-    assert game.undo_last_stroke() is False
+    assert game.canvas.undo_last_stroke() is False
 
 
 def test_canvas_revision_advances_only_for_semantic_history_changes():
     game = make_game()
-    assert game.canvas_revision == 0
+    assert game.canvas.revision == 0
 
-    game.start_next_turn()
-    assert game.canvas_revision == 1
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    assert game.canvas.revision == 1
 
-    assert game.record_stroke("draw_start", pen_start()) is True
-    assert game.canvas_revision == 2
-    assert game.record_stroke(
+    assert game.canvas.record_stroke("draw_start", pen_start()) is True
+    assert game.canvas.revision == 2
+    assert game.canvas.record_stroke(
         "draw_move",
         {"points": [{"x": 0.1, "y": 0.1}]},
     ) is True
-    assert game.record_stroke("draw_end", {}) is True
-    assert game.canvas_revision == 2
+    assert game.canvas.record_stroke("draw_end", {}) is True
+    assert game.canvas.revision == 2
 
-    assert game.record_stroke("draw_shape", shape_payload()) is True
-    assert game.canvas_revision == 3
-    assert game.clear_canvas_stroke() is True
-    assert game.canvas_revision == 4
-    assert game.undo_last_stroke() is True
-    assert game.canvas_revision == 5
-    assert game.undo_last_stroke() is True
-    assert game.canvas_revision == 6
-    assert game.undo_last_stroke() is True
-    assert game.canvas_revision == 7
-    assert game.undo_last_stroke() is False
-    assert game.canvas_revision == 7
+    assert game.canvas.record_stroke("draw_shape", shape_payload()) is True
+    assert game.canvas.revision == 3
+    assert game.canvas.clear_canvas_stroke() is True
+    assert game.canvas.revision == 4
+    assert game.canvas.undo_last_stroke() is True
+    assert game.canvas.revision == 5
+    assert game.canvas.undo_last_stroke() is True
+    assert game.canvas.revision == 6
+    assert game.canvas.undo_last_stroke() is True
+    assert game.canvas.revision == 7
+    assert game.canvas.undo_last_stroke() is False
+    assert game.canvas.revision == 7
 
 
 def test_canvas_sequence_commits_crc32_and_undo_uses_prefix_hash():
     game = make_game()
-    game.record_stroke("draw_shape", shape_payload())
-    first_hash = game.canvas_hash
-    assert game.commit_canvas_sequence(1) == (
-        game.canvas_revision,
+    game.canvas.record_stroke("draw_shape", shape_payload())
+    first_hash = game.canvas.hash
+    assert game.canvas.commit_sequence(1) == (
+        game.canvas.revision,
         first_hash,
         "action",
     )
 
-    game.record_stroke(
+    game.canvas.record_stroke(
         "draw_fill",
         {"x": 0.25, "y": 0.75, "color": "#abcdef"},
     )
-    assert game.canvas_hash != first_hash
-    assert game.commit_canvas_sequence(2)[1] == game.canvas_hash
+    assert game.canvas.hash != first_hash
+    assert game.canvas.commit_sequence(2)[1] == game.canvas.hash
 
-    assert game.undo_last_stroke() is True
-    assert game.canvas_hash == first_hash
-    assert game.commit_canvas_sequence(3, "undo") == (
-        game.canvas_revision,
+    assert game.canvas.undo_last_stroke() is True
+    assert game.canvas.hash == first_hash
+    assert game.canvas.commit_sequence(3, "undo") == (
+        game.canvas.revision,
         first_hash,
         "undo",
     )
 
 
 def test_record_stroke_respects_history_limit(monkeypatch):
-    monkeypatch.setattr("app.game.MAX_STROKE_RECORDS", 1)
+    monkeypatch.setattr("app.canvas_session.MAX_CANVAS_ACTIONS", 1)
     game = make_game()
 
-    assert game.record_stroke("draw_shape", shape_payload()) is True
-    assert game.record_stroke("draw_shape", shape_payload("ellipse")) is False
-    assert len(game.drawing_history) == 1
+    assert game.canvas.record_stroke("draw_shape", shape_payload()) is True
+    assert game.canvas.record_stroke("draw_shape", shape_payload("ellipse")) is False
+    assert len(game.canvas.history) == 1
 
 
 def test_record_stroke_respects_total_path_point_limit(monkeypatch):
-    monkeypatch.setattr("app.game.MAX_CANVAS_POINTS", 3)
+    monkeypatch.setattr("app.canvas_session.MAX_CANVAS_POINTS", 3)
     game = make_game()
 
-    assert game.record_stroke("draw_start", pen_start()) is True
-    assert game.record_stroke(
+    assert game.canvas.record_stroke("draw_start", pen_start()) is True
+    assert game.canvas.record_stroke(
         "draw_move",
         {"points": [{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]},
     )
-    assert game.record_stroke(
+    assert game.canvas.record_stroke(
         "draw_move",
         {"points": [{"x": 0.3, "y": 0.3}]},
     ) is False
-    assert game.canvas_point_count == 3
+    assert game.canvas.point_count == 3
 
-    assert game.undo_last_stroke() is True
-    assert game.canvas_point_count == 0
+    assert game.canvas.undo_last_stroke() is True
+    assert game.canvas.point_count == 0
 
 
 def test_undo_last_stroke_removes_entire_pen_stroke():
     game = make_game()
-    game.record_stroke("draw_start", pen_start())
-    game.record_stroke("draw_move", {"points": [{"x": 0.1, "y": 0.1}]})
-    game.record_stroke("draw_end", {})
-    assert game.undo_last_stroke() is True
-    assert game.drawing_history == []
+    game.canvas.record_stroke("draw_start", pen_start())
+    game.canvas.record_stroke("draw_move", {"points": [{"x": 0.1, "y": 0.1}]})
+    game.canvas.record_stroke("draw_end", {})
+    assert game.canvas.undo_last_stroke() is True
+    assert game.canvas.history == []
 
 
 def test_undo_last_stroke_only_removes_most_recent_stroke():
     game = make_game()
-    game.record_stroke("draw_start", pen_start())
-    game.record_stroke("draw_end", {})
-    game.record_stroke("draw_start", pen_start(1, 1))
-    game.record_stroke("draw_move", {"points": [{"x": 0.2, "y": 0.2}]})
-    game.record_stroke("draw_end", {})
-    assert game.undo_last_stroke() is True
-    assert all(isinstance(action, PathAction) for action in game.drawing_history)
+    game.canvas.record_stroke("draw_start", pen_start())
+    game.canvas.record_stroke("draw_end", {})
+    game.canvas.record_stroke("draw_start", pen_start(1, 1))
+    game.canvas.record_stroke("draw_move", {"points": [{"x": 0.2, "y": 0.2}]})
+    game.canvas.record_stroke("draw_end", {})
+    assert game.canvas.undo_last_stroke() is True
+    assert all(isinstance(action, PathAction) for action in game.canvas.history)
 
 
 def test_undo_last_stroke_removes_single_shape_event():
     game = make_game()
-    game.record_stroke("draw_start", pen_start())
-    game.record_stroke("draw_end", {})
-    game.record_stroke("draw_shape", shape_payload())
-    assert game.undo_last_stroke() is True
-    assert all(isinstance(action, PathAction) for action in game.drawing_history)
+    game.canvas.record_stroke("draw_start", pen_start())
+    game.canvas.record_stroke("draw_end", {})
+    game.canvas.record_stroke("draw_shape", shape_payload())
+    assert game.canvas.undo_last_stroke() is True
+    assert all(isinstance(action, PathAction) for action in game.canvas.history)
 
 
 def test_undo_last_stroke_repeatedly_empties_history():
     game = make_game()
-    game.record_stroke("draw_shape", shape_payload("ellipse"))
-    game.record_stroke("draw_start", pen_start())
-    game.record_stroke("draw_end", {})
-    assert game.undo_last_stroke() is True
-    assert game.undo_last_stroke() is True
-    assert game.drawing_history == []
-    assert game.undo_last_stroke() is False
+    game.canvas.record_stroke("draw_shape", shape_payload("ellipse"))
+    game.canvas.record_stroke("draw_start", pen_start())
+    game.canvas.record_stroke("draw_end", {})
+    assert game.canvas.undo_last_stroke() is True
+    assert game.canvas.undo_last_stroke() is True
+    assert game.canvas.history == []
+    assert game.canvas.undo_last_stroke() is False
 
 
 def test_clear_canvas_stroke_and_undo_clear():
     game = make_game()
-    game.record_stroke("draw_start", pen_start())
-    game.record_stroke("draw_end", {})
-    assert game.clear_canvas_stroke() is True
-    assert isinstance(game.drawing_history[0], PathAction)
-    assert isinstance(game.drawing_history[1], ClearAction)
+    game.canvas.record_stroke("draw_start", pen_start())
+    game.canvas.record_stroke("draw_end", {})
+    assert game.canvas.clear_canvas_stroke() is True
+    assert isinstance(game.canvas.history[0], PathAction)
+    assert isinstance(game.canvas.history[1], ClearAction)
 
     # Undo recovers drawing history to before Clear was pressed
-    assert game.undo_last_stroke() is True
-    assert all(isinstance(action, PathAction) for action in game.drawing_history)
+    assert game.canvas.undo_last_stroke() is True
+    assert all(isinstance(action, PathAction) for action in game.canvas.history)
 
 
 def test_new_stroke_after_clear_resets_pre_clear_history():
     game = make_game()
-    game.record_stroke("draw_start", pen_start())
-    game.record_stroke("draw_end", {})
-    game.clear_canvas_stroke()
+    game.canvas.record_stroke("draw_start", pen_start())
+    game.canvas.record_stroke("draw_end", {})
+    game.canvas.clear_canvas_stroke()
 
     # Starting a new stroke after Clear resets pre-clear history
-    game.record_stroke("draw_start", pen_start(1, 1))
-    assert isinstance(game.drawing_history[0], PathAction)
-    assert game.drawing_history[0].points[0][0] == 1
+    game.canvas.record_stroke("draw_start", pen_start(1, 1))
+    assert isinstance(game.canvas.history[0], PathAction)
+    assert game.canvas.history[0].points[0][0] == 1
 
 
 def test_sync_payload_round_trip_preserves_replay_and_undo_actions():
     game = make_game()
-    game.record_stroke("draw_start", {**pen_start(), "color": "#ffffff"})
-    game.record_stroke("draw_move", {"points": [{"x": 0.2, "y": 0.3}]})
-    game.record_stroke("draw_end", {})
-    game.record_stroke("draw_shape", shape_payload("triangle"))
-    game.record_stroke(
+    game.canvas.record_stroke("draw_start", {**pen_start(), "color": "#ffffff"})
+    game.canvas.record_stroke("draw_move", {"points": [{"x": 0.2, "y": 0.3}]})
+    game.canvas.record_stroke("draw_end", {})
+    game.canvas.record_stroke("draw_shape", shape_payload("triangle"))
+    game.canvas.record_stroke(
         "draw_fill",
         {"x": 0.999, "y": 0.999, "color": "#123456"},
     )
-    game.clear_canvas_stroke()
+    game.canvas.clear_canvas_stroke()
 
     assert decode_binary_canvas_history(
-        game.canvas_sync_payload()
-    ) == game.drawing_history
-    assert game.undo_last_stroke() is True
-    assert game.drawing_history[-1] == FillAction(x=799, y=599, color=0x123456)
+        game.canvas.sync_payload()
+    ) == game.canvas.history
+    assert game.canvas.undo_last_stroke() is True
+    assert game.canvas.history[-1] == FillAction(x=799, y=599, color=0x123456)
 
 
 def test_masked_word_returns_unmasked_for_drawer_and_correct_guesser():
     game = make_game(n_players=3)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game._set_word("cat")
     drawer = game.current_drawer
     guesser1, guesser2 = [t for t in game.turn_order if t != drawer]
@@ -488,11 +488,11 @@ def test_start_next_turn_skips_afk_drawers():
     game = make_game(n_players=3)
     p1, p2, p3 = game.turn_order
     # p2 is marked AFK
-    game.start_next_turn(afk_tokens={p2})
+    game.start_next_turn(afk_tokens={p2}, canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == p1
 
     # Next turn skips p2 and chooses p3
-    game.start_next_turn(afk_tokens={p2})
+    game.start_next_turn(afk_tokens={p2}, canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == p3
 
 
@@ -502,7 +502,7 @@ def make_hint_game(word, mode, n_players=3):
     game = make_game(n_players=n_players, rounds=1)
     game.hint_mode = mode
     game.word_pool = [word]
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.force_word_choice()
     return game
 
@@ -680,7 +680,7 @@ def test_letter_price_rarer_letter_costs_less():
 def make_close_guess_game(word, n_players=3):
     game = make_game(n_players=n_players, rounds=1)
     game.word_pool = [word]
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.force_word_choice()
     return game
 
@@ -838,7 +838,7 @@ def test_guess_hint_partial_caps_duplicate_word_matches():
 
 def test_new_scoring_system_guesser_and_drawer_scores():
     game = make_game(n_players=3)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_word(game.current_drawer, game.word_choices[0])
 
     others = [t for t in game.turn_order if t != game.current_drawer]
@@ -861,7 +861,7 @@ def test_new_scoring_system_guesser_and_drawer_scores():
 
 def test_hide_masked_prompt_returns_question_marks():
     game = Game(turn_order=["p0", "p1"], rounds_total=1, hide_masked_prompt=True)
-    game.start_next_turn()
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     word = game.word_choices[0]
     game.choose_word("p0", word)
 
