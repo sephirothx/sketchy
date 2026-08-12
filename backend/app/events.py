@@ -930,6 +930,9 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return {"ok": False, "error": "Not in this room"}
         room, voter = current
 
+        if voter.is_spectator:
+            return {"ok": False, "error": "Spectators cannot vote"}
+
         target_token = (data or {}).get("targetPlayerId")
         action = (data or {}).get("action")
         if not target_token or action not in ("kick", "afk"):
@@ -938,11 +941,13 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         target = room.players.get(target_token)
         if not target or target.id == voter.id:
             return {"ok": False, "error": "Cannot vote on yourself or non-existent player"}
+        if target.is_spectator:
+            return {"ok": False, "error": "Spectators cannot be moderation targets"}
 
-        target.kick_votes = {v for v in target.kick_votes if v in room.players and room.players[v].connected}
-        target.afk_votes = {v for v in target.afk_votes if v in room.players and room.players[v].connected}
-        connected_players = room.connected_players()
-        required_votes = (len(connected_players) // 2) + 1
+        eligible_voter_ids = {player.id for player in room.moderation_voters()}
+        target.kick_votes.intersection_update(eligible_voter_ids)
+        target.afk_votes.intersection_update(eligible_voter_ids)
+        required_votes = (len(eligible_voter_ids) // 2) + 1
 
         if action == "kick":
             if voter.id in target.kick_votes:

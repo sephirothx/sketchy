@@ -11,6 +11,11 @@ export interface PlayerInfo {
   afkVotes?: string[];
 }
 
+export interface ModerationState {
+  eligibleVoterIds: string[];
+  requiredVotes: number;
+}
+
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 export type ScoringMode = "none" | "default";
 
@@ -51,6 +56,7 @@ export interface RoomStatePayload {
   state: "waiting" | "playing";
   lastGameScores?: ScoreEntry[];
   lastGameDrawings?: DrawingRecapMetadata[];
+  moderation: ModerationState;
   players: PlayerInfo[];
 }
 
