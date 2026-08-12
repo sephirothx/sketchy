@@ -8,26 +8,36 @@ import socketio
 
 from app.game import (
     CHOOSE_WORD_SECONDS,
-    HINT_MODES,
     ROUND_END_SECONDS,
-    SCORING_MODES,
     Game,
     Phase,
 )
-from app.live_drawing import decode_live_drawing, encode_live_drawing
-from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
+from app.handlers.payloads import (
+    CreateRoomPayload,
+    HintPayload,
+    JoinRoomPayload,
+    PayloadError,
+    PlayerSettingsPayload,
+    RecapDrawingPayload,
+    RoomPreviewPayload,
+    SelectWordPayload,
+    TextPayload,
+    ToggleAfkPayload,
+    UpdateRoomSettingsPayload,
+    VotePayload,
+    WheelLetterPayload,
+    parse_draw_payload,
+    parse_empty_payload,
+    parse_payload,
+    parse_undo_payload,
+)
 from app.rooms import (
-    DEFAULT_ROOM_DRAWING_SECONDS,
-    DEFAULT_ROOM_HINT_MODE,
     DrawingRecapEntry,
-    MAX_PLAYERS_MAX,
-    MAX_PLAYERS_MIN,
     Player,
     Room,
     RoomFullError,
     RoomManager,
     STARTING_SCORE,
-    nearest_drawing_seconds,
     normalize_name_color,
 )
 from app.services.timers import TimerManager
@@ -37,33 +47,6 @@ logger = logging.getLogger("sketchy.events")
 
 RECONNECT_GRACE_SECONDS = 30
 
-MAX_CANVAS_SEQUENCE = 2**31 - 1
-
-def _clamp(value: int, low: int, high: int) -> int:
-    return max(low, min(high, value))
-
-
-def _canvas_sequence(value) -> int | None:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, int)
-        or not 1 <= value <= MAX_CANVAS_SEQUENCE
-    ):
-        return None
-    return value
-
-
-def _canvas_action_identity(value) -> tuple[int, int] | None:
-    if (
-        not isinstance(value, list)
-        or len(value) != 2
-        or (generation := _canvas_sequence(value[0])) is None
-        or (sequence := _canvas_sequence(value[1])) is None
-    ):
-        return None
-    return generation, sequence
-
-
 def register_handlers(
     sio: socketio.AsyncServer,
     room_manager: RoomManager,
@@ -72,36 +55,46 @@ def register_handlers(
 ) -> TimerManager:
     timer_manager = timers if timers is not None else TimerManager()
 
-    def room_settings_from_data(data: dict, *, fallback: Room | None = None) -> dict:
-        """Normalize room settings for both creation and host edits."""
-        data = data or {}
-        max_players = _clamp(int(data.get("maxPlayers", fallback.max_players if fallback else 8) or 8), MAX_PLAYERS_MIN, MAX_PLAYERS_MAX)
-        rounds = _clamp(int(data.get("rounds", fallback.rounds if fallback else 3) or 3), 1, 10)
-        drawing_seconds = nearest_drawing_seconds(int(data.get("drawingSeconds", fallback.drawing_seconds if fallback else DEFAULT_ROOM_DRAWING_SECONDS) or DEFAULT_ROOM_DRAWING_SECONDS))
-        hint_mode = str(data.get("hintMode", fallback.hint_mode if fallback else DEFAULT_ROOM_HINT_MODE) or DEFAULT_ROOM_HINT_MODE)
-        scoring_mode = str(data.get("scoringMode", fallback.scoring_mode if fallback else "default") or "default")
-        if hint_mode not in HINT_MODES:
+    def room_settings_from_payload(
+        payload: CreateRoomPayload | UpdateRoomSettingsPayload,
+        *,
+        fallback: Room | None = None,
+    ) -> dict:
+        """Build domain settings from an already validated boundary model."""
+        def value(field: str, fallback_field: str | None = None):
+            parsed = getattr(payload, field)
+            if parsed is not None or fallback is None:
+                return parsed
+            return getattr(fallback, fallback_field or field)
+
+        scoring_mode = value("scoring_mode")
+        hint_mode = value("hint_mode")
+        hide_masked_prompt = value("hide_masked_prompt")
+        if hide_masked_prompt or (
+            scoring_mode == "none" and hint_mode in ("purchase", "wheel")
+        ):
             hint_mode = "none"
-        if scoring_mode not in SCORING_MODES:
-            scoring_mode = "default"
-        if scoring_mode == "none" and hint_mode in ("purchase", "wheel"):
-            hint_mode = "none"
-        hide_masked_prompt = bool(data.get("hideMaskedPrompt", fallback.hide_masked_prompt if fallback else False))
-        if hide_masked_prompt:
-            hint_mode = "none"
+        custom_words = (
+            parse_custom_word_list(payload.custom_words)
+            if payload.custom_words is not None
+            else list(fallback.custom_words if fallback else [])
+        )
         return {
-            "name": str(data.get("name", fallback.name if fallback else "") or "").strip()[:40],
-            "is_public": bool(data.get("isPublic", fallback.is_public if fallback else True)),
-            "max_players": max_players,
-            "rounds": rounds,
-            "drawing_seconds": drawing_seconds,
-            "custom_words": parse_custom_word_list(str(data.get("customWords", "") or "")) if "customWords" in data else list(fallback.custom_words if fallback else []),
-            "custom_words_only": bool(data.get("customWordsOnly", fallback.custom_words_only if fallback else False)),
+            "name": value("name"),
+            "is_public": value("is_public"),
+            "max_players": value("max_players"),
+            "rounds": value("rounds"),
+            "drawing_seconds": value("drawing_seconds"),
+            "custom_words": custom_words,
+            "custom_words_only": value("custom_words_only"),
             "hint_mode": hint_mode,
             "scoring_mode": scoring_mode,
-            "spectators_see_solution": bool(data.get("spectatorsSeeSolution", fallback.spectators_see_solution if fallback else False)),
+            "spectators_see_solution": value("spectators_see_solution"),
             "hide_masked_prompt": hide_masked_prompt,
         }
+
+    def validation_error(error: PayloadError) -> dict[str, object]:
+        return error.acknowledgement()
 
     def editable_room_settings(room: Room) -> dict:
         return {
@@ -647,23 +640,29 @@ def register_handlers(
 
     @sio.event
     async def create_room(sid, data):
-        data = data or {}
-        nickname = str(data.get("nickname", "")).strip()[:20] or "Player"
-        settings = room_settings_from_data(data)
+        try:
+            payload = parse_payload(CreateRoomPayload, data)
+        except PayloadError as error:
+            return validation_error(error)
+        settings = room_settings_from_payload(payload)
 
         room = room_manager.create_room(
             **settings,
         )
         player = room_manager.add_player(
             room,
-            nickname,
-            name_color=normalize_name_color(data.get("nameColor")),
+            payload.nickname,
+            name_color=normalize_name_color(payload.name_color),
         )
         await _join_socket_room(sid, room, player, is_reconnect=False)
         return _session_ack(room, player)
 
     @sio.event
     async def get_room_settings(sid, data=None):
+        try:
+            parse_empty_payload(data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current or not current[1].is_host:
             return {"ok": False, "error": "Only the host can view room settings"}
@@ -672,6 +671,10 @@ def register_handlers(
 
     @sio.event
     async def get_custom_words(sid, data=None):
+        try:
+            parse_empty_payload(data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current:
             return {"ok": False, "error": "Not in this room"}
@@ -687,31 +690,34 @@ def register_handlers(
 
     @sio.event
     async def get_recap_drawing(sid, data):
-        index = data.get("index") if isinstance(data, dict) else None
+        try:
+            payload = parse_payload(RecapDrawingPayload, data)
+        except PayloadError:
+            return {"ok": False, "error": "Drawing not found"}
         current = await require_current_player(sid)
         if not current:
             return {"ok": False, "error": "Not in this room"}
         room, _ = current
-        if (
-            isinstance(index, bool)
-            or not isinstance(index, int)
-            or not 0 <= index < len(room.last_game_drawings)
-        ):
+        if payload.index >= len(room.last_game_drawings):
             return {"ok": False, "error": "Drawing not found"}
         return {
             "ok": True,
-            "drawing": room.last_game_drawings[index].payload(index),
+            "drawing": room.last_game_drawings[payload.index].payload(payload.index),
         }
 
     @sio.event
     async def update_room_settings(sid, data):
+        try:
+            payload = parse_payload(UpdateRoomSettingsPayload, data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current or not current[1].is_host:
             return {"ok": False, "error": "Only the host can change room settings"}
         room, _ = current
         if room.state != "waiting" or room.game:
             return {"ok": False, "error": "Settings can only be changed in the waiting room"}
-        settings = room_settings_from_data(data or {}, fallback=room)
+        settings = room_settings_from_payload(payload, fallback=room)
         active_count = len([p for p in room.player_list() if not p.is_spectator])
         if settings["max_players"] < active_count:
             return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}
@@ -726,22 +732,25 @@ def register_handlers(
     @sio.event
     async def get_room_preview(sid, data):
         """Return invite-screen metadata without joining or exposing player details."""
-        room = room_manager.get_room_by_code((data or {}).get("code"))
+        try:
+            payload = parse_payload(RoomPreviewPayload, data)
+        except PayloadError as error:
+            return validation_error(error)
+        room = room_manager.get_room_by_code(payload.code)
         if not room:
             return {"ok": False, "error": "Room not found"}
         return {"ok": True, "room": room.to_public_summary()}
 
     @sio.event
     async def join_room(sid, data):
-        data = data or {}
-        reconnect_secret = data.get("reconnectSecret")
-        room_id = data.get("roomId")
-        code = data.get("code")
-        nickname = str(data.get("nickname", "")).strip()[:20] or "Player"
-        name_color = normalize_name_color(data.get("nameColor"))
-        as_spectator = bool(data.get("asSpectator", False))
+        try:
+            payload = parse_payload(JoinRoomPayload, data)
+        except PayloadError as error:
+            return validation_error(error)
+        reconnect_secret = payload.reconnect_secret
+        name_color = normalize_name_color(payload.name_color)
 
-        room = room_manager.get_room(room_id) or room_manager.get_room_by_code(code)
+        room = room_manager.get_room(payload.room_id) or room_manager.get_room_by_code(payload.code)
         if not room:
             return {"ok": False, "error": "Room not found"}
 
@@ -763,7 +772,7 @@ def register_handlers(
                 sid,
                 room,
                 already_joined,
-                sync_canvas=not bool(data.get("soft")),
+                sync_canvas=not payload.soft,
             )
             return _session_ack(room, already_joined)
 
@@ -779,8 +788,8 @@ def register_handlers(
         try:
             player = room_manager.add_player(
                 room,
-                nickname,
-                is_spectator=as_spectator,
+                payload.nickname,
+                is_spectator=payload.as_spectator,
                 name_color=name_color,
             )
         except RoomFullError:
@@ -799,6 +808,10 @@ def register_handlers(
     @sio.event
     async def session_ping(sid, data=None):
         """Compact liveness check: [1, phase, round, remaining, gen, seq] or [0]."""
+        try:
+            parse_empty_payload(data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current:
             return [0]
@@ -821,19 +834,24 @@ def register_handlers(
 
     @sio.event
     async def update_player_settings(sid, data):
+        try:
+            payload = parse_payload(PlayerSettingsPayload, data)
+        except PayloadError:
+            return {"ok": False, "error": "Invalid player name color"}
         current = await require_current_player(sid)
         if not current:
             return {"ok": False, "error": "Not in this room"}
         room, player = current
-        name_color = normalize_name_color((data or {}).get("nameColor"))
-        if not name_color:
-            return {"ok": False, "error": "Invalid player name color"}
-        player.name_color = name_color
+        player.name_color = normalize_name_color(payload.name_color) or player.name_color
         await _emit_room_state(room)
         return {"ok": True}
 
     @sio.event
     async def become_player(sid, data=None):
+        try:
+            parse_empty_payload(data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current:
             return {"ok": False, "error": "Not in this room"}
@@ -865,6 +883,10 @@ def register_handlers(
 
     @sio.event
     async def leave_room(sid, data=None):
+        try:
+            parse_empty_payload(data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current:
             return
@@ -884,14 +906,16 @@ def register_handlers(
 
     @sio.event
     async def toggle_afk(sid, data=None):
+        try:
+            payload = parse_payload(ToggleAfkPayload, data, allow_none=True)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current:
             return {"ok": False, "error": "Not in this room"}
         room, player = current
 
-        target_afk = not player.is_afk
-        if data and "afk" in data:
-            target_afk = bool(data["afk"])
+        target_afk = not player.is_afk if payload.afk is None else payload.afk
 
         player.is_afk = target_afk
         await _emit_room_state(room)
@@ -909,6 +933,10 @@ def register_handlers(
 
     @sio.event
     async def vote_player(sid, data):
+        try:
+            payload = parse_payload(VotePayload, data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current:
             return {"ok": False, "error": "Not in this room"}
@@ -917,10 +945,8 @@ def register_handlers(
         if voter.is_spectator:
             return {"ok": False, "error": "Spectators cannot vote"}
 
-        target_token = (data or {}).get("targetPlayerId")
-        action = (data or {}).get("action")
-        if not target_token or action not in ("kick", "afk"):
-            return {"ok": False, "error": "Invalid vote parameter"}
+        target_token = payload.target_player_id
+        action = payload.action
 
         target = room.players.get(target_token)
         if not target or target.id == voter.id:
@@ -992,6 +1018,10 @@ def register_handlers(
 
     @sio.event
     async def start_game(sid, data=None):
+        try:
+            parse_empty_payload(data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current or not current[1].is_host:
             return {"ok": False, "error": "Only the host can start the game"}
@@ -1023,12 +1053,15 @@ def register_handlers(
 
     @sio.event
     async def select_word(sid, data):
+        try:
+            payload = parse_payload(SelectWordPayload, data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current or not current[0].game:
             return {"ok": False, "error": "Game is not ready for word selection"}
         room, player = current
-        word = str((data or {}).get("word", ""))
-        if not room.game.choose_word(player.id, word):
+        if not room.game.choose_word(player.id, payload.word):
             return {"ok": False, "error": "That word is no longer available"}
         timer_manager.cancel_phase_timer(room.id)
         await _begin_drawing(room)
@@ -1041,9 +1074,10 @@ def register_handlers(
     @sio.event
     async def draw(sid, data, action_identity=None):
         try:
-            packet = decode_live_drawing(data)
-        except ValueError:
-            return
+            payload = parse_draw_payload(data, action_identity)
+        except PayloadError as error:
+            return validation_error(error)
+        packet = payload.packet
         current = await require_current_player(sid)
         if not current or not current[0].game:
             return
@@ -1056,7 +1090,7 @@ def register_handlers(
             "draw_fill",
             "clear_canvas",
         }
-        identity = _canvas_action_identity(action_identity) if starts_action else None
+        identity = payload.action_identity if starts_action else None
         generation, sequence = identity if identity else (None, None)
         if starts_action:
             if generation is None or sequence is None:
@@ -1106,7 +1140,7 @@ def register_handlers(
                 return
             await sio.emit(
                 "draw",
-                data if isinstance(data, int) else bytes(data),
+                payload.wire_data,
                 room=room.id,
                 skip_sid=sid,
             )
@@ -1120,7 +1154,7 @@ def register_handlers(
             room.game.active_draw_sequence = sequence
         await sio.emit(
             "draw",
-            data if isinstance(data, int) else bytes(data),
+            payload.wire_data,
             room=room.id,
             skip_sid=sid,
         )
@@ -1137,25 +1171,18 @@ def register_handlers(
 
     @sio.event
     async def undo_stroke(sid, data=None):
+        try:
+            payload = parse_undo_payload(data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current or not current[0].game:
             return
         room, player = current
         if player.id != room.game.current_drawer:
             return {"ok": False, "error": "Only the drawer can undo"}
-        if (
-            not isinstance(data, list)
-            or len(data) != 4
-            or (generation := _canvas_sequence(data[0])) is None
-            or (sequence := _canvas_sequence(data[1])) is None
-            or isinstance(data[2], bool)
-            or not isinstance(data[2], int)
-            or data[2] < 0
-            or isinstance(data[3], bool)
-            or not isinstance(data[3], int)
-            or not 0 <= data[3] <= 0xFFFFFFFF
-        ):
-            return {"ok": False, "error": "Invalid Undo request"}
+        generation = payload.generation
+        sequence = payload.sequence
         if generation != room.game.canvas_generation:
             await _emit_canvas_sync(room, sid)
             return {"ok": False, "error": "Canvas generation is out of date"}
@@ -1174,7 +1201,7 @@ def register_handlers(
                 sequence,
             )
             return {"ok": False, "error": "Drawing actions are out of sequence"}
-        if data[2] != room.game.canvas_revision or data[3] != room.game.canvas_hash:
+        if payload.revision != room.game.canvas_revision or payload.history_hash != room.game.canvas_hash:
             await _emit_canvas_sync(room, sid)
             return {"ok": False, "error": "Canvas history is out of sync"}
         if room.game.undo_last_stroke():
@@ -1189,19 +1216,17 @@ def register_handlers(
 
     @sio.event
     async def send_chat(sid, data):
+        try:
+            payload = parse_payload(TextPayload, data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current:
             return {"ok": False, "error": "Not in a room"}
         room, player = current
         if room.state != "waiting":
             return {"ok": False, "error": "Waiting-room chat is unavailable during a game"}
-        raw_text = str((data or {}).get("text", ""))
-        if len(raw_text) > MAX_CHAT_MESSAGE_LENGTH:
-            return {
-                "ok": False,
-                "error": f"Message cannot exceed {MAX_CHAT_MESSAGE_LENGTH} characters",
-            }
-        text = raw_text.strip()
+        text = payload.text.strip()
         if not text:
             return {"ok": False, "error": "Message cannot be empty"}
         if player.is_afk and not player.is_spectator:
@@ -1216,17 +1241,15 @@ def register_handlers(
 
     @sio.event
     async def guess(sid, data):
+        try:
+            payload = parse_payload(TextPayload, data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if not current or not current[0].game:
             return
         room, player = current
-        raw_text = str((data or {}).get("text", ""))
-        if len(raw_text) > MAX_CHAT_MESSAGE_LENGTH:
-            return {
-                "ok": False,
-                "error": f"Message cannot exceed {MAX_CHAT_MESSAGE_LENGTH} characters",
-            }
-        text = raw_text.strip()
+        text = payload.text.strip()
         if not text:
             return
 
@@ -1338,6 +1361,10 @@ def register_handlers(
 
     @sio.event
     async def buy_hint(sid, data):
+        try:
+            payload = parse_payload(HintPayload, data)
+        except PayloadError:
+            return {"ok": False, "error": "Invalid hint"}
         current = await require_current_player(sid)
         if not current or not current[0].game:
             return {"ok": False, "error": "Not in an active game"}
@@ -1345,14 +1372,10 @@ def register_handlers(
         game = room.game
         if game.hint_mode != "purchase":
             return {"ok": False, "error": "Hint purchasing is disabled in this room"}
-        try:
-            slot = int((data or {}).get("slot"))
-        except (TypeError, ValueError):
-            return {"ok": False, "error": "Invalid hint"}
         cost = game.hint_cost(player.id)
         if player.score < cost:
             return {"ok": False, "error": "Not enough points"}
-        if not game.buy_hint_letter(player.id, slot):
+        if not game.buy_hint_letter(player.id, payload.slot):
             return {"ok": False, "error": "Hint unavailable"}
 
         player.score -= cost
@@ -1366,6 +1389,10 @@ def register_handlers(
 
     @sio.event
     async def buy_wheel_letter(sid, data):
+        try:
+            payload = parse_payload(WheelLetterPayload, data)
+        except PayloadError:
+            return {"ok": False, "error": "Invalid letter"}
         current = await require_current_player(sid)
         if not current or not current[0].game:
             return {"ok": False, "error": "Not in an active game"}
@@ -1373,9 +1400,7 @@ def register_handlers(
         game = room.game
         if game.hint_mode != "wheel":
             return {"ok": False, "error": "Letter buying is disabled in this room"}
-        letter = str((data or {}).get("letter", "")).strip().lower()
-        if len(letter) != 1 or not letter.isalpha():
-            return {"ok": False, "error": "Invalid letter"}
+        letter = payload.letter
         cost = game.wheel_hint_cost(player.id, letter)
         if player.score < cost:
             return {"ok": False, "error": "Not enough points"}
@@ -1405,7 +1430,11 @@ def register_handlers(
         return {"ok": True, "cost": cost, "found": found_count}
 
     @sio.event
-    async def request_sync_strokes(sid):
+    async def request_sync_strokes(sid, data=None):
+        try:
+            parse_empty_payload(data)
+        except PayloadError as error:
+            return validation_error(error)
         current = await require_current_player(sid)
         if current and current[0].game:
             room, _ = current

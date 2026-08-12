@@ -65,6 +65,8 @@ backend/
   app/
     main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, REST endpoints
     events.py     All Socket.IO event handlers (room lifecycle, turns, drawing, guessing)
+    handlers/
+      payloads.py Typed boundary models and parsers for every client command
     game.py       Pure game state machine (turns, word choice, scoring) - no I/O, unit-testable
     rooms.py      In-memory Room/Player/RoomManager domain model
     state.py      Shared RoomManager singleton
@@ -170,7 +172,7 @@ not CI pass/fail thresholds, because browser timings vary by machine. The
 `mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override the
 port with `PORT=<number>` when needed.
 
-`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. `events.py` socket event handlers (room lifecycle, word choice, drawing undo/fill/shapes, hint purchases, chat privacy) are covered by asyncio integration tests. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
+`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. `events.py` socket event handlers (room lifecycle, word choice, drawing undo/fill/shapes, hint purchases, chat privacy) are covered by asyncio integration tests. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 
 ### Production build
 
