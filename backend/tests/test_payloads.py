@@ -147,7 +147,7 @@ async def test_malformed_canvas_requests_do_not_partially_mutate_history():
     drawer.sid = "drawer-sid"
     room.state = "playing"
     room.game = Game(turn_order=[drawer.id])
-    room.game.start_next_turn(canvas_generation=1)
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -169,6 +169,6 @@ async def test_malformed_canvas_requests_do_not_partially_mutate_history():
 
     assert draw_response["ok"] is False
     assert undo_response["ok"] is False
-    assert room.game.drawing_history == []
-    assert room.game.canvas_sequence == 0
+    assert room.game.canvas.history == []
+    assert room.game.canvas.sequence == 0
     sio.emit.assert_not_awaited()

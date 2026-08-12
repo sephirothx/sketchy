@@ -202,6 +202,11 @@ class Room:
             for index, drawing in enumerate(self.last_game_drawings)
         ]
 
+    def allocate_canvas_generation(self) -> int:
+        """Return the next room-lifetime canvas protocol identity."""
+        self.canvas_generation += 1
+        return self.canvas_generation
+
     def effective_word_pool(self) -> list[str] | None:
         """Return the word pool a Game should draw from, or None for the default list.
 

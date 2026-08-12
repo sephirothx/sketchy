@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "frames": [
+    {
+      "event": "draw_start",
+      "payload": { "x": 0.25, "y": 0.75, "color": "#aabbcc", "width": 4 },
+      "wire": "10aabbcc0420030807"
+    },
+    {
+      "event": "draw_move",
+      "payload": {
+        "points": [{ "x": 0.1, "y": 0.2 }, { "x": 1.2, "y": -0.1 }]
+      },
+      "wire": "114001e001000f10ff"
+    },
+    { "event": "draw_end", "payload": {}, "wire": "12" },
+    {
+      "event": "draw_shape",
+      "payload": {
+        "shape": "ellipse",
+        "from": { "x": 0.1, "y": 0.2 },
+        "to": { "x": 0.8, "y": 0.9 },
+        "color": "#123456",
+        "width": 64
+      },
+      "wire": "1301123456404001e001000a7008"
+    },
+    {
+      "event": "draw_fill",
+      "payload": { "x": 0.25, "y": 0.75, "color": "#fedcba" },
+      "wire": "14fedcbac800c201"
+    },
+    { "event": "clear_canvas", "payload": {}, "wire": "15" }
+  ],
+  "histories": [
+    {
+      "name": "empty",
+      "payload": { "v": 1, "a": [] },
+      "binary": "534b434801000000000000",
+      "hash": 0
+    },
+    {
+      "name": "representative",
+      "payload": {
+        "v": 1,
+        "a": [
+          [0, 11189196, 4, 0.1, 0.2, 0.3, 0.4],
+          [1, 1, 1056816, 8, 0.2, 0.3, 0.8, 0.9],
+          [2, 16777215, 799, 599],
+          [3]
+        ]
+      },
+      "binary": "534b4348010400000000000d0000001b000000230000002400000000aabbcc044001e001c003c0030101102030088002d002000a700802ffffff1f03570203",
+      "hash": 209809303
+    }
+  ],
+  "malformedVersions": {
+    "frames": ["20", "25"],
+    "histories": [
+      { "payload": { "v": 2, "a": [] } },
+      { "binary": "534b434802000000000000" }
+    ]
+  }
+}

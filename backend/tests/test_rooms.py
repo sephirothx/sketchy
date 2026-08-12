@@ -1,4 +1,5 @@
 from app.canvas_history import encode_canvas_history
+from app.game import Game
 from app.rooms import DrawingRecapEntry, NAME_COLOR_PATTERN, RoomFullError, RoomManager
 
 
@@ -17,6 +18,23 @@ def test_create_room_uses_default_drawing_time_and_hint_mode():
     assert room.rounds == 3
     assert room.drawing_seconds == 90
     assert room.hint_mode == "checkpoints"
+
+
+def test_canvas_generation_is_monotonic_across_game_instances():
+    room = RoomManager().create_room(name="Room", is_public=True)
+
+    first_game = Game(turn_order=["first"])
+    first_game.start_next_turn(
+        canvas_generation=room.allocate_canvas_generation(),
+    )
+    replacement_game = Game(turn_order=["second"])
+    replacement_game.start_next_turn(
+        canvas_generation=room.allocate_canvas_generation(),
+    )
+
+    assert first_game.canvas.generation == 1
+    assert replacement_game.canvas.generation == 2
+    assert room.canvas_generation == 2
 
 
 def test_nearest_drawing_seconds_snaps_to_allowed_presets():
