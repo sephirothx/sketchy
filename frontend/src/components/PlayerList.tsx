@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import type { PlayerInfo } from "../types";
+import type { ModerationState, PlayerInfo } from "../types";
 import { socket } from "../lib/socket";
+import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -9,7 +10,7 @@ interface PlayerListProps {
   showScores?: boolean;
   variant?: "waiting" | "playing" | "game-end";
   allowVoting?: boolean;
-  votingPopulation?: PlayerInfo[];
+  moderation: ModerationState;
 }
 
 export function PlayerList({
@@ -19,10 +20,10 @@ export function PlayerList({
   showScores = true,
   variant = "playing",
   allowVoting = true,
-  votingPopulation = players,
+  moderation,
 }: PlayerListProps) {
   const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
-  const connectedPlayers = votingPopulation.filter((p) => p.connected);
+  const currentPlayerCanVote = canCastModerationVote(moderation, myPlayerId);
   const [openMenuToken, setOpenMenuToken] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -45,9 +46,9 @@ export function PlayerList({
     <ul className="player-list">
       {sorted.map((p, index) => {
         const isMe = p.playerId === myPlayerId;
-        const requiredVotes = Math.floor(connectedPlayers.length / 2) + 1;
-        const kickVotes = (p.kickVotes || []).filter((v) => connectedPlayers.some((cp) => cp.playerId === v));
-        const afkVotes = (p.afkVotes || []).filter((v) => connectedPlayers.some((cp) => cp.playerId === v));
+        const requiredVotes = moderation.requiredVotes;
+        const kickVotes = eligibleModerationVotes(moderation, p.kickVotes);
+        const afkVotes = eligibleModerationVotes(moderation, p.afkVotes);
         const hasVotedKick = myPlayerId ? kickVotes.includes(myPlayerId) : false;
         const hasVotedAfk = myPlayerId ? afkVotes.includes(myPlayerId) : false;
         const totalActiveVotes = Math.max(kickVotes.length, afkVotes.length);
@@ -56,13 +57,13 @@ export function PlayerList({
         return (
           <li
             key={p.playerId}
-            className={`player-row${p.connected ? "" : " disconnected"}${allowVoting && !isMe && p.connected ? " clickable" : ""}`}
+            className={`player-row${p.connected ? "" : " disconnected"}${allowVoting && currentPlayerCanVote && !isMe && p.connected ? " clickable" : ""}`}
             style={{
               position: "relative",
             }}
-            title={allowVoting && !isMe && p.connected ? "Click to vote AFK or Kick player" : undefined}
+            title={allowVoting && currentPlayerCanVote && !isMe && p.connected ? "Click to vote AFK or Kick player" : undefined}
             onClick={() => {
-              if (allowVoting && !isMe && p.connected) {
+              if (allowVoting && currentPlayerCanVote && !isMe && p.connected) {
                 setOpenMenuToken(isMenuOpen ? null : p.playerId);
               }
             }}
@@ -100,7 +101,7 @@ export function PlayerList({
               {showScores && <span className="player-score">{p.score}</span>}
             </div>
 
-            {allowVoting && isMenuOpen && !isMe && p.connected && (
+            {allowVoting && currentPlayerCanVote && isMenuOpen && !isMe && p.connected && (
               <div
                 ref={menuRef}
                 className="player-vote-menu"

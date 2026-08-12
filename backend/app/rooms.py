@@ -177,6 +177,25 @@ class Room:
     def connected_players(self) -> list[Player]:
         return [p for p in self.players.values() if p.connected]
 
+    def moderation_voters(self) -> list[Player]:
+        """Return players eligible to cast and count toward moderation votes.
+
+        AFK players and the vote target remain in the population. Spectators and
+        disconnected players do not participate.
+        """
+        return [
+            p
+            for p in self.players.values()
+            if p.connected and not p.is_spectator
+        ]
+
+    def moderation_state_payload(self) -> dict:
+        eligible_voter_ids = [p.id for p in self.moderation_voters()]
+        return {
+            "eligibleVoterIds": eligible_voter_ids,
+            "requiredVotes": (len(eligible_voter_ids) // 2) + 1,
+        }
+
     def drawing_recap_metadata(self) -> list[dict]:
         return [
             drawing.metadata(index)
@@ -244,6 +263,7 @@ class Room:
                 if self.state == "waiting"
                 else []
             ),
+            "moderation": self.moderation_state_payload(),
             "players": [
                 {
                     "playerId": p.id,

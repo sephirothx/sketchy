@@ -1859,6 +1859,61 @@ async def test_vote_kick_and_vote_afk_socket_handlers():
 
 
 @pytest.mark.asyncio
+async def test_direct_socket_moderation_rejects_spectator_voters_and_targets():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    voter = room_manager.add_player(room, "Voter")
+    target = room_manager.add_player(room, "Target")
+    afk_voter = room_manager.add_player(room, "AFK voter")
+    spectator = room_manager.add_player(room, "Spectator", is_spectator=True)
+    voter.sid = "voter-sid"
+    target.sid = "target-sid"
+    afk_voter.sid = "afk-sid"
+    spectator.sid = "spectator-sid"
+    afk_voter.is_afk = True
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {
+        "voter-sid": {"room_id": room.id, "player_id": voter.id},
+        "target-sid": {"room_id": room.id, "player_id": target.id},
+        "afk-sid": {"room_id": room.id, "player_id": afk_voter.id},
+        "spectator-sid": {"room_id": room.id, "player_id": spectator.id},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+    vote_player = sio.handlers["/"]["vote_player"]
+
+    spectator_vote = await vote_player(
+        "spectator-sid", {"targetPlayerId": target.id, "action": "kick"}
+    )
+    assert spectator_vote == {"ok": False, "error": "Spectators cannot vote"}
+    assert target.kick_votes == set()
+
+    spectator_target = await vote_player(
+        "voter-sid", {"targetPlayerId": spectator.id, "action": "kick"}
+    )
+    assert spectator_target == {
+        "ok": False,
+        "error": "Spectators cannot be moderation targets",
+    }
+    assert spectator.kick_votes == set()
+
+    first_vote = await vote_player(
+        "voter-sid", {"targetPlayerId": target.id, "action": "afk"}
+    )
+    assert first_vote == {"ok": True, "action": "afk", "executed": False}
+
+    # AFK players remain eligible. The spectator does not raise the threshold
+    # beyond two votes from the three connected non-spectator players.
+    second_vote = await vote_player(
+        "afk-sid", {"targetPlayerId": target.id, "action": "afk"}
+    )
+    assert second_vote == {"ok": True, "action": "afk", "executed": True}
+    assert target.is_afk is True
+
+
+@pytest.mark.asyncio
 async def test_votes_removed_when_player_leaves_or_disconnects():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)

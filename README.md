@@ -11,7 +11,7 @@ private room with a friend code — no accounts, no database, just a nickname an
 - Real-time synced canvas (freehand pen + rectangle/ellipse/triangle shape tools).
 - Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the secret word solution, and private spectator chat restricted to the drawer, spectators, and correct guessers.
 - AFK mode — toggle AFK status anytime so you are skipped for drawing turns and not waited for during rounds.
-- Vote kick and vote AFK — room players can vote to kick or mark another player AFK by majority vote.
+- Vote kick and vote AFK — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — download the current drawn image directly as a PNG file at any time.
 - Customization option to always hide masked prompt word length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.

@@ -5,6 +5,7 @@ import type {
   GameEndedPayload,
   GamePhase,
   HintMode,
+  ModerationState,
   PlayerInfo,
   RoomStatePayload,
   RoundEndedPayload,
@@ -35,6 +36,7 @@ interface GameStore {
   hideMaskedPrompt: boolean;
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
+  moderation: ModerationState;
 
   phase: GamePhase;
   drawerId: string | null;
@@ -136,6 +138,7 @@ export const useGameStore = create<GameStore>((set) => ({
   hideMaskedPrompt: false,
   roomState: "waiting",
   players: [],
+  moderation: { eligibleVoterIds: [], requiredVotes: 1 },
   error: null,
   ...initialGameFields,
 
@@ -172,6 +175,7 @@ export const useGameStore = create<GameStore>((set) => ({
         ? payload.lastGameScores
         : payload.state === "playing" ? null : state.finalScores,
       drawingRecap: payload.lastGameDrawings ?? state.drawingRecap,
+      moderation: payload.moderation,
       players: payload.players,
     })),
   addMessage: (message) => set((s) => ({ messages: [...s.messages.slice(-99), message] })),
@@ -236,5 +240,13 @@ export const useGameStore = create<GameStore>((set) => ({
   }),
   dismissGameEnd: () => set({ phase: "idle" }),
   setError: (error) => set({ error }),
-  reset: () => set({ playerId: null, reconnectSecret: null, roomId: null, code: null, players: [], ...initialGameFields }),
+  reset: () => set({
+    playerId: null,
+    reconnectSecret: null,
+    roomId: null,
+    code: null,
+    players: [],
+    moderation: { eligibleVoterIds: [], requiredVotes: 1 },
+    ...initialGameFields,
+  }),
 }));

@@ -76,6 +76,7 @@ export function GameRoomPage() {
 
   const roomState = useGameStore((s) => s.roomState);
   const players = useGameStore((s) => s.players);
+  const moderation = useGameStore((s) => s.moderation);
   const phase = useGameStore((s) => s.phase);
   const drawerId = useGameStore((s) => s.drawerId);
   const maskedWord = useGameStore((s) => s.maskedWord);
@@ -662,6 +663,7 @@ export function GameRoomPage() {
                 maxPlayers={maxPlayers}
                 showScores={scoringMode === "default"}
                 finalScores={finalScores}
+                moderation={moderation}
               />
             </div>
           </aside>
@@ -679,6 +681,7 @@ export function GameRoomPage() {
             maxPlayers={maxPlayers}
             showScores={scoringMode === "default"}
             finalScores={finalScores}
+            moderation={moderation}
           />
         }
         main={

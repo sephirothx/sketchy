@@ -158,6 +158,28 @@ def test_remove_player_cleans_up_votes():
     assert p1.id not in p2.afk_votes
 
 
+def test_moderation_population_includes_afk_players_and_target_but_not_spectators():
+    rm = RoomManager()
+    room = rm.create_room(name="Room", is_public=True)
+    voter = rm.add_player(room, "Voter")
+    target = rm.add_player(room, "Target")
+    afk_voter = rm.add_player(room, "AFK")
+    spectator = rm.add_player(room, "Spectator", is_spectator=True)
+    afk_voter.is_afk = True
+
+    moderation = room.to_state_payload()["moderation"]
+
+    assert moderation == {
+        "eligibleVoterIds": [voter.id, target.id, afk_voter.id],
+        "requiredVotes": 2,
+    }
+    assert spectator.id not in moderation["eligibleVoterIds"]
+
+    extra_spectator = rm.add_player(room, "Another spectator", is_spectator=True)
+    assert extra_spectator.id not in room.to_state_payload()["moderation"]["eligibleVoterIds"]
+    assert room.to_state_payload()["moderation"]["requiredVotes"] == 2
+
+
 def test_create_room_with_hide_masked_prompt_forces_hints_off():
     rm = RoomManager()
     room = rm.create_room(name="Hidden Room", hide_masked_prompt=True, hint_mode="checkpoints")
@@ -199,4 +221,3 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
 
     room.state = "playing"
     assert room.to_state_payload()["lastGameDrawings"] == []
-

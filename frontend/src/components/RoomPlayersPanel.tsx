@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
-import type { AckResponse, PlayerInfo, ScoreEntry } from "../types";
+import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../types";
 import { PlayerList } from "./PlayerList";
 
 interface RoomPlayersPanelProps {
@@ -11,6 +11,7 @@ interface RoomPlayersPanelProps {
   maxPlayers: number;
   showScores: boolean;
   finalScores: ScoreEntry[] | null;
+  moderation: ModerationState;
 }
 
 export function RoomPlayersPanel({
@@ -21,6 +22,7 @@ export function RoomPlayersPanel({
   maxPlayers,
   showScores,
   finalScores,
+  moderation,
 }: RoomPlayersPanelProps) {
   const [promotionBusy, setPromotionBusy] = useState(false);
   const [promotionError, setPromotionError] = useState<string | null>(null);
@@ -118,7 +120,7 @@ export function RoomPlayersPanel({
           showScores={showScores && (mode !== "waiting" || showFinalStandings)}
           variant={showFinalStandings ? "game-end" : mode === "game-end" ? "waiting" : mode}
           allowVoting={mode === "playing"}
-          votingPopulation={players}
+          moderation={moderation}
         />
       </div>
       {canPromoteSelf && (
