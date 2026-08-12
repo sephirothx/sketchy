@@ -37,3 +37,6 @@ Thumbs.db
 .agents/
 .cursor/
 AGENTS.md
+
+# --- Local documentation ---
+docs/
