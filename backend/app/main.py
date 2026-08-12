@@ -1,4 +1,5 @@
 """ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app."""
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import socketio
@@ -8,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
 from app import events
+from app.services.timers import TimerManager
 from app.state import room_manager
 
 
@@ -29,9 +31,19 @@ class SPAStaticFiles(StaticFiles):
 
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
-events.register_handlers(sio, room_manager)
+timer_manager = TimerManager()
+events.register_handlers(sio, room_manager, timers=timer_manager)
 
-api = FastAPI(title="Sketchy")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        await timer_manager.close()
+
+
+api = FastAPI(title="Sketchy", lifespan=lifespan)
 api.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
