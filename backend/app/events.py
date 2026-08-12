@@ -30,6 +30,7 @@ from app.rooms import (
     nearest_drawing_seconds,
     normalize_name_color,
 )
+from app.services.timers import TimerManager
 from app.words import MAX_WORD_LENGTH, parse_custom_word_list
 
 logger = logging.getLogger("sketchy.events")
@@ -37,15 +38,6 @@ logger = logging.getLogger("sketchy.events")
 RECONNECT_GRACE_SECONDS = 30
 
 MAX_CANVAS_SEQUENCE = 2**31 - 1
-
-# Per-room asyncio task driving the current phase's timeout (choosing/drawing/round-end).
-_phase_timers: dict[str, asyncio.Task] = {}
-# Per-room list of asyncio tasks that reveal checkpoint hint letters during drawing.
-# Kept separate from _phase_timers so canceling one never cancels the other.
-_hint_timers: dict[str, list[asyncio.Task]] = {}
-# Per-player-ID asyncio task that evicts a disconnected player after a grace period.
-_disconnect_timers: dict[str, asyncio.Task] = {}
-
 
 def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, value))
@@ -72,7 +64,14 @@ def _canvas_action_identity(value) -> tuple[int, int] | None:
     return generation, sequence
 
 
-def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> None:
+def register_handlers(
+    sio: socketio.AsyncServer,
+    room_manager: RoomManager,
+    *,
+    timers: TimerManager | None = None,
+) -> TimerManager:
+    timer_manager = timers if timers is not None else TimerManager()
+
     def room_settings_from_data(data: dict, *, fallback: Room | None = None) -> dict:
         """Normalize room settings for both creation and host edits."""
         data = data or {}
@@ -113,13 +112,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             "spectatorsSeeSolution": room.spectators_see_solution,
             "hideMaskedPrompt": room.hide_masked_prompt,
         }
-    def cancel_phase_timer(room_id: str) -> None:
-        task = _phase_timers.pop(room_id, None)
-        if task and not task.done():
-            task.cancel()
     def schedule_phase_timer(room: Room, seconds: float) -> None:
-        cancel_phase_timer(room.id)
-
         async def _runner() -> None:
             task = asyncio.current_task()
             try:
@@ -127,14 +120,14 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             except asyncio.CancelledError:
                 return
             # Deregister ourselves before running the timeout callback. The
-            # callback (e.g. _end_round) may itself call cancel_phase_timer,
+            # callback (e.g. _end_round) may itself cancel the phase timer,
             # and without this, that call would cancel *this* still-running
-            # task (since we're still stored in _phase_timers), which raises
+            # task (since we're still registered as the phase owner), which raises
             # CancelledError into us at the next await and prevents the
             # follow-up timer (e.g. for ROUND_END) from ever being scheduled
             # - silently stalling the game.
-            if _phase_timers.get(room.id) is task:
-                del _phase_timers[room.id]
+            assert task is not None
+            timer_manager.remove_phase_timer(room.id, task)
             try:
                 await _on_phase_timeout(room)
             except asyncio.CancelledError:
@@ -142,16 +135,10 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             except Exception:
                 logger.exception("Unhandled error in phase timeout for room %s", room.id)
 
-        _phase_timers[room.id] = asyncio.create_task(_runner())
-
-    def cancel_hint_timers(room_id: str) -> None:
-        tasks = _hint_timers.pop(room_id, [])
-        for task in tasks:
-            if not task.done():
-                task.cancel()
+        timer_manager.replace_phase_timer(room.id, asyncio.create_task(_runner()))
 
     def schedule_hint_checkpoints(room: Room) -> None:
-        cancel_hint_timers(room.id)
+        timer_manager.cancel_hint_timers(room.id)
         game = room.game
         if not game or game.hint_mode != "checkpoints":
             return
@@ -187,12 +174,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
                             to=p.sid,
                         )
 
-            _hint_timers.setdefault(room.id, []).append(asyncio.create_task(_runner()))
-
-    def cancel_disconnect_timer(token: str) -> None:
-        task = _disconnect_timers.pop(token, None)
-        if task and not task.done():
-            task.cancel()
+            timer_manager.add_hint_timer(room.id, asyncio.create_task(_runner()))
 
     async def _emit_room_state(room: Room) -> None:
         await sio.emit("room_state", room.to_state_payload(), room=room.id)
@@ -296,7 +278,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         await sio.enter_room(sid, room.id)
         if superseded_sid:
             await sio.disconnect(superseded_sid)
-        cancel_disconnect_timer(player.id)
+        timer_manager.cancel_disconnect_timer(player.id)
         await _emit_room_state(room)
         event_name = "player_reconnected" if is_reconnect else "player_joined"
         await sio.emit(
@@ -406,8 +388,8 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         game = room.game
         if not game or game.phase != Phase.DRAWING:
             return False
-        cancel_phase_timer(room.id)
-        cancel_hint_timers(room.id)
+        timer_manager.cancel_phase_timer(room.id)
+        timer_manager.cancel_hint_timers(room.id)
         drawer_bonus = game.end_round()
         if drawer_bonus is None:
             return False
@@ -606,14 +588,16 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             room_manager.remove_player(room, token)
             await sio.emit("player_left", {"playerId": token}, room=room.id)
             if not room.connected_players():
-                cancel_phase_timer(room.id)
-                cancel_hint_timers(room.id)
+                timer_manager.cancel_phase_timer(room.id)
+                timer_manager.cancel_hint_timers(room.id)
                 room_manager.remove_room_if_empty(room.id)
                 return
             await _remove_player_from_game(room, token)
             await _emit_room_state(room)
 
-        _disconnect_timers[token] = asyncio.create_task(_evict_after_grace())
+        timer_manager.replace_disconnect_timer(
+            token, asyncio.create_task(_evict_after_grace())
+        )
 
     # ------------------------------------------------------------------
     # Room lifecycle
@@ -625,13 +609,13 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
             return
         was_drawer = game.remove_player_from_rotation(token)
         if not game.turn_order:
-            cancel_phase_timer(room.id)
-            cancel_hint_timers(room.id)
+            timer_manager.cancel_phase_timer(room.id)
+            timer_manager.cancel_hint_timers(room.id)
             room.state = "waiting"
             room.game = None
         elif was_drawer:
-            cancel_phase_timer(room.id)
-            cancel_hint_timers(room.id)
+            timer_manager.cancel_phase_timer(room.id)
+            timer_manager.cancel_hint_timers(room.id)
             if game.is_finished():
                 await _finish_or_next(room)
             else:
@@ -773,7 +757,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if already_joined:
             already_joined.sid = sid
             already_joined.connected = True
-            cancel_disconnect_timer(already_joined.id)
+            timer_manager.cancel_disconnect_timer(already_joined.id)
             # Soft checks (heartbeat/visibility) must not dump full canvas history.
             await _sync_player_view(
                 sid,
@@ -885,13 +869,13 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if not current:
             return
         room, player = current
-        cancel_disconnect_timer(player.id)
+        timer_manager.cancel_disconnect_timer(player.id)
         room_manager.remove_player(room, player.id)
         await sio.leave_room(sid, room.id)
         await sio.save_session(sid, {})
         if not room.connected_players():
-            cancel_phase_timer(room.id)
-            cancel_hint_timers(room.id)
+            timer_manager.cancel_phase_timer(room.id)
+            timer_manager.cancel_hint_timers(room.id)
             room_manager.remove_room_if_empty(room.id)
         else:
             await _remove_player_from_game(room, player.id)
@@ -957,6 +941,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
 
             if len(target.kick_votes) >= required_votes:
                 target_sid = target.sid
+                timer_manager.cancel_disconnect_timer(target.id)
                 room_manager.remove_player(room, target.id)
                 if target_sid:
                     await sio.emit("kicked", {"reason": "You were kicked from the room by vote."}, to=target_sid)
@@ -1045,7 +1030,7 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         word = str((data or {}).get("word", ""))
         if not room.game.choose_word(player.id, word):
             return {"ok": False, "error": "That word is no longer available"}
-        cancel_phase_timer(room.id)
+        timer_manager.cancel_phase_timer(room.id)
         await _begin_drawing(room)
         return {"ok": True}
 
@@ -1425,3 +1410,5 @@ def register_handlers(sio: socketio.AsyncServer, room_manager: RoomManager) -> N
         if current and current[0].game:
             room, _ = current
             await _emit_canvas_sync(room, sid)
+
+    return timer_manager

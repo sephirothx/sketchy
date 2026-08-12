@@ -1081,7 +1081,7 @@ async def test_explicit_drawer_leave_starts_next_survivor_turn():
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
     sio.leave_room = AsyncMock()
     sio.save_session = AsyncMock()
@@ -1094,7 +1094,7 @@ async def test_explicit_drawer_leave_starts_next_survivor_turn():
     assert room.game.phase.value == "choosing_word"
     assert room.game.round_number == 1
 
-    timer = events._phase_timers.pop(room.id)
+    timer = timers.phase_timers.pop(room.id)
     timer.cancel()
     with suppress(asyncio.CancelledError):
         await timer
@@ -1114,7 +1114,7 @@ async def test_simultaneous_final_guesses_end_round_once():
     answer = room.game.word
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sessions = {
         player.sid: {"room_id": room.id, "player_id": player.id}
         for player in players
@@ -1144,7 +1144,7 @@ async def test_simultaneous_final_guesses_end_round_once():
     assert {guess["nickname"] for guess in round_ended_payload["guesses"]} == {"One", "Two"}
     assert all(0 <= guess["seconds"] <= DRAWING_SECONDS for guess in round_ended_payload["guesses"])
 
-    timer = events._phase_timers.pop(room.id)
+    timer = timers.phase_timers.pop(room.id)
     timer.cancel()
     with suppress(asyncio.CancelledError):
         await timer
@@ -1169,7 +1169,7 @@ async def test_finished_drawing_turn_is_captured_for_recap():
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sessions = {
         drawer.sid: {"room_id": room.id, "player_id": drawer.id},
         guesser.sid: {"room_id": room.id, "player_id": guesser.id},
@@ -1200,7 +1200,7 @@ async def test_finished_drawing_turn_is_captured_for_recap():
         FillAction(x=200, y=300, color=0x123456),
     ]
 
-    timer = events._phase_timers.pop(room.id)
+    timer = timers.phase_timers.pop(room.id)
     timer.cancel()
     with suppress(asyncio.CancelledError):
         await timer
@@ -1280,7 +1280,7 @@ async def test_starting_new_game_clears_previous_drawing_recap():
     )
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
         return_value={"room_id": room.id, "player_id": host.id},
     )
@@ -1291,7 +1291,7 @@ async def test_starting_new_game_clears_previous_drawing_recap():
     assert response == {"ok": True}
     assert room.last_game_drawings == []
 
-    timer = events._phase_timers.pop(room.id)
+    timer = timers.phase_timers.pop(room.id)
     timer.cancel()
     with suppress(asyncio.CancelledError):
         await timer
@@ -1315,7 +1315,7 @@ async def test_buy_hint_purchase_mode():
     room.game.choose_word(drawer.id, "apple")
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sessions = {
         "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
         "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
@@ -1345,7 +1345,7 @@ async def test_buy_hint_purchase_mode():
     res_broke = await buy_hint("guesser-sid", {"slot": 1})
     assert res_broke == {"ok": False, "error": "Not enough points"}
 
-    timer = events._phase_timers.pop(room.id, None)
+    timer = timers.phase_timers.pop(room.id, None)
     if timer:
         timer.cancel()
         with suppress(asyncio.CancelledError):
@@ -1370,7 +1370,7 @@ async def test_buy_wheel_letter():
     room.game.choose_word(drawer.id, "banana")
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
     sio.emit = AsyncMock()
     buy_wheel_letter = sio.handlers["/"]["buy_wheel_letter"]
@@ -1397,7 +1397,7 @@ async def test_buy_wheel_letter():
     chat_emits = [args for args in emitted if args[0] == "chat_message"]
     assert any("You bought 'A'" in args[1]["text"] for args in chat_emits)
 
-    timer = events._phase_timers.pop(room.id, None)
+    timer = timers.phase_timers.pop(room.id, None)
     if timer:
         timer.cancel()
         with suppress(asyncio.CancelledError):
@@ -1418,7 +1418,7 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sessions = {
         "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
         "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
@@ -1508,7 +1508,7 @@ async def test_undo_stroke_and_clear_canvas_handlers():
     assert len(room.game.drawing_history) == 1
     assert isinstance(room.game.drawing_history[0], PathAction)
 
-    timer = events._phase_timers.pop(room.id, None)
+    timer = timers.phase_timers.pop(room.id, None)
     if timer:
         timer.cancel()
         with suppress(asyncio.CancelledError):
@@ -1527,7 +1527,7 @@ async def test_draw_fill_handler_validation():
     room.game.force_word_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
     sio.emit = AsyncMock()
     draw = sio.handlers["/"]["draw"]
@@ -1553,7 +1553,7 @@ async def test_draw_fill_handler_validation():
     await draw("drawer-sid", b"\x14")
     assert len(room.game.drawing_history) == 1
 
-    timer = events._phase_timers.pop(room.id, None)
+    timer = timers.phase_timers.pop(room.id, None)
     if timer:
         timer.cancel()
         with suppress(asyncio.CancelledError):
@@ -1580,7 +1580,7 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sessions = {
         "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
         "guesser1-sid": {"room_id": room.id, "player_id": guesser1.id},
@@ -1628,7 +1628,7 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
     assert target_sids == {"drawer-sid", "guesser1-sid"}
     assert "guesser2-sid" not in target_sids
 
-    timer = events._phase_timers.pop(room.id, None)
+    timer = timers.phase_timers.pop(room.id, None)
     if timer:
         timer.cancel()
         with suppress(asyncio.CancelledError):
@@ -1730,7 +1730,7 @@ async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
     room.game._set_word("apple")
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sessions = {
         "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
         "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
@@ -1757,7 +1757,7 @@ async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
     assert target_sids == {"drawer-sid", "spec-sid"}
     assert "guesser-sid" not in target_sids
 
-    timer = events._phase_timers.pop(room.id, None)
+    timer = timers.phase_timers.pop(room.id, None)
     if timer:
         timer.cancel()
         with suppress(asyncio.CancelledError):
@@ -1779,7 +1779,7 @@ async def test_toggle_afk_socket_handler_and_not_waited_for():
     room.game._set_word("banana")
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sessions = {
         "p1-sid": {"room_id": room.id, "player_id": p1.id},
         "p2-sid": {"room_id": room.id, "player_id": p2.id},
@@ -1801,7 +1801,7 @@ async def test_toggle_afk_socket_handler_and_not_waited_for():
     assert p3.is_afk is True
     assert room.game.phase == events.Phase.ROUND_END
 
-    timer = events._phase_timers.pop(room.id, None)
+    timer = timers.phase_timers.pop(room.id, None)
     if timer:
         timer.cancel()
         with suppress(asyncio.CancelledError):
@@ -1956,7 +1956,7 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     room.game.start_next_turn()
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    timers = register_handlers(sio, room_manager)
     sessions = {
         "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
         "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
@@ -1981,7 +1981,7 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     assert len(guesser_hints) >= 1
     assert guesser_hints[0].args[1]["maskedWord"] != "banana"
 
-    timer = events._phase_timers.pop(room.id, None)
+    timer = timers.phase_timers.pop(room.id, None)
     if timer:
         timer.cancel()
         with suppress(asyncio.CancelledError):
