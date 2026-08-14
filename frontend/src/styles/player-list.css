@@ -1,0 +1,9 @@
+/* Clickable Player Row & Hover Feedback */
+.player-row.clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.player-row.clickable:hover {
+  background-color: #f1f5f9;
+}

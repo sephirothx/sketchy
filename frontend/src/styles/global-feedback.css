@@ -1,0 +1,54 @@
+/* Global network feedback */
+.connection-status-banner {
+  background: #fffbeb;
+  border-bottom: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 14px;
+  font-weight: 800;
+  left: 0;
+  padding: 9px 16px;
+  position: sticky;
+  right: 0;
+  text-align: center;
+  top: 0;
+  z-index: 1100;
+}
+
+.connection-status-banner.offline { background: #fef2f2; border-bottom-color: #ef4444; color: #991b1b; }
+
+.toast-viewport {
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  left: 50%;
+  max-width: min(440px, calc(100vw - 32px));
+  pointer-events: none;
+  position: fixed;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 1200;
+}
+
+.app-toast {
+  align-items: center;
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
+  color: #1e40af;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 10px;
+  justify-content: space-between;
+  max-width: 100%;
+  padding: 9px 10px 9px 14px;
+  pointer-events: auto;
+}
+
+.app-toast.success { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
+.app-toast.warning { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+.app-toast.error { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+.app-toast button { background: transparent; border: 0; color: inherit; font-size: 18px; line-height: 1; padding: 1px 4px; }
+.app-toast button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
