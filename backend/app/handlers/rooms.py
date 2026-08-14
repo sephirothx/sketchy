@@ -1,0 +1,298 @@
+"""Socket.IO handlers for the rooms domain."""
+from __future__ import annotations
+
+from functools import partial
+
+from app.game import Phase
+from app.handlers.context import HandlerContext
+from app.handlers.payloads import (
+    CreateRoomPayload,
+    JoinRoomPayload,
+    PayloadError,
+    PlayerSettingsPayload,
+    RecapDrawingPayload,
+    RoomPreviewPayload,
+    UpdateRoomSettingsPayload,
+    parse_empty_payload,
+    parse_payload,
+)
+from app.rooms import RoomFullError, STARTING_SCORE, normalize_name_color
+
+async def create_room(ctx: HandlerContext, sid, data):
+    try:
+        payload = parse_payload(CreateRoomPayload, data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    settings = ctx.game_flow.room_settings_from_payload(payload)
+
+    room = ctx.room_manager.create_room(
+        **settings,
+    )
+    player = ctx.room_manager.add_player(
+        room,
+        payload.nickname,
+        name_color=normalize_name_color(payload.name_color),
+    )
+    await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
+    return ctx.game_flow._session_ack(room, player)
+
+
+async def get_room_settings(ctx: HandlerContext, sid, data=None):
+    try:
+        parse_empty_payload(data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current or not current[1].is_host:
+        return {"ok": False, "error": "Only the host can view room settings"}
+    room, _ = current
+    return {"ok": True, "settings": ctx.game_flow.editable_room_settings(room)}
+
+
+async def get_custom_words(ctx: HandlerContext, sid, data=None):
+    try:
+        parse_empty_payload(data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return {"ok": False, "error": "Not in this room"}
+    room, player = current
+    if player.is_spectator:
+        return {"ok": False, "error": "Only players can view custom words"}
+    if room.state != "waiting" or room.game:
+        return {
+            "ok": False,
+            "error": "Custom words can only be viewed in the waiting room",
+        }
+    return {"ok": True, "words": list(room.custom_words)}
+
+
+async def get_recap_drawing(ctx: HandlerContext, sid, data):
+    try:
+        payload = parse_payload(RecapDrawingPayload, data)
+    except PayloadError:
+        return {"ok": False, "error": "Drawing not found"}
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return {"ok": False, "error": "Not in this room"}
+    room, _ = current
+    if payload.index >= len(room.last_game_drawings):
+        return {"ok": False, "error": "Drawing not found"}
+    return {
+        "ok": True,
+        "drawing": room.last_game_drawings[payload.index].payload(payload.index),
+    }
+
+
+async def update_room_settings(ctx: HandlerContext, sid, data):
+    try:
+        payload = parse_payload(UpdateRoomSettingsPayload, data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current or not current[1].is_host:
+        return {"ok": False, "error": "Only the host can change room settings"}
+    room, _ = current
+    if room.state != "waiting" or room.game:
+        return {"ok": False, "error": "Settings can only be changed in the waiting room"}
+    settings = ctx.game_flow.room_settings_from_payload(payload, fallback=room)
+    active_count = len([p for p in room.player_list() if not p.is_spectator])
+    if settings["max_players"] < active_count:
+        return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}
+    if not settings["custom_words"]:
+        settings["custom_words_only"] = False
+    for key, value in settings.items():
+        setattr(room, key, value)
+    await ctx.sio.emit("chat_message", {"playerId": "", "nickname": "", "text": "The host updated the room settings.", "correct": False, "system": True}, room=room.id)
+    await ctx.game_flow._emit_room_state(room)
+    return {"ok": True}
+
+
+async def get_room_preview(ctx: HandlerContext, sid, data):
+    """Return invite-screen metadata without joining or exposing player details."""
+    try:
+        payload = parse_payload(RoomPreviewPayload, data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    room = ctx.room_manager.get_room_by_code(payload.code)
+    if not room:
+        return {"ok": False, "error": "Room not found"}
+    return {"ok": True, "room": room.to_public_summary()}
+
+
+async def join_room(ctx: HandlerContext, sid, data):
+    try:
+        payload = parse_payload(JoinRoomPayload, data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    reconnect_secret = payload.reconnect_secret
+    name_color = normalize_name_color(payload.name_color)
+
+    room = ctx.room_manager.get_room(payload.room_id) or ctx.room_manager.get_room_by_code(payload.code)
+    if not room:
+        return {"ok": False, "error": "Room not found"}
+
+    # Checked before the token-reconnect branch below: a client's first
+    # join_room call (e.g. from the lobby) is very often followed by a
+    # second one moments later on the very same socket (e.g. GameRoomPage
+    # re-joining with the token it was just given). That second call
+    # would otherwise match the token-reconnect branch and fire a
+    # spurious "reconnected" message for a session that never actually
+    # disconnected - so if this exact socket already has a live session
+    # in this room, just confirm it rather than reprocessing the join.
+    already_joined = await ctx.game_flow._existing_player_for_sid(sid, room.id)
+    if already_joined:
+        already_joined.sid = sid
+        already_joined.connected = True
+        ctx.timers.cancel_disconnect_timer(already_joined.id)
+        # Soft checks (heartbeat/visibility) must not dump full canvas history.
+        await ctx.game_flow._sync_player_view(
+            sid,
+            room,
+            already_joined,
+            sync_canvas=not payload.soft,
+        )
+        return ctx.game_flow._session_ack(room, already_joined)
+
+    player = ctx.room_manager.get_player_by_reconnect_secret(room, reconnect_secret)
+    if player:
+        if name_color:
+            player.name_color = name_color
+        await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        return ctx.game_flow._session_ack(room, player)
+    if reconnect_secret:
+        return {"ok": False, "error": "Your previous room session has expired", "invalidReconnectSecret": True}
+
+    try:
+        player = ctx.room_manager.add_player(
+            room,
+            payload.nickname,
+            is_spectator=payload.as_spectator,
+            name_color=name_color,
+        )
+    except RoomFullError:
+        return {"ok": False, "error": "Room is full"}
+
+    # A game already in progress keeps running its existing turn_order -
+    # joining mid-game just enrolls the new player into future turns
+    # (appended to the end, so everyone already playing keeps their
+    # relative order) rather than blocking the join entirely.
+    if room.game and not player.is_spectator:
+        room.game.add_player_to_rotation(player.id)
+
+    await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
+    return ctx.game_flow._session_ack(room, player)
+
+
+async def session_ping(ctx: HandlerContext, sid, data=None):
+    """Compact liveness check: [1, phase, round, remaining, gen, seq] or [0]."""
+    try:
+        parse_empty_payload(data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return [0]
+    room, _ = current
+    game = room.game
+    phase = {
+        Phase.CHOOSING_WORD: 1,
+        Phase.DRAWING: 2,
+        Phase.ROUND_END: 3,
+        Phase.GAME_END: 4,
+    }.get(game.phase, 0) if game else 0
+    return [
+        1,
+        phase,
+        game.round_number if game else 0,
+        round(game.remaining_seconds()) if game else 0,
+        game.canvas.generation if game else 0,
+        game.canvas.sequence if game else 0,
+    ]
+
+
+async def update_player_settings(ctx: HandlerContext, sid, data):
+    try:
+        payload = parse_payload(PlayerSettingsPayload, data)
+    except PayloadError:
+        return {"ok": False, "error": "Invalid player name color"}
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return {"ok": False, "error": "Not in this room"}
+    room, player = current
+    player.name_color = normalize_name_color(payload.name_color) or player.name_color
+    await ctx.game_flow._emit_room_state(room)
+    return {"ok": True}
+
+
+async def become_player(ctx: HandlerContext, sid, data=None):
+    try:
+        parse_empty_payload(data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return {"ok": False, "error": "Not in this room"}
+    room, player = current
+    if room.state != "waiting" or room.game:
+        return {"ok": False, "error": "You can only join as a player from the waiting room"}
+    if not player.is_spectator:
+        return {"ok": False, "error": "You are already a player"}
+
+    active_count = len([candidate for candidate in room.players.values() if not candidate.is_spectator])
+    if active_count >= room.max_players:
+        return {"ok": False, "error": "Player slots are full"}
+
+    player.is_spectator = False
+    player.score = STARTING_SCORE if room.scoring_mode == "default" else 0
+    await ctx.sio.emit(
+        "chat_message",
+        {
+            "playerId": "",
+            "nickname": "",
+            "text": f"{player.nickname} joined as a player.",
+            "correct": False,
+            "system": True,
+        },
+        room=room.id,
+    )
+    await ctx.game_flow._emit_room_state(room)
+    return {"ok": True}
+
+
+async def leave_room(ctx: HandlerContext, sid, data=None):
+    try:
+        parse_empty_payload(data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return
+    room, player = current
+    ctx.timers.cancel_disconnect_timer(player.id)
+    ctx.room_manager.remove_player(room, player.id)
+    await ctx.sio.leave_room(sid, room.id)
+    await ctx.sio.save_session(sid, {})
+    if not room.connected_players():
+        ctx.timers.cancel_phase_timer(room.id)
+        ctx.timers.cancel_hint_timers(room.id)
+        ctx.room_manager.remove_room_if_empty(room.id)
+    else:
+        await ctx.game_flow._remove_player_from_game(room, player.id)
+        await ctx.sio.emit("player_left", {"playerId": player.id}, room=room.id)
+        await ctx.game_flow._emit_room_state(room)
+
+
+def register(ctx: HandlerContext) -> None:
+    ctx.sio.on("create_room", handler=partial(create_room, ctx))
+    ctx.sio.on("get_room_settings", handler=partial(get_room_settings, ctx))
+    ctx.sio.on("get_custom_words", handler=partial(get_custom_words, ctx))
+    ctx.sio.on("get_recap_drawing", handler=partial(get_recap_drawing, ctx))
+    ctx.sio.on("update_room_settings", handler=partial(update_room_settings, ctx))
+    ctx.sio.on("get_room_preview", handler=partial(get_room_preview, ctx))
+    ctx.sio.on("join_room", handler=partial(join_room, ctx))
+    ctx.sio.on("session_ping", handler=partial(session_ping, ctx))
+    ctx.sio.on("update_player_settings", handler=partial(update_player_settings, ctx))
+    ctx.sio.on("become_player", handler=partial(become_player, ctx))
+    ctx.sio.on("leave_room", handler=partial(leave_room, ctx))

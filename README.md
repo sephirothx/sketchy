@@ -64,14 +64,29 @@ flowchart LR
 backend/
   app/
     main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, REST endpoints
-    events.py     All Socket.IO event handlers (room lifecycle, turns, drawing, guessing)
     handlers/
-      payloads.py Typed boundary models and parsers for every client command
+      __init__.py    Registers all handler domains and returns their lifecycle context
+      context.py     Shared HandlerContext for Socket.IO, rooms, timers, and game flow
+      auth.py        Current-player authentication and stale-socket rejection
+      rooms.py       Room creation, joining, settings, previews, and player lifecycle
+      game.py        Game start and word-selection transport handlers
+      drawing.py     Drawing, undo, and canvas synchronization handlers
+      chat.py        Guessing, chat, and purchasable hint handlers
+      moderation.py Vote-kick and AFK handlers
+      connection.py Socket connect/disconnect and reconnect-grace handling
+      payloads.py    Typed boundary models and parsers for every client command
+    services/
+      game_flow.py Shared turn, round, timer, and player-removal workflows
+      timers.py    Application-owned asynchronous timer lifecycle
+    presenters.py Pure construction of room, turn, round, and session payloads
     game.py       Pure game state machine (turns, word choice, scoring) - no I/O, unit-testable
     rooms.py      In-memory Room/Player/RoomManager domain model
     state.py      Shared RoomManager singleton
     words.py      Word list + random choice helper
-  tests/          pytest unit tests for game.py and rooms.py
+  tests/
+    handlers/     Focused asyncio integration suites for each Socket.IO handler domain
+    e2e/          Multi-browser Playwright scenarios
+    test_*.py     Domain, protocol, payload, timer, and performance unit tests
 frontend/
   src/
     components/   Canvas, Toolbar, PlayerList, WordDisplay, Timer, GuessChat
@@ -172,7 +187,7 @@ not CI pass/fail thresholds, because browser timings vary by machine. The
 `mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override the
 port with `PORT=<number>` when needed.
 
-`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. `events.py` socket event handlers (room lifecycle, word choice, drawing undo/fill/shapes, hint purchases, chat privacy) are covered by asyncio integration tests. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
+`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 
 ### Production build
 

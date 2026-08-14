@@ -116,7 +116,7 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     from app import main
 
     timers = TimerManager()
-    monkeypatch.setattr(main, "timer_manager", timers)
+    monkeypatch.setattr(main.handler_context, "timers", timers)
     task = asyncio.create_task(asyncio.sleep(60))
     timers.replace_disconnect_timer("player", task)
     messages = iter(

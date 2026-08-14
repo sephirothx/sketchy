@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 import socketio
 
-from app.events import register_handlers
+from app.handlers import register_all_handlers as register_handlers
 from app.game import Game
 from app.handlers.payloads import (
     CreateRoomPayload,
