@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Canvas, type CanvasRef } from "./Canvas";
+import type { CanvasRef } from "./Canvas";
+import { CanvasSnapshot } from "./CanvasSnapshot";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
@@ -126,14 +127,10 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
           ) : actions === null ? (
             <p className="drawing-recap-status">Loading drawing…</p>
           ) : (
-            <Canvas
+            <CanvasSnapshot
               ref={canvasRef}
-              isDrawer={false}
-              color="#000000"
-              brushWidth={4}
-              tool="pen"
+              actions={actions}
               solutionWord={entry.word}
-              snapshotActions={actions}
             />
           )}
         </div>
