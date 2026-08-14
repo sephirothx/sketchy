@@ -1,4 +1,5 @@
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
+import type { DecodedCanvasAction } from "./canvasHistory.ts";
 import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
 import { floodFillPixels, hexToRgba, rasterizePath as rasterizePixelPath } from "./canvasPixels.ts";
@@ -146,4 +147,37 @@ export function applyFillAction(
     Math.floor(payload.y * CANVAS_HEIGHT),
     payload.color,
   );
+}
+
+export function renderCanvasActions(
+  context: CanvasRenderingContext2D,
+  actions: DecodedCanvasAction[],
+): void {
+  fillWhite(context, CANVAS_WIDTH, CANVAS_HEIGHT);
+  for (const action of actions) {
+    if (action.kind === "path" && action.points.length > 0) {
+      rasterizePath(
+        context,
+        action.points.length === 1
+          ? [action.points[0], action.points[0]]
+          : action.points,
+        action.width / 2,
+        hexToRgba(action.color),
+        false,
+      );
+    } else if (action.kind === "shape") {
+      drawShapeOutlinePixels(
+        context,
+        action.payload.from,
+        action.payload.to,
+        action.payload.shape,
+        action.payload.color,
+        action.payload.width,
+      );
+    } else if (action.kind === "fill") {
+      applyFillAtPixel(context, action.x, action.y, action.color);
+    } else if (action.kind === "clear") {
+      fillWhite(context, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
+  }
 }
