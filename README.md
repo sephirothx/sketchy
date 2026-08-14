@@ -197,7 +197,14 @@ cd ../backend && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
-so the whole game (UI + API + WebSocket) is served from a single port.
+so the whole game (UI + API + WebSocket) is served from a single port. The built-in server
+gzip-compresses eligible responses, serves Vite's fingerprinted `/assets/` files with a
+one-year `immutable` cache policy, and serves `index.html` (including client-route fallbacks)
+with `no-cache` so browsers discover new deployments promptly.
+
+If a reverse proxy handles compression instead, it may replace the gzip layer, but it should
+preserve the same cache distinction: fingerprinted assets are immutable while the SPA HTML
+must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encoding`.
 
 ## Game flow
 
