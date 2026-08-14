@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
+from starlette.middleware.gzip import GZipMiddleware
 
 from app.handlers import register_all_handlers
 from app.state import room_manager
@@ -17,7 +18,7 @@ class SPAStaticFiles(StaticFiles):
 
     async def get_response(self, path: str, scope):
         try:
-            return await super().get_response(path, scope)
+            response = await super().get_response(path, scope)
         except HTTPException as exc:
             is_client_route = (
                 exc.status_code == 404
@@ -26,7 +27,29 @@ class SPAStaticFiles(StaticFiles):
             )
             if not is_client_route:
                 raise
-            return await super().get_response("index.html", scope)
+            response = await super().get_response("index.html", scope)
+
+        if path.startswith("assets/"):
+            response.headers["Cache-Control"] = (
+                "public, max-age=31536000, immutable"
+            )
+        else:
+            # HTML and non-fingerprinted files must revalidate so a new deploy is
+            # discovered instead of leaving clients on a stale application shell.
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+def configure_frontend(app: FastAPI, directory: Path) -> None:
+    """Enable static compression and mount the production frontend when present."""
+
+    app.add_middleware(GZipMiddleware, minimum_size=500)
+    if directory.is_dir():
+        app.mount(
+            "/",
+            SPAStaticFiles(directory=str(directory), html=True),
+            name="frontend",
+        )
 
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
@@ -63,7 +86,6 @@ async def list_public_rooms():
 # In production, serve the built frontend as static files from the same origin
 # (single-port self-hosting). No-op during development when the folder is absent.
 _frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
-if _frontend_dist.is_dir():
-    api.mount("/", SPAStaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
+configure_frontend(api, _frontend_dist)
 
 app = socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io")
