@@ -8,8 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
-from app import events
-from app.services.timers import TimerManager
+from app.handlers import register_all_handlers
 from app.state import room_manager
 
 
@@ -31,8 +30,7 @@ class SPAStaticFiles(StaticFiles):
 
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
-timer_manager = TimerManager()
-events.register_handlers(sio, room_manager, timers=timer_manager)
+handler_context = register_all_handlers(sio, room_manager)
 
 
 @asynccontextmanager
@@ -40,7 +38,7 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
-        await timer_manager.close()
+        await handler_context.timers.close()
 
 
 api = FastAPI(title="Sketchy", lifespan=lifespan)
