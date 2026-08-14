@@ -1,0 +1,856 @@
+/* ==========================================================================
+   Dark Theme Overrides [data-theme="dark"]
+   Leaves default light theme completely unchanged when unset or light.
+   ========================================================================== */
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+[data-theme="dark"] body {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .invite-brand,
+[data-theme="dark"] .invite-card h1 {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .invite-card {
+  border-color: #334155;
+  background: #1e293b;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .invite-room-facts > div {
+  border-color: #334155;
+  background: #0f172a;
+}
+
+[data-theme="dark"] .invite-room-facts dd,
+[data-theme="dark"] .invite-join-form label {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .invite-join-form {
+  border-top-color: #334155;
+}
+
+[data-theme="dark"] .invite-join-form input {
+  border-color: #475569;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .invite-secondary-button {
+  border-color: #475569;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .invite-secondary-button:hover:not(:disabled) {
+  border-color: #64748b;
+  background: #334155;
+}
+
+[data-theme="dark"] .field-hint,
+[data-theme="dark"] .room-meta,
+[data-theme="dark"] .room-code,
+[data-theme="dark"] .settings-description {
+  color: #94a3b8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invite-loading-spinner {
+    animation-duration: 1400ms;
+  }
+  .choosing-word-dots span { animation: none; opacity: .65; }
+  .room-shell-main-transition { animation: none; }
+  .room-spectator-tooltip { transition: none; }
+  .round-score-row { transform: none !important; transition: none !important; }
+}
+
+[data-theme="dark"] .panel,
+[data-theme="dark"] .sidebar-box,
+[data-theme="dark"] .game-end-panel {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .create-room-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .create-room-heading h1,
+[data-theme="dark"] .advanced-settings summary,
+[data-theme="dark"] .m3-switch-label { color: #f8fafc; }
+[data-theme="dark"] .m3-switch-hint { background: #475569; color: #e2e8f0; }
+[data-theme="dark"] .m3-switch-hint-tooltip { background: #e2e8f0; color: #0f172a; }
+[data-theme="dark"] .m3-switch-hint-tooltip::after { border-top-color: #e2e8f0; }
+[data-theme="dark"] .create-room-heading span,
+[data-theme="dark"] .create-room-heading p,
+[data-theme="dark"] .advanced-settings summary span,
+[data-theme="dark"] .setting-dependency,
+[data-theme="dark"] .custom-words-summary { color: #94a3b8; }
+[data-theme="dark"] .create-room-card input[type="search"],
+[data-theme="dark"] .create-room-card select,
+[data-theme="dark"] .create-room-card textarea { background: #0f172a; border-color: #475569; color: #f8fafc; }
+[data-theme="dark"] .room-settings-fields input,
+[data-theme="dark"] .room-settings-fields select,
+[data-theme="dark"] .room-settings-fields textarea { background: #0f172a; border-color: #475569; color: #f8fafc; }
+[data-theme="dark"] .segmented-control { background: #0f172a; }
+[data-theme="dark"] .segmented-control-thumb { background: #1e293b; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
+[data-theme="dark"] .segmented-control button { color: #94a3b8; }
+[data-theme="dark"] .segmented-control button[aria-pressed="true"] { color: #f8fafc; }
+[data-theme="dark"] .input-number { background: #0f172a; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+[data-theme="dark"] .input-number button,
+[data-theme="dark"] .input-number input { color: #f8fafc; }
+[data-theme="dark"] .input-number button:disabled { color: #475569; }
+[data-theme="dark"] .m3-switch-track { background: #334155; border-color: #94a3b8; }
+[data-theme="dark"] .m3-switch-thumb { background: #94a3b8; }
+[data-theme="dark"] .m3-switch-label input:checked ~ .m3-switch-track { background: #2563eb; border-color: #2563eb; }
+[data-theme="dark"] .m3-switch-label input:checked ~ .m3-switch-track .m3-switch-thumb { background: #fff; }
+[data-theme="dark"] .advanced-settings,
+[data-theme="dark"] .custom-words-editor { border-color: #334155; }
+[data-theme="dark"] .room-settings-save { border-color: #334155; }
+
+[data-theme="dark"] .panel input[type="text"],
+[data-theme="dark"] .panel input[type="search"],
+[data-theme="dark"] .panel input[type="number"],
+[data-theme="dark"] .panel input:not([type]),
+[data-theme="dark"] .panel select,
+[data-theme="dark"] .settings-select {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .name-color-controls input[type="color"],
+[data-theme="dark"] .name-color-randomize {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .public-room-card {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .public-room-title-row h3 { color: #f8fafc; }
+[data-theme="dark"] .public-room-facts,
+[data-theme="dark"] .public-room-rules { color: #94a3b8; }
+[data-theme="dark"] .public-room-secondary-action { border-color: #64748b; color: #cbd5e1; }
+[data-theme="dark"] .room-state-waiting { background: #064e3b; color: #a7f3d0; }
+[data-theme="dark"] .room-state-playing { background: #78350f; color: #fde68a; }
+[data-theme="dark"] .public-room-badges span { background: #312e81; color: #c7d2fe; }
+
+[data-theme="dark"] .room-copy-button,
+[data-theme="dark"] .header-settings-button,
+[data-theme="dark"] .save-image-button {
+  background: #1e293b;
+  color: #f8fafc;
+  border-color: #475569;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .room-copy-button:hover,
+[data-theme="dark"] .header-settings-button:hover,
+[data-theme="dark"] .save-image-button:hover {
+  background: #334155;
+  border-color: #64748b;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .header-settings-button svg {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .header-settings-button:hover svg {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .canvas-stack {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .word-hidden-prompt {
+  color: #94a3b8;
+  background: #1e293b;
+  border-color: #475569;
+}
+
+[data-theme="dark"] .wheel-letter-btn {
+  background: #1e293b;
+  border-color: #3b82f6;
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .wheel-letter-btn:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+[data-theme="dark"] .wheel-letter-btn:disabled {
+  background: #0f172a;
+  border-color: #334155;
+  color: #64748b;
+}
+
+[data-theme="dark"] .word-lengths sup {
+  color: #94a3b8;
+}
+
+/* Toolbar in dark mode */
+[data-theme="dark"] .toolbar-container {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .toolbar-divider {
+  background: #334155;
+}
+
+[data-theme="dark"] .tool-button {
+  background: #334155;
+  border-color: #475569;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .tool-button:hover {
+  background: #475569;
+  border-color: #64748b;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .tool-button.selected {
+  background: #1e3a8a;
+  border-color: #3b82f6;
+  color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="dark"] .shortcut-badge {
+  color: #64748b;
+}
+
+[data-theme="dark"] .tool-button.selected .shortcut-badge {
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .brush-size-trigger {
+  background: #334155;
+  border-color: #475569;
+}
+
+[data-theme="dark"] .brush-size-trigger:hover {
+  background: #475569;
+  border-color: #64748b;
+}
+
+[data-theme="dark"] .game-header-afk-button {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .game-header-players-button {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .game-header-players-button:hover {
+  background: #334155;
+  border-color: #64748b;
+}
+
+[data-theme="dark"] .players-drawer {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .players-drawer-header {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .players-drawer-header h2 {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .players-drawer-close {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .game-header-leave-button {
+  background: #451a1a;
+  border-color: #b91c1c;
+  color: #fecaca;
+}
+
+[data-theme="dark"] .game-header-leave-button:hover {
+  background: #7f1d1d;
+  border-color: #ef4444;
+  color: #fff;
+}
+
+[data-theme="dark"] .app-toast { background: #1e3a8a; border-color: #3b82f6; color: #dbeafe; }
+[data-theme="dark"] .app-toast.success { background: #064e3b; border-color: #059669; color: #a7f3d0; }
+[data-theme="dark"] .app-toast.warning { background: #78350f; border-color: #d97706; color: #fef3c7; }
+[data-theme="dark"] .app-toast.error { background: #451a1a; border-color: #dc2626; color: #fecaca; }
+[data-theme="dark"] .lobby-action-error,
+[data-theme="dark"] .room-list-error { background: #451a1a; border-color: #dc2626; color: #fecaca; }
+[data-theme="dark"] .room-list-warning { background: #78350f; border-color: #d97706; color: #fef3c7; }
+[data-theme="dark"] .room-list-error button,
+[data-theme="dark"] .room-list-warning button { background: #0f172a; }
+
+[data-theme="dark"] .brush-size-trigger.active {
+  background: #1e3a8a;
+  border-color: #3b82f6;
+}
+
+[data-theme="dark"] .size-text-readout {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .brush-slider-popover {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .preview-readout {
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .recent-colors-label {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .toolbar-action-button {
+  background: #334155;
+  border-color: #475569;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .toolbar-action-button:hover {
+  background: #475569;
+  color: #ffffff;
+  border-color: #64748b;
+}
+
+[data-theme="dark"] .waiting-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .waiting-room-intro h1,
+[data-theme="dark"] .waiting-card h2,
+[data-theme="dark"] .room-panel-heading h2,
+[data-theme="dark"] .game-end-podium h1 {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .waiting-room-eyebrow,
+[data-theme="dark"] .waiting-card-kicker,
+[data-theme="dark"] .room-panel-kicker,
+[data-theme="dark"] .room-chat-drawer-note,
+[data-theme="dark"] .waiting-room-subtitle,
+[data-theme="dark"] .waiting-start-hint,
+[data-theme="dark"] .waiting-rules-list,
+[data-theme="dark"] .waiting-spectators h3 {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .waiting-invite-button {
+  background: #172554;
+  border-color: #2563eb;
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .waiting-custom-words {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .waiting-custom-words > summary {
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .waiting-custom-words-content p {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .waiting-custom-words-content,
+[data-theme="dark"] .waiting-custom-words-list,
+[data-theme="dark"] .waiting-custom-words-empty {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .waiting-custom-words-heading strong {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .waiting-custom-words-heading > span {
+  background: #172554;
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .waiting-custom-words-search {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .waiting-custom-words-search input,
+[data-theme="dark"] .waiting-custom-words-results select,
+[data-theme="dark"] .waiting-custom-words-filters button {
+  background: #1e293b;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .waiting-custom-words-search input:focus {
+  border-color: #60a5fa;
+  outline-color: #1e3a8a;
+}
+
+[data-theme="dark"] .waiting-custom-words-filters button[aria-pressed="true"] {
+  background: #2563eb;
+  border-color: #60a5fa;
+}
+
+[data-theme="dark"] .waiting-custom-words-list span {
+  background: #172554;
+  border-color: #1e3a8a;
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .waiting-custom-words-results label {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .waiting-custom-words-content .waiting-custom-words-error {
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .waiting-roster-list li,
+[data-theme="dark"] .waiting-spectators {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .waiting-room-actions button {
+  background: #334155;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .waiting-roster-list li { color: #e2e8f0; }
+
+[data-theme="dark"] .game-end-podium {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+
+[data-theme="dark"] .drawing-recap-card {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+
+[data-theme="dark"] .drawing-recap-header h1 { color: #f8fafc; }
+[data-theme="dark"] .drawing-recap-kicker,
+[data-theme="dark"] .drawing-recap-meta,
+[data-theme="dark"] .drawing-recap-status { color: #94a3b8; }
+[data-theme="dark"] .drawing-recap-close,
+[data-theme="dark"] .drawing-recap-download,
+[data-theme="dark"] .drawing-recap-navigation button,
+[data-theme="dark"] .drawing-recap-status button {
+  background: #334155;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .drawing-recap-canvas,
+[data-theme="dark"] .drawing-recap-empty { background: #0f172a; }
+[data-theme="dark"] .drawing-recap-empty { color: #94a3b8; }
+[data-theme="dark"] .drawing-recap-navigation strong { color: #e2e8f0; }
+
+[data-theme="dark"] .game-end-scoreboard li {
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .game-end-scoreboard li.is-you {
+  background: #172554;
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .game-end-no-score {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .room-spectator-indicator {
+  background: #0f172a;
+  border-color: #475569;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .room-spectator-tooltip {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .room-spectator-tooltip::before {
+  background: #1e293b;
+  border-color: #475569;
+}
+
+[data-theme="dark"] .spectator-promotion {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .spectator-promotion > p:first-child {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .spectator-promotion-error {
+  color: #fca5a5;
+}
+
+/* Chat & Messages in dark mode */
+[data-theme="dark"] .chat-message.system {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .chat-message.correct {
+  color: #4ade80;
+}
+
+[data-theme="dark"] .chat-message.close-hint {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .guess-focus-flash-close {
+  background: #431407;
+  border-color: #c2410c;
+  color: #fdba74;
+}
+
+[data-theme="dark"] .guess-focus-flash-miss {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .guess-focus-flash-info,
+[data-theme="dark"] .guess-focus-flash-error {
+  background: #451a1a;
+  border-color: #b91c1c;
+  color: #fecaca;
+}
+
+[data-theme="dark"] .chat-message.restricted {
+  color: #cbd5e1;
+  background: #334155;
+}
+
+[data-theme="dark"] .chat-input-box {
+  background: #0f172a;
+  border-color: #475569;
+}
+
+[data-theme="dark"] .chat-input-box input {
+  color: #f8fafc;
+  background: transparent;
+}
+
+[data-theme="dark"] select:disabled,
+[data-theme="dark"] input:disabled,
+[data-theme="dark"] textarea:disabled,
+[data-theme="dark"] .panel select:disabled,
+[data-theme="dark"] .panel input:disabled,
+[data-theme="dark"] .settings-select:disabled {
+  background-color: #0b1120 !important;
+  color: #64748b !important;
+  border-color: #1e293b !important;
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+[data-theme="dark"] input:-webkit-autofill,
+[data-theme="dark"] input:-webkit-autofill:hover,
+[data-theme="dark"] input:-webkit-autofill:focus,
+[data-theme="dark"] input:-webkit-autofill:active {
+  -webkit-text-fill-color: #f8fafc !important;
+  -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+[data-theme="dark"] .guess-hint-typing {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .guess-hint-correct {
+  color: #4ade80;
+}
+
+[data-theme="dark"] .guess-hint-wrong {
+  color: #f87171;
+}
+
+/* Overlays & Modals in dark mode */
+[data-theme="dark"] .round-end-overlay {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+[data-theme="dark"] .choosing-word-overlay {
+  background: rgba(15, 23, 42, .9);
+}
+
+[data-theme="dark"] .choosing-word-card {
+  background: rgba(30, 41, 59, .97);
+  border-color: #334155;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .32);
+}
+
+[data-theme="dark"] .choosing-word-message { color: #f8fafc; }
+[data-theme="dark"] .choosing-word-message strong { color: #93c5fd; }
+[data-theme="dark"] .choosing-word-hint { color: #94a3b8; }
+
+[data-theme="dark"] .round-end-panel {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .round-end-word {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .round-end-word strong {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .round-guesses-heading {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .round-guesses-list time {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .round-guesses-list li::marker {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .round-no-guesses {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .round-score-rank,
+[data-theme="dark"] .round-score-delta {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .round-score-change.rank-up,
+[data-theme="dark"] .round-score-delta.positive {
+  color: #4ade80;
+}
+
+[data-theme="dark"] .round-score-change.rank-down {
+  color: #f87171;
+}
+
+[data-theme="dark"] .player-row.clickable:hover {
+  background-color: #334155;
+}
+
+[data-theme="dark"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .modal-card {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .modal-title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .modal-body {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .confirmation-dialog-icon {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+[data-theme="dark"] .confirmation-cancel-button {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .settings-modal-header {
+  border-bottom-color: #334155;
+}
+
+[data-theme="dark"] .settings-modal-header h3 {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .close-icon-button {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .close-icon-button:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .settings-tabs {
+  border-bottom-color: #334155;
+}
+
+[data-theme="dark"] .settings-tab-button {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .settings-tab-button:hover {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .settings-tab-button.active {
+  color: #60a5fa;
+  border-bottom-color: #60a5fa;
+}
+
+[data-theme="dark"] .settings-section h4,
+[data-theme="dark"] .settings-label,
+[data-theme="dark"] .settings-labeled-field,
+[data-theme="dark"] .segmented-control-label,
+[data-theme="dark"] .settings-labeled-field-label {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .settings-fields-heading {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .settings-fields > .settings-fields-heading:not(:first-child) {
+  border-top-color: #334155;
+}
+
+[data-theme="dark"] .settings-volume-control {
+  --volume-track: #334155;
+}
+
+[data-theme="dark"] .settings-volume-value {
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .keybinding-row {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .keybinding-label {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .kbd-badge {
+  background: #1e293b;
+  border-color: #475569;
+  border-bottom-color: #64748b;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .kbd-badge:hover {
+  background: #334155;
+  border-color: #94a3b8;
+}
+
+[data-theme="dark"] .kbd-badge.rebinding {
+  background: #1e3a8a;
+  border-color: #3b82f6;
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .kbd-badge.secondary {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .settings-modal-footer {
+  border-top-color: #334155;
+}
+
+[data-theme="dark"] .modal-button.secondary {
+  background: #334155;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .modal-button.secondary:hover {
+  background: #475569;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .reset-defaults-button {
+  background: #0f172a;
+  border-color: #475569;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .reset-defaults-button:hover {
+  background: #334155;
+  color: #f8fafc;
+  border-color: #64748b;
+}
+
+[data-theme="dark"] .version-badge {
+  background: rgba(30, 41, 59, 0.9);
+  color: #64748b;
+}
+
+@media (max-width: 900px) {
+  [data-theme="dark"] .game-room.guess-focused .sidebar-right .sidebar-box {
+    background: #1e293b;
+    border-color: #334155;
+  }
+}
+
+@media (max-width: 600px) {
+  .waiting-room-intro,
+  .waiting-start-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .waiting-invite-button,
+  .waiting-start-button,
+  .room-settings-save-button { width: 100%; }
+  .waiting-card { padding: 16px; }
+  .room-settings-fields { grid-template-columns: 1fr; }
+  .waiting-room-actions { justify-content: flex-start; width: 100%; }
+  .drawing-recap-card { border-radius: 12px; padding: 14px; }
+  .drawing-recap-header { align-items: stretch; flex-direction: column; }
+  .drawing-recap-header-actions { align-self: stretch; flex-wrap: wrap; }
+}
+
+@media (max-width: 900px) {
+  .waiting-room-layout { grid-template-columns: 1fr; }
+  .waiting-room-chat-column { position: static; }
+  .waiting-chat { height: 300px; }
+}
