@@ -90,4 +90,4 @@ if [[ "$server_healthy" == false ]]; then
 fi
 
 log "Running Playwright Multi-Browser E2E Tests"
-(cd "$BACKEND_DIR" && .venv/bin/pytest tests/e2e -v)
+(cd "$BACKEND_DIR" && .venv/bin/pytest tests/e2e -v -n 2 --dist=loadfile)
