@@ -255,8 +255,26 @@
 
 .restart-vote-banner.approved {
   background: #ecfdf5;
-  border-color: #34d399;
+  border: 2px solid #10b981;
+  box-shadow: 0 8px 22px rgb(16 185 129 / 18%);
   grid-template-columns: 1fr minmax(180px, .8fr);
+}
+
+.restart-vote-banner.approved .restart-vote-copy strong {
+  color: #047857;
+  font-size: 15px;
+}
+
+.restart-approved-check {
+  align-items: center;
+  background: #10b981;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  margin-right: 3px;
+  width: 20px;
 }
 
 .restart-vote-copy {
@@ -278,18 +296,27 @@
 }
 
 .restart-vote-meter {
-  background: #e2e8f0;
-  border-radius: 999px;
   display: flex;
-  height: 12px;
+  gap: 4px;
+  height: 22px;
   min-width: 0;
-  overflow: hidden;
 }
 
-.restart-vote-meter span { min-width: 0; }
-.restart-vote-meter .yes { background: #22c55e; }
-.restart-vote-meter .no { background: #ef4444; }
-.restart-vote-meter .pending { background: #cbd5e1; }
+.restart-vote-tile {
+  align-items: center;
+  border-radius: 4px;
+  color: #fff;
+  display: inline-flex;
+  flex: 1 1 0;
+  font-size: 15px;
+  font-weight: 900;
+  justify-content: center;
+  min-width: 18px;
+}
+
+.restart-vote-tile.yes { background: #16a34a; }
+.restart-vote-tile.no { background: #dc2626; }
+.restart-vote-tile.pending { background: #cbd5e1; }
 
 .restart-vote-actions {
   display: flex;

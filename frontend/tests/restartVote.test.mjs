@@ -14,6 +14,11 @@ const vote = {
   eligibleVoterIds: ["one", "two", "three"],
   yesVoterIds: ["one", "outsider"],
   noVoterIds: ["two"],
+  castVotes: [
+    { playerId: "one", vote: true },
+    { playerId: "two", vote: false },
+    { playerId: "outsider", vote: true },
+  ],
   requiredVotes: 2,
   expiresAt: 21_000,
   restartAt: null,

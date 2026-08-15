@@ -23,6 +23,7 @@ export interface RestartVoteState {
   eligibleVoterIds: string[];
   yesVoterIds: string[];
   noVoterIds: string[];
+  castVotes: Array<{ playerId: string; vote: boolean }>;
   requiredVotes: number;
   expiresAt: number;
   restartAt: number | null;

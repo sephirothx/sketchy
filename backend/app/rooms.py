@@ -148,6 +148,10 @@ class RestartVote:
             "noVoterIds": [
                 player_id for player_id, vote in self.votes.items() if not vote
             ],
+            "castVotes": [
+                {"playerId": player_id, "vote": vote}
+                for player_id, vote in self.votes.items()
+            ],
             "requiredVotes": self.required_votes,
             "expiresAt": round(self.expires_at * 1000),
             "restartAt": (

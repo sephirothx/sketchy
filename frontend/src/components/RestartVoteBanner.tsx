@@ -18,6 +18,8 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
   }, []);
 
   const counts = restartVoteCounts(vote);
+  const eligibleIds = new Set(vote.eligibleVoterIds);
+  const castVotes = vote.castVotes.filter(({ playerId }) => eligibleIds.has(playerId));
   const deadline = vote.status === "approved" ? vote.restartAt : vote.expiresAt;
   const remaining = secondsUntil(deadline, now);
   const eligible = canCastRestartVote(vote, player);
@@ -30,19 +32,24 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
   return (
     <section
       className={`restart-vote-banner ${vote.status}`}
-      role="status"
-      aria-live="polite"
+      role={vote.status === "approved" ? "alert" : "status"}
+      aria-live={vote.status === "approved" ? "assertive" : "polite"}
       data-testid="restart-vote-banner"
     >
       <div className="restart-vote-copy">
         <strong>
           {vote.status === "approved"
-            ? `Restart approved · ${remaining}s`
+            ? (
+                <>
+                  <span className="restart-approved-check" aria-hidden="true">✓</span>
+                  Restart approved · restarting in {remaining}s
+                </>
+              )
             : `${vote.proposerNickname} proposed restarting · ${remaining}s`}
         </strong>
         <span>
           {vote.status === "approved"
-            ? "The current game is ending and a fresh game will begin."
+            ? "The vote passed. A fresh game is about to begin."
             : `${counts.yes} yes · ${counts.no} no · ${counts.pending} pending · ${vote.requiredVotes} needed`}
         </span>
       </div>
@@ -51,9 +58,22 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
         role="img"
         aria-label={`${counts.yes} yes, ${counts.no} no, ${counts.pending} pending`}
       >
-        <span className="yes" style={{ flexGrow: counts.yes }} />
-        <span className="no" style={{ flexGrow: counts.no }} />
-        <span className="pending" style={{ flexGrow: counts.pending }} />
+        {castVotes.map(({ playerId, vote: castVote }) => (
+          <span
+            key={playerId}
+            className={`restart-vote-tile ${castVote ? "yes" : "no"}`}
+            aria-hidden="true"
+          >
+            {castVote ? "✓" : "×"}
+          </span>
+        ))}
+        {Array.from({ length: counts.pending }, (_, index) => (
+          <span
+            key={`pending-${index}`}
+            className="restart-vote-tile pending"
+            aria-hidden="true"
+          />
+        ))}
       </div>
       {vote.status === "voting" && eligible && (
         <div className="restart-vote-actions" aria-label="Vote to restart the game">

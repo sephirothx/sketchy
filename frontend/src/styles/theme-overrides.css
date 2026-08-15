@@ -318,7 +318,6 @@
 [data-theme="dark"] .restart-vote-copy strong { color: #f8fafc; }
 [data-theme="dark"] .restart-vote-copy span,
 [data-theme="dark"] .restart-vote-observer-note { color: #94a3b8; }
-[data-theme="dark"] .restart-vote-meter { background: #334155; }
 [data-theme="dark"] .restart-vote-meter .pending { background: #475569; }
 [data-theme="dark"] .restart-vote-actions button {
   background: #0f172a;

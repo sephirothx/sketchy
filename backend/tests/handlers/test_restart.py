@@ -138,6 +138,10 @@ async def test_restart_vote_snapshots_eligible_players_and_requires_strict_major
     assert changed["ok"] is True
     assert changed["approved"] is True
     assert vote.status == "approved"
+    assert vote.payload()["castVotes"] == [
+        {"playerId": proposer.id, "vote": True},
+        {"playerId": voter.id, "vote": True},
+    ]
     assert room.game.phase == Phase.GAME_END
 
     await context.timers.close()
