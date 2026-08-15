@@ -15,8 +15,10 @@ def maximum_custom_words() -> list[str]:
             words.append(f"s{token}")
         elif index % 3 == 1:
             words.append(f"medium{token}")
+        elif index == 2:
+            words.append("skeleton in a closet")
         else:
-            words.append(f"long-custom-{token}")
+            words.append(f"long-custom-{'W' * 17}{token}")
     return words
 
 

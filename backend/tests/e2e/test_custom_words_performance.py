@@ -66,7 +66,8 @@ async def test_maximum_custom_word_editing_search_and_all_view_remain_bounded():
             await word_list.wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
             items = word_list.locator('[role="listitem"]')
-            assert await items.count() == 200
+            assert await items.count() < 100
+            assert await guest.get_by_text("10000 words", exact=True).is_visible()
 
             expected_filter_counts = {
                 "Short": 3334,
@@ -76,7 +77,7 @@ async def test_maximum_custom_word_editing_search_and_all_view_remain_bounded():
             for label, count in expected_filter_counts.items():
                 await guest.get_by_role("button", name=label, exact=True).click()
                 await guest.get_by_text(
-                    f"Showing 200 of {count} matching words",
+                    f"{count} of 10000 words match",
                     exact=True,
                 ).wait_for()
 
@@ -87,14 +88,42 @@ async def test_maximum_custom_word_editing_search_and_all_view_remain_bounded():
                 await guest.get_by_text("1 of 10000 words match", exact=True).wait_for()
                 assert await word_list.get_by_text(word, exact=True).is_visible()
 
-            await search.fill("")
             started = perf_counter()
-            await guest.get_by_label("Words to display").select_option("all")
+            await search.fill("")
             await guest.get_by_text("10000 words", exact=True).wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
+            assert await guest.get_by_label("Words to display").count() == 0
             assert await items.count() < 100
             assert await items.first.get_attribute("aria-posinset") == "1"
             assert await items.first.get_attribute("aria-setsize") == "10000"
+
+            long_word = word_list.get_by_text(words[2], exact=True)
+            await long_word.hover()
+            tooltip = guest.get_by_role("tooltip")
+            await tooltip.get_by_text(words[2], exact=True).wait_for()
+            assert await long_word.get_attribute(
+                "aria-describedby"
+            ) == await tooltip.get_attribute("id")
+            await long_word.focus()
+            await long_word.press("Escape")
+            assert await tooltip.count() == 0
+            await long_word.click()
+            await tooltip.wait_for()
+            await guest.get_by_text("10000 words", exact=True).click()
+            assert await tooltip.count() == 0
+            await items.first.hover()
+            assert await tooltip.count() == 0
+
+            await search.fill("skeleton")
+            await guest.get_by_text("1 of 10000 words match", exact=True).wait_for()
+            fully_visible_word = word_list.get_by_text(words[2], exact=True)
+            await fully_visible_word.hover()
+            assert await tooltip.count() == 0
+            assert await fully_visible_word.evaluate(
+                "element => element.scrollWidth <= element.clientWidth"
+            )
+            await search.fill("")
+            await guest.get_by_text("10000 words", exact=True).wait_for()
 
             await word_list.focus()
             await word_list.press("End")
@@ -108,7 +137,7 @@ async def test_maximum_custom_word_editing_search_and_all_view_remain_bounded():
 
             started = perf_counter()
             await search.fill("long-custom-")
-            await guest.get_by_text("3333 of 10000 words match", exact=True).wait_for()
+            await guest.get_by_text("3332 of 10000 words match", exact=True).wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
             assert await items.count() < 100
         finally:

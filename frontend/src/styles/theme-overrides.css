@@ -401,7 +401,6 @@
 }
 
 [data-theme="dark"] .waiting-custom-words-search input,
-[data-theme="dark"] .waiting-custom-words-results select,
 [data-theme="dark"] .waiting-custom-words-filters button {
   background: #1e293b;
   border-color: #475569;
@@ -422,10 +421,6 @@
   background: #172554;
   border-color: #1e3a8a;
   color: #bfdbfe;
-}
-
-[data-theme="dark"] .waiting-custom-words-results label {
-  color: #94a3b8;
 }
 
 [data-theme="dark"] .waiting-custom-words-content .waiting-custom-words-error {
