@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useReducer, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomWordsEditor } from "../components/CustomWordsEditor";
 import {
@@ -18,7 +18,7 @@ import {
   ROUNDS_MIN,
   SCORING_OPTIONS,
 } from "../lib/roomSetup";
-import { analyzeCustomWords } from "../lib/customWords";
+import { createCustomWordsState, customWordsReducer } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
@@ -34,15 +34,17 @@ export function CreateRoomPage() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
-  const [customWords, setCustomWords] = useState("");
-  const [customWordsOnly, setCustomWordsOnly] = useState(false);
+  const [customWords, dispatchCustomWords] = useReducer(
+    customWordsReducer,
+    undefined,
+    () => createCustomWordsState(),
+  );
   const [hintMode, setHintMode] = useState<HintMode>(DEFAULT_HINT_MODE);
   const [scoringMode, setScoringMode] = useState<ScoringMode>("default");
   const [spectatorsSeeSolution, setSpectatorsSeeSolution] = useState(false);
   const [hideMaskedPrompt, setHideMaskedPrompt] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const wordAnalysis = analyzeCustomWords(customWords);
 
   async function handleCreate() {
     const trimmedNickname = nickname.trim();
@@ -50,7 +52,7 @@ export function CreateRoomPage() {
       navigate("/");
       return;
     }
-    if (wordAnalysis.hasErrors) {
+    if (customWords.analysis.hasErrors) {
       setError("Fix the custom-word entries marked above before creating the room.");
       return;
     }
@@ -59,7 +61,7 @@ export function CreateRoomPage() {
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
         nickname: trimmedNickname, nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
-        customWords: customWords.trim(), customWordsOnly, hintMode, scoringMode,
+        customWords: customWords.value.trim(), customWordsOnly: customWords.only, hintMode, scoringMode,
         spectatorsSeeSolution, hideMaskedPrompt,
       });
       if (response.ok && response.roomId && response.code && response.playerId && response.reconnectSecret) {
@@ -78,9 +80,7 @@ export function CreateRoomPage() {
   const hintsDisabled = hideMaskedPrompt || scoringMode === "none";
 
   function handleCustomWordsChange(value: string) {
-    setCustomWords(value);
-    const analysis = analyzeCustomWords(value);
-    if (analysis.usableCount === 0 || analysis.hasErrors) setCustomWordsOnly(false);
+    dispatchCustomWords({ type: "change", value });
   }
 
   return <main className="create-room-page">
@@ -137,17 +137,17 @@ export function CreateRoomPage() {
           />
           {hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
           {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">Point-purchase hint modes require scoring.</p>}
-          <CustomWordsEditor value={customWords} onChange={handleCustomWordsChange} />
+          <CustomWordsEditor value={customWords.value} analysis={customWords.analysis} onChange={handleCustomWordsChange} />
           <Switch
             label="Only use custom words"
             hint="Add a usable custom word to enable this option."
-            checked={customWordsOnly}
-            disabled={wordAnalysis.usableCount === 0 || wordAnalysis.hasErrors}
-            onChange={setCustomWordsOnly}
+            checked={customWords.only}
+            disabled={customWords.analysis.usableCount === 0 || customWords.analysis.hasErrors}
+            onChange={(only) => dispatchCustomWords({ type: "set-only", only })}
           />
         </div>
       </details>
-      <button type="button" className="create-room-submit" disabled={busy || wordAnalysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
+      <button type="button" className="create-room-submit" disabled={busy || customWords.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
     </section>
   </main>;
 }

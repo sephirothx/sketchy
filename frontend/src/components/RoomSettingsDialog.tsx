@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { CustomWordsEditor } from "./CustomWordsEditor";
 import {
   ChoiceChips,
@@ -17,7 +17,7 @@ import {
   ROUNDS_MIN,
   SCORING_OPTIONS,
 } from "../lib/roomSetup";
-import { analyzeCustomWords } from "../lib/customWords";
+import { createCustomWordsState, customWordsReducer } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, EditableRoomSettings, HintMode, ScoringMode } from "../types";
 
@@ -37,10 +37,14 @@ const emptySettings: EditableRoomSettings = {
 
 export function RoomSettingsEditor() {
   const [settings, setSettings] = useState<EditableRoomSettings>(emptySettings);
+  const [customWords, dispatchCustomWords] = useReducer(
+    customWordsReducer,
+    undefined,
+    () => createCustomWordsState(),
+  );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const analysis = analyzeCustomWords(settings.customWords);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +52,14 @@ export function RoomSettingsEditor() {
       try {
         const response = await emitWithAck<{ ok: boolean; error?: string; settings?: EditableRoomSettings }>("get_room_settings", {});
         if (cancelled) return;
-        if (response.ok && response.settings) setSettings(response.settings);
+        if (response.ok && response.settings) {
+          setSettings(response.settings);
+          dispatchCustomWords({
+            type: "reset",
+            value: response.settings.customWords,
+            only: response.settings.customWordsOnly,
+          });
+        }
         else setError(response.error || "Could not load room settings");
       } catch (loadError) {
         if (!cancelled) setError(socketRequestErrorMessage(loadError, "load room settings"));
@@ -61,10 +72,14 @@ export function RoomSettingsEditor() {
 
   function update(patch: Partial<EditableRoomSettings>) { setSettings((current) => ({ ...current, ...patch })); }
   async function save() {
-    if (analysis.hasErrors) { setError("Fix custom-word errors before saving."); return; }
+    if (customWords.analysis.hasErrors) { setError("Fix custom-word errors before saving."); return; }
     setBusy(true); setError(null);
     try {
-      const response = await emitWithAck<AckResponse>("update_room_settings", settings);
+      const response = await emitWithAck<AckResponse>("update_room_settings", {
+        ...settings,
+        customWords: customWords.value,
+        customWordsOnly: customWords.only,
+      });
       if (response.ok) setError(null); else setError(response.error || "Could not save room settings");
     } catch (saveError) {
       setError(socketRequestErrorMessage(saveError, "save room settings"));
@@ -118,17 +133,17 @@ export function RoomSettingsEditor() {
           }))}
         />
         {settings.hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
-        <CustomWordsEditor value={settings.customWords} onChange={(customWords) => update({ customWords, customWordsOnly: analyzeCustomWords(customWords).usableCount > 0 && !analyzeCustomWords(customWords).hasErrors ? settings.customWordsOnly : false })} />
+        <CustomWordsEditor value={customWords.value} analysis={customWords.analysis} onChange={(value) => dispatchCustomWords({ type: "change", value })} />
         <Switch
           label="Only use custom words"
           hint="Add a usable custom word to enable this option."
-          checked={settings.customWordsOnly}
-          disabled={analysis.usableCount === 0 || analysis.hasErrors}
-          onChange={(customWordsOnly) => update({ customWordsOnly })}
+          checked={customWords.only}
+          disabled={customWords.analysis.usableCount === 0 || customWords.analysis.hasErrors}
+          onChange={(only) => dispatchCustomWords({ type: "set-only", only })}
         />
       </div></details>
     </div>}
     {error && <p className="create-room-error" role="alert">{error}</p>}
-    <div className="room-settings-save"><button type="button" className="room-settings-save-button" disabled={loading || busy || analysis.hasErrors} onClick={() => void save()}>{busy ? "Saving…" : "Save settings"}</button></div>
+    <div className="room-settings-save"><button type="button" className="room-settings-save-button" disabled={loading || busy || customWords.analysis.hasErrors} onClick={() => void save()}>{busy ? "Saving…" : "Save settings"}</button></div>
   </section>;
 }

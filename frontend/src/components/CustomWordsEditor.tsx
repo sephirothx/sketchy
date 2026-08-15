@@ -1,13 +1,13 @@
-import { analyzeCustomWords, MAX_CUSTOM_WORDS, MAX_RAW_INPUT_LENGTH, MAX_WORD_LENGTH } from "../lib/customWords";
+import { MAX_CUSTOM_WORDS, MAX_RAW_INPUT_LENGTH, MAX_WORD_LENGTH } from "../lib/customWords";
+import type { CustomWordAnalysis } from "../lib/customWords";
 
 interface CustomWordsEditorProps {
   value: string;
+  analysis: CustomWordAnalysis;
   onChange: (value: string) => void;
 }
 
-export function CustomWordsEditor({ value, onChange }: CustomWordsEditorProps) {
-  const analysis = analyzeCustomWords(value);
-
+export function CustomWordsEditor({ value, analysis, onChange }: CustomWordsEditorProps) {
   return <div className="custom-words-editor">
     <label htmlFor="custom-words">Custom words (optional)</label>
     <textarea id="custom-words" value={value} onChange={(event) => onChange(event.target.value)}

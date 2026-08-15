@@ -10,6 +10,17 @@ export interface CustomWordAnalysis {
   hasErrors: boolean;
 }
 
+export interface CustomWordsState {
+  value: string;
+  analysis: CustomWordAnalysis;
+  only: boolean;
+}
+
+export type CustomWordsAction =
+  | { type: "change"; value: string }
+  | { type: "reset"; value: string; only: boolean }
+  | { type: "set-only"; only: boolean };
+
 export function analyzeCustomWords(raw: string): CustomWordAnalysis {
   const seen = new Set<string>();
   const invalidEntries: string[] = [];
@@ -44,4 +55,33 @@ export function analyzeCustomWords(raw: string): CustomWordAnalysis {
     overLimitCount,
     hasErrors: invalidEntries.length > 0 || overLimitCount > 0,
   };
+}
+
+function canUseCustomWordsOnly(analysis: CustomWordAnalysis) {
+  return analysis.usableCount > 0 && !analysis.hasErrors;
+}
+
+export function createCustomWordsState(
+  value = "",
+  only = false,
+): CustomWordsState {
+  const analysis = analyzeCustomWords(value);
+  return {
+    value,
+    analysis,
+    only: canUseCustomWordsOnly(analysis) && only,
+  };
+}
+
+export function customWordsReducer(
+  state: CustomWordsState,
+  action: CustomWordsAction,
+): CustomWordsState {
+  if (action.type === "set-only") {
+    const only = canUseCustomWordsOnly(state.analysis) && action.only;
+    return only === state.only ? state : { ...state, only };
+  }
+  if (action.type === "change" && action.value === state.value) return state;
+  const only = action.type === "reset" ? action.only : state.only;
+  return createCustomWordsState(action.value, only);
 }

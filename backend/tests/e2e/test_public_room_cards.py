@@ -66,16 +66,7 @@ async def test_public_room_cards_explain_status_rules_and_actions():
             await player.fill('input[placeholder="Search custom words…"]', "")
             await player.get_by_role("button", name="Short", exact=True).click()
             assert await player.get_by_text("2 of 2 words match", exact=True).is_visible()
-            display_limit = player.get_by_label("Words to display")
-            assert await display_limit.locator("option").all_text_contents() == [
-                "200",
-                "500",
-                "1,000",
-                "2,000",
-                "5,000",
-                "All",
-            ]
-            await display_limit.select_option("all")
+            assert await player.get_by_label("Words to display").count() == 0
             assert not await host.is_visible(
                 'summary:has-text("Inspect 2 custom words")'
             )
