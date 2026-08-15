@@ -393,6 +393,16 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
     assert len(close_hints) == 1
     assert "very close" in close_hints[0].args[1]["text"]
 
+    forwarded_near_misses = [
+        call
+        for call in emitted_calls
+        if call.args[0] == "chat_message"
+        and call.args[1].get("text") == "pandas"
+        and call.kwargs.get("to") != "guesser1-sid"
+    ]
+    assert len(forwarded_near_misses) == 1
+    assert forwarded_near_misses[0].kwargs["to"] == ["drawer-sid"]
+
     # Guesser1's guess text should NOT be broadcast to room.id or guesser2-sid
     room_broadcasts = [call for call in emitted_calls if call.kwargs.get("room") == room.id]
     assert not any(call.args[1].get("text") == "pandas" for call in room_broadcasts)
@@ -402,6 +412,13 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
     # Guesser1 guesses correctly ("panda")
     await guess("guesser1-sid", {"text": "panda"})
     assert guesser1.id in room.game.correct_guessers
+    correct_chat_emits = [
+        call
+        for call in sio.emit.await_args_list
+        if call.args[0] == "chat_message" and call.args[1].get("correct") is True
+    ]
+    assert len(correct_chat_emits) == 1
+    assert correct_chat_emits[0].kwargs["to"] == ["drawer-sid", "guesser1-sid"]
 
     sio.emit.reset_mock()
 
@@ -413,10 +430,9 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
         call for call in sio.emit.await_args_list
         if call.args[0] == "chat_message" and call.args[1].get("restricted") is True
     ]
-    assert len(restricted_emits) == 2
-    target_sids = {call.kwargs.get("to") for call in restricted_emits}
-    assert target_sids == {"drawer-sid", "guesser1-sid"}
-    assert "guesser2-sid" not in target_sids
+    assert len(restricted_emits) == 1
+    assert restricted_emits[0].kwargs["to"] == ["drawer-sid", "guesser1-sid"]
+    assert "guesser2-sid" not in restricted_emits[0].kwargs["to"]
 
     timer = timers.phase_timers.pop(room.id, None)
     if timer:
@@ -463,9 +479,46 @@ async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
 
     # Message is restricted and sent to drawer and spectator, NOT active guesser
     emitted = [call for call in sio.emit.await_args_list if call.args[0] == "chat_message"]
-    target_sids = {call.kwargs.get("to") for call in emitted}
-    assert target_sids == {"drawer-sid", "spec-sid"}
-    assert "guesser-sid" not in target_sids
+    assert len(emitted) == 1
+    assert emitted[0].kwargs["to"] == ["drawer-sid", "spec-sid"]
+    assert "guesser-sid" not in emitted[0].kwargs["to"]
+
+    timer = timers.phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+@pytest.mark.asyncio
+async def test_empty_privileged_recipient_list_does_not_broadcast_close_guess():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    guesser.sid = "guesser-sid"
+
+    room.game = Game(turn_order=[drawer.id, guesser.id], word_pool=["panda"])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_word(drawer.id, "panda")
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    timers = register_handlers(sio, room_manager).timers
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": guesser.id}
+    )
+    sio.emit = AsyncMock()
+
+    guess = sio.handlers["/"]["guess"]
+    await guess("guesser-sid", {"text": "pandas"})
+
+    chat_emits = [
+        call for call in sio.emit.await_args_list if call.args[0] == "chat_message"
+    ]
+    assert len(chat_emits) == 2
+    assert all(call.kwargs.get("to") == "guesser-sid" for call in chat_emits)
+    assert all(call.kwargs.get("room") is None for call in chat_emits)
 
     timer = timers.phase_timers.pop(room.id, None)
     if timer:

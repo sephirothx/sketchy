@@ -66,7 +66,8 @@ async def guess(ctx: HandlerContext, sid, data):
     # Spectators and players who have already guessed correctly can chat,
     # but their messages are restricted to the drawer, other correct guessers, and spectators.
     if player.is_spectator:
-        for target_sid in ctx.game_flow._privileged_sids(room, game):
+        recipients = ctx.game_flow._privileged_sids(room, game)
+        if recipients:
             await ctx.sio.emit(
                 "chat_message",
                 {
@@ -77,12 +78,13 @@ async def guess(ctx: HandlerContext, sid, data):
                     "restricted": True,
                     "isSpectator": True,
                 },
-                to=target_sid,
+                to=recipients,
             )
         return
 
     if player.id in game.correct_guessers:
-        for target_sid in ctx.game_flow._privileged_sids(room, game):
+        recipients = ctx.game_flow._privileged_sids(room, game)
+        if recipients:
             await ctx.sio.emit(
                 "chat_message",
                 {
@@ -92,7 +94,7 @@ async def guess(ctx: HandlerContext, sid, data):
                     "correct": False,
                     "restricted": True,
                 },
-                to=target_sid,
+                to=recipients,
             )
         return
 
@@ -127,11 +129,12 @@ async def guess(ctx: HandlerContext, sid, data):
                 },
                 to=sid,
             )
-            for target_sid in ctx.game_flow._privileged_sids(room, game, exclude_sid=sid):
+            recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
+            if recipients:
                 await ctx.sio.emit(
                     "chat_message",
                     {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False},
-                    to=target_sid,
+                    to=recipients,
                 )
         else:
             await ctx.sio.emit(
@@ -148,11 +151,12 @@ async def guess(ctx: HandlerContext, sid, data):
         room=room.id,
     )
     await ctx.sio.emit("you_guessed_correctly", {"word": game.word}, to=player.sid)
-    for target_sid in ctx.game_flow._privileged_sids(room, game):
+    recipients = ctx.game_flow._privileged_sids(room, game)
+    if recipients:
         await ctx.sio.emit(
             "chat_message",
             {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": True},
-            to=target_sid,
+            to=recipients,
         )
 
     await ctx.game_flow._end_round_if_all_guessed(room)
