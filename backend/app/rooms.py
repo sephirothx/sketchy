@@ -7,7 +7,7 @@ import secrets
 import string
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Literal, Optional
 
 from app.game import Game
 from app.words import WORDS
@@ -129,7 +129,7 @@ class RestartVote:
     eligible_voter_ids: tuple[str, ...]
     votes: dict[str, bool]
     expires_at: float
-    status: str = "voting"
+    status: Literal["voting", "approved"] = "voting"
     restart_at: float | None = None
 
     @property

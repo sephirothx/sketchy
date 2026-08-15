@@ -78,7 +78,9 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
         </div>
       )}
       {vote.status === "voting" && !eligible && (
-        <span className="restart-vote-observer-note">Active players are voting.</span>
+        <span className="restart-vote-observer-note">
+          Only eligible players present when the vote started can vote.
+        </span>
       )}
     </section>
   );

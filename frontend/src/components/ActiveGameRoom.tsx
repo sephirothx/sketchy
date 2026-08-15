@@ -69,7 +69,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   useEffect(() => {
     if (restartVoteCooldownUntil <= Date.now()) return;
-    const interval = window.setInterval(() => setRestartClock(Date.now()), 250);
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      setRestartClock(now);
+      if (now >= restartVoteCooldownUntil) window.clearInterval(interval);
+    }, 250);
     return () => window.clearInterval(interval);
   }, [restartVoteCooldownUntil]);
 

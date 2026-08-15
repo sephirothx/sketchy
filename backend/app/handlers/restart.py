@@ -135,6 +135,8 @@ async def propose_restart_vote(ctx: HandlerContext, sid, data=None):
     room, proposer = current
     if room.state != "playing" or not room.game:
         return {"ok": False, "error": "There is no active game to restart"}
+    if room.game.current_drawer is None:
+        return {"ok": False, "error": "The game is still starting"}
     if proposer not in _eligible_players(room):
         return {
             "ok": False,

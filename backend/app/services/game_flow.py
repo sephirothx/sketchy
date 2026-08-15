@@ -212,7 +212,8 @@ class GameFlowService:
                     },
                     room=room.id,
                 )
-            await sio.emit("game_started", {"restarted": restarted}, room=room.id)
+            game_started_payload = {"restarted": True} if restarted else {}
+            await sio.emit("game_started", game_started_payload, room=room.id)
             await _start_turn(room)
 
         async def _emit_canvas_sync(room: Room, sid: str) -> None:

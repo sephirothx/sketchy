@@ -8,7 +8,7 @@ from app.canvas_history import encode_canvas_history
 from app.game import Game, Phase
 from app.handlers import register_all_handlers as register_handlers
 from app.live_drawing import encode_live_drawing
-from app.rooms import DrawingRecapEntry, RoomManager, STARTING_SCORE
+from app.rooms import DrawingRecapEntry, RestartVote, RoomManager, STARTING_SCORE
 
 
 def active_room(player_count: int = 3):
@@ -38,6 +38,44 @@ def registered_server(room_manager, room, players):
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
     return sio, context, sessions
+
+
+@pytest.mark.parametrize(
+    ("eligible_count", "required_votes"),
+    ((2, 2), (3, 2), (4, 3)),
+)
+def test_restart_vote_requires_a_strict_majority(
+    eligible_count: int,
+    required_votes: int,
+):
+    vote = RestartVote(
+        proposer_id="player-1",
+        proposer_nickname="Player 1",
+        eligible_voter_ids=tuple(
+            f"player-{index}" for index in range(1, eligible_count + 1)
+        ),
+        votes={"player-1": True},
+        expires_at=0,
+    )
+
+    assert vote.required_votes == required_votes
+
+
+@pytest.mark.asyncio
+async def test_restart_vote_cannot_start_before_the_first_turn_is_initialized():
+    room_manager, room, players = active_room(2)
+    room.game = Game(turn_order=[player.id for player in players], rounds_total=2)
+    sio, context, _ = registered_server(room_manager, room, players)
+
+    response = await sio.handlers["/"]["propose_restart_vote"](
+        players[0].sid, {}
+    )
+
+    assert response == {"ok": False, "error": "The game is still starting"}
+    assert room.restart_vote is None
+    assert context.timers.restart_timers == {}
+
+    await context.timers.close()
 
 
 @pytest.mark.asyncio
@@ -159,6 +197,13 @@ async def test_restart_vote_rejection_closes_immediately_and_enforces_cooldown()
 async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canvas():
     room_manager, room, players = active_room(2)
     proposer, voter = players
+    room.rounds = 4
+    room.drawing_seconds = 30
+    room.custom_words = ["reviewword", "secondword", "thirdword"]
+    room.custom_words_only = True
+    room.hint_mode = "wheel"
+    room.hide_masked_prompt = True
+    room.spectators_see_solution = True
     old_game = room.game
     assert old_game is not None
     old_generation = old_game.canvas.generation
@@ -199,6 +244,12 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     assert room.game is not None and room.game is not old_game
     assert room.game.phase == Phase.CHOOSING_WORD
     assert room.game.round_number == 1
+    assert room.game.rounds_total == 4
+    assert room.game.drawing_seconds == 30
+    assert room.game.word_pool == ["reviewword", "secondword", "thirdword"]
+    assert room.game.hint_mode == "wheel"
+    assert room.game.hide_masked_prompt is True
+    assert room.spectators_see_solution is True
     assert room.game.canvas.generation > old_generation
     assert room.last_game_drawings == []
     assert room.last_game_scores == []
