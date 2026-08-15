@@ -16,7 +16,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 VENV_PY="$BACKEND_DIR/.venv/bin/python"
-VENV_PIP="$BACKEND_DIR/.venv/bin/pip"
 PORT="${PORT:-8000}"
 
 SKIP_BUILD=false
@@ -63,14 +62,14 @@ if [[ ! -x "$VENV_PY" ]]; then
 fi
 
 log "Installing backend dependencies (including test/dev)"
-"$VENV_PIP" install -q -r "$BACKEND_DIR/requirements-dev.txt"
+"$VENV_PY" -m pip install -q --upgrade pip -r "$BACKEND_DIR/requirements-dev.txt"
 
 # --- Frontend build ----------------------------------------------------------
 if [[ "$SKIP_BUILD" == true ]]; then
   log "Skipping frontend build (--skip-build)"
 else
   log "Installing frontend dependencies"
-  (cd "$FRONTEND_DIR" && npm install)
+  (cd "$FRONTEND_DIR" && npm install --no-fund)
 
   log "Building frontend (tsc -b && vite build)"
   (cd "$FRONTEND_DIR" && npm run build)
