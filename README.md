@@ -11,6 +11,7 @@ private room with a friend code — no accounts, no database, just a nickname an
 - Real-time synced canvas (freehand pen + rectangle/ellipse/triangle shape tools).
 - Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the secret word solution, and private spectator chat restricted to the drawer, spectators, and correct guessers.
 - AFK mode — toggle AFK status anytime so you are skipped for drawing turns and not waited for during rounds.
+- Vote restart — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
 - Vote kick and vote AFK — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — download the current drawn image directly as a PNG file at any time.
 - Customization option to always hide masked prompt word length and composition from guessers (forces hints off).
@@ -73,6 +74,7 @@ backend/
       drawing.py     Drawing, undo, and canvas synchronization handlers
       chat.py        Guessing, chat, and purchasable hint handlers
       moderation.py Vote-kick and AFK handlers
+      restart.py    Majority-vote game restart handlers
       connection.py Socket connect/disconnect and reconnect-grace handling
       payloads.py    Typed boundary models and parsers for every client command
     services/
