@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, SERVER_URL, socketRequestErrorMessage } from "../lib/socket";
+import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
@@ -40,13 +41,17 @@ export function LobbyBrowserPage() {
   const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
 
   useEffect(() => {
+    // The polling controller stops new work; this flag also prevents an
+    // already-running fetch from updating React state after effect cleanup.
     let cancelled = false;
-    let requestInFlight = false;
+    let activeController: AbortController | null = null;
+    let activeTimeout: number | null = null;
+
     async function fetchRooms() {
-      if (requestInFlight) return;
-      requestInFlight = true;
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), ROOM_FETCH_TIMEOUT_MS);
+      activeController = controller;
+      activeTimeout = timeout;
       try {
         const res = await fetch(`${SERVER_URL}/api/rooms`, { signal: controller.signal });
         if (!res.ok) throw new Error(`Room list request failed with ${res.status}`);
@@ -70,14 +75,17 @@ export function LobbyBrowserPage() {
         }
       } finally {
         window.clearTimeout(timeout);
-        requestInFlight = false;
+        if (activeController === controller) activeController = null;
+        if (activeTimeout === timeout) activeTimeout = null;
       }
     }
-    void fetchRooms();
-    const interval = setInterval(fetchRooms, POLL_INTERVAL_MS);
+
+    const stopPolling = startVisibilityAwarePolling(fetchRooms, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      stopPolling();
+      if (activeTimeout !== null) window.clearTimeout(activeTimeout);
+      activeController?.abort();
     };
   }, [roomListRetry]);
 
