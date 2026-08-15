@@ -117,17 +117,19 @@ Detailed results are recorded in `docs/performance-191-phase2.md`.
 - [x] Count canvas readbacks and total readback/rasterization time during a
   representative fast stroke.
 - [x] Test desktop and throttled-mobile profiles.
-- [ ] If no material local stall is observed, close #123 as superseded by
+- [x] No material local stall was observed; close #123 as superseded by
   #147/#148 and record the measurements.
-- [ ] If a material stall is observed, compare the smallest viable approaches:
-  - [ ] coalesce available pointer samples per animation frame;
-  - [ ] retain a CPU-side pixel surface and upload dirty regions;
-  - [ ] move eligible raster work to a worker-backed `OffscreenCanvas`;
-  - [ ] reduce readback frequency without delaying visible local ink.
-- [ ] Select an implementation only after comparing latency, complexity,
-  browser support, and replay determinism.
-- [ ] Add regression coverage and rerun the full canvas benchmark if an
-  implementation is selected.
+- [x] Do not enter the implementation branch: the throttled-mobile local
+  handler remained at 5.4 ms p95, while median readback and upload together
+  consumed 0.3 ms.
+- [x] Skip comparison of pointer-sample coalescing, a retained CPU surface,
+  worker-backed `OffscreenCanvas`, and reduced readback frequency because the
+  measurement gate was not crossed.
+- [x] Preserve the existing pixel-equivalent renderer and deterministic replay;
+  no implementation-specific regression coverage is required.
+
+The measurements and decision are recorded in
+`docs/performance-191-phase3.md`.
 
 ## Phase 4: Replace the residual scope of #189
 
@@ -142,29 +144,34 @@ Detailed results are recorded in `docs/performance-191-phase2.md`.
 
 ### Add worst-case measurements
 
-- [ ] Add deterministic path-heavy, shape-heavy, fill-heavy, and mixed fixtures
+- [x] Add deterministic path-heavy, shape-heavy, fill-heavy, and mixed fixtures
   near the accepted action/point limits.
-- [ ] Measure packed server memory, encoded `sync_strokes` bytes, decode time,
+- [x] Measure packed server memory, encoded `sync_strokes` bytes, decode time,
   and complete browser replay time.
-- [ ] Verify the theoretical maximum binary history size with an automated test
+- [x] Verify the theoretical maximum binary history size with an automated test
   rather than relying only on representative drawings.
-- [ ] Measure late join and reconnect on desktop and throttled mobile.
-- [ ] Measure repeated fill replay separately, because a small encoded fill can
+- [x] Measure late join and reconnect on desktop and throttled mobile.
+- [x] Measure repeated fill replay separately, because a small encoded fill can
   still require a full-canvas pixel traversal.
-- [ ] Audit all per-turn protocol state, including the `commits` list, for a
+- [x] Audit all per-turn protocol state, including the `commits` list, for a
   documented bound or safe pruning strategy.
 
 ### Architecture decision
 
-- [ ] Agree on acceptable payload, replay-time, and per-room-memory budgets.
-- [ ] If the near-limit results stay within those budgets, document the bounds
-  and close #189 without checkpoints.
-- [ ] If a budget is exceeded, open a focused design issue for the failing
-  dimension rather than restoring the original broad scope.
-- [ ] Consider raster checkpoints plus semantic deltas only if replay is the
-  demonstrated bottleneck.
-- [ ] Preserve Undo depth and deterministic late-join reconstruction in any
-  checkpoint design.
+- [x] Agree on acceptable payload, replay-time, and per-room-memory budgets.
+- [x] Confirm payload, server state, encode/decode, and path/shape replay stay
+  within budget; record that fill-heavy and mixed replay exceed the accepted
+  full-history replay budget.
+- [x] Open focused follow-up #257 for the failing replay-work dimension rather
+  than restoring the original broad scope.
+- [x] Make raster checkpoints plus semantic deltas eligible only because replay
+  is now the demonstrated bottleneck; do not predetermine them over a simpler
+  weighted replay-work bound.
+- [x] Require #257 to preserve Undo depth and deterministic late-join
+  reconstruction.
+
+Detailed measurements and the budget decision are recorded in
+`docs/performance-191-phase4.md`.
 
 ## Phase 5: Close stale issues
 
@@ -197,19 +204,20 @@ Detailed results are recorded in `docs/performance-191-phase2.md`.
 - [x] Replace the original #123 and #189 descriptions with links to their
   measurement-gated residual scopes.
 - [x] Record the final #149 benchmark results.
-- [ ] Confirm that every remaining child issue is closed or moved to a clearly
+- [x] Confirm that every remaining child issue is closed or moved to a clearly
   scoped follow-up.
-- [ ] Close #191 when no accepted performance budget is exceeded without a
+- [x] Close #191 when no accepted performance budget is exceeded without a
   corresponding focused issue.
 
 GitHub issue updates applied on 2026-08-15:
 
-- #123 — rewritten and open;
-- #149 — rewritten and open;
-- #189 — rewritten and open;
+- #123 — rewritten, measured, and closed as completed;
+- #149 — implemented in #256 and closed as completed;
+- #189 — measured and closed as completed; replay remediation moved to #257;
+- #257 — opened for bounded fill-heavy authoritative replay;
 - #185 — closed as completed;
 - #150 — closed as not planned;
-- #191 — updated and open.
+- #191 — updated and closed after remaining work moved to #257.
 
 ## Verification commands
 
@@ -220,7 +228,8 @@ Run from the repository root unless noted otherwise:
 (cd frontend && npm run lint)
 (cd frontend && npm run build)
 (cd backend && .venv/bin/pytest)
-backend/.venv/bin/python benchmarks/canvas_history.py
+backend/.venv/bin/python benchmarks/canvas_history.py --near-limit
+./benchmarks/run_canvas_history_browser.sh
 ./benchmarks/run_canvas.sh
 ./scripts/test-e2e.sh
 ```
@@ -233,7 +242,7 @@ covered by automated tests.
 
 - [x] Flood fill preserves existing pixels and eight-connected semantics while
   materially reducing large-fill allocation or latency.
-- [ ] Interactive stroke readback is either improved or closed with evidence
+- [x] Interactive stroke readback is closed with evidence
   that it is not a material bottleneck.
 - [ ] Worst-case synchronization and replay behaviour has documented budgets
   and automated bounds.

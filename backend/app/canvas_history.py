@@ -39,6 +39,18 @@ _BINARY_HEADER = struct.Struct("<4sBH")
 _BINARY_OFFSET = struct.Struct("<I")
 _HASH_RECORD_LENGTH = struct.Struct("<I")
 
+# The largest valid history uses all 20,000 action slots, puts all 25,000
+# points in one path, and fills the remaining slots with the larger fixed-size
+# shape record. This is an invariant of the binary layout, not a target size.
+MAX_BINARY_CANVAS_HISTORY_BYTES = (
+    _BINARY_HEADER.size
+    + (MAX_CANVAS_ACTIONS + 1) * _BINARY_OFFSET.size
+    + MAX_CANVAS_ACTIONS * _SHAPE_ACTION.size
+    + MAX_CANVAS_POINTS * _PATH_POINT.size
+    + _PATH_HEADER.size
+    - _SHAPE_ACTION.size
+)
+
 HISTORY_HASH_INITIAL = 0
 
 

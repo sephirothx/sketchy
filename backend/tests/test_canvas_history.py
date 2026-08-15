@@ -3,6 +3,9 @@ import pytest
 from app.canvas_history import (
     ClearAction,
     FillAction,
+    MAX_BINARY_CANVAS_HISTORY_BYTES,
+    MAX_CANVAS_ACTIONS,
+    MAX_CANVAS_POINTS,
     PATH_TAG,
     PackedCanvasHistory,
     PathAction,
@@ -101,6 +104,28 @@ def test_binary_canvas_history_round_trip_preserves_packed_actions():
 
     assert decoded == history
     assert decoded.binary_payload() == history.binary_payload()
+
+
+def test_binary_canvas_history_has_an_exact_theoretical_maximum():
+    history = PackedCanvasHistory()
+    history.append_path(
+        [(0.0, 0.0)] * MAX_CANVAS_POINTS,
+        color=0,
+        width=1,
+    )
+    for _ in range(MAX_CANVAS_ACTIONS - 1):
+        history.append_shape(
+            shape="rectangle",
+            start=(0.0, 0.0),
+            end=(1.0, 1.0),
+            color=0,
+            width=1,
+        )
+
+    payload = history.binary_payload()
+
+    assert len(payload) == MAX_BINARY_CANVAS_HISTORY_BYTES == 460_002
+    assert decode_binary_canvas_history(payload) == history
 
 
 def test_binary_canvas_history_decoder_rejects_corrupt_envelopes():

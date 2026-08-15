@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Canvas history replay benchmark</title>
+  </head>
+  <body>
+    <canvas id="benchmark-canvas" width="800" height="600"></canvas>
+    <script type="module">
+      import { decodeCanvasHistory } from "/src/lib/canvasHistory.ts";
+      import { renderCanvasActions } from "/src/lib/canvasRenderer.ts";
+
+      const canvas = document.querySelector("#benchmark-canvas");
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+
+      function bytesFromBase64(encoded) {
+        const binary = atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index++) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+        return bytes;
+      }
+
+      function evenlySample(actions, limit) {
+        if (limit === null || actions.length <= limit) return actions;
+        return Array.from(
+          { length: limit },
+          (_, index) => actions[Math.floor(index * actions.length / limit)],
+        );
+      }
+
+      window.runCanvasHistoryBenchmark = async (encoded, replayLimit = null) => {
+        const bytes = bytesFromBase64(encoded);
+        const heapBefore = performance.memory?.usedJSHeapSize ?? 0;
+        const decodeStarted = performance.now();
+        const actions = decodeCanvasHistory(bytes);
+        const decodeMs = performance.now() - decodeStarted;
+        if (!actions) throw new Error("browser rejected benchmark history");
+
+        const replayActions = evenlySample(actions, replayLimit);
+        const replayStarted = performance.now();
+        renderCanvasActions(context, replayActions);
+        const replayMs = performance.now() - replayStarted;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        return {
+          actions: actions.length,
+          replayedActions: replayActions.length,
+          decodeMs,
+          replayMs,
+          heapDeltaBytes:
+            (performance.memory?.usedJSHeapSize ?? heapBefore) - heapBefore,
+        };
+      };
+    </script>
+  </body>
+</html>

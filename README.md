@@ -168,6 +168,12 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 backend/.venv/bin/python benchmarks/backend.py
 backend/.venv/bin/python benchmarks/live_drawing.py
 
+# Near-limit canvas payload, server-memory, encoding, and decoding measurements
+backend/.venv/bin/python benchmarks/canvas_history.py --near-limit
+
+# Near-limit browser decode/replay on desktop and 4× CPU throttling
+./benchmarks/run_canvas_history_browser.sh
+
 # End-to-end canvas benchmarks (desktop + throttled mobile)
 ./benchmarks/run_canvas.sh
 
@@ -193,6 +199,14 @@ timeline can be loaded into Chrome DevTools or Perfetto. Results are diagnostic
 baselines, not CI pass/fail thresholds, because browser timings vary by machine.
 The `mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override
 the port with `PORT=<number>` when needed.
+
+The canvas-history benchmarks construct deterministic path-heavy, shape-heavy,
+fill-heavy, mixed, and theoretical-maximum histories. The Python benchmark
+reports packed payload, retained server memory, and encode/decode costs. The
+browser benchmark runs the production decoder and renderer for cold late-join
+and repeated reconnect-style replay; expensive fill/mixed histories are evenly
+sampled and clearly reported as diagnostic projections rather than full-run
+timings.
 
 `game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 

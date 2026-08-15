@@ -11,6 +11,7 @@ from app.game import (
     Phase,
     _bounded_damerau_levenshtein,
 )
+from app.canvas_session import MAX_CANVAS_COMMITS
 from app.words import MAX_WORD_LENGTH
 
 
@@ -354,12 +355,27 @@ def test_canvas_sequence_commits_crc32_and_undo_uses_prefix_hash():
     )
 
 
+def test_canvas_commit_history_keeps_a_bounded_recovery_window():
+    game = make_game()
+    for sequence in range(1, MAX_CANVAS_COMMITS + 3):
+        game.canvas.commit_sequence(sequence)
+
+    assert len(game.canvas.commits) == MAX_CANVAS_COMMITS
+    assert game.canvas.commit_base_sequence == 3
+    assert game.canvas.get_commit(2) is None
+    assert game.canvas.get_commit(3) is not None
+    assert game.canvas.get_commit(MAX_CANVAS_COMMITS + 2) is not None
+
+
 def test_record_stroke_respects_history_limit(monkeypatch):
     monkeypatch.setattr("app.canvas_session.MAX_CANVAS_ACTIONS", 1)
     game = make_game()
 
     assert game.canvas.record_stroke("draw_shape", shape_payload()) is True
     assert game.canvas.record_stroke("draw_shape", shape_payload("ellipse")) is False
+    assert len(game.canvas.history) == 1
+
+    assert game.canvas.clear_canvas_stroke() is False
     assert len(game.canvas.history) == 1
 
 

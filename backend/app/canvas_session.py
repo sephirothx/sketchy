@@ -17,6 +17,12 @@ from app.canvas_history import (
 )
 
 
+# The browser retains at most 256 unacknowledged mutations. Keeping twice that
+# window lets the server answer ordinary duplicate deliveries without allowing
+# per-turn acknowledgement state to grow with the sequence number forever.
+MAX_CANVAS_COMMITS = 512
+
+
 @dataclass
 class CanvasSession:
     """Drawing state for one turn, identified by a room-assigned generation."""
@@ -27,6 +33,7 @@ class CanvasSession:
     sequence: int = 0
     hashes: list[int] = field(default_factory=list, repr=False, compare=False)
     commits: list[tuple[int, int, str]] = field(default_factory=list, repr=False, compare=False)
+    commit_base_sequence: int = field(default=1, repr=False, compare=False)
     active_draw_sequence: int | None = field(default=None, repr=False, compare=False)
     discarding_draw_sequence: bool = field(default=False, repr=False, compare=False)
     active_path_index: int | None = field(default=None, repr=False, compare=False)
@@ -93,7 +100,11 @@ class CanvasSession:
 
     def clear_canvas_stroke(self) -> bool:
         """Record a clear action so Undo can restore the preceding history."""
-        if not self.history or self.history.last_is_clear():
+        if (
+            not self.history
+            or self.history.last_is_clear()
+            or len(self.history) >= MAX_CANVAS_ACTIONS
+        ):
             return False
         self.active_path_index = None
         self.history.append_clear()
@@ -136,12 +147,17 @@ class CanvasSession:
         self.sequence = sequence
         commit = (self.revision, self.hash, mutation)
         self.commits.append(commit)
+        overflow = len(self.commits) - MAX_CANVAS_COMMITS
+        if overflow > 0:
+            del self.commits[:overflow]
+            self.commit_base_sequence += overflow
         return commit
 
     def get_commit(self, sequence: int) -> tuple[int, int, str] | None:
-        if not 1 <= sequence <= len(self.commits):
+        index = sequence - self.commit_base_sequence
+        if not 0 <= index < len(self.commits):
             return None
-        return self.commits[sequence - 1]
+        return self.commits[index]
 
     def restart_active_path(self) -> bool:
         """Discard an uncommitted path so its semantic action can be replayed."""
