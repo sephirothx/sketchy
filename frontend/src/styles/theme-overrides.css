@@ -294,6 +294,38 @@
   color: #fff;
 }
 
+[data-theme="dark"] .game-header-restart-button {
+  background: #422006;
+  border-color: #d97706;
+  color: #fde68a;
+}
+
+[data-theme="dark"] .game-header-restart-button:hover:not(:disabled) {
+  background: #78350f;
+  border-color: #f59e0b;
+}
+
+[data-theme="dark"] .restart-vote-banner {
+  background: #1e293b;
+  border-color: #475569;
+}
+
+[data-theme="dark"] .restart-vote-banner.approved {
+  background: #052e16;
+  border-color: #059669;
+}
+
+[data-theme="dark"] .restart-vote-copy strong { color: #f8fafc; }
+[data-theme="dark"] .restart-vote-copy span,
+[data-theme="dark"] .restart-vote-observer-note { color: #94a3b8; }
+[data-theme="dark"] .restart-vote-meter { background: #334155; }
+[data-theme="dark"] .restart-vote-meter .pending { background: #475569; }
+[data-theme="dark"] .restart-vote-actions button {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
 [data-theme="dark"] .app-toast { background: #1e3a8a; border-color: #3b82f6; color: #dbeafe; }
 [data-theme="dark"] .app-toast.success { background: #064e3b; border-color: #059669; color: #a7f3d0; }
 [data-theme="dark"] .app-toast.warning { background: #78350f; border-color: #d97706; color: #fef3c7; }

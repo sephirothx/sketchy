@@ -16,6 +16,18 @@ export interface ModerationState {
   requiredVotes: number;
 }
 
+export interface RestartVoteState {
+  status: "voting" | "approved";
+  proposerId: string;
+  proposerNickname: string;
+  eligibleVoterIds: string[];
+  yesVoterIds: string[];
+  noVoterIds: string[];
+  requiredVotes: number;
+  expiresAt: number;
+  restartAt: number | null;
+}
+
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 export type ScoringMode = "none" | "default";
 
@@ -57,6 +69,8 @@ export interface RoomStatePayload {
   lastGameScores?: ScoreEntry[];
   lastGameDrawings?: DrawingRecapMetadata[];
   moderation: ModerationState;
+  restartVote?: RestartVoteState | null;
+  restartVoteCooldownUntil?: number;
   players: PlayerInfo[];
 }
 

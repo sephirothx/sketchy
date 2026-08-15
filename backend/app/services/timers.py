@@ -16,6 +16,7 @@ class TimerManager:
     phase_timers: dict[str, Task] = field(default_factory=dict)
     hint_timers: dict[str, set[Task]] = field(default_factory=dict)
     disconnect_timers: dict[str, Task] = field(default_factory=dict)
+    restart_timers: dict[str, Task] = field(default_factory=dict)
 
     def replace_phase_timer(self, room_id: str, task: Task) -> None:
         self.cancel_phase_timer(room_id)
@@ -43,6 +44,15 @@ class TimerManager:
             )
         )
 
+    def replace_restart_timer(self, room_id: str, task: Task) -> None:
+        self.cancel_restart_timer(room_id)
+        self.restart_timers[room_id] = task
+        task.add_done_callback(
+            lambda completed: self._remove_if_current(
+                self.restart_timers, room_id, completed
+            )
+        )
+
     def cancel_phase_timer(self, room_id: str) -> None:
         self._cancel_current(self.phase_timers, room_id)
 
@@ -55,16 +65,21 @@ class TimerManager:
     def cancel_disconnect_timer(self, player_id: str) -> None:
         self._cancel_current(self.disconnect_timers, player_id)
 
+    def cancel_restart_timer(self, room_id: str) -> None:
+        self._cancel_current(self.restart_timers, room_id)
+
     async def close(self) -> None:
         """Cancel and await every task still owned by the application."""
         tasks = [
             *self.phase_timers.values(),
             *(task for group in self.hint_timers.values() for task in group),
             *self.disconnect_timers.values(),
+            *self.restart_timers.values(),
         ]
         self.phase_timers.clear()
         self.hint_timers.clear()
         self.disconnect_timers.clear()
+        self.restart_timers.clear()
 
         for task in tasks:
             if not task.done():

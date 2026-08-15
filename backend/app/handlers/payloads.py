@@ -18,7 +18,8 @@ Command inventory (client request shape)
 ``get_room_preview`` RoomPreviewPayload; ``update_room_settings``
 UpdateRoomSettingsPayload; ``update_player_settings`` PlayerSettingsPayload;
 ``get_recap_drawing`` RecapDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
-``vote_player`` VotePayload; ``select_word`` SelectWordPayload; ``send_chat`` and
+``vote_player`` VotePayload; ``cast_restart_vote`` RestartVotePayload;
+``select_word`` SelectWordPayload; ``send_chat`` and
 ``guess`` TextPayload; ``buy_hint`` HintPayload; ``buy_wheel_letter``
 WheelLetterPayload; ``draw`` DrawPayload; ``undo_stroke`` UndoPayload. The
 remaining commands (room/custom-word reads, promotion, leave, game start,
@@ -221,6 +222,10 @@ class ToggleAfkPayload(RequestModel):
 class VotePayload(RequestModel):
     target_player_id: str = Field(alias="targetPlayerId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH)
     action: Literal["kick", "afk"]
+
+
+class RestartVotePayload(RequestModel):
+    vote: bool
 
 
 class SelectWordPayload(RequestModel):

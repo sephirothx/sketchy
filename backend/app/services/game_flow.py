@@ -172,6 +172,49 @@ class GameFlowService:
         async def _emit_room_state(room: Room) -> None:
             await sio.emit("room_state", room_state_payload(room), room=room.id)
 
+        async def _start_fresh_game(
+            room: Room,
+            active_players: list[Player],
+            *,
+            restarted: bool = False,
+        ) -> None:
+            """Replace any prior game with a fresh, fully synchronized game."""
+            room.restart_vote = None
+            room.restart_vote_cooldown_until = 0
+            room.last_game_scores = []
+            room.last_game_drawings = []
+            for player in room.player_list():
+                player.score = (
+                    0
+                    if player.is_spectator
+                    else (STARTING_SCORE if room.scoring_mode == "default" else 0)
+                )
+            room.state = "playing"
+            room.game = Game(
+                turn_order=[player.id for player in active_players],
+                rounds_total=room.rounds,
+                word_pool=room.effective_word_pool(),
+                drawing_seconds=room.drawing_seconds,
+                hint_mode=room.hint_mode,
+                scoring_mode=room.scoring_mode,
+                hide_masked_prompt=room.hide_masked_prompt,
+            )
+            await _emit_room_state(room)
+            if restarted:
+                await sio.emit(
+                    "chat_message",
+                    {
+                        "playerId": "",
+                        "nickname": "",
+                        "text": "The game was restarted by player vote.",
+                        "correct": False,
+                        "system": True,
+                    },
+                    room=room.id,
+                )
+            await sio.emit("game_started", {"restarted": restarted}, room=room.id)
+            await _start_turn(room)
+
         async def _emit_canvas_sync(room: Room, sid: str) -> None:
             if not room.game:
                 return
@@ -395,6 +438,9 @@ class GameFlowService:
             game = room.game
             assert game is not None
             if game.is_finished():
+                timer_manager.cancel_restart_timer(room.id)
+                room.restart_vote = None
+                room.restart_vote_cooldown_until = 0
                 room.state = "waiting"
                 room.game = None
                 room.last_game_scores = [
@@ -475,6 +521,8 @@ class GameFlowService:
             if not game.turn_order:
                 timer_manager.cancel_phase_timer(room.id)
                 timer_manager.cancel_hint_timers(room.id)
+                timer_manager.cancel_restart_timer(room.id)
+                room.restart_vote = None
                 room.state = "waiting"
                 room.game = None
             elif was_drawer:
@@ -503,6 +551,7 @@ class GameFlowService:
         self.schedule_phase_timer = schedule_phase_timer
         self.schedule_hint_checkpoints = schedule_hint_checkpoints
         self._emit_room_state = _emit_room_state
+        self._start_fresh_game = _start_fresh_game
         self._emit_canvas_sync = _emit_canvas_sync
         self._emit_canvas_commit = _emit_canvas_commit
         self._request_canvas_actions = _request_canvas_actions

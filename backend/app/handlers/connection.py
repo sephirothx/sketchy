@@ -54,6 +54,7 @@ async def disconnect(ctx: HandlerContext, sid):
         if not room.connected_players():
             ctx.timers.cancel_phase_timer(room.id)
             ctx.timers.cancel_hint_timers(room.id)
+            ctx.timers.cancel_restart_timer(room.id)
             ctx.room_manager.remove_room_if_empty(room.id)
             return
         await ctx.game_flow._remove_player_from_game(room, token)

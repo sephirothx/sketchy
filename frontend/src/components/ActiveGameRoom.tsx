@@ -4,6 +4,7 @@ import type { CanvasRef } from "../components/Canvas";
 import { GameEndOverlay } from "../components/GameEndOverlay";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
+import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import {
   ConnectedRoomChatPanel,
@@ -40,9 +41,17 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
   const drawingRecap = useGameStore((s) => s.drawingRecap);
+  const restartVote = useGameStore((s) => s.restartVote);
+  const restartVoteCooldownUntil = useGameStore((s) => s.restartVoteCooldownUntil);
   const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
+  const isConnected = useGameStore((s) =>
+    s.players.find((player) => player.playerId === s.playerId)?.connected ?? false,
+  );
   const isAfk = useGameStore((s) =>
     s.players.find((player) => player.playerId === s.playerId)?.isAfk ?? false,
+  );
+  const isSpectator = useGameStore((s) =>
+    s.players.find((player) => player.playerId === s.playerId)?.isSpectator ?? false,
   );
 
   const normalizedCode = code.trim().toUpperCase();
@@ -52,9 +61,17 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const [startError, setStartError] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
   const [playersDrawerOpen, setPlayersDrawerOpen] = useState(false);
+  const [restartBusy, setRestartBusy] = useState(false);
+  const [restartClock, setRestartClock] = useState(() => Date.now());
   const isMobile = useMediaQuery("(max-width: 900px)");
 
   useVisualViewportCssVars();
+
+  useEffect(() => {
+    if (restartVoteCooldownUntil <= Date.now()) return;
+    const interval = window.setInterval(() => setRestartClock(Date.now()), 250);
+    return () => window.clearInterval(interval);
+  }, [restartVoteCooldownUntil]);
 
   useEffect(() => {
     if (!playersDrawerOpen) return;
@@ -137,6 +154,36 @@ export function ActiveGameRoom({ code }: { code: string }) {
     }
   }
 
+  async function handleProposeRestart() {
+    if (restartBusy) return;
+    setRestartBusy(true);
+    try {
+      const response = await emitWithAck<AckResponse>("propose_restart_vote", {});
+      if (!response.ok) {
+        notify(response.error || "Could not start a restart vote.", "error");
+      }
+    } catch (restartError) {
+      notify(socketRequestErrorMessage(restartError, "start a restart vote"), "error");
+    } finally {
+      setRestartBusy(false);
+    }
+  }
+
+  async function handleRestartVote(vote: boolean) {
+    if (restartBusy) return;
+    setRestartBusy(true);
+    try {
+      const response = await emitWithAck<AckResponse>("cast_restart_vote", { vote });
+      if (!response.ok) {
+        notify(response.error || "Could not record your restart vote.", "error");
+      }
+    } catch (restartError) {
+      notify(socketRequestErrorMessage(restartError, "record your restart vote"), "error");
+    } finally {
+      setRestartBusy(false);
+    }
+  }
+
   function handleViewDrawingsFromGameEnd() {
     dismissGameEnd();
     setRecapOpen(true);
@@ -144,6 +191,19 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   const amDrawer =
     (phase === "drawing" || phase === "choosing_word") && drawerId === playerId;
+  const me = playerId
+    ? { playerId, connected: isConnected, isAfk, isSpectator }
+    : undefined;
+  const restartCooldownSeconds = Math.max(
+    0,
+    Math.ceil((restartVoteCooldownUntil - restartClock) / 1000),
+  );
+  const canProposeRestart = Boolean(
+    roomState === "playing"
+    && isConnected
+    && !isAfk
+    && !isSpectator,
+  );
 
   // Density mode only: hide chrome while guessing on mobile. Positioning stays on the stable vv-pinned shell.
   const isGuessFocused = isInputFocused && phase === "drawing" && isMobile;
@@ -204,6 +264,25 @@ export function ActiveGameRoom({ code }: { code: string }) {
           )}
         </div>
         <div className="game-header-actions">
+          {roomView === "playing" && canProposeRestart && !restartVote && (
+            <button
+              type="button"
+              className="game-header-restart-button"
+              disabled={restartBusy || restartCooldownSeconds > 0}
+              onClick={() => void handleProposeRestart()}
+              aria-label={restartCooldownSeconds > 0
+                ? `Restart vote available in ${restartCooldownSeconds} seconds`
+                : "Propose restarting the game"}
+              title={restartCooldownSeconds > 0
+                ? `Restart vote available in ${restartCooldownSeconds}s`
+                : "Propose a vote to restart the game"}
+            >
+              <span className="header-action-icon" aria-hidden="true">↻</span>
+              <span className="header-action-label">
+                {restartCooldownSeconds > 0 ? `Restart · ${restartCooldownSeconds}s` : "Restart"}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             className="game-header-afk-button"
@@ -259,6 +338,15 @@ export function ActiveGameRoom({ code }: { code: string }) {
           </button>
         </div>
       </header>
+
+      {roomView === "playing" && restartVote && (
+        <RestartVoteBanner
+          vote={restartVote}
+          player={me}
+          busy={restartBusy}
+          onVote={(vote) => void handleRestartVote(vote)}
+        />
+      )}
 
       {playersDrawerOpen && (
         <div
