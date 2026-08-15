@@ -174,6 +174,9 @@ backend/.venv/bin/python benchmarks/live_drawing.py
 # Faster local iteration on one profile, with optional JSON output
 ./benchmarks/run_canvas.sh --profiles desktop --json-output /tmp/canvas-benchmark.json
 
+# Also capture Chrome DevTools timeline traces and heap allocation profiles
+./benchmarks/run_canvas.sh --trace-dir /tmp/canvas-traces
+
 # Multi-browser Playwright E2E tests (install browsers once first)
 backend/.venv/bin/python -m playwright install chromium firefox
 ./scripts/test-e2e.sh
@@ -182,10 +185,14 @@ backend/.venv/bin/python -m playwright install chromium firefox
 The canvas benchmark starts the built application on an isolated local port
 (`8765` by default), creates a real two-player game, and reports
 drawer-to-observer stroke latency, large-fill latency, Undo/replay latency,
-and the `sync_strokes` WebSocket payload size. Results are diagnostic baselines,
-not CI pass/fail thresholds, because browser timings vary by machine. The
-`mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override the
-port with `PORT=<number>` when needed.
+and the `sync_strokes` WebSocket payload size. It also instruments local drawer
+interaction-handler time, canvas readback calls/time/pixels, heap deltas, long
+tasks, a nested-boundary fill, and repeated Undo. Optional trace output includes
+raw DevTools timeline JSON and a sampled heap profile per browser profile; the
+timeline can be loaded into Chrome DevTools or Perfetto. Results are diagnostic
+baselines, not CI pass/fail thresholds, because browser timings vary by machine.
+The `mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override
+the port with `PORT=<number>` when needed.
 
 `game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 

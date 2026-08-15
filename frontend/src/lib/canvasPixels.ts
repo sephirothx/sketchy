@@ -80,6 +80,9 @@ export function floodFillPixels(
   startY: number,
   fillColor: Rgba,
 ): boolean {
+  if (startX < 0 || startX >= width || startY < 0 || startY >= height) {
+    return false;
+  }
   const startIndex = (startY * width + startX) * 4;
   if (colorsEqual(data, startIndex, fillColor)) return false;
   const target: Rgba = [
@@ -88,32 +91,71 @@ export function floodFillPixels(
     data[startIndex + 2],
     data[startIndex + 3],
   ];
-  const visited = new Uint8Array(width * height);
-  const stack: number[] = [startX, startY];
+  // A byte per pixel tracks unseen (0), queued (1), and filled (2) pixels, which
+  // keeps fills safe when fillColor is tolerance-close to the target. At
+  // 800×600 this fixed scratch buffer is 480 KB. Each pixel can be queued at
+  // most once, and the stack stores one numeric seed per adjacent horizontal
+  // run instead of eight coordinate pairs per visited pixel.
+  const status = new Uint8Array(width * height);
+  const stack: number[] = [startY * width + startX];
+  status[startY * width + startX] = 1;
 
-  while (stack.length > 0) {
-    const y = stack.pop()!;
-    const x = stack.pop()!;
-    if (x < 0 || x >= width || y < 0 || y >= height) continue;
-    const pixelIndex = y * width + x;
-    if (visited[pixelIndex]) continue;
+  const matchesTarget = (pixelIndex: number): boolean => (
+    status[pixelIndex] !== 2
+    && colorsMatchForFill(data, pixelIndex * 4, target)
+  );
+
+  const fillPixel = (pixelIndex: number): void => {
     const index = pixelIndex * 4;
-    if (!colorsMatchForFill(data, index, target)) continue;
-    visited[pixelIndex] = 1;
+    status[pixelIndex] = 2;
     data[index] = fillColor[0];
     data[index + 1] = fillColor[1];
     data[index + 2] = fillColor[2];
     data[index + 3] = fillColor[3];
-    stack.push(
-      x + 1, y,
-      x - 1, y,
-      x, y + 1,
-      x, y - 1,
-      x + 1, y + 1,
-      x + 1, y - 1,
-      x - 1, y + 1,
-      x - 1, y - 1,
-    );
+  };
+
+  const queueAdjacentRuns = (
+    y: number,
+    left: number,
+    right: number,
+  ): void => {
+    if (y < 0 || y >= height) return;
+    const rowOffset = y * width;
+    const scanLeft = Math.max(0, left - 1);
+    const scanRight = Math.min(width - 1, right + 1);
+    let insideRun = false;
+    for (let x = scanLeft; x <= scanRight; x++) {
+      const pixelIndex = rowOffset + x;
+      if (matchesTarget(pixelIndex)) {
+        if (!insideRun && status[pixelIndex] === 0) {
+          status[pixelIndex] = 1;
+          stack.push(pixelIndex);
+        }
+        insideRun = true;
+      } else {
+        insideRun = false;
+      }
+    }
+  };
+
+  while (stack.length > 0) {
+    const seed = stack.pop()!;
+    if (!matchesTarget(seed)) continue;
+    const y = Math.floor(seed / width);
+    const seedX = seed - y * width;
+    const rowOffset = y * width;
+
+    let left = seedX;
+    while (left > 0 && matchesTarget(rowOffset + left - 1)) left--;
+    let right = seedX;
+    while (right + 1 < width && matchesTarget(rowOffset + right + 1)) right++;
+
+    for (let x = left; x <= right; x++) fillPixel(rowOffset + x);
+
+    // Expand the adjacent-row scan by one pixel on both sides to preserve the
+    // existing eight-connected diagonal behaviour.
+    queueAdjacentRuns(y - 1, left, right);
+    queueAdjacentRuns(y + 1, left, right);
   }
   return true;
 }
