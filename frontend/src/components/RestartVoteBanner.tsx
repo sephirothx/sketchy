@@ -42,14 +42,14 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
             ? (
                 <>
                   <span className="restart-approved-check" aria-hidden="true">✓</span>
-                  Restart approved · restarting in {remaining}s
+                  Restart approved!
                 </>
               )
             : `${vote.proposerNickname} proposed restarting · ${remaining}s`}
         </strong>
         <span>
           {vote.status === "approved"
-            ? "The vote passed. A fresh game is about to begin."
+            ? "The current game is ending. A fresh game is starting now."
             : `${counts.yes} yes · ${counts.no} no · ${counts.pending} pending · ${vote.requiredVotes} needed`}
         </span>
       </div>
@@ -75,6 +75,12 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
           />
         ))}
       </div>
+      {vote.status === "approved" && (
+        <div className="restart-approved-countdown" aria-label={`Restarting in ${remaining} seconds`}>
+          <strong>{remaining}</strong>
+          <span>seconds</span>
+        </div>
+      )}
       {vote.status === "voting" && eligible && (
         <div className="restart-vote-actions" aria-label="Vote to restart the game">
           <button
