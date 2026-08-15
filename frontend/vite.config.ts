@@ -41,6 +41,9 @@ const buildTime = getLocalBuildTime()
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    manifest: true,
+  },
   define: {
     __APP_COMMIT_SHA__: JSON.stringify(gitLog('--format=%h') + (isWorkingTreeDirty() ? '*' : '')),
     __APP_COMMIT_DATE__: JSON.stringify(gitLog('--date=short --format=%cd')),
