@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import random
 import sys
 import time
 from typing import Callable, Any
@@ -48,6 +49,10 @@ def benchmark(name: str, fn: Callable[[], Any], iterations: int = 1_000) -> floa
 
 
 def run_all_benchmarks() -> None:
+    # Keep benchmark setup deterministic. The measured operations do not use
+    # randomness, but turn setup and room-code generation do.
+    random.seed(0)
+
     print("=" * 105)
     print(f"{'Sketchy Backend Micro-Benchmark Suite':^105}")
     print("=" * 105)
@@ -58,8 +63,9 @@ def run_all_benchmarks() -> None:
     # 1. Wheel Letter Prices (Issue #143 candidate)
     # -------------------------------------------------------------------------
     game_default = Game(turn_order=["p1", "p2", "p3"], word_pool=WORDS)
-    game_default.start_next_turn()
-    game_default.choose_word("p1", WORDS[0])
+    default_choices = game_default.start_next_turn(canvas_generation=1)
+    assert game_default.choose_word("p1", default_choices[0])
+    assert game_default.phase == Phase.DRAWING
 
     benchmark(
         "1a. wheel_letter_prices (default 64 words pool)",
@@ -70,8 +76,9 @@ def run_all_benchmarks() -> None:
     # Large custom word pool (5,000 words)
     custom_pool = [f"word_{i}_{w}" for i, w in enumerate(WORDS * 80)]
     game_large = Game(turn_order=["p1", "p2", "p3"], word_pool=custom_pool)
-    game_large.start_next_turn()
-    game_large.choose_word("p1", custom_pool[0])
+    large_choices = game_large.start_next_turn(canvas_generation=1)
+    assert game_large.choose_word("p1", large_choices[0])
+    assert game_large.phase == Phase.DRAWING
 
     benchmark(
         "1b. wheel_letter_prices (large 5,000 words pool)",
@@ -80,7 +87,7 @@ def run_all_benchmarks() -> None:
     )
 
     # -------------------------------------------------------------------------
-    # 2. Room Code Lookups (Issue #145 candidate)
+    # 2. Room Code Lookups (historical issues #126/#145 evidence)
     # -------------------------------------------------------------------------
     rm_small = RoomManager()
     for i in range(10):
@@ -108,8 +115,10 @@ def run_all_benchmarks() -> None:
     # 3. Guess Evaluation & Edit-Distance Hint Calculation
     # -------------------------------------------------------------------------
     game_guess = Game(turn_order=["p1", "p2"], word_pool=["watermelon"])
-    game_guess.start_next_turn()
-    game_guess.choose_word("p1", "watermelon")
+    guess_choices = game_guess.start_next_turn(canvas_generation=1)
+    assert game_guess.choose_word("p1", guess_choices[0])
+    assert game_guess.word == "watermelon"
+    assert game_guess.phase == Phase.DRAWING
 
     benchmark(
         "3a. submit_guess & guess_hint (close typo)",
@@ -118,7 +127,7 @@ def run_all_benchmarks() -> None:
     )
 
     # -------------------------------------------------------------------------
-    # 4. Room State Serialization (Issue #146 candidate)
+    # 4. Room State Serialization (historical issue #146 evidence)
     # -------------------------------------------------------------------------
     rm_state = RoomManager()
     room = rm_state.create_room(name="State Room", max_players=12)
