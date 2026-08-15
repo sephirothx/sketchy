@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  memo,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -30,6 +31,7 @@ import type { LiveDrawingPacket } from "../lib/liveDrawing";
 import { useSettingsStore } from "../store/settingsStore";
 import type { DrawTool, StrokePoint } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
+import { recordRender } from "../lib/renderDiagnostics";
 
 interface CanvasProps {
   isDrawer: boolean;
@@ -127,7 +129,7 @@ function createProtocolRenderer(
   return { apply, clear, replay };
 }
 
-export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
+const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   {
     isDrawer,
     color,
@@ -138,6 +140,7 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   },
   ref,
 ) {
+  recordRender("canvas");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -203,3 +206,5 @@ export const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     </div>
   );
 });
+
+export const Canvas = memo(CanvasComponent);

@@ -1,30 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Canvas, type CanvasRef } from "../components/Canvas";
-import { Toolbar } from "../components/Toolbar";
-import { WordDisplay } from "../components/WordDisplay";
-import { Timer } from "../components/Timer";
-import { RoundEndOverlay } from "../components/RoundEndOverlay";
-import { WaitingRoomPanel } from "../components/WaitingRoomPanel";
+import type { CanvasRef } from "../components/Canvas";
 import { GameEndOverlay } from "../components/GameEndOverlay";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
-import { ChoosingWordOverlay } from "../components/ChoosingWordOverlay";
-import { RoomChatPanel } from "../components/RoomChatPanel";
-import { RoomPlayersPanel } from "../components/RoomPlayersPanel";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
+import {
+  ConnectedRoomChatPanel,
+  ConnectedRoomPlayersPanel,
+  ConnectedWaitingRoomPanel,
+  GameplayRegion,
+} from "../components/GameRoomRegions";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useToolbarState } from "../hooks/useToolbarState";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
-import { splitMaskedWord } from "../lib/maskedWord";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { recordRender } from "../lib/renderDiagnostics";
 import type { AckResponse } from "../types";
 
 export function ActiveGameRoom({ code }: { code: string }) {
+  recordRender("activeGameRoom");
   const navigate = useNavigate();
   const { notify } = useToast();
   const openSettings = useSettingsStore((s) => s.openSettings);
@@ -37,34 +35,15 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const reset = useGameStore((s) => s.reset);
 
   const roomState = useGameStore((s) => s.roomState);
-  const players = useGameStore((s) => s.players);
-  const moderation = useGameStore((s) => s.moderation);
   const phase = useGameStore((s) => s.phase);
   const drawerId = useGameStore((s) => s.drawerId);
-  const maskedWord = useGameStore((s) => s.maskedWord);
-  const hintMode = useGameStore((s) => s.hintMode);
   const scoringMode = useGameStore((s) => s.scoringMode);
-  const name = useGameStore((s) => s.name);
-  const isPublic = useGameStore((s) => s.isPublic);
-  const maxPlayers = useGameStore((s) => s.maxPlayers);
-  const rounds = useGameStore((s) => s.rounds);
-  const customWordCount = useGameStore((s) => s.customWordCount);
-  const customWordsOnly = useGameStore((s) => s.customWordsOnly);
-  const drawingSeconds = useGameStore((s) => s.drawingSeconds);
-  const nextHintCost = useGameStore((s) => s.nextHintCost);
-  const letterPrices = useGameStore((s) => s.letterPrices);
-  const myWord = useGameStore((s) => s.myWord);
-  const guessedWord = useGameStore((s) => s.guessedWord);
-  const wordChoices = useGameStore((s) => s.wordChoices);
-  const roundNumber = useGameStore((s) => s.roundNumber);
-  const totalRounds = useGameStore((s) => s.totalRounds);
-  const phaseSeconds = useGameStore((s) => s.phaseSeconds);
-  const phaseStartedAt = useGameStore((s) => s.phaseStartedAt);
-  const messages = useGameStore((s) => s.messages);
-  const lastRoundResult = useGameStore((s) => s.lastRoundResult);
   const finalScores = useGameStore((s) => s.finalScores);
   const drawingRecap = useGameStore((s) => s.drawingRecap);
   const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
+  const isAfk = useGameStore((s) =>
+    s.players.find((player) => player.playerId === s.playerId)?.isAfk ?? false,
+  );
 
   const normalizedCode = code.trim().toUpperCase();
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -163,46 +142,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
     setRecapOpen(true);
   }
 
-  const me = players.find((p) => p.playerId === playerId);
-  const drawer = players.find((player) => player.playerId === drawerId);
-  const isHost = me?.isHost ?? false;
   const amDrawer =
     (phase === "drawing" || phase === "choosing_word") && drawerId === playerId;
-  const canDrawNow = phase === "drawing" && drawerId === playerId;
-  const canGuess = phase === "drawing" && !amDrawer && !(me?.isSpectator) && !guessedWord;
 
   // Density mode only: hide chrome while guessing on mobile. Positioning stays on the stable vv-pinned shell.
-  const isGuessFocused =
-    isInputFocused && canGuess && phase === "drawing" && isMobile;
-
-  if (isInputFocused && (!canGuess || phase !== "drawing")) {
-    setIsInputFocused(false);
-  }
-
-  const {
-    color,
-    setColor,
-    brushWidth,
-    onBrushWidthChange,
-    tool,
-    setTool,
-  } = useToolbarState(amDrawer);
-
-  const spectatorsSeeSolution = useGameStore((s) => s.spectatorsSeeSolution);
-  const hideMaskedPrompt = useGameStore((s) => s.hideMaskedPrompt);
-  const isDrawerPerson = drawerId === playerId;
-  const drawerWord = myWord || (maskedWord && !maskedWord.includes("_") ? splitMaskedWord(maskedWord).blanks.trim() : null);
-
-  const solutionWord =
-    phase === "round_end"
-      ? lastRoundResult?.word ?? null
-      : isDrawerPerson && phase === "drawing"
-      ? drawerWord
-      : guessedWord
-      ? guessedWord
-      : me?.isSpectator && spectatorsSeeSolution && maskedWord && !maskedWord.includes("_")
-      ? splitMaskedWord(maskedWord).blanks.trim()
-      : null;
+  const isGuessFocused = isInputFocused && phase === "drawing" && isMobile;
   const roomView: RoomShellMode =
     phase === "game_end" && finalScores ? "game-end" : roomState;
 
@@ -263,13 +207,13 @@ export function ActiveGameRoom({ code }: { code: string }) {
           <button
             type="button"
             className="game-header-afk-button"
-            style={{ background: me?.isAfk ? "#f59e0b" : undefined, color: me?.isAfk ? "#fff" : undefined }}
+            style={{ background: isAfk ? "#f59e0b" : undefined, color: isAfk ? "#fff" : undefined }}
             onClick={handleToggleAfk}
-            aria-label={me?.isAfk ? "Back from AFK" : "Go AFK"}
-            title={me?.isAfk ? "Back from AFK" : "Go AFK"}
+            aria-label={isAfk ? "Back from AFK" : "Go AFK"}
+            title={isAfk ? "Back from AFK" : "Go AFK"}
           >
-            <span className="header-action-icon" aria-hidden="true">{me?.isAfk ? "💤" : "AFK"}</span>
-            <span className="header-action-label">{me?.isAfk ? "AFK 💤" : "AFK"}</span>
+            <span className="header-action-icon" aria-hidden="true">{isAfk ? "💤" : "AFK"}</span>
+            <span className="header-action-label">{isAfk ? "AFK 💤" : "AFK"}</span>
           </button>
           <button
             type="button"
@@ -342,16 +286,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               </button>
             </div>
             <div className="players-drawer-body sidebar-box">
-              <RoomPlayersPanel
-                mode={roomView}
-                players={players}
-                drawerId={drawerId}
-                myPlayerId={playerId}
-                maxPlayers={maxPlayers}
-                showScores={scoringMode === "default"}
-                finalScores={finalScores}
-                moderation={moderation}
-              />
+              <ConnectedRoomPlayersPanel mode={roomView} />
             </div>
           </aside>
         </div>
@@ -360,16 +295,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       <RoomShell
         mode={roomView}
         players={
-          <RoomPlayersPanel
-            mode={roomView}
-            players={players}
-            drawerId={drawerId}
-            myPlayerId={playerId}
-            maxPlayers={maxPlayers}
-            showScores={scoringMode === "default"}
-            finalScores={finalScores}
-            moderation={moderation}
-          />
+          <ConnectedRoomPlayersPanel mode={roomView} />
         }
         main={
           recapOpen && drawingRecap.length > 0 ? (
@@ -387,20 +313,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               onViewDrawings={handleViewDrawingsFromGameEnd}
             />
           ) : roomView === "waiting" ? (
-            <WaitingRoomPanel
-              name={name}
-              isPublic={isPublic}
-              rounds={rounds}
-              drawingSeconds={drawingSeconds}
-              customWordCount={customWordCount}
-              customWordsOnly={customWordsOnly}
-              hintMode={hintMode}
-              scoringMode={scoringMode}
-              spectatorsSeeSolution={spectatorsSeeSolution}
-              hideMaskedPrompt={hideMaskedPrompt}
-              players={players}
-              myPlayerId={playerId}
-              isHost={isHost}
+            <ConnectedWaitingRoomPanel
               finalScores={finalScores}
               startBusy={startBusy}
               startError={startError}
@@ -409,81 +322,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
               onViewDrawings={() => setRecapOpen(true)}
             />
           ) : (
-            <main className="canvas-area">
-              <div className="round-info">
-                <span>
-                  Round {roundNumber}/{totalRounds}
-                </span>
-                {phase !== "round_end" && (
-                  <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
-                )}
-              </div>
-              <WordDisplay
-                isDrawer={amDrawer}
-                myWord={myWord}
-                maskedWord={maskedWord}
-                wordChoices={wordChoices}
-                revealedWord={
-                  phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord
-                }
-                hintMode={hintMode}
-                canBuyHint={phase === "drawing" && !amDrawer && !guessedWord}
-                myScore={me?.score ?? 0}
-                nextHintCost={nextHintCost}
-                letterPrices={letterPrices}
-              />
-              <Canvas
-                ref={canvasRef}
-                isDrawer={canDrawNow}
-                color={color}
-                brushWidth={brushWidth}
-                tool={tool}
-                solutionWord={solutionWord}
-                overlay={
-                  phase === "choosing_word" && !amDrawer ? (
-                    <ChoosingWordOverlay
-                      drawerNickname={drawer?.nickname || "The next player"}
-                      drawerNameColor={drawer?.nameColor}
-                    />
-                  ) : null
-                }
-              />
-              {phase === "round_end" && lastRoundResult && (
-                <RoundEndOverlay
-                  word={lastRoundResult.word}
-                  drawerId={lastRoundResult.drawerId}
-                  drawerBonus={lastRoundResult.drawerBonus}
-                  guesses={lastRoundResult.guesses}
-                  scores={lastRoundResult.scores}
-                  myPlayerId={playerId}
-                  showScores={scoringMode === "default"}
-                />
-              )}
-              {canDrawNow && (
-                <Toolbar
-                  color={color}
-                  onColorChange={setColor}
-                  brushWidth={brushWidth}
-                  onBrushWidthChange={onBrushWidthChange}
-                  tool={tool}
-                  onToolChange={setTool}
-                />
-              )}
-            </main>
+            <GameplayRegion canvasRef={canvasRef} />
           )
         }
         chat={
-          <RoomChatPanel
-            messages={messages}
-            players={players}
-            mode={roomView}
-            isDrawer={amDrawer}
-            canGuess={canGuess}
-            myPlayerId={playerId}
-            targetWordLengths={splitMaskedWord(maskedWord).counts}
-            hideMaskedPrompt={hideMaskedPrompt}
-            onFocusChange={setIsInputFocused}
-          />
+          <ConnectedRoomChatPanel mode={roomView} onFocusChange={setIsInputFocused} />
         }
       />
     </div>

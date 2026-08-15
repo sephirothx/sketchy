@@ -48,7 +48,7 @@ fi
 # Ensure frontend is built against the local E2E server (overrides
 # frontend/.env.production.local, which may point at a Cloudflare tunnel).
 log "Building frontend for E2E tests"
-(cd "$FRONTEND_DIR" && VITE_SERVER_URL="http://127.0.0.1:$PORT" npm run build --silent)
+(cd "$FRONTEND_DIR" && VITE_SERVER_URL="http://127.0.0.1:$PORT" VITE_RENDER_DIAGNOSTICS="true" npm run build --silent)
 
 # Start background server
 SERVER_LOG="$(mktemp "${TMPDIR:-/tmp}/sketchy-e2e-server.XXXXXX")"

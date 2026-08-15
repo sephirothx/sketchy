@@ -3,6 +3,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
 import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
+import { recordRender } from "../lib/renderDiagnostics";
 
 // Each pair is [light shade, dark shade] for the same color family, laid out
 // as two rows of matching columns (mirroring skribbl.io's palette).
@@ -126,6 +127,7 @@ export function Toolbar({
   tool,
   onToolChange,
 }: ToolbarProps) {
+  recordRender("toolbar");
   const isMobile = useMediaQuery("(max-width: 900px)");
   const isCustomColor = !COLORS.includes(color);
   const activeColor = tool === "eraser" ? "#6c757d" : color;

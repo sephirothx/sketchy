@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { MAX_WORD_LENGTH } from "../lib/customWords";
+import { recordRender } from "../lib/renderDiagnostics";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 
@@ -48,6 +49,7 @@ export function RoomChatPanel({
   hideMaskedPrompt = false,
   onFocusChange,
 }: RoomChatPanelProps) {
+  recordRender("chat");
   const inputPurpose = mode === "playing" ? "guess" : "chat";
   const [previousInputPurpose, setPreviousInputPurpose] = useState(inputPurpose);
   const [text, setText] = useState("");
