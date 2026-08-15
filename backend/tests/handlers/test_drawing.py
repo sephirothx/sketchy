@@ -271,6 +271,48 @@ async def test_retransmitted_committed_path_is_idempotent():
     assert room.game.canvas.sequence == 1
     assert room.game.canvas.sync_payload() == committed_history
 
+
+@pytest.mark.asyncio
+async def test_retransmission_older_than_commit_window_gets_authoritative_sync(
+    monkeypatch,
+):
+    monkeypatch.setattr("app.canvas_session.MAX_CANVAS_COMMITS", 1)
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    drawer.sid = "drawer-sid"
+    room.game = Game(turn_order=[drawer.id])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_word_choice()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": drawer.id},
+    )
+    sio.emit = AsyncMock()
+    draw = sio.handlers["/"]["draw"]
+    first = encode_live_drawing(
+        "draw_fill",
+        {"x": 0.1, "y": 0.2, "color": "#112233"},
+    )
+    second = encode_live_drawing(
+        "draw_fill",
+        {"x": 0.3, "y": 0.4, "color": "#445566"},
+    )
+
+    await draw("drawer-sid", first, canvas_action(room.game, 1))
+    await draw("drawer-sid", second, canvas_action(room.game, 2))
+    sio.emit.reset_mock()
+    await draw("drawer-sid", first, [room.game.canvas.generation, 1])
+
+    assert room.game.canvas.sequence == 2
+    assert any(
+        call.args[0] == "sync_strokes"
+        and call.kwargs.get("to") == "drawer-sid"
+        for call in sio.emit.await_args_list
+    )
+
 @pytest.mark.asyncio
 async def test_retransmitted_incomplete_path_restarts_the_semantic_action():
     room_manager = RoomManager()

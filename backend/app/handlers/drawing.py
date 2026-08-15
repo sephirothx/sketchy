@@ -58,7 +58,11 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         if sequence <= room.game.canvas.sequence:
             if packet.event == "draw_start":
                 room.game.canvas.discarding_draw_sequence = True
-            await ctx.game_flow._emit_canvas_commit(room, sequence, to=sid)
+            commit = room.game.canvas.get_commit(sequence)
+            if commit and commit[2] == "action":
+                await ctx.game_flow._emit_canvas_commit(room, sequence, to=sid)
+            else:
+                await ctx.game_flow._emit_canvas_sync(room, sid)
             return
         expected_sequence = room.game.canvas.sequence + 1
         if sequence != expected_sequence:
