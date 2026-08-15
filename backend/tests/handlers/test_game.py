@@ -102,6 +102,10 @@ async def test_starting_new_game_clears_previous_drawing_recap():
 
     assert response == {"ok": True}
     assert room.last_game_drawings == []
+    assert any(
+        call.args[0] == "game_started" and call.args[1] == {}
+        for call in sio.emit.await_args_list
+    )
 
     timer = timers.phase_timers.pop(room.id)
     timer.cancel()

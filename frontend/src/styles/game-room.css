@@ -42,6 +42,7 @@
 }
 
 .game-header-afk-button,
+.game-header-restart-button,
 .game-header-leave-button {
   border-radius: 6px;
   padding: 8px 14px;
@@ -56,6 +57,17 @@
   background: #f8fafc;
   border: 1px solid #cbd5e1;
   color: #334155;
+}
+
+.game-header-restart-button {
+  background: #fffbeb;
+  border: 1px solid #fbbf24;
+  color: #92400e;
+}
+
+.game-header-restart-button:hover:not(:disabled) {
+  background: #fef3c7;
+  border-color: #f59e0b;
 }
 
 .game-header-leave-button {
@@ -205,6 +217,7 @@
   }
 
   .game-header-afk-button,
+  .game-header-restart-button,
   .game-header-leave-button,
   .header-settings-button,
   .game-header-save-button,
@@ -225,6 +238,190 @@
   .room-copy-button {
     padding: 6px 8px;
     font-size: 13px;
+  }
+}
+
+.restart-vote-banner {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, .8fr) auto;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+}
+
+.restart-vote-banner.approved {
+  animation: restart-approved-emphasis 500ms ease-out;
+  background: linear-gradient(135deg, #047857, #059669);
+  border: 2px solid #34d399;
+  box-shadow: 0 8px 24px rgb(5 150 105 / 30%), 0 0 0 3px rgb(52 211 153 / 18%);
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, .7fr) auto;
+  padding-block: 14px;
+}
+
+.restart-vote-banner.approved .restart-vote-copy strong {
+  align-items: center;
+  color: #fff;
+  display: flex;
+  font-size: 18px;
+  letter-spacing: .01em;
+}
+
+.restart-vote-banner.approved .restart-vote-copy > span {
+  color: #d1fae5;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.restart-approved-check {
+  align-items: center;
+  background: #fff;
+  border-radius: 999px;
+  color: #047857;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 17px;
+  height: 28px;
+  justify-content: center;
+  margin-right: 8px;
+  width: 28px;
+}
+
+.restart-approved-countdown {
+  align-items: center;
+  background: rgb(255 255 255 / 16%);
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: 8px;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  min-width: 64px;
+  padding: 5px 10px;
+}
+
+.restart-approved-countdown strong {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.restart-approved-countdown span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  margin-top: 3px;
+  text-transform: uppercase;
+}
+
+@keyframes restart-approved-emphasis {
+  0% { opacity: .35; transform: scale(.985); }
+  55% { transform: scale(1.008); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.restart-vote-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.restart-vote-copy strong {
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.restart-vote-copy > span,
+.restart-vote-observer-note {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.restart-vote-meter {
+  display: flex;
+  gap: 4px;
+  height: 22px;
+  min-width: 0;
+}
+
+.restart-vote-tile {
+  align-items: center;
+  border-radius: 4px;
+  color: #fff;
+  display: inline-flex;
+  flex: 1 1 0;
+  font-size: 15px;
+  font-weight: 900;
+  justify-content: center;
+  min-width: 18px;
+}
+
+.restart-vote-tile.yes { background: #16a34a; }
+.restart-vote-tile.no { background: #dc2626; }
+.restart-vote-tile.pending { background: #cbd5e1; }
+
+.restart-vote-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.restart-vote-actions button {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.restart-vote-actions button.yes:hover:not(:disabled),
+.restart-vote-actions button.yes.selected {
+  background: #dcfce7;
+  border-color: #22c55e;
+  color: #166534;
+}
+
+.restart-vote-actions button.no:hover:not(:disabled),
+.restart-vote-actions button.no.selected {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.restart-vote-actions button:focus-visible,
+.game-header-restart-button:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .restart-vote-banner,
+  .restart-vote-banner.approved {
+    grid-template-columns: 1fr;
+  }
+
+  .restart-vote-banner.approved {
+    grid-template-columns: 1fr auto;
+  }
+
+  .restart-vote-banner.approved .restart-vote-meter {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .restart-approved-countdown {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .restart-vote-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }
 

@@ -12,18 +12,21 @@ async def test_naturally_completed_tasks_leave_every_registry():
     hint_one = asyncio.create_task(asyncio.sleep(0))
     hint_two = asyncio.create_task(asyncio.sleep(0))
     disconnect = asyncio.create_task(asyncio.sleep(0))
+    restart = asyncio.create_task(asyncio.sleep(0))
 
     timers.replace_phase_timer("room", phase)
     timers.add_hint_timer("room", hint_one)
     timers.add_hint_timer("room", hint_two)
     timers.replace_disconnect_timer("player", disconnect)
+    timers.replace_restart_timer("room", restart)
 
-    await asyncio.gather(phase, hint_one, hint_two, disconnect)
+    await asyncio.gather(phase, hint_one, hint_two, disconnect, restart)
     await asyncio.sleep(0)
 
     assert timers.phase_timers == {}
     assert timers.hint_timers == {}
     assert timers.disconnect_timers == {}
+    assert timers.restart_timers == {}
 
 
 @pytest.mark.asyncio
@@ -32,21 +35,26 @@ async def test_cancel_methods_cancel_tasks_and_clear_registries():
     phase = asyncio.create_task(asyncio.sleep(60))
     hint = asyncio.create_task(asyncio.sleep(60))
     disconnect = asyncio.create_task(asyncio.sleep(60))
+    restart = asyncio.create_task(asyncio.sleep(60))
     timers.replace_phase_timer("room", phase)
     timers.add_hint_timer("room", hint)
     timers.replace_disconnect_timer("player", disconnect)
+    timers.replace_restart_timer("room", restart)
 
     timers.cancel_phase_timer("room")
     timers.cancel_hint_timers("room")
     timers.cancel_disconnect_timer("player")
-    await asyncio.gather(phase, hint, disconnect, return_exceptions=True)
+    timers.cancel_restart_timer("room")
+    await asyncio.gather(phase, hint, disconnect, restart, return_exceptions=True)
 
     assert phase.cancelled()
     assert hint.cancelled()
     assert disconnect.cancelled()
+    assert restart.cancelled()
     assert timers.phase_timers == {}
     assert timers.hint_timers == {}
     assert timers.disconnect_timers == {}
+    assert timers.restart_timers == {}
 
 
 @pytest.mark.asyncio
@@ -109,6 +117,7 @@ async def test_close_cancels_and_awaits_outstanding_tasks():
     assert timers.phase_timers == {}
     assert timers.hint_timers == {}
     assert timers.disconnect_timers == {}
+    assert timers.restart_timers == {}
 
 
 @pytest.mark.asyncio
@@ -137,6 +146,7 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
 
     assert task.cancelled()
     assert timers.disconnect_timers == {}
+    assert timers.restart_timers == {}
     assert sent == [
         {"type": "lifespan.startup.complete"},
         {"type": "lifespan.shutdown.complete"},

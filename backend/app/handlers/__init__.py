@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import socketio
 
-from app.handlers import chat, connection, drawing, game, moderation, rooms
+from app.handlers import chat, connection, drawing, game, moderation, restart, rooms
 from app.handlers.context import HandlerContext
 from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
@@ -25,6 +25,7 @@ def register_all_handlers(
     ctx.game_flow = GameFlowService(ctx)
 
     moderation.register(ctx)
+    restart.register(ctx)
     rooms.register(ctx)
     chat.register(ctx)
     drawing.register(ctx)

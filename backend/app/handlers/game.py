@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from functools import partial
 
-from app.game import Game
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     PayloadError,
@@ -11,7 +10,6 @@ from app.handlers.payloads import (
     parse_empty_payload,
     parse_payload,
 )
-from app.rooms import STARTING_SCORE
 
 async def start_game(ctx: HandlerContext, sid, data=None):
     try:
@@ -28,23 +26,7 @@ async def start_game(ctx: HandlerContext, sid, data=None):
     if room.state == "playing":
         return {"ok": False, "error": "Game already in progress"}
 
-    room.last_game_scores = []
-    room.last_game_drawings = []
-    for p in room.player_list():
-        p.score = 0 if p.is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0)
-    room.state = "playing"
-    room.game = Game(
-        turn_order=[p.id for p in active_players],
-        rounds_total=room.rounds,
-        word_pool=room.effective_word_pool(),
-        drawing_seconds=room.drawing_seconds,
-        hint_mode=room.hint_mode,
-        scoring_mode=room.scoring_mode,
-        hide_masked_prompt=room.hide_masked_prompt,
-    )
-    await ctx.game_flow._emit_room_state(room)
-    await ctx.sio.emit("game_started", {}, room=room.id)
-    await ctx.game_flow._start_turn(room)
+    await ctx.game_flow._start_fresh_game(room, active_players)
     return {"ok": True}
 
 

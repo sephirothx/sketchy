@@ -7,7 +7,7 @@ import secrets
 import string
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Literal, Optional
 
 from app.game import Game
 from app.words import WORDS
@@ -122,6 +122,46 @@ class Player:
     afk_votes: set[str] = field(default_factory=set)
 
 
+@dataclass(slots=True)
+class RestartVote:
+    proposer_id: str
+    proposer_nickname: str
+    eligible_voter_ids: tuple[str, ...]
+    votes: dict[str, bool]
+    expires_at: float
+    status: Literal["voting", "approved"] = "voting"
+    restart_at: float | None = None
+
+    @property
+    def required_votes(self) -> int:
+        return (len(self.eligible_voter_ids) // 2) + 1
+
+    def payload(self) -> dict:
+        return {
+            "status": self.status,
+            "proposerId": self.proposer_id,
+            "proposerNickname": self.proposer_nickname,
+            "eligibleVoterIds": list(self.eligible_voter_ids),
+            "yesVoterIds": [
+                player_id for player_id, vote in self.votes.items() if vote
+            ],
+            "noVoterIds": [
+                player_id for player_id, vote in self.votes.items() if not vote
+            ],
+            "castVotes": [
+                {"playerId": player_id, "vote": vote}
+                for player_id, vote in self.votes.items()
+            ],
+            "requiredVotes": self.required_votes,
+            "expiresAt": round(self.expires_at * 1000),
+            "restartAt": (
+                round(self.restart_at * 1000)
+                if self.restart_at is not None
+                else None
+            ),
+        }
+
+
 @dataclass(frozen=True, slots=True)
 class DrawingRecapEntry:
     round_number: int
@@ -170,6 +210,8 @@ class Room:
     canvas_generation: int = 0
     last_game_scores: list[dict] = field(default_factory=list)
     last_game_drawings: list[DrawingRecapEntry] = field(default_factory=list)
+    restart_vote: RestartVote | None = None
+    restart_vote_cooldown_until: float = 0
 
     def player_list(self) -> list[Player]:
         return list(self.players.values())
@@ -269,6 +311,12 @@ class Room:
                 else []
             ),
             "moderation": self.moderation_state_payload(),
+            "restartVote": (
+                self.restart_vote.payload() if self.restart_vote else None
+            ),
+            "restartVoteCooldownUntil": round(
+                self.restart_vote_cooldown_until * 1000
+            ),
             "players": [
                 {
                     "playerId": p.id,

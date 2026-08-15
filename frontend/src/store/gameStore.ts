@@ -8,6 +8,7 @@ import type {
   ModerationState,
   PlayerInfo,
   RoomStatePayload,
+  RestartVoteState,
   RoundEndedPayload,
   ScoringMode,
 } from "../types";
@@ -37,6 +38,8 @@ interface GameStore {
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
   moderation: ModerationState;
+  restartVote: RestartVoteState | null;
+  restartVoteCooldownUntil: number;
 
   phase: GamePhase;
   drawerId: string | null;
@@ -139,6 +142,8 @@ export const useGameStore = create<GameStore>((set) => ({
   roomState: "waiting",
   players: [],
   moderation: { eligibleVoterIds: [], requiredVotes: 1 },
+  restartVote: null,
+  restartVoteCooldownUntil: 0,
   error: null,
   ...initialGameFields,
 
@@ -176,6 +181,8 @@ export const useGameStore = create<GameStore>((set) => ({
         : payload.state === "playing" ? null : state.finalScores,
       drawingRecap: payload.lastGameDrawings ?? state.drawingRecap,
       moderation: payload.moderation,
+      restartVote: payload.restartVote ?? null,
+      restartVoteCooldownUntil: payload.restartVoteCooldownUntil ?? 0,
       players: payload.players,
     })),
   addMessage: (message) => set((s) => ({ messages: [...s.messages.slice(-99), message] })),
@@ -247,6 +254,8 @@ export const useGameStore = create<GameStore>((set) => ({
     code: null,
     players: [],
     moderation: { eligibleVoterIds: [], requiredVotes: 1 },
+    restartVote: null,
+    restartVoteCooldownUntil: 0,
     ...initialGameFields,
   }),
 }));
