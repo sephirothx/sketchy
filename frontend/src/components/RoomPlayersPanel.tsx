@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { recordRender } from "../lib/renderDiagnostics";
 import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../types";
 import { PlayerList } from "./PlayerList";
 
@@ -24,6 +25,7 @@ export function RoomPlayersPanel({
   finalScores,
   moderation,
 }: RoomPlayersPanelProps) {
+  recordRender("players");
   const [promotionBusy, setPromotionBusy] = useState(false);
   const [promotionError, setPromotionError] = useState<string | null>(null);
   const activePlayers = players.filter((player) => !player.isSpectator);

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { recordRender } from "../lib/renderDiagnostics";
 
 export type RoomShellMode = "waiting" | "playing" | "game-end";
 
@@ -10,6 +11,7 @@ interface RoomShellProps {
 }
 
 export function RoomShell({ mode, players, main, chat }: RoomShellProps) {
+  recordRender("roomShell");
   return (
     <div
       className={`room-shell room-shell-${mode}${mode === "playing" ? " game-layout" : ""}`}
