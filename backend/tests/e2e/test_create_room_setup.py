@@ -18,7 +18,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             nickname_input = page.locator('input[placeholder="Your name"]')
             await assert_input_contract(nickname_input, {
                 "type": "search",
-                "role": "textbox",
+                "role": None,
                 "inputMode": "text",
                 "autoComplete": "nickname",
                 "autoCapitalize": "words",
@@ -27,7 +27,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             })
             await assert_input_contract(page.locator('input[placeholder="ABC123"]'), {
                 "type": "search",
-                "role": "textbox",
+                "role": None,
                 "inputMode": "text",
                 "autoComplete": "off",
                 "autoCapitalize": "characters",
@@ -49,7 +49,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             )
             await assert_input_contract(room_name_input, {
                 "type": "search",
-                "role": "textbox",
+                "role": None,
                 "inputMode": "text",
                 "autoComplete": "off",
                 "autoCapitalize": "sentences",

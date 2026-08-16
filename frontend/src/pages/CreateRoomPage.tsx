@@ -93,7 +93,7 @@ export function CreateRoomPage() {
           <label className="create-room-name-field">
             Room name (optional)
             {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
-            <input type="search" role="textbox" inputMode="text" value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={40} placeholder="Leave blank for a random name!" autoComplete="off" autoCapitalize="sentences" spellCheck={true} />
+            <input type="search" inputMode="text" value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={40} placeholder="Leave blank for a random name!" autoComplete="off" autoCapitalize="sentences" spellCheck={true} />
           </label>
           <SegmentedControl
             label="Visibility"

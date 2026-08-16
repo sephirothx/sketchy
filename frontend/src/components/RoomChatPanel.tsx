@@ -344,7 +344,6 @@ export function RoomChatPanel({
               <input
                 ref={inputRef}
                 type="search"
-                role="textbox"
                 inputMode="text"
                 value={text}
                 onChange={(event) => setText(event.target.value)}

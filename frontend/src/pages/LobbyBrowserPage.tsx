@@ -188,7 +188,6 @@ export function LobbyBrowserPage() {
           {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
           <input
             type="search"
-            role="textbox"
             inputMode="text"
             value={nicknameInput}
             onChange={(e) => setNicknameInput(e.target.value)}
@@ -231,7 +230,6 @@ export function LobbyBrowserPage() {
             {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
             <input
               type="search"
-              role="textbox"
               inputMode="text"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}

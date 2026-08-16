@@ -312,7 +312,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             guess_input = guesser_page.locator('.chat-input input')
             await assert_input_contract(guess_input, {
                 "type": "search",
-                "role": "textbox",
+                "role": None,
                 "inputMode": "text",
                 "autoComplete": "off",
                 "autoCapitalize": "none",

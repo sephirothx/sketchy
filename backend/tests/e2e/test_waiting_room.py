@@ -107,7 +107,7 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
             waiting_chat_input = player_page.locator('.waiting-chat-form input')
             await assert_input_contract(waiting_chat_input, {
                 "type": "search",
-                "role": "textbox",
+                "role": None,
                 "inputMode": "text",
                 "autoComplete": "off",
                 "autoCapitalize": "sentences",
