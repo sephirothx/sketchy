@@ -45,6 +45,7 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             await assert_input_contract(room_search, {
                 "type": "search",
                 "autoComplete": "off",
+                "enterKeyHint": "search",
             })
             await room_search.fill("no matching room")
             assert not await card.is_visible()

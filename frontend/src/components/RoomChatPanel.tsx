@@ -372,6 +372,7 @@ export function RoomChatPanel({
                 autoCapitalize={inputPurpose === "chat" ? "sentences" : "none"}
                 spellCheck={inputPurpose === "chat"}
                 autoCorrect={inputPurpose === "guess" ? "off" : undefined}
+                enterKeyHint="send"
               />
             </div>
             <button type="submit" disabled={sending}>

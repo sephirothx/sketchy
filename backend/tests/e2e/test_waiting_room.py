@@ -30,6 +30,19 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
             assert await host_page.is_visible('text=LobbyHost (you)')
             assert await host_page.is_visible('text=Host')
             await host_page.wait_for_selector('.room-settings-editor')
+            await assert_input_contract(
+                host_page.locator('.room-settings-editor label:has-text("Room name") input'),
+                {
+                    "type": "search",
+                    "role": None,
+                    "inputMode": "text",
+                    "autoComplete": "off",
+                    "autoCapitalize": "sentences",
+                    "spellCheck": True,
+                    "autoCorrect": None,
+                    "enterKeyHint": "done",
+                },
+            )
             assert not await host_page.is_visible('text=How this game will play')
             assert await host_page.input_value(
                 '.room-settings-editor label:has-text("Rounds") input'
@@ -113,6 +126,7 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
                 "autoCapitalize": "sentences",
                 "spellCheck": True,
                 "autoCorrect": None,
+                "enterKeyHint": "send",
             })
             await waiting_chat_input.fill("Hello from the lobby")
             await waiting_chat_input.press("Enter")

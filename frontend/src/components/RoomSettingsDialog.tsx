@@ -92,7 +92,11 @@ export function RoomSettingsEditor() {
     <div className="room-settings-editor-heading"><p className="waiting-card-kicker">Host settings</p><h2 id="room-settings-title">Edit room settings</h2></div>
     {loading ? <p>Loading settings…</p> : <div className="room-settings-fields">
       <div className="create-room-name-row">
-        <label className="create-room-name-field">Room name<input value={settings.name} onChange={(event) => update({ name: event.target.value })} maxLength={40} /></label>
+        <label className="create-room-name-field">
+          Room name
+          {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
+          <input type="search" inputMode="text" value={settings.name} onChange={(event) => update({ name: event.target.value })} maxLength={40} autoComplete="off" autoCapitalize="sentences" spellCheck={true} enterKeyHint="done" />
+        </label>
         <SegmentedControl
           label="Visibility"
           value={settings.isPublic ? "public" : "private"}

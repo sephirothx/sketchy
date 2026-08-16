@@ -13,6 +13,7 @@ def assert_input_contract():
                 autoCapitalize: input.getAttribute("autocapitalize"),
                 spellCheck: input.spellcheck,
                 autoCorrect: input.getAttribute("autocorrect"),
+                enterKeyHint: input.enterKeyHint,
             })"""
         )
         assert {key: contract[key] for key in expected} == expected

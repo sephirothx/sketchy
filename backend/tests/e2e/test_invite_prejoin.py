@@ -39,12 +39,13 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect(
             await spectator_page.goto(invite_url)
             await spectator_page.wait_for_selector("#invite-nickname")
             await assert_input_contract(spectator_page.locator("#invite-nickname"), {
-                "type": "text",
+                "type": "search",
                 "inputMode": "text",
-                "autoComplete": "nickname",
+                "autoComplete": "off",
                 "autoCapitalize": "words",
                 "spellCheck": False,
                 "autoCorrect": "off",
+                "enterKeyHint": "go",
             })
             assert await spectator_page.is_visible("text=Invite Test Room")
             assert await spectator_page.is_visible("text=Private invite")

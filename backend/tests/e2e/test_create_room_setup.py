@@ -24,8 +24,10 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
                 "autoCapitalize": "words",
                 "spellCheck": False,
                 "autoCorrect": "off",
+                "enterKeyHint": "done",
             })
-            await assert_input_contract(page.locator('input[placeholder="ABC123"]'), {
+            room_code_input = page.locator('input[placeholder="ABC123"]')
+            await assert_input_contract(room_code_input, {
                 "type": "search",
                 "role": None,
                 "inputMode": "text",
@@ -33,7 +35,11 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
                 "autoCapitalize": "characters",
                 "spellCheck": False,
                 "autoCorrect": "off",
+                "enterKeyHint": "go",
             })
+            await room_code_input.fill("ab-c12")
+            assert await room_code_input.input_value() == "ABC12"
+            await room_code_input.fill("")
             await nickname_input.fill("SetupHost")
             await page.click('button:has-text("Create room")')
             await page.wait_for_url(f"{BASE_URL}/create")
@@ -55,6 +61,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
                 "autoCapitalize": "sentences",
                 "spellCheck": True,
                 "autoCorrect": None,
+                "enterKeyHint": "done",
             })
             await room_name_input.fill("Setup room")
             await page.click('text=Advanced settings')

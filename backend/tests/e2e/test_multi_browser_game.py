@@ -318,6 +318,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                 "autoCapitalize": "none",
                 "spellCheck": False,
                 "autoCorrect": "off",
+                "enterKeyHint": "send",
             })
             await guess_input.focus()
             assert await guess_input.evaluate("input => document.activeElement === input")

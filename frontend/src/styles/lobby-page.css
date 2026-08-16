@@ -28,6 +28,28 @@
   gap: 12px;
 }
 
+.lobby-filter-bar {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.8rem;
+}
+
+.panel .lobby-filter-bar input[type="search"] {
+  flex: 1 1 200px;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.75rem;
+}
+
+.lobby-filter-bar .checkbox-label {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
 .public-room-card {
   align-items: center;
   background: #f8fafc;
