@@ -126,7 +126,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await host.locator('[data-testid="waiting-room"]').wait_for()
             assert not await host.get_by_text("Previous game", exact=True).is_visible()
             assert await host.get_by_text("Final standings", exact=True).is_visible()
-            assert await host.locator(".room-players-panel .player-placement").count() == 2
+            assert await host.locator(".room-players-panel .player-role-placement").count() == 2
             assert await host.locator(".room-players-panel .player-score").count() == 2
             assert await host.get_by_role(
                 "button",

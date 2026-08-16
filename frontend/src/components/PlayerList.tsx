@@ -17,6 +17,29 @@ interface PlayerListProps {
 
 const PLACEMENT_MEDALS = ["🥇", "🥈", "🥉"];
 
+function cx(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+
+function fitPlayerNames(list: HTMLElement) {
+  for (const cell of list.querySelectorAll<HTMLElement>(".player-name")) {
+    const name = cell.querySelector<HTMLElement>(".colored-player-name");
+    if (!name) continue;
+    name.style.fontSize = "";
+    const youMark = cell.querySelector(".player-you-mark");
+    const gap = youMark ? parseFloat(getComputedStyle(cell).gap) || 0 : 0;
+    const available =
+      cell.clientWidth - (youMark instanceof HTMLElement ? youMark.offsetWidth : 0) - gap;
+    const range = document.createRange();
+    range.selectNodeContents(name);
+    const natural = range.getBoundingClientRect().width;
+    if (natural > available && available > 0) {
+      const current = parseFloat(getComputedStyle(name).fontSize);
+      name.style.fontSize = `${(available / natural) * current}px`;
+    }
+  }
+}
+
 export function PlayerList({
   players,
   drawerId,
@@ -29,9 +52,27 @@ export function PlayerList({
   const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
   const currentPlayerCanVote = canCastModerationVote(moderation, myPlayerId);
   const [openMenuToken, setOpenMenuToken] = useState<string | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const nameFitKey = sorted.map((player) => `${player.playerId}:${player.nickname}`).join("\0");
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    fitPlayerNames(list);
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => fitPlayerNames(list));
+    });
+    observer.observe(list);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [nameFitKey, showScores, myPlayerId]);
 
   return (
-    <ul className="player-list">
+    <ul ref={listRef} className="player-list">
       {sorted.map((p, index) => {
         const isMe = p.playerId === myPlayerId;
         const isDrawer = p.playerId === drawerId;
@@ -46,16 +87,14 @@ export function PlayerList({
         const showAfkChip = afkVotes.length > 0 && !p.isAfk;
         const showKickChip = kickVotes.length > 0;
         const showVoteRow = showAfkChip || showKickChip;
-        const rowClass = [
+        const rowClass = cx(
           "player-row",
-          isMe ? "is-self" : "",
-          p.connected ? "" : "disconnected",
-          p.isAfk ? "is-afk" : "",
-          showScores ? "has-scores" : "",
-          canModerate ? "is-moderatable" : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
+          isMe && "is-self",
+          !p.connected && "disconnected",
+          p.isAfk && "is-afk",
+          showScores && "has-scores",
+          canModerate && "is-moderatable",
+        );
 
         return (
           <li key={p.playerId} className={rowClass}>
@@ -126,37 +165,8 @@ function FittedPlayerName({
   nickname: string;
   nameColor?: string;
 }) {
-  const nameRef = useRef<HTMLSpanElement>(null);
-
-  useLayoutEffect(() => {
-    const nameEl = nameRef.current;
-    const cellEl = nameEl?.parentElement;
-    if (!nameEl || !cellEl) return;
-
-    function fit(name: HTMLSpanElement, cell: HTMLElement) {
-      name.style.fontSize = "";
-      const youMark = cell.querySelector(".player-you-mark");
-      const gap = youMark ? parseFloat(getComputedStyle(cell).gap) || 0 : 0;
-      const available =
-        cell.clientWidth - (youMark instanceof HTMLElement ? youMark.offsetWidth : 0) - gap;
-      const range = document.createRange();
-      range.selectNodeContents(name);
-      const natural = range.getBoundingClientRect().width;
-      if (natural > available && available > 0) {
-        const current = parseFloat(getComputedStyle(name).fontSize);
-        name.style.fontSize = `${(available / natural) * current}px`;
-      }
-    }
-
-    const runFit = () => fit(nameEl, cellEl);
-    runFit();
-    const observer = new ResizeObserver(runFit);
-    observer.observe(cellEl);
-    return () => observer.disconnect();
-  }, [nickname]);
-
   return (
-    <span ref={nameRef} className="colored-player-name" style={{ color: nameColor }}>
+    <span className="colored-player-name" style={{ color: nameColor }}>
       {nickname}
     </span>
   );
@@ -175,9 +185,11 @@ function PlayerRole({
   isHost: boolean;
   isAfk: boolean;
 }) {
+  // One icon per row, in this order: drawing, AFK, host. Combined states
+  // (host+AFK, drawer+host) are exposed on aria-label/title instead.
   if (variant === "game-end") {
     return (
-      <span className="player-role player-placement" aria-hidden="true">
+      <span className="player-role player-role-placement" aria-hidden="true">
         {index < 3 ? PLACEMENT_MEDALS[index] : `#${index + 1}`}
       </span>
     );
@@ -245,13 +257,11 @@ function VoteChip({
   onVote?: () => void;
 }) {
   const kind = action === "afk" ? "AFK" : "Kick";
-  const className = [
+  const className = cx(
     "player-vote-chip",
     `player-vote-chip-${action}`,
-    hasVoted ? "is-cast" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+    hasVoted && "is-cast",
+  );
   const label = onVote
     ? hasVoted
       ? `Undo ${kind} vote for ${nickname}, ${count} of ${required}`
@@ -261,7 +271,7 @@ function VoteChip({
 
   if (!onVote) {
     return (
-      <span className={className} aria-label={label}>
+      <span className={className} role="status" aria-label={label}>
         {body}
       </span>
     );

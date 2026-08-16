@@ -19,6 +19,10 @@
   grid-template-columns: 1.25rem minmax(0, 1fr) 5ch;
 }
 
+.player-row.is-moderatable {
+  cursor: pointer;
+}
+
 .player-row.is-moderatable:hover,
 .player-row:has(.player-moderation-trigger[aria-expanded="true"]) {
   background: #f1f5f9;
