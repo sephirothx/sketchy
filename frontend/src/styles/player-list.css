@@ -1,9 +1,82 @@
-/* Clickable Player Row & Hover Feedback */
-.player-row.clickable {
-  cursor: pointer;
-  transition: background-color 0.15s ease, transform 0.1s ease;
+.player-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.player-row.clickable:hover {
-  background-color: #f1f5f9;
+.player-row {
+  position: relative;
+}
+
+.player-row-main {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.player-vote-count {
+  background: rgba(239, 68, 68, 0.2);
+  border-radius: 4px;
+  color: #b91c1c;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.35rem;
+}
+
+.player-moderation {
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.player-moderation-trigger {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.45rem;
+}
+
+.player-moderation-trigger:hover,
+.player-moderation-trigger[aria-expanded="true"] {
+  background: #e2e8f0;
+}
+
+.player-vote-menu {
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 160px;
+  padding: 0.4rem;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+}
+
+.player-vote-action {
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+}
+
+.player-vote-action.is-cast {
+  background: #f59e0b;
+}
+
+.player-vote-action.player-vote-kick.is-cast {
+  background: #ef4444;
 }

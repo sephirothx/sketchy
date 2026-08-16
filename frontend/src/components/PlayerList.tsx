@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ModerationState, PlayerInfo } from "../types";
 import { socket } from "../lib/socket";
 import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
+import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -25,27 +27,14 @@ export function PlayerList({
   const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
   const currentPlayerCanVote = canCastModerationVote(moderation, myPlayerId);
   const [openMenuToken, setOpenMenuToken] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpenMenuToken(null);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  function handleVote(targetPlayerId: string, action: "kick" | "afk") {
-    socket.emit("vote_player", { targetPlayerId, action });
-    setOpenMenuToken(null);
-  }
 
   return (
     <ul className="player-list">
       {sorted.map((p, index) => {
         const isMe = p.playerId === myPlayerId;
+        const canModerate = Boolean(
+          allowVoting && currentPlayerCanVote && !isMe && p.connected,
+        );
         const requiredVotes = moderation.requiredVotes;
         const kickVotes = eligibleModerationVotes(moderation, p.kickVotes);
         const afkVotes = eligibleModerationVotes(moderation, p.afkVotes);
@@ -57,39 +46,23 @@ export function PlayerList({
         return (
           <li
             key={p.playerId}
-            className={`player-row${p.connected ? "" : " disconnected"}${allowVoting && currentPlayerCanVote && !isMe && p.connected ? " clickable" : ""}`}
-            style={{
-              position: "relative",
-            }}
-            title={allowVoting && currentPlayerCanVote && !isMe && p.connected ? "Click to vote AFK or Kick player" : undefined}
-            onClick={() => {
-              if (allowVoting && currentPlayerCanVote && !isMe && p.connected) {
-                setOpenMenuToken(isMenuOpen ? null : p.playerId);
-              }
-            }}
+            className={`player-row${p.connected ? "" : " disconnected"}`}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+            <div className="player-row-main">
               <span className="player-name">
-                {variant === "game-end" && <span className="player-placement">{index < 3 ? ["🥇", "🥈", "🥉"][index] : `#${index + 1}`}</span>}
+                {variant === "game-end" && (
+                  <span className="player-placement">
+                    {index < 3 ? ["🥇", "🥈", "🥉"][index] : `#${index + 1}`}
+                  </span>
+                )}
                 {p.playerId === drawerId ? "\u270F\uFE0F " : ""}
                 <span className="colored-player-name" style={{ color: p.nameColor }}>
                   {p.nickname}
                 </span>
                 {isMe ? " (you)" : ""}
                 {totalActiveVotes > 0 && (
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      marginLeft: "0.4rem",
-                      padding: "0.1rem 0.35rem",
-                      borderRadius: "4px",
-                      background: "rgba(239, 68, 68, 0.2)",
-                      color: "#f87171",
-                      fontWeight: 600,
-                    }}
-                    title={`${totalActiveVotes} of ${requiredVotes} votes cast`}
-                  >
-                    🗳️ {totalActiveVotes}/{requiredVotes}
+                  <span className="player-vote-count">
+                    {totalActiveVotes} of {requiredVotes} votes
                   </span>
                 )}
               </span>
@@ -99,67 +72,133 @@ export function PlayerList({
                 {!p.connected && <em className="muted">Disconnected</em>}
               </span>
               {showScores && <span className="player-score">{p.score}</span>}
+              {canModerate && (
+                <PlayerModerationMenu
+                  player={p}
+                  requiredVotes={requiredVotes}
+                  kickVotes={kickVotes}
+                  afkVotes={afkVotes}
+                  hasVotedKick={hasVotedKick}
+                  hasVotedAfk={hasVotedAfk}
+                  isOpen={isMenuOpen}
+                  onOpenChange={(open) => setOpenMenuToken(open ? p.playerId : null)}
+                />
+              )}
             </div>
-
-            {allowVoting && currentPlayerCanVote && isMenuOpen && !isMe && p.connected && (
-              <div
-                ref={menuRef}
-                className="player-vote-menu"
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "100%",
-                  marginTop: "0.25rem",
-                  background: "#1e293b",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  borderRadius: "6px",
-                  boxShadow: "0 6px 16px rgba(0,0,0,0.5)",
-                  padding: "0.4rem",
-                  zIndex: 100,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.3rem",
-                  minWidth: "140px",
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {!p.isAfk && (
-                  <button
-                    style={{
-                      fontSize: "0.75rem",
-                      padding: "0.3rem 0.5rem",
-                      background: hasVotedAfk ? "#f59e0b" : "rgba(255,255,255,0.05)",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                    onClick={() => handleVote(p.playerId, "afk")}
-                  >
-                    {hasVotedAfk ? "✓ " : ""}Vote AFK ({afkVotes.length}/{requiredVotes})
-                  </button>
-                )}
-                <button
-                  style={{
-                    fontSize: "0.75rem",
-                    padding: "0.3rem 0.5rem",
-                    background: hasVotedKick ? "#ef4444" : "rgba(255,255,255,0.05)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                  onClick={() => handleVote(p.playerId, "kick")}
-                >
-                  {hasVotedKick ? "✓ " : ""}Vote Kick ({kickVotes.length}/{requiredVotes})
-                </button>
-              </div>
-            )}
           </li>
         );
       })}
     </ul>
+  );
+}
+
+function PlayerModerationMenu({
+  player,
+  requiredVotes,
+  kickVotes,
+  afkVotes,
+  hasVotedKick,
+  hasVotedAfk,
+  isOpen,
+  onOpenChange,
+}: {
+  player: PlayerInfo;
+  requiredVotes: number;
+  kickVotes: string[];
+  afkVotes: string[];
+  hasVotedKick: boolean;
+  hasVotedAfk: boolean;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const menuId = useId();
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEscapeLayer(isOpen, () => onOpenChange(false));
+  useFocusTrap(menuRef, { active: isOpen });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        onOpenChange(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, onOpenChange]);
+
+  function handleVote(action: "kick" | "afk") {
+    socket.emit("vote_player", { targetPlayerId: player.playerId, action });
+    onOpenChange(false);
+    triggerRef.current?.focus();
+  }
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = menuRef.current ? getFocusableElements(menuRef.current) : [];
+    if (!items.length) return;
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      items[(currentIndex + 1) % items.length]?.focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      items[(currentIndex - 1 + items.length) % items.length]?.focus();
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      items[0]?.focus();
+    } else if (event.key === "End") {
+      event.preventDefault();
+      items[items.length - 1]?.focus();
+    }
+  }
+
+  return (
+    <div ref={rootRef} className="player-moderation">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="player-moderation-trigger"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls={menuId}
+        aria-label={`Moderation for ${player.nickname}`}
+        onClick={() => onOpenChange(!isOpen)}
+      >
+        Moderate
+      </button>
+      {isOpen && (
+        <div
+          ref={menuRef}
+          id={menuId}
+          className="player-vote-menu"
+          role="menu"
+          aria-label={`Moderation actions for ${player.nickname}`}
+          tabIndex={-1}
+          onKeyDown={handleMenuKeyDown}
+        >
+          {!player.isAfk && (
+            <button
+              type="button"
+              role="menuitem"
+              className={`player-vote-action${hasVotedAfk ? " is-cast" : ""}`}
+              onClick={() => handleVote("afk")}
+            >
+              {hasVotedAfk ? "Undo vote AFK" : "Vote AFK"} ({afkVotes.length}/{requiredVotes})
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            className={`player-vote-action player-vote-kick${hasVotedKick ? " is-cast" : ""}`}
+            onClick={() => handleVote("kick")}
+          >
+            {hasVotedKick ? "Undo vote kick" : "Vote kick"} ({kickVotes.length}/{requiredVotes})
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

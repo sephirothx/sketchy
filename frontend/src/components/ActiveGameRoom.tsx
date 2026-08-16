@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { CanvasRef } from "../components/Canvas";
 import { GameEndOverlay } from "../components/GameEndOverlay";
@@ -13,6 +13,7 @@ import {
   GameplayRegion,
 } from "../components/GameRoomRegions";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
@@ -30,6 +31,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   const canvasRef = useRef<CanvasRef | null>(null);
   const exitingRoomRef = useRef(false);
+  const playersDrawerRef = useRef<HTMLElement | null>(null);
+  const playersDrawerCloseRef = useRef<HTMLButtonElement | null>(null);
+  const playersDrawerTitleId = useId();
 
   const playerId = useGameStore((s) => s.playerId);
   const clearStoredReconnectSecret = useGameStore((s) => s.clearStoredReconnectSecret);
@@ -67,6 +71,12 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   useVisualViewportCssVars();
 
+  useFocusTrap(playersDrawerRef, {
+    active: playersDrawerOpen,
+    onEscape: () => setPlayersDrawerOpen(false),
+    initialFocusRef: playersDrawerCloseRef,
+  });
+
   useEffect(() => {
     if (restartVoteCooldownUntil <= Date.now()) return;
     const interval = window.setInterval(() => {
@@ -76,15 +86,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
     }, 250);
     return () => window.clearInterval(interval);
   }, [restartVoteCooldownUntil]);
-
-  useEffect(() => {
-    if (!playersDrawerOpen) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setPlayersDrawerOpen(false);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [playersDrawerOpen]);
 
   useEffect(() => {
     function closeRecapForNewGame() {
@@ -360,15 +361,18 @@ export function ActiveGameRoom({ code }: { code: string }) {
           }}
         >
           <aside
+            ref={playersDrawerRef}
             className="players-drawer"
             role="dialog"
             aria-modal="true"
-            aria-label="Players in room"
+            aria-labelledby={playersDrawerTitleId}
+            tabIndex={-1}
             data-testid="players-drawer"
           >
             <div className="players-drawer-header">
-              <h2>Players</h2>
+              <h2 id={playersDrawerTitleId}>Players</h2>
               <button
+                ref={playersDrawerCloseRef}
                 type="button"
                 className="players-drawer-close"
                 onClick={() => setPlayersDrawerOpen(false)}

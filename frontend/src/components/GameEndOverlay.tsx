@@ -29,7 +29,7 @@ export function GameEndOverlay({
   }, [onContinue]);
 
   const placement = scores.findIndex((score) => score.playerId === myPlayerId) + 1;
-  return <main className="game-end-overlay" aria-labelledby="game-end-title" aria-live="polite">
+  return <main className="game-end-overlay" aria-labelledby="game-end-title" aria-live="polite" data-testid="game-end-overlay">
     <section className="game-end-podium">
       <p className="game-end-kicker">Game complete</p>
       <h1 id="game-end-title">{scoringMode === "default" ? <><span className="colored-player-name" style={{ color: scores[0]?.nameColor }}>{scores[0]?.nickname ?? "The room"}</span> takes the crown!</> : "A great round of drawing"}</h1>

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { SettingsIcon } from "./SettingsIcon";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { FieldHint, SegmentedControl, Switch } from "./RoomSetupControls";
 import {
   ACTION_LABELS,
@@ -40,6 +41,9 @@ function formatKey(key: string): string {
 function SettingsModalContent() {
   const { closeSettings, keyBindings, penCursor, theme, confettiEffects, soundEffects, volume, nameColor, setAllSettings } =
     useSettingsStore();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const titleId = useId();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [draftKeyBindings, setDraftKeyBindings] = useState<KeyBindings>(keyBindings);
@@ -114,22 +118,41 @@ function SettingsModalContent() {
     setActiveRebind(null);
   };
 
+  useFocusTrap(dialogRef, {
+    onEscape: handleDiscard,
+    initialFocusRef: closeButtonRef,
+  });
+
   const actionKeys = Object.keys(ACTION_LABELS) as (keyof KeyBindings)[];
 
   return (
-    <div className="modal-overlay" onClick={handleDiscard}>
+    <div
+      className="modal-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) handleDiscard();
+      }}
+    >
       <div
+        ref={dialogRef}
         className="modal-card settings-modal-card"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="Settings"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
       >
         <div className="settings-modal-header">
-          <h3 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <h3 id={titleId} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <SettingsIcon size={20} />
             <span>Settings</span>
           </h3>
-          <button type="button" className="close-icon-button" onClick={handleDiscard} title="Close">
+          <button
+            ref={closeButtonRef}
+            type="button"
+            className="close-icon-button"
+            onClick={handleDiscard}
+            title="Close"
+            aria-label="Close settings"
+          >
             ✕
           </button>
         </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSettingsStore } from "../store/settingsStore";
 
 interface Particle {
@@ -30,9 +31,11 @@ const CONFETTI_COLORS = [
 export function ConfettiCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiEffects = useSettingsStore((s) => s.confettiEffects);
+  const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const confettiEnabled = confettiEffects && !prefersReducedMotion;
 
   useEffect(() => {
-    if (!confettiEffects) return;
+    if (!confettiEnabled) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -152,13 +155,14 @@ export function ConfettiCanvas() {
       window.removeEventListener("sketchy:confetti", handleConfettiEvent);
       if (animId) cancelAnimationFrame(animId);
     };
-  }, [confettiEffects]);
+  }, [confettiEnabled]);
 
-  if (!confettiEffects) return null;
+  if (!confettiEnabled) return null;
 
   return (
     <canvas
       ref={canvasRef}
+      aria-hidden="true"
       style={{
         position: "fixed",
         inset: 0,

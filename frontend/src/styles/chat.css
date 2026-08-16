@@ -148,6 +148,11 @@
   background: white;
 }
 
+.chat-input-box:focus-within {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .chat-input-box input {
   flex: 1;
   min-width: 0;

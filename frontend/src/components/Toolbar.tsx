@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
 import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
@@ -164,6 +165,10 @@ export function Toolbar({
   }
 
   const labelPrefix = tool === "eraser" ? "Eraser" : "Brush";
+  const sizePickerId = "brush-size-popover";
+  const mobileToolPanelId = "toolbar-mobile-tool-panel";
+  const mobileColorPanelId = "toolbar-mobile-color-panel";
+  const mobileSizePanelId = "toolbar-mobile-size-panel";
   const currentIdx = PRESET_WIDTHS.indexOf(brushWidth);
   const defaultIdx = tool === "eraser" ? 6 : 2;
   const sliderValue = currentIdx !== -1 ? currentIdx : defaultIdx;
@@ -183,6 +188,11 @@ export function Toolbar({
     setMobilePanel((prev) => (prev === panel ? null : panel));
   }, []);
 
+  useEscapeLayer(sizePickerOpen || mobilePanel !== null, () => {
+    setSizePickerOpen(false);
+    setMobilePanel(null);
+  });
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as Node;
@@ -193,17 +203,9 @@ export function Toolbar({
         setMobilePanel(null);
       }
     }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setSizePickerOpen(false);
-        setMobilePanel(null);
-      }
-    }
     document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
 
@@ -278,7 +280,7 @@ export function Toolbar({
   );
 
   const sizeSlider = (
-    <div className="brush-slider-popover" role="dialog" aria-label={`Adjust ${labelPrefix.toLowerCase()} size`}>
+    <div className="brush-slider-popover" id={sizePickerId} role="group" aria-label={`Adjust ${labelPrefix.toLowerCase()} size`}>
       <div className="slider-top-preview">
         <span
           className="preview-dot"
@@ -314,6 +316,8 @@ export function Toolbar({
               className={`toolbar-mobile-chip toolbar-mobile-tool-chip${mobilePanel === "tool" ? " active" : ""}`}
               aria-label={`Choose tool, current: ${activeTool.name}`}
               aria-expanded={mobilePanel === "tool"}
+              aria-haspopup="true"
+              aria-controls={mobileToolPanelId}
               title="Choose tool"
               onClick={() => toggleMobilePanel("tool")}
             >
@@ -326,6 +330,8 @@ export function Toolbar({
               className={`toolbar-mobile-chip toolbar-mobile-color-chip${mobilePanel === "color" ? " active" : ""}`}
               aria-label={`Choose color, current ${color}`}
               aria-expanded={mobilePanel === "color"}
+              aria-haspopup="true"
+              aria-controls={mobileColorPanelId}
               title="Choose color"
               onClick={() => toggleMobilePanel("color")}
             >
@@ -338,6 +344,8 @@ export function Toolbar({
               className={`toolbar-mobile-chip${mobilePanel === "size" ? " active" : ""}`}
               aria-label={`${labelPrefix} size ${brushWidth}px`}
               aria-expanded={mobilePanel === "size"}
+              aria-haspopup="true"
+              aria-controls={mobileSizePanelId}
               onClick={() => toggleMobilePanel("size")}
             >
               {sizePreview}
@@ -367,7 +375,7 @@ export function Toolbar({
           </div>
 
           {mobilePanel === "tool" && (
-            <div className="toolbar-mobile-popover" role="dialog" aria-label="Choose tool">
+            <div id={mobileToolPanelId} className="toolbar-mobile-popover" role="group" aria-label="Choose tool">
               <div className="toolbar-mobile-tools">
                 {TOOLS.map((t) => (
                   <button
@@ -388,7 +396,7 @@ export function Toolbar({
           )}
 
           {mobilePanel === "color" && (
-            <div className="toolbar-mobile-popover" role="dialog" aria-label="Choose color">
+            <div id={mobileColorPanelId} className="toolbar-mobile-popover" role="group" aria-label="Choose color">
               <div className="toolbar-mobile-colors">
                 {COLORS.map((c) => (
                   <button
@@ -440,7 +448,7 @@ export function Toolbar({
           )}
 
           {mobilePanel === "size" && (
-            <div className="toolbar-mobile-popover toolbar-mobile-size-popover">
+            <div id={mobileSizePanelId} className="toolbar-mobile-popover toolbar-mobile-size-popover">
               {sizeSlider}
             </div>
           )}
@@ -478,6 +486,9 @@ export function Toolbar({
               className={`brush-size-trigger${sizePickerOpen ? " active" : ""}`}
               onClick={() => setSizePickerOpen((prev) => !prev)}
               aria-label={`${labelPrefix} size ${brushWidth}px`}
+              aria-expanded={sizePickerOpen}
+              aria-haspopup="true"
+              aria-controls={sizePickerId}
               title={`${labelPrefix} size: ${brushWidth}px ([ / ])`}
             >
               {sizePreview}

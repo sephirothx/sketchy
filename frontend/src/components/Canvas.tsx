@@ -40,6 +40,7 @@ interface CanvasProps {
   tool: DrawTool;
   solutionWord?: string | null;
   overlay?: ReactNode;
+  label: string;
 }
 
 export interface CanvasRef {
@@ -137,6 +138,7 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     tool,
     solutionWord = null,
     overlay = null,
+    label,
   },
   ref,
 ) {
@@ -189,6 +191,8 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           className={`drawing-canvas${isDrawer ? " drawable" : ""}${pointer.showCircleCursor ? " eraser-tool" : ""}`}
+          role="img"
+          aria-label={label}
           onPointerDown={pointer.onPointerDown}
           onPointerMove={pointer.onPointerMove}
           onPointerUp={pointer.onPointerUp}
@@ -200,6 +204,7 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           className="preview-canvas"
+          aria-hidden="true"
         />
         {overlay}
       </div>

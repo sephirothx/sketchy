@@ -466,7 +466,7 @@
 .waiting-custom-words-search { color: #475569; display: block; font-size: 12px; font-weight: 700; margin-top: 14px; }
 .waiting-custom-words-search span { display: block; margin-bottom: 5px; }
 .waiting-custom-words-search input { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; color: #1e293b; font: inherit; padding: 9px 10px; width: 100%; }
-.waiting-custom-words-search input:focus { border-color: #2563eb; outline: 2px solid #bfdbfe; outline-offset: 1px; }
+.waiting-custom-words-search input:focus-visible { border-color: #2563eb; outline: 2px solid #bfdbfe; outline-offset: 1px; }
 .waiting-custom-words-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .waiting-custom-words-filters button { background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; color: #475569; font-size: 12px; font-weight: 700; padding: 5px 9px; }
 .waiting-custom-words-filters button[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }

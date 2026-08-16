@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/wcag-aa]
   pull_request:
-    branches: [main]
+    branches: [main, feature/wcag-aa]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

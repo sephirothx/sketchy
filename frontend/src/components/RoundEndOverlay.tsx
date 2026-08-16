@@ -54,9 +54,15 @@ export function RoundEndOverlay({
   const mine = sorted.find((entry) => entry.playerId === myPlayerId);
 
   return (
-    <div className="round-end-overlay">
+    <div
+      className="round-end-overlay"
+      role="status"
+      aria-live="polite"
+      aria-labelledby="round-end-title"
+      data-testid="round-end-overlay"
+    >
       <div className="round-end-panel">
-        <h3>{showScores ? "Round results" : "Round complete"}</h3>
+        <h3 id="round-end-title">{showScores ? "Round results" : "Round complete"}</h3>
         <p className="round-end-word">
           The word was <strong>{word}</strong>
         </p>
