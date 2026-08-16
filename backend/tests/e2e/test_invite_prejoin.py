@@ -6,7 +6,9 @@ BASE_URL = "http://localhost:8000"
 
 
 @pytest.mark.asyncio
-async def test_invite_preview_join_spectate_full_room_and_reconnect():
+async def test_invite_preview_join_spectate_full_room_and_reconnect(
+    assert_input_contract,
+):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         host_context = await browser.new_context()
@@ -36,6 +38,14 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             # Previewing a private invite does not join the room.
             await spectator_page.goto(invite_url)
             await spectator_page.wait_for_selector("#invite-nickname")
+            await assert_input_contract(spectator_page.locator("#invite-nickname"), {
+                "type": "text",
+                "inputMode": "text",
+                "autoComplete": "nickname",
+                "autoCapitalize": "words",
+                "spellCheck": False,
+                "autoCorrect": "off",
+            })
             assert await spectator_page.is_visible("text=Invite Test Room")
             assert await spectator_page.is_visible("text=Private invite")
             assert await spectator_page.is_visible("text=1/3")

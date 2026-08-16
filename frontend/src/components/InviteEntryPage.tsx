@@ -107,11 +107,15 @@ export function InviteEntryPage({ code }: { code: string }) {
             <input
               id="invite-nickname"
               type="text"
+              inputMode="text"
               value={nicknameInput}
               onChange={(event) => setNicknameInput(event.target.value)}
               maxLength={20}
               placeholder="Your name"
               autoComplete="nickname"
+              autoCapitalize="words"
+              spellCheck={false}
+              autoCorrect="off"
               autoFocus
               disabled={busy}
               aria-describedby={entryError ? "invite-entry-error" : undefined}

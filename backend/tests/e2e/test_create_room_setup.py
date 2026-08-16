@@ -6,14 +6,35 @@ BASE_URL = "http://localhost:8000"
 
 
 @pytest.mark.asyncio
-async def test_create_room_uses_progressive_disclosure_and_validates_custom_words():
+async def test_create_room_uses_progressive_disclosure_and_validates_custom_words(
+    assert_input_contract,
+):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         context = await browser.new_context(viewport={"width": 390, "height": 844})
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
-            await page.fill('input[placeholder="Your name"]', "SetupHost")
+            nickname_input = page.locator('input[placeholder="Your name"]')
+            await assert_input_contract(nickname_input, {
+                "type": "search",
+                "role": "textbox",
+                "inputMode": "text",
+                "autoComplete": "nickname",
+                "autoCapitalize": "words",
+                "spellCheck": False,
+                "autoCorrect": "off",
+            })
+            await assert_input_contract(page.locator('input[placeholder="ABC123"]'), {
+                "type": "search",
+                "role": "textbox",
+                "inputMode": "text",
+                "autoComplete": "off",
+                "autoCapitalize": "characters",
+                "spellCheck": False,
+                "autoCorrect": "off",
+            })
+            await nickname_input.fill("SetupHost")
             await page.click('button:has-text("Create room")')
             await page.wait_for_url(f"{BASE_URL}/create")
             # History updates before React finishes the route swap; wait for the
@@ -23,7 +44,19 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             assert not await page.is_visible('#custom-words')
             assert not await page.locator('label:has-text("Nickname")').count()
 
-            await page.fill('input[placeholder="Leave blank for a random name!"]', "Setup room")
+            room_name_input = page.locator(
+                'input[placeholder="Leave blank for a random name!"]'
+            )
+            await assert_input_contract(room_name_input, {
+                "type": "search",
+                "role": "textbox",
+                "inputMode": "text",
+                "autoComplete": "off",
+                "autoCapitalize": "sentences",
+                "spellCheck": True,
+                "autoCorrect": None,
+            })
+            await room_name_input.fill("Setup room")
             await page.click('text=Advanced settings')
             await page.fill('#custom-words', "apple\nred panda\nAPPLE\nthis entry is deliberately longer than thirty two characters")
             assert await page.is_visible('text=2 usable custom words')

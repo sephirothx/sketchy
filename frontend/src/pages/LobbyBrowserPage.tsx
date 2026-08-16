@@ -185,13 +185,19 @@ export function LobbyBrowserPage() {
       <section className="panel">
         <label>
           Nickname
+          {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
           <input
             type="search"
+            role="textbox"
+            inputMode="text"
             value={nicknameInput}
             onChange={(e) => setNicknameInput(e.target.value)}
             maxLength={20}
             placeholder="Your name"
-            autoComplete="off"
+            autoComplete="nickname"
+            autoCapitalize="words"
+            spellCheck={false}
+            autoCorrect="off"
           />
         </label>
       </section>
@@ -222,13 +228,19 @@ export function LobbyBrowserPage() {
           <h2>Join a private room</h2>
           <label>
             Room code
+            {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
             <input
               type="search"
+              role="textbox"
+              inputMode="text"
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               maxLength={6}
               placeholder="ABC123"
               autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              autoCorrect="off"
             />
           </label>
           <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -269,6 +281,7 @@ export function LobbyBrowserPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="🔍 Search rooms by name or code..."
+              autoComplete="off"
               style={{ flex: "1 1 200px", padding: "0.4rem 0.75rem", fontSize: "0.9rem" }}
             />
             <label className="checkbox-label" style={{ fontSize: "0.85rem", whiteSpace: "nowrap" }}>

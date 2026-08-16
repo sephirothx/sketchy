@@ -90,7 +90,11 @@ export function CreateRoomPage() {
       {error && <p className="create-room-error" role="alert">{error}</p>}
       <div className="create-room-basic-grid">
         <div className="create-room-name-row">
-          <label className="create-room-name-field">Room name (optional)<input type="search" value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={40} placeholder="Leave blank for a random name!" autoComplete="off" /></label>
+          <label className="create-room-name-field">
+            Room name (optional)
+            {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
+            <input type="search" role="textbox" inputMode="text" value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={40} placeholder="Leave blank for a random name!" autoComplete="off" autoCapitalize="sentences" spellCheck={true} />
+          </label>
           <SegmentedControl
             label="Visibility"
             value={isPublic ? "public" : "private"}
