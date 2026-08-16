@@ -26,9 +26,10 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
 
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
             assert await host_page.is_visible('text=Lobby details')
-            assert await host_page.is_visible('text=Players (1/8)')
-            assert await host_page.is_visible('text=LobbyHost (you)')
-            assert await host_page.is_visible('text=Host')
+            assert await host_page.get_by_role("heading", name="Players").is_visible()
+            assert await host_page.get_by_label("1 of 8 players").is_visible()
+            assert await host_page.locator(".player-row.is-self").get_by_text("LobbyHost").is_visible()
+            assert await host_page.get_by_label("Host").is_visible()
             await host_page.wait_for_selector('.room-settings-editor')
             await assert_input_contract(
                 host_page.locator('.room-settings-editor label:has-text("Room name") input'),
@@ -133,8 +134,7 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
             await host_page.wait_for_selector('text=Hello from the lobby')
 
             await player_page.click('button:has-text("AFK")')
-            await host_page.wait_for_selector('text=LobbyPlayer')
-            await host_page.wait_for_selector('.waiting-player-badges >> text=AFK')
+            await host_page.wait_for_selector('.player-row.is-afk:has-text("LobbyPlayer")')
             assert await host_page.is_disabled('.waiting-start-button')
         finally:
             await host_context.close()

@@ -5,109 +5,98 @@
 }
 
 .player-row {
+  align-items: center;
+  border-radius: 6px;
+  column-gap: 8px;
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  padding: 6px 4px;
   position: relative;
+  row-gap: 4px;
 }
 
-.player-row-main {
+.player-row.has-scores {
+  grid-template-columns: 1.25rem minmax(0, 1fr) 5ch;
+}
+
+.player-row.is-moderatable {
+  cursor: pointer;
+}
+
+.player-row.is-moderatable:hover,
+.player-row:has(.player-moderation-trigger[aria-expanded="true"]) {
+  background: #f1f5f9;
+}
+
+.player-row:has(.player-moderation-trigger[aria-expanded="true"]) {
+  z-index: 4;
+}
+
+.player-row.is-afk:not(.disconnected) > :not(.player-moderation) {
+  opacity: 0.72;
+}
+
+.player-row.disconnected > :not(.player-moderation) {
+  opacity: 0.5;
+}
+
+.player-role {
   align-items: center;
-  display: flex;
-  gap: 6px;
-  width: 100%;
+  color: #7c3aed;
+  display: inline-flex;
+  grid-column: 1;
+  grid-row: 1;
+  height: 1.25rem;
+  justify-content: center;
+  width: 1.25rem;
+}
+
+.player-role-afk {
+  color: #d97706;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .player-name {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.player-row-meta {
-  align-items: center;
-  display: flex;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
-  gap: 4px;
-  justify-content: flex-end;
-  margin-left: auto;
-}
-
-.player-row-meta .waiting-player-badges {
-  margin-left: 0;
-}
-
-.player-vote-summary {
   align-items: center;
   display: inline-flex;
-  flex: 0 0 auto;
-  gap: 3px;
-}
-
-.player-vote-chip {
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
-  padding: 2px 6px;
+  gap: 6px;
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
   white-space: nowrap;
 }
 
-.player-vote-chip-afk {
-  background: #fef3c7;
-  color: #b45309;
+.player-name .colored-player-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.player-vote-chip-kick {
-  background: #fee2e2;
-  color: #b91c1c;
-}
-
-.player-vote-chip.is-cast {
-  box-shadow: inset 0 0 0 1px currentColor;
+.player-you-mark {
+  color: #94a3b8;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .player-moderation {
-  flex: 0 0 auto;
-  position: relative;
+  inset: 0;
+  position: absolute;
+  z-index: 1;
 }
 
 .player-moderation-trigger {
-  align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 6px;
-  color: #64748b;
   cursor: pointer;
-  display: inline-flex;
-  flex: 0 0 auto;
-  height: 24px;
-  justify-content: center;
-  min-width: 24px;
-  opacity: 0.55;
+  inset: 0;
   padding: 0;
-  width: 24px;
-}
-
-.player-row:hover .player-moderation-trigger,
-.player-moderation-trigger:focus-visible,
-.player-moderation-trigger[aria-expanded="true"],
-.player-moderation-trigger.has-self-vote {
-  opacity: 1;
-}
-
-.player-moderation-trigger:hover,
-.player-moderation-trigger[aria-expanded="true"] {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
-.player-moderation-trigger.has-self-vote {
-  color: #b45309;
-}
-
-@media (hover: none) {
-  .player-moderation-trigger {
-    opacity: 0.85;
-  }
+  position: absolute;
+  width: 100%;
 }
 
 .player-vote-menu {
@@ -121,8 +110,8 @@
   min-width: 168px;
   padding: 0.35rem;
   position: absolute;
-  right: 0;
-  top: 100%;
+  left: 0;
+  top: calc(100% + 4px);
   z-index: 100;
 }
 
@@ -183,4 +172,72 @@
 .player-vote-action.is-cast .player-vote-action-label,
 .player-vote-action.is-cast .player-vote-action-count {
   color: inherit;
+}
+
+.player-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  min-width: 0;
+  text-align: right;
+  width: 100%;
+}
+
+.player-vote-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  grid-column: 2 / -1;
+  grid-row: 2;
+  position: relative;
+  z-index: 2;
+}
+
+.player-vote-chip {
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+button.player-vote-chip {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  min-height: 0;
+  padding: 1px 5px;
+}
+
+button.player-vote-chip-afk:hover,
+button.player-vote-chip-afk:focus-visible {
+  background: #fde68a;
+}
+
+button.player-vote-chip-kick:hover,
+button.player-vote-chip-kick:focus-visible {
+  background: #fecaca;
+}
+
+.player-vote-chip-afk {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.player-vote-chip-kick {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.player-vote-chip.is-cast {
+  box-shadow: inset 0 0 0 1px currentColor;
 }

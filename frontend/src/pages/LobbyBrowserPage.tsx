@@ -8,6 +8,7 @@ import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import type { AckResponse, RoomSummary } from "../types";
 
 const POLL_INTERVAL_MS = 4000;
@@ -240,7 +241,7 @@ export function LobbyBrowserPage() {
             inputMode="text"
             value={nicknameInput}
             onChange={(e) => setNicknameInput(e.target.value)}
-            maxLength={20}
+            maxLength={MAX_NICKNAME_LENGTH}
             placeholder="Your name"
             autoComplete="nickname"
             autoCapitalize="words"

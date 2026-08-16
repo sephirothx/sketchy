@@ -442,13 +442,6 @@
 .waiting-card h2 { font-size: 19px; }
 .waiting-ready-count { background: #f1f5f9; border-radius: 999px; color: #64748b; font-size: 13px; font-weight: 700; padding: 6px 9px; }
 .waiting-ready-count.is-ready { background: #dcfce7; color: #15803d; }
-.waiting-roster-list { list-style: none; margin: 16px 0 0; padding: 0; }
-.waiting-roster-list li { align-items: center; border-top: 1px solid #eef2f7; color: #334155; display: flex; font-weight: 600; justify-content: space-between; padding: 11px 0; }
-.waiting-roster-list li.is-disconnected { color: #94a3b8; }
-.waiting-player-badges { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
-.waiting-player-badges em { background: #e0e7ff; border-radius: 999px; color: #4338ca; font-size: 11px; font-style: normal; font-weight: 700; padding: 3px 7px; }
-.waiting-player-badges em.warning { background: #fef3c7; color: #b45309; }
-.waiting-player-badges em.muted { background: #f1f5f9; color: #64748b; }
 .waiting-spectators { border-top: 1px solid #dfe1e6; margin-top: 8px; padding-top: 14px; }
 .waiting-spectators h3 { color: #475569; font-size: 14px; margin: 0; }
 .waiting-rules-list { color: #475569; line-height: 1.45; margin: 14px 0 0; padding-left: 20px; }
@@ -571,6 +564,19 @@
   color: #1e293b;
   font-size: 16px;
   margin: 0;
+}
+
+.room-players-title-row {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+}
+
+.room-player-occupancy {
+  color: #64748b;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
 .room-panel-kicker {
@@ -891,43 +897,6 @@
   padding: 12px;
 }
 
-.player-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.player-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 4px;
-  border-radius: 6px;
-}
-
-.player-row > div {
-  gap: 6px;
-}
-
-.player-name {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.player-placement {
-  display: inline-block;
-  margin-right: 4px;
-  min-width: 22px;
-}
-
-.room-players-panel .waiting-player-badges {
-  flex: 0 1 auto;
-  margin-left: auto;
-}
-
-.room-players-panel .waiting-player-badges em {
-  padding: 2px 5px;
-}
-
 .room-panel-actions {
   align-items: center;
   display: flex;
@@ -1061,17 +1030,6 @@
   opacity: 1;
   transform: translateY(0);
   visibility: visible;
-}
-
-.player-row.disconnected {
-  opacity: 0.5;
-}
-
-.player-score {
-  flex: 0 0 auto;
-  font-weight: 700;
-  min-width: 24px;
-  text-align: right;
 }
 
 .canvas-area {

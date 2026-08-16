@@ -12,6 +12,7 @@ import type {
   RoundEndedPayload,
   ScoringMode,
 } from "../types";
+import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import {
   clearReconnectSecret,
   readReconnectSecret,
@@ -123,7 +124,7 @@ const initialGameFields = {
 };
 
 export const useGameStore = create<GameStore>((set) => ({
-  nickname: localStorage.getItem("sketchy_nickname") || "",
+  nickname: (localStorage.getItem("sketchy_nickname") || "").slice(0, MAX_NICKNAME_LENGTH),
   playerId: null,
   reconnectSecret: null,
   roomId: null,
@@ -148,8 +149,9 @@ export const useGameStore = create<GameStore>((set) => ({
   ...initialGameFields,
 
   setNickname: (nickname) => {
-    localStorage.setItem("sketchy_nickname", nickname);
-    set({ nickname });
+    const next = nickname.slice(0, MAX_NICKNAME_LENGTH);
+    localStorage.setItem("sketchy_nickname", next);
+    set({ nickname: next });
   },
   setSession: ({ roomId, code, playerId, reconnectSecret }) => {
     writeReconnectSecret(localStorage, code, reconnectSecret);

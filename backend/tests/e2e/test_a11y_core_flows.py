@@ -173,12 +173,12 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         )
         await assert_no_axe_violations(host_page, "players drawer")
 
-        menu_button = host_page.get_by_role("button", name="Moderation for A11yGuest")
+        menu_button = drawer.get_by_role("button", name="Moderation for A11yGuest")
         if await menu_button.count() == 0:
-            menu_button = host_page.get_by_role("button", name="Moderation for A11yHost")
+            menu_button = drawer.get_by_role("button", name="Moderation for A11yHost")
         await menu_button.focus()
         await host_page.keyboard.press("Enter")
-        menu = host_page.get_by_role("menu")
+        menu = drawer.get_by_role("menu")
         await menu.wait_for()
         assert await host_page.evaluate(
             "() => document.activeElement?.getAttribute('role')"

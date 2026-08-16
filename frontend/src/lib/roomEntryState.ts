@@ -1,5 +1,8 @@
 import type { AckResponse, RoomPreviewResponse, RoomSummary } from "../types";
 
+/** Keep in sync with backend/app/handlers/payloads.py MAX_NICKNAME_LENGTH. */
+export const MAX_NICKNAME_LENGTH = 16;
+
 export type RoomJoinMode = "player" | "spectator";
 
 export type RoomEntryState =

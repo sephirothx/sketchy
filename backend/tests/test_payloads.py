@@ -8,6 +8,7 @@ import socketio
 from app.handlers import register_all_handlers as register_handlers
 from app.game import Game
 from app.handlers.payloads import (
+    MAX_NICKNAME_LENGTH,
     CreateRoomPayload,
     HintPayload,
     PayloadError,
@@ -48,6 +49,12 @@ def test_json_payloads_reject_non_objects_and_unknown_fields():
         parse_payload(TextPayload, ["hello"])
     with pytest.raises(PayloadError):
         parse_payload(TextPayload, {"text": "hello", "unexpected": True})
+
+
+def test_nickname_is_capped_at_sixteen_characters():
+    parse_payload(CreateRoomPayload, {"nickname": "a" * MAX_NICKNAME_LENGTH})
+    with pytest.raises(PayloadError):
+        parse_payload(CreateRoomPayload, {"nickname": "a" * (MAX_NICKNAME_LENGTH + 1)})
 
 
 def test_binary_drawing_and_undo_wire_shapes_are_typed_and_bounded():
