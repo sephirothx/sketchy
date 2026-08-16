@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ModerationState, PlayerInfo } from "../types";
 import { socket } from "../lib/socket";
@@ -79,9 +79,7 @@ export function PlayerList({
               isAfk={p.isAfk}
             />
             <span className="player-name">
-              <span className="colored-player-name" style={{ color: p.nameColor }}>
-                {p.nickname}
-              </span>
+              <FittedPlayerName nickname={p.nickname} nameColor={p.nameColor} />
               {isMe && <span className="player-you-mark">you</span>}
               {!p.connected && <span className="visually-hidden">Disconnected</span>}
             </span>
@@ -121,6 +119,48 @@ function votePlayer(targetPlayerId: string, action: "kick" | "afk") {
   socket.emit("vote_player", { targetPlayerId, action });
 }
 
+function FittedPlayerName({
+  nickname,
+  nameColor,
+}: {
+  nickname: string;
+  nameColor: string;
+}) {
+  const nameRef = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const nameEl = nameRef.current;
+    const cellEl = nameEl?.parentElement;
+    if (!nameEl || !cellEl) return;
+
+    function fit() {
+      nameEl.style.fontSize = "";
+      const youMark = cellEl.querySelector(".player-you-mark");
+      const gap = youMark ? parseFloat(getComputedStyle(cellEl).gap) || 0 : 0;
+      const available =
+        cellEl.clientWidth - (youMark instanceof HTMLElement ? youMark.offsetWidth : 0) - gap;
+      const range = document.createRange();
+      range.selectNodeContents(nameEl);
+      const natural = range.getBoundingClientRect().width;
+      if (natural > available && available > 0) {
+        const current = parseFloat(getComputedStyle(nameEl).fontSize);
+        nameEl.style.fontSize = `${(available / natural) * current}px`;
+      }
+    }
+
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(cellEl);
+    return () => observer.disconnect();
+  }, [nickname]);
+
+  return (
+    <span ref={nameRef} className="colored-player-name" style={{ color: nameColor }}>
+      {nickname}
+    </span>
+  );
+}
+
 function PlayerRole({
   variant,
   index,
@@ -136,7 +176,7 @@ function PlayerRole({
 }) {
   if (variant === "game-end") {
     return (
-      <span className="player-role" aria-hidden="true">
+      <span className="player-role player-placement" aria-hidden="true">
         {index < 3 ? PLACEMENT_MEDALS[index] : `#${index + 1}`}
       </span>
     );
@@ -149,6 +189,7 @@ function PlayerRole({
     return (
       <span
         className="player-role"
+        role="img"
         aria-label={drawingLabel ? `Drawing, ${drawingLabel}` : "Drawing"}
         title={drawingLabel ? `Drawing, ${drawingLabel}` : "Drawing"}
       >
@@ -159,7 +200,7 @@ function PlayerRole({
 
   if (isAfk) {
     return (
-      <span className="player-role player-role-afk" aria-label="AFK" title="AFK">
+      <span className="player-role player-role-afk" role="img" aria-label="AFK" title="AFK">
         zzz
       </span>
     );
@@ -167,7 +208,7 @@ function PlayerRole({
 
   if (isHost) {
     return (
-      <span className="player-role" aria-label="Host" title="Host">
+      <span className="player-role" role="img" aria-label="Host" title="Host">
         <HostCrownIcon />
       </span>
     );
