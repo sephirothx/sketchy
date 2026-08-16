@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import { Canvas, type CanvasRef } from "./Canvas";
 import { ChoosingWordOverlay } from "./ChoosingWordOverlay";
+import { GameAnnouncer } from "./GameAnnouncer";
 import { RoomChatPanel } from "./RoomChatPanel";
 import { RoomPlayersPanel } from "./RoomPlayersPanel";
 import { RoundEndOverlay } from "./RoundEndOverlay";
@@ -193,8 +194,21 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
     setTool,
   } = useToolbarState(amDrawer);
 
+  const canvasLabel = canDrawNow
+    ? "Drawing canvas. You are drawing."
+    : me?.isSpectator
+      ? `Drawing canvas. Spectating ${drawerNickname || "the drawer"}.`
+      : `Drawing canvas. ${drawerNickname || "A player"} is drawing.`;
+
+  const phaseAnnouncement = phase === "drawing"
+    ? (canDrawNow
+      ? "Your turn to draw."
+      : `${drawerNickname || "A player"} is drawing.`)
+    : "";
+
   return (
     <main className="canvas-area">
+      <GameAnnouncer message={phaseAnnouncement} />
       <div className="round-info">
         <span>
           Round {roundNumber}/{totalRounds}
@@ -222,6 +236,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         brushWidth={brushWidth}
         tool={tool}
         solutionWord={solutionWord}
+        label={canvasLabel}
         overlay={
           phase === "choosing_word" && !amDrawer ? (
             <ChoosingWordOverlay

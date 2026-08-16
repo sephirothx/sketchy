@@ -11,10 +11,11 @@ import { renderCanvasActions } from "../lib/canvasRenderer";
 interface CanvasSnapshotProps {
   actions: DecodedCanvasAction[];
   solutionWord?: string | null;
+  label?: string;
 }
 
 export const CanvasSnapshot = forwardRef<CanvasRef, CanvasSnapshotProps>(
-  function CanvasSnapshot({ actions, solutionWord = null }, ref) {
+  function CanvasSnapshot({ actions, solutionWord = null, label }, ref) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     useEffect(() => {
@@ -36,6 +37,8 @@ export const CanvasSnapshot = forwardRef<CanvasRef, CanvasSnapshotProps>(
             width={CANVAS_WIDTH}
             height={CANVAS_HEIGHT}
             className="drawing-canvas"
+            role="img"
+            aria-label={label ?? (solutionWord ? `Drawing of ${solutionWord}` : "Saved drawing")}
           />
         </div>
       </div>

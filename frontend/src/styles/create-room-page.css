@@ -157,6 +157,7 @@
   grid-template-columns: 44px minmax(48px, 1fr) 44px;
   height: 44px;
   max-width: 180px;
+  overflow: visible;
   width: 140px;
 }
 .input-number button {
@@ -172,6 +173,8 @@
   justify-content: center;
   line-height: 1;
   padding: 0;
+  position: relative;
+  z-index: 1;
 }
 .input-number button:disabled { color: #cbd5e1; cursor: not-allowed; }
 .input-number input {

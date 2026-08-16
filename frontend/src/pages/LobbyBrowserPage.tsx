@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, SERVER_URL, socketRequestErrorMessage } from "../lib/socket";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
@@ -7,6 +7,7 @@ import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import type { AckResponse, RoomSummary } from "../types";
 
 const POLL_INTERVAL_MS = 4000;
@@ -17,6 +18,50 @@ type PendingJoin = { key: string; mode: "join" | "spectate" };
 
 function normalizeRoomCodeInput(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+}
+
+function RemovedFromRoomDialog({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const okButtonRef = useRef<HTMLButtonElement | null>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useFocusTrap(dialogRef, {
+    onEscape: onDismiss,
+    initialFocusRef: okButtonRef,
+  });
+
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onDismiss();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        tabIndex={-1}
+      >
+        <div className="modal-icon" aria-hidden="true">🚫</div>
+        <h3 id={titleId} className="modal-title">Removed from room</h3>
+        <p id={descriptionId} className="modal-body">{message}</p>
+        <button ref={okButtonRef} type="button" className="modal-button" onClick={onDismiss}>
+          OK
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function LobbyBrowserPage() {
@@ -207,16 +252,10 @@ export function LobbyBrowserPage() {
       </section>
 
       {criticalError && (
-        <div className="modal-overlay" onClick={() => setCriticalError(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-icon">🚫</div>
-            <h3 className="modal-title">Removed from room</h3>
-            <p className="modal-body">{criticalError}</p>
-            <button className="modal-button" onClick={() => setCriticalError(null)}>
-              OK
-            </button>
-          </div>
-        </div>
+        <RemovedFromRoomDialog
+          message={criticalError}
+          onDismiss={() => setCriticalError(null)}
+        />
       )}
 
       {error && <p className="lobby-action-error" role="alert">{error}</p>}

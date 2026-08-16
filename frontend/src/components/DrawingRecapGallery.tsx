@@ -131,6 +131,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
               ref={canvasRef}
               actions={actions}
               solutionWord={entry.word}
+              label={`Drawing of ${entry.word} by ${entry.drawerNickname}`}
             />
           )}
         </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { MAX_WORD_LENGTH } from "../lib/customWords";
+import { chatAnnouncement } from "../lib/chatAnnouncements";
 import { recordRender } from "../lib/renderDiagnostics";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
@@ -62,6 +63,7 @@ export function RoomChatPanel({
   const [prevMessagesCount, setPrevMessagesCount] = useState(messages.length);
   const [guessFlash, setGuessFlash] = useState<GuessFlash | null>(null);
   const [flashSourceId, setFlashSourceId] = useState<string | null>(null);
+  const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const draftTextRef = useRef("");
   const listRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -119,6 +121,8 @@ export function RoomChatPanel({
   const newestMessage = messages.length > 0 ? messages[messages.length - 1] : null;
   if (newestMessage && newestMessage.id !== flashSourceId) {
     setFlashSourceId(newestMessage.id);
+    const announcement = chatAnnouncement(newestMessage);
+    if (announcement) setLiveAnnouncement(announcement);
     if (mode === "playing" && canGuess) {
       let flash: GuessFlash | null = null;
       if (newestMessage.close) {
@@ -303,6 +307,9 @@ export function RoomChatPanel({
             ↓ {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
           </button>
         )}
+      </div>
+      <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-testid="chat-announcer">
+        {liveAnnouncement}
       </div>
 
       {error && <p className="waiting-chat-error" role="alert">{error}</p>}

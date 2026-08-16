@@ -1,0 +1,74 @@
+:root {
+  --focus-ring: #2563eb;
+  --focus-field-border: #2563eb;
+}
+
+[data-theme="dark"] {
+  --focus-ring: #93c5fd;
+  --focus-field-border: #60a5fa;
+}
+
+.visually-hidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Text fields: blue border only — no outer halo. */
+input:not(
+    [type="button"],
+    [type="submit"],
+    [type="reset"],
+    [type="checkbox"],
+    [type="radio"],
+    [type="range"],
+    [type="color"],
+    [type="file"],
+    [type="hidden"],
+    [type="image"]
+  ):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  border-color: var(--focus-field-border);
+  outline: none;
+}
+
+.chat-input-box:focus-within {
+  border-color: var(--focus-field-border);
+}
+
+.input-number:has(input:focus-visible) {
+  outline: 1px solid var(--focus-field-border);
+  outline-offset: 0;
+}
+
+.chat-input-box input:focus-visible,
+.input-number input:focus-visible {
+  border-color: transparent;
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
