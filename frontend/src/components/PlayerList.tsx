@@ -40,7 +40,6 @@ export function PlayerList({
         const afkVotes = eligibleModerationVotes(moderation, p.afkVotes);
         const hasVotedKick = myPlayerId ? kickVotes.includes(myPlayerId) : false;
         const hasVotedAfk = myPlayerId ? afkVotes.includes(myPlayerId) : false;
-        const totalActiveVotes = Math.max(kickVotes.length, afkVotes.length);
         const isMenuOpen = openMenuToken === p.playerId;
 
         return (
@@ -60,30 +59,49 @@ export function PlayerList({
                   {p.nickname}
                 </span>
                 {isMe ? " (you)" : ""}
-                {totalActiveVotes > 0 && (
-                  <span className="player-vote-count">
-                    {totalActiveVotes} of {requiredVotes} votes
+              </span>
+              <div className="player-row-meta">
+                {(p.isHost || p.isAfk || !p.connected) && (
+                  <span className="waiting-player-badges">
+                    {p.isHost && <em>Host</em>}
+                    {p.isAfk && <em className="warning">AFK</em>}
+                    {!p.connected && <em className="muted">Disconnected</em>}
                   </span>
                 )}
-              </span>
-              <span className="waiting-player-badges">
-                {p.isHost && <em>Host</em>}
-                {p.isAfk && <em className="warning">AFK</em>}
-                {!p.connected && <em className="muted">Disconnected</em>}
-              </span>
-              {showScores && <span className="player-score">{p.score}</span>}
-              {canModerate && (
-                <PlayerModerationMenu
-                  player={p}
-                  requiredVotes={requiredVotes}
-                  kickVotes={kickVotes}
-                  afkVotes={afkVotes}
-                  hasVotedKick={hasVotedKick}
-                  hasVotedAfk={hasVotedAfk}
-                  isOpen={isMenuOpen}
-                  onOpenChange={(open) => setOpenMenuToken(open ? p.playerId : null)}
-                />
-              )}
+                {(afkVotes.length > 0 || kickVotes.length > 0) && (
+                  <span className="player-vote-summary">
+                    {afkVotes.length > 0 && (
+                      <span
+                        className={`player-vote-chip player-vote-chip-afk${hasVotedAfk ? " is-cast" : ""}`}
+                        aria-label={`AFK votes ${afkVotes.length} of ${requiredVotes}${hasVotedAfk ? ", including yours" : ""}`}
+                      >
+                        AFK {afkVotes.length}/{requiredVotes}
+                      </span>
+                    )}
+                    {kickVotes.length > 0 && (
+                      <span
+                        className={`player-vote-chip player-vote-chip-kick${hasVotedKick ? " is-cast" : ""}`}
+                        aria-label={`Kick votes ${kickVotes.length} of ${requiredVotes}${hasVotedKick ? ", including yours" : ""}`}
+                      >
+                        Kick {kickVotes.length}/{requiredVotes}
+                      </span>
+                    )}
+                  </span>
+                )}
+                {showScores && <span className="player-score">{p.score}</span>}
+                {canModerate && (
+                  <PlayerModerationMenu
+                    player={p}
+                    requiredVotes={requiredVotes}
+                    kickVotes={kickVotes}
+                    afkVotes={afkVotes}
+                    hasVotedKick={hasVotedKick}
+                    hasVotedAfk={hasVotedAfk}
+                    isOpen={isMenuOpen}
+                    onOpenChange={(open) => setOpenMenuToken(open ? p.playerId : null)}
+                  />
+                )}
+              </div>
             </div>
           </li>
         );
@@ -115,6 +133,7 @@ function PlayerModerationMenu({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const hasSelfVote = hasVotedKick || hasVotedAfk;
 
   useEscapeLayer(isOpen, () => onOpenChange(false));
   useFocusTrap(menuRef, { active: isOpen });
@@ -160,14 +179,18 @@ function PlayerModerationMenu({
       <button
         ref={triggerRef}
         type="button"
-        className="player-moderation-trigger"
+        className={`player-moderation-trigger${hasSelfVote ? " has-self-vote" : ""}`}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
         aria-label={`Moderation for ${player.nickname}`}
         onClick={() => onOpenChange(!isOpen)}
       >
-        Moderate
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="5" r="2" fill="currentColor" />
+          <circle cx="12" cy="12" r="2" fill="currentColor" />
+          <circle cx="12" cy="19" r="2" fill="currentColor" />
+        </svg>
       </button>
       {isOpen && (
         <div
@@ -183,10 +206,16 @@ function PlayerModerationMenu({
             <button
               type="button"
               role="menuitem"
-              className={`player-vote-action${hasVotedAfk ? " is-cast" : ""}`}
+              className={`player-vote-action player-vote-afk${hasVotedAfk ? " is-cast" : ""}`}
               onClick={() => handleVote("afk")}
             >
-              {hasVotedAfk ? "Undo vote AFK" : "Vote AFK"} ({afkVotes.length}/{requiredVotes})
+              <span className="player-vote-action-kind">AFK</span>
+              <span className="player-vote-action-label">
+                {hasVotedAfk ? "Undo vote" : "Vote"}
+              </span>
+              <span className="player-vote-action-count">
+                {afkVotes.length}/{requiredVotes}
+              </span>
             </button>
           )}
           <button
@@ -195,7 +224,13 @@ function PlayerModerationMenu({
             className={`player-vote-action player-vote-kick${hasVotedKick ? " is-cast" : ""}`}
             onClick={() => handleVote("kick")}
           >
-            {hasVotedKick ? "Undo vote kick" : "Vote kick"} ({kickVotes.length}/{requiredVotes})
+            <span className="player-vote-action-kind">Kick</span>
+            <span className="player-vote-action-label">
+              {hasVotedKick ? "Undo vote" : "Vote"}
+            </span>
+            <span className="player-vote-action-count">
+              {kickVotes.length}/{requiredVotes}
+            </span>
           </button>
         </div>
       )}

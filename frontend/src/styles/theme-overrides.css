@@ -701,17 +701,26 @@
 }
 
 [data-theme="dark"] .player-moderation-trigger {
-  background: #1e293b;
-  border-color: #475569;
-  color: #e2e8f0;
+  color: #94a3b8;
 }
 
 [data-theme="dark"] .player-moderation-trigger:hover,
 [data-theme="dark"] .player-moderation-trigger[aria-expanded="true"] {
   background: #334155;
+  color: #f8fafc;
 }
 
-[data-theme="dark"] .player-vote-count {
+[data-theme="dark"] .player-moderation-trigger.has-self-vote {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .player-vote-chip-afk {
+  background: #422006;
+  color: #fcd34d;
+}
+
+[data-theme="dark"] .player-vote-chip-kick {
+  background: #450a0a;
   color: #fca5a5;
 }
 
