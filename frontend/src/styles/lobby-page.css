@@ -296,12 +296,6 @@
   font: inherit;
 }
 
-.invite-join-form input:focus-visible {
-  border-color: #4c6ef5;
-  outline: 3px solid rgba(76, 110, 245, 0.18);
-  outline-offset: 1px;
-}
-
 .invite-form-error {
   margin-top: 8px;
   margin-bottom: 0;

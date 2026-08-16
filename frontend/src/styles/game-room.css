@@ -466,7 +466,6 @@
 .waiting-custom-words-search { color: #475569; display: block; font-size: 12px; font-weight: 700; margin-top: 14px; }
 .waiting-custom-words-search span { display: block; margin-bottom: 5px; }
 .waiting-custom-words-search input { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; color: #1e293b; font: inherit; padding: 9px 10px; width: 100%; }
-.waiting-custom-words-search input:focus-visible { border-color: #2563eb; outline: 2px solid #bfdbfe; outline-offset: 1px; }
 .waiting-custom-words-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .waiting-custom-words-filters button { background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; color: #475569; font-size: 12px; font-weight: 700; padding: 5px 9px; }
 .waiting-custom-words-filters button[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }
@@ -515,8 +514,10 @@
   justify-content: flex-start;
   width: fit-content;
 }
-.room-settings-fields input, .room-settings-fields select, .room-settings-fields textarea { border: 1px solid #c7cad1; border-radius: 6px; box-sizing: border-box; font: inherit; font-weight: 400; padding: 9px 10px; width: 100%; }
-.room-settings-fields .input-number input { border: 0; padding: 0; width: 100%; }
+.room-settings-fields input[type="text"],
+.room-settings-fields input[type="search"],
+.room-settings-fields select,
+.room-settings-fields textarea { border: 1px solid #c7cad1; border-radius: 6px; box-sizing: border-box; font: inherit; font-weight: 400; padding: 9px 10px; width: 100%; }
 .room-settings-fields .checkbox-label { align-items: center; flex-direction: row; grid-column: 1 / -1; }
 .room-settings-fields .checkbox-label input { width: auto; }
 .room-settings-fields details { border-top: 1px solid #e2e8f0; grid-column: 1 / -1; padding-top: 18px; }
