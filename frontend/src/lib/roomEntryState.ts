@@ -1,5 +1,7 @@
 import type { AckResponse, RoomPreviewResponse, RoomSummary } from "../types";
 
+export const MAX_NICKNAME_LENGTH = 16;
+
 export type RoomJoinMode = "player" | "spectator";
 
 export type RoomEntryState =

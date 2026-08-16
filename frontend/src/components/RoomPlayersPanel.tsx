@@ -66,12 +66,16 @@ export function RoomPlayersPanel({
     <section className="room-players-panel" aria-labelledby="room-players-title">
       <div className="room-panel-heading">
         <div>
-          <p className="room-panel-kicker">
-            {showFinalStandings ? "Final standings" : "People in room"}
-          </p>
-          <h2 id="room-players-title">
-            Players ({activePlayers.length}/{maxPlayers})
-          </h2>
+          {showFinalStandings && <p className="room-panel-kicker">Final standings</p>}
+          <div className="room-players-title-row">
+            <h2 id="room-players-title">Players</h2>
+            <span
+              className="room-player-occupancy"
+              aria-label={`${activePlayers.length} of ${maxPlayers} players`}
+            >
+              {activePlayers.length}/{maxPlayers}
+            </span>
+          </div>
         </div>
         <div className="room-panel-actions">
           {mode === "waiting" && (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRoomEntry } from "../hooks/useRoomEntry";
+import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import { useSettingsStore } from "../store/settingsStore";
 import type { RoomSummary } from "../types";
 import { SettingsIcon } from "./SettingsIcon";
@@ -113,7 +114,7 @@ export function InviteEntryPage({ code }: { code: string }) {
               inputMode="text"
               value={nicknameInput}
               onChange={(event) => setNicknameInput(event.target.value)}
-              maxLength={20}
+              maxLength={MAX_NICKNAME_LENGTH}
               placeholder="Your name"
               autoComplete="off"
               autoCapitalize="words"
