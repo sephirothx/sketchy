@@ -124,7 +124,7 @@ function FittedPlayerName({
   nameColor,
 }: {
   nickname: string;
-  nameColor: string;
+  nameColor?: string;
 }) {
   const nameRef = useRef<HTMLSpanElement>(null);
 
@@ -133,23 +133,24 @@ function FittedPlayerName({
     const cellEl = nameEl?.parentElement;
     if (!nameEl || !cellEl) return;
 
-    function fit() {
-      nameEl.style.fontSize = "";
-      const youMark = cellEl.querySelector(".player-you-mark");
-      const gap = youMark ? parseFloat(getComputedStyle(cellEl).gap) || 0 : 0;
+    function fit(name: HTMLSpanElement, cell: HTMLElement) {
+      name.style.fontSize = "";
+      const youMark = cell.querySelector(".player-you-mark");
+      const gap = youMark ? parseFloat(getComputedStyle(cell).gap) || 0 : 0;
       const available =
-        cellEl.clientWidth - (youMark instanceof HTMLElement ? youMark.offsetWidth : 0) - gap;
+        cell.clientWidth - (youMark instanceof HTMLElement ? youMark.offsetWidth : 0) - gap;
       const range = document.createRange();
-      range.selectNodeContents(nameEl);
+      range.selectNodeContents(name);
       const natural = range.getBoundingClientRect().width;
       if (natural > available && available > 0) {
-        const current = parseFloat(getComputedStyle(nameEl).fontSize);
-        nameEl.style.fontSize = `${(available / natural) * current}px`;
+        const current = parseFloat(getComputedStyle(name).fontSize);
+        name.style.fontSize = `${(available / natural) * current}px`;
       }
     }
 
-    fit();
-    const observer = new ResizeObserver(fit);
+    const runFit = () => fit(nameEl, cellEl);
+    runFit();
+    const observer = new ResizeObserver(runFit);
     observer.observe(cellEl);
     return () => observer.disconnect();
   }, [nickname]);
