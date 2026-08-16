@@ -16,7 +16,7 @@
 }
 
 .player-row.has-scores {
-  grid-template-columns: 1.25rem minmax(0, 1fr) 3.5ch;
+  grid-template-columns: 1.25rem minmax(0, 1fr) 5ch;
 }
 
 .player-row.is-moderatable:hover,
@@ -175,7 +175,10 @@
   font-weight: 700;
   grid-column: 3;
   grid-row: 1;
+  justify-self: end;
+  min-width: 0;
   text-align: right;
+  width: 100%;
 }
 
 .player-vote-row {
