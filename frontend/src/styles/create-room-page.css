@@ -46,6 +46,7 @@
 .create-room-name-row .segmented-control-field {
   flex: 0 0 auto;
 }
+.create-room-card input[type="text"],
 .create-room-card input[type="search"],
 .create-room-card select,
 .create-room-card textarea { border: 1px solid #c7cad1; border-radius: 6px; font: inherit; font-weight: 400; padding: 9px 10px; }

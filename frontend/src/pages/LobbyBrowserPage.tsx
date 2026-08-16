@@ -15,6 +15,10 @@ const ROOM_FETCH_TIMEOUT_MS = 6000;
 type RoomListStatus = "loading" | "loaded" | "error";
 type PendingJoin = { key: string; mode: "join" | "spectate" };
 
+function normalizeRoomCodeInput(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+}
+
 export function LobbyBrowserPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -185,13 +189,19 @@ export function LobbyBrowserPage() {
       <section className="panel">
         <label>
           Nickname
+          {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
           <input
             type="search"
+            inputMode="text"
             value={nicknameInput}
             onChange={(e) => setNicknameInput(e.target.value)}
             maxLength={20}
             placeholder="Your name"
-            autoComplete="off"
+            autoComplete="nickname"
+            autoCapitalize="words"
+            spellCheck={false}
+            autoCorrect="off"
+            enterKeyHint="done"
           />
         </label>
       </section>
@@ -222,13 +232,19 @@ export function LobbyBrowserPage() {
           <h2>Join a private room</h2>
           <label>
             Room code
+            {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
             <input
               type="search"
+              inputMode="text"
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
+              onChange={(e) => setJoinCode(normalizeRoomCodeInput(e.target.value))}
               maxLength={6}
               placeholder="ABC123"
               autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              autoCorrect="off"
+              enterKeyHint="go"
             />
           </label>
           <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -251,27 +267,16 @@ export function LobbyBrowserPage() {
         </div>
 
         {roomListStatus === "loaded" && rooms.length > 0 && (
-          <div
-            className="lobby-filter-bar"
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "0.75rem",
-              alignItems: "center",
-              marginBottom: "1rem",
-              background: "rgba(0,0,0,0.15)",
-              padding: "0.6rem 0.8rem",
-              borderRadius: "8px",
-            }}
-          >
+          <div className="lobby-filter-bar">
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="🔍 Search rooms by name or code..."
-              style={{ flex: "1 1 200px", padding: "0.4rem 0.75rem", fontSize: "0.9rem" }}
+              autoComplete="off"
+              enterKeyHint="search"
             />
-            <label className="checkbox-label" style={{ fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+            <label className="checkbox-label">
               <input
                 type="checkbox"
                 checked={hideFullRooms}
@@ -279,7 +284,7 @@ export function LobbyBrowserPage() {
               />
               Hide full rooms
             </label>
-            <label className="checkbox-label" style={{ fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+            <label className="checkbox-label">
               <input
                 type="checkbox"
                 checked={hideInProgressRooms}

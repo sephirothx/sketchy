@@ -4,7 +4,7 @@ from playwright.async_api import async_playwright
 BASE_URL = "http://localhost:8000"
 
 @pytest.mark.asyncio
-async def test_multi_browser_gameplay_scenario():
+async def test_multi_browser_gameplay_scenario(assert_input_contract):
     """
     Multi-browser test scenario:
     1. Browser 1 (Host in Chromium) creates a room and enters waiting lobby.
@@ -309,8 +309,28 @@ async def test_multi_browser_gameplay_scenario():
             await drawer_page.wait_for_function(canvas_is_blank)
 
             # Step 7: Guesser submits a guess in chat
-            await guesser_page.fill('.chat-input input', 'apple')
-            await guesser_page.keyboard.press('Enter')
+            guess_input = guesser_page.locator('.chat-input input')
+            await assert_input_contract(guess_input, {
+                "type": "search",
+                "role": None,
+                "inputMode": "text",
+                "autoComplete": "off",
+                "autoCapitalize": "none",
+                "spellCheck": False,
+                "autoCorrect": "off",
+                "enterKeyHint": "send",
+            })
+            await guess_input.focus()
+            assert await guess_input.evaluate("input => document.activeElement === input")
+            await guess_input.fill('semantic-history-probe')
+            await guess_input.press('Enter')
+            await guesser_page.wait_for_function(
+                "document.querySelector('.chat-input input')?.value === ''"
+            )
+            await guess_input.press('ArrowUp')
+            assert await guess_input.input_value() == 'semantic-history-probe'
+            await guess_input.blur()
+            assert not await guess_input.evaluate("input => document.activeElement === input")
 
             # Verify chat message container is present
             await guesser_page.wait_for_selector('.chat-messages')

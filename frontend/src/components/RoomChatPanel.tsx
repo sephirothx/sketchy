@@ -340,9 +340,11 @@ export function RoomChatPanel({
           </div>
           <div className="chat-input-row">
             <div className="chat-input-box">
+              {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
               <input
                 ref={inputRef}
                 type="search"
+                inputMode="text"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 onKeyDown={handleKeyDown}
@@ -367,6 +369,10 @@ export function RoomChatPanel({
                 }
                 maxLength={500}
                 autoComplete="off"
+                autoCapitalize={inputPurpose === "chat" ? "sentences" : "none"}
+                spellCheck={inputPurpose === "chat"}
+                autoCorrect={inputPurpose === "guess" ? "off" : undefined}
+                enterKeyHint="send"
               />
             </div>
             <button type="submit" disabled={sending}>

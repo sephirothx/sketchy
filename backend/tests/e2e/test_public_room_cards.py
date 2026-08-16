@@ -6,7 +6,9 @@ BASE_URL = "http://localhost:8000"
 
 
 @pytest.mark.asyncio
-async def test_public_room_cards_explain_status_rules_and_actions():
+async def test_public_room_cards_explain_status_rules_and_actions(
+    assert_input_contract,
+):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         host_context = await browser.new_context()
@@ -37,6 +39,18 @@ async def test_public_room_cards_explain_status_rules_and_actions():
             await visitor.fill('input[placeholder="Your name"]', "CardVisitor")
             card = visitor.locator('[data-testid="public-room-card"]', has_text="Room cards")
             await card.wait_for()
+            room_search = visitor.locator(
+                'input[placeholder="🔍 Search rooms by name or code..."]'
+            )
+            await assert_input_contract(room_search, {
+                "type": "search",
+                "autoComplete": "off",
+                "enterKeyHint": "search",
+            })
+            await room_search.fill("no matching room")
+            assert not await card.is_visible()
+            await room_search.fill("Room cards")
+            await card.wait_for()
             assert await card.get_by_text("Waiting", exact=True).is_visible()
             assert await card.get_by_text("1/3 players", exact=True).is_visible()
             assert await card.get_by_text("2 rounds", exact=True).is_visible()
@@ -55,15 +69,19 @@ async def test_public_room_cards_explain_status_rules_and_actions():
             await player.click('summary:has-text("Inspect 2 custom words")')
             word_list = player.locator('.waiting-custom-words-list')
             await word_list.wait_for()
+            custom_word_search = player.locator(
+                'input[placeholder="Search custom words…"]'
+            )
+            await assert_input_contract(custom_word_search, {
+                "type": "search",
+                "autoComplete": "off",
+            })
             assert await word_list.get_by_text("apple", exact=True).is_visible()
             assert await word_list.get_by_text("pear", exact=True).is_visible()
-            await player.fill(
-                'input[placeholder="Search custom words…"]',
-                "app",
-            )
+            await custom_word_search.fill("app")
             assert await word_list.get_by_text("apple", exact=True).is_visible()
             assert not await word_list.get_by_text("pear", exact=True).is_visible()
-            await player.fill('input[placeholder="Search custom words…"]', "")
+            await custom_word_search.fill("")
             await player.get_by_role("button", name="Short", exact=True).click()
             assert await player.get_by_text("2 of 2 words match", exact=True).is_visible()
             assert await player.get_by_label("Words to display").count() == 0

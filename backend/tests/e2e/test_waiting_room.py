@@ -6,7 +6,9 @@ BASE_URL = "http://localhost:8000"
 
 
 @pytest.mark.asyncio
-async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibility():
+async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibility(
+    assert_input_contract,
+):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         host_context = await browser.new_context()
@@ -28,6 +30,19 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
             assert await host_page.is_visible('text=LobbyHost (you)')
             assert await host_page.is_visible('text=Host')
             await host_page.wait_for_selector('.room-settings-editor')
+            await assert_input_contract(
+                host_page.locator('.room-settings-editor label:has-text("Room name") input'),
+                {
+                    "type": "search",
+                    "role": None,
+                    "inputMode": "text",
+                    "autoComplete": "off",
+                    "autoCapitalize": "sentences",
+                    "spellCheck": True,
+                    "autoCorrect": None,
+                    "enterKeyHint": "done",
+                },
+            )
             assert not await host_page.is_visible('text=How this game will play')
             assert await host_page.input_value(
                 '.room-settings-editor label:has-text("Rounds") input'
@@ -72,7 +87,9 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
             code = code_text.split('Code:')[1].strip()
             await player_page.goto(BASE_URL)
             await player_page.fill('input[placeholder="Your name"]', "LobbyPlayer")
-            await player_page.fill('input[placeholder="ABC123"]', code)
+            room_code_input = player_page.locator('input[placeholder="ABC123"]')
+            await room_code_input.fill(code.lower())
+            assert await room_code_input.input_value() == code
             await player_page.evaluate(
                 """() => {
                     window.__inviteLoaderSeen = false;
@@ -100,8 +117,19 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
             await player_page.wait_for_selector('text=4 rounds each · 90s to draw')
 
             # Waiting-room chat is shared before the game starts.
-            await player_page.fill('.waiting-chat-form input', "Hello from the lobby")
-            await player_page.click('.waiting-chat-form button')
+            waiting_chat_input = player_page.locator('.waiting-chat-form input')
+            await assert_input_contract(waiting_chat_input, {
+                "type": "search",
+                "role": None,
+                "inputMode": "text",
+                "autoComplete": "off",
+                "autoCapitalize": "sentences",
+                "spellCheck": True,
+                "autoCorrect": None,
+                "enterKeyHint": "send",
+            })
+            await waiting_chat_input.fill("Hello from the lobby")
+            await waiting_chat_input.press("Enter")
             await host_page.wait_for_selector('text=Hello from the lobby')
 
             await player_page.click('button:has-text("AFK")')

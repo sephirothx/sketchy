@@ -98,20 +98,28 @@ export function InviteEntryPage({ code }: { code: string }) {
 
           <form
             className="invite-join-form"
+            autoComplete="off"
             onSubmit={(event) => {
               event.preventDefault();
               if (!room.isFull) void join("player");
             }}
           >
             <label htmlFor="invite-nickname">Your nickname</label>
+            {/* Search type + autocomplete=off suppress Android Chrome's unrelated autofill toolbar. */}
             <input
               id="invite-nickname"
-              type="text"
+              name="sketchy-invite-name"
+              type="search"
+              inputMode="text"
               value={nicknameInput}
               onChange={(event) => setNicknameInput(event.target.value)}
               maxLength={20}
               placeholder="Your name"
-              autoComplete="nickname"
+              autoComplete="off"
+              autoCapitalize="words"
+              spellCheck={false}
+              autoCorrect="off"
+              enterKeyHint="go"
               autoFocus
               disabled={busy}
               aria-describedby={entryError ? "invite-entry-error" : undefined}

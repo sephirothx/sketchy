@@ -90,6 +90,7 @@
 [data-theme="dark"] .advanced-settings summary span,
 [data-theme="dark"] .setting-dependency,
 [data-theme="dark"] .custom-words-summary { color: #94a3b8; }
+[data-theme="dark"] .create-room-card input[type="text"],
 [data-theme="dark"] .create-room-card input[type="search"],
 [data-theme="dark"] .create-room-card select,
 [data-theme="dark"] .create-room-card textarea { background: #0f172a; border-color: #475569; color: #f8fafc; }
