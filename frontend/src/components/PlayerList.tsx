@@ -1,6 +1,9 @@
+import { useEffect, useId, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ModerationState, PlayerInfo } from "../types";
 import { socket } from "../lib/socket";
 import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
+import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -25,6 +28,7 @@ export function PlayerList({
 }: PlayerListProps) {
   const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
   const currentPlayerCanVote = canCastModerationVote(moderation, myPlayerId);
+  const [openMenuToken, setOpenMenuToken] = useState<string | null>(null);
 
   return (
     <ul className="player-list">
@@ -39,8 +43,8 @@ export function PlayerList({
         const afkVotes = eligibleModerationVotes(moderation, p.afkVotes);
         const hasVotedKick = myPlayerId ? kickVotes.includes(myPlayerId) : false;
         const hasVotedAfk = myPlayerId ? afkVotes.includes(myPlayerId) : false;
-        const showAfkChip = canModerate ? !p.isAfk : afkVotes.length > 0;
-        const showKickChip = canModerate || kickVotes.length > 0;
+        const showAfkChip = afkVotes.length > 0 && !p.isAfk;
+        const showKickChip = kickVotes.length > 0;
         const showVoteRow = showAfkChip || showKickChip;
         const rowClass = [
           "player-row",
@@ -48,24 +52,37 @@ export function PlayerList({
           p.connected ? "" : "disconnected",
           p.isAfk ? "is-afk" : "",
           showScores ? "has-scores" : "",
+          canModerate ? "is-moderatable" : "",
         ]
           .filter(Boolean)
           .join(" ");
 
         return (
           <li key={p.playerId} className={rowClass}>
+            {canModerate && (
+              <PlayerModerationMenu
+                player={p}
+                requiredVotes={requiredVotes}
+                kickVotes={kickVotes}
+                afkVotes={afkVotes}
+                hasVotedKick={hasVotedKick}
+                hasVotedAfk={hasVotedAfk}
+                isOpen={openMenuToken === p.playerId}
+                onOpenChange={(open) => setOpenMenuToken(open ? p.playerId : null)}
+              />
+            )}
             <PlayerRole
               variant={variant}
               index={index}
               isDrawer={isDrawer}
               isHost={p.isHost}
+              isAfk={p.isAfk}
             />
             <span className="player-name">
               <span className="colored-player-name" style={{ color: p.nameColor }}>
                 {p.nickname}
               </span>
-              {isMe && <span className="visually-hidden">(you)</span>}
-              {p.isAfk && <span className="visually-hidden">AFK</span>}
+              {isMe && <span className="player-you-mark">you</span>}
               {!p.connected && <span className="visually-hidden">Disconnected</span>}
             </span>
             {showScores && <span className="player-score">{p.score}</span>}
@@ -78,8 +95,7 @@ export function PlayerList({
                     count={afkVotes.length}
                     required={requiredVotes}
                     hasVoted={hasVotedAfk}
-                    readOnly={!canModerate}
-                    onVote={() => votePlayer(p.playerId, "afk")}
+                    onVote={canModerate ? () => votePlayer(p.playerId, "afk") : undefined}
                   />
                 )}
                 {showKickChip && (
@@ -89,8 +105,7 @@ export function PlayerList({
                     count={kickVotes.length}
                     required={requiredVotes}
                     hasVoted={hasVotedKick}
-                    readOnly={!canModerate}
-                    onVote={() => votePlayer(p.playerId, "kick")}
+                    onVote={canModerate ? () => votePlayer(p.playerId, "kick") : undefined}
                   />
                 )}
               </div>
@@ -111,11 +126,13 @@ function PlayerRole({
   index,
   isDrawer,
   isHost,
+  isAfk,
 }: {
   variant: "waiting" | "playing" | "game-end";
   index: number;
   isDrawer: boolean;
   isHost: boolean;
+  isAfk: boolean;
 }) {
   if (variant === "game-end") {
     return (
@@ -126,13 +143,24 @@ function PlayerRole({
   }
 
   if (isDrawer) {
+    const drawingLabel = [isHost ? "host" : null, isAfk ? "AFK" : null]
+      .filter(Boolean)
+      .join(", ");
     return (
       <span
         className="player-role"
-        aria-label={isHost ? "Drawing, host" : "Drawing"}
-        title={isHost ? "Drawing, host" : "Drawing"}
+        aria-label={drawingLabel ? `Drawing, ${drawingLabel}` : "Drawing"}
+        title={drawingLabel ? `Drawing, ${drawingLabel}` : "Drawing"}
       >
         {"\u270F\uFE0F"}
+      </span>
+    );
+  }
+
+  if (isAfk) {
+    return (
+      <span className="player-role player-role-afk" aria-label="AFK" title="AFK">
+        zzz
       </span>
     );
   }
@@ -165,7 +193,6 @@ function VoteChip({
   count,
   required,
   hasVoted,
-  readOnly,
   onVote,
 }: {
   action: "afk" | "kick";
@@ -173,26 +200,24 @@ function VoteChip({
   count: number;
   required: number;
   hasVoted: boolean;
-  readOnly: boolean;
-  onVote: () => void;
+  onVote?: () => void;
 }) {
   const kind = action === "afk" ? "AFK" : "Kick";
   const className = [
     "player-vote-chip",
     `player-vote-chip-${action}`,
     hasVoted ? "is-cast" : "",
-    count === 0 ? "is-ghost" : "",
   ]
     .filter(Boolean)
     .join(" ");
-  const label = readOnly
-    ? `${kind} votes for ${nickname}, ${count} of ${required}`
-    : hasVoted
+  const label = onVote
+    ? hasVoted
       ? `Undo ${kind} vote for ${nickname}, ${count} of ${required}`
-      : `Vote ${kind} for ${nickname}, ${count} of ${required}`;
-  const body = count > 0 ? `${kind} ${count}/${required}` : kind;
+      : `Vote ${kind} for ${nickname}, ${count} of ${required}`
+    : `${kind} votes for ${nickname}, ${count} of ${required}${hasVoted ? ", including yours" : ""}`;
+  const body = `${kind} ${count}/${required}`;
 
-  if (readOnly) {
+  if (!onVote) {
     return (
       <span className={className} aria-label={label}>
         {body}
@@ -201,8 +226,139 @@ function VoteChip({
   }
 
   return (
-    <button type="button" className={className} aria-label={label} onClick={onVote}>
+    <button
+      type="button"
+      className={className}
+      aria-label={label}
+      onClick={(event) => {
+        event.stopPropagation();
+        onVote();
+      }}
+    >
       {body}
     </button>
+  );
+}
+
+function PlayerModerationMenu({
+  player,
+  requiredVotes,
+  kickVotes,
+  afkVotes,
+  hasVotedKick,
+  hasVotedAfk,
+  isOpen,
+  onOpenChange,
+}: {
+  player: PlayerInfo;
+  requiredVotes: number;
+  kickVotes: string[];
+  afkVotes: string[];
+  hasVotedKick: boolean;
+  hasVotedAfk: boolean;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const menuId = useId();
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const hasSelfVote = hasVotedKick || hasVotedAfk;
+
+  useEscapeLayer(isOpen, () => onOpenChange(false));
+  useFocusTrap(menuRef, { active: isOpen });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        onOpenChange(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, onOpenChange]);
+
+  function handleVote(action: "kick" | "afk") {
+    votePlayer(player.playerId, action);
+    onOpenChange(false);
+    triggerRef.current?.focus();
+  }
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = menuRef.current ? getFocusableElements(menuRef.current) : [];
+    if (!items.length) return;
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      items[(currentIndex + 1) % items.length]?.focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      items[(currentIndex - 1 + items.length) % items.length]?.focus();
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      items[0]?.focus();
+    } else if (event.key === "End") {
+      event.preventDefault();
+      items[items.length - 1]?.focus();
+    }
+  }
+
+  return (
+    <div ref={rootRef} className="player-moderation">
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`player-moderation-trigger${hasSelfVote ? " has-self-vote" : ""}`}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls={menuId}
+        aria-label={`Moderation for ${player.nickname}`}
+        title="Vote AFK or kick"
+        onClick={() => onOpenChange(!isOpen)}
+      />
+      {isOpen && (
+        <div
+          ref={menuRef}
+          id={menuId}
+          className="player-vote-menu"
+          role="menu"
+          aria-label={`Moderation actions for ${player.nickname}`}
+          tabIndex={-1}
+          onKeyDown={handleMenuKeyDown}
+        >
+          {!player.isAfk && (
+            <button
+              type="button"
+              role="menuitem"
+              className={`player-vote-action player-vote-afk${hasVotedAfk ? " is-cast" : ""}`}
+              onClick={() => handleVote("afk")}
+            >
+              <span className="player-vote-action-kind">AFK</span>
+              <span className="player-vote-action-label">
+                {hasVotedAfk ? "Undo vote" : "Vote"}
+              </span>
+              <span className="player-vote-action-count">
+                {afkVotes.length}/{requiredVotes}
+              </span>
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            className={`player-vote-action player-vote-kick${hasVotedKick ? " is-cast" : ""}`}
+            onClick={() => handleVote("kick")}
+          >
+            <span className="player-vote-action-kind">Kick</span>
+            <span className="player-vote-action-label">
+              {hasVotedKick ? "Undo vote" : "Vote"}
+            </span>
+            <span className="player-vote-action-count">
+              {kickVotes.length}/{requiredVotes}
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

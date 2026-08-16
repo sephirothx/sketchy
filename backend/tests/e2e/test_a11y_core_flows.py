@@ -173,12 +173,20 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         )
         await assert_no_axe_violations(host_page, "players drawer")
 
-        vote_button = drawer.get_by_role("button", name="Vote AFK for A11yGuest")
-        if await vote_button.count() == 0:
-            vote_button = drawer.get_by_role("button", name="Vote AFK for A11yHost")
-        await vote_button.focus()
+        menu_button = drawer.get_by_role("button", name="Moderation for A11yGuest")
+        if await menu_button.count() == 0:
+            menu_button = drawer.get_by_role("button", name="Moderation for A11yHost")
+        await menu_button.focus()
+        await host_page.keyboard.press("Enter")
+        menu = drawer.get_by_role("menu")
+        await menu.wait_for()
         assert await host_page.evaluate(
-            "() => document.activeElement?.getAttribute('aria-label')?.startsWith('Vote')"
+            "() => document.activeElement?.getAttribute('role')"
+        ) == "menuitem"
+        await host_page.keyboard.press("Escape")
+        await menu.wait_for(state="hidden")
+        assert await host_page.evaluate(
+            "() => document.activeElement?.getAttribute('aria-label')?.startsWith('Moderation for')"
         )
         await host_page.keyboard.press("Escape")
         await drawer.wait_for(state="hidden")
