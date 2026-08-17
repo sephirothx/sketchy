@@ -6,6 +6,11 @@ from typing import TYPE_CHECKING
 
 import socketio
 
+from app.repositories.interfaces import (
+    GameHistoryRepository,
+    UserRepository,
+    WordListRepository,
+)
 from app.rooms import RoomManager
 from app.services.timers import TimerManager
 
@@ -20,4 +25,7 @@ class HandlerContext:
     sio: socketio.AsyncServer
     room_manager: RoomManager
     timers: TimerManager = field(default_factory=TimerManager)
+    user_repo: UserRepository | None = None
+    game_history_repo: GameHistoryRepository | None = None
+    word_list_repo: WordListRepository | None = None
     game_flow: GameFlowService = field(init=False)

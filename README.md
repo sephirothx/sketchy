@@ -2,7 +2,7 @@
 
 An online multiplayer drawing & guessing game, iSketch/Pictionary-style: one player draws a
 secret word while everyone else races to guess it in the chat. Join a public lobby or create a
-private room with a friend code — no accounts, no database, just a nickname and a link.
+private room with a friend code — no mandatory accounts required to play.
 
 ## Features
 
@@ -23,8 +23,9 @@ private room with a friend code — no accounts, no database, just a nickname an
 
 ## Architecture
 
-Single-process backend holding all game state in memory — no database, no Redis. Built for
-self-hosting at "friends playing together" scale, not internet-wide concurrency.
+Single-process backend holding all live game and room state in memory, with durable storage
+for accounts, game history, and word lists backed by async SQLAlchemy (embedded SQLite by default,
+or PostgreSQL). Built for self-hosting at "friends playing together" scale.
 
 ```mermaid
 flowchart LR
@@ -35,39 +36,55 @@ flowchart LR
         REST["FastAPI REST\n/api/health, /api/rooms"]
         IO["python-socketio\nAsyncServer"]
         State["In-memory state\nRoomManager + Game"]
+        Repo["Repository Layer\nUserRepository\nGameHistoryRepository\nWordListRepository"]
+    end
+    subgraph Database[Storage]
+        DB[("SQLite / PostgreSQL\n(SQLAlchemy + Alembic)")]
     end
     UI -- "GET (polled)" --> REST
     UI <-- "WebSocket (all gameplay)" --> IO
     REST --> State
     IO --> State
+    IO --> Repo
+    REST --> Repo
+    Repo --> DB
 ```
 
-- **REST** is only used for `GET /api/health` and `GET /api/rooms` (the public lobby list,
-  polled every 4s by the client).
-- **Everything else** — creating/joining rooms, starting the game, choosing words, drawing,
-  guessing, chat — goes through Socket.IO events. There's no REST endpoint for room creation;
-  players need a live socket connection anyway, so it's simpler to do it all over the socket.
-- **No accounts**: the server assigns each player a public `playerId` plus a private reconnect
-  secret. Only the secret is stored in `localStorage` per room code
-  (`sketchy_reconnect_secret_<code>`), and it is never included in shared room or game payloads.
+- **REST** is used for health checks, room discovery, and data queries.
+- **WebSocket (Socket.IO)** powers all real-time gameplay interactions, drawing replication, and room events.
+- **In-Memory Engine**: Active rooms, canvas sessions, timers, and game progression run entirely in memory.
+- **Durable Persistence**: Accounts, game history records, and curated word lists are stored via abstract repository interfaces backed by SQLAlchemy.
 
 ## Tech stack
 
 | Layer    | Technology |
 |----------|------------|
-| Backend  | Python 3.14, FastAPI, python-socketio (`AsyncServer`, ASGI), uvicorn |
+| Backend  | Python 3.14, FastAPI, python-socketio (`AsyncServer`, ASGI), uvicorn, SQLAlchemy 2.0 (async), aiosqlite, Alembic |
 | Frontend | React 19, TypeScript, Vite, react-router-dom, zustand, socket.io-client |
 | Testing  | pytest + pytest-asyncio (backend unit tests), Playwright (multi-browser E2E testing) |
+
+## Database & Configuration
+
+Sketchy requires zero configuration by default, using an embedded SQLite database stored locally at `./sketchy.db`. Database migrations run automatically on server startup via Alembic.
+
+To use an external PostgreSQL database instead, set the `DATABASE_URL` environment variable:
+
+```bash
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy ./scripts/serve.sh
+```
 
 ## Project structure
 
 ```
 backend/
+  alembic/        Alembic migration environment and versioned migration scripts
   app/
+    db/           SQLAlchemy models, engine setup, and schema migration runner
+    repositories/ Abstract repository interfaces and SQLAlchemy implementations
     main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, REST endpoints
     handlers/
       __init__.py    Registers all handler domains and returns their lifecycle context
-      context.py     Shared HandlerContext for Socket.IO, rooms, timers, and game flow
+      context.py     Shared HandlerContext for Socket.IO, rooms, timers, and repositories
       auth.py        Current-player authentication and stale-socket rejection
       rooms.py       Room creation, joining, settings, previews, and player lifecycle
       game.py        Game start and word-selection transport handlers
@@ -88,7 +105,7 @@ backend/
   tests/
     handlers/     Focused asyncio integration suites for each Socket.IO handler domain
     e2e/          Multi-browser Playwright scenarios
-    test_*.py     Domain, protocol, payload, timer, and performance unit tests
+    test_*.py     Domain, protocol, payload, timer, DB, repository, and performance unit tests
 frontend/
   src/
     components/   Canvas, Toolbar, PlayerList, WordDisplay, Timer, GuessChat
@@ -153,9 +170,7 @@ VITE_SERVER_URL=http://localhost:8000
 ```
 
 Open the dev server URL in two separate browser profiles/incognito windows to test with
-multiple players — this app persists a per-room reconnect secret in `localStorage`, so
-multiple tabs in the *same* browser profile will share that credential and reconnect as the
-same player.
+multiple players.
 
 ### Running tests
 
@@ -268,12 +283,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ## Key design decisions & limitations
 
-- **No persistence**: all state lives in process memory. Restarting the backend clears every
-  room. This is intentional for the "self-hosted for a group of friends" scale — no DB/Redis
-  ops overhead.
-- **No accounts**: reconnection uses a bearer-style secret in `localStorage`, not a password or
-  user account. The public player ID is safe to broadcast but cannot be used to reconnect.
-  Anyone with the room code can still join a public/private room as a new player or spectator.
+- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, word lists) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers) remains purely in memory for minimal latency.
 - **Single process**: no horizontal scaling story; one uvicorn worker holds all rooms. Fine for
   small deployments, not for internet-scale traffic.
 - **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO
