@@ -160,6 +160,16 @@ def _is_close_pair(guess: str, target: str) -> bool:
     return False
 
 
+@dataclass(frozen=True)
+class CompletedTurnStats:
+    round_number: int
+    turn_number: int
+    offered_words: list[str]
+    chosen_word: str
+    correct_guess_count: int
+    total_guesser_count: int
+
+
 @dataclass
 class Game:
     turn_order: list[str]
@@ -184,6 +194,7 @@ class Game:
     revealed_positions: set[int] = field(default_factory=set)
     purchased_hints: dict[str, set[int]] = field(default_factory=dict)  # slot hints ("purchase")
     purchased_letters: dict[str, set[str]] = field(default_factory=dict)  # letter hints ("wheel")
+    completed_turns: list[CompletedTurnStats] = field(default_factory=list)
     _cached_letter_frequencies: dict[str, float] | None = field(default=None, repr=False, compare=False)
 
     @property
@@ -558,7 +569,7 @@ class Game:
     def all_guessed(self, total_guessers: int) -> bool:
         return total_guessers > 0 and len(self.correct_guessers) >= total_guessers
 
-    def end_round(self) -> int | None:
+    def end_round(self, total_guesser_count: int = 0) -> int | None:
         """Transition to ROUND_END, return drawer bonus points.
 
         The drawer receives the sum of the points earned by all correct guessers in this round.
@@ -569,6 +580,16 @@ class Game:
         if self.phase != Phase.DRAWING:
             return None
         self.phase = Phase.ROUND_END
+        self.completed_turns.append(
+            CompletedTurnStats(
+                round_number=self.round_number,
+                turn_number=len(self.completed_turns) + 1,
+                offered_words=list(self.word_choices),
+                chosen_word=self.word or "",
+                correct_guess_count=len(self.correct_guessers),
+                total_guesser_count=total_guesser_count,
+            )
+        )
         return sum(self.guess_points.values())
 
     def advance_phase_after_round(self) -> Phase:

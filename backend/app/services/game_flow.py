@@ -62,7 +62,7 @@ class GameFlowService:
         room_manager = ctx.room_manager
         timer_manager = ctx.timers
 
-        def room_settings_from_payload(
+        async def room_settings_from_payload(
             payload: CreateRoomPayload | UpdateRoomSettingsPayload,
             *,
             fallback: Room | None = None,
@@ -86,6 +86,21 @@ class GameFlowService:
                 if payload.custom_words is not None
                 else list(fallback.custom_words if fallback else [])
             )
+            raw_slugs = getattr(payload, "word_list_slugs", None)
+            if raw_slugs is not None and len(raw_slugs) > 0:
+                word_list_slugs = list(raw_slugs)
+            elif fallback is not None:
+                word_list_slugs = list(fallback.word_list_slugs)
+            else:
+                word_list_slugs = ["english_standard"]
+
+            curated_words: list[str] = []
+            if word_list_slugs and ctx.word_list_repo:
+                try:
+                    curated_words = await ctx.word_list_repo.get_words_by_slugs(word_list_slugs)
+                except Exception:
+                    logger.exception("Failed to load words for slugs: %s", word_list_slugs)
+
             return {
                 "name": value("name"),
                 "is_public": value("is_public"),
@@ -98,6 +113,8 @@ class GameFlowService:
                 "scoring_mode": scoring_mode,
                 "spectators_see_solution": value("spectators_see_solution"),
                 "hide_masked_prompt": hide_masked_prompt,
+                "word_list_slugs": word_list_slugs,
+                "curated_words": curated_words,
             }
 
         def validation_error(error: PayloadError) -> dict[str, object]:
@@ -405,7 +422,11 @@ class GameFlowService:
                 return False
             timer_manager.cancel_phase_timer(room.id)
             timer_manager.cancel_hint_timers(room.id)
-            drawer_bonus = game.end_round()
+            guesser_count = len([
+                p for p in room.connected_players()
+                if p.id != game.current_drawer and not p.is_spectator and not p.is_afk
+            ])
+            drawer_bonus = game.end_round(total_guesser_count=guesser_count)
             if drawer_bonus is None:
                 return False
             drawer = room.players.get(game.current_drawer)
@@ -453,6 +474,24 @@ class GameFlowService:
                     }
                     for p in sorted(room.player_list(), key=lambda p: -p.score)
                 ]
+
+                # Update word usage tracking metrics in DB
+                if ctx.word_list_repo and room.word_list_slugs:
+                    for turn in game.completed_turns:
+                        for slug in room.word_list_slugs:
+                            try:
+                                if turn.offered_words:
+                                    await ctx.word_list_repo.increment_word_offers(slug, turn.offered_words)
+                                if turn.chosen_word:
+                                    await ctx.word_list_repo.increment_word_stats(
+                                        slug,
+                                        turn.chosen_word,
+                                        turn.correct_guess_count,
+                                        turn.total_guesser_count,
+                                    )
+                            except Exception:
+                                logger.exception("Failed to update word usage metrics for slug '%s'", slug)
+
                 await sio.emit(
                     "game_ended",
                     {

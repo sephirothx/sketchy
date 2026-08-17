@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useState } from "react";
 import { CustomWordsEditor } from "./CustomWordsEditor";
+import { WordListPicker } from "./WordListPicker";
 import {
   ChoiceChips,
   InputNumber,
@@ -33,6 +34,7 @@ const emptySettings: EditableRoomSettings = {
   scoringMode: "default",
   spectatorsSeeSolution: false,
   hideMaskedPrompt: false,
+  wordListSlugs: ["english_standard"],
 };
 
 export function RoomSettingsEditor() {
@@ -110,6 +112,10 @@ export function RoomSettingsEditor() {
       <InputNumber label="Max players" value={settings.maxPlayers} min={MAX_PLAYERS_MIN} max={MAX_PLAYERS_MAX} onChange={(maxPlayers) => update({ maxPlayers })} />
       <InputNumber label="Rounds" value={settings.rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={(rounds) => update({ rounds })} />
       <InputNumber label="Drawing time (seconds)" value={settings.drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={(drawingSeconds) => update({ drawingSeconds })} />
+      <WordListPicker
+        selectedSlugs={settings.wordListSlugs || ["english_standard"]}
+        onChange={(wordListSlugs) => update({ wordListSlugs })}
+      />
       <details><summary>Advanced settings</summary><div className="room-settings-advanced">
         <Switch label="Allow spectators to see the prompt" checked={settings.spectatorsSeeSolution} onChange={(spectatorsSeeSolution) => update({ spectatorsSeeSolution })} />
         <Switch

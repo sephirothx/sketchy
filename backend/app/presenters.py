@@ -22,6 +22,7 @@ def editable_room_settings_payload(room: Room) -> dict:
         "scoringMode": room.scoring_mode,
         "spectatorsSeeSolution": room.spectators_see_solution,
         "hideMaskedPrompt": room.hide_masked_prompt,
+        "wordListSlugs": list(room.word_list_slugs),
     }
 
 

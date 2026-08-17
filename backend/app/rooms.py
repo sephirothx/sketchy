@@ -204,6 +204,8 @@ class Room:
     scoring_mode: str = "default"
     spectators_see_solution: bool = False
     hide_masked_prompt: bool = False
+    word_list_slugs: list[str] = field(default_factory=list)
+    curated_words: list[str] = field(default_factory=list)
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
@@ -252,18 +254,19 @@ class Room:
     def effective_word_pool(self) -> list[str] | None:
         """Return the word pool a Game should draw from, or None for the default list.
 
-        If no custom words were provided, returns None (Game falls back to the
-        built-in WORDS). If `custom_words_only` is set, returns just the custom
-        words. Otherwise, merges custom words with the default list (custom
-        words first, deduped case-insensitively) so they extend the variety
-        rather than replacing it.
+        If custom_words_only is set and custom words exist, returns just the custom words.
+        Otherwise, merges custom words with curated words (or fallback WORDS if none provided),
+        with custom words first, deduplicated case-insensitively.
         """
-        if not self.custom_words:
+        base_words = self.curated_words if self.curated_words else WORDS
+        if not self.custom_words and not self.curated_words:
             return None
+        if not self.custom_words:
+            return self.curated_words
         if self.custom_words_only:
             return self.custom_words
         seen = {w.lower() for w in self.custom_words}
-        return self.custom_words + [w for w in WORDS if w.lower() not in seen]
+        return self.custom_words + [w for w in base_words if w.lower() not in seen]
 
     def to_public_summary(self) -> dict:
         active_players = [p for p in self.players.values() if not p.is_spectator]
@@ -285,6 +288,7 @@ class Room:
             "scoringMode": self.scoring_mode,
             "spectatorsSeeSolution": self.spectators_see_solution,
             "hideMaskedPrompt": self.hide_masked_prompt,
+            "wordListSlugs": list(self.word_list_slugs),
             "state": self.state,
         }
 
@@ -303,6 +307,7 @@ class Room:
             "scoringMode": self.scoring_mode,
             "spectatorsSeeSolution": self.spectators_see_solution,
             "hideMaskedPrompt": self.hide_masked_prompt,
+            "wordListSlugs": list(self.word_list_slugs),
             "state": self.state,
             "lastGameScores": self.last_game_scores,
             "lastGameDrawings": (
@@ -352,6 +357,8 @@ class RoomManager:
         scoring_mode: str = "default",
         spectators_see_solution: bool = False,
         hide_masked_prompt: bool = False,
+        word_list_slugs: list[str] | None = None,
+        curated_words: list[str] | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
@@ -371,6 +378,8 @@ class RoomManager:
             scoring_mode=scoring_mode,
             spectators_see_solution=spectators_see_solution,
             hide_masked_prompt=hide_masked_prompt,
+            word_list_slugs=list(word_list_slugs or []),
+            curated_words=list(curated_words or []),
         )
         self.rooms[room_id] = room
         return room

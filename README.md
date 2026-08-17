@@ -7,6 +7,7 @@ private room with a friend code — no mandatory accounts required to play.
 ## Features
 
 - Public lobby with a live, polled list of open rooms, or join a private room by code.
+- Curated word lists (Standard and Extended English) selectable during room creation, combined with optional custom words. Word pick rate and guess accuracy stats tracked per prompt.
 - Turn-based rounds: each player draws once per round, choosing from 3 word options.
 - Real-time synced canvas (freehand pen + rectangle/ellipse/triangle shape tools).
 - Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the secret word solution, and private spectator chat restricted to the drawer, spectators, and correct guessers.
@@ -78,8 +79,10 @@ DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy ./scripts
 ```
 backend/
   alembic/        Alembic migration environment and versioned migration scripts
+  data/
+    word_lists/   Bundled curated word list JSON definitions
   app/
-    db/           SQLAlchemy models, engine setup, and schema migration runner
+    db/           SQLAlchemy models, engine setup, seeding, and migration runner
     repositories/ Abstract repository interfaces and SQLAlchemy implementations
     main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, REST endpoints
     handlers/
