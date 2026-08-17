@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom";
 import { ActiveGameRoom } from "../components/ActiveGameRoom";
+import { ConfettiCanvas } from "../components/ConfettiCanvas";
 import { InviteEntryPage } from "../components/InviteEntryPage";
 import { useGameStore } from "../store/gameStore";
 
@@ -15,8 +16,14 @@ export function GameRoomPage() {
     playerId && activeRoomId && activeRoomCode?.toUpperCase() === normalizedCode,
   );
 
-  if (!hasActiveSession) {
-    return <InviteEntryPage key={normalizedCode} code={normalizedCode} />;
-  }
-  return <ActiveGameRoom code={normalizedCode} />;
+  return (
+    <>
+      {hasActiveSession ? (
+        <ActiveGameRoom code={normalizedCode} />
+      ) : (
+        <InviteEntryPage key={normalizedCode} code={normalizedCode} />
+      )}
+      <ConfettiCanvas />
+    </>
+  );
 }

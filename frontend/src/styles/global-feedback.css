@@ -52,3 +52,12 @@
 .app-toast.error { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
 .app-toast button { background: transparent; border: 0; color: inherit; font-size: 18px; line-height: 1; padding: 1px 4px; }
 .app-toast button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+.route-loading {
+  color: #64748b;
+  font-weight: 700;
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 48px 16px;
+  text-align: center;
+}

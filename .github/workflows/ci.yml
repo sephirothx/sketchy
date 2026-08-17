@@ -58,6 +58,8 @@ jobs:
 
       - run: npm run build
 
+      - run: npm run check:bundle
+
   e2e:
     name: E2E multi-browser tests
     runs-on: ubuntu-latest

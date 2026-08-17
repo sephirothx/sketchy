@@ -1,0 +1,14 @@
+{
+  "baseline": {
+    "initialRawBytes": 500078,
+    "initialGzipBytes": 140393
+  },
+  "initialLobby": {
+    "maxRawBytes": 410000,
+    "maxGzipBytes": 118000
+  },
+  "dynamicRoutes": [
+    "src/pages/CreateRoomPage.tsx",
+    "src/pages/GameRoomPage.tsx"
+  ]
+}
