@@ -350,6 +350,12 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
     def has_checkpoint(self) -> bool:
         return bool(self) and self.data[self.offsets[0]] == CHECKPOINT_TAG
 
+    def checkpoint_png_size(self) -> int:
+        if not self.has_checkpoint():
+            return 0
+        _, length = _CHECKPOINT_HEADER.unpack_from(self.data, self.offsets[0])
+        return length
+
     def semantic_start(self) -> int:
         return 1 if self.has_checkpoint() else 0
 

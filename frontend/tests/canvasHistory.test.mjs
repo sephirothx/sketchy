@@ -5,7 +5,9 @@ import {
   calculateCanvasHistoryHash,
   ClientCanvasHistory,
   decodeCanvasHistory,
+  describeFold,
 } from "../src/lib/canvasHistory.ts";
+import { formatWindowLog, formatWindowOverlay } from "../src/lib/canvasWindowDebug.ts";
 
 function replace(history, actions, revision, sequence = 0, generation = 1) {
   return history.replace(
@@ -204,4 +206,26 @@ test("JSON and binary checkpoint records round-trip", () => {
   assert.equal(decoded[0].kind, "checkpoint");
   assert.deepEqual(Array.from(decoded[0].png), Array.from(png));
   assert.equal(decoded[1].kind, "fill");
+});
+
+test("windowSnapshot reports headroom and the next compact trigger", () => {
+  const history = new ClientCanvasHistory();
+  assert.equal(replace(history, [], 1), true);
+  const empty = history.windowSnapshot();
+  assert.equal(empty.work, 0);
+  assert.equal(describeFold(empty.nextFillFold), "ok");
+  assert.match(formatWindowLog(empty), /compact80=ok/);
+  for (let index = 0; index < 41; index++) {
+    assert.equal(history.apply({
+      event: "draw_fill",
+      payload: { x: 0.1, y: 0.1, color: "#000000" },
+    }), true);
+  }
+  const mid = history.windowSnapshot();
+  assert.equal(mid.work, 8200);
+  assert.equal(mid.actionCount, 41);
+  assert.equal(describeFold(mid.opportunisticFold), "fold 1");
+  assert.equal(describeFold(mid.nextFillFold), "ok");
+  assert.match(formatWindowOverlay(mid, ""), /next fill ok/);
+  assert.match(formatWindowLog(mid), /compact80=fold 1/);
 });

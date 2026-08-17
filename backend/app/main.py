@@ -1,4 +1,5 @@
 """ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app."""
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -56,8 +57,21 @@ sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 handler_context = register_all_handlers(sio, room_manager)
 
 
+def _configure_app_logging() -> None:
+    """Show application INFO logs on the uvicorn command line."""
+    logger = logging.getLogger("sketchy")
+    if logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    _configure_app_logging()
     try:
         yield
     finally:

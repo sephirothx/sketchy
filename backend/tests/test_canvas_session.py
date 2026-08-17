@@ -124,6 +124,38 @@ def test_canvas_session_rejects_the_fifty_first_fill_until_checkpoint():
     assert canvas.record_stroke("draw_fill", fill)
 
 
+def test_debug_summary_tracks_window_headroom_and_compact_need():
+    canvas = CanvasSession()
+    fill = {"x": 0.1, "y": 0.1, "color": "#000000"}
+    empty = canvas.debug_summary()
+    assert "work=0/10000 (0%)" in empty
+    assert "compact80=ok" in empty
+    assert "next_fill=ok" in empty
+    for _ in range(40):
+        assert canvas.record_stroke("draw_fill", fill)
+    at_threshold = canvas.debug_summary()
+    assert "work=8000/10000 (80%)" in at_threshold
+    assert "compact80=ok" in at_threshold
+    assert "next_fill=ok" in at_threshold
+    assert "hottest=work@80%" in at_threshold
+    assert canvas.record_stroke("draw_fill", fill)
+    over_threshold = canvas.debug_summary()
+    assert "work=8200/10000 (82%)" in over_threshold
+    assert "compact80=fold 1" in over_threshold
+    for _ in range(9):
+        assert canvas.record_stroke("draw_fill", fill)
+    full = canvas.debug_summary()
+    assert "work=10000/10000 (100%)" in full
+    assert "next_fill=fold 1" in full
+    assert canvas.history.checkpoint_png_size() == 0
+    prefix = canvas.hashes[0]
+    assert canvas.apply_checkpoint(tiny_png(), 1, prefix) is None
+    after = canvas.debug_summary()
+    assert canvas.history.checkpoint_png_size() == len(tiny_png())
+    assert f"png={len(tiny_png())}B" in after
+    assert "work=9800/10000 (98%)" in after
+
+
 def test_canvas_session_undo_stops_at_checkpoint():
     canvas = CanvasSession()
     fill = {"x": 0.2, "y": 0.2, "color": "#abcdef"}

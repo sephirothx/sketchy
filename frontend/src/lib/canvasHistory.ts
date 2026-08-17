@@ -169,6 +169,26 @@ export function windowPointCount(actions: DecodedCanvasAction[]): number {
   return actions.reduce((total, action) => total + actionPointCount(action), 0);
 }
 
+export type CanvasWindowSnapshot = {
+  work: number;
+  maxWork: number;
+  actionCount: number;
+  maxActions: number;
+  points: number;
+  maxPoints: number;
+  pngBytes: number;
+  hasCheckpoint: boolean;
+  opportunisticFold: number | null;
+  nextStrokeFold: number | null;
+  nextFillFold: number | null;
+};
+
+export function describeFold(needed: number | null): string {
+  if (needed == null) return "ok";
+  if (needed < 0) return "blocked";
+  return `fold ${needed}`;
+}
+
 export function neededFoldCount(
   actions: DecodedCanvasAction[],
   extraWork: number,
@@ -347,6 +367,33 @@ export class ClientCanvasHistory {
       MAX_WINDOW_ACTIONS - Math.max(1, Math.floor(MAX_WINDOW_ACTIONS * threshold)),
     );
     return typeof needed === "number" && needed > 0 ? needed : null;
+  }
+
+  windowSnapshot(): CanvasWindowSnapshot {
+    const actions = this.actions.at(-1)?.kind === "clear" ? [] : this.actions;
+    const live = this.actions;
+    const needed = (
+      extraWork: number,
+      extraPoints: number,
+      extraActions: number,
+    ): number | null => {
+      const fold = neededFoldCount(actions, extraWork, extraPoints, extraActions);
+      return fold === null ? null : fold;
+    };
+    const png = this.checkpointPng();
+    return {
+      work: windowReplayWork(live),
+      maxWork: MAX_WINDOW_WORK,
+      actionCount: live.length - semanticStart(live),
+      maxActions: MAX_WINDOW_ACTIONS,
+      points: windowPointCount(live),
+      maxPoints: MAX_CANVAS_POINTS,
+      pngBytes: png?.byteLength ?? 0,
+      hasCheckpoint: live[0]?.kind === "checkpoint",
+      opportunisticFold: this.opportunisticFoldCount(),
+      nextStrokeFold: needed(PATH_WORK, 1, 1),
+      nextFillFold: needed(FILL_WORK, 0, 1),
+    };
   }
 
   applyCheckpoint(png: Uint8Array, foldedCount: number): boolean {

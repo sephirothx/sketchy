@@ -9,6 +9,11 @@ import { decodeLiveDrawing, encodeClear } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
 import { encodeCheckpointPng } from "../lib/canvasRenderer";
 import { emitWithAck, socket } from "../lib/socket";
+import {
+  formatCompactLog,
+  formatWindowLog,
+} from "../lib/canvasWindowDebug.ts";
+import type { CanvasWindowDebugEvent } from "../lib/canvasWindowDebug.ts";
 
 const MAX_PENDING_CANVAS_ACTIONS = 256;
 
@@ -57,6 +62,7 @@ export interface CanvasProtocol {
 export function useCanvasProtocol(
   renderer: CanvasProtocolRenderer,
   onRejected?: (reason: string) => void,
+  onWindowDebug?: (event: CanvasWindowDebugEvent) => void,
 ): CanvasProtocol {
   const historyRef = useRef(new ClientCanvasHistory());
   const nextSequenceRef = useRef(1);
@@ -70,6 +76,16 @@ export function useCanvasProtocol(
     frame: DrawingFrame,
     isPath?: boolean,
   ) => number | null>(() => null);
+  const onWindowDebugRef = useRef(onWindowDebug);
+  useEffect(() => {
+    onWindowDebugRef.current = onWindowDebug;
+  }, [onWindowDebug]);
+
+  const emitWindowDebug = (semantic: boolean) => {
+    const snapshot = historyRef.current.windowSnapshot();
+    if (semantic) console.info(`[canvas] window ${formatWindowLog(snapshot)}`);
+    onWindowDebugRef.current?.({ type: "window", snapshot, semantic });
+  };
 
   const flushQueuedDraw = useCallback(() => {
     const queued = queuedDrawRef.current;
@@ -129,19 +145,38 @@ export function useCanvasProtocol(
     return sequence;
   }, [allocateSequence, requestAuthoritativeSync]);
 
-  const compactWindow = useCallback(async (foldedCount: number): Promise<boolean> => {
+  const compactWindow = useCallback(async (
+    foldedCount: number,
+    trigger: "forced" | "opportunistic" | "remote",
+  ): Promise<boolean> => {
     const history = historyRef.current;
     const start = semanticStart(history.actions);
     const folded = history.actions.slice(start, start + foldedCount);
     const previous = history.checkpointPng();
     const prefixHash = history.prefixHashForFold(foldedCount);
+    const before = history.windowSnapshot();
     if (prefixHash === null) {
       requestAuthoritativeSync();
       return false;
     }
+    const started = performance.now();
     try {
       const png = await encodeCheckpointPng(previous, folded);
-      return emitCheckpoint(png, foldedCount, prefixHash) !== null;
+      const ok = emitCheckpoint(png, foldedCount, prefixHash) !== null;
+      const elapsedMs = Math.round(performance.now() - started);
+      const event: CanvasWindowDebugEvent = {
+        type: "compact",
+        trigger,
+        foldedCount,
+        pngBytes: png.byteLength,
+        elapsedMs,
+        before,
+        after: history.windowSnapshot(),
+      };
+      console.info(`[canvas] compact ${formatCompactLog(event)}`);
+      onWindowDebugRef.current?.(event);
+      if (ok) emitWindowDebug(true);
+      return ok;
     } catch {
       requestAuthoritativeSync();
       return false;
@@ -161,7 +196,7 @@ export function useCanvasProtocol(
         return 0;
       }
       compactingRef.current = true;
-      void compactWindow(fold).then((ok) => {
+      void compactWindow(fold, "forced").then((ok) => {
         compactingRef.current = false;
         if (!ok) {
           queuedDrawRef.current = null;
@@ -179,6 +214,7 @@ export function useCanvasProtocol(
       }
       return null;
     }
+    emitWindowDebug(packet.event !== "draw_move");
     const sequence = allocateSequence();
     const generation = historyRef.current.generation;
     if (sequence === null || generation === null) {
@@ -211,6 +247,7 @@ export function useCanvasProtocol(
       requestAuthoritativeSync();
       return;
     }
+    emitWindowDebug(packet.event !== "draw_move");
     pending.frames.push(frame);
     socket.emit("draw", frame);
   }, [requestAuthoritativeSync]);
@@ -243,6 +280,7 @@ export function useCanvasProtocol(
       expectedHash: historyRef.current.historyHash!,
     });
     renderer.replay(historyRef.current.actions);
+    emitWindowDebug(true);
     void emitWithAck<{ ok: boolean; error?: string }>("undo_stroke", request)
       .then((response) => {
         if (!response?.ok && response?.error !== "Drawing actions are out of sequence") {
@@ -267,6 +305,7 @@ export function useCanvasProtocol(
       }
       historyRef.current.apply(packet);
       renderer.apply(packet);
+      emitWindowDebug(packet.event !== "draw_move");
     };
 
     const finishQueuedSync = () => {
@@ -287,6 +326,7 @@ export function useCanvasProtocol(
       historyRef.current.replace(actions, revision, generation, sequence, historyHash);
       nextSequenceRef.current = committedSequence + 1;
       renderer.replay(actions);
+      emitWindowDebug(true);
       finishQueuedSync();
     };
 
@@ -386,6 +426,7 @@ export function useCanvasProtocol(
       }
       nextSequenceRef.current = (pendingSequences.at(-1) ?? committedSequence) + 1;
       renderer.replay(historyRef.current.actions);
+      emitWindowDebug(true);
       finishQueuedSync();
     };
 
@@ -409,7 +450,7 @@ export function useCanvasProtocol(
         const fold = historyRef.current.opportunisticFoldCount();
         if (fold) {
           compactingRef.current = true;
-          void compactWindow(fold).finally(() => {
+          void compactWindow(fold, "opportunistic").finally(() => {
             compactingRef.current = false;
             flushQueuedDraw();
           });
@@ -433,6 +474,7 @@ export function useCanvasProtocol(
       }
       pendingMutationsRef.current.delete(sequence);
       renderer.replay(historyRef.current.actions);
+      emitWindowDebug(true);
     };
 
     const onRequestCanvasActions = (payload: unknown) => {
@@ -518,6 +560,7 @@ export function useCanvasProtocol(
               payload[5].byteLength,
             )
             : null;
+      const before = historyRef.current.windowSnapshot();
       if (
         typeof payload[4] !== "number"
         || png === null
@@ -527,7 +570,19 @@ export function useCanvasProtocol(
         requestAuthoritativeSync();
         return;
       }
+      const event: CanvasWindowDebugEvent = {
+        type: "compact",
+        trigger: "remote",
+        foldedCount: payload[4],
+        pngBytes: png.byteLength,
+        elapsedMs: 0,
+        before,
+        after: historyRef.current.windowSnapshot(),
+      };
+      console.info(`[canvas] compact ${formatCompactLog(event)}`);
+      onWindowDebugRef.current?.(event);
       renderer.replay(historyRef.current.actions);
+      emitWindowDebug(true);
     };
 
     const onCanvasRejected = (payload: unknown) => {
@@ -556,6 +611,7 @@ export function useCanvasProtocol(
       activeOutgoingSequenceRef.current = null;
       nextSequenceRef.current = 1;
       renderer.clear();
+      emitWindowDebug(true);
     };
 
     socket.on("draw", onDraw);

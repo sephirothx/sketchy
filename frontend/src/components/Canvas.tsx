@@ -15,6 +15,9 @@ import type { CanvasProtocolRenderer } from "../hooks/useCanvasProtocol";
 import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  MAX_CANVAS_POINTS,
+  MAX_WINDOW_ACTIONS,
+  MAX_WINDOW_WORK,
 } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { toPixels } from "../lib/canvasGeometry";
@@ -33,6 +36,11 @@ import type { DrawTool, StrokePoint } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
 import { recordRender } from "../lib/renderDiagnostics";
 import { useToast } from "../lib/toast";
+import {
+  formatCompactOverlay,
+  formatWindowOverlay,
+} from "../lib/canvasWindowDebug.ts";
+import type { CanvasWindowSnapshot } from "../lib/canvasHistory";
 
 interface CanvasProps {
   isDrawer: boolean;
@@ -132,6 +140,20 @@ function createProtocolRenderer(
   return { apply, clear, replay };
 }
 
+const EMPTY_WINDOW_SNAPSHOT: CanvasWindowSnapshot = {
+  work: 0,
+  maxWork: MAX_WINDOW_WORK,
+  actionCount: 0,
+  maxActions: MAX_WINDOW_ACTIONS,
+  points: 0,
+  maxPoints: MAX_CANVAS_POINTS,
+  pngBytes: 0,
+  hasCheckpoint: false,
+  opportunisticFold: null,
+  nextStrokeFold: null,
+  nextFillFold: null,
+};
+
 const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   {
     isDrawer,
@@ -151,6 +173,8 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   const previewContextRef = useRef<CanvasRenderingContext2D | null>(null);
   const penCursor = useSettingsStore((state) => state.penCursor);
   const { notify } = useToast();
+  const debugRef = useRef<HTMLPreElement>(null);
+  const lastCompactRef = useRef("");
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -181,6 +205,13 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
           ? "Too many drawing actions. Try undoing some strokes."
           : "Could not save this drawing action. The canvas was restored.";
     notify(message, "warning", 4000);
+  }, (event) => {
+    if (event.type === "compact") {
+      lastCompactRef.current = formatCompactOverlay(event);
+    }
+    const snapshot = event.type === "compact" ? event.after : event.snapshot;
+    const node = debugRef.current;
+    if (node) node.textContent = formatWindowOverlay(snapshot, lastCompactRef.current);
   });
   const pointer = useCanvasPointerInput(
     protocol,
@@ -218,6 +249,14 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
           className="preview-canvas"
           aria-hidden="true"
         />
+        <pre
+          ref={debugRef}
+          className="canvas-window-debug"
+          aria-hidden="true"
+          data-testid="canvas-window-debug"
+        >
+          {formatWindowOverlay(EMPTY_WINDOW_SNAPSHOT, "")}
+        </pre>
         {overlay}
       </div>
     </div>

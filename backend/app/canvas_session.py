@@ -9,6 +9,7 @@ from app.canvas_history import (
     CHECKPOINT_TAG,
     CLEAR_TAG,
     FILL_TAG,
+    FILL_WORK,
     HISTORY_HASH_INITIAL,
     MAX_CANVAS_POINTS,
     MAX_WINDOW_ACTIONS,
@@ -33,6 +34,14 @@ MAX_CANVAS_COMMITS = 512
 
 # Re-export so existing tests can monkeypatch the session module.
 MAX_CANVAS_ACTIONS = MAX_WINDOW_ACTIONS
+
+
+def _fold_label(needed: int | None) -> str:
+    if needed is None:
+        return "ok"
+    if needed < 0:
+        return "blocked"
+    return f"fold {needed}"
 
 
 @dataclass
@@ -85,6 +94,28 @@ class CanvasSession:
             extra_points=MAX_CANVAS_POINTS - target_points,
             extra_actions=MAX_WINDOW_ACTIONS - target_actions,
             foldable_count=self._foldable_count(),
+        )
+
+    def debug_summary(self) -> str:
+        """One-line replay-window usage for server logs."""
+        work = self.replay_work
+        actions = self.history.semantic_count()
+        points = self.point_count
+        png_bytes = self.history.checkpoint_png_size()
+        ratios = (
+            ("work", work / MAX_WINDOW_WORK if MAX_WINDOW_WORK else 0),
+            ("actions", actions / MAX_WINDOW_ACTIONS if MAX_WINDOW_ACTIONS else 0),
+            ("points", points / MAX_CANVAS_POINTS if MAX_CANVAS_POINTS else 0),
+        )
+        hottest, hottest_ratio = max(ratios, key=lambda item: item[1])
+        return (
+            f"work={work}/{MAX_WINDOW_WORK} ({work / MAX_WINDOW_WORK:.0%}) "
+            f"actions={actions}/{MAX_WINDOW_ACTIONS} ({actions / MAX_WINDOW_ACTIONS:.0%}) "
+            f"points={points}/{MAX_CANVAS_POINTS} ({points / MAX_CANVAS_POINTS:.0%}) "
+            f"png={png_bytes}B hottest={hottest}@{hottest_ratio:.0%} "
+            f"compact80={_fold_label(self.window_needs_compact())} "
+            f"next_fill={_fold_label(self.needed_fold_count(extra_work=FILL_WORK, extra_points=0, extra_actions=1))} "
+            f"next_stroke={_fold_label(self.needed_fold_count(extra_work=PATH_WORK, extra_points=1, extra_actions=1))}"
         )
 
     def apply_checkpoint(self, png: bytes, folded_count: int, prefix_hash: int) -> str | None:

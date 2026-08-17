@@ -1,6 +1,7 @@
 """Socket.IO handlers for the drawing domain."""
 from __future__ import annotations
 
+import logging
 from functools import partial
 
 from app.game import Phase
@@ -12,6 +13,23 @@ from app.handlers.payloads import (
     parse_empty_payload,
     parse_undo_payload,
 )
+
+logger = logging.getLogger("sketchy.canvas")
+
+
+def _log_canvas(room, event: str, extra: str = "") -> None:
+    canvas = room.game.canvas
+    suffix = f" {extra}" if extra else ""
+    logger.info(
+        "canvas %s room=%s gen=%s seq=%s %s%s",
+        event,
+        room.code,
+        canvas.generation,
+        canvas.sequence,
+        canvas.debug_summary(),
+        suffix,
+    )
+
 
 async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     try:
@@ -91,6 +109,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
             reason = room.game.canvas.reject_reason or "invalid"
             if reason != "invalid":
                 room.game.canvas.commit_sequence(sequence, f"reject:{reason}")
+                _log_canvas(room, "reject", extra=f"reason={reason} event=clear")
                 await ctx.game_flow._emit_canvas_rejected(room, sequence, reason, to=sid)
                 await ctx.game_flow._emit_canvas_sync(room, sid)
             return
@@ -101,6 +120,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
             skip_sid=sid,
         )
         room.game.canvas.commit_sequence(sequence)
+        _log_canvas(room, "window", extra="event=clear")
         await ctx.game_flow._emit_canvas_commit(room, sequence)
         return
     if not room.game.canvas.record_stroke(packet.event, packet.payload):
@@ -109,6 +129,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
             if packet.event == "draw_start":
                 room.game.canvas.discarding_draw_sequence = True
             room.game.canvas.commit_sequence(sequence, f"reject:{reason}")
+            _log_canvas(room, "reject", extra=f"reason={reason} event={packet.event}")
             await ctx.game_flow._emit_canvas_rejected(room, sequence, reason, to=sid)
             await ctx.game_flow._emit_canvas_sync(room, sid)
         return
@@ -127,9 +148,11 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
             return
         room.game.canvas.active_draw_sequence = None
         room.game.canvas.commit_sequence(active_sequence)
+        _log_canvas(room, "window", extra="event=stroke")
         await ctx.game_flow._emit_canvas_commit(room, active_sequence)
     elif packet.event in {"draw_shape", "draw_fill"}:
         room.game.canvas.commit_sequence(sequence)
+        _log_canvas(room, "window", extra=f"event={packet.event}")
         await ctx.game_flow._emit_canvas_commit(room, sequence)
 
 
@@ -169,6 +192,7 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
         return {"ok": False, "error": "Canvas history is out of sync"}
     if room.game.canvas.undo_last_stroke():
         room.game.canvas.commit_sequence(sequence, "undo")
+        _log_canvas(room, "window", extra="event=undo")
         await ctx.game_flow._emit_canvas_commit(room, sequence)
         return {"ok": True}
     return {"ok": False, "error": "Nothing to undo"}
@@ -216,15 +240,36 @@ async def canvas_checkpoint(ctx: HandlerContext, sid, data, identity=None):
             payload.sequence,
         )
         return
+    before = canvas.debug_summary()
     reason = canvas.apply_checkpoint(
         payload.png, payload.folded_count, payload.prefix_hash
     )
     if reason:
         canvas.commit_sequence(payload.sequence, f"reject:{reason}")
+        logger.info(
+            "canvas compact-reject room=%s gen=%s seq=%s reason=%s folded=%s png=%sB before=[%s]",
+            room.code,
+            canvas.generation,
+            canvas.sequence,
+            reason,
+            payload.folded_count,
+            len(payload.png),
+            before,
+        )
         await ctx.game_flow._emit_canvas_rejected(room, payload.sequence, reason, to=sid)
         await ctx.game_flow._emit_canvas_sync(room, sid)
         return
     canvas.commit_sequence(payload.sequence, "checkpoint")
+    logger.info(
+        "canvas compact room=%s gen=%s seq=%s folded=%s png=%sB before=[%s] after=[%s]",
+        room.code,
+        canvas.generation,
+        canvas.sequence,
+        payload.folded_count,
+        len(payload.png),
+        before,
+        canvas.debug_summary(),
+    )
     await ctx.game_flow._emit_canvas_checkpoint(
         room,
         payload.sequence,
