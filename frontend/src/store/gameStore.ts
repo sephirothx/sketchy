@@ -179,7 +179,7 @@ export const useGameStore = create<GameStore>((set) => ({
       scoringMode: payload.scoringMode ?? "default",
       spectatorsSeeSolution: payload.spectatorsSeeSolution ?? false,
       hideMaskedPrompt: payload.hideMaskedPrompt ?? false,
-      wordListSlugs: payload.wordListSlugs ?? [],
+      wordListSlugs: payload.wordListSlugs?.length ? payload.wordListSlugs : ["english_standard"],
       roomState: payload.state,
       finalScores: payload.lastGameScores?.length
         ? payload.lastGameScores

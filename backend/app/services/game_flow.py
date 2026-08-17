@@ -87,7 +87,7 @@ class GameFlowService:
                 else list(fallback.custom_words if fallback else [])
             )
             raw_slugs = getattr(payload, "word_list_slugs", None)
-            if raw_slugs is not None:
+            if raw_slugs is not None and len(raw_slugs) > 0:
                 word_list_slugs = list(raw_slugs)
             elif fallback is not None:
                 word_list_slugs = list(fallback.word_list_slugs)

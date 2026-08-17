@@ -1,6 +1,4 @@
-"""Startup data seeder for bundled curated word lists."""
-from __future__ import annotations
-
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -25,7 +23,7 @@ async def seed_word_lists(
     seeded: list[WordListSummary] = []
     for file_path in sorted(target_dir.glob("*.json")):
         try:
-            content = file_path.read_text(encoding="utf-8")
+            content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
             data = json.loads(content)
             slug = str(data["slug"]).strip()
             name = str(data["name"]).strip()

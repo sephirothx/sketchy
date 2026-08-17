@@ -87,7 +87,7 @@ class RoomSettingsFields(RequestModel):
     scoring_mode: str = Field(default="default", alias="scoringMode")
     spectators_see_solution: bool = Field(default=False, alias="spectatorsSeeSolution")
     hide_masked_prompt: bool = Field(default=False, alias="hideMaskedPrompt")
-    word_list_slugs: list[str] = Field(default_factory=list, alias="wordListSlugs")
+    word_list_slugs: list[str] = Field(default_factory=lambda: ["english_standard"], alias="wordListSlugs")
 
     @field_validator("name", "custom_words")
     @classmethod
@@ -106,7 +106,7 @@ class RoomSettingsFields(RequestModel):
                 cleaned.append(trimmed)
         if len(cleaned) > 20:
             raise ValueError("too many word lists selected (max 20)")
-        return cleaned
+        return cleaned if cleaned else ["english_standard"]
 
     @field_validator("drawing_seconds")
     @classmethod
@@ -119,14 +119,14 @@ class RoomSettingsFields(RequestModel):
     @classmethod
     def valid_hint_mode(cls, value: str) -> str:
         if value not in HINT_MODES:
-            raise ValueError("must be a supported hint mode")
+            raise ValueError(f"must be one of {', '.join(sorted(HINT_MODES))}")
         return value
 
     @field_validator("scoring_mode")
     @classmethod
     def valid_scoring_mode(cls, value: str) -> str:
         if value not in SCORING_MODES:
-            raise ValueError("must be a supported scoring mode")
+            raise ValueError(f"must be one of {', '.join(sorted(SCORING_MODES))}")
         return value
 
     @model_validator(mode="after")
@@ -149,6 +149,7 @@ class CreateRoomPayload(RoomSettingsFields):
 
 
 class UpdateRoomSettingsPayload(RequestModel):
+
     name: str | None = Field(default=None, max_length=MAX_ROOM_NAME_LENGTH)
     is_public: bool | None = Field(default=None, alias="isPublic")
     max_players: int | None = Field(default=None, alias="maxPlayers", ge=MAX_PLAYERS_MIN, le=MAX_PLAYERS_MAX)
@@ -164,7 +165,7 @@ class UpdateRoomSettingsPayload(RequestModel):
 
     @field_validator("word_list_slugs")
     @classmethod
-    def clean_optional_word_list_slugs(cls, slugs: list[str] | None) -> list[str] | None:
+    def clean_update_word_list_slugs(cls, slugs: list[str] | None) -> list[str] | None:
         if slugs is None:
             return None
         cleaned: list[str] = []
@@ -176,6 +177,8 @@ class UpdateRoomSettingsPayload(RequestModel):
                 cleaned.append(trimmed)
         if len(cleaned) > 20:
             raise ValueError("too many word lists selected (max 20)")
+        if not cleaned:
+            raise ValueError("at least one word list must be selected")
         return cleaned
 
     @field_validator("name", "custom_words")
