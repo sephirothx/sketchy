@@ -9,7 +9,13 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
+from app.db import async_session_factory, init_db
 from app.handlers import register_all_handlers
+from app.repositories.sqlalchemy import (
+    SqlAlchemyGameHistoryRepository,
+    SqlAlchemyUserRepository,
+    SqlAlchemyWordListRepository,
+)
 from app.state import room_manager
 
 
@@ -52,12 +58,23 @@ def configure_frontend(app: FastAPI, directory: Path) -> None:
         )
 
 
+user_repo = SqlAlchemyUserRepository(async_session_factory)
+game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
+word_list_repo = SqlAlchemyWordListRepository(async_session_factory)
+
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
-handler_context = register_all_handlers(sio, room_manager)
+handler_context = register_all_handlers(
+    sio,
+    room_manager,
+    user_repo=user_repo,
+    game_history_repo=game_history_repo,
+    word_list_repo=word_list_repo,
+)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    await init_db()
     try:
         yield
     finally:
