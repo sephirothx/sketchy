@@ -13,6 +13,7 @@ interface WaitingRoomPanelProps {
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
+  wordListSlugs?: string[];
   players: PlayerInfo[];
   myPlayerId: string | null;
   isHost: boolean;
@@ -90,8 +91,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               {props.customWordsOnly
                 ? `Custom words only (${props.customWordCount})`
                 : props.customWordCount
-                  ? `${props.customWordCount} custom words included`
-                  : "Built-in word list"}
+                  ? `${props.customWordCount} custom words + curated lists`
+                  : props.wordListSlugs && props.wordListSlugs.length > 1
+                    ? `${props.wordListSlugs.length} curated word lists`
+                    : "Curated word list"}
             </li>
             <li>
               {props.spectatorsSeeSolution

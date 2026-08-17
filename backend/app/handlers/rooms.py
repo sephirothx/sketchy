@@ -23,7 +23,7 @@ async def create_room(ctx: HandlerContext, sid, data):
         payload = parse_payload(CreateRoomPayload, data)
     except PayloadError as error:
         return ctx.game_flow.validation_error(error)
-    settings = ctx.game_flow.room_settings_from_payload(payload)
+    settings = await ctx.game_flow.room_settings_from_payload(payload)
 
     room = ctx.room_manager.create_room(
         **settings,
@@ -96,7 +96,7 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
     room, _ = current
     if room.state != "waiting" or room.game:
         return {"ok": False, "error": "Settings can only be changed in the waiting room"}
-    settings = ctx.game_flow.room_settings_from_payload(payload, fallback=room)
+    settings = await ctx.game_flow.room_settings_from_payload(payload, fallback=room)
     active_count = len([p for p in room.player_list() if not p.is_spectator])
     if settings["max_players"] < active_count:
         return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}

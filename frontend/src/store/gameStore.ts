@@ -36,6 +36,7 @@ interface GameStore {
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
+  wordListSlugs: string[];
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
   moderation: ModerationState;
@@ -140,6 +141,7 @@ export const useGameStore = create<GameStore>((set) => ({
   scoringMode: "default" as ScoringMode,
   spectatorsSeeSolution: false,
   hideMaskedPrompt: false,
+  wordListSlugs: ["english_standard"],
   roomState: "waiting",
   players: [],
   moderation: { eligibleVoterIds: [], requiredVotes: 1 },
@@ -177,6 +179,7 @@ export const useGameStore = create<GameStore>((set) => ({
       scoringMode: payload.scoringMode ?? "default",
       spectatorsSeeSolution: payload.spectatorsSeeSolution ?? false,
       hideMaskedPrompt: payload.hideMaskedPrompt ?? false,
+      wordListSlugs: payload.wordListSlugs ?? [],
       roomState: payload.state,
       finalScores: payload.lastGameScores?.length
         ? payload.lastGameScores

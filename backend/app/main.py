@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
 from app.db import async_session_factory, init_db
+from app.db.seed import seed_word_lists
 from app.handlers import register_all_handlers
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -75,6 +76,7 @@ handler_context = register_all_handlers(
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await init_db()
+    await seed_word_lists(word_list_repo)
     try:
         yield
     finally:
@@ -98,6 +100,23 @@ async def health():
 @api.get("/api/rooms")
 async def list_public_rooms():
     return room_manager.list_public_rooms()
+
+
+@api.get("/api/word-lists")
+async def list_word_lists():
+    lists = await word_list_repo.list_all()
+    return [
+        {
+            "slug": wl.slug,
+            "name": wl.name,
+            "description": wl.description,
+            "language": wl.language,
+            "wordCount": wl.word_count,
+            "isBundled": wl.is_bundled,
+            "version": wl.version,
+        }
+        for wl in lists
+    ]
 
 
 # In production, serve the built frontend as static files from the same origin

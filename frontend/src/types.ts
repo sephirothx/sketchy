@@ -32,6 +32,16 @@ export interface RestartVoteState {
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 export type ScoringMode = "none" | "default";
 
+export interface WordListSummary {
+  slug: string;
+  name: string;
+  description: string;
+  language: string;
+  wordCount: number;
+  isBundled: boolean;
+  version: number;
+}
+
 export interface RoomSummary {
   id: string;
   code: string;
@@ -49,6 +59,7 @@ export interface RoomSummary {
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
+  wordListSlugs?: string[];
   state: "waiting" | "playing";
 }
 
@@ -66,6 +77,7 @@ export interface RoomStatePayload {
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
+  wordListSlugs?: string[];
   state: "waiting" | "playing";
   lastGameScores?: ScoreEntry[];
   lastGameDrawings?: DrawingRecapMetadata[];
@@ -87,6 +99,7 @@ export interface EditableRoomSettings {
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
+  wordListSlugs?: string[];
 }
 
 export type GamePhase = "idle" | "choosing_word" | "drawing" | "round_end" | "game_end";

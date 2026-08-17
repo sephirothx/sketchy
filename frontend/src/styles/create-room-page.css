@@ -458,3 +458,105 @@
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+
+/* Curated Word List Picker */
+.word-list-picker-group {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+}
+.word-list-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.word-list-chip {
+  align-items: center;
+  background: #e8edf5;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+  padding: 6px 14px;
+  transition: all 150ms ease;
+  user-select: none;
+}
+[data-theme="dark"] .word-list-chip {
+  background: #0f172a;
+  color: #94a3b8;
+}
+.word-list-chip:hover:not(:disabled) {
+  background: #dfe6f0;
+  color: #1e293b;
+}
+[data-theme="dark"] .word-list-chip:hover:not(:disabled) {
+  background: #1e293b;
+  color: #f8fafc;
+}
+.word-list-chip.is-selected {
+  background: #fff;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  color: #1e293b;
+}
+[data-theme="dark"] .word-list-chip.is-selected {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  color: #f8fafc;
+}
+.word-list-chip-status {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.word-list-chip.is-selected .word-list-chip-status {
+  color: #2563eb;
+}
+[data-theme="dark"] .word-list-chip.is-selected .word-list-chip-status {
+  color: #60a5fa;
+}
+.word-list-chip-name {
+  white-space: nowrap;
+}
+.word-list-chip-count {
+  background: rgba(100, 116, 139, 0.12);
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+}
+[data-theme="dark"] .word-list-chip-count {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+.word-list-chip.is-selected .word-list-chip-count {
+  background: #eff6ff;
+  color: #2563eb;
+}
+[data-theme="dark"] .word-list-chip.is-selected .word-list-chip-count {
+  background: rgba(96, 165, 250, 0.15);
+  color: #93c5fd;
+}
+.word-list-chip:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+.word-list-chip:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+.word-list-picker-loading,
+.word-list-picker-fallback {
+  color: #64748b;
+  font-size: 13px;
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+

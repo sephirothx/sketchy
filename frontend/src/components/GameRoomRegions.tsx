@@ -103,6 +103,7 @@ export function ConnectedWaitingRoomPanel({
   const scoringMode = useGameStore((state) => state.scoringMode);
   const spectatorsSeeSolution = useGameStore((state) => state.spectatorsSeeSolution);
   const hideMaskedPrompt = useGameStore((state) => state.hideMaskedPrompt);
+  const wordListSlugs = useGameStore((state) => state.wordListSlugs);
   const players = useGameStore((state) => state.players);
   const myPlayerId = useGameStore((state) => state.playerId);
   const isHost = useGameStore((state) =>
@@ -121,6 +122,7 @@ export function ConnectedWaitingRoomPanel({
       scoringMode={scoringMode}
       spectatorsSeeSolution={spectatorsSeeSolution}
       hideMaskedPrompt={hideMaskedPrompt}
+      wordListSlugs={wordListSlugs}
       players={players}
       myPlayerId={myPlayerId}
       isHost={isHost}

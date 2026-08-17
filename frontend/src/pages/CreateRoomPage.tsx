@@ -1,6 +1,7 @@
 import { useReducer, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomWordsEditor } from "../components/CustomWordsEditor";
+import { WordListPicker } from "../components/WordListPicker";
 import {
   ChoiceChips,
   InputNumber,
@@ -34,6 +35,7 @@ export function CreateRoomPage() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
+  const [wordListSlugs, setWordListSlugs] = useState<string[]>(["english_standard"]);
   const [customWords, dispatchCustomWords] = useReducer(
     customWordsReducer,
     undefined,
@@ -62,7 +64,7 @@ export function CreateRoomPage() {
       const response = await emitWithAck<AckResponse>("create_room", {
         nickname: trimmedNickname, nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customWords: customWords.value.trim(), customWordsOnly: customWords.only, hintMode, scoringMode,
-        spectatorsSeeSolution, hideMaskedPrompt,
+        spectatorsSeeSolution, hideMaskedPrompt, wordListSlugs,
       });
       if (response.ok && response.roomId && response.code && response.playerId && response.reconnectSecret) {
         setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId, reconnectSecret: response.reconnectSecret });
@@ -108,6 +110,7 @@ export function CreateRoomPage() {
         <InputNumber label="Max players" value={maxPlayers} min={MAX_PLAYERS_MIN} max={MAX_PLAYERS_MAX} onChange={setMaxPlayers} />
         <InputNumber label="Rounds" value={rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={setRounds} />
         <InputNumber label="Drawing time (seconds)" value={drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={setDrawingSeconds} />
+        <WordListPicker selectedSlugs={wordListSlugs} onChange={setWordListSlugs} />
       </div>
       <details className="advanced-settings"><summary>Advanced settings <span>Spectators, scoring, hints, and custom words</span></summary>
         <div className="advanced-settings-content">
