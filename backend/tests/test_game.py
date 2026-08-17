@@ -368,6 +368,8 @@ def test_canvas_commit_history_keeps_a_bounded_recovery_window():
 
 
 def test_record_stroke_respects_history_limit(monkeypatch):
+    monkeypatch.setattr("app.canvas_history.MAX_WINDOW_ACTIONS", 1)
+    monkeypatch.setattr("app.canvas_session.MAX_WINDOW_ACTIONS", 1)
     monkeypatch.setattr("app.canvas_session.MAX_CANVAS_ACTIONS", 1)
     game = make_game()
 

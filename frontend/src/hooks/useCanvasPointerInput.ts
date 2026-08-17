@@ -208,9 +208,9 @@ export function useCanvasPointerInput(
     } else if (tool === "fill") {
       const context = contextRef.current;
       const payload: StrokeFillPayload = { x: point.x, y: point.y, color };
-      if (context && applyFillAction(context, payload)) {
-        protocol.beginDrawAction(encodeFill(payload));
-      }
+      if (!context) return;
+      if (protocol.beginDrawAction(encodeFill(payload)) === null) return;
+      applyFillAction(context, payload);
     } else {
       shapeStartRef.current = point;
     }

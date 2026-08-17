@@ -9,11 +9,28 @@ export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
 export const CANVAS_COORDINATE_SCALE = 4;
 
-const CANVAS_HISTORY_VERSION = 1;
+function envCap(name: string, fallback: number): number {
+  const value = (globalThis as Record<string, unknown>)[name];
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : fallback;
+}
+
+export const PATH_WORK = 1;
+export const SHAPE_WORK = 1;
+export const FILL_WORK = 200;
+export const CLEAR_WORK = 0;
+export const CHECKPOINT_WORK = 0;
+export const MAX_WINDOW_WORK = envCap("SKETCHY_MAX_WINDOW_WORK", 10_000);
+export const MAX_WINDOW_ACTIONS = envCap("SKETCHY_MAX_WINDOW_ACTIONS", 256);
+export const MAX_CANVAS_POINTS = 25_000;
+export const MAX_CHECKPOINT_PNG = 400_000;
+export const MAX_SYNC_BYTES = 524_288;
+
+const CANVAS_HISTORY_VERSION = 2;
 const MAX_BRUSH_WIDTH = 64;
 const MAX_NORMALIZED_COORDINATE_MAGNITUDE = 1_000_000;
-const MAX_CANVAS_ACTIONS = 20_000;
-const MAX_CANVAS_POINTS = 25_000;
+const MAX_CANVAS_ACTIONS = MAX_WINDOW_ACTIONS + 1;
 const HISTORY_SHAPES: ShapeType[] = ["rectangle", "ellipse", "triangle"];
 const BINARY_HISTORY_MAGIC = [0x53, 0x4b, 0x43, 0x48]; // "SKCH"
 const BINARY_HEADER_SIZE = 7;
@@ -23,6 +40,8 @@ const PATH_POINT_SIZE = 4;
 const SHAPE_ACTION_SIZE = 14;
 const FILL_ACTION_SIZE = 8;
 const CLEAR_ACTION_SIZE = 1;
+const CHECKPOINT_HEADER_SIZE = 5;
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 interface CanvasPoint {
   x: number;
@@ -33,7 +52,8 @@ export type DecodedCanvasAction =
   | { kind: "path"; color: string; width: number; points: CanvasPoint[] }
   | { kind: "shape"; payload: StrokeShapePayload }
   | { kind: "fill"; color: string; x: number; y: number }
-  | { kind: "clear" };
+  | { kind: "clear" }
+  | { kind: "checkpoint"; png: Uint8Array };
 
 const CRC32_TABLE = new Uint32Array(256);
 for (let index = 0; index < CRC32_TABLE.length; index++) {
@@ -101,6 +121,14 @@ function canonicalActionBytes(action: DecodedCanvasAction): Uint8Array {
     view.setUint16(6, action.y, true);
     return bytes;
   }
+  if (action.kind === "checkpoint") {
+    const bytes = new Uint8Array(CHECKPOINT_HEADER_SIZE + action.png.byteLength);
+    const view = new DataView(bytes.buffer);
+    bytes[0] = 4;
+    view.setUint32(1, action.png.byteLength, true);
+    bytes.set(action.png, CHECKPOINT_HEADER_SIZE);
+    return bytes;
+  }
   return Uint8Array.of(3);
 }
 
@@ -115,6 +143,89 @@ export function calculateCanvasHistoryHash(
   actions: DecodedCanvasAction[],
 ): number {
   return actions.reduce(extendHistoryHash, 0);
+}
+
+export function actionReplayWork(action: DecodedCanvasAction): number {
+  if (action.kind === "path") return PATH_WORK;
+  if (action.kind === "shape") return SHAPE_WORK;
+  if (action.kind === "fill") return FILL_WORK;
+  if (action.kind === "checkpoint") return CHECKPOINT_WORK;
+  return CLEAR_WORK;
+}
+
+export function actionPointCount(action: DecodedCanvasAction): number {
+  return action.kind === "path" ? action.points.length : 0;
+}
+
+export function semanticStart(actions: DecodedCanvasAction[]): number {
+  return actions[0]?.kind === "checkpoint" ? 1 : 0;
+}
+
+export function windowReplayWork(actions: DecodedCanvasAction[]): number {
+  return actions.reduce((total, action) => total + actionReplayWork(action), 0);
+}
+
+export function windowPointCount(actions: DecodedCanvasAction[]): number {
+  return actions.reduce((total, action) => total + actionPointCount(action), 0);
+}
+
+export function neededFoldCount(
+  actions: DecodedCanvasAction[],
+  extraWork: number,
+  extraPoints: number,
+  extraActions: number,
+  foldableCount?: number,
+): number | null | -1 {
+  const start = semanticStart(actions);
+  const semantic = actions.length - start;
+  const foldable = Math.min(foldableCount ?? semantic, semantic);
+  const work = windowReplayWork(actions);
+  const points = windowPointCount(actions);
+  if (
+    work + extraWork <= MAX_WINDOW_WORK
+    && semantic + extraActions <= MAX_WINDOW_ACTIONS
+    && points + extraPoints <= MAX_CANVAS_POINTS
+  ) {
+    return null;
+  }
+  let foldedWork = 0;
+  let foldedPoints = 0;
+  for (let folded = 1; folded <= foldable; folded++) {
+    const action = actions[start + folded - 1];
+    foldedWork += actionReplayWork(action);
+    foldedPoints += actionPointCount(action);
+    if (
+      work - foldedWork + extraWork <= MAX_WINDOW_WORK
+      && semantic - folded + extraActions <= MAX_WINDOW_ACTIONS
+      && points - foldedPoints + extraPoints <= MAX_CANVAS_POINTS
+    ) {
+      return folded;
+    }
+  }
+  return -1;
+}
+
+function packetCost(packet: LiveDrawingPacket): {
+  extraWork: number;
+  extraPoints: number;
+  extraActions: number;
+} | null {
+  if (packet.event === "draw_start") {
+    return { extraWork: PATH_WORK, extraPoints: 1, extraActions: 1 };
+  }
+  if (packet.event === "draw_shape") {
+    return { extraWork: SHAPE_WORK, extraPoints: 0, extraActions: 1 };
+  }
+  if (packet.event === "draw_fill") {
+    return { extraWork: FILL_WORK, extraPoints: 0, extraActions: 1 };
+  }
+  if (packet.event === "clear_canvas") {
+    return { extraWork: CLEAR_WORK, extraPoints: 0, extraActions: 1 };
+  }
+  if (packet.event === "draw_move") {
+    return { extraWork: 0, extraPoints: packet.payload.points.length, extraActions: 0 };
+  }
+  return { extraWork: 0, extraPoints: 0, extraActions: 0 };
 }
 
 function isRevision(value: unknown): value is number {
@@ -187,6 +298,90 @@ export class ClientCanvasHistory {
     return true;
   }
 
+  canApply(packet: LiveDrawingPacket): boolean {
+    if (
+      packet.event === "clear_canvas"
+      && (this.actions.length === 0 || this.actions.at(-1)?.kind === "clear")
+    ) {
+      return false;
+    }
+    const cost = packetCost(packet);
+    if (!cost) return false;
+    if (packet.event === "draw_move") {
+      if (!this.activePath && this.actions.at(-1)?.kind !== "path") return false;
+      return windowPointCount(this.actions) + cost.extraPoints <= MAX_CANVAS_POINTS;
+    }
+    if (packet.event === "draw_end") {
+      return Boolean(this.activePath || this.actions.at(-1)?.kind === "path");
+    }
+    const needed = neededFoldCount(
+      this.actions.at(-1)?.kind === "clear" ? [] : this.actions,
+      cost.extraWork,
+      cost.extraPoints,
+      cost.extraActions,
+      this.actions.at(-1)?.kind === "path" && this.activePath
+        ? this.actions.length - semanticStart(this.actions) - 1
+        : undefined,
+    );
+    return needed !== -1;
+  }
+
+  neededFoldForPacket(packet: LiveDrawingPacket): number | null {
+    const cost = packetCost(packet);
+    if (!cost || cost.extraActions === 0 && packet.event !== "draw_move") return null;
+    if (packet.event === "draw_move" || packet.event === "draw_end") return null;
+    const needed = neededFoldCount(
+      this.actions.at(-1)?.kind === "clear" ? [] : this.actions,
+      cost.extraWork,
+      cost.extraPoints,
+      cost.extraActions,
+    );
+    return typeof needed === "number" && needed > 0 ? needed : null;
+  }
+
+  opportunisticFoldCount(threshold = 0.8): number | null {
+    const needed = neededFoldCount(
+      this.actions,
+      MAX_WINDOW_WORK - Math.floor(MAX_WINDOW_WORK * threshold),
+      MAX_CANVAS_POINTS - Math.floor(MAX_CANVAS_POINTS * threshold),
+      MAX_WINDOW_ACTIONS - Math.max(1, Math.floor(MAX_WINDOW_ACTIONS * threshold)),
+    );
+    return typeof needed === "number" && needed > 0 ? needed : null;
+  }
+
+  applyCheckpoint(png: Uint8Array, foldedCount: number): boolean {
+    if (png.byteLength > MAX_CHECKPOINT_PNG) return false;
+    if (PNG_SIGNATURE.some((byte, index) => png[index] !== byte)) return false;
+    const start = semanticStart(this.actions);
+    const semantic = this.actions.length - start;
+    if (foldedCount < 1 || foldedCount > semantic) return false;
+    if (this.activePath && foldedCount > semantic - 1) return false;
+    const remaining = this.actions.slice(start + foldedCount);
+    this.actions = [{ kind: "checkpoint", png: new Uint8Array(png) }, ...remaining];
+    this.prefixHashes = [];
+    for (const action of this.actions) {
+      this.prefixHashes.push(extendHistoryHash(this.prefixHashes.at(-1) ?? 0, action));
+    }
+    this.historyHash = this.prefixHashes.at(-1) ?? 0;
+    this.advanceRevision();
+    if (this.activePath) {
+      this.activePath = remaining.at(-1)?.kind === "path"
+        ? remaining.at(-1) as Extract<DecodedCanvasAction, { kind: "path" }>
+        : null;
+    }
+    return true;
+  }
+
+  prefixHashForFold(foldedCount: number): number | null {
+    const start = semanticStart(this.actions);
+    return this.prefixHashes[start + foldedCount - 1] ?? null;
+  }
+
+  checkpointPng(): Uint8Array | null {
+    const first = this.actions[0];
+    return first?.kind === "checkpoint" ? first.png : null;
+  }
+
   apply(packet: LiveDrawingPacket): boolean {
     if (packet.event === "draw_move") {
       if (!this.activePath && this.actions.at(-1)?.kind === "path") {
@@ -196,6 +391,9 @@ export class ClientCanvasHistory {
         >;
       }
       if (!this.activePath) return false;
+      if (windowPointCount(this.actions) + packet.payload.points.length > MAX_CANVAS_POINTS) {
+        return false;
+      }
       this.activePath.points.push(
         ...packet.payload.points.map((point) => ({
           x: point.x * CANVAS_WIDTH,
@@ -220,6 +418,7 @@ export class ClientCanvasHistory {
       if (this.actions.length === 0 || this.actions.at(-1)?.kind === "clear") {
         return false;
       }
+      if (neededFoldCount(this.actions, CLEAR_WORK, 0, 1) !== null) return false;
       this.actions.push({ kind: "clear" });
       this.activePath = null;
       this.advanceRevision();
@@ -235,6 +434,16 @@ export class ClientCanvasHistory {
       this.historyHash = 0;
     }
     this.activePath = null;
+
+    const cost = packetCost(packet);
+    if (!cost || neededFoldCount(
+      this.actions,
+      cost.extraWork,
+      cost.extraPoints,
+      cost.extraActions,
+    ) !== null) {
+      return false;
+    }
 
     if (packet.event === "draw_start") {
       const action: Extract<DecodedCanvasAction, { kind: "path" }> = {
@@ -286,6 +495,7 @@ export class ClientCanvasHistory {
       || !isRevision(sequence)
       || sequence <= this.sequence
       || this.actions.length === 0
+      || this.actions.at(-1)?.kind === "checkpoint"
     ) return null;
     const request: [number, number, number, number] = [
       this.generation,
@@ -308,7 +518,7 @@ export class ClientCanvasHistory {
   ): boolean {
     if (
       !Array.isArray(payload)
-      || payload.length !== 4
+      || payload.length < 4
       || !isRevision(payload[0])
       || !isRevision(payload[1])
       || !isRevision(payload[2])
@@ -387,6 +597,18 @@ export class ClientCanvasHistory {
   }
 }
 
+function historyWindowValid(actions: DecodedCanvasAction[]): boolean {
+  const start = semanticStart(actions);
+  if (actions.some((action, index) => action.kind === "checkpoint" && index !== 0)) {
+    return false;
+  }
+  return (
+    actions.length - start <= MAX_WINDOW_ACTIONS
+    && windowReplayWork(actions) <= MAX_WINDOW_WORK
+    && windowPointCount(actions) <= MAX_CANVAS_POINTS
+  );
+}
+
 function isNumberBetween(value: unknown, low: number, high: number): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= low && value <= high;
 }
@@ -418,7 +640,7 @@ function decodeJsonCanvasHistory(payload: unknown): DecodedCanvasAction[] | null
   const decoded: DecodedCanvasAction[] = [];
   let totalPoints = 0;
   for (const rawAction of (payload as CanvasSyncPayload).a) {
-    if (!Array.isArray(rawAction) || !isIntegerBetween(rawAction[0], 0, 3)) return null;
+    if (!Array.isArray(rawAction) || !isIntegerBetween(rawAction[0], 0, 4)) return null;
     const tag = rawAction[0];
     if (tag === 0) {
       const color = historyColor(rawAction[1]);
@@ -494,12 +716,33 @@ function decodeJsonCanvasHistory(payload: unknown): DecodedCanvasAction[] | null
         return null;
       }
       decoded.push({ kind: "fill", color, x: rawAction[2], y: rawAction[3] });
+    } else if (tag === 4) {
+      if (
+        decoded.length !== 0
+        || rawAction.length !== 2
+        || typeof rawAction[1] !== "string"
+      ) {
+        return null;
+      }
+      try {
+        const binary = atob(rawAction[1]);
+        const png = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        if (
+          png.byteLength > MAX_CHECKPOINT_PNG
+          || PNG_SIGNATURE.some((byte, offset) => png[offset] !== byte)
+        ) {
+          return null;
+        }
+        decoded.push({ kind: "checkpoint", png });
+      } catch {
+        return null;
+      }
     } else {
       if (rawAction.length !== 1) return null;
       decoded.push({ kind: "clear" });
     }
   }
-  return decoded;
+  return historyWindowValid(decoded) ? decoded : null;
 }
 
 export function binaryDataView(payload: unknown): DataView | null {
@@ -531,7 +774,7 @@ function decodeBinaryCanvasHistory(view: DataView): DecodedCanvasAction[] | null
   }
 
   const actionCount = view.getUint16(5, true);
-  if (actionCount > MAX_CANVAS_ACTIONS) return null;
+  if (actionCount > MAX_CANVAS_ACTIONS || view.byteLength > MAX_SYNC_BYTES) return null;
   const dataStart = (
     BINARY_HEADER_SIZE
     + (actionCount + 1) * BINARY_OFFSET_SIZE
@@ -632,11 +875,19 @@ function decodeBinaryCanvasHistory(view: DataView): DecodedCanvasAction[] | null
     } else if (tag === 3) {
       if (recordLength !== CLEAR_ACTION_SIZE) return null;
       decoded.push({ kind: "clear" });
+    } else if (tag === 4) {
+      if (index !== 0 || recordLength < CHECKPOINT_HEADER_SIZE) return null;
+      const length = view.getUint32(start + 1, true);
+      if (length !== recordLength - CHECKPOINT_HEADER_SIZE) return null;
+      if (length > MAX_CHECKPOINT_PNG) return null;
+      const png = new Uint8Array(view.buffer, view.byteOffset + start + CHECKPOINT_HEADER_SIZE, length);
+      if (PNG_SIGNATURE.some((byte, offset) => png[offset] !== byte)) return null;
+      decoded.push({ kind: "checkpoint", png: new Uint8Array(png) });
     } else {
       return null;
     }
   }
-  return decoded;
+  return historyWindowValid(decoded) ? decoded : null;
 }
 
 export function decodeCanvasHistory(payload: unknown): DecodedCanvasAction[] | null {

@@ -41,14 +41,15 @@ PROFILES = {
     "mobile": 4,
 }
 
-# Full replay is practical for bounded paths and small shapes. Fill-heavy and
-# mixed histories are sampled evenly because replaying 20,000 full-canvas fills
-# would intentionally occupy the main thread for minutes.
+# Full replay of every accepted window fixture. Checkpoint histories replay
+# drawImage plus the trailing window, not the folded prefix floods.
 REPLAY_LIMITS = {
+    "window-fill": None,
     "path-heavy": None,
     "shape-heavy": None,
-    "fill-heavy": 100,
-    "mixed": 400,
+    "checkpoint-fill-spam": None,
+    "checkpoint-mixed": None,
+    "realistic": None,
 }
 
 
@@ -124,8 +125,8 @@ def print_results(results: list[BrowserReplayResult]) -> None:
             f"{result.projected_full_replay_ms:>12.1f}ms"
         )
     print(
-        "\nProjected values linearly scale an evenly sampled replay only when the "
-        "full 20,000-action replay is intentionally time-bounded."
+        "\nEvery fixture replays in full. Checkpoint histories blit one PNG then "
+        "the trailing window; they do not re-flood compacted fills."
     )
 
 

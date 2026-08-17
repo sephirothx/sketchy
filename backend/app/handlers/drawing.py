@@ -7,6 +7,7 @@ from app.game import Phase
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     PayloadError,
+    parse_checkpoint_payload,
     parse_draw_payload,
     parse_empty_payload,
     parse_undo_payload,
@@ -61,6 +62,12 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
             commit = room.game.canvas.get_commit(sequence)
             if commit and commit[2] == "action":
                 await ctx.game_flow._emit_canvas_commit(room, sequence, to=sid)
+            elif commit and commit[2].startswith("reject:"):
+                await ctx.game_flow._emit_canvas_rejected(
+                    room, sequence, commit[2].split(":", 1)[1], to=sid
+                )
+            elif commit and commit[2] == "checkpoint":
+                await ctx.game_flow._emit_canvas_sync(room, sid)
             else:
                 await ctx.game_flow._emit_canvas_sync(room, sid)
             return
@@ -81,6 +88,11 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         return
     if packet.event == "clear_canvas":
         if not room.game.canvas.clear_canvas_stroke():
+            reason = room.game.canvas.reject_reason or "invalid"
+            if reason != "invalid":
+                room.game.canvas.commit_sequence(sequence, f"reject:{reason}")
+                await ctx.game_flow._emit_canvas_rejected(room, sequence, reason, to=sid)
+                await ctx.game_flow._emit_canvas_sync(room, sid)
             return
         await ctx.sio.emit(
             "draw",
@@ -92,6 +104,13 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         await ctx.game_flow._emit_canvas_commit(room, sequence)
         return
     if not room.game.canvas.record_stroke(packet.event, packet.payload):
+        reason = room.game.canvas.reject_reason or "invalid"
+        if starts_action and reason != "invalid":
+            if packet.event == "draw_start":
+                room.game.canvas.discarding_draw_sequence = True
+            room.game.canvas.commit_sequence(sequence, f"reject:{reason}")
+            await ctx.game_flow._emit_canvas_rejected(room, sequence, reason, to=sid)
+            await ctx.game_flow._emit_canvas_sync(room, sid)
         return
     if packet.event == "draw_start":
         room.game.canvas.discarding_draw_sequence = False
@@ -154,9 +173,64 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
         return {"ok": True}
     return {"ok": False, "error": "Nothing to undo"}
 
-# ------------------------------------------------------------------
-# Guessing / chat
-# ------------------------------------------------------------------
+
+async def canvas_checkpoint(ctx: HandlerContext, sid, data, identity=None):
+    try:
+        payload = parse_checkpoint_payload(data, identity)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current or not current[0].game:
+        return
+    room, player = current
+    if player.id != room.game.current_drawer or room.game.phase != Phase.DRAWING:
+        return
+    canvas = room.game.canvas
+    if payload.generation != canvas.generation:
+        await ctx.game_flow._emit_canvas_sync(room, sid)
+        return
+    if canvas.active_draw_sequence is not None:
+        await ctx.game_flow._request_canvas_actions(
+            room,
+            sid,
+            canvas.sequence + 1,
+            payload.sequence,
+        )
+        return
+    if payload.sequence <= canvas.sequence:
+        commit = canvas.get_commit(payload.sequence)
+        if commit and commit[2] == "checkpoint":
+            await ctx.game_flow._emit_canvas_sync(room, sid)
+        elif commit and commit[2].startswith("reject:"):
+            await ctx.game_flow._emit_canvas_rejected(
+                room, payload.sequence, commit[2].split(":", 1)[1], to=sid
+            )
+        else:
+            await ctx.game_flow._emit_canvas_sync(room, sid)
+        return
+    if payload.sequence != canvas.sequence + 1:
+        await ctx.game_flow._request_canvas_actions(
+            room,
+            sid,
+            canvas.sequence + 1,
+            payload.sequence,
+        )
+        return
+    reason = canvas.apply_checkpoint(
+        payload.png, payload.folded_count, payload.prefix_hash
+    )
+    if reason:
+        canvas.commit_sequence(payload.sequence, f"reject:{reason}")
+        await ctx.game_flow._emit_canvas_rejected(room, payload.sequence, reason, to=sid)
+        await ctx.game_flow._emit_canvas_sync(room, sid)
+        return
+    canvas.commit_sequence(payload.sequence, "checkpoint")
+    await ctx.game_flow._emit_canvas_checkpoint(
+        room,
+        payload.sequence,
+        payload.folded_count,
+        payload.png,
+    )
 
 
 async def request_sync_strokes(ctx: HandlerContext, sid, data=None):
@@ -173,4 +247,5 @@ async def request_sync_strokes(ctx: HandlerContext, sid, data=None):
 def register(ctx: HandlerContext) -> None:
     ctx.sio.on("draw", handler=partial(draw, ctx))
     ctx.sio.on("undo_stroke", handler=partial(undo_stroke, ctx))
+    ctx.sio.on("canvas_checkpoint", handler=partial(canvas_checkpoint, ctx))
     ctx.sio.on("request_sync_strokes", handler=partial(request_sync_strokes, ctx))

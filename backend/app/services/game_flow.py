@@ -243,7 +243,13 @@ class GameFlowService:
             if not commit:
                 return
             revision, history_hash, mutation = commit
-            event = "canvas_undo" if mutation == "undo" else "canvas_commit"
+            event = (
+                "canvas_undo"
+                if mutation == "undo"
+                else "canvas_commit"
+            )
+            if mutation.startswith("reject:"):
+                return
             payload = (
                 [
                     room.game.canvas.generation,
@@ -263,6 +269,49 @@ class GameFlowService:
             await sio.emit(
                 event,
                 payload,
+                to=to,
+                room=None if to else room.id,
+            )
+
+        async def _emit_canvas_rejected(
+            room: Room,
+            sequence: int,
+            reason: str,
+            *,
+            to: str,
+        ) -> None:
+            if not room.game:
+                return
+            await sio.emit(
+                "canvas_rejected",
+                [room.game.canvas.generation, sequence, reason],
+                to=to,
+            )
+
+        async def _emit_canvas_checkpoint(
+            room: Room,
+            sequence: int,
+            folded_count: int,
+            png: bytes,
+            *,
+            to: str | None = None,
+        ) -> None:
+            if not room.game:
+                return
+            commit = room.game.canvas.get_commit(sequence)
+            if not commit:
+                return
+            revision, history_hash, _mutation = commit
+            await sio.emit(
+                "canvas_checkpoint",
+                [
+                    room.game.canvas.generation,
+                    sequence,
+                    revision,
+                    history_hash,
+                    folded_count,
+                    png,
+                ],
                 to=to,
                 room=None if to else room.id,
             )
@@ -555,6 +604,8 @@ class GameFlowService:
         self._start_fresh_game = _start_fresh_game
         self._emit_canvas_sync = _emit_canvas_sync
         self._emit_canvas_commit = _emit_canvas_commit
+        self._emit_canvas_rejected = _emit_canvas_rejected
+        self._emit_canvas_checkpoint = _emit_canvas_checkpoint
         self._request_canvas_actions = _request_canvas_actions
         self._sync_player_view = _sync_player_view
         self._join_socket_room = _join_socket_room

@@ -22,7 +22,7 @@ export const CanvasSnapshot = forwardRef<CanvasRef, CanvasSnapshotProps>(
       const canvas = canvasRef.current;
       const context = canvas?.getContext("2d", { willReadFrequently: true });
       if (!canvas || !context) return;
-      renderCanvasActions(context, actions);
+      void renderCanvasActions(context, actions);
     }, [actions]);
 
     useImperativeHandle(ref, () => ({

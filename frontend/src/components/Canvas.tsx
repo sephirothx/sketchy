@@ -32,6 +32,7 @@ import { useSettingsStore } from "../store/settingsStore";
 import type { DrawTool, StrokePoint } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
 import { recordRender } from "../lib/renderDiagnostics";
+import { useToast } from "../lib/toast";
 
 interface CanvasProps {
   isDrawer: boolean;
@@ -117,13 +118,14 @@ function createProtocolRenderer(
     offscreen.height = CANVAS_HEIGHT;
     const offscreenContext = offscreen.getContext("2d", { willReadFrequently: true });
     if (!offscreenContext) return;
-    renderCanvasActions(offscreenContext, actions);
-    const canvas = canvasRef.current;
-    const context = contextRef.current;
-    if (currentReplay === replayGeneration && canvas && context) {
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(offscreen, 0, 0);
-    }
+    renderCanvasActions(offscreenContext, actions).then(() => {
+      const canvas = canvasRef.current;
+      const context = contextRef.current;
+      if (currentReplay === replayGeneration && canvas && context) {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(offscreen, 0, 0);
+      }
+    });
     remoteState.last = null;
   };
 
@@ -148,6 +150,7 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const previewContextRef = useRef<CanvasRenderingContext2D | null>(null);
   const penCursor = useSettingsStore((state) => state.penCursor);
+  const { notify } = useToast();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -169,7 +172,16 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     () => createProtocolRenderer(canvasRef, contextRef),
     [],
   );
-  const protocol = useCanvasProtocol(renderer);
+  const protocol = useCanvasProtocol(renderer, (reason) => {
+    const message = reason === "replay_work"
+      ? "This fill would make the drawing too slow to replay. Try a stroke or shape, or undo."
+      : reason === "point_count"
+        ? "This stroke has too many points. Try undoing some strokes."
+        : reason === "action_count"
+          ? "Too many drawing actions. Try undoing some strokes."
+          : "Could not save this drawing action. The canvas was restored.";
+    notify(message, "warning", 4000);
+  });
   const pointer = useCanvasPointerInput(
     protocol,
     canvasRef,

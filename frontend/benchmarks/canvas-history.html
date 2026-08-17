@@ -41,7 +41,7 @@
 
         const replayActions = evenlySample(actions, replayLimit);
         const replayStarted = performance.now();
-        renderCanvasActions(context, replayActions);
+        await renderCanvasActions(context, replayActions);
         const replayMs = performance.now() - replayStarted;
         await new Promise((resolve) => setTimeout(resolve, 0));
 

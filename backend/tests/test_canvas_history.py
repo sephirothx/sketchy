@@ -6,6 +6,10 @@ from app.canvas_history import (
     MAX_BINARY_CANVAS_HISTORY_BYTES,
     MAX_CANVAS_ACTIONS,
     MAX_CANVAS_POINTS,
+    MAX_CHECKPOINT_PNG,
+    MAX_WINDOW_ACTIONS,
+    MAX_WINDOW_BINARY_BYTES,
+    MAX_WINDOW_WORK,
     PATH_TAG,
     PackedCanvasHistory,
     PathAction,
@@ -16,7 +20,10 @@ from app.canvas_history import (
     decode_binary_canvas_history,
     decode_canvas_history,
     encode_canvas_history,
+    needed_fold_count,
+    validate_checkpoint_png,
 )
+from tests.checkpoint_png import tiny_png
 
 
 def representative_actions():
@@ -40,7 +47,7 @@ def representative_actions():
 
 def test_canvas_history_encoding_is_compact_and_versioned():
     assert encode_canvas_history(representative_actions()) == {
-        "v": 1,
+        "v": 2,
         "a": [
             [0, 0xAABBCC, 4, 0.1, 0.2, 0.3, 0.4],
             [1, 1, 0x102030, 8, 0.2, 0.3, 0.8, 0.9],
@@ -113,7 +120,7 @@ def test_binary_canvas_history_has_an_exact_theoretical_maximum():
         color=0,
         width=1,
     )
-    for _ in range(MAX_CANVAS_ACTIONS - 1):
+    for _ in range(MAX_WINDOW_ACTIONS - 1):
         history.append_shape(
             shape="rectangle",
             start=(0.0, 0.0),
@@ -124,7 +131,9 @@ def test_binary_canvas_history_has_an_exact_theoretical_maximum():
 
     payload = history.binary_payload()
 
-    assert len(payload) == MAX_BINARY_CANVAS_HISTORY_BYTES == 460_002
+    assert len(history) == MAX_WINDOW_ACTIONS
+    assert len(payload) == MAX_WINDOW_BINARY_BYTES
+    assert len(payload) < MAX_BINARY_CANVAS_HISTORY_BYTES
     assert decode_binary_canvas_history(payload) == history
 
 
@@ -185,20 +194,21 @@ def test_canvas_history_crc32_matches_frontend_canonical_encoding():
     [
         None,
         {},
-        {"v": 2, "a": []},
-        {"v": 1, "a": [], "extra": True},
-        {"v": 1, "a": "not-a-list"},
-        {"v": 1, "a": [[]]},
-        {"v": 1, "a": [[True]]},
-        {"v": 1, "a": [[4]]},
-        {"v": 1, "a": [[0, 0, 4, 0.1]]},
-        {"v": 1, "a": [[0, 0, 4, 0.1, float("nan")]]},
-        {"v": 1, "a": [[0, 0, 4.5, 0.1, 0.2]]},
-        {"v": 1, "a": [[0, 0x1000000, 4, 0.1, 0.2]]},
-        {"v": 1, "a": [[1, 3, 0, 4, 0.1, 0.2, 0.3, 0.4]]},
-        {"v": 1, "a": [[2, 0, 800, 0]]},
-        {"v": 1, "a": [[2, 0, 0, 600]]},
-        {"v": 1, "a": [[3, 0]]},
+        {"v": 3, "a": []},
+        {"v": 1, "a": []},
+        {"v": 2, "a": [], "extra": True},
+        {"v": 2, "a": "not-a-list"},
+        {"v": 2, "a": [[]]},
+        {"v": 2, "a": [[True]]},
+        {"v": 2, "a": [[4]]},
+        {"v": 2, "a": [[0, 0, 4, 0.1]]},
+        {"v": 2, "a": [[0, 0, 4, 0.1, float("nan")]]},
+        {"v": 2, "a": [[0, 0, 4.5, 0.1, 0.2]]},
+        {"v": 2, "a": [[0, 0x1000000, 4, 0.1, 0.2]]},
+        {"v": 2, "a": [[1, 3, 0, 4, 0.1, 0.2, 0.3, 0.4]]},
+        {"v": 2, "a": [[2, 0, 800, 0]]},
+        {"v": 2, "a": [[2, 0, 0, 600]]},
+        {"v": 2, "a": [[3, 0]]},
     ],
 )
 def test_canvas_history_decoder_rejects_malformed_payloads(payload):
@@ -208,13 +218,84 @@ def test_canvas_history_decoder_rejects_malformed_payloads(payload):
 
 def test_canvas_history_decoder_enforces_complexity_limits():
     with pytest.raises(ValueError, match="too many actions"):
-        decode_canvas_history({"v": 1, "a": [[3]] * 20_001})
+        decode_canvas_history({"v": 2, "a": [[3]] * (MAX_CANVAS_ACTIONS + 1)})
 
-    oversized_path = [0, 0, 4] + [0, 0] * 25_001
+    oversized_path = [0, 0, 4] + [0, 0] * (MAX_CANVAS_POINTS + 1)
     with pytest.raises(ValueError, match="too many points"):
-        decode_canvas_history({"v": 1, "a": [oversized_path]})
+        decode_canvas_history({"v": 2, "a": [oversized_path]})
+
+    with pytest.raises(ValueError, match="replay-work"):
+        decode_canvas_history({"v": 2, "a": [[2, 0, 0, 0]] * 51})
 
 
 def test_color_encoding_round_trip_preserves_leading_zeroes():
     assert color_to_int("#00a0ff") == 0x00A0FF
     assert color_to_hex(0x00A0FF) == "#00a0ff"
+
+
+def test_needed_fold_count_folds_the_smallest_prefix():
+    history = PackedCanvasHistory()
+    for _ in range(50):
+        history.append_fill(x=0, y=0, color=0)
+    assert history.replay_work() == MAX_WINDOW_WORK
+    assert needed_fold_count(history, extra_work=200, extra_points=0, extra_actions=1) == 1
+    assert needed_fold_count(history, extra_work=0, extra_points=0, extra_actions=0) is None
+
+
+def test_needed_fold_count_folds_a_cheap_action_window():
+    history = PackedCanvasHistory()
+    for _ in range(MAX_WINDOW_ACTIONS):
+        history.append_shape(
+            shape="rectangle",
+            start=(0.0, 0.0),
+            end=(1.0, 1.0),
+            color=0,
+            width=1,
+        )
+    assert needed_fold_count(history, extra_work=1, extra_points=0, extra_actions=1) == 1
+
+
+def test_checkpoint_png_round_trip_and_hash_changes():
+    png = tiny_png()
+    validate_checkpoint_png(png)
+    history = PackedCanvasHistory()
+    for _ in range(2):
+        history.append_fill(x=1, y=1, color=0x112233)
+    before = canvas_history_hash(history)
+    history.compact_prefix(png, 1)
+    after = canvas_history_hash(history)
+    assert history.has_checkpoint()
+    assert history.semantic_count() == 1
+    assert after != before
+    decoded = decode_binary_canvas_history(history.binary_payload())
+    assert decoded.has_checkpoint()
+    assert encode_canvas_history(decoded)["v"] == 2
+    assert encode_canvas_history(decoded)["a"][0][0] == 4
+
+
+def test_decoder_rejects_v1_envelope_with_checkpoint_tag():
+    png = tiny_png()
+    import base64
+
+    with pytest.raises(ValueError, match="invalid canvas history envelope"):
+        decode_canvas_history({"v": 1, "a": [[4, base64.b64encode(png).decode("ascii")]]})
+
+
+def test_decoder_rejects_oversize_and_non_png_checkpoints():
+    history = PackedCanvasHistory()
+    history.append_fill(x=0, y=0, color=0)
+    valid = history.binary_payload()
+    with pytest.raises(ValueError):
+        validate_checkpoint_png(b"not-a-png")
+    with pytest.raises(ValueError):
+        validate_checkpoint_png(b"\x89PNG\r\n\x1a\n" + b"x" * (MAX_CHECKPOINT_PNG + 1))
+
+    packed = PackedCanvasHistory()
+    packed.append_checkpoint(tiny_png())
+    payload = bytearray(packed.binary_payload())
+    # Corrupt the PNG signature inside the checkpoint record.
+    data_start = 7 + 2 * 4
+    payload[data_start + 5] = 0
+    with pytest.raises(ValueError):
+        decode_binary_canvas_history(bytes(payload))
+    assert decode_binary_canvas_history(valid)

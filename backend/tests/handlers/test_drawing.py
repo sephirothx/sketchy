@@ -6,6 +6,7 @@ import pytest
 import socketio
 
 from app.canvas_history import (
+    CheckpointAction,
     ClearAction,
     FillAction,
     PathAction,
@@ -19,6 +20,7 @@ from app.live_drawing import encode_live_drawing
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import DrawingRecapEntry, STARTING_SCORE, RoomManager
 from app.words import MAX_WORD_LENGTH
+from tests.checkpoint_png import tiny_png
 
 
 def canvas_action(game: Game, sequence: int) -> list[int]:
@@ -750,7 +752,7 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
     assert sequence == room.game.canvas.sequence
     assert history_hash == room.game.canvas.hash
     assert encode_canvas_history(decoded) == {
-        "v": 1,
+        "v": 2,
         "a": [[0, 0, 4, 0.1, 0.2, 0.3, 0.4]],
     }
 
@@ -782,3 +784,108 @@ async def test_request_sync_strokes_seeds_empty_history_revision():
     assert generation == room.game.canvas.generation
     assert sequence == 0
     assert history_hash == 0
+
+
+def _drawing_room():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    drawer.sid = "drawer-sid"
+    room_manager.add_player(room, "Guesser")
+    room.game = Game(turn_order=list(room.players), rounds_total=1)
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_word_choice()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": drawer.id}
+    )
+    sio.emit = AsyncMock()
+    return room_manager, room, sio
+
+
+@pytest.mark.asyncio
+async def test_canvas_checkpoint_replaces_prefix_and_is_not_rebroadcast_as_draw():
+    _, room, sio = _drawing_room()
+    draw = sio.handlers["/"]["draw"]
+    checkpoint = sio.handlers["/"]["canvas_checkpoint"]
+    fill = encode_live_drawing("draw_fill", {"x": 0.1, "y": 0.1, "color": "#112233"})
+    await draw("drawer-sid", fill, canvas_action(room.game, 1))
+    prefix_hash = room.game.canvas.hash
+    await draw("drawer-sid", fill, canvas_action(room.game, 2))
+    png = tiny_png()
+    sio.emit.reset_mock()
+
+    await checkpoint("drawer-sid", png, [room.game.canvas.generation, 3, 1, prefix_hash])
+
+    assert isinstance(room.game.canvas.history[0], CheckpointAction)
+    assert room.game.canvas.history.semantic_count() == 1
+    assert room.game.canvas.sequence == 3
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "canvas_checkpoint" in events
+    assert "draw" not in events
+    checkpoint_call = next(
+        call for call in sio.emit.await_args_list if call.args[0] == "canvas_checkpoint"
+    )
+    assert checkpoint_call.args[1][4] == 1
+    assert checkpoint_call.args[1][5] == png
+
+
+@pytest.mark.asyncio
+async def test_over_budget_draw_is_rejected_until_checkpoint(monkeypatch):
+    monkeypatch.setattr("app.canvas_history.MAX_WINDOW_WORK", 200)
+    monkeypatch.setattr("app.canvas_session.MAX_WINDOW_WORK", 200)
+    _, room, sio = _drawing_room()
+    draw = sio.handlers["/"]["draw"]
+    checkpoint = sio.handlers["/"]["canvas_checkpoint"]
+    fill = encode_live_drawing("draw_fill", {"x": 0.2, "y": 0.2, "color": "#abcdef"})
+    await draw("drawer-sid", fill, canvas_action(room.game, 1))
+    prefix_hash = room.game.canvas.hash
+    sio.emit.reset_mock()
+
+    await draw("drawer-sid", fill, canvas_action(room.game, 2))
+
+    assert room.game.canvas.sequence == 2
+    assert len(room.game.canvas.history) == 1
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "canvas_rejected" in events
+    assert "sync_strokes" in events
+    assert "draw" not in events
+    rejected = next(
+        call for call in sio.emit.await_args_list if call.args[0] == "canvas_rejected"
+    )
+    assert rejected.args[1][2] == "replay_work"
+    assert rejected.kwargs.get("to") == "drawer-sid"
+
+    png = tiny_png()
+    await checkpoint("drawer-sid", png, [room.game.canvas.generation, 3, 1, prefix_hash])
+    sio.emit.reset_mock()
+    await draw("drawer-sid", fill, canvas_action(room.game, 4))
+    assert room.game.canvas.history.has_checkpoint()
+    assert room.game.canvas.history.semantic_count() == 1
+    assert any(call.args[0] == "draw" for call in sio.emit.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_invalid_checkpoint_png_is_rejected_and_consumes_sequence():
+    _, room, sio = _drawing_room()
+    draw = sio.handlers["/"]["draw"]
+    checkpoint = sio.handlers["/"]["canvas_checkpoint"]
+    fill = encode_live_drawing("draw_fill", {"x": 0.4, "y": 0.4, "color": "#000000"})
+    await draw("drawer-sid", fill, canvas_action(room.game, 1))
+    prefix_hash = room.game.canvas.hash
+    sio.emit.reset_mock()
+
+    await checkpoint(
+        "drawer-sid",
+        b"not-a-png",
+        [room.game.canvas.generation, 2, 1, prefix_hash],
+    )
+
+    assert room.game.canvas.sequence == 2
+    assert room.game.canvas.history.has_checkpoint() is False
+    rejected = next(
+        call for call in sio.emit.await_args_list if call.args[0] == "canvas_rejected"
+    )
+    assert rejected.args[1][2] == "checkpoint"
+    assert any(call.args[0] == "sync_strokes" for call in sio.emit.await_args_list)

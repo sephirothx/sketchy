@@ -265,6 +265,15 @@ class UndoPayload:
     history_hash: int
 
 
+@dataclass(frozen=True, slots=True)
+class CheckpointPayload:
+    png: bytes
+    generation: int
+    sequence: int
+    folded_count: int
+    prefix_hash: int
+
+
 def parse_payload(model: type[RequestModel], data: Any, *, allow_none: bool = False) -> Any:
     if data is None and allow_none:
         data = {}
@@ -331,3 +340,30 @@ def parse_undo_payload(data: Any) -> UndoPayload:
     ):
         raise PayloadError("Invalid undo request")
     return UndoPayload(generation, sequence, revision, history_hash)
+
+
+def parse_checkpoint_payload(data: Any, identity: Any = None) -> CheckpointPayload:
+    if not isinstance(data, (bytes, bytearray, memoryview)):
+        raise PayloadError("Invalid canvas checkpoint")
+    png = bytes(data)
+    if (
+        not isinstance(identity, list)
+        or len(identity) != 4
+        or (generation := _canvas_sequence(identity[0])) is None
+        or (sequence := _canvas_sequence(identity[1])) is None
+        or isinstance(identity[2], bool)
+        or not isinstance(identity[2], int)
+        or identity[2] < 1
+        or identity[2] > MAX_CANVAS_SEQUENCE
+        or isinstance(identity[3], bool)
+        or not isinstance(identity[3], int)
+        or not 0 <= identity[3] <= 0xFFFFFFFF
+    ):
+        raise PayloadError("Invalid canvas checkpoint identity")
+    return CheckpointPayload(
+        png=png,
+        generation=generation,
+        sequence=sequence,
+        folded_count=identity[2],
+        prefix_hash=identity[3],
+    )

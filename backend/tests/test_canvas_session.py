@@ -13,6 +13,7 @@ from app.canvas_history import (
 )
 from app.canvas_session import CanvasSession
 from app.live_drawing import decode_live_drawing, encode_live_drawing
+from tests.checkpoint_png import tiny_png
 
 
 FIXTURES = json.loads(
@@ -108,3 +109,50 @@ def test_versioned_cross_language_fixtures_reject_malformed_versions():
                 decode_canvas_history(fixture["payload"])
             else:
                 decode_binary_canvas_history(bytes.fromhex(fixture["binary"]))
+
+
+def test_canvas_session_rejects_the_fifty_first_fill_until_checkpoint():
+    canvas = CanvasSession()
+    fill = {"x": 0.1, "y": 0.1, "color": "#000000"}
+    for _ in range(50):
+        assert canvas.record_stroke("draw_fill", fill)
+    assert canvas.replay_work == 10_000
+    assert canvas.record_stroke("draw_fill", fill) is False
+    assert canvas.reject_reason == "replay_work"
+    assert canvas.apply_checkpoint(tiny_png(), 1, canvas.hashes[0]) is None
+    assert canvas.history.has_checkpoint()
+    assert canvas.record_stroke("draw_fill", fill)
+
+
+def test_canvas_session_undo_stops_at_checkpoint():
+    canvas = CanvasSession()
+    fill = {"x": 0.2, "y": 0.2, "color": "#abcdef"}
+    assert canvas.record_stroke("draw_fill", fill)
+    prefix = canvas.hash
+    assert canvas.record_stroke("draw_fill", fill)
+    assert canvas.apply_checkpoint(tiny_png(), 1, prefix) is None
+    assert canvas.undo_last_stroke() is True
+    assert canvas.history.has_checkpoint()
+    assert canvas.undo_last_stroke() is False
+
+
+def test_clear_then_new_action_drops_checkpoint():
+    canvas = CanvasSession()
+    fill = {"x": 0.3, "y": 0.3, "color": "#123456"}
+    assert canvas.record_stroke("draw_fill", fill)
+    prefix = canvas.hash
+    assert canvas.record_stroke("draw_fill", fill)
+    assert canvas.apply_checkpoint(tiny_png(), 1, prefix) is None
+    assert canvas.clear_canvas_stroke()
+    assert canvas.record_stroke("draw_shape", shape_payload())
+    assert canvas.history.has_checkpoint() is False
+    assert len(canvas.history) == 1
+
+
+def test_canvas_session_rejects_invalid_checkpoint_png():
+    canvas = CanvasSession()
+    canvas.record_stroke("draw_fill", {"x": 0.1, "y": 0.1, "color": "#000000"})
+    assert canvas.apply_checkpoint(b"not-a-png", 1, canvas.hash) == "checkpoint"
+    assert canvas.apply_checkpoint(tiny_png(), 2, canvas.hash) == "checkpoint"
+    assert canvas.apply_checkpoint(tiny_png(), 1, 0xDEADBEEF) == "checkpoint"
+

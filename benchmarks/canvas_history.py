@@ -23,11 +23,14 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from app.canvas_history import (  # noqa: E402
+    CheckpointAction,
     ClearAction,
     FillAction,
-    MAX_BINARY_CANVAS_HISTORY_BYTES,
-    MAX_CANVAS_ACTIONS,
     MAX_CANVAS_POINTS,
+    MAX_SYNC_BYTES,
+    MAX_WINDOW_ACTIONS,
+    MAX_WINDOW_BINARY_BYTES,
+    MAX_WINDOW_WORK,
     PackedCanvasHistory,
     PathAction,
     ShapeAction,
@@ -36,6 +39,11 @@ from app.canvas_history import (  # noqa: E402
     encode_canvas_history,
 )
 from app.canvas_session import CanvasSession, MAX_CANVAS_COMMITS  # noqa: E402
+
+TINY_CHECKPOINT_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de"
+    "0000000c4944415478da63f8cfc0000003010100f70341430000000049454e44ae426082"
+)
 
 
 @dataclass(frozen=True)
@@ -170,17 +178,19 @@ def packed_history(actions: list) -> PackedCanvasHistory:
             )
         elif isinstance(action, FillAction):
             history.append_fill(x=action.x, y=action.y, color=action.color)
+        elif isinstance(action, CheckpointAction):
+            history.append_checkpoint(action.png)
         else:
             history.append_clear()
     return history
 
 
 def path_heavy_history() -> PackedCanvasHistory:
-    """Use every action slot and point slot, distributed across paths."""
+    """256-action window using every point slot, with fatter paths rather than extra>actions."""
     history = PackedCanvasHistory()
-    extra_points = MAX_CANVAS_POINTS - MAX_CANVAS_ACTIONS
-    for index in range(MAX_CANVAS_ACTIONS):
-        point_count = 2 if index < extra_points else 1
+    base, extra = divmod(MAX_CANVAS_POINTS, MAX_WINDOW_ACTIONS)
+    for index in range(MAX_WINDOW_ACTIONS):
+        point_count = base + (1 if index < extra else 0)
         history.append_path(
             [
                 (
@@ -198,7 +208,7 @@ def path_heavy_history() -> PackedCanvasHistory:
 def shape_heavy_history() -> PackedCanvasHistory:
     history = PackedCanvasHistory()
     shapes = tuple(("rectangle", "ellipse", "triangle"))
-    for index in range(MAX_CANVAS_ACTIONS):
+    for index in range(MAX_WINDOW_ACTIONS):
         x = (index % 100) / 100
         y = ((index // 100) % 100) / 100
         history.append_shape(
@@ -211,9 +221,10 @@ def shape_heavy_history() -> PackedCanvasHistory:
     return history
 
 
-def fill_heavy_history(action_count: int = MAX_CANVAS_ACTIONS) -> PackedCanvasHistory:
+def window_fill_history() -> PackedCanvasHistory:
+    """50 full-canvas fills, no PNG — the live window worst case."""
     history = PackedCanvasHistory()
-    for index in range(action_count):
+    for index in range(MAX_WINDOW_WORK // 200):
         history.append_fill(
             x=(index * 37) % 800,
             y=(index * 29) % 600,
@@ -222,39 +233,80 @@ def fill_heavy_history(action_count: int = MAX_CANVAS_ACTIONS) -> PackedCanvasHi
     return history
 
 
-def mixed_history() -> PackedCanvasHistory:
+def checkpoint_fill_spam_history() -> PackedCanvasHistory:
+    """200+ fills compacted to PNG + 50 remaining fills."""
     history = PackedCanvasHistory()
-    path_actions = 6_250
-    shape_actions = 6_250
-    for index in range(path_actions):
+    history.append_checkpoint(TINY_CHECKPOINT_PNG)
+    for index in range(MAX_WINDOW_WORK // 200):
+        history.append_fill(
+            x=(index * 37) % 800,
+            y=(index * 29) % 600,
+            color=(index * 654_319) & 0xFFFFFF,
+        )
+    return history
+
+
+def checkpoint_mixed_history() -> PackedCanvasHistory:
+    history = PackedCanvasHistory()
+    history.append_checkpoint(TINY_CHECKPOINT_PNG)
+    for index in range(8):
         history.append_path(
             [
                 (
                     ((index * 17 + point * 3) % 800) / 800,
                     ((index * 11 + point * 5) % 600) / 600,
                 )
-                for point in range(4)
+                for point in range(32)
             ],
             color=(index * 977) & 0xFFFFFF,
-            width=index % 12 + 1,
+            width=4,
         )
     shapes = tuple(("rectangle", "ellipse", "triangle"))
-    for index in range(shape_actions):
-        x = (index % 100) / 100
-        y = ((index // 100) % 100) / 100
+    for index in range(16):
         history.append_shape(
             shape=shapes[index % len(shapes)],
-            start=(x, y),
-            end=(min(1.0, x + 0.04), min(1.0, y + 0.04)),
+            start=(index / 100, index / 120),
+            end=(0.8, 0.9),
             color=(index * 123_457) & 0xFFFFFF,
-            width=index % 12 + 1,
+            width=4,
         )
-    for index in range(MAX_CANVAS_ACTIONS - path_actions - shape_actions):
+    for index in range(40):
         history.append_fill(
             x=(index * 37) % 800,
             y=(index * 29) % 600,
             color=(index * 654_319) & 0xFFFFFF,
         )
+    return history
+
+
+def realistic_history() -> PackedCanvasHistory:
+    """Typical turn: a few fills and 100–1,500 points, no checkpoint."""
+    history = PackedCanvasHistory()
+    for index in range(12):
+        history.append_path(
+            [
+                (
+                    ((index * 17 + point * 3) % 800) / 800,
+                    ((index * 11 + point * 5) % 600) / 600,
+                )
+                for point in range(100)
+            ],
+            color=(index * 977) & 0xFFFFFF,
+            width=4,
+        )
+    for index in range(6):
+        history.append_fill(
+            x=(index * 37) % 800,
+            y=(index * 29) % 600,
+            color=(index * 654_319) & 0xFFFFFF,
+        )
+    history.append_shape(
+        shape="ellipse",
+        start=(0.2, 0.3),
+        end=(0.8, 0.9),
+        color=0x102030,
+        width=8,
+    )
     return history
 
 
@@ -265,7 +317,7 @@ def theoretical_max_history() -> PackedCanvasHistory:
         color=0,
         width=1,
     )
-    for _ in range(MAX_CANVAS_ACTIONS - 1):
+    for _ in range(MAX_WINDOW_ACTIONS - 1):
         history.append_shape(
             shape="rectangle",
             start=(0.0, 0.0),
@@ -278,10 +330,12 @@ def theoretical_max_history() -> PackedCanvasHistory:
 
 def near_limit_histories() -> dict[str, PackedCanvasHistory]:
     return {
+        "window-fill": window_fill_history(),
         "path-heavy": path_heavy_history(),
         "shape-heavy": shape_heavy_history(),
-        "fill-heavy": fill_heavy_history(),
-        "mixed": mixed_history(),
+        "checkpoint-fill-spam": checkpoint_fill_spam_history(),
+        "checkpoint-mixed": checkpoint_mixed_history(),
+        "realistic": realistic_history(),
         "theoretical-max": theoretical_max_history(),
     }
 
@@ -373,8 +427,13 @@ def report_near_limits() -> list[NearLimitResult]:
     theoretical = next(
         result for result in results if result.fixture == "theoretical-max"
     )
-    if theoretical.binary_bytes != MAX_BINARY_CANVAS_HISTORY_BYTES:
-        raise RuntimeError("theoretical maximum fixture does not match layout bound")
+    if theoretical.binary_bytes != MAX_WINDOW_BINARY_BYTES:
+        raise RuntimeError("theoretical maximum fixture does not match window layout bound")
+    for result in results:
+        if result.binary_bytes > MAX_SYNC_BYTES:
+            raise RuntimeError(f"{result.fixture} exceeds the 512 KiB sync budget")
+        if result.fixture == "realistic" and result.actions > 32:
+            raise RuntimeError("realistic fixture should stay far under the window")
     return results
 
 

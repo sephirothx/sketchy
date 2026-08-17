@@ -1,4 +1,8 @@
-import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
+import {
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH,
+  MAX_CHECKPOINT_PNG,
+} from "./canvasHistory.ts";
 import type { DecodedCanvasAction } from "./canvasHistory.ts";
 import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
@@ -149,13 +153,19 @@ export function applyFillAction(
   );
 }
 
-export function renderCanvasActions(
+export async function renderCanvasActions(
   context: CanvasRenderingContext2D,
   actions: DecodedCanvasAction[],
-): void {
+): Promise<void> {
   fillWhite(context, CANVAS_WIDTH, CANVAS_HEIGHT);
   for (const action of actions) {
-    if (action.kind === "path" && action.points.length > 0) {
+    if (action.kind === "checkpoint") {
+      const png = new Uint8Array(action.png);
+      const blob = new Blob([png], { type: "image/png" });
+      const bitmap = await createImageBitmap(blob);
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+    } else if (action.kind === "path" && action.points.length > 0) {
       rasterizePath(
         context,
         action.points.length === 1
@@ -180,4 +190,27 @@ export function renderCanvasActions(
       fillWhite(context, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
   }
+}
+
+export async function encodeCheckpointPng(
+  previousPng: Uint8Array | null,
+  foldedActions: DecodedCanvasAction[],
+): Promise<Uint8Array> {
+  const canvas = document.createElement("canvas");
+  canvas.width = CANVAS_WIDTH;
+  canvas.height = CANVAS_HEIGHT;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("checkpoint");
+  const prefix: DecodedCanvasAction[] = previousPng
+    ? [{ kind: "checkpoint", png: previousPng }, ...foldedActions]
+    : foldedActions;
+  await renderCanvasActions(context, prefix);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (value) => (value ? resolve(value) : reject(new Error("checkpoint"))),
+      "image/png",
+    );
+  });
+  if (blob.size > MAX_CHECKPOINT_PNG) throw new Error("checkpoint");
+  return new Uint8Array(await blob.arrayBuffer());
 }

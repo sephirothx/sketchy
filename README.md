@@ -8,7 +8,7 @@ private room with a friend code — no accounts, no database, just a nickname an
 
 - Public lobby with a live, polled list of open rooms, or join a private room by code.
 - Turn-based rounds: each player draws once per round, choosing from 3 word options.
-- Real-time synced canvas (freehand pen + rectangle/ellipse/triangle shape tools).
+- Real-time synced canvas (freehand pen, shapes, and fill). Long turns compact older strokes into a lossless PNG so drawing never stops at a hard action cap.
 - Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the secret word solution, and private spectator chat restricted to the drawer, spectators, and correct guessers.
 - AFK mode — toggle AFK status anytime so you are skipped for drawing turns and not waited for during rounds.
 - Vote restart — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
@@ -202,13 +202,17 @@ baselines, not CI pass/fail thresholds, because browser timings vary by machine.
 The `mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override
 the port with `PORT=<number>` when needed.
 
-The canvas-history benchmarks construct deterministic path-heavy, shape-heavy,
-fill-heavy, mixed, and theoretical-maximum histories. The Python benchmark
-reports packed payload, retained server memory, and encode/decode costs. The
-browser benchmark runs the production decoder and renderer for cold late-join
-and repeated reconnect-style replay; expensive fill/mixed histories are evenly
-sampled and clearly reported as diagnostic projections rather than full-run
-timings.
+The canvas-history benchmarks construct deterministic window-fill, path-heavy, shape-heavy,
+checkpoint, realistic, and theoretical-maximum histories. Limits are **compaction triggers**,
+not a pen-down stop: the live replay window is 10,000 work units (path/shape 1, fill 200,
+clear/checkpoint 0), 256 undoable actions, and 25,000 points, with PNG + window ≤ 512 KiB.
+Fill cost is a constant calibrated to Phase 4 Chromium timings **after** the scanline fill
+(~6.5 ms desktop / ~26 ms at 4× CPU per full-canvas fill); 50 worst-case fills stay in the
+window, and further fills fold into a lossless PNG encoded by the drawer. The Python
+benchmark reports packed payload, retained server memory, and encode/decode costs. The
+browser benchmark runs the production decoder and renderer for cold late-join and repeated
+reconnect-style replay of the **full** accepted window (PNG blit plus trailing actions, not
+sampled 20k-fill projections).
 
 `game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 
@@ -285,7 +289,12 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
   or rebroadcasting them.
 - **Versioned canvas history**: rooms keep drawing actions in a contiguous packed byte buffer
   with compact action offsets, and send replay history in a versioned binary envelope
-  containing its action-offset table and packed records. Packed paths use quarter-pixel
-  signed 16-bit coordinates and one-byte widths; packed shapes additionally use a one-byte
-  shape enum. The frontend retains the versioned `{v, a}` JSON history decoder as a
-  compatibility fallback.
+  (`SKCH` v2) containing its action-offset table and packed records. Packed paths use
+  quarter-pixel signed 16-bit coordinates and one-byte widths; packed shapes additionally use
+  a one-byte shape enum. When the live window would exceed its work, action, point, or byte
+  cap, the drawer encodes a lossless PNG of the folded prefix (`CHECKPOINT` tag 4, always
+  index 0). Late joiners `drawImage` that PNG and then replay only the trailing undoable
+  window. Undo cannot pop the checkpoint. Clear stays a window action so it can restore the
+  PNG; the next non-clear action still discards that history. Reject (`canvas_rejected` +
+  sync) is only the fallback if a checkpoint cannot be produced or validated. The frontend
+  retains the versioned `{v, a}` JSON history decoder as a compatibility fallback.

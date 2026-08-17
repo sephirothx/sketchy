@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   calculateCanvasHistoryHash,
   ClientCanvasHistory,
+  decodeCanvasHistory,
 } from "../src/lib/canvasHistory.ts";
 
 function replace(history, actions, revision, sequence = 0, generation = 1) {
@@ -158,4 +159,49 @@ test("full sync rejects a mismatched CRC32", () => {
   const history = new ClientCanvasHistory();
   assert.equal(history.replace([{ kind: "clear" }], 1, 1, 1, 123), false);
   assert.equal(history.revision, null);
+});
+
+function tinyPng() {
+  return Uint8Array.from(
+    "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415478da63f8cfc0000003010100f70341430000000049454e44ae426082"
+      .match(/../g)
+      .map((byte) => Number.parseInt(byte, 16)),
+  );
+}
+
+test("canApply allows an action that fits after compact, but apply waits for the PNG", () => {
+  const history = new ClientCanvasHistory();
+  assert.equal(replace(history, [], 1), true);
+  for (let index = 0; index < 50; index++) {
+    assert.equal(history.apply({
+      event: "draw_fill",
+      payload: { x: 0.1, y: 0.1, color: "#000000" },
+    }), true);
+  }
+  const packet = { event: "draw_fill", payload: { x: 0.2, y: 0.2, color: "#ffffff" } };
+  assert.equal(history.canApply(packet), true);
+  assert.equal(history.apply(packet), false);
+  assert.equal(history.neededFoldForPacket(packet), 1);
+});
+
+test("undo cannot pop a checkpoint", () => {
+  const history = new ClientCanvasHistory();
+  const fill = { kind: "fill", color: "#abcdef", x: 10, y: 20 };
+  assert.equal(replace(history, [fill], 4, 1, 1), true);
+  assert.equal(history.applyCheckpoint(tinyPng(), 1), true);
+  assert.equal(history.actions[0].kind, "checkpoint");
+  assert.equal(history.prepareUndo(3), null);
+});
+
+test("JSON and binary checkpoint records round-trip", () => {
+  const png = tinyPng();
+  const json = {
+    v: 2,
+    a: [[4, Buffer.from(png).toString("base64")], [2, 0, 0, 0]],
+  };
+  const decoded = decodeCanvasHistory(json);
+  assert.ok(decoded);
+  assert.equal(decoded[0].kind, "checkpoint");
+  assert.deepEqual(Array.from(decoded[0].png), Array.from(png));
+  assert.equal(decoded[1].kind, "fill");
 });

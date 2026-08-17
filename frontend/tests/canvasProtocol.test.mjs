@@ -31,6 +31,13 @@ test("a commit from a stale canvas generation is rejected", () => {
   assert.equal(history.sequence, 2);
 });
 
+test("checkpoint commit payloads may include folded count and PNG", () => {
+  const history = new ClientCanvasHistory();
+  assert.equal(replace(history, [], 4, 8, 2), true);
+  assert.equal(history.confirmAction([8, 3, 4, 0, 1, new Uint8Array()]), true);
+  assert.equal(history.sequence, 3);
+});
+
 test("authoritative sync rejects a mismatched history hash", () => {
   const history = new ClientCanvasHistory();
   const actions = [{ kind: "clear" }];

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ClientCanvasHistory,
   decodeCanvasHistory,
+  semanticStart,
 } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { decodeLiveDrawing, encodeClear } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
+import { encodeCheckpointPng } from "../lib/canvasRenderer";
 import { emitWithAck, socket } from "../lib/socket";
 
 const MAX_PENDING_CANVAS_ACTIONS = 256;
@@ -24,6 +26,15 @@ type PendingCanvasMutation =
     kind: "undo";
     generation: number;
     request: [number, number, number, number];
+    expectedRevision: number;
+    expectedHash: number;
+  }
+  | {
+    kind: "checkpoint";
+    generation: number;
+    png: Uint8Array;
+    foldedCount: number;
+    prefixHash: number;
     expectedRevision: number;
     expectedHash: number;
   };
@@ -45,6 +56,7 @@ export interface CanvasProtocol {
 
 export function useCanvasProtocol(
   renderer: CanvasProtocolRenderer,
+  onRejected?: (reason: string) => void,
 ): CanvasProtocol {
   const historyRef = useRef(new ClientCanvasHistory());
   const nextSequenceRef = useRef(1);
@@ -52,6 +64,18 @@ export function useCanvasProtocol(
   const activeOutgoingSequenceRef = useRef<number | null>(null);
   const syncInFlightRef = useRef(false);
   const syncQueuedRef = useRef(false);
+  const compactingRef = useRef(false);
+  const queuedDrawRef = useRef<{ frame: DrawingFrame; isPath: boolean } | null>(null);
+  const beginDrawActionRef = useRef<(
+    frame: DrawingFrame,
+    isPath?: boolean,
+  ) => number | null>(() => null);
+
+  const flushQueuedDraw = useCallback(() => {
+    const queued = queuedDrawRef.current;
+    queuedDrawRef.current = null;
+    if (queued) beginDrawActionRef.current(queued.frame, queued.isPath);
+  }, []);
 
   const requestAuthoritativeSync = useCallback((discardPending = true): void => {
     if (discardPending) {
@@ -77,12 +101,84 @@ export function useCanvasProtocol(
     return sequence;
   }, [requestAuthoritativeSync]);
 
+  const emitCheckpoint = useCallback((
+    png: Uint8Array,
+    foldedCount: number,
+    prefixHash: number,
+  ): number | null => {
+    const sequence = allocateSequence();
+    const generation = historyRef.current.generation;
+    if (sequence === null || generation === null) {
+      requestAuthoritativeSync();
+      return null;
+    }
+    if (!historyRef.current.applyCheckpoint(png, foldedCount)) {
+      requestAuthoritativeSync();
+      return null;
+    }
+    pendingMutationsRef.current.set(sequence, {
+      kind: "checkpoint",
+      generation,
+      png,
+      foldedCount,
+      prefixHash,
+      expectedRevision: historyRef.current.revision!,
+      expectedHash: historyRef.current.historyHash!,
+    });
+    socket.emit("canvas_checkpoint", png, [generation, sequence, foldedCount, prefixHash]);
+    return sequence;
+  }, [allocateSequence, requestAuthoritativeSync]);
+
+  const compactWindow = useCallback(async (foldedCount: number): Promise<boolean> => {
+    const history = historyRef.current;
+    const start = semanticStart(history.actions);
+    const folded = history.actions.slice(start, start + foldedCount);
+    const previous = history.checkpointPng();
+    const prefixHash = history.prefixHashForFold(foldedCount);
+    if (prefixHash === null) {
+      requestAuthoritativeSync();
+      return false;
+    }
+    try {
+      const png = await encodeCheckpointPng(previous, folded);
+      return emitCheckpoint(png, foldedCount, prefixHash) !== null;
+    } catch {
+      requestAuthoritativeSync();
+      return false;
+    }
+  }, [emitCheckpoint, requestAuthoritativeSync]);
+
   const beginDrawAction = useCallback((
     frame: DrawingFrame,
     isPath = false,
   ): number | null => {
     const packet = decodeLiveDrawing(frame);
-    if (!packet || !historyRef.current.apply(packet)) return null;
+    if (!packet || !historyRef.current.canApply(packet)) return null;
+    const fold = historyRef.current.neededFoldForPacket(packet);
+    if (fold) {
+      if (compactingRef.current) {
+        queuedDrawRef.current = { frame, isPath };
+        return 0;
+      }
+      compactingRef.current = true;
+      void compactWindow(fold).then((ok) => {
+        compactingRef.current = false;
+        if (!ok) {
+          queuedDrawRef.current = null;
+          return;
+        }
+        beginDrawActionRef.current(frame, isPath);
+        flushQueuedDraw();
+      });
+      return 0;
+    }
+    if (!historyRef.current.apply(packet)) {
+      if (compactingRef.current) {
+        queuedDrawRef.current = { frame, isPath };
+        return 0;
+      }
+      return null;
+    }
     const sequence = allocateSequence();
     const generation = historyRef.current.generation;
     if (sequence === null || generation === null) {
@@ -99,7 +195,11 @@ export function useCanvasProtocol(
     activeOutgoingSequenceRef.current = isPath ? sequence : null;
     socket.emit("draw", frame, [generation, sequence]);
     return sequence;
-  }, [allocateSequence, requestAuthoritativeSync]);
+  }, [allocateSequence, compactWindow, flushQueuedDraw, requestAuthoritativeSync]);
+
+  useEffect(() => {
+    beginDrawActionRef.current = beginDrawAction;
+  }, [beginDrawAction]);
 
   const sendPathFrame = useCallback((frame: DrawingFrame): void => {
     const sequence = activeOutgoingSequenceRef.current;
@@ -260,6 +360,12 @@ export function useCanvasProtocol(
               index === 0 ? [pending.generation, pendingSequence] : undefined,
             );
           });
+        } else if (pending.kind === "checkpoint") {
+          socket.emit(
+            "canvas_checkpoint",
+            pending.png,
+            [pending.generation, pendingSequence, pending.foldedCount, pending.prefixHash],
+          );
         } else {
           const request = historyRef.current.prepareUndo(pendingSequence);
           if (!request) {
@@ -297,7 +403,18 @@ export function useCanvasProtocol(
         requestAuthoritativeSync();
         return;
       }
+      const drawerCommit = pending?.kind === "draw";
       pendingMutationsRef.current.delete(sequence);
+      if (drawerCommit && !compactingRef.current) {
+        const fold = historyRef.current.opportunisticFoldCount();
+        if (fold) {
+          compactingRef.current = true;
+          void compactWindow(fold).finally(() => {
+            compactingRef.current = false;
+            flushQueuedDraw();
+          });
+        }
+      }
     };
 
     const onUndoStroke = (payload: unknown) => {
@@ -340,6 +457,14 @@ export function useCanvasProtocol(
           socket.emit("undo_stroke", pending.request);
           continue;
         }
+        if (pending.kind === "checkpoint") {
+          socket.emit(
+            "canvas_checkpoint",
+            pending.png,
+            [pending.generation, sequence, pending.foldedCount, pending.prefixHash],
+          );
+          continue;
+        }
         const incomplete = pending.frames.length > 0
           && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
           && decodeLiveDrawing(pending.frames.at(-1)!)?.event !== "draw_end";
@@ -360,6 +485,68 @@ export function useCanvasProtocol(
       }
     };
 
+    const onCanvasCheckpoint = (payload: unknown) => {
+      if (!Array.isArray(payload) || payload.length !== 6) {
+        requestAuthoritativeSync();
+        return;
+      }
+      const sequence = payload[1];
+      const pending = typeof sequence === "number"
+        ? pendingMutationsRef.current.get(sequence)
+        : undefined;
+      if (pending?.kind === "checkpoint") {
+        const valid = historyRef.current.confirmAction(
+          payload.slice(0, 4),
+          pending.expectedRevision,
+          pending.expectedHash,
+        );
+        if (!valid) {
+          requestAuthoritativeSync();
+          return;
+        }
+        pendingMutationsRef.current.delete(sequence);
+        return;
+      }
+      const png = payload[5] instanceof Uint8Array
+        ? payload[5]
+        : payload[5] instanceof ArrayBuffer
+          ? new Uint8Array(payload[5])
+          : ArrayBuffer.isView(payload[5])
+            ? new Uint8Array(
+              payload[5].buffer,
+              payload[5].byteOffset,
+              payload[5].byteLength,
+            )
+            : null;
+      if (
+        typeof payload[4] !== "number"
+        || png === null
+        || !historyRef.current.applyCheckpoint(png, payload[4])
+        || !historyRef.current.confirmAction(payload.slice(0, 4))
+      ) {
+        requestAuthoritativeSync();
+        return;
+      }
+      renderer.replay(historyRef.current.actions);
+    };
+
+    const onCanvasRejected = (payload: unknown) => {
+      if (!Array.isArray(payload) || payload.length !== 3) {
+        requestAuthoritativeSync();
+        return;
+      }
+      const sequence = payload[1];
+      const reason = payload[2];
+      if (typeof sequence === "number") {
+        pendingMutationsRef.current.delete(sequence);
+        if (activeOutgoingSequenceRef.current === sequence) {
+          activeOutgoingSequenceRef.current = null;
+        }
+      }
+      if (typeof reason === "string") onRejected?.(reason);
+      requestAuthoritativeSync();
+    };
+
     const onCanvasReset = (payload: unknown) => {
       if (!historyRef.current.reset(payload)) {
         requestAuthoritativeSync();
@@ -375,6 +562,8 @@ export function useCanvasProtocol(
     socket.on("sync_strokes", onSyncStrokes);
     socket.on("canvas_commit", onCanvasCommit);
     socket.on("canvas_undo", onUndoStroke);
+    socket.on("canvas_checkpoint", onCanvasCheckpoint);
+    socket.on("canvas_rejected", onCanvasRejected);
     socket.on("request_canvas_actions", onRequestCanvasActions);
     socket.on("canvas_reset", onCanvasReset);
     socket.emit("request_sync_strokes");
@@ -384,10 +573,12 @@ export function useCanvasProtocol(
       socket.off("sync_strokes", onSyncStrokes);
       socket.off("canvas_commit", onCanvasCommit);
       socket.off("canvas_undo", onUndoStroke);
+      socket.off("canvas_checkpoint", onCanvasCheckpoint);
+      socket.off("canvas_rejected", onCanvasRejected);
       socket.off("request_canvas_actions", onRequestCanvasActions);
       socket.off("canvas_reset", onCanvasReset);
     };
-  }, [renderer, requestAuthoritativeSync]);
+  }, [compactWindow, flushQueuedDraw, onRejected, renderer, requestAuthoritativeSync]);
 
   return useMemo(() => ({
     beginDrawAction,
