@@ -6,19 +6,46 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 
+class RepositoryError(Exception):
+    """Base class for domain repository errors."""
+    pass
+
+
+class AccountAlreadyClaimedError(RepositoryError):
+    """Raised when attempting to claim an account that is already registered."""
+    pass
+
+
+class UsernameTakenError(RepositoryError):
+    """Raised when attempting to register or claim a username that is already in use."""
+    pass
+
+
+class InvalidProfileDataError(RepositoryError):
+    """Raised when profile update fields fail validation."""
+    pass
+
+
 @dataclass(frozen=True)
 class UserData:
-    """Read-only user entity."""
+    """Read-only public/domain user entity (without sensitive credential hashes)."""
 
     id: str
     username: str | None
-    password_hash: str | None
     display_name: str
     name_color: str | None
     avatar_url: str | None
     is_anonymous: bool
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True)
+class UserCredentials:
+    """Internal authentication credential payload for password verification only."""
+
+    user: UserData
+    password_hash: str
 
 
 @dataclass(frozen=True)
@@ -183,12 +210,17 @@ class UserRepository(ABC):
 
     @abstractmethod
     async def get_by_id(self, user_id: str) -> UserData | None:
-        """Fetch user by unique ID."""
+        """Fetch user by unique ID without returning credential hashes."""
         ...
 
     @abstractmethod
     async def get_by_username(self, username: str) -> UserData | None:
-        """Fetch user by case-insensitive unique username."""
+        """Fetch user by case-insensitive unique username without returning credential hashes."""
+        ...
+
+    @abstractmethod
+    async def get_credentials_by_username(self, username: str) -> UserCredentials | None:
+        """Fetch user authentication credentials by case-insensitive username for auth verification."""
         ...
 
     @abstractmethod
@@ -240,12 +272,16 @@ class GameHistoryRepository(ABC):
         limit: int = 20,
         offset: int = 0,
     ) -> list[GameSummary]:
-        """Fetch paginated summary of games where a user participated."""
+        """Fetch clamped paginated summary of games where a user participated."""
         ...
 
     @abstractmethod
-    async def get_game_detail(self, game_id: str) -> GameDetail | None:
-        """Fetch full round-by-round details for a specific game."""
+    async def get_game_detail(
+        self,
+        game_id: str,
+        requesting_user_id: str | None = None,
+    ) -> GameDetail | None:
+        """Fetch full round-by-round details for a specific game, optionally scoped to a participant."""
         ...
 
 

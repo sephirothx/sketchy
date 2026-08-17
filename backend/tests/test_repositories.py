@@ -7,10 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.db.models import Base
 from app.repositories.interfaces import (
+    AccountAlreadyClaimedError,
     GameParticipantInput,
     GameRecordInput,
+    InvalidProfileDataError,
     RoundGuessInput,
     RoundRecordInput,
+    UsernameTakenError,
 )
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -45,29 +48,52 @@ async def test_user_repository_crud_and_stats():
         assert anon.is_anonymous is True
         assert anon.username is None
 
-        # 2. Get by ID
+        # 2. Get by ID (no password hash attribute in UserData)
         fetched = await repo.get_by_id(anon.id)
         assert fetched is not None
         assert fetched.id == anon.id
+        assert not hasattr(fetched, "password_hash")
 
         # 3. Claim account
         claimed = await repo.claim_account(anon.id, "bob123", "hashed_pw")
         assert claimed.username == "bob123"
         assert claimed.is_anonymous is False
-        assert claimed.password_hash == "hashed_pw"
 
-        # 4. Get by username (case-insensitive)
+        # 4. Cannot claim an already claimed account
+        with pytest.raises(AccountAlreadyClaimedError):
+            await repo.claim_account(anon.id, "bob999", "another_hash")
+
+        # 5. Username uniqueness on claim (case-insensitive)
+        anon2 = await repo.create_anonymous("Alice")
+        with pytest.raises(UsernameTakenError):
+            await repo.claim_account(anon2.id, "BOB123", "hash2")
+
+        # 6. Fetch credentials separately via auth-specific method
+        creds = await repo.get_credentials_by_username("BOB123")
+        assert creds is not None
+        assert creds.user.id == anon.id
+        assert creds.password_hash == "hashed_pw"
+
+        # 7. Get by username (case-insensitive) returns UserData without password_hash
         by_name = await repo.get_by_username("BOB123")
         assert by_name is not None
         assert by_name.id == anon.id
+        assert not hasattr(by_name, "password_hash")
 
-        # 5. Update profile
+        # 8. Update profile with valid and invalid avatar URLs
         updated = await repo.update_profile(anon.id, name_color="#00ff00", avatar_url="https://example.com/avatar.png")
         assert updated is not None
         assert updated.name_color == "#00ff00"
         assert updated.avatar_url == "https://example.com/avatar.png"
 
-        # 6. Stats with 0 games
+        # Disallow javascript: schemes or XSS characters in avatar_url
+        with pytest.raises(InvalidProfileDataError):
+            await repo.update_profile(anon.id, avatar_url="javascript:alert(1)")
+
+        with pytest.raises(InvalidProfileDataError):
+            await repo.update_profile(anon.id, avatar_url='https://example.com/"onerror="alert(1)')
+
+        # 9. Stats with 0 games
         stats = await repo.get_stats(anon.id)
         assert stats.games_played == 0
         assert stats.total_score == 0
@@ -84,6 +110,7 @@ async def test_game_history_repository():
 
         u1 = await user_repo.create_anonymous("Player1")
         u2 = await user_repo.create_anonymous("Player2")
+        u3 = await user_repo.create_anonymous("Player3_NonParticipant")
 
         now = datetime.now(timezone.utc)
         game_input = GameRecordInput(
@@ -121,15 +148,15 @@ async def test_game_history_repository():
         game_id = await history_repo.save_game(game_input, participants, rounds, guesses)
         assert game_id is not None
 
-        # Check user games list
-        u1_games = await history_repo.get_user_games(u1.id)
+        # Check user games list with pagination clamping
+        u1_games = await history_repo.get_user_games(u1.id, limit=999999, offset=-5)
         assert len(u1_games) == 1
         assert u1_games[0].id == game_id
         assert len(u1_games[0].participants) == 2
         assert u1_games[0].participants[0].user_id == u1.id
 
-        # Check game detail
-        detail = await history_repo.get_game_detail(game_id)
+        # Check game detail for participant (authorized)
+        detail = await history_repo.get_game_detail(game_id, requesting_user_id=u1.id)
         assert detail is not None
         assert detail.summary.id == game_id
         assert len(detail.rounds) == 1
@@ -137,6 +164,10 @@ async def test_game_history_repository():
         assert len(detail.rounds[0].guesses) == 1
         assert detail.rounds[0].guesses[0].user_id == u2.id
         assert detail.rounds[0].guesses[0].points_awarded == 200
+
+        # Check game detail for non-participant (scoped out)
+        unauthorized_detail = await history_repo.get_game_detail(game_id, requesting_user_id=u3.id)
+        assert unauthorized_detail is None
 
         # Check aggregated stats for users
         u1_stats = await user_repo.get_stats(u1.id)

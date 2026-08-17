@@ -19,30 +19,37 @@ from app.db.models import (
     generate_uuid,
 )
 from app.repositories.interfaces import (
+    AccountAlreadyClaimedError,
     GameDetail,
     GameHistoryRepository,
     GameParticipantInput,
     GameParticipantSummary,
     GameRecordInput,
     GameSummary,
+    InvalidProfileDataError,
     RoundDetail,
     RoundGuessDetail,
     RoundGuessInput,
     RoundRecordInput,
+    UserCredentials,
     UserData,
     UserRepository,
     UserStats,
+    UsernameTakenError,
     WordListRepository,
     WordListSummary,
     WordStatsSummary,
 )
 
+MAX_PAGINATION_LIMIT = 100
+DEFAULT_PAGINATION_LIMIT = 20
+
 
 def _to_user_data(user: User) -> UserData:
+    """Convert a database User entity to a public UserData DTO (without password_hash)."""
     return UserData(
         id=user.id,
         username=user.username,
-        password_hash=user.password_hash,
         display_name=user.display_name,
         name_color=user.name_color,
         avatar_url=user.avatar_url,
@@ -65,6 +72,21 @@ def _to_word_list_summary(wl: WordList) -> WordListSummary:
     )
 
 
+def _validate_avatar_url(url: str | None) -> str | None:
+    if url is None:
+        return None
+    trimmed = url.strip()
+    if not trimmed:
+        return None
+    lower = trimmed.lower()
+    # Allow http, https, or root-relative paths only. Disallow control chars, quotes, and dangerous schemes.
+    is_valid_scheme = lower.startswith("https://") or lower.startswith("http://") or lower.startswith("/")
+    has_forbidden_chars = any(c in trimmed for c in ("\r", "\n", "<", ">", '"', "'"))
+    if not is_valid_scheme or has_forbidden_chars or lower.startswith("javascript:") or lower.startswith("data:"):
+        raise InvalidProfileDataError("Invalid avatar_url: must be a valid http/https or relative URL")
+    return trimmed
+
+
 class SqlAlchemyUserRepository(UserRepository):
     """SQLAlchemy-backed implementation of UserRepository."""
 
@@ -83,7 +105,7 @@ class SqlAlchemyUserRepository(UserRepository):
                     id=user_id or generate_uuid(),
                     username=None,
                     password_hash=None,
-                    display_name=display_name,
+                    display_name=display_name.strip() or "Guest",
                     name_color=name_color,
                     avatar_url=None,
                     is_anonymous=True,
@@ -100,11 +122,26 @@ class SqlAlchemyUserRepository(UserRepository):
             return _to_user_data(user) if user else None
 
     async def get_by_username(self, username: str) -> UserData | None:
+        clean = username.strip()
+        if not clean:
+            return None
         async with self._session_factory() as session:
-            stmt = select(User).where(func.lower(User.username) == username.lower())
+            stmt = select(User).where(func.lower(User.username) == clean.lower())
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()
             return _to_user_data(user) if user else None
+
+    async def get_credentials_by_username(self, username: str) -> UserCredentials | None:
+        clean = username.strip()
+        if not clean:
+            return None
+        async with self._session_factory() as session:
+            stmt = select(User).where(func.lower(User.username) == clean.lower())
+            result = await session.execute(stmt)
+            user = result.scalar_one_or_none()
+            if not user or not user.password_hash:
+                return None
+            return UserCredentials(user=_to_user_data(user), password_hash=user.password_hash)
 
     async def claim_account(
         self,
@@ -112,12 +149,35 @@ class SqlAlchemyUserRepository(UserRepository):
         username: str,
         password_hash: str,
     ) -> UserData:
+        clean_username = username.strip()
+        if not clean_username:
+            raise ValueError("Username cannot be empty")
+        if not password_hash:
+            raise ValueError("Password hash cannot be empty")
+
         async with self._session_factory() as session:
             async with session.begin():
+                # 1. Fetch user to claim
                 stmt = select(User).where(User.id == user_id)
                 result = await session.execute(stmt)
-                user = result.scalar_one()
-                user.username = username
+                user = result.scalar_one_or_none()
+                if user is None:
+                    raise ValueError(f"User '{user_id}' not found")
+                if not user.is_anonymous:
+                    raise AccountAlreadyClaimedError("Account has already been claimed")
+
+                # 2. Check case-insensitive username collision
+                collision_stmt = select(User.id).where(
+                    and_(
+                        func.lower(User.username) == clean_username.lower(),
+                        User.id != user_id,
+                    )
+                )
+                existing_owner = (await session.execute(collision_stmt)).scalar_one_or_none()
+                if existing_owner is not None:
+                    raise UsernameTakenError(f"Username '{clean_username}' is already taken")
+
+                user.username = clean_username
                 user.password_hash = password_hash
                 user.is_anonymous = False
             await session.refresh(user)
@@ -131,6 +191,7 @@ class SqlAlchemyUserRepository(UserRepository):
         name_color: str | None = None,
         avatar_url: str | None = None,
     ) -> UserData | None:
+        validated_avatar = _validate_avatar_url(avatar_url) if avatar_url is not None else None
         async with self._session_factory() as session:
             async with session.begin():
                 stmt = select(User).where(User.id == user_id)
@@ -139,11 +200,11 @@ class SqlAlchemyUserRepository(UserRepository):
                 if not user:
                     return None
                 if display_name is not None:
-                    user.display_name = display_name
+                    user.display_name = display_name.strip() or user.display_name
                 if name_color is not None:
                     user.name_color = name_color
                 if avatar_url is not None:
-                    user.avatar_url = avatar_url
+                    user.avatar_url = validated_avatar
             await session.refresh(user)
             return _to_user_data(user)
 
@@ -279,9 +340,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
     async def get_user_games(
         self,
         user_id: str,
-        limit: int = 20,
+        limit: int = DEFAULT_PAGINATION_LIMIT,
         offset: int = 0,
     ) -> list[GameSummary]:
+        clamped_limit = max(1, min(limit, MAX_PAGINATION_LIMIT))
+        clamped_offset = max(0, offset)
+
         async with self._session_factory() as session:
             # Find game IDs the user was a participant in
             user_games_subq = (
@@ -297,8 +361,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     selectinload(GameRecord.participants).selectinload(GameParticipant.user)
                 )
                 .order_by(GameRecord.finished_at.desc())
-                .limit(limit)
-                .offset(offset)
+                .limit(clamped_limit)
+                .offset(clamped_offset)
             )
 
             result = await session.execute(stmt)
@@ -333,7 +397,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 )
             return summaries
 
-    async def get_game_detail(self, game_id: str) -> GameDetail | None:
+    async def get_game_detail(
+        self,
+        game_id: str,
+        requesting_user_id: str | None = None,
+    ) -> GameDetail | None:
         async with self._session_factory() as session:
             stmt = (
                 select(GameRecord)
@@ -348,6 +416,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             g = result.scalar_one_or_none()
             if not g:
                 return None
+
+            # Authorization scoping: If a requesting user is specified, ensure they participated in this game
+            if requesting_user_id is not None:
+                is_participant = any(p.user_id == requesting_user_id for p in g.participants)
+                if not is_participant:
+                    return None
 
             part_summaries = [
                 GameParticipantSummary(
