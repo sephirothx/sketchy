@@ -1,10 +1,7 @@
 """SQLAlchemy implementations of domain repository interfaces."""
 from __future__ import annotations
 
-import math
-from typing import Sequence
-
-from sqlalchemy import and_, case, delete, distinct, func, select, update
+from sqlalchemy import and_, case, distinct, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -323,17 +320,20 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
 
                 for g in guesses:
-                    if 0 <= g.round_index < len(created_round_ids):
-                        target_round_id = created_round_ids[g.round_index]
-                        session.add(
-                            RoundGuess(
-                                id=generate_uuid(),
-                                round_id=target_round_id,
-                                user_id=g.user_id,
-                                points_awarded=g.points_awarded,
-                                guess_time_seconds=g.guess_time_seconds,
-                            )
+                    if not (0 <= g.round_index < len(created_round_ids)):
+                        raise ValueError(
+                            f"Invalid guess round_index {g.round_index}: out of bounds for {len(created_round_ids)} rounds"
                         )
+                    target_round_id = created_round_ids[g.round_index]
+                    session.add(
+                        RoundGuess(
+                            id=generate_uuid(),
+                            round_id=target_round_id,
+                            user_id=g.user_id,
+                            points_awarded=g.points_awarded,
+                            guess_time_seconds=g.guess_time_seconds,
+                        )
+                    )
 
         return record_id
 

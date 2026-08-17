@@ -25,11 +25,11 @@ def get_database_url() -> str:
 
     # Normalize common scheme prefixes to async driver counterparts
     if url.startswith("sqlite://") and not url.startswith("sqlite+aiosqlite://"):
-        url = "sqlite+aiosqlite://" + url[len("sqlite://"):]
+        url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
     elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
-        url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://") and not url.startswith("postgresql+asyncpg://"):
-        url = "postgresql+asyncpg://" + url[len("postgres://"):]
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
 
     return url
 

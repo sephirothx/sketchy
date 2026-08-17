@@ -96,7 +96,7 @@ def run_migrations_online() -> None:
         # Running inside an active event loop without provided connection
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(asyncio.run, run_async_migrations()).result()
+            executor.submit(lambda: asyncio.run(run_async_migrations())).result()
     else:
         asyncio.run(run_async_migrations())
 

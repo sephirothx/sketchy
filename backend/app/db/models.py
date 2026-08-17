@@ -9,11 +9,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -42,8 +44,18 @@ class User(Base):
 
     __tablename__ = "users"
 
+    __table_args__ = (
+        Index(
+            "ix_users_username_lower",
+            func.lower(text("username")),
+            unique=True,
+            postgresql_where=text("username IS NOT NULL"),
+            sqlite_where=text("username IS NOT NULL"),
+        ),
+    )
+
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    username: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True, index=True)
+    username: Mapped[str | None] = mapped_column(String(32), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str] = mapped_column(String(32), nullable=False)
     name_color: Mapped[str | None] = mapped_column(String(16), nullable=True)

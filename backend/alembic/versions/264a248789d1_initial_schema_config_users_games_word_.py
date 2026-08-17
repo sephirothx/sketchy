@@ -51,7 +51,13 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_users_username'), ['username'], unique=True)
+        batch_op.create_index(
+            'ix_users_username_lower',
+            [sa.text('lower(username)')],
+            unique=True,
+            sqlite_where=sa.text('username IS NOT NULL'),
+            postgresql_where=sa.text('username IS NOT NULL'),
+        )
 
     op.create_table('word_lists',
     sa.Column('id', sa.String(length=36), nullable=False),
@@ -156,7 +162,7 @@ def downgrade() -> None:
 
     op.drop_table('word_lists')
     with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_users_username'))
+        batch_op.drop_index('ix_users_username_lower')
 
     op.drop_table('users')
     op.drop_table('game_records')

@@ -75,19 +75,35 @@ async def test_user_creation_and_unique_username():
             assert loaded.display_name == "Alice"
             assert loaded.is_anonymous is False
 
-        # Attempt duplicate username in new session
+        # Attempt duplicate username with different casing in new session (DB level case-insensitive uniqueness)
         with pytest.raises(IntegrityError):
             async with factory() as session:
                 async with session.begin():
                     user2 = User(
                         id=generate_uuid(),
-                        username="alice",
+                        username="ALICE",
                         password_hash="hash456",
                         display_name="Alice2",
                     )
                     session.add(user2)
     finally:
         await engine.dispose()
+
+
+async def test_get_database_url_normalization(monkeypatch):
+    from app.db import get_database_url
+
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./relative.db")
+    assert get_database_url() == "sqlite+aiosqlite:///./relative.db"
+
+    monkeypatch.setenv("DATABASE_URL", "sqlite:////absolute/path.db")
+    assert get_database_url() == "sqlite+aiosqlite:////absolute/path.db"
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/db")
+    assert get_database_url() == "postgresql+asyncpg://user:pass@localhost:5432/db"
+
+    monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+    assert get_database_url() == "postgresql+asyncpg://user:pass@localhost:5432/db"
 
 
 async def test_game_record_cascade_and_relationships():

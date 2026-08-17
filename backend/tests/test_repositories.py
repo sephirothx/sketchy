@@ -148,6 +148,18 @@ async def test_game_history_repository():
         game_id = await history_repo.save_game(game_input, participants, rounds, guesses)
         assert game_id is not None
 
+        # Invalid guess round_index fails loudly
+        invalid_guesses = [
+            RoundGuessInput(
+                round_index=99,
+                user_id=u2.id,
+                points_awarded=100,
+                guess_time_seconds=5.0,
+            )
+        ]
+        with pytest.raises(ValueError, match="out of bounds"):
+            await history_repo.save_game(game_input, participants, rounds, invalid_guesses)
+
         # Check user games list with pagination clamping
         u1_games = await history_repo.get_user_games(u1.id, limit=999999, offset=-5)
         assert len(u1_games) == 1
