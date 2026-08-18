@@ -285,3 +285,70 @@ async def test_room_preview_returns_private_room_metadata_without_joining():
     assert response["room"]["drawingSeconds"] == 90
     assert response["room"]["hintMode"] == "checkpoints"
     assert len(room.players) == 1
+
+
+@pytest.mark.asyncio
+async def test_resume_only_join_never_seats_a_new_player():
+    """The invite screen probes for an existing seat; it must not create one."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    seated = room_manager.add_player(room, "Seated", user_id="returning-user")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=FakeUserRepository())
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+    join_room = sio.handlers["/"]["join_room"]
+
+    sio.get_session = AsyncMock(return_value={"user_id": "brand-new-user"})
+    probe = await join_room(
+        "visitor-sid", {"code": room.code, "nickname": "Visitor", "resumeOnly": True}
+    )
+    assert probe["ok"] is False
+    assert [p.nickname for p in room.player_list()] == ["Seated"]
+
+    sio.get_session = AsyncMock(return_value={"user_id": "returning-user"})
+    resumed = await join_room(
+        "returning-sid", {"code": room.code, "nickname": "Seated", "resumeOnly": True}
+    )
+    assert resumed["ok"] is True
+    assert resumed["playerId"] == seated.id
+    assert len(room.player_list()) == 1
+
+
+@pytest.mark.asyncio
+async def test_registering_mid_game_upgrades_the_existing_seat():
+    """A guest who signs up keeps their seat but stops being a guest on it."""
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_guest("user-1", "Wanderer")
+
+    room = room_manager.create_room(name="Room")
+    seat = room_manager.add_player(room, "Wanderer", user_id="user-1")
+    seat.sid = "old-sid"
+    assert seat.is_anonymous is True
+    assert seat.name_color == ANONYMOUS_NAME_COLOR
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "user-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.disconnect = AsyncMock()
+    sio.emit = AsyncMock()
+
+    # Claiming the account keeps the same user id, which is what lets the
+    # socket bounce land back on this very seat.
+    await user_repo.claim_account("user-1", "Stefano", "hash")
+
+    response = await sio.handlers["/"]["join_room"](
+        "new-sid", {"code": room.code, "nickname": "Wanderer", "nameColor": "#123abc"}
+    )
+
+    assert response["ok"] is True
+    assert response["playerId"] == seat.id, "must keep the same seat, not create one"
+    assert seat.nickname == "Stefano"
+    assert seat.is_anonymous is False
+    assert seat.name_color == "#123abc"
+    assert len(room.player_list()) == 1

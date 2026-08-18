@@ -13,16 +13,17 @@ import type {
   ScoringMode,
 } from "../types";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
-import {
-  clearReconnectSecret,
-  readReconnectSecret,
-  writeReconnectSecret,
-} from "../lib/sessionCredentials";
 
 interface GameStore {
   nickname: string;
   playerId: string | null;
-  reconnectSecret: string | null;
+  /**
+   * Set while deliberately leaving a room (leave, kick, or a seat taken over
+   * elsewhere). Clearing the session makes the room route briefly look like an
+   * un-joined visitor, which would otherwise flash the invite screen and fire
+   * a pointless rejoin probe on the way out.
+   */
+  isExitingRoom: boolean;
   roomId: string | null;
   code: string | null;
   name: string;
@@ -67,10 +68,9 @@ interface GameStore {
     roomId: string;
     code: string;
     playerId: string;
-    reconnectSecret: string;
   }) => void;
-  getStoredReconnectSecret: (code: string) => string | null;
-  clearStoredReconnectSecret: (code: string) => void;
+  clearSession: () => void;
+  setExitingRoom: (isExiting: boolean) => void;
   setRoomState: (payload: RoomStatePayload) => void;
   addMessage: (message: ChatMessage) => void;
   applyGuessPoints: (playerId: string, points: number) => void;
@@ -127,7 +127,7 @@ const initialGameFields = {
 export const useGameStore = create<GameStore>((set) => ({
   nickname: (localStorage.getItem("sketchy_nickname") || "").slice(0, MAX_NICKNAME_LENGTH),
   playerId: null,
-  reconnectSecret: null,
+  isExitingRoom: false,
   roomId: null,
   code: null,
   name: "",
@@ -155,15 +155,15 @@ export const useGameStore = create<GameStore>((set) => ({
     localStorage.setItem("sketchy_nickname", next);
     set({ nickname: next });
   },
-  setSession: ({ roomId, code, playerId, reconnectSecret }) => {
-    writeReconnectSecret(localStorage, code, reconnectSecret);
-    set({ roomId, code, playerId, reconnectSecret });
+  setSession: ({ roomId, code, playerId }) => {
+    // Nothing is persisted: the session cookie is the credential and the room
+    // code comes from the URL.
+    set({ roomId, code, playerId });
   },
-  getStoredReconnectSecret: (code) => readReconnectSecret(localStorage, code),
-  clearStoredReconnectSecret: (code) => {
-    clearReconnectSecret(localStorage, code);
-    set({ playerId: null, reconnectSecret: null, roomId: null, code: null });
+  clearSession: () => {
+    set({ playerId: null, roomId: null, code: null });
   },
+  setExitingRoom: (isExitingRoom) => set({ isExitingRoom }),
   setRoomState: (payload) =>
     set((state) => ({
       roomId: payload.id,
@@ -254,7 +254,6 @@ export const useGameStore = create<GameStore>((set) => ({
   setError: (error) => set({ error }),
   reset: () => set({
     playerId: null,
-    reconnectSecret: null,
     roomId: null,
     code: null,
     players: [],

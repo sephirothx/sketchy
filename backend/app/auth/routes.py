@@ -1,6 +1,8 @@
 """REST endpoints for anonymous provisioning, registration, and sign-in."""
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,11 +29,29 @@ from app.repositories.interfaces import (
     UserRepository,
 )
 
+def _limit(name: str, default: int) -> int:
+    """Read a rate limit from the environment, falling back to the default.
+
+    Configurable because the right ceiling depends on deployment: households
+    and offices share one address, and test harnesses need it out of the way.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 # Generous enough that a person fumbling their password is never locked out,
 # tight enough that online guessing and username scraping are impractical.
-login_limiter = RateLimiter(limit=10, window_seconds=300)
-register_limiter = RateLimiter(limit=5, window_seconds=3600)
-lookup_limiter = RateLimiter(limit=60, window_seconds=60)
+login_limiter = RateLimiter(limit=_limit("AUTH_LOGIN_LIMIT", 10), window_seconds=300)
+register_limiter = RateLimiter(
+    limit=_limit("AUTH_REGISTER_LIMIT", 10), window_seconds=3600
+)
+lookup_limiter = RateLimiter(limit=_limit("AUTH_LOOKUP_LIMIT", 60), window_seconds=60)
 
 # GET /api/auth/me runs on every page load, so recording a login timestamp on
 # each one would mean a write per visitor per load.
@@ -44,6 +64,12 @@ class CredentialsBody(BaseModel):
 
     username: str = Field(max_length=MAX_NAME_LENGTH)
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+
+
+class DisplayNameBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str = Field(max_length=MAX_NAME_LENGTH, alias="displayName")
 
 
 def user_payload(user: UserData) -> dict:
@@ -115,6 +141,43 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
                 "reason": "That name belongs to a registered player.",
             }
         return {"available": True, "reason": None}
+
+    @router.post("/display-name")
+    async def set_display_name(
+        body: DisplayNameBody, request: Request, response: Response
+    ):
+        """Remember the name a guest chose to play under.
+
+        Kept server-side so the choice survives a cleared localStorage or a
+        different device, and so the claim funnel can pre-fill it later.
+        """
+        throttle(lookup_limiter, request)
+        try:
+            name = validate_name(body.display_name)
+        except NameError_ as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
+        user_id = getattr(request.state, "user_id", None)
+        user = await user_repo.get_by_id(user_id) if user_id else None
+        if user is None:
+            user = await user_repo.create_anonymous(display_name=name)
+            await issue_cookie(response, request, user.id)
+            return user_payload(user)
+        if not user.is_anonymous:
+            # A registered player's name is their username; changing it here
+            # would let the two drift apart.
+            raise HTTPException(
+                status_code=409, detail="Registered players play as their username."
+            )
+
+        owner = await user_repo.get_by_username(name)
+        if owner is not None and not owner.is_anonymous:
+            raise HTTPException(
+                status_code=409, detail="That name belongs to a registered player."
+            )
+
+        updated = await user_repo.update_profile(user.id, display_name=name)
+        return user_payload(updated or user)
 
     @router.post("/register")
     async def register(body: CredentialsBody, request: Request, response: Response):

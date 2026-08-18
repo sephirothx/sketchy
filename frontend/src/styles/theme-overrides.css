@@ -742,6 +742,31 @@
   background: rgba(0, 0, 0, 0.7);
 }
 
+[data-theme="dark"] .auth-form input {
+  border-color: #475569;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .auth-error {
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .auth-link {
+  color: #a5b4fc;
+}
+
+[data-theme="dark"] .account-action,
+[data-theme="dark"] .account-chip {
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .account-dropdown {
+  background: #1e293b;
+  border-color: #334155;
+}
+
 [data-theme="dark"] .modal-card {
   background: #1e293b;
   border-color: #334155;

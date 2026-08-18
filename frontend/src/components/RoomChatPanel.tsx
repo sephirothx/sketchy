@@ -286,7 +286,12 @@ export function RoomChatPanel({
                 ) : (
                   <>
                     <strong
-                      className="colored-player-name"
+                      className={
+                        players.find((player) => player.playerId === message.playerId)
+                          ?.isAnonymous
+                          ? "colored-player-name is-guest"
+                          : "colored-player-name"
+                      }
                       style={{
                         color: message.nameColor
                           ?? players.find((player) => player.playerId === message.playerId)

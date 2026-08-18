@@ -1,5 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
+from tests.e2e.lobby_helpers import use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -23,7 +24,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect(
 
         try:
             await host_page.goto(BASE_URL)
-            await host_page.fill('input[placeholder="Your name"]', "InviteHost")
+            await use_guest_name(host_page, "InviteHost")
             await host_page.click('button:has-text("Create room")')
             await host_page.fill('input[placeholder="Leave blank for a random name!"]', "Invite Test Room")
             await host_page.get_by_role("button", name="Private").click()

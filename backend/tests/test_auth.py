@@ -278,3 +278,41 @@ async def test_registering_twice_is_rejected(client):
         "/api/auth/register", json={"username": "Another", "password": "a-good-password"}
     )
     assert again.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_guest_display_name_is_persisted_and_survives_reload(client):
+    await client.get("/api/auth/me")
+    saved = await client.post("/api/auth/display-name", json={"displayName": "Wanderer"})
+    assert saved.status_code == 200
+    assert saved.json()["displayName"] == "Wanderer"
+    # Persisted server-side, so a cleared localStorage does not lose the choice.
+    assert (await client.get("/api/auth/me")).json()["displayName"] == "Wanderer"
+
+
+@pytest.mark.asyncio
+async def test_guest_cannot_take_a_registered_username_as_display_name(client):
+    await client.get("/api/auth/me")
+    await client.post(
+        "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
+    )
+
+    guest = AsyncClient(transport=client._transport, base_url="http://test")
+    async with guest:
+        await guest.get("/api/auth/me")
+        clash = await guest.post("/api/auth/display-name", json={"displayName": "stefano"})
+        assert clash.status_code == 409
+        assert (
+            await guest.post("/api/auth/display-name", json={"displayName": "has space"})
+        ).status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_claiming_an_account_aligns_display_name_with_username(client):
+    await client.get("/api/auth/me")
+    await client.post("/api/auth/display-name", json={"displayName": "Wanderer"})
+    claimed = await client.post(
+        "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
+    )
+    # Registered players play as their username, so the two must not drift.
+    assert claimed.json()["displayName"] == "Stefano"

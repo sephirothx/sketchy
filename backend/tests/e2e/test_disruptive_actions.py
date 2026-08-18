@@ -1,5 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
+from tests.e2e.lobby_helpers import use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -20,7 +21,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
 
         try:
             await host_page.goto(BASE_URL)
-            await host_page.fill('input[placeholder="Your name"]', "SafeHost")
+            await use_guest_name(host_page, "SafeHost")
             await host_page.click('button:has-text("Create room")')
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
@@ -46,7 +47,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             code_text = await host_page.inner_text('.room-copy-button')
             code = code_text.split("Code:")[1].strip()
             await player_page.goto(BASE_URL)
-            await player_page.fill('input[placeholder="Your name"]', "SafePlayer")
+            await use_guest_name(player_page, "SafePlayer")
             await player_page.fill('input[placeholder="ABC123"]', code)
             await player_page.click('button:has-text("Join by code")')
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
@@ -113,7 +114,7 @@ async def test_waiting_room_leave_remains_immediate():
 
         try:
             await page.goto(BASE_URL)
-            await page.fill('input[placeholder="Your name"]', "WaitingLeaver")
+            await use_guest_name(page, "WaitingLeaver")
             await page.click('button:has-text("Create room")')
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')
@@ -127,9 +128,21 @@ async def test_waiting_room_leave_remains_immediate():
             sent_frames = await page.evaluate("window.__sentSocketFrames")
             assert sum('"leave_room"' in frame for frame in sent_frames) == 1
             assert not any('"join_room"' in frame for frame in sent_frames)
-            assert await page.evaluate(
-                "(code) => localStorage.getItem(`sketchy_reconnect_secret_${code}`)",
+            # Identity now lives in an HttpOnly cookie, so the property worth
+            # asserting is that nothing about the session is reachable from
+            # JavaScript - and that leaving stores no room credential at all.
+            leaked = await page.evaluate(
+                """(code) => ({
+                    cookie: document.cookie,
+                    storage: Object.keys(localStorage),
+                    session: Object.keys(sessionStorage).filter(
+                        (key) => key.includes(code)
+                    ),
+                })""",
                 room_code,
-            ) is None
+            )
+            assert "sketchy_session" not in leaked["cookie"]
+            assert not any(key.startswith("sketchy_reconnect") for key in leaked["storage"])
+            assert leaked["session"] == []
         finally:
             await browser.close()

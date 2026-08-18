@@ -118,7 +118,11 @@ export function PlayerList({
               isAfk={p.isAfk}
             />
             <span className="player-name">
-              <FittedPlayerName nickname={p.nickname} nameColor={p.nameColor} />
+              <FittedPlayerName
+                nickname={p.nickname}
+                nameColor={p.nameColor}
+                isAnonymous={p.isAnonymous}
+              />
               {isMe && <span className="player-you-mark">you</span>}
               {!p.connected && <span className="visually-hidden">Disconnected</span>}
             </span>
@@ -161,12 +165,22 @@ function votePlayer(targetPlayerId: string, action: "kick" | "afk") {
 function FittedPlayerName({
   nickname,
   nameColor,
+  isAnonymous,
 }: {
   nickname: string;
   nameColor?: string;
+  isAnonymous?: boolean;
 }) {
   return (
-    <span className="colored-player-name" style={{ color: nameColor }}>
+    <span
+      className={
+        isAnonymous ? "colored-player-name is-guest" : "colored-player-name"
+      }
+      style={{ color: nameColor }}
+      // Guests are visually distinct, so state it for screen readers too
+      // rather than relying on the italics alone.
+      title={isAnonymous ? `${nickname} (guest)` : undefined}
+    >
       {nickname}
     </span>
   );

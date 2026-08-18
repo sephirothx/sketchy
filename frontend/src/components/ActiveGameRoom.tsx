@@ -4,6 +4,7 @@ import type { CanvasRef } from "../components/Canvas";
 import { GameEndOverlay } from "../components/GameEndOverlay";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
+import { AccountMenu } from "../components/AccountMenu";
 import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import {
@@ -36,7 +37,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const playersDrawerTitleId = useId();
 
   const playerId = useGameStore((s) => s.playerId);
-  const clearStoredReconnectSecret = useGameStore((s) => s.clearStoredReconnectSecret);
+  const clearSession = useGameStore((s) => s.clearSession);
+  const setExitingRoom = useGameStore((s) => s.setExitingRoom);
   const reset = useGameStore((s) => s.reset);
 
   const roomState = useGameStore((s) => s.roomState);
@@ -110,24 +112,42 @@ export function ActiveGameRoom({ code }: { code: string }) {
   useEffect(() => {
     function onKicked(data: { reason?: string }) {
       exitingRoomRef.current = true;
-      clearStoredReconnectSecret(normalizedCode);
+      setExitingRoom(true);
+      clearSession();
       reset();
       navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
     }
     function onVotedAfk(data: { message?: string }) {
       notify(data?.message || "You were marked AFK by room vote.", "warning");
     }
+    // One seat per account per room: another tab took this one over. Say so
+    // rather than leaving this tab on a board that has silently stopped.
+    function onSuperseded(data: { reason?: string }) {
+      exitingRoomRef.current = true;
+      setExitingRoom(true);
+      clearSession();
+      reset();
+      navigate("/", {
+        state: {
+          criticalError:
+            data?.reason || "This room was opened in another tab.",
+        },
+      });
+    }
     socket.on("kicked", onKicked);
     socket.on("voted_afk", onVotedAfk);
+    socket.on("session_superseded", onSuperseded);
     return () => {
       socket.off("kicked", onKicked);
       socket.off("voted_afk", onVotedAfk);
+      socket.off("session_superseded", onSuperseded);
     };
-  }, [clearStoredReconnectSecret, navigate, normalizedCode, notify, reset]);
+  }, [clearSession, navigate, normalizedCode, notify, reset, setExitingRoom]);
 
   function performLeave() {
     exitingRoomRef.current = true;
-    clearStoredReconnectSecret(normalizedCode);
+    setExitingRoom(true);
+    clearSession();
     socket.emit("leave_room");
     reset();
     navigate("/");
@@ -288,6 +308,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               </span>
             </button>
           )}
+          <AccountMenu />
           <button
             type="button"
             className="game-header-afk-button"

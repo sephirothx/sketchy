@@ -42,8 +42,8 @@ export function useRoomSessionReconnect() {
     let consecutiveHeartbeatFailures = 0;
 
     async function joinWithSession(soft = false) {
-      const { reconnectSecret, roomId, code, nickname } = useGameStore.getState();
-      if (!reconnectSecret || !code) {
+      const { roomId, code, nickname } = useGameStore.getState();
+      if (!code) {
         setRoomBindingStatus("ready");
         return;
       }
@@ -53,30 +53,16 @@ export function useRoomSessionReconnect() {
         roomId,
         nickname,
         nameColor,
-        reconnectSecret,
         soft,
       });
       if (cancelled) return;
-      if (
-        response.ok
-        && response.roomId
-        && response.code
-        && response.playerId
-        && response.reconnectSecret
-      ) {
+      if (response.ok && response.roomId && response.code && response.playerId) {
         useGameStore.getState().setSession({
           roomId: response.roomId,
           code: response.code,
           playerId: response.playerId,
-          reconnectSecret: response.reconnectSecret,
         });
         setRoomBindingStatus("ready");
-        return;
-      }
-      if (response.invalidReconnectSecret) {
-        useGameStore.getState().clearStoredReconnectSecret(code);
-        useGameStore.getState().reset();
-        setRoomBindingStatus("failed");
         return;
       }
       throw new Error(response.error || "join_room failed");
@@ -86,8 +72,8 @@ export function useRoomSessionReconnect() {
       options: { forceTransportRestart?: boolean; soft?: boolean } = {},
     ) {
       const { forceTransportRestart = false, soft = false } = options;
-      const { reconnectSecret, code } = useGameStore.getState();
-      if (!reconnectSecret || !code) {
+      const { code } = useGameStore.getState();
+      if (!code) {
         setRoomBindingStatus("ready");
         return;
       }
@@ -124,8 +110,8 @@ export function useRoomSessionReconnect() {
     }
 
     function onConnect() {
-      const { reconnectSecret, code } = useGameStore.getState();
-      if (!reconnectSecret || !code) {
+      const { code } = useGameStore.getState();
+      if (!code) {
         setRoomBindingStatus("ready");
         return;
       }
@@ -133,14 +119,14 @@ export function useRoomSessionReconnect() {
     }
 
     function onDisconnect() {
-      const { reconnectSecret, code } = useGameStore.getState();
-      if (reconnectSecret && code) setRoomBindingStatus("rejoining");
+      const { code } = useGameStore.getState();
+      if (code) setRoomBindingStatus("rejoining");
     }
 
     function onVisibility() {
       if (document.visibilityState !== "visible") return;
-      const { reconnectSecret, code, phase, roomState } = useGameStore.getState();
-      if (!reconnectSecret || !code) return;
+      const { code, phase, roomState } = useGameStore.getState();
+      if (!code) return;
       if (!ACTIVE_PHASES.has(phase) && roomState !== "playing") return;
       queueRebind({ soft: true });
     }

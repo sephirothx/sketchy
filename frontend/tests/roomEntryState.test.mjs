@@ -28,7 +28,6 @@ const sessionResponse = {
   roomId: "room-1",
   code: "ABC123",
   playerId: "player-1",
-  reconnectSecret: "private-secret",
 };
 
 function deferred() {
@@ -39,8 +38,6 @@ function deferred() {
 
 function dependencies(overrides = {}) {
   return {
-    getReconnectSecret: () => null,
-    clearReconnectSecret: () => {},
     reconnect: async () => ({ ok: false }),
     preview: async () => ({ ok: true, room }),
     join: async () => sessionResponse,
@@ -51,15 +48,11 @@ function dependencies(overrides = {}) {
   };
 }
 
-test("a valid stored credential reconnects without loading a preview", async () => {
+test("an existing seat is resumed without loading a preview", async () => {
   const accepted = [];
   let previewCalls = 0;
   const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
-    getReconnectSecret: () => "stored-secret",
-    reconnect: async (request) => {
-      assert.equal(request.reconnectSecret, "stored-secret");
-      return sessionResponse;
-    },
+    reconnect: async () => sessionResponse,
     preview: async () => {
       previewCalls += 1;
       return { ok: true, room };
@@ -72,26 +65,39 @@ test("a valid stored credential reconnects without loading a preview", async () 
     roomId: "room-1",
     code: "ABC123",
     playerId: "player-1",
-    reconnectSecret: "private-secret",
   }]);
   assert.equal(previewCalls, 0);
 });
 
-test("an expired credential is cleared before showing the room preview", async () => {
-  const cleared = [];
+test("a visitor with no seat sees the preview and is never auto-joined", async () => {
+  const accepted = [];
   const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
-    getReconnectSecret: () => "expired-secret",
-    reconnect: async () => ({ ok: false, invalidReconnectSecret: true }),
-    clearReconnectSecret: (code) => cleared.push(code),
+    reconnect: async () => ({ ok: false, error: "No existing session in this room" }),
+    acceptSession: (session) => accepted.push(session),
   }));
 
   await machine.load();
-  assert.deepEqual(cleared, ["ABC123"]);
-  assert.deepEqual(machine.getSnapshot().state, {
-    status: "preview",
-    room,
-    notice: "Your previous session expired. Choose how you would like to rejoin.",
-  });
+  assert.deepEqual(accepted, []);
+  assert.deepEqual(machine.getSnapshot().state, { status: "preview", room });
+});
+
+test("a nickname breaking the shared name rule is rejected before joining", async () => {
+  const joins = [];
+  const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
+    join: async (request) => { joins.push(request); return sessionResponse; },
+  }));
+  await machine.load();
+
+  for (const bad of ["ab", "has space", "Guest", "way-too-long-a-nickname"]) {
+    machine.setNicknameInput(bad);
+    await machine.join("player");
+    assert.equal(joins.length, 0, bad);
+    assert.ok(machine.getSnapshot().state.error, bad);
+  }
+
+  machine.setNicknameInput("Ada-Lovelace");
+  await machine.join("player");
+  assert.equal(joins.length, 1);
 });
 
 test("direct player and spectator joins preserve their distinct modes", async () => {
@@ -142,26 +148,36 @@ test("disposing the machine ignores a pending response", async () => {
   assert.deepEqual(accepted, []);
 });
 
-test("a late response cannot overwrite the newest preview", async () => {
-  const first = deferred();
-  const second = deferred();
-  let calls = 0;
+test("a superseded load cannot overwrite the newest preview", async () => {
+  const probes = [];
+  const newestRoom = { ...room, name: "Newest room state" };
+  let previewCalls = 0;
   const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
-    preview: () => {
-      calls += 1;
-      return calls === 1 ? first.promise : second.promise;
+    reconnect: () => {
+      const pending = deferred();
+      probes.push(pending);
+      return pending.promise;
+    },
+    preview: async () => {
+      previewCalls += 1;
+      return { ok: true, room: newestRoom };
     },
   }));
 
   const firstLoad = machine.load();
   const secondLoad = machine.load();
-  const newestRoom = { ...room, name: "Newest room state" };
-  second.resolve({ ok: true, room: newestRoom });
+  assert.equal(probes.length, 2);
+
+  // Newest load finishes first, then the stale one comes back late.
+  probes[1].resolve({ ok: false });
   await secondLoad;
-  first.resolve({ ok: false, error: "stale failure" });
+  probes[0].resolve({ ok: false });
   await firstLoad;
 
-  assert.deepEqual(machine.getSnapshot().state, { status: "preview", room: newestRoom, notice: undefined });
+  assert.deepEqual(machine.getSnapshot().state, { status: "preview", room: newestRoom });
+  // The superseded load is abandoned at the resume probe, so it never even
+  // asks for a preview it would not be allowed to publish.
+  assert.equal(previewCalls, 1);
 });
 
 test("a room-full player response returns to preview while keeping spectator join available", async () => {

@@ -220,6 +220,9 @@ class JoinRoomPayload(RequestModel):
     name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
     as_spectator: bool = Field(default=False, alias="asSpectator")
     soft: bool = False
+    # "Do I already hold a seat here?" - used by the invite screen, which must
+    # not seat a visitor who is still deciding whether to play or spectate.
+    resume_only: bool = Field(default=False, alias="resumeOnly")
 
     @field_validator("nickname")
     @classmethod

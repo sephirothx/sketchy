@@ -180,6 +180,9 @@ class SqlAlchemyUserRepository(UserRepository):
                 user.username = clean_username
                 user.password_hash = password_hash
                 user.is_anonymous = False
+                # Registered players play as their username, so the display
+                # name follows it rather than keeping the old guest nickname.
+                user.display_name = clean_username
             await session.refresh(user)
             return _to_user_data(user)
 

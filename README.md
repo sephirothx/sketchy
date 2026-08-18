@@ -74,6 +74,31 @@ To use an external PostgreSQL database instead, set the `DATABASE_URL` environme
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy ./scripts/serve.sh
 ```
 
+### Accounts
+
+Every visitor is given an account automatically on their first page load, and
+it is remembered by an HttpOnly `sketchy_session` cookie. Guests play under a
+name of their choosing; setting a username and password later claims that same
+account, so stats collected as a guest carry over.
+
+Sessions are signed with a key that is generated once and stored in the
+database. Set `JWT_SECRET` to supply your own — required if you run more than
+one server process, since they must all sign with the same key, and it also
+keeps existing sessions valid if the database is ever rebuilt:
+
+```bash
+JWT_SECRET=$(openssl rand -base64 48) ./scripts/serve.sh
+```
+
+The authentication endpoints are rate limited per client address. The defaults
+suit a normal deployment; raise them if many of your players share one address:
+
+| Variable | Default | Applies to |
+| --- | --- | --- |
+| `AUTH_LOGIN_LIMIT` | 10 per 5 minutes | `POST /api/auth/login` |
+| `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
+| `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
+
 ## Project structure
 
 ```

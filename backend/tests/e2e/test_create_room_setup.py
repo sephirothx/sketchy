@@ -15,17 +15,6 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
-            nickname_input = page.locator('input[placeholder="Your name"]')
-            await assert_input_contract(nickname_input, {
-                "type": "search",
-                "role": None,
-                "inputMode": "text",
-                "autoComplete": "nickname",
-                "autoCapitalize": "words",
-                "spellCheck": False,
-                "autoCorrect": "off",
-                "enterKeyHint": "done",
-            })
             room_code_input = page.locator('input[placeholder="ABC123"]')
             await assert_input_contract(room_code_input, {
                 "type": "search",
@@ -40,8 +29,26 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             await room_code_input.fill("ab-c12")
             assert await room_code_input.input_value() == "ABC12"
             await room_code_input.fill("")
-            await nickname_input.fill("SetupHost")
+
+            # The name is asked for in a dialog at create time. It carries the
+            # same input contract the lobby field used to, except that
+            # autoCapitalize is off: names are case-sensitive and cannot
+            # contain spaces.
             await page.click('button:has-text("Create room")')
+            nickname_input = page.locator('.modal-card input')
+            await nickname_input.wait_for(state="visible")
+            await assert_input_contract(nickname_input, {
+                "type": "search",
+                "role": None,
+                "inputMode": "text",
+                "autoComplete": "nickname",
+                "autoCapitalize": "off",
+                "spellCheck": False,
+                "autoCorrect": "off",
+                "enterKeyHint": "go",
+            })
+            await nickname_input.fill("SetupHost")
+            await page.click('.modal-card button[type="submit"]')
             await page.wait_for_url(f"{BASE_URL}/create")
             # History updates before React finishes the route swap; wait for the
             # create page before asserting lobby controls are gone.

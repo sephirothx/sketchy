@@ -21,6 +21,7 @@ from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     RoomFullError,
     STARTING_SCORE,
+    generate_random_name_color,
     normalize_name_color,
 )
 
@@ -174,12 +175,19 @@ async def join_room(ctx: HandlerContext, sid, data):
     # another, so scores and turn order survive and cannot be duplicated.
     player = ctx.room_manager.get_player_by_user_id(room, user_id)
     if player:
+        # The account may have been claimed since this seat was taken - this is
+        # the path a guest returns through after registering or logging in
+        # mid-game, so the seat has to pick up the new name and status.
+        await _refresh_seat_identity(ctx, player, name_color)
         if name_color and not player.is_anonymous:
             player.name_color = name_color
         # _join_socket_room notifies and disconnects any socket that was
         # holding this seat before handing it to the new one.
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         return ctx.game_flow._session_ack(room, player)
+
+    if payload.resume_only:
+        return {"ok": False, "error": "No existing session in this room"}
 
     try:
         identity = await resolve_identity(ctx, sid, payload.nickname)
@@ -207,6 +215,27 @@ async def join_room(ctx: HandlerContext, sid, data):
 
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     return ctx.game_flow._session_ack(room, player)
+
+
+async def _refresh_seat_identity(
+    ctx: HandlerContext, player, name_color: str | None
+) -> None:
+    """Re-sync a rebound seat with its account.
+
+    Registering keeps the same user id, so the seat survives - but its nickname
+    and guest status are stale until refreshed here. Only ever upgrades a guest
+    seat to a registered one; it never renames a player mid-game otherwise.
+    """
+    if ctx.user_repo is None or not player.user_id or not player.is_anonymous:
+        return
+    account = await ctx.user_repo.get_by_id(player.user_id)
+    if account is None or account.is_anonymous or not account.username:
+        return
+    player.nickname = account.username
+    player.is_anonymous = False
+    player.name_color = (
+        normalize_name_color(name_color) or generate_random_name_color()
+    )
 
 
 async def session_ping(ctx: HandlerContext, sid, data=None):

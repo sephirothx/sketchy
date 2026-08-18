@@ -66,8 +66,8 @@ export function CreateRoomPage() {
         customWords: customWords.value.trim(), customWordsOnly: customWords.only, hintMode, scoringMode,
         spectatorsSeeSolution, hideMaskedPrompt, wordListSlugs,
       });
-      if (response.ok && response.roomId && response.code && response.playerId && response.reconnectSecret) {
-        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId, reconnectSecret: response.reconnectSecret });
+      if (response.ok && response.roomId && response.code && response.playerId) {
+        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId });
         navigate(`/room/${response.code}`);
         return;
       }

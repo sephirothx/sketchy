@@ -1,5 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
+from tests.e2e.lobby_helpers import use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -17,7 +18,7 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
         player_page = await player_context.new_page()
         try:
             await host_page.goto(BASE_URL)
-            await host_page.fill('input[placeholder="Your name"]', "LobbyHost")
+            await use_guest_name(host_page, "LobbyHost")
             await host_page.click('button:has-text("Create room")')
             await host_page.fill('input[placeholder="Leave blank for a random name!"]', "Lobby details")
             await host_page.fill('label:has-text("Rounds") input', "2")
@@ -87,7 +88,7 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
             code_text = await host_page.inner_text('.room-copy-button')
             code = code_text.split('Code:')[1].strip()
             await player_page.goto(BASE_URL)
-            await player_page.fill('input[placeholder="Your name"]', "LobbyPlayer")
+            await use_guest_name(player_page, "LobbyPlayer")
             room_code_input = player_page.locator('input[placeholder="ABC123"]')
             await room_code_input.fill(code.lower())
             assert await room_code_input.input_value() == code
