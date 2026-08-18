@@ -5,6 +5,7 @@ import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import { useSettingsStore } from "../store/settingsStore";
 import type { RoomSummary } from "../types";
 import { SettingsIcon } from "./SettingsIcon";
+import { AccountMenu } from "./AccountMenu";
 
 const INVITE_LOADING_DELAY_MS = 250;
 
@@ -47,10 +48,13 @@ export function InviteEntryPage({ code }: { code: string }) {
     <div className="invite-entry-page">
       <header className="invite-entry-header">
         <button type="button" className="invite-brand" onClick={() => navigate("/")}>Sketchy</button>
-        <button type="button" className="header-settings-button" onClick={openSettings} title="Game Settings">
-          <SettingsIcon size={16} />
-          <span>Settings</span>
-        </button>
+        <div className="lobby-header-actions">
+          <AccountMenu />
+          <button type="button" className="header-settings-button" onClick={openSettings} title="Game Settings">
+            <SettingsIcon size={16} />
+            <span>Settings</span>
+          </button>
+        </div>
       </header>
 
       {state.status === "error" ? (

@@ -24,6 +24,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, HintMode, ScoringMode } from "../types";
+import { AccountMenu } from "../components/AccountMenu";
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
@@ -86,7 +87,10 @@ export function CreateRoomPage() {
   }
 
   return <main className="create-room-page">
-    <button type="button" className="back-link" onClick={() => navigate("/")}>← Back to lobby</button>
+    <div className="create-room-top-bar">
+      <button type="button" className="back-link" onClick={() => navigate("/")}>← Back to lobby</button>
+      <AccountMenu />
+    </div>
     <section className="create-room-card">
       <div className="create-room-heading"><p>Room setup</p><h1>Create a room</h1></div>
       {error && <p className="create-room-error" role="alert">{error}</p>}
