@@ -38,7 +38,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
                 "role": None,
                 "inputMode": "text",
                 "autoComplete": "nickname",
-                "autoCapitalize": "words",
+                "autoCapitalize": "off",
                 "spellCheck": False,
                 "autoCorrect": "off",
                 "enterKeyHint": "done",

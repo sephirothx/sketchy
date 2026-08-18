@@ -1,4 +1,5 @@
 import type { AckResponse, RoomPreviewResponse, RoomSummary } from "../types";
+import { GUEST_NICKNAME_RULES_MESSAGE, isValidGuestNickname } from "./guestNickname.ts";
 
 /** Keep in sync with backend/app/handlers/payloads.py MAX_NICKNAME_LENGTH. */
 export const MAX_NICKNAME_LENGTH = 16;
@@ -148,6 +149,13 @@ export class RoomEntryMachine {
       this.publish({
         ...this.snapshot,
         state: { ...current, error: "Enter a nickname to continue." },
+      });
+      return;
+    }
+    if (!isValidGuestNickname(nickname)) {
+      this.publish({
+        ...this.snapshot,
+        state: { ...current, error: GUEST_NICKNAME_RULES_MESSAGE },
       });
       return;
     }

@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from functools import partial
 
-from app.auth.nickname import guest_nickname_is_available, registered_nickname_taken_message
+from app.auth.nickname import (
+    NICKNAME_RULES_MESSAGE,
+    guest_nickname_is_available,
+    is_valid_guest_nickname,
+    registered_nickname_taken_message,
+)
 from app.game import Phase
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
@@ -21,21 +26,29 @@ from app.rooms import RoomFullError, STARTING_SCORE, normalize_name_color
 
 
 async def _resolve_identity(
-    ctx: HandlerContext, sid: str, requested_nickname: str
+    ctx: HandlerContext,
+    sid: str,
+    requested_nickname: str,
+    *,
+    require_valid_guest_nickname: bool = True,
 ) -> tuple[str, str, bool, str | None]:
     """
     Resolve persistent identity and the nickname to use in the room.
 
     Registered users always appear as their username. Guests keep the requested
-    nickname unless it collides with a registered username.
+    nickname unless it collides with a registered username. Guest nicknames use
+    the same charset as usernames (no spaces).
     Returns (user_id, effective_nickname, is_anonymous, error_message).
     """
     session = await ctx.sio.get_session(sid) if sid else {}
     session = session or {}
     user_id = session.get("user_id")
-    clean_nickname = requested_nickname.strip() or "Player"
+    requested = requested_nickname.strip()
+    clean_nickname = requested or "Player"
 
     if ctx.user_repo is None:
+        if not is_valid_guest_nickname(clean_nickname):
+            return ("", "", True, NICKNAME_RULES_MESSAGE)
         return (user_id or sid, clean_nickname, False, None)
 
     user = None
@@ -51,6 +64,18 @@ async def _resolve_identity(
 
     if not user_id or user is None:
         return ("", "", True, "Not authenticated")
+
+    stored = (user.display_name or "").strip()
+    if is_valid_guest_nickname(requested):
+        clean_nickname = requested
+    elif is_valid_guest_nickname(stored) and stored.lower() != "guest":
+        clean_nickname = stored
+    elif not requested:
+        clean_nickname = "Player"
+    elif not require_valid_guest_nickname:
+        clean_nickname = stored or requested
+    else:
+        return ("", "", True, NICKNAME_RULES_MESSAGE)
 
     if not await guest_nickname_is_available(ctx.user_repo, clean_nickname, user.id):
         return ("", "", True, registered_nickname_taken_message(clean_nickname))
@@ -200,8 +225,24 @@ async def join_room(ctx: HandlerContext, sid, data):
         )
         return ctx.game_flow._session_ack(room, already_joined)
 
+    session = await ctx.sio.get_session(sid) if sid else {}
+    session = session or {}
+    existing = None
+    if session.get("user_id"):
+        existing = ctx.room_manager.get_player_by_user_id(room, session["user_id"])
+
+    if existing is None and payload.reconnect_only:
+        return {
+            "ok": False,
+            "error": "Your previous room session has expired",
+            "sessionExpired": True,
+        }
+
     user_id, effective_nickname, is_anonymous, error = await _resolve_identity(
-        ctx, sid, payload.nickname
+        ctx,
+        sid,
+        payload.nickname,
+        require_valid_guest_nickname=existing is None,
     )
     if error:
         return {"ok": False, "error": error}
@@ -214,13 +255,6 @@ async def join_room(ctx: HandlerContext, sid, data):
             player.name_color = name_color
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         return ctx.game_flow._session_ack(room, player)
-
-    if payload.reconnect_only:
-        return {
-            "ok": False,
-            "error": "Your previous room session has expired",
-            "sessionExpired": True,
-        }
 
     try:
         player = ctx.room_manager.add_player(

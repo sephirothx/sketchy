@@ -16,7 +16,7 @@ from app.auth.middleware import (
     cookie_should_be_secure,
     set_auth_cookie,
 )
-from app.auth.nickname import guest_nickname_is_available
+from app.auth.nickname import NICKNAME_RULES_MESSAGE, guest_nickname_is_available, is_valid_guest_nickname
 from app.auth.password import hash_password, verify_password
 from app.auth.schemas import LoginRequest, RegisterRequest
 from app.db import async_session_factory, init_db
@@ -186,6 +186,8 @@ async def nickname_available(
     current_user: UserData | None = getattr(request.state, "user", None)
     if current_user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    if nickname.strip() and not is_valid_guest_nickname(nickname):
+        raise HTTPException(status_code=400, detail=NICKNAME_RULES_MESSAGE)
     available = await guest_nickname_is_available(user_repo, nickname, current_user.id)
     return {"available": available}
 
@@ -226,6 +228,7 @@ async def login_user(req: LoginRequest, request: Request, response: Response):
     user = user or creds.user
     token = create_token(user.id, _jwt_secret)
     set_auth_cookie(response, token, secure=cookie_should_be_secure(request))
+    await apply_claimed_identity(user)
     return user_payload(user)
 
 

@@ -44,7 +44,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect(
                 "type": "search",
                 "inputMode": "text",
                 "autoComplete": "off",
-                "autoCapitalize": "words",
+                "autoCapitalize": "off",
                 "spellCheck": False,
                 "autoCorrect": "off",
                 "enterKeyHint": "go",

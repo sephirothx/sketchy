@@ -15,6 +15,7 @@ from app.canvas_history import (
     decode_binary_canvas_history,
     encode_canvas_history,
 )
+from app.auth.nickname import NICKNAME_RULES_MESSAGE
 from app.handlers import register_all_handlers as register_handlers
 from app.game import DRAWING_SECONDS, Game, Phase
 from app.live_drawing import encode_live_drawing
@@ -355,4 +356,55 @@ async def test_registered_username_is_enforced_and_guests_cannot_impersonate_it(
     )
     assert rejected["ok"] is False
     assert "already taken by a registered account" in rejected["error"]
+
+
+@pytest.mark.asyncio
+async def test_guest_nicknames_reject_spaces_and_short_names():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value=None)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    spaced = await sio.handlers["/"]["create_room"](
+        "host-sid",
+        {"nickname": "Cool Cat", "name": "Room"},
+    )
+    assert spaced == {"ok": False, "error": NICKNAME_RULES_MESSAGE}
+
+    short = await sio.handlers["/"]["create_room"](
+        "host-sid",
+        {"nickname": "ab", "name": "Room"},
+    )
+    assert short == {"ok": False, "error": NICKNAME_RULES_MESSAGE}
+
+
+@pytest.mark.asyncio
+async def test_authenticated_guest_nicknames_reject_spaces():
+    guest = _user(id="guest-1", display_name="Guest")
+    repo = _FakeUserRepo([guest])
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "guest-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    rejected = await sio.handlers["/"]["create_room"](
+        "guest-sid",
+        {"nickname": "Cool Cat", "name": "Room"},
+    )
+    assert rejected == {"ok": False, "error": NICKNAME_RULES_MESSAGE}
+
+    created = await sio.handlers["/"]["create_room"](
+        "guest-sid",
+        {"nickname": "Cool_Cat", "name": "Room"},
+    )
+    assert created["ok"] is True
+    assert created["roomId"]
+    room = room_manager.get_room(created["roomId"])
+    assert room.players[created["playerId"]].nickname == "Cool_Cat"
 

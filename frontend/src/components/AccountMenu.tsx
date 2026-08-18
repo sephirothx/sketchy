@@ -66,59 +66,8 @@ export function AccountMenu() {
     await logout();
   }
 
-  if (!user) {
-    return (
-      <button type="button" className="account-menu-button" disabled={isLoading} aria-label="Account">
-        <span className="account-menu-avatar" aria-hidden="true" />
-      </button>
-    );
-  }
-
-  return (
-    <div className="account-menu">
-      <button
-        ref={buttonRef}
-        type="button"
-        className="account-menu-button"
-        onClick={() => setMenuOpen((open) => !open)}
-        aria-haspopup="true"
-        aria-expanded={menuOpen}
-        aria-controls={menuOpen ? "account-menu-dropdown" : undefined}
-        aria-label={user.isAnonymous ? "Guest account" : `Account: ${displayName}`}
-        title={displayName}
-      >
-        <LetterAvatar name={displayName} color={avatarColor} />
-      </button>
-      {menuOpen && (
-        <div id="account-menu-dropdown" ref={menuRef} className="account-menu-dropdown">
-          <div className="account-menu-profile">
-            <LetterAvatar name={displayName} color={avatarColor} large />
-            <div>
-              <strong>{displayName}</strong>
-              <p>{user.isAnonymous ? "Guest" : `@${user.username}`}</p>
-            </div>
-          </div>
-          {user.isAnonymous ? (
-            <>
-              <p className="account-menu-cta">
-                {suggested
-                  ? `Playing as ${displayName}. Create an account to claim this name and keep your stats.`
-                  : "Create an account to keep your stats on any device."}
-              </p>
-              <button type="button" onClick={() => { setMenuOpen(false); openDialog("register"); }}>
-                Create account
-              </button>
-              <button type="button" onClick={() => { setMenuOpen(false); openDialog("login"); }}>
-                Log in
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={() => void handleLogout()}>
-              Log out
-            </button>
-          )}
-        </div>
-      )}
+  const authDialogs = (
+    <>
       {dialog === "register" && (
         <AuthFormDialog
           mode="register"
@@ -142,6 +91,63 @@ export function AccountMenu() {
           onSwitch={() => openDialog("register")}
         />
       )}
+    </>
+  );
+
+  if (!user) {
+    return (
+      <div className="account-menu">
+        <button
+          type="button"
+          className="account-menu-button"
+          onClick={() => openDialog("login")}
+          aria-label="Log in"
+        >
+          <span className="account-menu-avatar" aria-hidden="true" />
+          <span className="header-action-label">Log in</span>
+        </button>
+        {authDialogs}
+      </div>
+    );
+  }
+
+  return (
+    <div className="account-menu">
+      <button
+        ref={buttonRef}
+        type="button"
+        className="account-menu-button"
+        onClick={() => {
+          if (user.isAnonymous) {
+            openDialog("login");
+            return;
+          }
+          setMenuOpen((open) => !open);
+        }}
+        aria-haspopup={user.isAnonymous ? undefined : "true"}
+        aria-expanded={user.isAnonymous ? undefined : menuOpen}
+        aria-controls={!user.isAnonymous && menuOpen ? "account-menu-dropdown" : undefined}
+        aria-label={user.isAnonymous ? "Log in" : `Account: ${displayName}`}
+        title={displayName}
+      >
+        <LetterAvatar name={displayName} color={avatarColor} />
+        {user.isAnonymous ? <span className="header-action-label">Log in</span> : null}
+      </button>
+      {menuOpen && !user.isAnonymous && (
+        <div id="account-menu-dropdown" ref={menuRef} className="account-menu-dropdown">
+          <div className="account-menu-profile">
+            <LetterAvatar name={displayName} color={avatarColor} large />
+            <div>
+              <strong>{displayName}</strong>
+              <p>@{user.username}</p>
+            </div>
+          </div>
+          <button type="button" onClick={() => void handleLogout()}>
+            Log out
+          </button>
+        </div>
+      )}
+      {authDialogs}
     </div>
   );
 }

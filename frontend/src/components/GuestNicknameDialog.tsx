@@ -1,16 +1,24 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { apiRequest } from "../lib/api";
-import { registeredNicknameTakenMessage } from "../lib/guestNickname";
+import { ApiError, apiRequest } from "../lib/api";
+import {
+  GUEST_NICKNAME_RULES_MESSAGE,
+  isValidGuestNickname,
+  registeredNicknameTakenMessage,
+} from "../lib/guestNickname";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
+import { useAuthStore } from "../store/authStore";
 
 export function GuestNicknameDialog({
   onCancel,
   onSubmit,
+  onLogin,
 }: {
   onCancel: () => void;
   onSubmit: (nickname: string) => void;
+  onLogin?: () => void;
 }) {
+  const openDialog = useAuthStore((state) => state.openDialog);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const titleId = useId();
@@ -31,6 +39,10 @@ export function GuestNicknameDialog({
       setError("Please enter a nickname");
       return;
     }
+    if (!isValidGuestNickname(nickname)) {
+      setError(GUEST_NICKNAME_RULES_MESSAGE);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -42,8 +54,13 @@ export function GuestNicknameDialog({
         return;
       }
       onSubmit(nickname);
-    } catch {
-      setError("Could not check that nickname. Please try again.");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.detail);
+        return;
+      }
+      // Unreachable check (offline). Create/join still enforces collisions.
+      onSubmit(nickname);
     } finally {
       setBusy(false);
     }
@@ -67,7 +84,8 @@ export function GuestNicknameDialog({
       >
         <h3 id={titleId} className="modal-title">Choose a nickname</h3>
         <p id={descriptionId} className="modal-body">
-          Pick a name to play as a guest. You can create an account later to keep it and your stats.
+          Pick a name to play as a guest. Use 3–16 letters, digits, underscores, or hyphens.
+          You can create an account later to keep it and your stats.
         </p>
         <form className="guest-nickname-form" onSubmit={handleSubmit}>
           <label htmlFor="guest-nickname-input">Nickname</label>
@@ -84,7 +102,7 @@ export function GuestNicknameDialog({
             maxLength={MAX_NICKNAME_LENGTH}
             placeholder="Your name"
             autoComplete="nickname"
-            autoCapitalize="words"
+            autoCapitalize="off"
             spellCheck={false}
             autoCorrect="off"
             enterKeyHint="done"
@@ -104,6 +122,21 @@ export function GuestNicknameDialog({
             </button>
           </div>
         </form>
+        <button
+          type="button"
+          className="account-dialog-switch"
+          onClick={() => {
+            if (onLogin) {
+              onLogin();
+              return;
+            }
+            openDialog("login");
+            onCancel();
+          }}
+          disabled={busy}
+        >
+          Already have an account? Log in
+        </button>
       </div>
     </div>
   );

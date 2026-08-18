@@ -1,5 +1,6 @@
 .create-room-page { margin: 0 auto; max-width: 760px; padding: 28px 16px 64px; }
-.back-link { background: transparent; border: 0; color: #2563eb; cursor: pointer; font-size: 14px; font-weight: 700; margin-bottom: 16px; padding: 0; }
+.create-room-toolbar { align-items: center; display: flex; justify-content: space-between; margin-bottom: 16px; }
+.back-link { background: transparent; border: 0; color: #2563eb; cursor: pointer; font-size: 14px; font-weight: 700; margin-bottom: 0; padding: 0; }
 .create-room-card { background: #fff; border: 1px solid #dfe1e6; border-radius: 12px; padding: 24px; }
 .create-room-heading p { color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 4px; text-transform: uppercase; }
 .create-room-heading h1 { color: #1e293b; margin: 0; }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { RoomEntryMachine } from "../src/lib/roomEntryState.ts";
+import { GUEST_NICKNAME_RULES_MESSAGE } from "../src/lib/guestNickname.ts";
 
 const room = {
   id: "room-1",
@@ -176,4 +177,21 @@ test("a room-full player response returns to preview while keeping spectator joi
     machine.getSnapshot().state.error,
     "The player slots just filled up, but you can still spectate.",
   );
+});
+
+test("join rejects nicknames that include spaces", async () => {
+  let joinCalls = 0;
+  const machine = new RoomEntryMachine("ABC123", "Cool Cat", dependencies({
+    join: async () => {
+      joinCalls += 1;
+      return sessionResponse;
+    },
+  }));
+
+  await machine.load();
+  await machine.join("player");
+
+  assert.equal(joinCalls, 0);
+  assert.equal(machine.getSnapshot().state.status, "preview");
+  assert.equal(machine.getSnapshot().state.error, GUEST_NICKNAME_RULES_MESSAGE);
 });

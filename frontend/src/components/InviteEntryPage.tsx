@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useRoomEntry } from "../hooks/useRoomEntry";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import { needsGuestNickname } from "../lib/guestNickname";
+import { useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { RoomSummary } from "../types";
 import { SettingsIcon } from "./SettingsIcon";
@@ -39,6 +40,7 @@ function DelayedInviteLoader() {
 export function InviteEntryPage({ code }: { code: string }) {
   const navigate = useNavigate();
   const openSettings = useSettingsStore((state) => state.openSettings);
+  const openDialog = useAuthStore((state) => state.openDialog);
   const { state, nicknameInput, setNicknameInput, join, isRegistered } = useRoomEntry(code);
   const askForNickname = !isRegistered && needsGuestNickname(nicknameInput, null);
   const room = state.status === "preview" || state.status === "joining" ? state.room : null;
@@ -139,7 +141,7 @@ export function InviteEntryPage({ code }: { code: string }) {
                   maxLength={MAX_NICKNAME_LENGTH}
                   placeholder="Your name"
                   autoComplete="off"
-                  autoCapitalize="words"
+                  autoCapitalize="off"
                   spellCheck={false}
                   autoCorrect="off"
                   enterKeyHint="go"
@@ -149,6 +151,11 @@ export function InviteEntryPage({ code }: { code: string }) {
                 />
                 <p className="lobby-nickname-hint">
                   Play now as a guest. Create an account later to claim this name and keep your stats.
+                  Use 3–16 letters, digits, underscores, or hyphens.
+                  {" "}
+                  <button type="button" onClick={() => openDialog("login")}>
+                    Already have an account? Log in
+                  </button>
                 </p>
               </>
             ) : null}

@@ -22,6 +22,7 @@ import {
 import { createCustomWordsState, customWordsReducer } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { GuestNicknameDialog } from "../components/GuestNicknameDialog";
+import { AccountMenu } from "../components/AccountMenu";
 import { needsGuestNickname, resolvedPlayName } from "../lib/guestNickname";
 import { useGameStore } from "../store/gameStore";
 import { useAuthStore } from "../store/authStore";
@@ -35,6 +36,7 @@ export function CreateRoomPage() {
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const user = useAuthStore((state) => state.user);
+  const openDialog = useAuthStore((state) => state.openDialog);
   const [roomName, setRoomName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
@@ -98,13 +100,20 @@ export function CreateRoomPage() {
           setAskingName(false);
           navigate("/");
         }}
+        onLogin={() => {
+          openDialog("login");
+          setAskingName(false);
+        }}
         onSubmit={(name) => {
           setNickname(name);
           setAskingName(false);
         }}
       />
     )}
-    <button type="button" className="back-link" onClick={() => navigate("/")}>← Back to lobby</button>
+    <div className="create-room-toolbar">
+      <button type="button" className="back-link" onClick={() => navigate("/")}>← Back to lobby</button>
+      <AccountMenu />
+    </div>
     <section className="create-room-card">
       <div className="create-room-heading"><p>Room setup</p><h1>Create a room</h1></div>
       {error && <p className="create-room-error" role="alert">{error}</p>}

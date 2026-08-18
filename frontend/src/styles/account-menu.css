@@ -18,6 +18,11 @@
   padding: 2px;
 }
 
+.account-menu-button:has(.header-action-label) {
+  gap: 8px;
+  padding: 2px 10px 2px 2px;
+}
+
 .account-menu-button:hover {
   border-color: #94a3b8;
 }

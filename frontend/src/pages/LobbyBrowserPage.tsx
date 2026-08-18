@@ -81,6 +81,7 @@ export function LobbyBrowserPage() {
   const nameColor = useSettingsStore((s) => s.nameColor);
   const setSession = useGameStore((s) => s.setSession);
   const user = useAuthStore((s) => s.user);
+  const openDialog = useAuthStore((s) => s.openDialog);
   const isRegistered = Boolean(user && !user.isAnonymous);
 
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
@@ -279,6 +280,10 @@ export function LobbyBrowserPage() {
       {nameAction && (
         <GuestNicknameDialog
           onCancel={() => setNameAction(null)}
+          onLogin={() => {
+            openDialog("login");
+            setNameAction(null);
+          }}
           onSubmit={handleNicknameChosen}
         />
       )}

@@ -15,7 +15,7 @@ from app.auth.middleware import (
 )
 from app.auth.password import hash_password, verify_password
 from app.auth.schemas import LoginRequest, RegisterRequest, suggest_username
-from app.auth.nickname import guest_nickname_is_available
+from app.auth.nickname import NICKNAME_RULES_MESSAGE, guest_nickname_is_available, is_valid_guest_nickname
 from app.db.models import Base
 from app.handlers.connection import extract_jwt_cookie
 from app.main import user_payload
@@ -100,6 +100,8 @@ async def test_auth_rest_flow_and_timestamps():
         current = getattr(request.state, "user", None)
         if current is None:
             raise HTTPException(status_code=401, detail="Not authenticated")
+        if nickname.strip() and not is_valid_guest_nickname(nickname):
+            raise HTTPException(status_code=400, detail=NICKNAME_RULES_MESSAGE)
         available = await guest_nickname_is_available(repo, nickname, current.id)
         return {"available": available}
 
@@ -183,6 +185,9 @@ async def test_auth_rest_flow_and_timestamps():
             blocked = await other.get("/api/auth/nickname-available", params={"nickname": unique_name})
             assert blocked.status_code == 200
             assert blocked.json()["available"] is False
+            invalid = await other.get("/api/auth/nickname-available", params={"nickname": "Cool Cat"})
+            assert invalid.status_code == 400
+            assert invalid.json()["detail"] == NICKNAME_RULES_MESSAGE
             await other.aclose()
 
             logout_resp = await client.post("/api/auth/logout")
