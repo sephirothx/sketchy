@@ -52,7 +52,10 @@ export function AccountMenu() {
             className="account-action account-action-primary"
             onClick={() => setOpenMode("register")}
           >
-            Create account
+            {/* Same long/short pattern the header buttons already use, so the
+                controls stay on one row on a phone. */}
+            <span className="account-action-long">Create account</span>
+            <span className="account-action-short" aria-hidden="true">Sign up</span>
           </button>
           <button
             type="button"

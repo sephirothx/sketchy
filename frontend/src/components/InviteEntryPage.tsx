@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRoomEntry } from "../hooks/useRoomEntry";
-import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import { useSettingsStore } from "../store/settingsStore";
 import type { RoomSummary } from "../types";
 import { SettingsIcon } from "./SettingsIcon";
 import { AccountMenu } from "./AccountMenu";
+import { GuestNameControl } from "./GuestNameControl";
 
 const INVITE_LOADING_DELAY_MS = 250;
 
@@ -38,7 +38,7 @@ function DelayedInviteLoader() {
 export function InviteEntryPage({ code }: { code: string }) {
   const navigate = useNavigate();
   const openSettings = useSettingsStore((state) => state.openSettings);
-  const { state, nicknameInput, setNicknameInput, join } = useRoomEntry(code);
+  const { state, join } = useRoomEntry(code);
   const room = state.status === "preview" || state.status === "joining" ? state.room : null;
   const busy = state.status === "joining";
   const entryError = state.status === "preview" ? state.error : undefined;
@@ -49,6 +49,7 @@ export function InviteEntryPage({ code }: { code: string }) {
       <header className="invite-entry-header">
         <button type="button" className="invite-brand" onClick={() => navigate("/")}>Sketchy</button>
         <div className="lobby-header-actions">
+          <GuestNameControl />
           <AccountMenu />
           <button type="button" className="header-settings-button" onClick={openSettings} title="Game Settings">
             <SettingsIcon size={16} />
@@ -109,26 +110,12 @@ export function InviteEntryPage({ code }: { code: string }) {
               if (!room.isFull) void join("player");
             }}
           >
-            <label htmlFor="invite-nickname">Your nickname</label>
-            {/* Search type + autocomplete=off suppress Android Chrome's unrelated autofill toolbar. */}
-            <input
-              id="invite-nickname"
-              name="sketchy-invite-name"
-              type="search"
-              inputMode="text"
-              value={nicknameInput}
-              onChange={(event) => setNicknameInput(event.target.value)}
-              maxLength={MAX_NICKNAME_LENGTH}
-              placeholder="Your name"
-              autoComplete="off"
-              autoCapitalize="words"
-              spellCheck={false}
-              autoCorrect="off"
-              enterKeyHint="go"
-              autoFocus
-              disabled={busy}
-              aria-describedby={entryError ? "invite-entry-error" : undefined}
-            />
+            {/* No name field: the account already carries one, shown in the
+                header where it can also be changed. Asking again here would
+                be a second answer to a question nobody was asked. */}
+            <p className="invite-playing-as">
+              Joining as <GuestNameControl />
+            </p>
             {entryError && <p id="invite-entry-error" className="invite-form-error" role="alert">{entryError}</p>}
             <div className="invite-actions">
               <button type="submit" className="invite-primary-button" disabled={busy || room.isFull}>

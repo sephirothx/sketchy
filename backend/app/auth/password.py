@@ -22,6 +22,11 @@ _hasher = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1)
 DUMMY_HASH = _hasher.hash("no-such-account")
 
 
+PASSWORD_RULE_MESSAGE = (
+    f"Password must be {MIN_PASSWORD_LENGTH}-{MAX_PASSWORD_LENGTH} characters."
+)
+
+
 class PasswordPolicyError(ValueError):
     """A password that fails the length policy before it is ever hashed."""
 

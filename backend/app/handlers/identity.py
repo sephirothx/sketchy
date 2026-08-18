@@ -42,20 +42,24 @@ async def resolve_identity(
             user_id=user.id, nickname=user.username, is_anonymous=False
         )
 
+    if user is not None:
+        # Guests are handed a name on their first visit and rename it
+        # explicitly, so the account is the authority. Trusting the socket
+        # payload instead would let a client play under any name it liked.
+        return PlayerIdentity(
+            user_id=user.id, nickname=user.display_name, is_anonymous=True
+        )
+
+    # No account at all (cookies blocked): fall back to whatever they asked
+    # for, still subject to the shared rule.
     try:
         nickname = validate_name(requested_nickname)
     except NameError_ as error:
         raise IdentityError(str(error)) from error
 
-    # Two guests may share a nickname - it is not an identity - but neither may
-    # wear a name someone has actually claimed.
     if ctx.user_repo is not None:
         owner = await ctx.user_repo.get_by_username(nickname)
         if owner is not None and not owner.is_anonymous:
             raise IdentityError("That name belongs to a registered player.")
 
-    return PlayerIdentity(
-        user_id=user.id if user else user_id,
-        nickname=nickname,
-        is_anonymous=True,
-    )
+    return PlayerIdentity(user_id=user_id, nickname=nickname, is_anonymous=True)

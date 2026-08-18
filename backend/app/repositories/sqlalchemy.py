@@ -4,9 +4,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, case, distinct, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
+from app.auth.names import generate_guest_name
 from app.db.models import (
     GameParticipant,
     GameRecord,
@@ -105,7 +107,7 @@ class SqlAlchemyUserRepository(UserRepository):
                     id=user_id or generate_uuid(),
                     username=None,
                     password_hash=None,
-                    display_name=display_name.strip() or "Guest",
+                    display_name=display_name.strip() or generate_guest_name(),
                     name_color=name_color,
                     avatar_url=None,
                     is_anonymous=True,
@@ -183,6 +185,15 @@ class SqlAlchemyUserRepository(UserRepository):
                 # Registered players play as their username, so the display
                 # name follows it rather than keeping the old guest nickname.
                 user.display_name = clean_username
+                try:
+                    await session.flush()
+                except IntegrityError as error:
+                    # The check above can still lose to a concurrent claim of
+                    # the same name; the unique index is the real arbiter, and
+                    # callers should see the same error either way.
+                    raise UsernameTakenError(
+                        f"Username '{clean_username}' is already taken"
+                    ) from error
             await session.refresh(user)
             return _to_user_data(user)
 

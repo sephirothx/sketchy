@@ -742,6 +742,24 @@
   background: rgba(0, 0, 0, 0.7);
 }
 
+[data-theme="dark"] .guest-name-chip,
+[data-theme="dark"] .guest-name-save,
+[data-theme="dark"] .guest-name-cancel {
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .guest-name-form input {
+  border-color: #475569;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+/* 5.71:1 on the dark panel, 6.96:1 on the page background. */
+[data-theme="dark"] .colored-player-name.is-guest {
+  color: #94a3b8;
+}
+
 [data-theme="dark"] .auth-form input {
   border-color: #475569;
   background: #0f172a;

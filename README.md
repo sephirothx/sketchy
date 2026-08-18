@@ -99,6 +99,13 @@ suit a normal deployment; raise them if many of your players share one address:
 | `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
 
+Limits are keyed on the connecting address. Behind a reverse proxy or tunnel
+every request arrives from the proxy, so run uvicorn with `--proxy-headers` and
+`--forwarded-allow-ips=<proxy address>` to have the real client address
+recovered from `X-Forwarded-For`. Without that flag the header is ignored on
+purpose: it is attacker-controlled, and trusting it blindly would let a
+password-guesser sidestep the limit by varying it on every attempt.
+
 ## Project structure
 
 ```

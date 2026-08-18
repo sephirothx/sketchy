@@ -12,10 +12,8 @@ import type {
   RoundEndedPayload,
   ScoringMode,
 } from "../types";
-import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 
 interface GameStore {
-  nickname: string;
   playerId: string | null;
   /**
    * Set while deliberately leaving a room (leave, kick, or a seat taken over
@@ -63,7 +61,6 @@ interface GameStore {
   drawingRecap: DrawingRecapMetadata[];
   error: string | null;
 
-  setNickname: (nickname: string) => void;
   setSession: (session: {
     roomId: string;
     code: string;
@@ -125,7 +122,6 @@ const initialGameFields = {
 };
 
 export const useGameStore = create<GameStore>((set) => ({
-  nickname: (localStorage.getItem("sketchy_nickname") || "").slice(0, MAX_NICKNAME_LENGTH),
   playerId: null,
   isExitingRoom: false,
   roomId: null,
@@ -150,11 +146,6 @@ export const useGameStore = create<GameStore>((set) => ({
   error: null,
   ...initialGameFields,
 
-  setNickname: (nickname) => {
-    const next = nickname.slice(0, MAX_NICKNAME_LENGTH);
-    localStorage.setItem("sketchy_nickname", next);
-    set({ nickname: next });
-  },
   setSession: ({ roomId, code, playerId }) => {
     // Nothing is persisted: the session cookie is the credential and the room
     // code comes from the URL.

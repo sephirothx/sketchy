@@ -4,6 +4,8 @@ import type { ModerationState, PlayerInfo } from "../types";
 import { socket } from "../lib/socket";
 import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
+import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { GuestNameControl } from "./GuestNameControl";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -124,6 +126,10 @@ export function PlayerList({
                 isAnonymous={p.isAnonymous}
               />
               {isMe && <span className="player-you-mark">you</span>}
+              {/* Renaming lives here rather than in the game header, which is a
+                  fixed icon row with no space left - and this is where your
+                  name actually is. */}
+              {isMe && p.isAnonymous && <GuestNameControl variant="compact" />}
               {!p.connected && <span className="visually-hidden">Disconnected</span>}
             </span>
             {showScores && <span className="player-score">{p.score}</span>}
@@ -173,10 +179,8 @@ function FittedPlayerName({
 }) {
   return (
     <span
-      className={
-        isAnonymous ? "colored-player-name is-guest" : "colored-player-name"
-      }
-      style={{ color: nameColor }}
+      className={playerNameClass(isAnonymous)}
+      style={playerNameStyle(nameColor, isAnonymous)}
       // Guests are visually distinct, so state it for screen readers too
       // rather than relying on the italics alone.
       title={isAnonymous ? `${nickname} (guest)` : undefined}

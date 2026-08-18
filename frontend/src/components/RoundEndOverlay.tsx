@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { RoundEndedPayload, RoundScoreEntry } from "../types";
+import { playerNameClass, playerNameStyle } from "../lib/playerName";
 
 interface RoundEndOverlayProps {
   word: string;
@@ -74,8 +75,8 @@ export function RoundEndOverlay({
               {guesses.map((guess) => (
                 <li key={guess.playerId}>
                   <span
-                    className="colored-player-name"
-                    style={{ color: guess.nameColor }}
+                    className={playerNameClass(guess.isAnonymous)}
+                    style={playerNameStyle(guess.nameColor, guess.isAnonymous)}
                   >
                     {guess.nickname}
                   </span>
@@ -105,8 +106,8 @@ export function RoundEndOverlay({
                   <span className="round-score-name">
                     {entry.playerId === drawerId ? "\u270F\uFE0F " : ""}
                     <span
-                      className="colored-player-name"
-                      style={{ color: entry.nameColor }}
+                      className={playerNameClass(entry.isAnonymous)}
+                      style={playerNameStyle(entry.nameColor, entry.isAnonymous)}
                     >
                       {entry.nickname}
                     </span>

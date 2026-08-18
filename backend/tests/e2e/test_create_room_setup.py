@@ -30,12 +30,11 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             assert await room_code_input.input_value() == "ABC12"
             await room_code_input.fill("")
 
-            # The name is asked for in a dialog at create time. It carries the
-            # same input contract the lobby field used to, except that
-            # autoCapitalize is off: names are case-sensitive and cannot
-            # contain spaces.
-            await page.click('button:has-text("Create room")')
-            nickname_input = page.locator('.modal-card input')
+            # Nobody is asked for a name any more, but the rename field still
+            # carries the app's input contract - except that autoCapitalize is
+            # off: names are case-sensitive and cannot contain spaces.
+            await page.click(".guest-name-chip")
+            nickname_input = page.locator(".guest-name-form input")
             await nickname_input.wait_for(state="visible")
             await assert_input_contract(nickname_input, {
                 "type": "search",
@@ -45,10 +44,12 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
                 "autoCapitalize": "off",
                 "spellCheck": False,
                 "autoCorrect": "off",
-                "enterKeyHint": "go",
+                "enterKeyHint": "done",
             })
             await nickname_input.fill("SetupHost")
-            await page.click('.modal-card button[type="submit"]')
+            await page.click(".guest-name-save")
+            await page.wait_for_selector('.guest-name-value:has-text("SetupHost")')
+            await page.click('button:has-text("Create room")')
             await page.wait_for_url(f"{BASE_URL}/create")
             # History updates before React finishes the route swap; wait for the
             # create page before asserting lobby controls are gone.

@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { RoomEntryMachine, type RoomEntrySnapshot, type RoomJoinMode } from "../lib/roomEntryState";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
+import { useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, RoomPreviewResponse } from "../types";
 
 export function useRoomEntry(code: string) {
-  const nickname = useGameStore((state) => state.nickname);
-  const setNickname = useGameStore((state) => state.setNickname);
+  const nickname = useAuthStore((state) => state.user?.displayName ?? "");
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const machineRef = useRef<RoomEntryMachine | null>(null);
@@ -37,7 +37,6 @@ export function useRoomEntry(code: string) {
           nameColor,
           asSpectator: mode === "spectator",
         }),
-      saveNickname: setNickname,
       acceptSession: setSession,
       requestErrorMessage: socketRequestErrorMessage,
     });
@@ -49,7 +48,7 @@ export function useRoomEntry(code: string) {
       machine.dispose();
       if (machineRef.current === machine) machineRef.current = null;
     };
-  }, [code, nameColor, nickname, setNickname, setSession]);
+  }, [code, nameColor, nickname, setSession]);
 
   function setNicknameInput(value: string) {
     machineRef.current?.setNicknameInput(value);

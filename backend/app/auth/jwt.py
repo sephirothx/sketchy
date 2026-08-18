@@ -1,12 +1,14 @@
 """Signing key management and JWT encode/decode for session cookies."""
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import AppConfig
@@ -51,29 +53,35 @@ async def get_or_create_secret(
         _cached_secret = from_env
         return _cached_secret
 
-    async with session_factory() as session:
-        async with session.begin():
-            stmt = select(AppConfig).where(AppConfig.key == SECRET_CONFIG_KEY)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                # Two workers can reach this concurrently on first boot. The
-                # primary key makes the loser's insert fail rather than letting
-                # it overwrite the winner's key and invalidate live sessions.
-                row = AppConfig(key=SECRET_CONFIG_KEY, value=secrets.token_urlsafe(64))
-                session.add(row)
-                try:
-                    await session.flush()
-                except Exception:
-                    await session.rollback()
-                    async with session.begin():
-                        retry = select(AppConfig).where(
-                            AppConfig.key == SECRET_CONFIG_KEY
-                        )
-                        row = (await session.execute(retry)).scalar_one()
-            value = row.value
+    stmt = select(AppConfig).where(AppConfig.key == SECRET_CONFIG_KEY)
 
-    _cached_secret = value
-    return value
+    # Read, then try to claim, and repeat. Several processes can reach first
+    # boot together: the primary key means only one insert survives, and the
+    # losers must read back the winner's key rather than overwrite it - every
+    # session already signed with it would otherwise stop verifying. The loop
+    # matters because a loser can lose the race and *still* find no row yet,
+    # when the winner has not committed at the moment it looks.
+    for _ in range(5):
+        async with session_factory() as session:
+            existing = (await session.execute(stmt)).scalar_one_or_none()
+        if existing is not None:
+            _cached_secret = existing.value
+            return _cached_secret
+
+        candidate = secrets.token_urlsafe(64)
+        try:
+            async with session_factory() as session:
+                async with session.begin():
+                    session.add(AppConfig(key=SECRET_CONFIG_KEY, value=candidate))
+        except (IntegrityError, OperationalError):
+            # Someone else claimed it, or the database was momentarily locked.
+            # Either way the next pass re-reads rather than assuming.
+            await asyncio.sleep(0.05)
+            continue
+        _cached_secret = candidate
+        return _cached_secret
+
+    raise RuntimeError("Could not establish a session signing key")
 
 
 def create_token(user_id: str, secret: str) -> str:

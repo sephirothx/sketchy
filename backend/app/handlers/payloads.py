@@ -17,7 +17,7 @@ Command inventory (client request shape)
 ``create_room`` CreateRoomPayload; ``join_room`` JoinRoomPayload;
 ``get_room_preview`` RoomPreviewPayload; ``update_room_settings``
 UpdateRoomSettingsPayload; ``update_player_settings`` PlayerSettingsPayload;
-``get_recap_drawing`` RecapDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
+``rename_player`` RenamePlayerPayload; ``get_recap_drawing`` RecapDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
 ``vote_player`` VotePayload; ``cast_restart_vote`` RestartVotePayload;
 ``select_word`` SelectWordPayload; ``send_chat`` and
 ``guess`` TextPayload; ``buy_hint`` HintPayload; ``buy_wheel_letter``
@@ -227,10 +227,12 @@ class JoinRoomPayload(RequestModel):
     @field_validator("nickname")
     @classmethod
     def normalize_nickname(cls, value: str) -> str:
-        try:
-            return validate_name(value)
-        except NameError_ as error:
-            raise ValueError(str(error) or NAME_RULE_MESSAGE) from error
+        # Only trimmed here, deliberately. A join carrying an empty or stale
+        # name still has to reach the handler, which resolves identity from the
+        # session cookie - rejecting it at the payload would stop a returning
+        # player from resuming their seat. resolve_identity applies the naming
+        # rule at the point a genuinely new seat is created.
+        return value.strip()
 
     @field_validator("code")
     @classmethod
@@ -255,6 +257,18 @@ class RoomPreviewPayload(RequestModel):
 
 class PlayerSettingsPayload(RequestModel):
     name_color: str = Field(alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+class RenamePlayerPayload(RequestModel):
+    nickname: str = Field(max_length=MAX_NICKNAME_LENGTH)
+
+    @field_validator("nickname")
+    @classmethod
+    def normalize_nickname(cls, value: str) -> str:
+        try:
+            return validate_name(value)
+        except NameError_ as error:
+            raise ValueError(str(error) or NAME_RULE_MESSAGE) from error
 
 
 class RecapDrawingPayload(RequestModel):

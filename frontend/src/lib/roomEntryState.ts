@@ -47,7 +47,6 @@ export interface RoomEntryDependencies {
     nickname: string;
     mode: RoomJoinMode;
   }) => Promise<AckResponse>;
-  saveNickname: (nickname: string) => void;
   acceptSession: (session: RoomSession) => void;
   requestErrorMessage: (error: unknown, action: string) => string;
 }
@@ -163,7 +162,6 @@ export class RoomEntryMachine {
       if (!this.isCurrent(version)) return;
       const session = sessionFrom(response);
       if (session) {
-        this.dependencies.saveNickname(nickname);
         this.dependencies.acceptSession(session);
         return;
       }

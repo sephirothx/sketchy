@@ -8,6 +8,7 @@ between two different character sets.
 """
 from __future__ import annotations
 
+import random
 import re
 
 MIN_NAME_LENGTH = 3
@@ -54,3 +55,34 @@ def is_valid_name(value: object) -> bool:
     except NameError_:
         return False
     return True
+
+
+# Deliberately wholesome and short: a generated name is the first thing other
+# players see, it has to fit the 16-character budget alongside an adjective,
+# and nobody should be embarrassed by the name they were handed.
+GUEST_ADJECTIVES: tuple[str, ...] = (
+    "Brisk", "Quiet", "Lucky", "Nimble", "Cosmic", "Sleepy", "Cheery",
+    "Bold", "Fuzzy", "Swift", "Merry", "Clever", "Jolly", "Wobbly",
+    "Sunny", "Chilly", "Snappy", "Plucky", "Breezy", "Zesty",
+)
+
+GUEST_ANIMALS: tuple[str, ...] = (
+    "Otter", "Walrus", "Puffin", "Badger", "Heron", "Marmot", "Gecko",
+    "Tapir", "Lemur", "Falcon", "Beaver", "Ferret", "Magpie", "Newt",
+    "Quokka", "Panda", "Koala", "Yak", "Moose", "Crow",
+)
+
+
+def generate_guest_name() -> str:
+    """Invent a display name for a brand new guest.
+
+    Players are never asked for a name, so one has to be waiting for them.
+    Guaranteed to satisfy the shared naming rule, and guests may share a name -
+    it is a label, not an identity.
+    """
+    for _ in range(10):
+        candidate = f"{random.choice(GUEST_ADJECTIVES)}{random.choice(GUEST_ANIMALS)}"
+        if len(candidate) <= MAX_NAME_LENGTH:
+            return candidate
+    # Every adjective/animal pair fits, but never hand back an invalid name.
+    return f"Player{random.randint(100, 999)}"

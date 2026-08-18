@@ -11,6 +11,7 @@ from app.handlers.payloads import (
     PayloadError,
     PlayerSettingsPayload,
     RecapDrawingPayload,
+    RenamePlayerPayload,
     RoomPreviewPayload,
     UpdateRoomSettingsPayload,
     parse_empty_payload,
@@ -285,6 +286,63 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
     return {"ok": True}
 
 
+async def rename_player(ctx: HandlerContext, sid, data):
+    """Change the name a guest is playing under, live.
+
+    Guests are handed a generated name rather than being asked for one, so
+    renaming has to be possible at any moment - including mid-game. The new
+    name is stored on the account, which is what makes it survive a reload and
+    follow the player into the next room.
+    """
+    try:
+        payload = parse_payload(RenamePlayerPayload, data)
+    except PayloadError as error:
+        return ctx.game_flow.validation_error(error)
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return {"ok": False, "error": "Not in this room"}
+    room, player = current
+
+    if not player.is_anonymous:
+        return {
+            "ok": False,
+            "error": "Registered players play as their username",
+            "field": "nickname",
+        }
+
+    nickname = payload.nickname
+    if ctx.user_repo is not None:
+        owner = await ctx.user_repo.get_by_username(nickname)
+        if owner is not None and not owner.is_anonymous:
+            return {
+                "ok": False,
+                "error": "That name belongs to a registered player.",
+                "field": "nickname",
+            }
+
+    previous = player.nickname
+    if previous == nickname:
+        return {"ok": True, "nickname": nickname}
+
+    player.nickname = nickname
+    if ctx.user_repo is not None and player.user_id:
+        await ctx.user_repo.update_profile(player.user_id, display_name=nickname)
+
+    await ctx.sio.emit(
+        "chat_message",
+        {
+            "playerId": "",
+            "nickname": "",
+            "text": f"{previous} is now known as {nickname}.",
+            "correct": False,
+            "system": True,
+        },
+        room=room.id,
+    )
+    await ctx.game_flow._emit_room_state(room)
+    return {"ok": True, "nickname": nickname}
+
+
 async def become_player(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
@@ -357,5 +415,6 @@ def register(ctx: HandlerContext) -> None:
     ctx.sio.on("join_room", handler=partial(join_room, ctx))
     ctx.sio.on("session_ping", handler=partial(session_ping, ctx))
     ctx.sio.on("update_player_settings", handler=partial(update_player_settings, ctx))
+    ctx.sio.on("rename_player", handler=partial(rename_player, ctx))
     ctx.sio.on("become_player", handler=partial(become_player, ctx))
     ctx.sio.on("leave_room", handler=partial(leave_room, ctx))

@@ -352,3 +352,132 @@ async def test_registering_mid_game_upgrades_the_existing_seat():
     assert seat.is_anonymous is False
     assert seat.name_color == "#123abc"
     assert len(room.player_list()) == 1
+
+
+@pytest.mark.asyncio
+async def test_guest_can_rename_and_the_name_sticks_to_the_account():
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_guest("guest-1", "BriskOtter")
+    room = room_manager.create_room(name="Room")
+    player = room_manager.add_player(room, "BriskOtter", user_id="guest-1")
+    player.sid = "guest-sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": player.id, "user_id": "guest-1"}
+    )
+    sio.emit = AsyncMock()
+    rename = sio.handlers["/"]["rename_player"]
+
+    assert await rename("guest-sid", {"nickname": "Marta"}) == {
+        "ok": True,
+        "nickname": "Marta",
+    }
+    assert player.nickname == "Marta"
+    # Stored on the account, so it survives a reload and follows them onward.
+    assert (await user_repo.get_by_id("guest-1")).display_name == "Marta"
+    assert any(
+        call.args[0] == "chat_message"
+        and "is now known as Marta" in call.args[1].get("text", "")
+        for call in sio.emit.await_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_rename_rejects_bad_names_and_registered_usernames():
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_guest("guest-1", "BriskOtter")
+    user_repo.add_registered("user-2", "Stefano")
+    room = room_manager.create_room(name="Room")
+    player = room_manager.add_player(room, "BriskOtter", user_id="guest-1")
+    player.sid = "guest-sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": player.id, "user_id": "guest-1"}
+    )
+    sio.emit = AsyncMock()
+    rename = sio.handlers["/"]["rename_player"]
+
+    for bad in ["ab", "has space", "Guest", "x" * 17]:
+        assert (await rename("guest-sid", {"nickname": bad}))["ok"] is False, bad
+    squat = await rename("guest-sid", {"nickname": "stefano"})
+    assert squat["ok"] is False
+    assert "registered player" in squat["error"]
+    assert player.nickname == "BriskOtter"
+
+
+@pytest.mark.asyncio
+async def test_registered_players_cannot_rename_away_from_their_username():
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_registered("user-1", "Stefano")
+    room = room_manager.create_room(name="Room")
+    player = room_manager.add_player(
+        room, "Stefano", user_id="user-1", is_anonymous=False
+    )
+    player.sid = "sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": player.id, "user_id": "user-1"}
+    )
+    sio.emit = AsyncMock()
+
+    result = await sio.handlers["/"]["rename_player"]("sid", {"nickname": "Someone"})
+    assert result["ok"] is False
+    assert player.nickname == "Stefano"
+
+
+
+@pytest.mark.asyncio
+async def test_resume_probe_works_with_no_local_nickname():
+    """A returning player with cleared local state must still resume.
+
+    Identity comes from the cookie, so an empty or stale nickname in the
+    payload must not stop the lookup from happening.
+    """
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_guest("returning-user", "BriskOtter")
+    room = room_manager.create_room(name="Room")
+    seat = room_manager.add_player(room, "BriskOtter", user_id="returning-user")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "returning-user"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    resumed = await sio.handlers["/"]["join_room"](
+        "new-sid", {"code": room.code, "nickname": "", "resumeOnly": True}
+    )
+    assert resumed["ok"] is True
+    assert resumed["playerId"] == seat.id
+
+
+@pytest.mark.asyncio
+async def test_guest_seat_is_named_from_the_account_not_the_payload():
+    """The client cannot pick a name by asking for one on the wire."""
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_guest("guest-1", "BriskOtter")
+    room = room_manager.create_room(name="Room")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "guest-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["join_room"](
+        "sid", {"code": room.code, "nickname": "SomethingElse"}
+    )
+    assert room.players[response["playerId"]].nickname == "BriskOtter"

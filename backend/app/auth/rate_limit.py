@@ -41,16 +41,16 @@ class RateLimiter:
 
 
 def client_key(request: Request) -> str:
-    """Identify the caller, preferring the proxy-reported address.
+    """Identify the caller by their connection, never by a request header.
 
-    Deployments put this behind a tunnel or reverse proxy, where every
-    connection arrives from the proxy itself - without reading the forwarded
-    header the whole internet would share one bucket.
+    Reading ``X-Forwarded-For`` here would defeat the limiter entirely: the
+    header is attacker-controlled, so a password-guesser could simply send a
+    different value with every attempt and never fill a bucket.
+
+    Behind a proxy, run uvicorn with ``--proxy-headers`` and
+    ``--forwarded-allow-ips`` naming that proxy. Uvicorn then validates the
+    header against the trusted hop and rewrites ``request.client`` itself, so
+    the real address arrives here having actually been vouched for.
     """
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        first = forwarded.split(",")[0].strip()
-        if first:
-            return first
     client = request.client
     return client.host if client else "unknown"

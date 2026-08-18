@@ -48,10 +48,10 @@ async def test_player_afk_and_disconnect_scenario():
             await page1.wait_for_selector('[data-testid="waiting-room"]')
 
             # Step 4: Player toggles AFK in Browser 2
-            await page2.click('button:has-text("AFK")')
+            await page2.click(".game-header-afk-button")
 
             # Verify AFK button text toggled to AFK 💤
-            await page2.wait_for_selector('button:has-text("AFK 💤")')
+            await page2.wait_for_selector('.game-header-afk-button:has-text("AFK 💤")')
 
             # Step 5: Player closes Browser 2 context
             await context2.close()

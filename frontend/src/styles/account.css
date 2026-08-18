@@ -1,15 +1,18 @@
 /* Guest identity cues and the header account control. */
 
 /*
- * Italics mark a name as unclaimed. The colour is already forced to the guest
- * grey server-side, so this is the second, redundant cue - important because
- * colour alone would not survive a colour-vision deficiency or a grayscale
- * display.
+ * Italics mark a name as unclaimed, and are the cue that survives a
+ * colour-vision deficiency or a greyscale display. The grey is set here rather
+ * than by the server because it has to clear 4.5:1 on both a white panel and a
+ * dark one, and no single hex does that: #888888 is only 3.54:1 on white.
+ *
+ * #6b7280 is 4.83:1 on white; the dark-theme override is 5.7:1 or better. No
+ * opacity - it would scale the contrast straight back down.
  */
 .colored-player-name.is-guest {
   font-style: italic;
   font-weight: 600;
-  opacity: 0.85;
+  color: #6b7280;
 }
 
 /* Groups the account control with Settings so the header stays one row. */
@@ -194,4 +197,171 @@
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 8px;
+}
+
+/* "Playing as X" - a chip that becomes an input in place, never a dialog. */
+.guest-name-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px dashed #cbd5e1;
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  min-height: 36px;
+  max-width: 100%;
+}
+
+.guest-name-chip:hover {
+  border-style: solid;
+  background: rgba(127, 127, 127, 0.1);
+}
+
+.guest-name-label {
+  opacity: 0.75;
+  font-size: 13px;
+}
+
+.guest-name-value {
+  font-weight: 600;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guest-name-pencil {
+  opacity: 0.7;
+  font-size: 13px;
+}
+
+.guest-name-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.guest-name-form input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 7px 10px;
+  /* 16px keeps iOS from zooming the viewport when the field takes focus. */
+  font-size: 16px;
+  background: #fff;
+  color: #0f172a;
+  max-width: 11rem;
+}
+
+.guest-name-save,
+.guest-name-cancel {
+  border: 1px solid #cbd5e1;
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+
+.guest-name-save {
+  border-color: transparent;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.guest-name-form .auth-error {
+  flex-basis: 100%;
+}
+
+/* Compact rename affordance, used beside your own row in the player list. */
+.guest-name-edit {
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px;
+  /* Keeps the tap target at the 24px WCAG 2.2 minimum without inflating the row. */
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.guest-name-edit:hover,
+.guest-name-edit:focus-visible {
+  opacity: 1;
+}
+
+.guest-name-form.is-compact input {
+  max-width: 8rem;
+  font-size: 14px;
+  padding: 4px 8px;
+}
+
+.guest-name-form.is-compact .guest-name-save,
+.guest-name-form.is-compact .guest-name-cancel {
+  padding: 4px 8px;
+  min-height: 28px;
+  font-size: 12px;
+}
+
+.invite-playing-as {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.account-action-short {
+  display: none;
+}
+
+/*
+ * On a phone the header has to stay one row: three stacked controls cost 128px
+ * of a ~800px screen before any of the game is visible. The name is still
+ * shown - only the "Playing as" lead-in and the longer button label go.
+ */
+@media (max-width: 560px) {
+  .guest-name-label {
+    display: none;
+  }
+
+  .account-action-long {
+    display: none;
+  }
+
+  .account-action-short {
+    display: inline;
+  }
+
+  .account-action,
+  .guest-name-chip {
+    padding-inline: 10px;
+  }
+
+  .guest-name-value {
+    max-width: 10ch;
+  }
+
+  /* The title alone leaves ~220px beside it, which the three controls cannot
+     share. Give them their own full-width row instead of letting each wrap
+     onto a line of its own. */
+  .lobby-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .lobby-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }

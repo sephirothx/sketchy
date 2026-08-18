@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { emitWithAck, socket } from "../lib/socket";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { useGameStore } from "../store/gameStore";
+import { currentPlayerName } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse } from "../types";
 
@@ -42,7 +43,7 @@ export function useRoomSessionReconnect() {
     let consecutiveHeartbeatFailures = 0;
 
     async function joinWithSession(soft = false) {
-      const { roomId, code, nickname } = useGameStore.getState();
+      const { roomId, code } = useGameStore.getState();
       if (!code) {
         setRoomBindingStatus("ready");
         return;
@@ -51,7 +52,7 @@ export function useRoomSessionReconnect() {
       const response = await emitWithAck<AckResponse>("join_room", {
         code,
         roomId,
-        nickname,
+        nickname: currentPlayerName(),
         nameColor,
         soft,
       });

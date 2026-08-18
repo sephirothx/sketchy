@@ -12,10 +12,16 @@ from app.auth.middleware import (
     is_secure_request,
     set_session_cookie,
 )
-from app.auth.names import MAX_NAME_LENGTH, NameError_, validate_name
+from app.auth.names import (
+    MAX_NAME_LENGTH,
+    NAME_RULE_MESSAGE,
+    NameError_,
+    validate_name,
+)
 from app.auth.password import (
     DUMMY_HASH,
     MAX_PASSWORD_LENGTH,
+    PASSWORD_RULE_MESSAGE,
     PasswordPolicyError,
     hash_password,
     validate_password,
@@ -132,8 +138,8 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         throttle(lookup_limiter, request)
         try:
             candidate = validate_name(name)
-        except NameError_ as error:
-            return {"available": False, "reason": str(error)}
+        except NameError_:
+            return {"available": False, "reason": NAME_RULE_MESSAGE}
         owner = await user_repo.get_by_username(candidate)
         if owner is not None and not owner.is_anonymous:
             return {
@@ -190,11 +196,11 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         try:
             username = validate_name(body.username)
         except NameError_ as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise HTTPException(status_code=400, detail=NAME_RULE_MESSAGE) from error
         try:
             password = validate_password(body.password)
         except PasswordPolicyError as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise HTTPException(status_code=400, detail=PASSWORD_RULE_MESSAGE) from error
 
         user_id = getattr(request.state, "user_id", None)
         current = await user_repo.get_by_id(user_id) if user_id else None
@@ -202,6 +208,13 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
             raise HTTPException(
                 status_code=409, detail="You are already signed in to an account."
             )
+
+        # Check before creating anything. Creating first and claiming second
+        # left an unreachable account behind whenever the name turned out to be
+        # taken: committed, cookie-less, and belonging to nobody.
+        owner = await user_repo.get_by_username(username)
+        if owner is not None:
+            raise HTTPException(status_code=409, detail="That username is taken.")
 
         password_hash = await hash_password(password)
         if current is None:
@@ -218,9 +231,9 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
                 status_code=409, detail="You are already signed in to an account."
             ) from error
 
-        await user_repo.touch_last_login(claimed.id)
+        refreshed = await user_repo.touch_last_login(claimed.id)
         await issue_cookie(response, request, claimed.id)
-        return user_payload(claimed)
+        return user_payload(refreshed or claimed)
 
     @router.post("/login")
     async def login(body: CredentialsBody, request: Request, response: Response):

@@ -41,7 +41,6 @@ function dependencies(overrides = {}) {
     reconnect: async () => ({ ok: false }),
     preview: async () => ({ ok: true, room }),
     join: async () => sessionResponse,
-    saveNickname: () => {},
     acceptSession: () => {},
     requestErrorMessage: (_error, action) => `Could not ${action}.`,
     ...overrides,
@@ -102,14 +101,12 @@ test("a nickname breaking the shared name rule is rejected before joining", asyn
 
 test("direct player and spectator joins preserve their distinct modes", async () => {
   const joins = [];
-  const nicknames = [];
   const accepted = [];
   const deps = dependencies({
     join: async (request) => {
       joins.push(request);
       return sessionResponse;
     },
-    saveNickname: (nickname) => nicknames.push(nickname),
     acceptSession: (session) => accepted.push(session),
   });
 
@@ -125,7 +122,6 @@ test("direct player and spectator joins preserve their distinct modes", async ()
     { code: "ABC123", nickname: "Ada", mode: "player" },
     { code: "ABC123", nickname: "Grace", mode: "spectator" },
   ]);
-  assert.deepEqual(nicknames, ["Ada", "Grace"]);
   assert.equal(accepted.length, 2);
 });
 

@@ -123,7 +123,7 @@ async def test_create_room_and_invite_axe():
     playwright, browser, context, page = await _open_chromium()
     try:
         await page.goto(f"{BASE_URL}/room/{code}")
-        await page.wait_for_selector("#invite-nickname")
+        await page.wait_for_selector(".invite-join-form")
         await assert_no_axe_violations(page, "invite entry")
     finally:
         await _close(playwright, browser, context)

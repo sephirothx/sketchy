@@ -3,15 +3,14 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { SettingsIcon } from "../components/SettingsIcon";
-import { AccountMenu, AuthDialog } from "../components/AccountMenu";
-import { GuestNicknameDialog } from "../components/GuestNicknameDialog";
-import { useAuthStore } from "../store/authStore";
+import { AccountMenu } from "../components/AccountMenu";
+import { GuestNameControl } from "../components/GuestNameControl";
+import { currentPlayerName } from "../store/authStore";
 import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { nicknameError } from "../lib/roomEntryState";
 import type { AckResponse, RoomSummary } from "../types";
 
 const POLL_INTERVAL_MS = 4000;
@@ -71,19 +70,12 @@ function RemovedFromRoomDialog({
 export function LobbyBrowserPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const nickname = useGameStore((s) => s.nickname);
-  const setNickname = useGameStore((s) => s.setNickname);
   const openSettings = useSettingsStore((s) => s.openSettings);
   const nameColor = useSettingsStore((s) => s.nameColor);
   const setSession = useGameStore((s) => s.setSession);
   const setExitingRoom = useGameStore((s) => s.setExitingRoom);
-  const authUser = useAuthStore((s) => s.user);
-  const loginUser = useAuthStore((s) => s.login);
 
-  const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
-  // Held across the dialog so the click that triggered it still happens.
-  const pendingActionRef = useRef<(() => void | Promise<void>) | null>(null);
+
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -176,35 +168,9 @@ export function LobbyBrowserPage() {
     return true;
   });
 
-  /**
-   * Run an action that needs a name, asking for one first if necessary.
-   *
-   * Registered players always play as their username, so they are never
-   * interrupted. A guest is asked once, at the moment it actually matters -
-   * arriving on the lobby does not require picking a name.
-   */
-  function withPlayerName(action: () => void | Promise<void>) {
-    if (authUser && !authUser.isAnonymous) {
-      void action();
-      return;
-    }
-    const knownName =
-      nickname && !nicknameError(nickname)
-        ? nickname
-        : authUser && !nicknameError(authUser.displayName)
-          ? authUser.displayName
-          : null;
-    if (knownName) {
-      if (knownName !== nickname) setNickname(knownName);
-      void action();
-      return;
-    }
-    pendingActionRef.current = action;
-    setNicknameDialogOpen(true);
-  }
-
+  // No gate: every visitor already has a name, generated on their first load.
   function handleOpenCreateRoom() {
-    withPlayerName(() => navigate("/create"));
+    navigate("/create");
   }
 
   async function handleJoinByCode(asSpectator = false) {
@@ -212,13 +178,11 @@ export function LobbyBrowserPage() {
       setError("Please enter a room code");
       return;
     }
-    withPlayerName(() =>
-      joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator, "private-code"),
-    );
+    await joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator, "private-code");
   }
 
   async function handleJoinRoom(room: RoomSummary, asSpectator = false) {
-    withPlayerName(() => joinRoom({ roomId: room.id }, asSpectator, room.id));
+    await joinRoom({ roomId: room.id }, asSpectator, room.id);
   }
 
   async function joinRoom(target: { roomId?: string; code?: string }, asSpectator: boolean, key: string) {
@@ -227,7 +191,7 @@ export function LobbyBrowserPage() {
     setError(null);
     try {
       const res = await emitWithAck<AckResponse>("join_room", {
-        nickname: useGameStore.getState().nickname,
+        nickname: currentPlayerName(),
         nameColor,
         asSpectator,
         ...target,
@@ -252,6 +216,7 @@ export function LobbyBrowserPage() {
           <h1>Sketchy</h1>
         </div>
         <div className="lobby-header-actions">
+          <GuestNameControl />
           <AccountMenu />
           <button
             type="button"
@@ -273,39 +238,7 @@ export function LobbyBrowserPage() {
         />
       )}
 
-      {nicknameDialogOpen && (
-        <GuestNicknameDialog
-          initialNickname={
-            nickname || (authUser && !nicknameError(authUser.displayName)
-              ? authUser.displayName
-              : "")
-          }
-          onCancel={() => {
-            pendingActionRef.current = null;
-            setNicknameDialogOpen(false);
-          }}
-          onConfirm={(chosen) => {
-            setNickname(chosen);
-            setNicknameDialogOpen(false);
-            const action = pendingActionRef.current;
-            pendingActionRef.current = null;
-            void action?.();
-          }}
-          onLogin={() => {
-            setNicknameDialogOpen(false);
-            setLoginOpen(true);
-          }}
-        />
-      )}
 
-      {loginOpen && (
-        <AuthDialog
-          mode="login"
-          onClose={() => setLoginOpen(false)}
-          onSwitchMode={() => {}}
-          onSubmit={loginUser}
-        />
-      )}
 
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
 

@@ -25,10 +25,10 @@ import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, HintMode, ScoringMode } from "../types";
 import { AccountMenu } from "../components/AccountMenu";
+import { currentPlayerName } from "../store/authStore";
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
-  const nickname = useGameStore((state) => state.nickname);
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const [roomName, setRoomName] = useState("");
@@ -50,11 +50,6 @@ export function CreateRoomPage() {
   const [busy, setBusy] = useState(false);
 
   async function handleCreate() {
-    const trimmedNickname = nickname.trim();
-    if (!trimmedNickname) {
-      navigate("/");
-      return;
-    }
     if (customWords.analysis.hasErrors) {
       setError("Fix the custom-word entries marked above before creating the room.");
       return;
@@ -63,7 +58,7 @@ export function CreateRoomPage() {
     setError(null);
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
-        nickname: trimmedNickname, nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
+        nickname: currentPlayerName(), nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customWords: customWords.value.trim(), customWordsOnly: customWords.only, hintMode, scoringMode,
         spectatorsSeeSolution, hideMaskedPrompt, wordListSlugs,
       });

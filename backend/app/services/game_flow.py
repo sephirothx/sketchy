@@ -488,6 +488,7 @@ class GameFlowService:
                         "playerId": p.id,
                         "nickname": p.nickname,
                         "nameColor": p.name_color,
+                        "isAnonymous": p.is_anonymous,
                         "score": p.score,
                     }
                     for p in sorted(room.player_list(), key=lambda p: -p.score)

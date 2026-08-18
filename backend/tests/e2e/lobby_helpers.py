@@ -3,18 +3,36 @@ from __future__ import annotations
 
 
 async def use_guest_name(page, name: str) -> None:
-    """Pre-answer the guest nickname dialog for a page already on the lobby.
+    """Give this page's guest a specific name.
 
-    The name is asked in a dialog at create/join time rather than in a lobby
-    field, so tests that merely need *a* named player seed it here instead of
-    stepping through the dialog. The dialog itself, and the rules it enforces,
-    are covered by test_auth_accounts.py.
+    Players are never asked for a name - one is generated on first load - so
+    tests that assert on a particular name set it the same way the UI does,
+    through the account. Renaming through the control itself is covered by
+    test_auth_accounts.py.
     """
-    await page.evaluate("(value) => localStorage.setItem('sketchy_nickname', value)", name)
-    # The store reads the stored nickname at startup, so the reload is what
-    # makes the seeded value take effect.
+    # Wait for the app's own provisioning to finish first. Setting the name
+    # while GET /api/auth/me is still in flight races it: both calls create an
+    # account, and whichever cookie lands second wins - usually discarding the
+    # name that was just set.
+    await page.wait_for_selector(".guest-name-chip")
+
+    result = await page.evaluate(
+        """async (value) => {
+            const response = await fetch('/api/auth/display-name', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ displayName: value }),
+            });
+            return response.status;
+        }""",
+        name,
+    )
+    assert result == 200, f"could not set guest name {name!r}: HTTP {result}"
+    # The store caches the account, so a reload is what picks the name up.
+    # The name control is in every header, so this works on the lobby, the
+    # invite screen, and the create-room page alike.
     await page.reload()
-    await page.wait_for_selector('button:has-text("Create room")')
+    await page.wait_for_selector(".guest-name-chip")
 
 
 async def register_account(page, username: str, password: str = "a-good-password") -> None:

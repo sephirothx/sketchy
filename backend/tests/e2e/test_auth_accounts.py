@@ -70,7 +70,40 @@ async def test_registering_keeps_the_seat_and_drops_the_guest_styling():
 
 
 @pytest.mark.asyncio
-async def test_guest_cannot_play_under_a_registered_username():
+async def test_guest_is_given_a_name_and_can_change_it():
+    """Nobody is asked for a name; renaming is inline and never a gate."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+        try:
+            await page.goto(BASE_URL)
+            chip = page.locator(".guest-name-chip")
+            await chip.wait_for(state="visible")
+            generated = await page.inner_text(".guest-name-value")
+            assert generated, "a guest must arrive already named"
+
+            await chip.click()
+            await page.fill(".guest-name-form input", "Marta")
+            await page.click(".guest-name-save")
+            await page.wait_for_selector('.guest-name-value:has-text("Marta")')
+
+            # The name belongs to the account, so it survives a reload.
+            await page.reload()
+            await page.wait_for_selector('.guest-name-value:has-text("Marta")')
+
+            # And it is the name they play under.
+            await page.click('button:has-text("Create room")')
+            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+            assert "Marta" == await page.inner_text(
+                ".player-name .colored-player-name"
+            )
+        finally:
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_guest_cannot_rename_to_a_registered_username():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         owner_context = await browser.new_context()
@@ -82,16 +115,16 @@ async def test_guest_cannot_play_under_a_registered_username():
             await register_account(owner, "TakenName")
 
             await guest.goto(BASE_URL)
-            await guest.click('button:has-text("Create room")')
-            dialog = guest.locator(".modal-card", has_text="Pick a name")
-            await dialog.wait_for(state="visible")
-            await dialog.locator("input").fill("takenname")
-            await dialog.locator('button[type="submit"]').click()
+            await guest.wait_for_selector(".guest-name-chip")
+            before = await guest.inner_text(".guest-name-value")
+            await guest.click(".guest-name-chip")
+            await guest.fill(".guest-name-form input", "takenname")
+            await guest.click(".guest-name-save")
 
             await guest.wait_for_selector(".auth-error")
             assert "registered player" in (await guest.inner_text(".auth-error"))
-            # Still on the lobby: the name was refused, so nothing was created.
-            assert guest.url.rstrip("/") == BASE_URL
+            await guest.click(".guest-name-cancel")
+            assert await guest.inner_text(".guest-name-value") == before
         finally:
             await owner_context.close()
             await guest_context.close()
