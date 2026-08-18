@@ -450,7 +450,9 @@ async def test_undo_hash_mismatch_sends_authoritative_sync():
 async def test_finished_drawing_turn_is_captured_for_recap():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
-    drawer = room_manager.add_player(room, "Drawer", name_color="#123abc")
+    drawer = room_manager.add_player(
+        room, "Drawer", name_color="#123abc", is_anonymous=False
+    )
     guesser = room_manager.add_player(room, "Guesser")
     drawer.sid = "drawer-sid"
     guesser.sid = "guesser-sid"

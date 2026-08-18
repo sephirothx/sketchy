@@ -1,4 +1,8 @@
-"""Socket session resolution shared by handler domains."""
+"""Socket session resolution shared by handler domains.
+
+About sockets and rooms, not authentication - account identity lives in
+``app/auth``. The two were easy to confuse while both were called ``auth``.
+"""
 from __future__ import annotations
 
 from app.handlers.context import HandlerContext

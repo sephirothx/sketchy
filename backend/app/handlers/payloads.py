@@ -35,6 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from app.game import HINT_MODES, SCORING_MODES
 from app.live_drawing import LiveDrawingPacket, decode_live_drawing
+from app.auth.names import MAX_NAME_LENGTH, NAME_RULE_MESSAGE, NameError_, validate_name
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import (
     DEFAULT_ROOM_DRAWING_SECONDS,
@@ -47,8 +48,9 @@ from app.words import MAX_RAW_INPUT_LENGTH, MAX_WORD_LENGTH
 
 MAX_CANVAS_SEQUENCE = 2**31 - 1
 MAX_ROOM_NAME_LENGTH = 40
+# Guest nicknames and account usernames share one rule (app/auth/names.py).
 # Keep in sync with frontend/src/lib/roomEntryState.ts MAX_NICKNAME_LENGTH.
-MAX_NICKNAME_LENGTH = 16
+MAX_NICKNAME_LENGTH = MAX_NAME_LENGTH
 MAX_IDENTIFIER_LENGTH = 128
 
 
@@ -145,7 +147,10 @@ class CreateRoomPayload(RoomSettingsFields):
     @field_validator("nickname")
     @classmethod
     def normalize_nickname(cls, value: str) -> str:
-        return value.strip() or "Player"
+        try:
+            return validate_name(value)
+        except NameError_ as error:
+            raise ValueError(str(error) or NAME_RULE_MESSAGE) from error
 
 
 class UpdateRoomSettingsPayload(RequestModel):
@@ -209,7 +214,6 @@ class UpdateRoomSettingsPayload(RequestModel):
 
 
 class JoinRoomPayload(RequestModel):
-    reconnect_secret: str | None = Field(default=None, alias="reconnectSecret", max_length=MAX_IDENTIFIER_LENGTH)
     room_id: str | None = Field(default=None, alias="roomId", max_length=MAX_IDENTIFIER_LENGTH)
     code: str | None = Field(default=None, max_length=16)
     nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
@@ -220,7 +224,10 @@ class JoinRoomPayload(RequestModel):
     @field_validator("nickname")
     @classmethod
     def normalize_nickname(cls, value: str) -> str:
-        return value.strip() or "Player"
+        try:
+            return validate_name(value)
+        except NameError_ as error:
+            raise ValueError(str(error) or NAME_RULE_MESSAGE) from error
 
     @field_validator("code")
     @classmethod

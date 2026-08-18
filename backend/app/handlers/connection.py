@@ -5,13 +5,27 @@ import asyncio
 import logging
 from functools import partial
 
+from app.auth.jwt import get_or_create_secret
+from app.auth.middleware import user_id_from_cookie_header
 from app.handlers.context import HandlerContext
 
 logger = logging.getLogger("sketchy.handlers.connection")
 RECONNECT_GRACE_SECONDS = 30
 
 async def connect(ctx: HandlerContext, sid, environ, auth):
-    logger.info("socket connected: %s", sid)
+    """Bind the socket to whatever account the session cookie names.
+
+    Read-only: a visitor with no cookie yet connects as ``user_id=None`` and
+    plays normally, just without reconnect or history. Guests are provisioned
+    solely by ``GET /api/auth/me`` so that merely opening a socket cannot
+    create user rows.
+    """
+    user_id = None
+    if ctx.session_factory is not None:
+        secret = await get_or_create_secret(ctx.session_factory)
+        user_id = user_id_from_cookie_header(environ.get("HTTP_COOKIE"), secret)
+    await ctx.sio.save_session(sid, {"user_id": user_id})
+    logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
 
 
 async def disconnect(ctx: HandlerContext, sid):

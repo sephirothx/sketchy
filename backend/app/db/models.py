@@ -61,6 +61,9 @@ class User(Base):
     name_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Reserved for password recovery; no reset flow ships yet, but the column
+    # exists so recovery can be added without migrating live accounts.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -70,6 +73,13 @@ class User(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
+        nullable=False,
+    )
+    # Distinct from updated_at, which moves on any write. Set on guest
+    # provision and refreshed on login, register, and GET /api/auth/me.
+    last_login_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
         nullable=False,
     )
 

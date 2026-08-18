@@ -1,6 +1,8 @@
 """SQLAlchemy implementations of domain repository interfaces."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy import and_, case, distinct, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -53,6 +55,7 @@ def _to_user_data(user: User) -> UserData:
         is_anonymous=user.is_anonymous,
         created_at=user.created_at,
         updated_at=user.updated_at,
+        last_login_at=user.last_login_at,
     )
 
 
@@ -202,6 +205,31 @@ class SqlAlchemyUserRepository(UserRepository):
                     user.name_color = name_color
                 if avatar_url is not None:
                     user.avatar_url = validated_avatar
+            await session.refresh(user)
+            return _to_user_data(user)
+
+    async def touch_last_login(
+        self, user_id: str, min_interval_seconds: float = 0.0
+    ) -> UserData | None:
+        async with self._session_factory() as session:
+            async with session.begin():
+                stmt = select(User).where(User.id == user_id)
+                user = (await session.execute(stmt)).scalar_one_or_none()
+                if not user:
+                    return None
+                now = datetime.now(timezone.utc)
+                previous = user.last_login_at
+                if previous is not None and previous.tzinfo is None:
+                    # SQLite hands back naive datetimes; treat them as UTC so the
+                    # comparison below does not raise on mixed awareness.
+                    previous = previous.replace(tzinfo=timezone.utc)
+                is_recent = (
+                    min_interval_seconds > 0
+                    and previous is not None
+                    and (now - previous).total_seconds() < min_interval_seconds
+                )
+                if not is_recent:
+                    user.last_login_at = now
             await session.refresh(user)
             return _to_user_data(user)
 

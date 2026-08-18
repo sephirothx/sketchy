@@ -16,13 +16,23 @@ from app.handlers.payloads import (
     parse_empty_payload,
     parse_payload,
 )
-from app.rooms import RoomFullError, STARTING_SCORE, normalize_name_color
+from app.handlers.identity import IdentityError, resolve_identity
+from app.rooms import (
+    ANONYMOUS_NAME_COLOR,
+    RoomFullError,
+    STARTING_SCORE,
+    normalize_name_color,
+)
 
 async def create_room(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(CreateRoomPayload, data)
     except PayloadError as error:
         return ctx.game_flow.validation_error(error)
+    try:
+        identity = await resolve_identity(ctx, sid, payload.nickname)
+    except IdentityError as error:
+        return {"ok": False, "error": str(error), "field": "nickname"}
     settings = await ctx.game_flow.room_settings_from_payload(payload)
 
     room = ctx.room_manager.create_room(
@@ -30,8 +40,10 @@ async def create_room(ctx: HandlerContext, sid, data):
     )
     player = ctx.room_manager.add_player(
         room,
-        payload.nickname,
+        identity.nickname,
         name_color=normalize_name_color(payload.name_color),
+        user_id=identity.user_id,
+        is_anonymous=identity.is_anonymous,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     return ctx.game_flow._session_ack(room, player)
@@ -126,7 +138,6 @@ async def join_room(ctx: HandlerContext, sid, data):
         payload = parse_payload(JoinRoomPayload, data)
     except PayloadError as error:
         return ctx.game_flow.validation_error(error)
-    reconnect_secret = payload.reconnect_secret
     name_color = normalize_name_color(payload.name_color)
 
     room = ctx.room_manager.get_room(payload.room_id) or ctx.room_manager.get_room_by_code(payload.code)
@@ -155,21 +166,34 @@ async def join_room(ctx: HandlerContext, sid, data):
         )
         return ctx.game_flow._session_ack(room, already_joined)
 
-    player = ctx.room_manager.get_player_by_reconnect_secret(room, reconnect_secret)
+    session = await ctx.sio.get_session(sid) if sid else None
+    user_id = session.get("user_id") if session else None
+
+    # One seat per account per room. A second tab - or a reconnect after the
+    # transport dropped - takes over the existing seat instead of adding
+    # another, so scores and turn order survive and cannot be duplicated.
+    player = ctx.room_manager.get_player_by_user_id(room, user_id)
     if player:
-        if name_color:
+        if name_color and not player.is_anonymous:
             player.name_color = name_color
+        # _join_socket_room notifies and disconnects any socket that was
+        # holding this seat before handing it to the new one.
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         return ctx.game_flow._session_ack(room, player)
-    if reconnect_secret:
-        return {"ok": False, "error": "Your previous room session has expired", "invalidReconnectSecret": True}
+
+    try:
+        identity = await resolve_identity(ctx, sid, payload.nickname)
+    except IdentityError as error:
+        return {"ok": False, "error": str(error), "field": "nickname"}
 
     try:
         player = ctx.room_manager.add_player(
             room,
-            payload.nickname,
+            identity.nickname,
             is_spectator=payload.as_spectator,
             name_color=name_color,
+            user_id=identity.user_id,
+            is_anonymous=identity.is_anonymous,
         )
     except RoomFullError:
         return {"ok": False, "error": "Room is full"}
@@ -221,6 +245,12 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
     if not current:
         return {"ok": False, "error": "Not in this room"}
     room, player = current
+    if player.is_anonymous:
+        # Grey italics is what marks a name as unclaimed; letting guests recolour
+        # would erase the only cue distinguishing them from registered players.
+        player.name_color = ANONYMOUS_NAME_COLOR
+        await ctx.game_flow._emit_room_state(room)
+        return {"ok": False, "error": "Create an account to choose a name colour"}
     player.name_color = normalize_name_color(payload.name_color) or player.name_color
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}
@@ -273,7 +303,10 @@ async def leave_room(ctx: HandlerContext, sid, data=None):
     ctx.timers.cancel_disconnect_timer(player.id)
     ctx.room_manager.remove_player(room, player.id)
     await ctx.sio.leave_room(sid, room.id)
-    await ctx.sio.save_session(sid, {})
+    # Drop the room binding but keep the account: the socket stays open and the
+    # player may immediately join another room as themselves.
+    session = await ctx.sio.get_session(sid) or {}
+    await ctx.sio.save_session(sid, {"user_id": session.get("user_id")})
     if not room.connected_players():
         ctx.timers.cancel_phase_timer(room.id)
         ctx.timers.cancel_hint_timers(room.id)

@@ -17,7 +17,13 @@ from app.handlers import register_all_handlers as register_handlers
 from app.game import DRAWING_SECONDS, Game, Phase
 from app.live_drawing import encode_live_drawing
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
-from app.rooms import DrawingRecapEntry, STARTING_SCORE, RoomManager
+from app.rooms import (
+    ANONYMOUS_NAME_COLOR,
+    DrawingRecapEntry,
+    STARTING_SCORE,
+    RoomManager,
+)
+from tests.fake_user_repo import FakeUserRepository
 from app.words import MAX_WORD_LENGTH
 
 
@@ -65,11 +71,13 @@ async def test_create_room_accepts_no_scoring_and_disables_point_purchase_hints(
     assert room.player_list()[0].score == 0
 
 @pytest.mark.asyncio
-async def test_player_name_color_is_created_and_can_be_updated_live():
+async def test_registered_player_name_color_is_created_and_can_be_updated_live():
     room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_registered("user-1", "HostPlayer")
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value=None)
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "user-1"})
     sio.save_session = AsyncMock()
     sio.enter_room = AsyncMock()
     sio.emit = AsyncMock()
@@ -77,7 +85,7 @@ async def test_player_name_color_is_created_and_can_be_updated_live():
     response = await sio.handlers["/"]["create_room"](
         "host-sid",
         {
-            "nickname": "Host",
+            "nickname": "Ignored",
             "name": "Room",
             "nameColor": "#AABBCC",
         },
@@ -85,11 +93,14 @@ async def test_player_name_color_is_created_and_can_be_updated_live():
     room = room_manager.get_room(response["roomId"])
     assert room is not None
     player = room.players[response["playerId"]]
+    # A registered player always plays as their username, whatever they sent.
+    assert player.nickname == "HostPlayer"
+    assert player.is_anonymous is False
     assert player.name_color == "#aabbcc"
     assert room.to_state_payload()["players"][0]["nameColor"] == "#aabbcc"
 
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "player_id": player.id}
+        return_value={"room_id": room.id, "player_id": player.id, "user_id": "user-1"}
     )
     update = sio.handlers["/"]["update_player_settings"]
     assert await update("host-sid", {"nameColor": "#123ABC"}) == {"ok": True}
@@ -101,6 +112,35 @@ async def test_player_name_color_is_created_and_can_be_updated_live():
         "error": "Invalid player name color",
     }
     assert player.name_color == "#123abc"
+
+
+@pytest.mark.asyncio
+async def test_anonymous_player_is_grey_and_cannot_change_color():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=FakeUserRepository())
+    sio.get_session = AsyncMock(return_value={"user_id": "guest-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "guest-sid",
+        {"nickname": "Wanderer", "name": "Room", "nameColor": "#AABBCC"},
+    )
+    room = room_manager.get_room(response["roomId"])
+    player = room.players[response["playerId"]]
+    assert player.is_anonymous is True
+    assert player.name_color == ANONYMOUS_NAME_COLOR
+    assert room.to_state_payload()["players"][0]["isAnonymous"] is True
+
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": player.id, "user_id": "guest-1"}
+    )
+    update = sio.handlers["/"]["update_player_settings"]
+    result = await update("guest-sid", {"nameColor": "#123ABC"})
+    assert result["ok"] is False
+    assert player.name_color == ANONYMOUS_NAME_COLOR
 
 @pytest.mark.asyncio
 async def test_only_host_can_update_waiting_room_settings_and_not_during_game():

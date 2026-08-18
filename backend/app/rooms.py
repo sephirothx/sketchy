@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import random
 import re
-import secrets
 import string
 import uuid
 from dataclasses import dataclass, field
@@ -37,6 +36,10 @@ NAME_COLORS: tuple[str, ...] = (
     "#be185d",
 )
 NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+# Guests render in grey italics everywhere, so a colour would be meaningless
+# and would also make an unclaimed name look like a registered one.
+ANONYMOUS_NAME_COLOR = "#888888"
 
 
 def normalize_name_color(value: object) -> str | None:
@@ -109,8 +112,12 @@ class RoomFullError(Exception):
 @dataclass
 class Player:
     id: str
-    reconnect_secret: str
     nickname: str
+    # The account this seat belongs to. None when the client had no session
+    # cookie (cookies blocked, embedded webview): such a player still plays
+    # normally but cannot reconnect and is not recorded in game history.
+    user_id: str | None = None
+    is_anonymous: bool = True
     name_color: str = field(default_factory=generate_random_name_color)
     sid: Optional[str] = None
     score: int = STARTING_SCORE
@@ -327,6 +334,7 @@ class Room:
                     "playerId": p.id,
                     "nickname": p.nickname,
                     "nameColor": p.name_color,
+                    "isAnonymous": p.is_anonymous,
                     "score": p.score,
                     "connected": p.connected,
                     "isHost": p.is_host,
@@ -415,6 +423,8 @@ class RoomManager:
         nickname: str,
         is_spectator: bool = False,
         name_color: str | None = None,
+        user_id: str | None = None,
+        is_anonymous: bool = True,
     ) -> Player:
         active_players = [p for p in room.players.values() if not p.is_spectator]
         if not is_spectator and len(active_players) >= room.max_players:
@@ -422,9 +432,14 @@ class RoomManager:
         player_id = str(uuid.uuid4())
         player = Player(
             id=player_id,
-            reconnect_secret=secrets.token_urlsafe(32),
             nickname=nickname,
-            name_color=normalize_name_color(name_color) or generate_random_name_color(),
+            user_id=user_id,
+            is_anonymous=is_anonymous,
+            name_color=(
+                ANONYMOUS_NAME_COLOR
+                if is_anonymous
+                else normalize_name_color(name_color) or generate_random_name_color()
+            ),
             score=0 if is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0),
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,
@@ -432,16 +447,20 @@ class RoomManager:
         room.players[player_id] = player
         return player
 
-    def get_player_by_reconnect_secret(
-        self, room: Room, reconnect_secret: object
-    ) -> Player | None:
-        if not isinstance(reconnect_secret, str) or not reconnect_secret:
+    def get_player_by_user_id(self, room: Room, user_id: object) -> Player | None:
+        """Find this account's existing seat in the room, if it has one.
+
+        One seat per account per room: a second tab rebinds this same Player
+        rather than creating another, which is what stops one account from
+        occupying several seats and compounding its own score.
+        """
+        if not isinstance(user_id, str) or not user_id:
             return None
         return next(
             (
                 player
                 for player in room.players.values()
-                if secrets.compare_digest(player.reconnect_secret, reconnect_secret)
+                if player.user_id and player.user_id == user_id
             ),
             None,
         )

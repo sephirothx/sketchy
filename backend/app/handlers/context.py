@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import socketio
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.repositories.interfaces import (
     GameHistoryRepository,
@@ -28,4 +29,7 @@ class HandlerContext:
     user_repo: UserRepository | None = None
     game_history_repo: GameHistoryRepository | None = None
     word_list_repo: WordListRepository | None = None
+    # Needed to resolve the JWT signing key when a socket handshake presents a
+    # session cookie.
+    session_factory: async_sessionmaker[AsyncSession] | None = None
     game_flow: GameFlowService = field(init=False)

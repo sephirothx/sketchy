@@ -27,12 +27,14 @@ def editable_room_settings_payload(room: Room) -> dict:
 
 
 def session_payload(room: Room, player: Player) -> dict:
+    """Acknowledge a join. Carries no credential: the session cookie is the
+    identity, and it is never readable from JavaScript."""
     return {
         "ok": True,
         "roomId": room.id,
         "code": room.code,
         "playerId": player.id,
-        "reconnectSecret": player.reconnect_secret,
+        "isAnonymous": player.is_anonymous,
     }
 
 
