@@ -1,9 +1,10 @@
 import { io, Socket } from "socket.io-client";
 import type { AckResponse } from "../types";
 
-export const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:8000";
-
-export const socket: Socket = io(SERVER_URL, {
+// No URL: connect to the origin that served the page. The backend serves the
+// frontend in production and E2E, and the Vite dev server proxies /socket.io,
+// so this is same-origin everywhere and carries the session cookie unchanged.
+export const socket: Socket = io({
   autoConnect: true,
   transports: ["websocket", "polling"],
 });

@@ -164,13 +164,12 @@ npm install
 npm run dev
 ```
 
-Runs on http://localhost:5173 (Vite dev server) and talks to the backend at
-`http://localhost:8000` by default. Override with an env var if needed:
-
-```bash
-# frontend/.env
-VITE_SERVER_URL=http://localhost:8000
-```
+Runs on http://localhost:5173 (Vite dev server). The frontend requests `/api` and
+`/socket.io` relative to whatever origin served it, and the dev server proxies both
+to the backend on http://localhost:8000 (see `server.proxy` in
+`frontend/vite.config.ts`). Everything is therefore same-origin in dev, under
+`scripts/serve.sh`, and in E2E — which is what keeps cookie-based sessions working
+without CORS credentials. Point the proxy elsewhere if your backend is not on 8000.
 
 Open the dev server URL in two separate browser profiles/incognito windows to test with
 multiple players.

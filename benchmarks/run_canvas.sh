@@ -17,7 +17,7 @@ if lsof -nP -tiTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 log "Building frontend"
-(cd "$FRONTEND_DIR" && VITE_SERVER_URL="$BASE_URL" npm run build --silent)
+(cd "$FRONTEND_DIR" && npm run build --silent)
 
 log "Starting benchmark server on $BASE_URL"
 (cd "$BACKEND_DIR" && .venv/bin/uvicorn app.main:app \

@@ -38,9 +38,23 @@ function getLocalBuildTime(): string {
 
 const buildTime = getLocalBuildTime()
 
+// The API and Socket.IO endpoints are same-origin in every real deployment:
+// the backend serves the built frontend itself (see SPAStaticFiles in
+// backend/app/main.py). The Vite dev server on :5173 is the one exception, so
+// it proxies those two prefixes to the backend to keep the frontend's URLs
+// relative everywhere - which is what lets the session cookie work unchanged in
+// dev, under scripts/serve.sh, in E2E, and through a tunnel.
+const DEV_BACKEND = 'http://localhost:8000'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      '/api': { target: DEV_BACKEND, changeOrigin: true },
+      '/socket.io': { target: DEV_BACKEND, changeOrigin: true, ws: true },
+    },
+  },
   define: {
     __APP_COMMIT_SHA__: JSON.stringify(gitLog('--format=%h') + (isWorkingTreeDirty() ? '*' : '')),
     __APP_COMMIT_DATE__: JSON.stringify(gitLog('--date=short --format=%cd')),
