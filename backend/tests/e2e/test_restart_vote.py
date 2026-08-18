@@ -1,6 +1,8 @@
 import pytest
 from playwright.async_api import async_playwright
 
+from tests.e2e.guest_nickname import submit_guest_nickname
+
 
 BASE_URL = "http://localhost:8000"
 
@@ -21,22 +23,22 @@ async def test_players_approve_restart_without_losing_room_context():
 
         try:
             await host_page.goto(BASE_URL)
-            await host_page.fill('input[placeholder="Your name"]', "RestartHost")
             await host_page.click('button:has-text("Create room")')
+            await submit_guest_nickname(host_page, "RestartHost")
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
             code_text = await host_page.inner_text(".room-copy-button")
             room_code = code_text.split("Code:")[1].strip()
             await player_page.goto(BASE_URL)
-            await player_page.fill('input[placeholder="Your name"]', "RestartPlayer")
             await player_page.fill('input[placeholder="ABC123"]', room_code)
             await player_page.click('button:has-text("Join by code")')
+            await submit_guest_nickname(player_page, "RestartPlayer")
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
             await third_page.goto(BASE_URL)
-            await third_page.fill('input[placeholder="Your name"]', "RestartThird")
             await third_page.fill('input[placeholder="ABC123"]', room_code)
             await third_page.click('button:has-text("Join by code")')
+            await submit_guest_nickname(third_page, "RestartThird")
             await third_page.wait_for_selector('[data-testid="waiting-room"]')
 
             await player_page.fill(".waiting-chat-form input", "Keep this message")
@@ -110,17 +112,17 @@ async def test_players_see_a_rejected_restart_and_cooldown():
 
         try:
             await host_page.goto(BASE_URL)
-            await host_page.fill('input[placeholder="Your name"]', "RejectHost")
             await host_page.click('button:has-text("Create room")')
+            await submit_guest_nickname(host_page, "RejectHost")
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
             code_text = await host_page.inner_text(".room-copy-button")
             room_code = code_text.split("Code:")[1].strip()
 
             await player_page.goto(BASE_URL)
-            await player_page.fill('input[placeholder="Your name"]', "RejectPlayer")
             await player_page.fill('input[placeholder="ABC123"]', room_code)
             await player_page.click('button:has-text("Join by code")')
+            await submit_guest_nickname(player_page, "RejectPlayer")
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
             await host_page.click('button:has-text("Start game")')
             await host_page.wait_for_selector(".game-layout")

@@ -1,14 +1,17 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { emitWithAck, SERVER_URL, socketRequestErrorMessage } from "../lib/socket";
+import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { SettingsIcon } from "../components/SettingsIcon";
+import { AccountMenu } from "../components/AccountMenu";
 import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
+import { GuestNicknameDialog } from "../components/GuestNicknameDialog";
+import { resolvedPlayName } from "../lib/guestNickname";
+import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import type { AckResponse, RoomSummary } from "../types";
 
 const POLL_INTERVAL_MS = 4000;
@@ -16,6 +19,10 @@ const ROOM_FETCH_TIMEOUT_MS = 6000;
 
 type RoomListStatus = "loading" | "loaded" | "error";
 type PendingJoin = { key: string; mode: "join" | "spectate" };
+type PendingNameAction =
+  | { kind: "create" }
+  | { kind: "join-code"; asSpectator: boolean }
+  | { kind: "join-room"; room: RoomSummary; asSpectator: boolean };
 
 function normalizeRoomCodeInput(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
@@ -73,8 +80,9 @@ export function LobbyBrowserPage() {
   const openSettings = useSettingsStore((s) => s.openSettings);
   const nameColor = useSettingsStore((s) => s.nameColor);
   const setSession = useGameStore((s) => s.setSession);
+  const user = useAuthStore((s) => s.user);
+  const isRegistered = Boolean(user && !user.isAnonymous);
 
-  const [nicknameInput, setNicknameInput] = useState(nickname);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +97,12 @@ export function LobbyBrowserPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [hideFullRooms, setHideFullRooms] = useState(false);
   const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
+  const [nameAction, setNameAction] = useState<PendingNameAction | null>(null);
+
+  useEffect(() => {
+    const resolved = resolvedPlayName(nickname, user);
+    if (resolved && resolved !== nickname) setNickname(resolved);
+  }, [nickname, setNickname, user]);
 
   useEffect(() => {
     // The polling controller stops new work; this flag also prevents an
@@ -103,7 +117,7 @@ export function LobbyBrowserPage() {
       activeController = controller;
       activeTimeout = timeout;
       try {
-        const res = await fetch(`${SERVER_URL}/api/rooms`, { signal: controller.signal });
+        const res = await fetch("/api/rooms", { signal: controller.signal, credentials: "include" });
         if (!res.ok) throw new Error(`Room list request failed with ${res.status}`);
         const data: unknown = await res.json();
         if (!Array.isArray(data)) throw new Error("Invalid room list response");
@@ -162,47 +176,74 @@ export function LobbyBrowserPage() {
     return true;
   });
 
-  function requireNickname(): boolean {
-    if (!nicknameInput.trim()) {
-      setError("Please enter a nickname first");
-      return false;
+  function playName(): string {
+    return resolvedPlayName(nickname, user);
+  }
+
+  function withNickname(action: PendingNameAction, run: (name: string) => void) {
+    const name = playName();
+    if (name) {
+      setNickname(name);
+      run(name);
+      return;
     }
-    setNickname(nicknameInput.trim());
-    return true;
+    setNameAction(action);
   }
 
   function handleOpenCreateRoom() {
-    if (!requireNickname()) return;
-    navigate("/create");
+    withNickname({ kind: "create" }, () => navigate("/create"));
   }
 
   async function handleJoinByCode(asSpectator = false) {
-    if (!requireNickname()) return;
     if (!joinCode.trim()) {
       setError("Please enter a room code");
       return;
     }
-    await joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator, "private-code");
+    withNickname({ kind: "join-code", asSpectator }, (name) => {
+      void joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator, "private-code", name);
+    });
   }
 
   async function handleJoinRoom(room: RoomSummary, asSpectator = false) {
-    if (!requireNickname()) return;
-    await joinRoom({ roomId: room.id }, asSpectator, room.id);
+    withNickname({ kind: "join-room", room, asSpectator }, (name) => {
+      void joinRoom({ roomId: room.id }, asSpectator, room.id, name);
+    });
   }
 
-  async function joinRoom(target: { roomId?: string; code?: string }, asSpectator: boolean, key: string) {
+  function handleNicknameChosen(name: string) {
+    const action = nameAction;
+    setNickname(name);
+    setNameAction(null);
+    if (!action) return;
+    if (action.kind === "create") {
+      navigate("/create");
+      return;
+    }
+    if (action.kind === "join-code") {
+      void joinRoom({ code: joinCode.trim().toUpperCase() }, action.asSpectator, "private-code", name);
+      return;
+    }
+    void joinRoom({ roomId: action.room.id }, action.asSpectator, action.room.id, name);
+  }
+
+  async function joinRoom(
+    target: { roomId?: string; code?: string },
+    asSpectator: boolean,
+    key: string,
+    name: string,
+  ) {
     if (pendingJoin) return;
     setPendingJoin({ key, mode: asSpectator ? "spectate" : "join" });
     setError(null);
     try {
       const res = await emitWithAck<AckResponse>("join_room", {
-        nickname: nicknameInput.trim(),
-        nameColor,
+        nickname: name.trim(),
+        nameColor: isRegistered ? nameColor : undefined,
         asSpectator,
         ...target,
       });
-      if (res.ok && res.roomId && res.code && res.playerId && res.reconnectSecret) {
-        setSession({ roomId: res.roomId, code: res.code, playerId: res.playerId, reconnectSecret: res.reconnectSecret });
+      if (res.ok && res.roomId && res.code && res.playerId) {
+        setSession({ roomId: res.roomId, code: res.code, playerId: res.playerId });
         navigate(`/room/${res.code}`);
       } else {
         setError(res.error || "Failed to join room");
@@ -220,37 +261,27 @@ export function LobbyBrowserPage() {
         <div>
           <h1>Sketchy</h1>
         </div>
-        <button
-          type="button"
-          className="header-settings-button"
-          onClick={openSettings}
-          title="Game Settings"
-          aria-label="Game Settings"
-        >
-          <SettingsIcon size={16} />
-          <span className="header-action-label">Settings</span>
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="header-settings-button"
+            onClick={openSettings}
+            title="Game Settings"
+            aria-label="Game Settings"
+          >
+            <SettingsIcon size={16} />
+            <span className="header-action-label">Settings</span>
+          </button>
+          <AccountMenu />
+        </div>
       </div>
 
-      <section className="panel">
-        <label>
-          Nickname
-          {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
-          <input
-            type="search"
-            inputMode="text"
-            value={nicknameInput}
-            onChange={(e) => setNicknameInput(e.target.value)}
-            maxLength={MAX_NICKNAME_LENGTH}
-            placeholder="Your name"
-            autoComplete="nickname"
-            autoCapitalize="words"
-            spellCheck={false}
-            autoCorrect="off"
-            enterKeyHint="done"
-          />
-        </label>
-      </section>
+      {nameAction && (
+        <GuestNicknameDialog
+          onCancel={() => setNameAction(null)}
+          onSubmit={handleNicknameChosen}
+        />
+      )}
 
       {criticalError && (
         <RemovedFromRoomDialog

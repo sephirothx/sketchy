@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { ColoredPlayerName } from "./ColoredPlayerName";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ModerationState, PlayerInfo } from "../types";
 import { socket } from "../lib/socket";
@@ -118,7 +119,7 @@ export function PlayerList({
               isAfk={p.isAfk}
             />
             <span className="player-name">
-              <FittedPlayerName nickname={p.nickname} nameColor={p.nameColor} />
+              <FittedPlayerName nickname={p.nickname} nameColor={p.nameColor} isAnonymous={p.isAnonymous} />
               {isMe && <span className="player-you-mark">you</span>}
               {!p.connected && <span className="visually-hidden">Disconnected</span>}
             </span>
@@ -161,14 +162,14 @@ function votePlayer(targetPlayerId: string, action: "kick" | "afk") {
 function FittedPlayerName({
   nickname,
   nameColor,
+  isAnonymous,
 }: {
   nickname: string;
   nameColor?: string;
+  isAnonymous?: boolean;
 }) {
   return (
-    <span className="colored-player-name" style={{ color: nameColor }}>
-      {nickname}
-    </span>
+    <ColoredPlayerName nickname={nickname} nameColor={nameColor} isAnonymous={isAnonymous} />
   );
 }
 

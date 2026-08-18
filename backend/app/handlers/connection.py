@@ -5,13 +5,57 @@ import asyncio
 import logging
 from functools import partial
 
+from app.auth.jwt import JWT_COOKIE_NAME, decode_token
 from app.handlers.context import HandlerContext
 
 logger = logging.getLogger("sketchy.handlers.connection")
 RECONNECT_GRACE_SECONDS = 30
 
+
+def extract_jwt_cookie(environ: dict | None) -> str | None:
+    """Read the sketchy_session cookie from a Socket.IO handshake environ."""
+    if not isinstance(environ, dict):
+        return None
+    raw_cookie = environ.get("HTTP_COOKIE")
+    if not raw_cookie:
+        scope = environ.get("asgi.scope") if isinstance(environ.get("asgi.scope"), dict) else environ
+        headers = scope.get("headers", []) if isinstance(scope, dict) else []
+        if isinstance(headers, (list, tuple)):
+            for item in headers:
+                if isinstance(item, (list, tuple)) and len(item) == 2:
+                    name, val = item
+                    name_str = name.decode("latin1").lower() if isinstance(name, bytes) else str(name).lower()
+                    if name_str == "cookie":
+                        raw_cookie = val.decode("latin1") if isinstance(val, bytes) else str(val)
+                        break
+        elif isinstance(headers, dict):
+            for key, value in headers.items():
+                key_str = key.decode("latin1").lower() if isinstance(key, bytes) else str(key).lower()
+                if key_str == "cookie":
+                    raw_cookie = value.decode("latin1") if isinstance(value, bytes) else str(value)
+                    break
+    if not raw_cookie:
+        return None
+    for part in raw_cookie.split(";"):
+        if "=" not in part:
+            continue
+        key, value = part.strip().split("=", 1)
+        if key.strip() == JWT_COOKIE_NAME:
+            return value.strip()
+    return None
+
+
 async def connect(ctx: HandlerContext, sid, environ, auth):
     logger.info("socket connected: %s", sid)
+    token = extract_jwt_cookie(environ)
+    user_id = None
+    if token:
+        jwt_secret = ctx.jwt_secret_getter() if ctx.jwt_secret_getter else ""
+        if jwt_secret:
+            user_id = decode_token(token, jwt_secret)
+    session = await ctx.sio.get_session(sid) or {}
+    session["user_id"] = user_id
+    await ctx.sio.save_session(sid, session)
 
 
 async def disconnect(ctx: HandlerContext, sid):

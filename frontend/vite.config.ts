@@ -46,4 +46,13 @@ export default defineConfig({
     __APP_COMMIT_DATE__: JSON.stringify(gitLog('--date=short --format=%cd')),
     __APP_BUILD_TIME__: JSON.stringify(buildTime),
   },
+  server: {
+    proxy: {
+      "/api": "http://127.0.0.1:8000",
+      "/socket.io": {
+        target: "http://127.0.0.1:8000",
+        ws: true,
+      },
+    },
+  },
 })

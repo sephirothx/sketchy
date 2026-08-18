@@ -1,6 +1,8 @@
 """SQLAlchemy implementations of domain repository interfaces."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy import and_, case, distinct, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -52,6 +54,7 @@ def _to_user_data(user: User) -> UserData:
         avatar_url=user.avatar_url,
         is_anonymous=user.is_anonymous,
         created_at=user.created_at,
+        last_login_at=user.last_login_at,
         updated_at=user.updated_at,
     )
 
@@ -98,6 +101,7 @@ class SqlAlchemyUserRepository(UserRepository):
     ) -> UserData:
         async with self._session_factory() as session:
             async with session.begin():
+                now = datetime.now(timezone.utc)
                 user = User(
                     id=user_id or generate_uuid(),
                     username=None,
@@ -106,6 +110,8 @@ class SqlAlchemyUserRepository(UserRepository):
                     name_color=name_color,
                     avatar_url=None,
                     is_anonymous=True,
+                    created_at=now,
+                    last_login_at=now,
                 )
                 session.add(user)
             await session.refresh(user)
@@ -177,6 +183,20 @@ class SqlAlchemyUserRepository(UserRepository):
                 user.username = clean_username
                 user.password_hash = password_hash
                 user.is_anonymous = False
+                user.display_name = clean_username
+                user.last_login_at = datetime.now(timezone.utc)
+            await session.refresh(user)
+            return _to_user_data(user)
+
+    async def record_login(self, user_id: str) -> UserData | None:
+        async with self._session_factory() as session:
+            async with session.begin():
+                stmt = select(User).where(User.id == user_id)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                if user is None:
+                    return None
+                user.last_login_at = datetime.now(timezone.utc)
             await session.refresh(user)
             return _to_user_data(user)
 

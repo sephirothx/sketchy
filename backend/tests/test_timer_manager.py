@@ -124,6 +124,16 @@ async def test_close_cancels_and_awaits_outstanding_tasks():
 async def test_application_lifespan_closes_timer_manager(monkeypatch):
     from app import main
 
+    async def skip_db_setup(*_args, **_kwargs):
+        return None
+
+    async def fake_secret(*_args, **_kwargs):
+        return "x" * 64
+
+    monkeypatch.setattr(main, "init_db", skip_db_setup)
+    monkeypatch.setattr(main, "get_or_create_secret", fake_secret)
+    monkeypatch.setattr(main, "seed_word_lists", skip_db_setup)
+
     timers = TimerManager()
     monkeypatch.setattr(main.handler_context, "timers", timers)
     task = asyncio.create_task(asyncio.sleep(60))

@@ -37,6 +37,7 @@ class UserData:
     avatar_url: str | None
     is_anonymous: bool
     created_at: datetime
+    last_login_at: datetime
     updated_at: datetime
 
 
@@ -231,6 +232,11 @@ class UserRepository(ABC):
         password_hash: str,
     ) -> UserData:
         """Upgrade an anonymous user to a registered account with credentials."""
+        ...
+
+    @abstractmethod
+    async def record_login(self, user_id: str) -> UserData | None:
+        """Update last_login_at for a user and return the refreshed entity."""
         ...
 
     @abstractmethod

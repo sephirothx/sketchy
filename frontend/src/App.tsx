@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
@@ -9,10 +10,15 @@ import { SettingsModal } from "./components/SettingsModal";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
+import { ensureSession } from "./lib/socket";
 
 function App() {
   useGameSocketListeners();
   useRoomSessionReconnect();
+
+  useEffect(() => {
+    void ensureSession();
+  }, []);
 
   return (
     <ToastProvider>

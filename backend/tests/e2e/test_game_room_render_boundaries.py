@@ -1,6 +1,8 @@
 import pytest
 from playwright.async_api import async_playwright
 
+from tests.e2e.guest_nickname import submit_guest_nickname
+
 
 BASE_URL = "http://localhost:8000"
 
@@ -35,8 +37,8 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
         host, guest_one, guest_two = pages
         try:
             await host.goto(BASE_URL)
-            await host.fill('input[placeholder="Your name"]', "BoundaryHost")
             await host.get_by_role("button", name="Create room", exact=True).click()
+            await submit_guest_nickname(host, "BoundaryHost")
             await host.get_by_role("button", name="Create room", exact=True).click()
             await host.wait_for_selector('[data-testid="waiting-room"]')
             code = (await host.inner_text(".room-copy-button")).split("Code:")[1].strip()
@@ -46,9 +48,9 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
                 (guest_two, "BoundaryGuestTwo"),
             ):
                 await page.goto(BASE_URL)
-                await page.fill('input[placeholder="Your name"]', nickname)
                 await page.fill('input[placeholder="ABC123"]', code)
                 await page.get_by_role("button", name="Join by code", exact=True).click()
+                await submit_guest_nickname(page, nickname)
                 await page.wait_for_selector('[data-testid="waiting-room"]')
 
             await host.get_by_role("button", name="Start game", exact=True).click()

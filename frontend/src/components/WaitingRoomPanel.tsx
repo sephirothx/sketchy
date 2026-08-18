@@ -1,6 +1,7 @@
 import { RoomSettingsEditor } from "./RoomSettingsDialog";
 import { CustomWordsPreview } from "./CustomWordsPreview";
 import type { HintMode, PlayerInfo, ScoreEntry, ScoringMode } from "../types";
+import { ColoredPlayerName } from "./ColoredPlayerName";
 
 interface WaitingRoomPanelProps {
   name: string;
@@ -137,7 +138,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             <p className="waiting-card-kicker">Waiting for host</p>
             <h2>
               {host
-                ? <><span className="colored-player-name" style={{ color: host.nameColor }}>{host.nickname}</span> will start {rematch ? "the rematch" : "the game"}</>
+                ? <><ColoredPlayerName nickname={host.nickname} nameColor={host.nameColor} isAnonymous={host.isAnonymous} /> will start {rematch ? "the rematch" : "the game"}</>
                 : "Waiting for a host"}
             </h2>
             <p className="waiting-start-hint">

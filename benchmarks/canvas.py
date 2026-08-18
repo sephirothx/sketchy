@@ -435,6 +435,14 @@ async def click_canvas_action(page: Page, action: str) -> None:
     await page.get_by_role("button", name=accessible_name).click()
 
 
+async def submit_guest_nickname(page: Page, nickname: str) -> None:
+    dialog = page.get_by_role("dialog", name="Choose a nickname")
+    await dialog.wait_for()
+    await dialog.locator('input[placeholder="Your name"]').fill(nickname)
+    await dialog.get_by_role("button", name="Continue").click()
+    await dialog.wait_for(state="hidden")
+
+
 async def draw_stroke(
     drawer: Page,
     start: tuple[float, float],
@@ -480,8 +488,8 @@ async def create_game(
     )
 
     await drawer.goto(base_url)
-    await drawer.fill('input[placeholder="Your name"]', f"{profile.name}-drawer")
     await drawer.get_by_role("button", name="Create room", exact=True).click()
+    await submit_guest_nickname(drawer, f"{profile.name}-drawer")
     await drawer.wait_for_url("**/create")
     await drawer.get_by_role("button", name="Create room", exact=True).click()
     await drawer.wait_for_url("**/room/**")
@@ -489,9 +497,9 @@ async def create_game(
     code = (await drawer.inner_text(".room-copy-button")).split("Code:")[1].strip()
 
     await observer.goto(base_url)
-    await observer.fill('input[placeholder="Your name"]', f"{profile.name}-observer")
     await observer.fill('input[placeholder="ABC123"]', code)
     await observer.click('button:has-text("Join by code")')
+    await submit_guest_nickname(observer, f"{profile.name}-observer")
     await observer.wait_for_selector('[data-testid="waiting-room"]')
 
     await drawer.wait_for_selector(".waiting-start-button:not([disabled])")

@@ -18,6 +18,7 @@ import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { SettingsIcon } from "../components/SettingsIcon";
+import { AccountMenu } from "../components/AccountMenu";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { recordRender } from "../lib/renderDiagnostics";
@@ -36,7 +37,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const playersDrawerTitleId = useId();
 
   const playerId = useGameStore((s) => s.playerId);
-  const clearStoredReconnectSecret = useGameStore((s) => s.clearStoredReconnectSecret);
+  const clearSession = useGameStore((s) => s.clearSession);
   const reset = useGameStore((s) => s.reset);
 
   const roomState = useGameStore((s) => s.roomState);
@@ -110,7 +111,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   useEffect(() => {
     function onKicked(data: { reason?: string }) {
       exitingRoomRef.current = true;
-      clearStoredReconnectSecret(normalizedCode);
+      clearSession();
       reset();
       navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
     }
@@ -123,11 +124,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
       socket.off("kicked", onKicked);
       socket.off("voted_afk", onVotedAfk);
     };
-  }, [clearStoredReconnectSecret, navigate, normalizedCode, notify, reset]);
+  }, [clearSession, navigate, normalizedCode, notify, reset]);
 
   function performLeave() {
     exitingRoomRef.current = true;
-    clearStoredReconnectSecret(normalizedCode);
+    clearSession();
     socket.emit("leave_room");
     reset();
     navigate("/");
@@ -341,6 +342,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
             <SettingsIcon size={16} />
             <span className="header-action-label">Settings</span>
           </button>
+          <AccountMenu />
         </div>
       </header>
 

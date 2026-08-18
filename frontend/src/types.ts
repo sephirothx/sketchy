@@ -7,6 +7,7 @@ export interface PlayerInfo {
   isHost: boolean;
   isSpectator: boolean;
   isAfk: boolean;
+  isAnonymous?: boolean;
   kickVotes?: string[];
   afkVotes?: string[];
 }
@@ -109,6 +110,7 @@ export interface ChatMessage {
   playerId?: string;
   nickname: string;
   nameColor?: string;
+  isAnonymous?: boolean;
   text: string;
   correct: boolean;
   system?: boolean;
@@ -121,6 +123,7 @@ export interface ScoreEntry {
   playerId: string;
   nickname: string;
   nameColor?: string;
+  isAnonymous?: boolean;
   score: number;
 }
 
@@ -139,6 +142,7 @@ export interface RoundEndedPayload {
     playerId: string;
     nickname: string;
     nameColor?: string;
+    isAnonymous?: boolean;
     seconds: number;
   }[];
   scores: RoundScoreEntry[];
@@ -212,9 +216,8 @@ export interface AckResponse {
   roomId?: string;
   code?: string;
   playerId?: string;
-  reconnectSecret?: string;
   error?: string;
-  invalidReconnectSecret?: boolean;
+  sessionExpired?: boolean;
   needsRebind?: boolean;
 }
 

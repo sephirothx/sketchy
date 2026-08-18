@@ -3,6 +3,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { recordRender } from "../lib/renderDiagnostics";
 import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../types";
 import { PlayerList } from "./PlayerList";
+import { ColoredPlayerName } from "./ColoredPlayerName";
 
 interface RoomPlayersPanelProps {
   mode: "waiting" | "playing" | "game-end";
@@ -103,12 +104,11 @@ export function RoomPlayersPanel({
                 <ul>
                   {spectators.map((spectator) => (
                     <li key={spectator.playerId}>
-                      <span
-                        className="colored-player-name"
-                        style={{ color: spectator.nameColor }}
-                      >
-                        {spectator.nickname}
-                      </span>
+                      <ColoredPlayerName
+                        nickname={spectator.nickname}
+                        nameColor={spectator.nameColor}
+                        isAnonymous={spectator.isAnonymous}
+                      />
                       {spectator.playerId === myPlayerId ? " (you)" : ""}
                     </li>
                   ))}

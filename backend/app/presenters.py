@@ -32,7 +32,6 @@ def session_payload(room: Room, player: Player) -> dict:
         "roomId": room.id,
         "code": room.code,
         "playerId": player.id,
-        "reconnectSecret": player.reconnect_secret,
     }
 
 
@@ -100,6 +99,7 @@ def round_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
                 "playerId": player.id,
                 "nickname": player.nickname,
                 "nameColor": player.name_color,
+                "isAnonymous": player.is_anonymous,
                 "seconds": game.guess_times[player.id],
             }
             for player in sorted(
@@ -113,6 +113,7 @@ def round_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
                 "playerId": player.id,
                 "nickname": player.nickname,
                 "nameColor": player.name_color,
+                "isAnonymous": player.is_anonymous,
                 "score": player.score,
                 "delta": deltas[player.id],
                 "previousRank": previous_ranks[player.id],

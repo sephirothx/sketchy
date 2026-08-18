@@ -328,7 +328,14 @@ class GameFlowService:
             superseded_sid = player.sid if player.sid != sid else None
             player.sid = sid
             player.connected = True
-            await sio.save_session(sid, {"room_id": room.id, "player_id": player.id})
+            await sio.save_session(
+                sid,
+                {
+                    **(await sio.get_session(sid) or {}),
+                    "room_id": room.id,
+                    "player_id": player.id,
+                },
+            )
             await sio.enter_room(sid, room.id)
             if superseded_sid:
                 await sio.disconnect(superseded_sid)
@@ -470,6 +477,7 @@ class GameFlowService:
                         "playerId": p.id,
                         "nickname": p.nickname,
                         "nameColor": p.name_color,
+                        "isAnonymous": p.is_anonymous,
                         "score": p.score,
                     }
                     for p in sorted(room.player_list(), key=lambda p: -p.score)

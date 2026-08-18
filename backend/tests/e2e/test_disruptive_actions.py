@@ -1,6 +1,8 @@
 import pytest
 from playwright.async_api import async_playwright
 
+from tests.e2e.guest_nickname import submit_guest_nickname
+
 
 BASE_URL = "http://localhost:8000"
 
@@ -20,8 +22,8 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
 
         try:
             await host_page.goto(BASE_URL)
-            await host_page.fill('input[placeholder="Your name"]', "SafeHost")
             await host_page.click('button:has-text("Create room")')
+            await submit_guest_nickname(host_page, "SafeHost")
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
@@ -46,9 +48,9 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             code_text = await host_page.inner_text('.room-copy-button')
             code = code_text.split("Code:")[1].strip()
             await player_page.goto(BASE_URL)
-            await player_page.fill('input[placeholder="Your name"]', "SafePlayer")
             await player_page.fill('input[placeholder="ABC123"]', code)
             await player_page.click('button:has-text("Join by code")')
+            await submit_guest_nickname(player_page, "SafePlayer")
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
 
             await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
@@ -113,8 +115,8 @@ async def test_waiting_room_leave_remains_immediate():
 
         try:
             await page.goto(BASE_URL)
-            await page.fill('input[placeholder="Your name"]', "WaitingLeaver")
             await page.click('button:has-text("Create room")')
+            await submit_guest_nickname(page, "WaitingLeaver")
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')
 
@@ -128,7 +130,7 @@ async def test_waiting_room_leave_remains_immediate():
             assert sum('"leave_room"' in frame for frame in sent_frames) == 1
             assert not any('"join_room"' in frame for frame in sent_frames)
             assert await page.evaluate(
-                "(code) => localStorage.getItem(`sketchy_reconnect_secret_${code}`)",
+                "(code) => sessionStorage.getItem('sketchy_active_room')",
                 room_code,
             ) is None
         finally:

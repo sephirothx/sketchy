@@ -12,6 +12,7 @@ VENV_PIP="$BACKEND_DIR/.venv/bin/pip"
 PORT="${PORT:-8000}"
 SERVER_LOG=""
 SERVER_PID=""
+E2E_DB=""
 STARTUP_FAILED=false
 
 log() { printf '\n\033[1;34m==>\033[0m %s\n' "$1"; }
@@ -48,9 +49,12 @@ fi
 # Ensure frontend is built against the local E2E server (overrides
 # frontend/.env.production.local, which may point at a Cloudflare tunnel).
 log "Building frontend for E2E tests"
-(cd "$FRONTEND_DIR" && VITE_SERVER_URL="http://127.0.0.1:$PORT" VITE_RENDER_DIAGNOSTICS="true" npm run build --silent)
+(cd "$FRONTEND_DIR" && VITE_SERVER_URL= VITE_RENDER_DIAGNOSTICS="true" npm run build --silent)
 
-# Start background server
+# Start background server against an isolated database so a local sketchy.db
+# stamped with another branch's Alembic revision cannot fail startup.
+E2E_DB="$(mktemp "${TMPDIR:-/tmp}/sketchy-e2e.XXXXXX.db")"
+export DATABASE_URL="sqlite+aiosqlite:///${E2E_DB}"
 SERVER_LOG="$(mktemp "${TMPDIR:-/tmp}/sketchy-e2e-server.XXXXXX")"
 log "Starting background server on http://127.0.0.1:$PORT"
 (cd "$BACKEND_DIR" && "$BACKEND_DIR/.venv/bin/uvicorn" app.main:app --host 127.0.0.1 --port "$PORT" --log-level warning) >"$SERVER_LOG" 2>&1 &
@@ -65,6 +69,9 @@ cleanup() {
     wait "$SERVER_PID" 2>/dev/null || true
   fi
   rm -f "$SERVER_LOG"
+  if [[ -n "$E2E_DB" ]]; then
+    rm -f "$E2E_DB" "${E2E_DB}-journal" "${E2E_DB}-wal" "${E2E_DB}-shm"
+  fi
 }
 trap cleanup EXIT
 

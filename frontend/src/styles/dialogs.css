@@ -119,3 +119,30 @@
 
 .confirmation-danger-button:hover { background: #b91c1c; border-color: #b91c1c; }
 .confirmation-dialog-actions button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+.guest-nickname-card {
+  text-align: left;
+}
+
+.guest-nickname-form {
+  display: grid;
+  gap: 10px;
+}
+
+.guest-nickname-form label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.guest-nickname-form input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.guest-nickname-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}

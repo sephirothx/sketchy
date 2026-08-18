@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { emitWithAck, socket } from "../lib/socket";
+import { emitWithAck, socket, waitForConnect } from "../lib/socket";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { useAuthStore } from "../store/authStore";
 import type { AckResponse } from "../types";
 
 const STALL_GRACE_MS = 2500;
@@ -11,22 +12,6 @@ const HEARTBEAT_MS = 5000;
 const HEARTBEAT_TIMEOUT_MS = 5000;
 const ACTIVE_PHASES = new Set(["choosing_word", "drawing", "round_end"]);
 const PHASE_BY_CODE = ["idle", "choosing_word", "drawing", "round_end", "game_end"] as const;
-
-function waitForConnect(timeoutMs = 8000): Promise<void> {
-  if (socket.connected) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      socket.off("connect", onConnect);
-      reject(new Error("connect timeout"));
-    }, timeoutMs);
-    function onConnect() {
-      window.clearTimeout(timer);
-      resolve();
-    }
-    socket.once("connect", onConnect);
-    socket.connect();
-  });
-}
 
 /**
  * After a Socket.IO transport reconnect the client gets a new sid and is no
@@ -40,41 +25,41 @@ export function useRoomSessionReconnect() {
     let lastStallRecoveryAt = 0;
     let heartbeatInFlight = false;
     let consecutiveHeartbeatFailures = 0;
+    let hardRebindAfterDisconnect = false;
 
     async function joinWithSession(soft = false) {
-      const { reconnectSecret, roomId, code, nickname } = useGameStore.getState();
-      if (!reconnectSecret || !code) {
+      const state = useGameStore.getState();
+      const { playerId, roomId, code, nickname, players } = state;
+      if (!playerId || !code) {
         setRoomBindingStatus("ready");
         return;
       }
-      const nameColor = useSettingsStore.getState().nameColor;
+      const isGuest = Boolean(useAuthStore.getState().user?.isAnonymous ?? true);
+      const nameColor = isGuest ? undefined : useSettingsStore.getState().nameColor;
+      const reconnectNickname =
+        nickname.trim()
+        || players.find((player) => player.playerId === playerId)?.nickname
+        || "Player";
       const response = await emitWithAck<AckResponse>("join_room", {
         code,
         roomId,
-        nickname,
+        nickname: reconnectNickname,
         nameColor,
-        reconnectSecret,
+        reconnectOnly: true,
         soft,
       });
       if (cancelled) return;
-      if (
-        response.ok
-        && response.roomId
-        && response.code
-        && response.playerId
-        && response.reconnectSecret
-      ) {
+      if (response.ok && response.roomId && response.code && response.playerId) {
         useGameStore.getState().setSession({
           roomId: response.roomId,
           code: response.code,
           playerId: response.playerId,
-          reconnectSecret: response.reconnectSecret,
         });
         setRoomBindingStatus("ready");
         return;
       }
-      if (response.invalidReconnectSecret) {
-        useGameStore.getState().clearStoredReconnectSecret(code);
+      if (response.sessionExpired) {
+        useGameStore.getState().clearSession();
         useGameStore.getState().reset();
         setRoomBindingStatus("failed");
         return;
@@ -86,8 +71,8 @@ export function useRoomSessionReconnect() {
       options: { forceTransportRestart?: boolean; soft?: boolean } = {},
     ) {
       const { forceTransportRestart = false, soft = false } = options;
-      const { reconnectSecret, code } = useGameStore.getState();
-      if (!reconnectSecret || !code) {
+      const { playerId, code } = useGameStore.getState();
+      if (!playerId || !code) {
         setRoomBindingStatus("ready");
         return;
       }
@@ -124,23 +109,28 @@ export function useRoomSessionReconnect() {
     }
 
     function onConnect() {
-      const { reconnectSecret, code } = useGameStore.getState();
-      if (!reconnectSecret || !code) {
+      const { playerId, code } = useGameStore.getState();
+      if (!playerId || !code) {
         setRoomBindingStatus("ready");
         return;
       }
-      queueRebind();
+      const forceTransportRestart = hardRebindAfterDisconnect;
+      hardRebindAfterDisconnect = false;
+      queueRebind({ forceTransportRestart });
     }
 
     function onDisconnect() {
-      const { reconnectSecret, code } = useGameStore.getState();
-      if (reconnectSecret && code) setRoomBindingStatus("rejoining");
+      const { playerId, code } = useGameStore.getState();
+      if (playerId && code) {
+        hardRebindAfterDisconnect = true;
+        setRoomBindingStatus("rejoining");
+      }
     }
 
     function onVisibility() {
       if (document.visibilityState !== "visible") return;
-      const { reconnectSecret, code, phase, roomState } = useGameStore.getState();
-      if (!reconnectSecret || !code) return;
+      const { playerId, code, phase, roomState } = useGameStore.getState();
+      if (!playerId || !code) return;
       if (!ACTIVE_PHASES.has(phase) && roomState !== "playing") return;
       queueRebind({ soft: true });
     }
@@ -216,20 +206,35 @@ export function useRoomSessionReconnect() {
       }
     }
 
+    function onBrowserOffline() {
+      if (socket.connected) socket.disconnect();
+    }
+
+    function onBrowserOnline() {
+      void waitForConnect();
+    }
+
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("offline", onBrowserOffline);
+    window.addEventListener("online", onBrowserOnline);
     const stallTimer = window.setInterval(checkPhaseStall, STALL_CHECK_MS);
     const heartbeatTimer = window.setInterval(() => {
       void runHeartbeat();
     }, HEARTBEAT_MS);
     if (socket.connected) onConnect();
+    if (typeof navigator !== "undefined" && !navigator.onLine && socket.connected) {
+      socket.disconnect();
+    }
 
     return () => {
       cancelled = true;
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("offline", onBrowserOffline);
+      window.removeEventListener("online", onBrowserOnline);
       window.clearInterval(stallTimer);
       window.clearInterval(heartbeatTimer);
     };

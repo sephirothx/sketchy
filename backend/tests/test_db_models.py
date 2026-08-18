@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -214,6 +214,7 @@ async def test_word_list_and_word_uniqueness():
         await engine.dispose()
 
 
+@pytest.mark.filterwarnings("error:Skipped unsupported reflection of expression-based index:sqlalchemy.exc.SAWarning")
 async def test_init_db_runs_alembic_migrations(tmp_path):
     from app.db import init_db
     db_file = tmp_path / "test_migration.db"
@@ -227,6 +228,15 @@ async def test_init_db_runs_alembic_migrations(tmp_path):
                 session.add(AppConfig(key="migrated", value="yes"))
             res = await session.execute(select(AppConfig).where(AppConfig.key == "migrated"))
             assert res.scalar_one().value == "yes"
+
+        async with engine.connect() as conn:
+            index_sql = (
+                await conn.execute(
+                    text("SELECT sql FROM sqlite_master WHERE type='index' AND name='ix_users_username_lower'")
+                )
+            ).scalar_one()
+        assert index_sql is not None
+        assert "lower(username)" in index_sql.lower()
     finally:
         await engine.dispose()
 

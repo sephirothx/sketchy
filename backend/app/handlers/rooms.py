@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from functools import partial
 
+from app.auth.nickname import guest_nickname_is_available, registered_nickname_taken_message
 from app.game import Phase
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
@@ -18,6 +19,49 @@ from app.handlers.payloads import (
 )
 from app.rooms import RoomFullError, STARTING_SCORE, normalize_name_color
 
+
+async def _resolve_identity(
+    ctx: HandlerContext, sid: str, requested_nickname: str
+) -> tuple[str, str, bool, str | None]:
+    """
+    Resolve persistent identity and the nickname to use in the room.
+
+    Registered users always appear as their username. Guests keep the requested
+    nickname unless it collides with a registered username.
+    Returns (user_id, effective_nickname, is_anonymous, error_message).
+    """
+    session = await ctx.sio.get_session(sid) if sid else {}
+    session = session or {}
+    user_id = session.get("user_id")
+    clean_nickname = requested_nickname.strip() or "Player"
+
+    if ctx.user_repo is None:
+        return (user_id or sid, clean_nickname, False, None)
+
+    user = None
+    if user_id:
+        try:
+            user = await ctx.user_repo.get_by_id(user_id)
+        except Exception:
+            user = None
+
+    if user is not None and not user.is_anonymous:
+        effective = user.username or user.display_name or "Player"
+        return (user.id, effective, False, None)
+
+    if not user_id or user is None:
+        return ("", "", True, "Not authenticated")
+
+    if not await guest_nickname_is_available(ctx.user_repo, clean_nickname, user.id):
+        return ("", "", True, registered_nickname_taken_message(clean_nickname))
+
+    try:
+        await ctx.user_repo.update_profile(user.id, display_name=clean_nickname)
+    except Exception:
+        pass
+    return (user.id, clean_nickname, True, None)
+
+
 async def create_room(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(CreateRoomPayload, data)
@@ -25,13 +69,21 @@ async def create_room(ctx: HandlerContext, sid, data):
         return ctx.game_flow.validation_error(error)
     settings = await ctx.game_flow.room_settings_from_payload(payload)
 
+    user_id, effective_nickname, is_anonymous, error = await _resolve_identity(
+        ctx, sid, payload.nickname
+    )
+    if error:
+        return {"ok": False, "error": error}
+
     room = ctx.room_manager.create_room(
         **settings,
     )
     player = ctx.room_manager.add_player(
         room,
-        payload.nickname,
-        name_color=normalize_name_color(payload.name_color),
+        effective_nickname,
+        user_id=user_id,
+        name_color=None if is_anonymous else normalize_name_color(payload.name_color),
+        is_anonymous=is_anonymous,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     return ctx.game_flow._session_ack(room, player)
@@ -126,20 +178,13 @@ async def join_room(ctx: HandlerContext, sid, data):
         payload = parse_payload(JoinRoomPayload, data)
     except PayloadError as error:
         return ctx.game_flow.validation_error(error)
-    reconnect_secret = payload.reconnect_secret
     name_color = normalize_name_color(payload.name_color)
 
     room = ctx.room_manager.get_room(payload.room_id) or ctx.room_manager.get_room_by_code(payload.code)
     if not room:
         return {"ok": False, "error": "Room not found"}
 
-    # Checked before the token-reconnect branch below: a client's first
-    # join_room call (e.g. from the lobby) is very often followed by a
-    # second one moments later on the very same socket (e.g. GameRoomPage
-    # re-joining with the token it was just given). That second call
-    # would otherwise match the token-reconnect branch and fire a
-    # spurious "reconnected" message for a session that never actually
-    # disconnected - so if this exact socket already has a live session
+    # Checked before the reconnect branch below: if this exact socket already has a live session
     # in this room, just confirm it rather than reprocessing the join.
     already_joined = await ctx.game_flow._existing_player_for_sid(sid, room.id)
     if already_joined:
@@ -155,21 +200,36 @@ async def join_room(ctx: HandlerContext, sid, data):
         )
         return ctx.game_flow._session_ack(room, already_joined)
 
-    player = ctx.room_manager.get_player_by_reconnect_secret(room, reconnect_secret)
+    user_id, effective_nickname, is_anonymous, error = await _resolve_identity(
+        ctx, sid, payload.nickname
+    )
+    if error:
+        return {"ok": False, "error": error}
+
+    player = ctx.room_manager.get_player_by_user_id(room, user_id)
     if player:
-        if name_color:
+        player.nickname = effective_nickname
+        player.is_anonymous = is_anonymous
+        if not is_anonymous and name_color:
             player.name_color = name_color
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         return ctx.game_flow._session_ack(room, player)
-    if reconnect_secret:
-        return {"ok": False, "error": "Your previous room session has expired", "invalidReconnectSecret": True}
+
+    if payload.reconnect_only:
+        return {
+            "ok": False,
+            "error": "Your previous room session has expired",
+            "sessionExpired": True,
+        }
 
     try:
         player = ctx.room_manager.add_player(
             room,
-            payload.nickname,
+            effective_nickname,
+            user_id=user_id,
             is_spectator=payload.as_spectator,
-            name_color=name_color,
+            name_color=None if is_anonymous else name_color,
+            is_anonymous=is_anonymous,
         )
     except RoomFullError:
         return {"ok": False, "error": "Room is full"}
@@ -221,6 +281,8 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
     if not current:
         return {"ok": False, "error": "Not in this room"}
     room, player = current
+    if player.is_anonymous:
+        return {"ok": False, "error": "Guest accounts cannot customize name color"}
     player.name_color = normalize_name_color(payload.name_color) or player.name_color
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}

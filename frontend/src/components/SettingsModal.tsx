@@ -12,6 +12,7 @@ import {
   useSettingsStore,
 } from "../store/settingsStore";
 import { socket } from "../lib/socket";
+import { useAuthStore } from "../store/authStore";
 
 type SettingsTab = "general" | "game" | "shortcuts";
 
@@ -41,6 +42,8 @@ function formatKey(key: string): string {
 function SettingsModalContent() {
   const { closeSettings, keyBindings, penCursor, theme, confettiEffects, soundEffects, volume, nameColor, setAllSettings } =
     useSettingsStore();
+  const user = useAuthStore((state) => state.user);
+  const isGuest = Boolean(!user || user.isAnonymous);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
@@ -109,7 +112,9 @@ function SettingsModalContent() {
       volume: draftVolume,
       nameColor: draftNameColor,
     });
-    socket.emit("update_player_settings", { nameColor: draftNameColor });
+    if (!isGuest) {
+      socket.emit("update_player_settings", { nameColor: draftNameColor });
+    }
     closeSettings();
   };
 
@@ -186,6 +191,16 @@ function SettingsModalContent() {
                   onChange={setDraftTheme}
                 />
 
+                {isGuest ? (
+                  <div className="settings-labeled-field name-color-setting">
+                    <span className="settings-labeled-field-label">
+                      Player name color
+                    </span>
+                    <p className="name-color-guest-note">
+                      Guest names stay gray. Create an account to pick a color.
+                    </p>
+                  </div>
+                ) : (
                 <div className="settings-labeled-field name-color-setting">
                   <span className="settings-labeled-field-label">
                     Player name color
@@ -209,6 +224,7 @@ function SettingsModalContent() {
                     </button>
                   </div>
                 </div>
+                )}
 
                 <h4 className="settings-fields-heading">Audio</h4>
                 <Switch

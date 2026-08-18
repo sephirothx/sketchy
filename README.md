@@ -164,8 +164,10 @@ npm install
 npm run dev
 ```
 
-Runs on http://localhost:5173 (Vite dev server) and talks to the backend at
-`http://localhost:8000` by default. Override with an env var if needed:
+Runs on http://localhost:5173 (Vite dev server). API and Socket.IO requests are
+proxied to the backend at `http://127.0.0.1:8000` so the HttpOnly session cookie
+stays same-origin. Override the Socket.IO/API origin only when the frontend is
+not served (or proxied) from the same host as the backend:
 
 ```bash
 # frontend/.env
@@ -277,7 +279,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ### Reconnection & disconnection
 
-- On disconnect, a player has 30 seconds to reconnect with their private stored secret and keep
+- On disconnect, a player has 30 seconds to reconnect with the same HttpOnly session cookie and keep
   their score and place in the turn order. A successful reconnect replaces the player's active
   socket, so the superseded socket can no longer issue commands.
 - If the drawer disconnects and doesn't return in time, their turn is skipped and evicted from

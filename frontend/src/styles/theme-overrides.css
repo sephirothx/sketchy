@@ -919,3 +919,44 @@
   .waiting-room-chat-column { position: static; }
   .waiting-chat { height: 300px; }
 }
+
+[data-theme="dark"] .account-menu-button {
+  border-color: #475569;
+}
+
+[data-theme="dark"] .account-menu-dropdown {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .account-menu-dropdown button {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .account-menu-cta,
+[data-theme="dark"] .lobby-nickname-hint,
+[data-theme="dark"] .name-color-guest-note {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .game-end-claim-banner {
+  background: #1e1b4b;
+  border-color: #4338ca;
+}
+
+[data-theme="dark"] .game-end-claim-banner p {
+  color: #c7d2fe;
+}
+
+[data-theme="dark"] .account-dialog-form input {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .guest-nickname-form input {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}

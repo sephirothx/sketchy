@@ -28,7 +28,6 @@ const sessionResponse = {
   roomId: "room-1",
   code: "ABC123",
   playerId: "player-1",
-  reconnectSecret: "private-secret",
 };
 
 function deferred() {
@@ -39,8 +38,8 @@ function deferred() {
 
 function dependencies(overrides = {}) {
   return {
-    getReconnectSecret: () => null,
-    clearReconnectSecret: () => {},
+    hasActiveRoomSession: () => false,
+    clearSession: () => {},
     reconnect: async () => ({ ok: false }),
     preview: async () => ({ ok: true, room }),
     join: async () => sessionResponse,
@@ -51,13 +50,13 @@ function dependencies(overrides = {}) {
   };
 }
 
-test("a valid stored credential reconnects without loading a preview", async () => {
+test("a valid stored session reconnects without loading a preview", async () => {
   const accepted = [];
   let previewCalls = 0;
   const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
-    getReconnectSecret: () => "stored-secret",
+    hasActiveRoomSession: () => true,
     reconnect: async (request) => {
-      assert.equal(request.reconnectSecret, "stored-secret");
+      assert.equal(request.code, "ABC123");
       return sessionResponse;
     },
     preview: async () => {
@@ -72,17 +71,16 @@ test("a valid stored credential reconnects without loading a preview", async () 
     roomId: "room-1",
     code: "ABC123",
     playerId: "player-1",
-    reconnectSecret: "private-secret",
   }]);
   assert.equal(previewCalls, 0);
 });
 
-test("an expired credential is cleared before showing the room preview", async () => {
+test("an expired session is cleared before showing the room preview", async () => {
   const cleared = [];
   const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
-    getReconnectSecret: () => "expired-secret",
-    reconnect: async () => ({ ok: false, invalidReconnectSecret: true }),
-    clearReconnectSecret: (code) => cleared.push(code),
+    hasActiveRoomSession: () => true,
+    reconnect: async () => ({ ok: false, sessionExpired: true }),
+    clearSession: () => cleared.push("ABC123"),
   }));
 
   await machine.load();

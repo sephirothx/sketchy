@@ -1,5 +1,7 @@
 import asyncio
 from contextlib import suppress
+from dataclasses import replace
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -17,7 +19,8 @@ from app.handlers import register_all_handlers as register_handlers
 from app.game import DRAWING_SECONDS, Game, Phase
 from app.live_drawing import encode_live_drawing
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
-from app.rooms import DrawingRecapEntry, STARTING_SCORE, RoomManager
+from app.repositories.interfaces import UserData
+from app.rooms import DrawingRecapEntry, GUEST_NAME_COLOR, STARTING_SCORE, RoomManager
 from app.words import MAX_WORD_LENGTH
 
 
@@ -245,3 +248,111 @@ async def test_room_preview_returns_private_room_metadata_without_joining():
     assert response["room"]["drawingSeconds"] == 90
     assert response["room"]["hintMode"] == "checkpoints"
     assert len(room.players) == 1
+
+
+def _user(**kwargs) -> UserData:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "id": "user-1",
+        "username": None,
+        "display_name": "Guest",
+        "name_color": None,
+        "avatar_url": None,
+        "is_anonymous": True,
+        "created_at": now,
+        "last_login_at": now,
+        "updated_at": now,
+    }
+    payload.update(kwargs)
+    return UserData(**payload)
+
+
+class _FakeUserRepo:
+    def __init__(self, users: list[UserData]):
+        self.users = {user.id: user for user in users}
+
+    async def get_by_id(self, user_id: str):
+        return self.users.get(user_id)
+
+    async def get_by_username(self, username: str):
+        needle = username.strip().lower()
+        for user in self.users.values():
+            if user.username and user.username.lower() == needle:
+                return user
+        return None
+
+    async def update_profile(self, user_id: str, **kwargs):
+        user = self.users[user_id]
+        if kwargs.get("display_name"):
+            user = replace(user, display_name=kwargs["display_name"])
+            self.users[user_id] = user
+        return user
+
+
+@pytest.mark.asyncio
+async def test_guest_name_color_is_locked_and_display_name_is_persisted():
+    guest = _user(id="guest-1", display_name="Guest")
+    repo = _FakeUserRepo([guest])
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "guest-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "guest-sid",
+        {"nickname": "Stefano", "name": "Room", "nameColor": "#AABBCC"},
+    )
+    room = room_manager.get_room(response["roomId"])
+    player = room.players[response["playerId"]]
+    assert player.is_anonymous is True
+    assert player.nickname == "Stefano"
+    assert player.name_color == GUEST_NAME_COLOR
+    assert repo.users["guest-1"].display_name == "Stefano"
+
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": player.id, "user_id": "guest-1"}
+    )
+    update = await sio.handlers["/"]["update_player_settings"](
+        "guest-sid", {"nameColor": "#123ABC"}
+    )
+    assert update == {"ok": False, "error": "Guest accounts cannot customize name color"}
+    assert player.name_color == GUEST_NAME_COLOR
+
+
+@pytest.mark.asyncio
+async def test_registered_username_is_enforced_and_guests_cannot_impersonate_it():
+    registered = _user(
+        id="bob-1",
+        username="BobUser",
+        display_name="BobUser",
+        is_anonymous=False,
+    )
+    guest = _user(id="guest-2", display_name="Guest")
+    repo = _FakeUserRepo([registered, guest])
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=repo)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    sio.get_session = AsyncMock(return_value={"user_id": "bob-1"})
+    created = await sio.handlers["/"]["create_room"](
+        "bob-sid",
+        {"nickname": "CustomNick", "name": "BobRoom"},
+    )
+    room = room_manager.get_room(created["roomId"])
+    assert room.players[created["playerId"]].nickname == "BobUser"
+    assert room.players[created["playerId"]].is_anonymous is False
+
+    sio.get_session = AsyncMock(return_value={"user_id": "guest-2"})
+    rejected = await sio.handlers["/"]["create_room"](
+        "guest-sid",
+        {"nickname": "BobUser", "name": "GuestRoom"},
+    )
+    assert rejected["ok"] is False
+    assert "already taken by a registered account" in rejected["error"]
+

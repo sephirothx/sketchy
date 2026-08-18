@@ -1,6 +1,8 @@
 import pytest
 from playwright.async_api import async_playwright
 
+from tests.e2e.guest_nickname import submit_guest_nickname
+
 BASE_URL = "http://localhost:8000"
 
 
@@ -55,8 +57,8 @@ async def test_settings_dialog_pen_cursor_scenario():
 
         try:
             await page.goto(BASE_URL)
-            await page.fill('input[placeholder="Your name"]', "SettingsTester")
             await page.click('button:has-text("Create room")')
+            await submit_guest_nickname(page, "SettingsTester")
             await page.click('button:has-text("Create room")')
 
             # Open Settings Modal
@@ -67,8 +69,9 @@ async def test_settings_dialog_pen_cursor_scenario():
             await page.wait_for_selector('.settings-modal-card')
             assert await page.is_visible('text=Settings')
 
-            # Choose a player name color in General settings.
-            await page.locator("#name-color-input").fill("#22aa66")
+            # Guests cannot customize name color; the control is hidden.
+            assert await page.locator("#name-color-input").count() == 0
+            assert await page.is_visible("text=Guest names stay gray")
 
             # Click Game tab
             await page.click('button[role="tab"]:has-text("Game")')
@@ -86,14 +89,12 @@ async def test_settings_dialog_pen_cursor_scenario():
             # Verify localStorage
             stored_cursor = await page.evaluate("() => localStorage.getItem('sketchy_pencursor')")
             assert stored_cursor == "circle"
-            stored_name_color = await page.evaluate("() => localStorage.getItem('sketchy_namecolor')")
-            assert stored_name_color == "#22aa66"
 
-            # Saving settings updates the shared room state without rejoining.
+            # Guest names stay gray in the waiting-room player list.
             await page.wait_for_function(
                 """() => {
                     const name = document.querySelector('.player-name .colored-player-name');
-                    return name && getComputedStyle(name).color === 'rgb(34, 170, 102)';
+                    return name && getComputedStyle(name).color === 'rgb(136, 136, 136)';
                 }"""
             )
 

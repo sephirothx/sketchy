@@ -209,13 +209,13 @@ class UpdateRoomSettingsPayload(RequestModel):
 
 
 class JoinRoomPayload(RequestModel):
-    reconnect_secret: str | None = Field(default=None, alias="reconnectSecret", max_length=MAX_IDENTIFIER_LENGTH)
     room_id: str | None = Field(default=None, alias="roomId", max_length=MAX_IDENTIFIER_LENGTH)
     code: str | None = Field(default=None, max_length=16)
     nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
     name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
     as_spectator: bool = Field(default=False, alias="asSpectator")
     soft: bool = False
+    reconnect_only: bool = Field(default=False, alias="reconnectOnly")
 
     @field_validator("nickname")
     @classmethod

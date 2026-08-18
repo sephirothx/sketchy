@@ -15,7 +15,6 @@ export interface RoomSession {
   roomId: string;
   code: string;
   playerId: string;
-  reconnectSecret: string;
 }
 
 export interface RoomEntrySnapshot {
@@ -24,12 +23,11 @@ export interface RoomEntrySnapshot {
 }
 
 export interface RoomEntryDependencies {
-  getReconnectSecret: (code: string) => string | null;
-  clearReconnectSecret: (code: string) => void;
+  hasActiveRoomSession: (code: string) => boolean;
+  clearSession: () => void;
   reconnect: (args: {
     code: string;
     nickname: string;
-    reconnectSecret: string;
   }) => Promise<AckResponse>;
   preview: (code: string) => Promise<RoomPreviewResponse>;
   join: (args: {
@@ -50,13 +48,11 @@ function sessionFrom(response: AckResponse): RoomSession | null {
     || !response.roomId
     || !response.code
     || !response.playerId
-    || !response.reconnectSecret
   ) return null;
   return {
     roomId: response.roomId,
     code: response.code,
     playerId: response.playerId,
-    reconnectSecret: response.reconnectSecret,
   };
 }
 
@@ -101,12 +97,10 @@ export class RoomEntryMachine {
     let notice: string | undefined;
 
     try {
-      const reconnectSecret = this.dependencies.getReconnectSecret(this.code);
-      if (reconnectSecret) {
+      if (this.dependencies.hasActiveRoomSession(this.code)) {
         const response = await this.dependencies.reconnect({
           code: this.code,
           nickname: this.snapshot.nicknameInput,
-          reconnectSecret,
         });
         if (!this.isCurrent(version)) return;
 
@@ -115,14 +109,14 @@ export class RoomEntryMachine {
           this.dependencies.acceptSession(session);
           return;
         }
-        if (!response.invalidReconnectSecret) {
+        if (!response.sessionExpired) {
           this.publish({
             ...this.snapshot,
             state: { status: "error", message: response.error || "Could not reconnect to this room" },
           });
           return;
         }
-        this.dependencies.clearReconnectSecret(this.code);
+        this.dependencies.clearSession();
         notice = "Your previous session expired. Choose how you would like to rejoin.";
       }
 

@@ -1,6 +1,8 @@
 import pytest
 from playwright.async_api import async_playwright
 
+from tests.e2e.guest_nickname import submit_guest_nickname
+
 
 BASE_URL = "http://localhost:8000"
 
@@ -21,8 +23,8 @@ async def test_public_room_cards_explain_status_rules_and_actions(
         observer = await observer_context.new_page()
         try:
             await host.goto(BASE_URL)
-            await host.fill('input[placeholder="Your name"]', "CardHost")
             await host.click('button:has-text("Create room")')
+            await submit_guest_nickname(host, "CardHost")
             await host.fill('input[placeholder="Leave blank for a random name!"]', "Room cards")
             await host.fill('label:has-text("Max players") input', "3")
             await host.fill('label:has-text("Rounds") input', "2")
@@ -36,7 +38,6 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             code = (await host.inner_text('.room-copy-button')).split("Code:")[1].strip()
 
             await visitor.goto(BASE_URL)
-            await visitor.fill('input[placeholder="Your name"]', "CardVisitor")
             card = visitor.locator('[data-testid="public-room-card"]', has_text="Room cards")
             await card.wait_for()
             room_search = visitor.locator(
@@ -62,9 +63,9 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             assert await card.get_by_text("2 custom words only", exact=True).is_visible()
 
             await player.goto(BASE_URL)
-            await player.fill('input[placeholder="Your name"]', "CardPlayer")
             await player.fill('input[placeholder="ABC123"]', code)
             await player.click('button:has-text("Join by code")')
+            await submit_guest_nickname(player, "CardPlayer")
             await player.wait_for_selector('[data-testid="waiting-room"]')
             await player.click('summary:has-text("Inspect 2 custom words")')
             word_list = player.locator('.waiting-custom-words-list')
@@ -95,16 +96,17 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             await card.get_by_text("In progress", exact=True).wait_for()
             assert await card.get_by_role("button", name="Join in progress", exact=True).is_visible()
             await card.get_by_role("button", name="Join in progress", exact=True).click()
+            await submit_guest_nickname(visitor, "CardVisitor")
             await visitor.wait_for_selector('.game-layout')
 
             await observer.goto(BASE_URL)
-            await observer.fill('input[placeholder="Your name"]', "CardObserver")
             observer_card = observer.locator('[data-testid="public-room-card"]', has_text="Room cards")
             await observer_card.wait_for()
             await observer_card.get_by_text("Full", exact=True).wait_for()
             assert await observer_card.get_by_role("button", name="Spectate", exact=True).is_visible()
             assert await observer_card.get_by_role("button", name="Join", exact=True).count() == 0
             await observer_card.get_by_role("button", name="Spectate", exact=True).click()
+            await submit_guest_nickname(observer, "CardObserver")
             await observer.wait_for_selector('.game-layout')
         finally:
             await host_context.close()

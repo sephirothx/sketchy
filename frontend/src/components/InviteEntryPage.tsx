@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRoomEntry } from "../hooks/useRoomEntry";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
+import { needsGuestNickname } from "../lib/guestNickname";
 import { useSettingsStore } from "../store/settingsStore";
 import type { RoomSummary } from "../types";
 import { SettingsIcon } from "./SettingsIcon";
+import { AccountMenu } from "./AccountMenu";
 
 const INVITE_LOADING_DELAY_MS = 250;
 
@@ -37,7 +39,8 @@ function DelayedInviteLoader() {
 export function InviteEntryPage({ code }: { code: string }) {
   const navigate = useNavigate();
   const openSettings = useSettingsStore((state) => state.openSettings);
-  const { state, nicknameInput, setNicknameInput, join } = useRoomEntry(code);
+  const { state, nicknameInput, setNicknameInput, join, isRegistered } = useRoomEntry(code);
+  const askForNickname = !isRegistered && needsGuestNickname(nicknameInput, null);
   const room = state.status === "preview" || state.status === "joining" ? state.room : null;
   const busy = state.status === "joining";
   const entryError = state.status === "preview" ? state.error : undefined;
@@ -47,10 +50,13 @@ export function InviteEntryPage({ code }: { code: string }) {
     <div className="invite-entry-page">
       <header className="invite-entry-header">
         <button type="button" className="invite-brand" onClick={() => navigate("/")}>Sketchy</button>
-        <button type="button" className="header-settings-button" onClick={openSettings} title="Game Settings">
-          <SettingsIcon size={16} />
-          <span>Settings</span>
-        </button>
+        <div className="header-actions">
+          <button type="button" className="header-settings-button" onClick={openSettings} title="Game Settings">
+            <SettingsIcon size={16} />
+            <span>Settings</span>
+          </button>
+          <AccountMenu />
+        </div>
       </header>
 
       {state.status === "error" ? (
@@ -105,26 +111,47 @@ export function InviteEntryPage({ code }: { code: string }) {
               if (!room.isFull) void join("player");
             }}
           >
-            <label htmlFor="invite-nickname">Your nickname</label>
-            {/* Search type + autocomplete=off suppress Android Chrome's unrelated autofill toolbar. */}
-            <input
-              id="invite-nickname"
-              name="sketchy-invite-name"
-              type="search"
-              inputMode="text"
-              value={nicknameInput}
-              onChange={(event) => setNicknameInput(event.target.value)}
-              maxLength={MAX_NICKNAME_LENGTH}
-              placeholder="Your name"
-              autoComplete="off"
-              autoCapitalize="words"
-              spellCheck={false}
-              autoCorrect="off"
-              enterKeyHint="go"
-              autoFocus
-              disabled={busy}
-              aria-describedby={entryError ? "invite-entry-error" : undefined}
-            />
+            {isRegistered ? (
+              <>
+                <label htmlFor="invite-nickname">Playing as</label>
+                <input
+                  id="invite-nickname"
+                  name="sketchy-invite-name"
+                  type="search"
+                  inputMode="text"
+                  value={nicknameInput}
+                  maxLength={MAX_NICKNAME_LENGTH}
+                  autoComplete="off"
+                  disabled
+                  readOnly
+                />
+              </>
+            ) : askForNickname ? (
+              <>
+                <label htmlFor="invite-nickname">Your nickname</label>
+                <input
+                  id="invite-nickname"
+                  name="sketchy-invite-name"
+                  type="search"
+                  inputMode="text"
+                  value={nicknameInput}
+                  onChange={(event) => setNicknameInput(event.target.value)}
+                  maxLength={MAX_NICKNAME_LENGTH}
+                  placeholder="Your name"
+                  autoComplete="off"
+                  autoCapitalize="words"
+                  spellCheck={false}
+                  autoCorrect="off"
+                  enterKeyHint="go"
+                  autoFocus
+                  disabled={busy}
+                  aria-describedby={entryError ? "invite-entry-error" : undefined}
+                />
+                <p className="lobby-nickname-hint">
+                  Play now as a guest. Create an account later to claim this name and keep your stats.
+                </p>
+              </>
+            ) : null}
             {entryError && <p id="invite-entry-error" className="invite-form-error" role="alert">{entryError}</p>}
             <div className="invite-actions">
               <button type="submit" className="invite-primary-button" disabled={busy || room.isFull}>

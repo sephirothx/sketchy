@@ -13,16 +13,53 @@ import type {
   ScoringMode,
 } from "../types";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
-import {
-  clearReconnectSecret,
-  readReconnectSecret,
-  writeReconnectSecret,
-} from "../lib/sessionCredentials";
+
+const ACTIVE_ROOM_KEY = "sketchy_active_room";
+
+interface ActiveRoomSession {
+  roomId: string;
+  code: string;
+  playerId: string;
+}
+
+function readActiveRoomSession(): ActiveRoomSession | null {
+  try {
+    const raw = sessionStorage.getItem(ACTIVE_ROOM_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ActiveRoomSession>;
+    if (
+      parsed
+      && typeof parsed.roomId === "string"
+      && typeof parsed.code === "string"
+      && typeof parsed.playerId === "string"
+    ) {
+      return { roomId: parsed.roomId, code: parsed.code, playerId: parsed.playerId };
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return null;
+}
+
+function writeActiveRoomSession(session: ActiveRoomSession) {
+  try {
+    sessionStorage.setItem(ACTIVE_ROOM_KEY, JSON.stringify(session));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearActiveRoomSession() {
+  try {
+    sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 interface GameStore {
   nickname: string;
   playerId: string | null;
-  reconnectSecret: string | null;
   roomId: string | null;
   code: string | null;
   name: string;
@@ -67,10 +104,9 @@ interface GameStore {
     roomId: string;
     code: string;
     playerId: string;
-    reconnectSecret: string;
   }) => void;
-  getStoredReconnectSecret: (code: string) => string | null;
-  clearStoredReconnectSecret: (code: string) => void;
+  hasActiveRoomSession: (code: string) => boolean;
+  clearSession: () => void;
   setRoomState: (payload: RoomStatePayload) => void;
   addMessage: (message: ChatMessage) => void;
   applyGuessPoints: (playerId: string, points: number) => void;
@@ -124,12 +160,13 @@ const initialGameFields = {
   drawingRecap: [] as DrawingRecapMetadata[],
 };
 
-export const useGameStore = create<GameStore>((set) => ({
+const activeSession = readActiveRoomSession();
+
+export const useGameStore = create<GameStore>((set, get) => ({
   nickname: (localStorage.getItem("sketchy_nickname") || "").slice(0, MAX_NICKNAME_LENGTH),
-  playerId: null,
-  reconnectSecret: null,
-  roomId: null,
-  code: null,
+  playerId: activeSession?.playerId ?? null,
+  roomId: activeSession?.roomId ?? null,
+  code: activeSession?.code ?? null,
   name: "",
   isPublic: true,
   maxPlayers: 8,
@@ -155,14 +192,21 @@ export const useGameStore = create<GameStore>((set) => ({
     localStorage.setItem("sketchy_nickname", next);
     set({ nickname: next });
   },
-  setSession: ({ roomId, code, playerId, reconnectSecret }) => {
-    writeReconnectSecret(localStorage, code, reconnectSecret);
-    set({ roomId, code, playerId, reconnectSecret });
+  setSession: ({ roomId, code, playerId }) => {
+    writeActiveRoomSession({ roomId, code, playerId });
+    set({ roomId, code, playerId });
   },
-  getStoredReconnectSecret: (code) => readReconnectSecret(localStorage, code),
-  clearStoredReconnectSecret: (code) => {
-    clearReconnectSecret(localStorage, code);
-    set({ playerId: null, reconnectSecret: null, roomId: null, code: null });
+  hasActiveRoomSession: (code) => {
+    const session = get();
+    if (session.playerId && session.roomId && session.code?.toUpperCase() === code.toUpperCase()) {
+      return true;
+    }
+    const stored = readActiveRoomSession();
+    return Boolean(stored && stored.code.toUpperCase() === code.toUpperCase());
+  },
+  clearSession: () => {
+    clearActiveRoomSession();
+    set({ playerId: null, roomId: null, code: null });
   },
   setRoomState: (payload) =>
     set((state) => ({
@@ -252,15 +296,17 @@ export const useGameStore = create<GameStore>((set) => ({
   }),
   dismissGameEnd: () => set({ phase: "idle" }),
   setError: (error) => set({ error }),
-  reset: () => set({
-    playerId: null,
-    reconnectSecret: null,
-    roomId: null,
-    code: null,
-    players: [],
-    moderation: { eligibleVoterIds: [], requiredVotes: 1 },
-    restartVote: null,
-    restartVoteCooldownUntil: 0,
-    ...initialGameFields,
-  }),
+  reset: () => {
+    clearActiveRoomSession();
+    set({
+      playerId: null,
+      roomId: null,
+      code: null,
+      players: [],
+      moderation: { eligibleVoterIds: [], requiredVotes: 1 },
+      restartVote: null,
+      restartVoteCooldownUntil: 0,
+      ...initialGameFields,
+    });
+  },
 }));

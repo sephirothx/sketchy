@@ -3,6 +3,8 @@ import asyncio
 import pytest
 from playwright.async_api import async_playwright
 
+from tests.e2e.guest_nickname import submit_guest_nickname
+
 
 BASE_URL = "http://localhost:8000"
 
@@ -36,9 +38,9 @@ async def test_room_list_failure_retry_and_connection_banner():
 
             await context.set_offline(True)
             await page.wait_for_selector('.connection-status-banner.offline:has-text("You’re offline")')
-            await page.fill('input[placeholder="Your name"]', "OfflinePlayer")
             await page.fill('input[placeholder="ABC123"]', "ABC123")
             await page.click('button:has-text("Join by code")')
+            await submit_guest_nickname(page, "OfflinePlayer")
             await page.wait_for_selector('.lobby-action-error:has-text("Connection lost")')
             assert await page.is_enabled('button:has-text("Join by code")')
             await context.set_offline(False)
@@ -61,16 +63,16 @@ async def test_mid_session_socket_reconnect_rejoins_room():
 
         try:
             await host.goto(BASE_URL)
-            await host.fill('input[placeholder="Your name"]', "HostReconnect")
             await host.click('button:has-text("Create room")')
+            await submit_guest_nickname(host, "HostReconnect")
             await host.click('button:has-text("Create room")')
             await host.wait_for_selector(".room-copy-button")
             code = (await host.inner_text(".room-copy-button")).split("Code:")[1].strip()
 
             await guest.goto(BASE_URL)
-            await guest.fill('input[placeholder="Your name"]', "GuestReconnect")
             await guest.fill('input[placeholder="ABC123"]', code)
             await guest.click('button:has-text("Join by code")')
+            await submit_guest_nickname(guest, "GuestReconnect")
             await guest.wait_for_selector(".room-copy-button")
 
             await context2.set_offline(True)

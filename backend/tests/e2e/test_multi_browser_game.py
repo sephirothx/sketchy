@@ -1,6 +1,8 @@
 import pytest
 from playwright.async_api import async_playwright
 
+from tests.e2e.guest_nickname import submit_guest_nickname
+
 BASE_URL = "http://localhost:8000"
 
 @pytest.mark.asyncio
@@ -28,8 +30,8 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
         try:
             # Step 1: Host creates a room
             await page1.goto(BASE_URL)
-            await page1.fill('input[placeholder="Your name"]', "HostAlice")
             await page1.click('button:has-text("Create room")')
+            await submit_guest_nickname(page1, "HostAlice")
             await page1.click('button:has-text("Create room")')
 
             # Wait for navigation to room waiting panel
@@ -40,9 +42,9 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
 
             # Step 2: Player joins using room code from Browser 2 (Firefox)
             await page2.goto(BASE_URL)
-            await page2.fill('input[placeholder="Your name"]', "BobGuesser")
             await page2.fill('input[placeholder="ABC123"]', code)
             await page2.click('button:has-text("Join by code")')
+            await submit_guest_nickname(page2, "BobGuesser")
 
             # Wait for Browser 2 to enter waiting panel
             await page2.wait_for_selector('.room-copy-button')

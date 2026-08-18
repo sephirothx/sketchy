@@ -21,15 +21,20 @@ import {
 } from "../lib/roomSetup";
 import { createCustomWordsState, customWordsReducer } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { GuestNicknameDialog } from "../components/GuestNicknameDialog";
+import { needsGuestNickname, resolvedPlayName } from "../lib/guestNickname";
 import { useGameStore } from "../store/gameStore";
+import { useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, HintMode, ScoringMode } from "../types";
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
   const nickname = useGameStore((state) => state.nickname);
+  const setNickname = useGameStore((state) => state.setNickname);
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
+  const user = useAuthStore((state) => state.user);
   const [roomName, setRoomName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
@@ -47,11 +52,12 @@ export function CreateRoomPage() {
   const [hideMaskedPrompt, setHideMaskedPrompt] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [askingName, setAskingName] = useState(false);
 
   async function handleCreate() {
-    const trimmedNickname = nickname.trim();
+    const trimmedNickname = resolvedPlayName(nickname, user);
     if (!trimmedNickname) {
-      navigate("/");
+      setAskingName(true);
       return;
     }
     if (customWords.analysis.hasErrors) {
@@ -62,12 +68,12 @@ export function CreateRoomPage() {
     setError(null);
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
-        nickname: trimmedNickname, nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
+        nickname: trimmedNickname, nameColor: !user || user.isAnonymous ? undefined : nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customWords: customWords.value.trim(), customWordsOnly: customWords.only, hintMode, scoringMode,
         spectatorsSeeSolution, hideMaskedPrompt, wordListSlugs,
       });
-      if (response.ok && response.roomId && response.code && response.playerId && response.reconnectSecret) {
-        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId, reconnectSecret: response.reconnectSecret });
+      if (response.ok && response.roomId && response.code && response.playerId) {
+        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId });
         navigate(`/room/${response.code}`);
         return;
       }
@@ -86,6 +92,18 @@ export function CreateRoomPage() {
   }
 
   return <main className="create-room-page">
+    {askingName && needsGuestNickname(nickname, user) && (
+      <GuestNicknameDialog
+        onCancel={() => {
+          setAskingName(false);
+          navigate("/");
+        }}
+        onSubmit={(name) => {
+          setNickname(name);
+          setAskingName(false);
+        }}
+      />
+    )}
     <button type="button" className="back-link" onClick={() => navigate("/")}>← Back to lobby</button>
     <section className="create-room-card">
       <div className="create-room-heading"><p>Room setup</p><h1>Create a room</h1></div>

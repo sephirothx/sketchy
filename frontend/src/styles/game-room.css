@@ -221,7 +221,8 @@
   .game-header-leave-button,
   .header-settings-button,
   .game-header-save-button,
-  .game-header-players-button {
+  .game-header-players-button,
+  .account-menu-button {
     padding: 8px;
     min-width: 40px;
     min-height: 40px;

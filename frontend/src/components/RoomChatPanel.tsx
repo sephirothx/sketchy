@@ -5,6 +5,7 @@ import { chatAnnouncement } from "../lib/chatAnnouncements";
 import { recordRender } from "../lib/renderDiagnostics";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
+import { ColoredPlayerName } from "./ColoredPlayerName";
 
 interface RoomChatPanelProps {
   messages: ChatMessage[];
@@ -285,16 +286,20 @@ export function RoomChatPanel({
                   message.text
                 ) : (
                   <>
-                    <strong
-                      className="colored-player-name"
-                      style={{
-                        color: message.nameColor
+                    <ColoredPlayerName
+                      as="strong"
+                      nickname={`${message.nickname}: `}
+                      nameColor={
+                        message.nameColor
                           ?? players.find((player) => player.playerId === message.playerId)
-                            ?.nameColor,
-                      }}
-                    >
-                      {message.nickname}:{" "}
-                    </strong>
+                            ?.nameColor
+                      }
+                      isAnonymous={
+                        message.isAnonymous
+                          ?? players.find((player) => player.playerId === message.playerId)
+                            ?.isAnonymous
+                      }
+                    />
                     {message.text}
                   </>
                 )}

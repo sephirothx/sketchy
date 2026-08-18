@@ -47,6 +47,8 @@ async def test_user_repository_crud_and_stats():
         assert anon.display_name == "Bob"
         assert anon.is_anonymous is True
         assert anon.username is None
+        assert anon.created_at is not None
+        assert anon.last_login_at is not None
 
         # 2. Get by ID (no password hash attribute in UserData)
         fetched = await repo.get_by_id(anon.id)
@@ -58,6 +60,12 @@ async def test_user_repository_crud_and_stats():
         claimed = await repo.claim_account(anon.id, "bob123", "hashed_pw")
         assert claimed.username == "bob123"
         assert claimed.is_anonymous is False
+        assert claimed.created_at == anon.created_at
+
+        later = await repo.record_login(anon.id)
+        assert later is not None
+        assert later.last_login_at >= claimed.last_login_at
+        assert later.created_at == anon.created_at
 
         # 4. Cannot claim an already claimed account
         with pytest.raises(AccountAlreadyClaimedError):
