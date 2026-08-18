@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { emitWithAck, SERVER_URL, socketRequestErrorMessage } from "../lib/socket";
+import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { PublicRoomCard } from "../components/PublicRoomCard";
@@ -103,7 +103,7 @@ export function LobbyBrowserPage() {
       activeController = controller;
       activeTimeout = timeout;
       try {
-        const res = await fetch(`${SERVER_URL}/api/rooms`, { signal: controller.signal });
+        const res = await fetch("/api/rooms", { signal: controller.signal });
         if (!res.ok) throw new Error(`Room list request failed with ${res.status}`);
         const data: unknown = await res.json();
         if (!Array.isArray(data)) throw new Error("Invalid room list response");

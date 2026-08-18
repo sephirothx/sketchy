@@ -59,6 +59,16 @@ async def test_mid_session_socket_reconnect_rejoins_room():
         host = await context1.new_page()
         guest = await context2.new_page()
 
+        # Proxy the guest's Socket.IO transport so the test can sever it on
+        # demand; each reconnect attempt routes through here too.
+        live_sockets = []
+
+        async def route_socket(ws):
+            ws.connect_to_server()
+            live_sockets.append(ws)
+
+        await guest.route_web_socket("**/socket.io/**", route_socket)
+
         try:
             await host.goto(BASE_URL)
             await host.fill('input[placeholder="Your name"]', "HostReconnect")
@@ -73,11 +83,22 @@ async def test_mid_session_socket_reconnect_rejoins_room():
             await guest.click('button:has-text("Join by code")')
             await guest.wait_for_selector(".room-copy-button")
 
-            await context2.set_offline(True)
+            # Drop the transport at the socket itself rather than via offline
+            # emulation: the frontend is same-origin with the backend, and
+            # Chromium keeps a same-origin WebSocket alive across an offline
+            # toggle, so toggling would not actually sever anything here.
+            for _ in range(50):
+                if live_sockets:
+                    break
+                await asyncio.sleep(0.1)
+            assert live_sockets, (
+                "guest never opened a Socket.IO WebSocket, so there is no "
+                "transport to sever - it may have fallen back to polling"
+            )
+            await live_sockets[-1].close()
             await guest.wait_for_selector(
                 '.connection-status-banner.offline, .connection-status-banner.reconnecting'
             )
-            await context2.set_offline(False)
             await guest.wait_for_selector(".connection-status-banner", state="hidden", timeout=15000)
 
             await host.wait_for_selector("text=GuestReconnect reconnected", timeout=10000)
