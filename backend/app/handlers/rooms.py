@@ -36,18 +36,43 @@ async def _resolve_user_and_nickname(
         except Exception:
             pass
 
+    clean_nickname = requested_nickname.strip() or "Player"
+    existing = None
+    if ctx.user_repo:
+        try:
+            existing = await ctx.user_repo.get_by_username(clean_nickname)
+        except Exception:
+            pass
+
+    # If the user resolved from socket session is registered:
     if user is not None and not user.is_anonymous:
         effective_nickname = user.username or user.display_name or "Player"
         return (user.id, effective_nickname, False, None)
 
-    clean_nickname = requested_nickname.strip() or "Player"
-    if ctx.user_repo:
-        try:
-            existing = await ctx.user_repo.get_by_username(clean_nickname)
-            if existing is not None and not existing.is_anonymous:
-                return ("", "", True, f"The nickname '{clean_nickname}' is already taken by a registered account")
-        except Exception:
-            pass
+    # If the requested nickname matches a registered account, verify ownership via cookie token:
+    if existing is not None and not existing.is_anonymous:
+        if user_id == existing.id or (user is not None and user.id == existing.id):
+            return (existing.id, clean_nickname, False, None)
+        if sid:
+            try:
+                environ = ctx.sio.get_environ(sid)
+                if environ:
+                    from app.handlers.connection import extract_jwt_cookie
+                    token = extract_jwt_cookie(environ)
+                    if token:
+                        jwt_secret = ctx.jwt_secret_getter() if ctx.jwt_secret_getter else ""
+                        if not jwt_secret:
+                            from app.db import async_session_factory
+                            jwt_secret = await get_or_create_jwt_secret(async_session_factory)
+                        token_user_id = decode_token(token, jwt_secret)
+                        if token_user_id == existing.id:
+                            if session is not None:
+                                session["user_id"] = existing.id
+                                await ctx.sio.save_session(sid, session)
+                            return (existing.id, clean_nickname, False, None)
+            except Exception:
+                pass
+        return ("", "", True, f"The nickname '{clean_nickname}' is already taken by a registered account")
 
     if user is None and ctx.user_repo:
         try:
@@ -59,7 +84,7 @@ async def _resolve_user_and_nickname(
         except Exception:
             pass
 
-    return (user_id or sid, clean_nickname, True, None)
+    return (user.id if user else (user_id or sid), clean_nickname, True, None)
 
 
 async def create_room(ctx: HandlerContext, sid, data):
@@ -185,8 +210,10 @@ async def join_room(ctx: HandlerContext, sid, data):
     # Checked before the reconnect branch below: if this exact socket already has a live session in this room
     already_joined = await ctx.game_flow._existing_player_for_sid(sid, room.id)
     if already_joined:
+        if not already_joined.connected:
+            await ctx.game_flow._join_socket_room(sid, room, already_joined, is_reconnect=True)
+            return ctx.game_flow._session_ack(room, already_joined)
         already_joined.sid = sid
-        already_joined.connected = True
         ctx.timers.cancel_disconnect_timer(already_joined.id)
         # Soft checks (heartbeat/visibility) must not dump full canvas history.
         await ctx.game_flow._sync_player_view(
@@ -202,6 +229,11 @@ async def join_room(ctx: HandlerContext, sid, data):
         return {"ok": False, "error": error}
 
     player = ctx.room_manager.get_player_by_user_id(room, user_id)
+    if not player and is_anonymous:
+        for p in room.player_list():
+            if p.nickname == effective_nickname and not p.connected:
+                player = p
+                break
     if player:
         player.nickname = effective_nickname
         if not is_anonymous and name_color:

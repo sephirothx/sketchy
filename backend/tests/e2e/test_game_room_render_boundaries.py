@@ -74,6 +74,9 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
 
             await observer.evaluate(RESET_COUNTS)
             await drawer.locator(".word-choices button").first.click()
+            await observer.wait_for_function(
+                "Boolean(window.__SKETCHY_RENDER_DIAGNOSTICS__?.counts.gameplay > 0)"
+            )
             for page in pages:
                 await page.wait_for_selector("canvas.drawing-canvas")
             phase_counts = await observer.evaluate(READ_COUNTS)

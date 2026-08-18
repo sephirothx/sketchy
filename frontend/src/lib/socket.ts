@@ -1,10 +1,11 @@
 import { io, Socket } from "socket.io-client";
 import type { AckResponse } from "../types";
 
-export const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:8000";
+export const SERVER_URL = import.meta.env.VITE_SERVER_URL || undefined;
 
 export const socket: Socket = io(SERVER_URL, {
   autoConnect: true,
+  withCredentials: true,
   transports: ["websocket", "polling"],
 });
 

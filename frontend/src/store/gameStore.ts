@@ -116,11 +116,32 @@ const initialGameFields = {
   drawingRecap: [] as DrawingRecapMetadata[],
 };
 
+function readActiveRoomSession(): { roomId: string; code: string; playerId: string } | null {
+  try {
+    const raw = sessionStorage.getItem("sketchy_active_room");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed.roomId === "string" &&
+      typeof parsed.code === "string" &&
+      typeof parsed.playerId === "string"
+    ) {
+      return parsed;
+    }
+  } catch {
+    // Ignore storage/parse errors
+  }
+  return null;
+}
+
+const activeSession = readActiveRoomSession();
+
 export const useGameStore = create<GameStore>((set) => ({
   nickname: (localStorage.getItem("sketchy_nickname") || "").slice(0, MAX_NICKNAME_LENGTH),
-  playerId: null,
-  roomId: null,
-  code: null,
+  playerId: activeSession?.playerId ?? null,
+  roomId: activeSession?.roomId ?? null,
+  code: activeSession?.code ?? null,
   name: "",
   isPublic: true,
   maxPlayers: 8,
@@ -147,9 +168,19 @@ export const useGameStore = create<GameStore>((set) => ({
     set({ nickname: next });
   },
   setSession: ({ roomId, code, playerId }) => {
+    try {
+      sessionStorage.setItem("sketchy_active_room", JSON.stringify({ roomId, code, playerId }));
+    } catch {
+      // Ignore storage errors
+    }
     set({ roomId, code, playerId });
   },
   clearSession: () => {
+    try {
+      sessionStorage.removeItem("sketchy_active_room");
+    } catch {
+      // Ignore storage errors
+    }
     set({ playerId: null, roomId: null, code: null });
   },
   setRoomState: (payload) =>

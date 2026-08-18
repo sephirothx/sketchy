@@ -16,9 +16,23 @@ def extract_jwt_cookie(environ: dict) -> str | None:
     if not isinstance(environ, dict):
         return None
     raw_cookie = environ.get("HTTP_COOKIE")
-    if not raw_cookie and "asgi.scope" in environ:
-        headers = dict(environ["asgi.scope"].get("headers", []))
-        raw_cookie = headers.get(b"cookie", b"").decode("utf-8", errors="ignore")
+    if not raw_cookie:
+        scope = environ.get("asgi.scope") if isinstance(environ.get("asgi.scope"), dict) else environ
+        headers = scope.get("headers", [])
+        if isinstance(headers, (list, tuple)):
+            for item in headers:
+                if isinstance(item, (list, tuple)) and len(item) == 2:
+                    name, val = item
+                    name_str = name.decode("latin1").lower() if isinstance(name, bytes) else str(name).lower()
+                    if name_str == "cookie":
+                        raw_cookie = val.decode("latin1") if isinstance(val, bytes) else str(val)
+                        break
+        elif isinstance(headers, dict):
+            for k, v in headers.items():
+                k_str = k.decode("latin1").lower() if isinstance(k, bytes) else str(k).lower()
+                if k_str == "cookie":
+                    raw_cookie = v.decode("latin1") if isinstance(v, bytes) else str(v)
+                    break
     if not raw_cookie:
         return None
     for part in raw_cookie.split(";"):
@@ -32,21 +46,18 @@ def extract_jwt_cookie(environ: dict) -> str | None:
 async def connect(ctx: HandlerContext, sid, environ, auth):
     logger.info("socket connected: %s", sid)
     token = extract_jwt_cookie(environ)
+    if not token and auth and isinstance(auth, dict):
+        token = auth.get("token") or auth.get("jwt")
     user_id = None
     if token:
         try:
-            from app.db import async_session_factory
-            jwt_secret = await get_or_create_jwt_secret(async_session_factory)
+            jwt_secret = ctx.jwt_secret_getter() if ctx.jwt_secret_getter else ""
+            if not jwt_secret:
+                from app.db import async_session_factory
+                jwt_secret = await get_or_create_jwt_secret(async_session_factory)
             user_id = decode_token(token, jwt_secret)
         except Exception:
             logger.exception("Error decoding JWT on socket connect")
-
-    if not user_id and ctx.user_repo:
-        try:
-            guest = await ctx.user_repo.create_anonymous(display_name="Guest")
-            user_id = guest.id
-        except Exception:
-            logger.exception("Failed to auto-provision anonymous user on socket connect")
 
     await ctx.sio.save_session(sid, {"user_id": user_id})
 
@@ -102,6 +113,30 @@ async def disconnect(ctx: HandlerContext, sid):
     )
 
 
+async def auth_sync(ctx: HandlerContext, sid, data=None):
+    token = None
+    if isinstance(data, dict):
+        token = data.get("token") or data.get("jwt")
+    if not token:
+        environ = ctx.sio.get_environ(sid)
+        token = extract_jwt_cookie(environ)
+    user_id = None
+    if token:
+        try:
+            jwt_secret = ctx.jwt_secret_getter() if ctx.jwt_secret_getter else ""
+            if not jwt_secret:
+                from app.db import async_session_factory
+                jwt_secret = await get_or_create_jwt_secret(async_session_factory)
+            user_id = decode_token(token, jwt_secret)
+        except Exception:
+            pass
+    if user_id:
+        session = await ctx.sio.get_session(sid) or {}
+        session["user_id"] = user_id
+        await ctx.sio.save_session(sid, session)
+
+
 def register(ctx: HandlerContext) -> None:
     ctx.sio.on("connect", handler=partial(connect, ctx))
     ctx.sio.on("disconnect", handler=partial(disconnect, ctx))
+    ctx.sio.on("auth_sync", handler=partial(auth_sync, ctx))

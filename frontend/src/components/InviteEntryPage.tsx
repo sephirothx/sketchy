@@ -73,8 +73,8 @@ export function InviteEntryPage({ code }: { code: string }) {
       {room && (
         <main className="invite-card">
           <div className="invite-pill-row">
-            <span className="invite-pill">{room.isPublic ? "Public room" : "Private room"}</span>
-            <span className="invite-pill">{room.playerCount}/{room.maxPlayers} players</span>
+            <span className="invite-pill">{room.isPublic ? "Public room" : "Private invite"}</span>
+            <span className="invite-pill">{room.playerCount}/{room.maxPlayers}</span>
             <span className="invite-pill">{hintModeLabel(room)}</span>
           </div>
 

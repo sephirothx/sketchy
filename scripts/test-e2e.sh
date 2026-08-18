@@ -48,7 +48,7 @@ fi
 # Ensure frontend is built against the local E2E server (overrides
 # frontend/.env.production.local, which may point at a Cloudflare tunnel).
 log "Building frontend for E2E tests"
-(cd "$FRONTEND_DIR" && VITE_SERVER_URL="http://127.0.0.1:$PORT" VITE_RENDER_DIAGNOSTICS="true" npm run build --silent)
+(cd "$FRONTEND_DIR" && VITE_RENDER_DIAGNOSTICS="true" npm run build --silent)
 
 # Start background server
 SERVER_LOG="$(mktemp "${TMPDIR:-/tmp}/sketchy-e2e-server.XXXXXX")"
@@ -90,4 +90,8 @@ if [[ "$server_healthy" == false ]]; then
 fi
 
 log "Running Playwright Multi-Browser E2E Tests"
-(cd "$BACKEND_DIR" && .venv/bin/pytest tests/e2e -v -n 2 --dist=loadfile)
+if [[ $# -gt 0 ]]; then
+  (cd "$BACKEND_DIR" && .venv/bin/pytest -v "$@")
+else
+  (cd "$BACKEND_DIR" && .venv/bin/pytest tests/e2e -v -n 2 --dist=loadfile)
+fi

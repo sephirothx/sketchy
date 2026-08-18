@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import socketio
 
@@ -28,4 +28,5 @@ class HandlerContext:
     user_repo: UserRepository | None = None
     game_history_repo: GameHistoryRepository | None = None
     word_list_repo: WordListRepository | None = None
+    jwt_secret_getter: Any = None
     game_flow: GameFlowService = field(init=False)

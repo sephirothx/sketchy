@@ -328,7 +328,12 @@ class GameFlowService:
             superseded_sid = player.sid if player.sid != sid else None
             player.sid = sid
             player.connected = True
-            await sio.save_session(sid, {"room_id": room.id, "player_id": player.id})
+            existing_session = await sio.get_session(sid) or {}
+            existing_session["room_id"] = room.id
+            existing_session["player_id"] = player.id
+            if player.user_id:
+                existing_session["user_id"] = player.user_id
+            await sio.save_session(sid, existing_session)
             await sio.enter_room(sid, room.id)
             if superseded_sid:
                 await sio.disconnect(superseded_sid)

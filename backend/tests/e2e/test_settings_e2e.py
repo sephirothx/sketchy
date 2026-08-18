@@ -1,3 +1,4 @@
+import uuid
 import pytest
 from playwright.async_api import async_playwright
 
@@ -54,10 +55,19 @@ async def test_settings_dialog_pen_cursor_scenario():
         page = await context.new_page()
 
         try:
+            unique_user = f"SetTester_{uuid.uuid4().hex[:6]}"
             await page.goto(BASE_URL)
-            await page.fill('input[placeholder="Your name"]', "SettingsTester")
+            # Register account to unlock name color customization
+            await page.click('#account-menu-button')
+            await page.fill('#reg-username', unique_user)
+            await page.fill('#reg-password', 'password123')
+            await page.click('button[type="submit"].account-submit-btn')
+            await page.wait_for_selector('#account-dialog', state='hidden')
+
             await page.click('button:has-text("Create room")')
-            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector('.create-room-submit')
+            await page.click('.create-room-submit')
+            await page.wait_for_selector('.room-copy-button')
 
             # Open Settings Modal
             await page.wait_for_selector('button.header-settings-button')

@@ -73,15 +73,16 @@ game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
 word_list_repo = SqlAlchemyWordListRepository(async_session_factory)
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+_jwt_secret: str = ""
+
 handler_context = register_all_handlers(
     sio,
     room_manager,
     user_repo=user_repo,
     game_history_repo=game_history_repo,
     word_list_repo=word_list_repo,
+    jwt_secret_getter=lambda: _jwt_secret,
 )
-
-_jwt_secret: str = ""
 
 
 @asynccontextmanager
@@ -195,6 +196,7 @@ async def register_user(req: RegisterRequest, request: Request, response: Respon
         "avatarUrl": user.avatar_url,
         "isAnonymous": user.is_anonymous,
         "createdAt": user.created_at.isoformat() if user.created_at else "",
+        "token": token,
     }
 
 
@@ -215,6 +217,7 @@ async def login_user(req: LoginRequest, response: Response):
         "avatarUrl": user.avatar_url,
         "isAnonymous": user.is_anonymous,
         "createdAt": user.created_at.isoformat() if user.created_at else "",
+        "token": token,
     }
 
 
@@ -225,6 +228,7 @@ async def logout_user(response: Response):
     set_auth_cookie(response, token)
     return {
         "ok": True,
+        "token": token,
         "user": {
             "id": guest.id,
             "username": guest.username,

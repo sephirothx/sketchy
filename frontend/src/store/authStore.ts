@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { socket } from "../lib/socket";
 import type { User } from "../types";
 
 interface AuthState {
@@ -56,6 +57,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         return { ok: false, error: errorMsg };
       }
       set({ user: data, isLoading: false, error: null });
+      if (data.token) {
+        socket.auth = { token: data.token };
+      }
+      if (socket.connected) {
+        socket.emit("auth_sync", { token: data.token });
+      }
       return { ok: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Registration failed";
@@ -80,6 +87,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         return { ok: false, error: errorMsg };
       }
       set({ user: data, isLoading: false, error: null });
+      if (data.token) {
+        socket.auth = { token: data.token };
+      }
+      if (socket.connected) {
+        socket.emit("auth_sync", { token: data.token });
+      }
       return { ok: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Login failed";
@@ -98,6 +111,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (response.ok) {
         const data = await response.json();
         set({ user: data.user, isLoading: false, error: null });
+        if (data.token) {
+          socket.auth = { token: data.token };
+        }
+        if (socket.connected) {
+          socket.emit("auth_sync", { token: data.token });
+        }
       } else {
         set({ user: null, isLoading: false });
       }

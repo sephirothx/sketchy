@@ -143,3 +143,32 @@ async def test_registered_user_nickname_and_guest_collision_rejection():
             {"nickname": f"Guest_{uuid.uuid4().hex[:4]}", "name": "GuestRoom2"},
         )
         assert guest_ok_res["ok"] is True
+
+
+def test_extract_jwt_cookie():
+    from app.handlers.connection import extract_jwt_cookie
+    # ASGI scope headers
+    environ_asgi = {
+        "asgi.scope": {
+            "headers": [
+                (b"host", b"localhost:8000"),
+                (b"cookie", b"other=123; sketchy_session=my_token_abc; foo=bar"),
+            ]
+        }
+    }
+    assert extract_jwt_cookie(environ_asgi) == "my_token_abc"
+
+    # Direct headers dict
+    environ_direct = {
+        "headers": [(b"cookie", b"sketchy_session=token_direct")]
+    }
+    assert extract_jwt_cookie(environ_direct) == "token_direct"
+
+    # WSGI HTTP_COOKIE
+    environ_wsgi = {
+        "HTTP_COOKIE": "sketchy_session=token_wsgi"
+    }
+    assert extract_jwt_cookie(environ_wsgi) == "token_wsgi"
+
+    # Absent
+    assert extract_jwt_cookie({}) is None
