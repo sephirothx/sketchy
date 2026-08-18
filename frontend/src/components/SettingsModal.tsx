@@ -12,6 +12,7 @@ import {
   useSettingsStore,
 } from "../store/settingsStore";
 import { socket } from "../lib/socket";
+import { useAuthStore } from "../store/authStore";
 
 type SettingsTab = "general" | "game" | "shortcuts";
 
@@ -41,6 +42,7 @@ function formatKey(key: string): string {
 function SettingsModalContent() {
   const { closeSettings, keyBindings, penCursor, theme, confettiEffects, soundEffects, volume, nameColor, setAllSettings } =
     useSettingsStore();
+  const isGuest = useAuthStore((s) => !s.user || s.user.isAnonymous);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
@@ -189,24 +191,30 @@ function SettingsModalContent() {
                 <div className="settings-labeled-field name-color-setting">
                   <span className="settings-labeled-field-label">
                     Player name color
-                    <FieldHint hint="This color is visible to everyone in rooms you join." />
+                    <FieldHint hint={isGuest ? "Create an account to customize your name color." : "This color is visible to everyone in rooms you join."} />
                   </span>
                   <div className="name-color-controls">
                     <input
                       id="name-color-input"
                       type="color"
-                      value={draftNameColor}
+                      disabled={isGuest}
+                      value={isGuest ? "#888888" : draftNameColor}
                       onChange={(event) => setDraftNameColor(event.target.value)}
                       aria-label="Player name color"
+                      style={isGuest ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                     />
-                    <strong style={{ color: draftNameColor }}>Your colored name</strong>
-                    <button
-                      type="button"
-                      className="name-color-randomize"
-                      onClick={() => setDraftNameColor(randomNameColor(draftNameColor))}
-                    >
-                      Randomize
-                    </button>
+                    <strong style={{ color: isGuest ? "#888888" : draftNameColor, fontStyle: isGuest ? "italic" : "normal" }}>
+                      {isGuest ? "Guest (locked to gray)" : "Your colored name"}
+                    </strong>
+                    {!isGuest && (
+                      <button
+                        type="button"
+                        className="name-color-randomize"
+                        onClick={() => setDraftNameColor(randomNameColor(draftNameColor))}
+                      >
+                        Randomize
+                      </button>
+                    )}
                   </div>
                 </div>
 

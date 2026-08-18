@@ -102,6 +102,9 @@ def generate_random_room_name() -> str:
     return f"{adj} {noun}"
 
 
+GUEST_NAME_COLOR = "#888888"
+
+
 class RoomFullError(Exception):
     pass
 
@@ -109,7 +112,7 @@ class RoomFullError(Exception):
 @dataclass
 class Player:
     id: str
-    reconnect_secret: str
+    user_id: str
     nickname: str
     name_color: str = field(default_factory=generate_random_name_color)
     sid: Optional[str] = None
@@ -118,6 +121,7 @@ class Player:
     is_host: bool = False
     is_spectator: bool = False
     is_afk: bool = False
+    is_anonymous: bool = True
     kick_votes: set[str] = field(default_factory=set)
     afk_votes: set[str] = field(default_factory=set)
 
@@ -332,6 +336,7 @@ class Room:
                     "isHost": p.is_host,
                     "isSpectator": p.is_spectator,
                     "isAfk": p.is_afk,
+                    "isAnonymous": p.is_anonymous,
                     "kickVotes": list(p.kick_votes),
                     "afkVotes": list(p.afk_votes),
                 }
@@ -371,7 +376,7 @@ class RoomManager:
             is_public=is_public,
             max_players=max_players,
             rounds=rounds,
-            custom_words=custom_words or [],
+            custom_words=list(custom_words or []),
             custom_words_only=custom_words_only,
             drawing_seconds=drawing_seconds,
             hint_mode=hint_mode,
@@ -413,35 +418,43 @@ class RoomManager:
         self,
         room: Room,
         nickname: str,
+        user_id: str | None = None,
         is_spectator: bool = False,
         name_color: str | None = None,
+        is_anonymous: bool = False,
     ) -> Player:
         active_players = [p for p in room.players.values() if not p.is_spectator]
         if not is_spectator and len(active_players) >= room.max_players:
             raise RoomFullError("Room is full")
         player_id = str(uuid.uuid4())
+        resolved_color = (
+            GUEST_NAME_COLOR
+            if is_anonymous
+            else (normalize_name_color(name_color) or generate_random_name_color())
+        )
         player = Player(
             id=player_id,
-            reconnect_secret=secrets.token_urlsafe(32),
+            user_id=user_id or str(uuid.uuid4()),
             nickname=nickname,
-            name_color=normalize_name_color(name_color) or generate_random_name_color(),
+            name_color=resolved_color,
             score=0 if is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0),
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,
+            is_anonymous=is_anonymous,
         )
         room.players[player_id] = player
         return player
 
-    def get_player_by_reconnect_secret(
-        self, room: Room, reconnect_secret: object
+    def get_player_by_user_id(
+        self, room: Room, user_id: object
     ) -> Player | None:
-        if not isinstance(reconnect_secret, str) or not reconnect_secret:
+        if not isinstance(user_id, str) or not user_id:
             return None
         return next(
             (
                 player
                 for player in room.players.values()
-                if secrets.compare_digest(player.reconnect_secret, reconnect_secret)
+                if player.user_id == user_id
             ),
             None,
         )

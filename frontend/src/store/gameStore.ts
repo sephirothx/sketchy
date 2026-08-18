@@ -13,16 +13,10 @@ import type {
   ScoringMode,
 } from "../types";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
-import {
-  clearReconnectSecret,
-  readReconnectSecret,
-  writeReconnectSecret,
-} from "../lib/sessionCredentials";
 
 interface GameStore {
   nickname: string;
   playerId: string | null;
-  reconnectSecret: string | null;
   roomId: string | null;
   code: string | null;
   name: string;
@@ -67,10 +61,8 @@ interface GameStore {
     roomId: string;
     code: string;
     playerId: string;
-    reconnectSecret: string;
   }) => void;
-  getStoredReconnectSecret: (code: string) => string | null;
-  clearStoredReconnectSecret: (code: string) => void;
+  clearSession: () => void;
   setRoomState: (payload: RoomStatePayload) => void;
   addMessage: (message: ChatMessage) => void;
   applyGuessPoints: (playerId: string, points: number) => void;
@@ -127,7 +119,6 @@ const initialGameFields = {
 export const useGameStore = create<GameStore>((set) => ({
   nickname: (localStorage.getItem("sketchy_nickname") || "").slice(0, MAX_NICKNAME_LENGTH),
   playerId: null,
-  reconnectSecret: null,
   roomId: null,
   code: null,
   name: "",
@@ -155,14 +146,11 @@ export const useGameStore = create<GameStore>((set) => ({
     localStorage.setItem("sketchy_nickname", next);
     set({ nickname: next });
   },
-  setSession: ({ roomId, code, playerId, reconnectSecret }) => {
-    writeReconnectSecret(localStorage, code, reconnectSecret);
-    set({ roomId, code, playerId, reconnectSecret });
+  setSession: ({ roomId, code, playerId }) => {
+    set({ roomId, code, playerId });
   },
-  getStoredReconnectSecret: (code) => readReconnectSecret(localStorage, code),
-  clearStoredReconnectSecret: (code) => {
-    clearReconnectSecret(localStorage, code);
-    set({ playerId: null, reconnectSecret: null, roomId: null, code: null });
+  clearSession: () => {
+    set({ playerId: null, roomId: null, code: null });
   },
   setRoomState: (payload) =>
     set((state) => ({
@@ -254,7 +242,6 @@ export const useGameStore = create<GameStore>((set) => ({
   setError: (error) => set({ error }),
   reset: () => set({
     playerId: null,
-    reconnectSecret: null,
     roomId: null,
     code: null,
     players: [],

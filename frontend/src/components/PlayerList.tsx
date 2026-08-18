@@ -118,7 +118,7 @@ export function PlayerList({
               isAfk={p.isAfk}
             />
             <span className="player-name">
-              <FittedPlayerName nickname={p.nickname} nameColor={p.nameColor} />
+              <FittedPlayerName nickname={p.nickname} nameColor={p.nameColor} isAnonymous={p.isAnonymous} />
               {isMe && <span className="player-you-mark">you</span>}
               {!p.connected && <span className="visually-hidden">Disconnected</span>}
             </span>
@@ -161,12 +161,20 @@ function votePlayer(targetPlayerId: string, action: "kick" | "afk") {
 function FittedPlayerName({
   nickname,
   nameColor,
+  isAnonymous,
 }: {
   nickname: string;
   nameColor?: string;
+  isAnonymous?: boolean;
 }) {
   return (
-    <span className="colored-player-name" style={{ color: nameColor }}>
+    <span
+      className="colored-player-name"
+      style={{
+        color: isAnonymous ? "#888888" : nameColor,
+        fontStyle: isAnonymous ? "italic" : "normal",
+      }}
+    >
       {nickname}
     </span>
   );

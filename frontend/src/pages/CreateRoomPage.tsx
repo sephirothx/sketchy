@@ -23,11 +23,14 @@ import { createCustomWordsState, customWordsReducer } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { useAuthStore } from "../store/authStore";
 import type { AckResponse, HintMode, ScoringMode } from "../types";
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
   const nickname = useGameStore((state) => state.nickname);
+  const user = useAuthStore((state) => state.user);
+  const isRegistered = Boolean(user && !user.isAnonymous);
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const [roomName, setRoomName] = useState("");
@@ -49,8 +52,8 @@ export function CreateRoomPage() {
   const [busy, setBusy] = useState(false);
 
   async function handleCreate() {
-    const trimmedNickname = nickname.trim();
-    if (!trimmedNickname) {
+    const effectiveNickname = isRegistered ? (user?.username || "Player") : nickname.trim();
+    if (!effectiveNickname) {
       navigate("/");
       return;
     }
@@ -62,12 +65,12 @@ export function CreateRoomPage() {
     setError(null);
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
-        nickname: trimmedNickname, nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
+        nickname: effectiveNickname, nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customWords: customWords.value.trim(), customWordsOnly: customWords.only, hintMode, scoringMode,
         spectatorsSeeSolution, hideMaskedPrompt, wordListSlugs,
       });
-      if (response.ok && response.roomId && response.code && response.playerId && response.reconnectSecret) {
-        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId, reconnectSecret: response.reconnectSecret });
+      if (response.ok && response.roomId && response.code && response.playerId) {
+        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId });
         navigate(`/room/${response.code}`);
         return;
       }

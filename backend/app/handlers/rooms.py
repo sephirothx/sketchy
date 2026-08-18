@@ -18,6 +18,50 @@ from app.handlers.payloads import (
 )
 from app.rooms import RoomFullError, STARTING_SCORE, normalize_name_color
 
+async def _resolve_user_and_nickname(
+    ctx: HandlerContext, sid: str, requested_nickname: str
+) -> tuple[str, str, bool, str | None]:
+    """
+    Resolves the player's identity and effective nickname:
+    - If registered: Always enforces user.username (or user.display_name), ignoring requested_nickname.
+    - If guest: Validates that requested_nickname is not an in-use username by a registered user.
+    Returns (user_id, effective_nickname, is_anonymous, error_message).
+    """
+    session = await ctx.sio.get_session(sid) if sid else {}
+    user_id = session.get("user_id") if session else None
+    user = None
+    if user_id and ctx.user_repo:
+        try:
+            user = await ctx.user_repo.get_by_id(user_id)
+        except Exception:
+            pass
+
+    if user is not None and not user.is_anonymous:
+        effective_nickname = user.username or user.display_name or "Player"
+        return (user.id, effective_nickname, False, None)
+
+    clean_nickname = requested_nickname.strip() or "Player"
+    if ctx.user_repo:
+        try:
+            existing = await ctx.user_repo.get_by_username(clean_nickname)
+            if existing is not None and not existing.is_anonymous:
+                return ("", "", True, f"The nickname '{clean_nickname}' is already taken by a registered account")
+        except Exception:
+            pass
+
+    if user is None and ctx.user_repo:
+        try:
+            user = await ctx.user_repo.create_anonymous(display_name=clean_nickname)
+            user_id = user.id
+            if session is not None:
+                session["user_id"] = user_id
+                await ctx.sio.save_session(sid, session)
+        except Exception:
+            pass
+
+    return (user_id or sid, clean_nickname, True, None)
+
+
 async def create_room(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(CreateRoomPayload, data)
@@ -25,13 +69,19 @@ async def create_room(ctx: HandlerContext, sid, data):
         return ctx.game_flow.validation_error(error)
     settings = await ctx.game_flow.room_settings_from_payload(payload)
 
+    user_id, effective_nickname, is_anonymous, error = await _resolve_user_and_nickname(ctx, sid, payload.nickname)
+    if error:
+        return {"ok": False, "error": error}
+
     room = ctx.room_manager.create_room(
         **settings,
     )
     player = ctx.room_manager.add_player(
         room,
-        payload.nickname,
-        name_color=normalize_name_color(payload.name_color),
+        effective_nickname,
+        user_id=user_id,
+        name_color=None if is_anonymous else normalize_name_color(payload.name_color),
+        is_anonymous=is_anonymous,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     return ctx.game_flow._session_ack(room, player)
@@ -126,21 +176,13 @@ async def join_room(ctx: HandlerContext, sid, data):
         payload = parse_payload(JoinRoomPayload, data)
     except PayloadError as error:
         return ctx.game_flow.validation_error(error)
-    reconnect_secret = payload.reconnect_secret
     name_color = normalize_name_color(payload.name_color)
 
     room = ctx.room_manager.get_room(payload.room_id) or ctx.room_manager.get_room_by_code(payload.code)
     if not room:
         return {"ok": False, "error": "Room not found"}
 
-    # Checked before the token-reconnect branch below: a client's first
-    # join_room call (e.g. from the lobby) is very often followed by a
-    # second one moments later on the very same socket (e.g. GameRoomPage
-    # re-joining with the token it was just given). That second call
-    # would otherwise match the token-reconnect branch and fire a
-    # spurious "reconnected" message for a session that never actually
-    # disconnected - so if this exact socket already has a live session
-    # in this room, just confirm it rather than reprocessing the join.
+    # Checked before the reconnect branch below: if this exact socket already has a live session in this room
     already_joined = await ctx.game_flow._existing_player_for_sid(sid, room.id)
     if already_joined:
         already_joined.sid = sid
@@ -155,29 +197,31 @@ async def join_room(ctx: HandlerContext, sid, data):
         )
         return ctx.game_flow._session_ack(room, already_joined)
 
-    player = ctx.room_manager.get_player_by_reconnect_secret(room, reconnect_secret)
+    user_id, effective_nickname, is_anonymous, error = await _resolve_user_and_nickname(ctx, sid, payload.nickname)
+    if error:
+        return {"ok": False, "error": error}
+
+    player = ctx.room_manager.get_player_by_user_id(room, user_id)
     if player:
-        if name_color:
+        player.nickname = effective_nickname
+        if not is_anonymous and name_color:
             player.name_color = name_color
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         return ctx.game_flow._session_ack(room, player)
-    if reconnect_secret:
-        return {"ok": False, "error": "Your previous room session has expired", "invalidReconnectSecret": True}
 
     try:
         player = ctx.room_manager.add_player(
             room,
-            payload.nickname,
+            effective_nickname,
+            user_id=user_id,
             is_spectator=payload.as_spectator,
-            name_color=name_color,
+            name_color=None if is_anonymous else name_color,
+            is_anonymous=is_anonymous,
         )
     except RoomFullError:
         return {"ok": False, "error": "Room is full"}
 
-    # A game already in progress keeps running its existing turn_order -
-    # joining mid-game just enrolls the new player into future turns
-    # (appended to the end, so everyone already playing keeps their
-    # relative order) rather than blocking the join entirely.
+    # A game already in progress keeps running its existing turn_order
     if room.game and not player.is_spectator:
         room.game.add_player_to_rotation(player.id)
 
@@ -221,6 +265,8 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
     if not current:
         return {"ok": False, "error": "Not in this room"}
     room, player = current
+    if player.is_anonymous:
+        return {"ok": False, "error": "Guest accounts cannot customize name color"}
     player.name_color = normalize_name_color(payload.name_color) or player.name_color
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}

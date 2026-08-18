@@ -66,10 +66,26 @@ async def test_create_room_accepts_no_scoring_and_disables_point_purchase_hints(
 
 @pytest.mark.asyncio
 async def test_player_name_color_is_created_and_can_be_updated_live():
+    from app.repositories.interfaces import UserData
+    from datetime import datetime, timezone
+    user_repo = AsyncMock()
+    user_repo.get_by_id = AsyncMock(
+        return_value=UserData(
+            id="user-1",
+            username="Host",
+            display_name="Host",
+            name_color="#aabbcc",
+            avatar_url=None,
+            is_anonymous=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    user_repo.get_by_username = AsyncMock(return_value=None)
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value=None)
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "user-1"})
     sio.save_session = AsyncMock()
     sio.enter_room = AsyncMock()
     sio.emit = AsyncMock()
@@ -89,7 +105,7 @@ async def test_player_name_color_is_created_and_can_be_updated_live():
     assert room.to_state_payload()["players"][0]["nameColor"] == "#aabbcc"
 
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "player_id": player.id}
+        return_value={"room_id": room.id, "player_id": player.id, "user_id": "user-1"}
     )
     update = sio.handlers["/"]["update_player_settings"]
     assert await update("host-sid", {"nameColor": "#123ABC"}) == {"ok": True}

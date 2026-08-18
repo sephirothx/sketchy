@@ -285,16 +285,22 @@ export function RoomChatPanel({
                   message.text
                 ) : (
                   <>
-                    <strong
-                      className="colored-player-name"
-                      style={{
-                        color: message.nameColor
-                          ?? players.find((player) => player.playerId === message.playerId)
-                            ?.nameColor,
-                      }}
-                    >
-                      {message.nickname}:{" "}
-                    </strong>
+                    {(() => {
+                      const sender = players.find((player) => player.playerId === message.playerId);
+                      const isAnon = sender?.isAnonymous ?? false;
+                      const resolvedColor = isAnon ? "#888888" : (message.nameColor ?? sender?.nameColor);
+                      return (
+                        <strong
+                          className="colored-player-name"
+                          style={{
+                            color: resolvedColor,
+                            fontStyle: isAnon ? "italic" : "normal",
+                          }}
+                        >
+                          {message.nickname}:{" "}
+                        </strong>
+                      );
+                    })()}
                     {message.text}
                   </>
                 )}

@@ -229,8 +229,20 @@ class UserRepository(ABC):
         user_id: str,
         username: str,
         password_hash: str,
+        display_name: str | None = None,
     ) -> UserData:
         """Upgrade an anonymous user to a registered account with credentials."""
+        ...
+
+    @abstractmethod
+    async def register(
+        self,
+        username: str,
+        password_hash: str,
+        display_name: str | None = None,
+        name_color: str | None = None,
+    ) -> UserData:
+        """Create a new registered user directly with credentials."""
         ...
 
     @abstractmethod

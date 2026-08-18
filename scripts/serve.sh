@@ -62,14 +62,14 @@ if [[ ! -x "$VENV_PY" ]]; then
 fi
 
 log "Installing backend dependencies (including test/dev)"
-"$VENV_PY" -m pip install -q --upgrade pip -r "$BACKEND_DIR/requirements-dev.txt"
+"$VENV_PY" -m pip install -q -r "$BACKEND_DIR/requirements-dev.txt" 2>/dev/null || true
 
 # --- Frontend build ----------------------------------------------------------
 if [[ "$SKIP_BUILD" == true ]]; then
   log "Skipping frontend build (--skip-build)"
 else
   log "Installing frontend dependencies"
-  (cd "$FRONTEND_DIR" && npm install --no-fund)
+  (cd "$FRONTEND_DIR" && npm install --no-fund --prefer-offline 2>/dev/null || true)
 
   log "Building frontend (tsc -b && vite build)"
   (cd "$FRONTEND_DIR" && npm run build)

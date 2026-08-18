@@ -32,7 +32,6 @@ def session_payload(room: Room, player: Player) -> dict:
         "roomId": room.id,
         "code": room.code,
         "playerId": player.id,
-        "reconnectSecret": player.reconnect_secret,
     }
 
 

@@ -75,7 +75,10 @@ export function RoundEndOverlay({
                 <li key={guess.playerId}>
                   <span
                     className="colored-player-name"
-                    style={{ color: guess.nameColor }}
+                    style={{
+                      color: guess.nameColor,
+                      fontStyle: guess.nameColor === "#888888" ? "italic" : "normal",
+                    }}
                   >
                     {guess.nickname}
                   </span>
@@ -106,7 +109,10 @@ export function RoundEndOverlay({
                     {entry.playerId === drawerId ? "\u270F\uFE0F " : ""}
                     <span
                       className="colored-player-name"
-                      style={{ color: entry.nameColor }}
+                      style={{
+                        color: entry.nameColor,
+                        fontStyle: entry.nameColor === "#888888" ? "italic" : "normal",
+                      }}
                     >
                       {entry.nickname}
                     </span>

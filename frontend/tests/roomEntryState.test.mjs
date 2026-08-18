@@ -28,7 +28,6 @@ const sessionResponse = {
   roomId: "room-1",
   code: "ABC123",
   playerId: "player-1",
-  reconnectSecret: "private-secret",
 };
 
 function deferred() {
@@ -39,9 +38,6 @@ function deferred() {
 
 function dependencies(overrides = {}) {
   return {
-    getReconnectSecret: () => null,
-    clearReconnectSecret: () => {},
-    reconnect: async () => ({ ok: false }),
     preview: async () => ({ ok: true, room }),
     join: async () => sessionResponse,
     saveNickname: () => {},
@@ -50,49 +46,6 @@ function dependencies(overrides = {}) {
     ...overrides,
   };
 }
-
-test("a valid stored credential reconnects without loading a preview", async () => {
-  const accepted = [];
-  let previewCalls = 0;
-  const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
-    getReconnectSecret: () => "stored-secret",
-    reconnect: async (request) => {
-      assert.equal(request.reconnectSecret, "stored-secret");
-      return sessionResponse;
-    },
-    preview: async () => {
-      previewCalls += 1;
-      return { ok: true, room };
-    },
-    acceptSession: (session) => accepted.push(session),
-  }));
-
-  await machine.load();
-  assert.deepEqual(accepted, [{
-    roomId: "room-1",
-    code: "ABC123",
-    playerId: "player-1",
-    reconnectSecret: "private-secret",
-  }]);
-  assert.equal(previewCalls, 0);
-});
-
-test("an expired credential is cleared before showing the room preview", async () => {
-  const cleared = [];
-  const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
-    getReconnectSecret: () => "expired-secret",
-    reconnect: async () => ({ ok: false, invalidReconnectSecret: true }),
-    clearReconnectSecret: (code) => cleared.push(code),
-  }));
-
-  await machine.load();
-  assert.deepEqual(cleared, ["ABC123"]);
-  assert.deepEqual(machine.getSnapshot().state, {
-    status: "preview",
-    room,
-    notice: "Your previous session expired. Choose how you would like to rejoin.",
-  });
-});
 
 test("direct player and spectator joins preserve their distinct modes", async () => {
   const joins = [];
@@ -120,7 +73,10 @@ test("direct player and spectator joins preserve their distinct modes", async ()
     { code: "ABC123", nickname: "Grace", mode: "spectator" },
   ]);
   assert.deepEqual(nicknames, ["Ada", "Grace"]);
-  assert.equal(accepted.length, 2);
+  assert.deepEqual(accepted, [
+    { roomId: "room-1", code: "ABC123", playerId: "player-1" },
+    { roomId: "room-1", code: "ABC123", playerId: "player-1" },
+  ]);
 });
 
 test("disposing the machine ignores a pending response", async () => {

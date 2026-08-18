@@ -3,15 +3,24 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import socketio
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.exceptions import HTTPException
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
+from app.auth.jwt import create_token, get_or_create_jwt_secret
+from app.auth.middleware import AuthMiddleware, set_auth_cookie
+from app.auth.password import hash_password, verify_password
+from app.auth.schemas import LoginRequest, RegisterRequest
 from app.db import async_session_factory, init_db
 from app.db.seed import seed_word_lists
 from app.handlers import register_all_handlers
+from app.repositories.interfaces import (
+    AccountAlreadyClaimedError,
+    UserData,
+    UsernameTakenError,
+)
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -26,7 +35,7 @@ class SPAStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         try:
             response = await super().get_response(path, scope)
-        except HTTPException as exc:
+        except StarletteHTTPException as exc:
             is_client_route = (
                 exc.status_code == 404
                 and not path.startswith("api/")
@@ -72,10 +81,14 @@ handler_context = register_all_handlers(
     word_list_repo=word_list_repo,
 )
 
+_jwt_secret: str = ""
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    global _jwt_secret
     await init_db()
+    _jwt_secret = await get_or_create_jwt_secret(async_session_factory)
     await seed_word_lists(word_list_repo)
     try:
         yield
@@ -89,6 +102,12 @@ api.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
+)
+api.add_middleware(
+    AuthMiddleware,
+    user_repo=user_repo,
+    jwt_secret_getter=lambda: _jwt_secret,
 )
 
 
@@ -119,9 +138,108 @@ async def list_word_lists():
     ]
 
 
+@api.get("/api/auth/me")
+async def get_current_user(request: Request):
+    user: UserData | None = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    stats = await user_repo.get_stats(user.id)
+    return {
+        "id": user.id,
+        "username": user.username,
+        "displayName": user.display_name,
+        "nameColor": user.name_color,
+        "avatarUrl": user.avatar_url,
+        "isAnonymous": user.is_anonymous,
+        "createdAt": user.created_at.isoformat() if user.created_at else "",
+        "stats": {
+            "gamesPlayed": stats.games_played,
+            "gamesWon": stats.games_won,
+            "winRate": stats.win_rate,
+            "totalScore": stats.total_score,
+            "averageScore": stats.average_score,
+        } if stats else None,
+    }
+
+
+@api.post("/api/auth/register")
+async def register_user(req: RegisterRequest, request: Request, response: Response):
+    current_user: UserData | None = getattr(request.state, "user", None)
+    pw_hash = hash_password(req.password)
+    try:
+        if current_user and current_user.is_anonymous:
+            user = await user_repo.claim_account(
+                user_id=current_user.id,
+                username=req.username,
+                password_hash=pw_hash,
+                display_name=req.username,
+            )
+        else:
+            user = await user_repo.register(
+                username=req.username,
+                password_hash=pw_hash,
+                display_name=req.username,
+            )
+    except UsernameTakenError:
+        raise HTTPException(status_code=409, detail="Username is already taken")
+    except AccountAlreadyClaimedError:
+        raise HTTPException(status_code=400, detail="Account is already registered")
+
+    token = create_token(user.id, _jwt_secret)
+    set_auth_cookie(response, token)
+    return {
+        "id": user.id,
+        "username": user.username,
+        "displayName": user.display_name,
+        "nameColor": user.name_color,
+        "avatarUrl": user.avatar_url,
+        "isAnonymous": user.is_anonymous,
+        "createdAt": user.created_at.isoformat() if user.created_at else "",
+    }
+
+
+@api.post("/api/auth/login")
+async def login_user(req: LoginRequest, response: Response):
+    creds = await user_repo.get_credentials_by_username(req.username)
+    if not creds or not verify_password(req.password, creds.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    user = creds.user
+    token = create_token(user.id, _jwt_secret)
+    set_auth_cookie(response, token)
+    return {
+        "id": user.id,
+        "username": user.username,
+        "displayName": user.display_name,
+        "nameColor": user.name_color,
+        "avatarUrl": user.avatar_url,
+        "isAnonymous": user.is_anonymous,
+        "createdAt": user.created_at.isoformat() if user.created_at else "",
+    }
+
+
+@api.post("/api/auth/logout")
+async def logout_user(response: Response):
+    guest = await user_repo.create_anonymous(display_name="Guest")
+    token = create_token(guest.id, _jwt_secret)
+    set_auth_cookie(response, token)
+    return {
+        "ok": True,
+        "user": {
+            "id": guest.id,
+            "username": guest.username,
+            "displayName": guest.display_name,
+            "nameColor": guest.name_color,
+            "avatarUrl": guest.avatar_url,
+            "isAnonymous": guest.is_anonymous,
+            "createdAt": guest.created_at.isoformat() if guest.created_at else "",
+        },
+    }
+
+
 # In production, serve the built frontend as static files from the same origin
-# (single-port self-hosting). No-op during development when the folder is absent.
 _frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 configure_frontend(api, _frontend_dist)
 
 app = socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io")
+

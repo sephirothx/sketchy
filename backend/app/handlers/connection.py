@@ -5,13 +5,50 @@ import asyncio
 import logging
 from functools import partial
 
+from app.auth.jwt import JWT_COOKIE_NAME, decode_token, get_or_create_jwt_secret
 from app.handlers.context import HandlerContext
 
 logger = logging.getLogger("sketchy.handlers.connection")
 RECONNECT_GRACE_SECONDS = 30
 
+
+def extract_jwt_cookie(environ: dict) -> str | None:
+    if not isinstance(environ, dict):
+        return None
+    raw_cookie = environ.get("HTTP_COOKIE")
+    if not raw_cookie and "asgi.scope" in environ:
+        headers = dict(environ["asgi.scope"].get("headers", []))
+        raw_cookie = headers.get(b"cookie", b"").decode("utf-8", errors="ignore")
+    if not raw_cookie:
+        return None
+    for part in raw_cookie.split(";"):
+        if "=" in part:
+            k, v = part.strip().split("=", 1)
+            if k.strip() == JWT_COOKIE_NAME:
+                return v.strip()
+    return None
+
+
 async def connect(ctx: HandlerContext, sid, environ, auth):
     logger.info("socket connected: %s", sid)
+    token = extract_jwt_cookie(environ)
+    user_id = None
+    if token:
+        try:
+            from app.db import async_session_factory
+            jwt_secret = await get_or_create_jwt_secret(async_session_factory)
+            user_id = decode_token(token, jwt_secret)
+        except Exception:
+            logger.exception("Error decoding JWT on socket connect")
+
+    if not user_id and ctx.user_repo:
+        try:
+            guest = await ctx.user_repo.create_anonymous(display_name="Guest")
+            user_id = guest.id
+        except Exception:
+            logger.exception("Failed to auto-provision anonymous user on socket connect")
+
+    await ctx.sio.save_session(sid, {"user_id": user_id})
 
 
 async def disconnect(ctx: HandlerContext, sid):

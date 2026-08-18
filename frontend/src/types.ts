@@ -7,8 +7,28 @@ export interface PlayerInfo {
   isHost: boolean;
   isSpectator: boolean;
   isAfk: boolean;
+  isAnonymous?: boolean;
   kickVotes?: string[];
   afkVotes?: string[];
+}
+
+export interface UserStats {
+  gamesPlayed: number;
+  gamesWon: number;
+  winRate: number;
+  totalScore: number;
+  averageScore: number;
+}
+
+export interface User {
+  id: string;
+  username: string | null;
+  displayName: string;
+  nameColor: string | null;
+  avatarUrl: string | null;
+  isAnonymous: boolean;
+  createdAt: string;
+  stats?: UserStats | null;
 }
 
 export interface ModerationState {

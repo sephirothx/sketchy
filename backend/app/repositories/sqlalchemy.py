@@ -145,6 +145,7 @@ class SqlAlchemyUserRepository(UserRepository):
         user_id: str,
         username: str,
         password_hash: str,
+        display_name: str | None = None,
     ) -> UserData:
         clean_username = username.strip()
         if not clean_username:
@@ -177,6 +178,45 @@ class SqlAlchemyUserRepository(UserRepository):
                 user.username = clean_username
                 user.password_hash = password_hash
                 user.is_anonymous = False
+                if display_name and display_name.strip():
+                    user.display_name = display_name.strip()
+            await session.refresh(user)
+            return _to_user_data(user)
+
+    async def register(
+        self,
+        username: str,
+        password_hash: str,
+        display_name: str | None = None,
+        name_color: str | None = None,
+    ) -> UserData:
+        clean_username = username.strip()
+        if not clean_username:
+            raise ValueError("Username cannot be empty")
+        if not password_hash:
+            raise ValueError("Password hash cannot be empty")
+
+        clean_display = (display_name or "").strip() or clean_username
+
+        async with self._session_factory() as session:
+            async with session.begin():
+                collision_stmt = select(User.id).where(
+                    func.lower(User.username) == clean_username.lower()
+                )
+                existing = (await session.execute(collision_stmt)).scalar_one_or_none()
+                if existing is not None:
+                    raise UsernameTakenError(f"Username '{clean_username}' is already taken")
+
+                user = User(
+                    id=generate_uuid(),
+                    username=clean_username,
+                    password_hash=password_hash,
+                    display_name=clean_display,
+                    name_color=name_color,
+                    avatar_url=None,
+                    is_anonymous=False,
+                )
+                session.add(user)
             await session.refresh(user)
             return _to_user_data(user)
 

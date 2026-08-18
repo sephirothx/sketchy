@@ -889,6 +889,107 @@
   color: #64748b;
 }
 
+[data-theme="dark"] .account-menu-btn {
+  background: #1e293b;
+  color: #f8fafc;
+  border-color: #475569;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .account-menu-btn:hover {
+  background: #334155;
+  border-color: #64748b;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .account-name.is-guest {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .account-guest-badge {
+  background: #0f172a;
+  color: #94a3b8;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .account-dialog {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .account-tabs {
+  border-bottom-color: #334155;
+}
+
+[data-theme="dark"] .account-tab-btn {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .account-tab-btn:hover {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .account-tab-btn.active {
+  color: #60a5fa;
+  border-bottom-color: #60a5fa;
+}
+
+[data-theme="dark"] .account-form-label {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .account-form-input {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .account-form-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="dark"] .account-error-banner {
+  background: #450a0a;
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .account-profile-name {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .account-profile-username {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .account-stats-grid {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .account-stat-label {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .account-stat-value {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .account-secondary-btn {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .account-secondary-btn:hover:not(:disabled) {
+  background: #334155;
+  border-color: #64748b;
+  color: #ffffff;
+}
+
 @media (max-width: 900px) {
   [data-theme="dark"] .game-room.guess-focused .sidebar-right .sidebar-box {
     background: #1e293b;

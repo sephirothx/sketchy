@@ -37,60 +37,51 @@ function DelayedInviteLoader() {
 export function InviteEntryPage({ code }: { code: string }) {
   const navigate = useNavigate();
   const openSettings = useSettingsStore((state) => state.openSettings);
-  const { state, nicknameInput, setNicknameInput, join } = useRoomEntry(code);
+  const { state, nicknameInput, setNicknameInput, join, isRegistered, username } = useRoomEntry(code);
   const room = state.status === "preview" || state.status === "joining" ? state.room : null;
   const busy = state.status === "joining";
   const entryError = state.status === "preview" ? state.error : undefined;
   const notice = state.status === "preview" || state.status === "joining" ? state.notice : undefined;
 
   return (
-    <div className="invite-entry-page">
-      <header className="invite-entry-header">
-        <button type="button" className="invite-brand" onClick={() => navigate("/")}>Sketchy</button>
-        <button type="button" className="header-settings-button" onClick={openSettings} title="Game Settings">
+    <div className="invite-page">
+      <div className="invite-header-actions">
+        <button
+          type="button"
+          className="header-settings-button"
+          onClick={openSettings}
+          title="Game Settings"
+          aria-label="Game Settings"
+        >
           <SettingsIcon size={16} />
           <span>Settings</span>
         </button>
-      </header>
+      </div>
 
-      {state.status === "error" ? (
-        <main className="invite-card invite-unavailable-card">
-          <div className="invite-status-icon" aria-hidden="true">✕</div>
-          <p className="invite-eyebrow">Room {code}</p>
-          <h1>Room unavailable</h1>
+      <DelayedInviteLoader />
+
+      {state.status === "error" && (
+        <main className="invite-card invite-error-card" role="alert">
+          <h1>Unable to join room</h1>
           <p>{state.message}</p>
-          <button type="button" className="invite-primary-button" onClick={() => navigate("/")}>Back to lobby</button>
+          <button type="button" className="invite-secondary-button" onClick={() => navigate("/")}>
+            Back to lobby
+          </button>
         </main>
-      ) : !room ? (
-        <DelayedInviteLoader />
-      ) : (
+      )}
+
+      {room && (
         <main className="invite-card">
-          <div className="invite-card-heading">
-            <div>
-              <p className="invite-eyebrow">{room.isPublic ? "Public room" : "Private invite"} · {room.code}</p>
-              <h1>{room.name}</h1>
-            </div>
-            <span className={`invite-state-badge ${room.state}`}>
-              {room.state === "playing" ? "In progress" : "Waiting"}
-            </span>
+          <div className="invite-pill-row">
+            <span className="invite-pill">{room.isPublic ? "Public room" : "Private room"}</span>
+            <span className="invite-pill">{room.playerCount}/{room.maxPlayers} players</span>
+            <span className="invite-pill">{hintModeLabel(room)}</span>
           </div>
 
-          <dl className="invite-room-facts">
-            <div><dt>Players</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? " · Full" : ""}</dd></div>
-            <div><dt>Rounds</dt><dd>{room.rounds}</dd></div>
-            <div><dt>Draw time</dt><dd>{room.drawingSeconds}s</dd></div>
-            <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "Just for fun" : "Points on"}</dd></div>
-          </dl>
-
-          <ul className="invite-rule-list" aria-label="Room rules">
-            <li>{hintModeLabel(room)}</li>
-            <li>{room.spectatorsSeeSolution ? "Spectators can see the answer" : "Spectators guess along"}</li>
-            <li>
-              {room.customWordCount > 0
-                ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " plus defaults"}`
-                : "Default word list"}
-            </li>
-          </ul>
+          <h1>{room.name}</h1>
+          <p className="invite-subtitle">
+            {room.isFull ? "This room is full for active players, but you can still join as a spectator." : "You've been invited to play Sketchy."}
+          </p>
 
           {room.state === "playing" && (
             <p className="invite-callout">This game is already in progress. Joining as a player adds you to a future turn.</p>
@@ -105,26 +96,40 @@ export function InviteEntryPage({ code }: { code: string }) {
               if (!room.isFull) void join("player");
             }}
           >
-            <label htmlFor="invite-nickname">Your nickname</label>
-            {/* Search type + autocomplete=off suppress Android Chrome's unrelated autofill toolbar. */}
-            <input
-              id="invite-nickname"
-              name="sketchy-invite-name"
-              type="search"
-              inputMode="text"
-              value={nicknameInput}
-              onChange={(event) => setNicknameInput(event.target.value)}
-              maxLength={MAX_NICKNAME_LENGTH}
-              placeholder="Your name"
-              autoComplete="off"
-              autoCapitalize="words"
-              spellCheck={false}
-              autoCorrect="off"
-              enterKeyHint="go"
-              autoFocus
-              disabled={busy}
-              aria-describedby={entryError ? "invite-entry-error" : undefined}
-            />
+            {isRegistered ? (
+              <div style={{ marginBottom: "1rem" }}>
+                <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--color-text-secondary, #64748b)" }}>
+                  Playing as
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                  <span style={{ fontWeight: 700, fontSize: "16px" }}>{username}</span>
+                  <span style={{ fontSize: "12px", color: "var(--color-text-muted, #94a3b8)" }}>(Registered username)</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <label htmlFor="invite-nickname">Your nickname</label>
+                {/* Search type + autocomplete=off suppress Android Chrome's unrelated autofill toolbar. */}
+                <input
+                  id="invite-nickname"
+                  name="sketchy-invite-name"
+                  type="search"
+                  inputMode="text"
+                  value={nicknameInput}
+                  onChange={(event) => setNicknameInput(event.target.value)}
+                  maxLength={MAX_NICKNAME_LENGTH}
+                  placeholder="Your name"
+                  autoComplete="off"
+                  autoCapitalize="words"
+                  spellCheck={false}
+                  autoCorrect="off"
+                  enterKeyHint="go"
+                  autoFocus
+                  disabled={busy}
+                  aria-describedby={entryError ? "invite-entry-error" : undefined}
+                />
+              </>
+            )}
             {entryError && <p id="invite-entry-error" className="invite-form-error" role="alert">{entryError}</p>}
             <div className="invite-actions">
               <button type="submit" className="invite-primary-button" disabled={busy || room.isFull}>

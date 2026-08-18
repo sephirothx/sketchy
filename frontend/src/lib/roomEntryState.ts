@@ -15,7 +15,6 @@ export interface RoomSession {
   roomId: string;
   code: string;
   playerId: string;
-  reconnectSecret: string;
 }
 
 export interface RoomEntrySnapshot {
@@ -24,13 +23,6 @@ export interface RoomEntrySnapshot {
 }
 
 export interface RoomEntryDependencies {
-  getReconnectSecret: (code: string) => string | null;
-  clearReconnectSecret: (code: string) => void;
-  reconnect: (args: {
-    code: string;
-    nickname: string;
-    reconnectSecret: string;
-  }) => Promise<AckResponse>;
   preview: (code: string) => Promise<RoomPreviewResponse>;
   join: (args: {
     code: string;
@@ -50,13 +42,11 @@ function sessionFrom(response: AckResponse): RoomSession | null {
     || !response.roomId
     || !response.code
     || !response.playerId
-    || !response.reconnectSecret
   ) return null;
   return {
     roomId: response.roomId,
     code: response.code,
     playerId: response.playerId,
-    reconnectSecret: response.reconnectSecret,
   };
 }
 
@@ -98,38 +88,12 @@ export class RoomEntryMachine {
   async load(): Promise<void> {
     const version = ++this.requestVersion;
     this.publish({ ...this.snapshot, state: { status: "loading" } });
-    let notice: string | undefined;
 
     try {
-      const reconnectSecret = this.dependencies.getReconnectSecret(this.code);
-      if (reconnectSecret) {
-        const response = await this.dependencies.reconnect({
-          code: this.code,
-          nickname: this.snapshot.nicknameInput,
-          reconnectSecret,
-        });
-        if (!this.isCurrent(version)) return;
-
-        const session = sessionFrom(response);
-        if (session) {
-          this.dependencies.acceptSession(session);
-          return;
-        }
-        if (!response.invalidReconnectSecret) {
-          this.publish({
-            ...this.snapshot,
-            state: { status: "error", message: response.error || "Could not reconnect to this room" },
-          });
-          return;
-        }
-        this.dependencies.clearReconnectSecret(this.code);
-        notice = "Your previous session expired. Choose how you would like to rejoin.";
-      }
-
       const response = await this.dependencies.preview(this.code);
       if (!this.isCurrent(version)) return;
       if (response.ok && response.room) {
-        this.publish({ ...this.snapshot, state: { status: "preview", room: response.room, notice } });
+        this.publish({ ...this.snapshot, state: { status: "preview", room: response.room, notice: undefined } });
       } else {
         this.publish({
           ...this.snapshot,
@@ -140,60 +104,83 @@ export class RoomEntryMachine {
       if (!this.isCurrent(version)) return;
       this.publish({
         ...this.snapshot,
-        state: { status: "error", message: this.dependencies.requestErrorMessage(error, "load this room") },
+        state: {
+          status: "error",
+          message: this.dependencies.requestErrorMessage(error, "load room preview"),
+        },
       });
     }
   }
 
   async join(mode: RoomJoinMode): Promise<void> {
-    const current = this.snapshot.state;
-    if (current.status !== "preview") return;
+    if (this.snapshot.state.status !== "preview") return;
 
-    const nickname = this.snapshot.nicknameInput.trim();
-    if (!nickname) {
+    const trimmedNickname = this.snapshot.nicknameInput.trim();
+    if (!trimmedNickname) {
       this.publish({
         ...this.snapshot,
-        state: { ...current, error: "Enter a nickname to continue." },
+        state: {
+          ...this.snapshot.state,
+          error: "Please enter a nickname before joining",
+        },
       });
       return;
     }
 
     const version = ++this.requestVersion;
+    const room = this.snapshot.state.room;
+    const notice = this.snapshot.state.notice;
     this.publish({
-      ...this.snapshot,
-      state: { status: "joining", room: current.room, mode, notice: current.notice },
+      nicknameInput: trimmedNickname,
+      state: { status: "joining", room, mode, notice },
     });
 
     try {
-      const response = await this.dependencies.join({ code: this.code, nickname, mode });
+      const response = await this.dependencies.join({
+        code: this.code,
+        nickname: trimmedNickname,
+        mode,
+      });
       if (!this.isCurrent(version)) return;
+
       const session = sessionFrom(response);
       if (session) {
-        this.dependencies.saveNickname(nickname);
+        this.dependencies.saveNickname(trimmedNickname);
         this.dependencies.acceptSession(session);
         return;
       }
 
-      const room = mode === "player" && response.error === "Room is full"
-        ? { ...current.room, isFull: true }
-        : current.room;
-      const error = mode === "player" && response.error === "Room is full"
-        ? "The player slots just filled up, but you can still spectate."
-        : response.error || "Could not join this room";
+      if (response.error === "Room is full" && mode === "player") {
+        this.publish({
+          nicknameInput: trimmedNickname,
+          state: {
+            status: "preview",
+            room: { ...room, isFull: true },
+            notice,
+            error: "The player slots just filled up, but you can still spectate.",
+          },
+        });
+        return;
+      }
+
       this.publish({
-        ...this.snapshot,
-        state: { status: "preview", room, notice: current.notice, error },
+        nicknameInput: trimmedNickname,
+        state: {
+          status: "preview",
+          room,
+          notice,
+          error: response.error || "Could not join room",
+        },
       });
     } catch (error) {
       if (!this.isCurrent(version)) return;
-      const action = mode === "spectator" ? "join as a spectator" : "join this room";
       this.publish({
-        ...this.snapshot,
+        nicknameInput: trimmedNickname,
         state: {
           status: "preview",
-          room: current.room,
-          notice: current.notice,
-          error: this.dependencies.requestErrorMessage(error, action),
+          room,
+          notice,
+          error: this.dependencies.requestErrorMessage(error, "join room"),
         },
       });
     }
@@ -201,7 +188,6 @@ export class RoomEntryMachine {
 
   dispose(): void {
     this.disposed = true;
-    this.requestVersion += 1;
     this.listener = null;
   }
 
@@ -209,9 +195,8 @@ export class RoomEntryMachine {
     return !this.disposed && version === this.requestVersion;
   }
 
-  private publish(snapshot: RoomEntrySnapshot): void {
-    if (this.disposed) return;
-    this.snapshot = snapshot;
-    this.listener?.(snapshot);
+  private publish(next: RoomEntrySnapshot): void {
+    this.snapshot = next;
+    this.listener?.(this.snapshot);
   }
 }

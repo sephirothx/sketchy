@@ -5,8 +5,10 @@ import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
+import { AccountMenu } from "../components/AccountMenu";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { useAuthStore } from "../store/authStore";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import type { AckResponse, RoomSummary } from "../types";
@@ -162,9 +164,14 @@ export function LobbyBrowserPage() {
     return true;
   });
 
+  const user = useAuthStore((state) => state.user);
+  const isRegistered = Boolean(user && !user.isAnonymous);
+  const effectiveNickname = isRegistered ? (user?.username || "Player") : nicknameInput.trim();
+
   function requireNickname(): boolean {
+    if (isRegistered) return true;
     if (!nicknameInput.trim()) {
-      setError("Please enter a nickname first");
+      setError("Please enter a nickname");
       return false;
     }
     setNickname(nicknameInput.trim());
@@ -196,13 +203,13 @@ export function LobbyBrowserPage() {
     setError(null);
     try {
       const res = await emitWithAck<AckResponse>("join_room", {
-        nickname: nicknameInput.trim(),
+        nickname: effectiveNickname,
         nameColor,
         asSpectator,
         ...target,
       });
-      if (res.ok && res.roomId && res.code && res.playerId && res.reconnectSecret) {
-        setSession({ roomId: res.roomId, code: res.code, playerId: res.playerId, reconnectSecret: res.reconnectSecret });
+      if (res.ok && res.roomId && res.code && res.playerId) {
+        setSession({ roomId: res.roomId, code: res.code, playerId: res.playerId });
         navigate(`/room/${res.code}`);
       } else {
         setError(res.error || "Failed to join room");
@@ -220,36 +227,55 @@ export function LobbyBrowserPage() {
         <div>
           <h1>Sketchy</h1>
         </div>
-        <button
-          type="button"
-          className="header-settings-button"
-          onClick={openSettings}
-          title="Game Settings"
-          aria-label="Game Settings"
-        >
-          <SettingsIcon size={16} />
-          <span className="header-action-label">Settings</span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <AccountMenu />
+          <button
+            type="button"
+            className="header-settings-button"
+            onClick={openSettings}
+            title="Game Settings"
+            aria-label="Game Settings"
+          >
+            <SettingsIcon size={16} />
+            <span className="header-action-label">Settings</span>
+          </button>
+        </div>
       </div>
 
       <section className="panel">
-        <label>
-          Nickname
-          {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
-          <input
-            type="search"
-            inputMode="text"
-            value={nicknameInput}
-            onChange={(e) => setNicknameInput(e.target.value)}
-            maxLength={MAX_NICKNAME_LENGTH}
-            placeholder="Your name"
-            autoComplete="nickname"
-            autoCapitalize="words"
-            spellCheck={false}
-            autoCorrect="off"
-            enterKeyHint="done"
-          />
-        </label>
+        {isRegistered ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--color-text-secondary, #64748b)" }}>
+              Playing as
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontWeight: 700, fontSize: "16px" }}>
+                {user?.username}
+              </span>
+              <span style={{ fontSize: "12px", color: "var(--color-text-muted, #94a3b8)" }}>
+                (Registered username)
+              </span>
+            </div>
+          </div>
+        ) : (
+          <label>
+            Nickname
+            {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
+            <input
+              type="search"
+              inputMode="text"
+              value={nicknameInput}
+              onChange={(e) => setNicknameInput(e.target.value)}
+              maxLength={MAX_NICKNAME_LENGTH}
+              placeholder="Your name"
+              autoComplete="nickname"
+              autoCapitalize="words"
+              spellCheck={false}
+              autoCorrect="off"
+              enterKeyHint="done"
+            />
+          </label>
+        )}
       </section>
 
       {criticalError && (

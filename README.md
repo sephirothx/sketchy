@@ -7,6 +7,7 @@ private room with a friend code — no mandatory accounts required to play.
 ## Features
 
 - Public lobby with a live, polled list of open rooms, or join a private room by code.
+- Anonymous guest accounts provisioned automatically on first visit, with seamless registration and sign-in to customize colors and track stats.
 - Curated word lists (Standard and Extended English) selectable during room creation, combined with optional custom words. Word pick rate and guess accuracy stats tracked per prompt.
 - Turn-based rounds: each player draws once per round, choosing from 3 word options.
 - Real-time synced canvas (freehand pen + rectangle/ellipse/triangle shape tools).
@@ -17,7 +18,7 @@ private room with a friend code — no mandatory accounts required to play.
 - Save image — download the current drawn image directly as a PNG file at any time.
 - Customization option to always hide masked prompt word length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
-- Reconnection grace period (30s) — refreshing mid-game rejoins you with your score intact.
+- Reconnection grace period (30s) — refreshing mid-game seamlessly rejoins you via session authentication with your score intact.
 - Score system designed to resist "sandbagging": drawers can't game an easy word by stalling,
   since their bonus scales with how fast guessers actually answered (see
   [Scoring](#scoring) below).
@@ -277,7 +278,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ### Reconnection & disconnection
 
-- On disconnect, a player has 30 seconds to reconnect with their private stored secret and keep
+- On disconnect, a player has 30 seconds to reconnect with their session and keep
   their score and place in the turn order. A successful reconnect replaces the player's active
   socket, so the superseded socket can no longer issue commands.
 - If the drawer disconnects and doesn't return in time, their turn is skipped and evicted from
