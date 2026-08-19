@@ -87,7 +87,7 @@ jobs:
       # not at all. Keyed on the pinned playwright version, so a bump
       # re-downloads rather than reusing browsers the new client cannot drive.
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('backend/requirements-dev.txt') }}
