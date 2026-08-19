@@ -15,6 +15,20 @@ export const socket: Socket = io({
   transports: ["websocket", "polling"],
 });
 
+// Registered here rather than in a component so the flag is set by the very
+// first `connect`, whatever mounts when: it tells "still opening the first
+// connection" apart from "the connection dropped", which look identical from
+// `socket.connected` alone.
+let everConnected = false;
+socket.on("connect", () => {
+  everConnected = true;
+});
+
+/** True once this page load has completed at least one handshake. */
+export function hasEverConnected(): boolean {
+  return everConnected;
+}
+
 export const DEFAULT_ACK_TIMEOUT_MS = 8000;
 
 export type SocketRequestErrorCode = "disconnected" | "timeout";
