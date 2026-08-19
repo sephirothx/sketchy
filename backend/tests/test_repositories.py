@@ -5,7 +5,14 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.models import Base
+from sqlalchemy import select
+
+from app.db.models import (
+    Base,
+    GameParticipant,
+    RoundGuess,
+    RoundRecord,
+)
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     GameParticipantInput,
@@ -266,5 +273,98 @@ async def test_word_list_repository():
         assert len(new_stats) == 2
         apple_stat_v2 = next(s for s in new_stats if s.text == "apple")
         assert apple_stat_v2.pick_count == 1  # preserved stats
+    finally:
+        await engine.dispose()
+
+
+async def test_save_game_persists_the_analytics_columns():
+    """These are written for later analysis and are not read back by any view,
+    so the write itself is what has to be checked."""
+    factory, engine = await create_test_db()
+    try:
+        user_repo = SqlAlchemyUserRepository(factory)
+        history_repo = SqlAlchemyGameHistoryRepository(factory)
+        drawer = await user_repo.create_anonymous("Drawer")
+        guesser = await user_repo.create_anonymous("Guesser")
+
+        now = datetime.now(timezone.utc)
+        game_id = await history_repo.save_game(
+            GameRecordInput(
+                room_name="Analytics Room",
+                scoring_mode="default",
+                hint_mode="purchase",
+                drawing_seconds=90,
+                total_rounds=1,
+                player_count=2,
+                started_at=now,
+                finished_at=now,
+            ),
+            [
+                GameParticipantInput(
+                    user_id=drawer.id, final_score=350, final_rank=1, turns_played=2
+                ),
+                GameParticipantInput(
+                    user_id=guesser.id, final_score=200, final_rank=2, turns_played=1
+                ),
+            ],
+            [
+                RoundRecordInput(
+                    round_number=1,
+                    turn_number=1,
+                    drawer_user_id=drawer.id,
+                    word="guitar",
+                    duration_seconds=30.0,
+                    guesser_count=4,
+                    word_auto_picked=True,
+                    stroke_count=23,
+                    end_reason="all_guessed",
+                    wrong_guess_count=7,
+                    near_miss_count=3,
+                )
+            ],
+            [
+                RoundGuessInput(
+                    round_index=0,
+                    user_id=guesser.id,
+                    points_awarded=200,
+                    guess_time_seconds=12.5,
+                    hints_used=2,
+                    points_spent_on_hints=36,
+                    wrong_guesses_before=5,
+                )
+            ],
+        )
+
+        async with factory() as session:
+            round_row = (
+                await session.execute(
+                    select(RoundRecord).where(RoundRecord.game_id == game_id)
+                )
+            ).scalar_one()
+            assert round_row.guesser_count == 4
+            assert round_row.word_auto_picked is True
+            assert round_row.stroke_count == 23
+            assert round_row.end_reason == "all_guessed"
+            assert round_row.wrong_guess_count == 7
+            assert round_row.near_miss_count == 3
+
+            guess_row = (
+                await session.execute(
+                    select(RoundGuess).where(RoundGuess.round_id == round_row.id)
+                )
+            ).scalar_one()
+            assert guess_row.hints_used == 2
+            assert guess_row.points_spent_on_hints == 36
+            assert guess_row.wrong_guesses_before == 5
+
+            played = {
+                row.user_id: row.turns_played
+                for row in (
+                    await session.execute(
+                        select(GameParticipant).where(GameParticipant.game_id == game_id)
+                    )
+                ).scalars()
+            }
+            assert played == {drawer.id: 2, guesser.id: 1}
     finally:
         await engine.dispose()

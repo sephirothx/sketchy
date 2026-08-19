@@ -17,5 +17,6 @@
 @import "./styles/canvas.css" layer(components);
 @import "./styles/settings.css" layer(components);
 @import "./styles/account.css" layer(components);
+@import "./styles/profile.css" layer(components);
 @import "./styles/theme-overrides.css" layer(components);
 @import "./styles/a11y.css" layer(utilities);

@@ -61,6 +61,7 @@ function SettingsModalContent() {
   const [draftNameColor, setDraftNameColor] = useState<string>(nameColor);
   const authUser = useAuthStore((state) => state.user);
   const setDisplayName = useAuthStore((state) => state.setDisplayName);
+  const setNameColor = useAuthStore((state) => state.setNameColor);
   const login = useAuthStore((state) => state.login);
   const register = useAuthStore((state) => state.register);
   const logout = useAuthStore((state) => state.logout);
@@ -168,7 +169,12 @@ function SettingsModalContent() {
     // Guests are pinned to the guest grey server-side, so sending a colour
     // would only be rejected.
     if (!isGuest) {
+      // The socket recolours the room the player is in right now; the account
+      // write is what makes the choice outlast this room and show up on their
+      // profile. Neither is a reason to keep the dialog open, and a failed
+      // save is not worth an error over a colour.
       socket.emit("update_player_settings", { nameColor: draftNameColor });
+      void setNameColor(draftNameColor).catch(() => {});
     }
     closeSettings();
   };

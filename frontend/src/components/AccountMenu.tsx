@@ -1,9 +1,10 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import { avatarColor, avatarInitial } from "../lib/avatar";
+import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 
 export type AuthMode = "claim" | "login";
 
@@ -12,13 +13,16 @@ export type AuthMode = "claim" | "login";
  *
  * One chip in place of the three separate controls this replaced: the avatar
  * and name are who you are, and an unclaimed guest name carries a dot. Clicking
- * is the only account affordance in the header - renaming lives in Settings, so
- * there is nothing else a menu would hold.
+ * opens a menu - for guests too, since a guest has a profile and a game history
+ * of their own and the chip is the only place to reach them from.
  *
  * `compact` drops the name and shows the avatar alone, for the game-room header
- * where the row is deliberately nowrap and every pixel is spoken for.
+ * where the row is deliberately nowrap and every pixel is spoken for. It also
+ * keeps the guest chip going straight to the claim dialog: the only route out
+ * of a compact chip is a live game, and navigating away would give up the seat.
  */
 export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
@@ -26,31 +30,50 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
 
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEscapeLayer(menuOpen, () => setMenuOpen(false));
+
+  // A menu is dismissed by looking away from it. The chip itself is inside the
+  // root, so clicking it still toggles rather than closing and reopening.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [menuOpen]);
 
   // Before identity resolves, and during a first run, there is no one to show.
   if (!user || (user.isAnonymous && !user.displayName)) return null;
 
   const isGuest = user.isAnonymous;
   const shownName = isGuest ? user.displayName : (user.username ?? user.displayName);
+  const opensDialogDirectly = isGuest && compact;
 
   return (
-    <div className="account-menu">
+    <div className="account-menu" ref={rootRef}>
       <button
         type="button"
         className={compact ? "identity-chip is-compact" : "identity-chip"}
-        aria-haspopup={isGuest ? "dialog" : "menu"}
-        aria-expanded={isGuest ? undefined : menuOpen}
-        onClick={() => (isGuest ? setMode("claim") : setMenuOpen((open) => !open))}
+        aria-haspopup={opensDialogDirectly ? "dialog" : "menu"}
+        aria-expanded={opensDialogDirectly ? undefined : menuOpen}
+        onClick={() =>
+          opensDialogDirectly ? setMode("claim") : setMenuOpen((open) => !open)
+        }
         aria-label={
           isGuest
-            ? `${shownName}. Your name is not saved. Claim it.`
+            ? `${shownName}. Your name is not saved.`
             : `Signed in as ${shownName}`
         }
       >
         <span
           className="identity-avatar"
           aria-hidden="true"
-          style={{ backgroundColor: avatarColor(shownName, isGuest) }}
+          style={{ backgroundColor: identityColor(shownName, isGuest, user.nameColor) }}
         >
           {avatarInitial(shownName)}
         </span>
@@ -58,18 +81,53 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         {isGuest && <span className="identity-unclaimed" aria-hidden="true" />}
       </button>
 
-      {menuOpen && !isGuest && (
+      {menuOpen && !opensDialogDirectly && (
         <div className="account-dropdown" role="menu">
           <button
             type="button"
             role="menuitem"
-            onClick={async () => {
+            onClick={() => {
               setMenuOpen(false);
-              await logout();
+              navigate("/profile");
             }}
           >
-            Log out
+            My profile
           </button>
+          {isGuest ? (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setMode("claim");
+                }}
+              >
+                Claim your name
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setMode("login");
+                }}
+              >
+                Log in
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={async () => {
+                setMenuOpen(false);
+                await logout();
+              }}
+            >
+              Log out
+            </button>
+          )}
         </div>
       )}
 
@@ -208,7 +266,15 @@ export function AuthDialog({
           {error && <p className="auth-error" role="alert">{error}</p>}
 
           <button type="submit" className="modal-button" disabled={busy}>
-            {busy ? "Please wait…" : isClaim ? "Claim my name" : "Log in"}
+            {busy
+              ? "Please wait…"
+              : isClaim
+                ? // Mirrors the title: there is a name to claim only when one
+                  // was carried in, and otherwise this is a plain sign-up.
+                  suggestedUsername
+                  ? "Claim my name"
+                  : "Create"
+                : "Log in"}
           </button>
         </form>
 

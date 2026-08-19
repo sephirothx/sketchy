@@ -129,6 +129,11 @@ class GameParticipant(Base):
     )
     final_score: Mapped[int] = mapped_column(Integer, nullable=False)
     final_rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Turns this player was still in the rotation for. A one-round walkout and
+    # a full game otherwise look identical, which skews win rate and averages.
+    turns_played: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
 
     game: Mapped[GameRecord] = relationship(back_populates="participants")
     user: Mapped[User] = relationship()
@@ -156,6 +161,32 @@ class RoundRecord(Base):
     )
     word: Mapped[str] = mapped_column(String(64), nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    # How many players could still have guessed. Correct-guess counts are
+    # uninterpretable without it: two of two is not two of eight.
+    guesser_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    # The drawer let the clock run out and took the first offered word. Not a
+    # preference, and it should not be counted as one.
+    word_auto_picked: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("0"), nullable=False
+    )
+    # Canvas actions committed during the turn: separates an impossible word
+    # from a drawer who drew nothing.
+    stroke_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    # "all_guessed" or "timeout". A turn whose drawer leaves never completes,
+    # so it is never recorded and cannot appear here.
+    end_reason: Mapped[str] = mapped_column(
+        String(16), default="timeout", server_default="timeout", nullable=False
+    )
+    wrong_guess_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    near_miss_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
 
     game: Mapped[GameRecord] = relationship(back_populates="rounds")
     drawer: Mapped[User] = relationship()
@@ -185,6 +216,17 @@ class RoundGuess(Base):
     )
     points_awarded: Mapped[int] = mapped_column(Integer, nullable=False)
     guess_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    # Hints are paid for out of the player's score, so without these a cheap
+    # win and an expensive one are the same number.
+    hints_used: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    points_spent_on_hints: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    wrong_guesses_before: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
 
     round_record: Mapped[RoundRecord] = relationship(back_populates="guesses")
     user: Mapped[User] = relationship()

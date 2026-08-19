@@ -27,10 +27,11 @@ from app.auth.password import (
     validate_password,
     verify_password,
 )
+from app.api.serializers import user_payload
 from app.auth.rate_limit import RateLimiter, client_key
+from app.rooms import normalize_name_color
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
-    UserData,
     UsernameTakenError,
     UserRepository,
 )
@@ -78,16 +79,10 @@ class DisplayNameBody(BaseModel):
     display_name: str = Field(max_length=MAX_NAME_LENGTH, alias="displayName")
 
 
-def user_payload(user: UserData) -> dict:
-    return {
-        "id": user.id,
-        "username": user.username,
-        "displayName": user.display_name,
-        "nameColor": user.name_color,
-        "isAnonymous": user.is_anonymous,
-        "createdAt": user.created_at.isoformat() if user.created_at else None,
-        "lastLoginAt": user.last_login_at.isoformat() if user.last_login_at else None,
-    }
+class NameColorBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name_color: str = Field(max_length=16, alias="nameColor")
 
 
 def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
@@ -183,6 +178,35 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
             )
 
         updated = await user_repo.update_profile(user.id, display_name=name)
+        return user_payload(updated or user)
+
+    @router.post("/name-color")
+    async def set_name_color(body: NameColorBody, request: Request):
+        """Remember the colour a registered player chose for their name.
+
+        Settings keeps it in localStorage and sends it when joining a room,
+        which is enough to colour a name in play but leaves it invisible
+        everywhere else - a profile, or anyone else's view of this player, has
+        no room to read it from. Storing it on the account is what lets a name
+        look the same wherever it appears.
+        """
+        throttle(lookup_limiter, request)
+        color = normalize_name_color(body.name_color)
+        if color is None:
+            raise HTTPException(status_code=400, detail="Invalid colour.")
+
+        user_id = getattr(request.state, "user_id", None)
+        user = await user_repo.get_by_id(user_id) if user_id else None
+        if user is None:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        if user.is_anonymous:
+            # Grey italics is the only cue that separates an unclaimed name
+            # from a registered one, so a guest colour would erase it.
+            raise HTTPException(
+                status_code=403, detail="Create an account to choose a name colour."
+            )
+
+        updated = await user_repo.update_profile(user.id, name_color=color)
         return user_payload(updated or user)
 
     @router.post("/register")

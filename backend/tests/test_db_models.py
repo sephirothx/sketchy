@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -230,3 +230,103 @@ async def test_init_db_runs_alembic_migrations(tmp_path):
     finally:
         await engine.dispose()
 
+
+
+async def test_analytics_migration_applies_to_a_database_that_already_has_games(
+    tmp_path,
+):
+    """The columns land on populated tables, which is the case that can fail.
+
+    A NOT NULL column with no server default cannot be added to a table that
+    already holds rows, and these tables hold finished games from before the
+    analytics existed.
+    """
+    from alembic import command as alembic_command
+    from app.db import get_alembic_config
+
+    db_file = tmp_path / "populated.db"
+    url = f"sqlite+aiosqlite:///{db_file}"
+    engine = create_async_engine(url)
+    config = get_alembic_config()
+    config.set_main_option("sqlalchemy.url", url)
+
+    def upgrade_to(connection, revision):
+        config.attributes["connection"] = connection
+        alembic_command.upgrade(config, revision)
+
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(upgrade_to, "264a248789d1")
+
+        factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+        user_id = generate_uuid()
+        game_id = generate_uuid()
+        round_id = generate_uuid()
+        now = datetime.now(timezone.utc).isoformat(sep=" ")
+        # Raw SQL on purpose: the ORM models already carry the new columns, so
+        # they cannot write a row shaped the way the old schema stored it.
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, display_name, is_anonymous, created_at,"
+                    " updated_at, last_login_at)"
+                    " VALUES (:id, 'Veteran', 1, :now, :now, :now)"
+                ),
+                {"id": user_id, "now": now},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_records (id, room_name, scoring_mode, hint_mode,"
+                    " drawing_seconds, total_rounds, player_count, started_at,"
+                    " finished_at)"
+                    " VALUES (:id, 'Room From Before', 'default', 'none', 90, 1, 1,"
+                    " :now, :now)"
+                ),
+                {"id": game_id, "now": now},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_participants (id, game_id, user_id, final_score,"
+                    " final_rank) VALUES (:id, :game_id, :user_id, 300, 1)"
+                ),
+                {"id": generate_uuid(), "game_id": game_id, "user_id": user_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO round_records (id, game_id, round_number, turn_number,"
+                    " drawer_user_id, word, duration_seconds)"
+                    " VALUES (:id, :game_id, 1, 1, :user_id, 'apple', 12.0)"
+                ),
+                {"id": round_id, "game_id": game_id, "user_id": user_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO round_guesses (id, round_id, user_id, points_awarded,"
+                    " guess_time_seconds) VALUES (:id, :round_id, :user_id, 100, 4.0)"
+                ),
+                {"id": generate_uuid(), "round_id": round_id, "user_id": user_id},
+            )
+
+        async with engine.begin() as connection:
+            await connection.run_sync(upgrade_to, "head")
+
+        async with factory() as session:
+            old_round = (
+                await session.execute(
+                    select(RoundRecord).where(RoundRecord.id == round_id)
+                )
+            ).scalar_one()
+            assert old_round.word == "apple"
+            assert old_round.guesser_count == 0
+            assert old_round.word_auto_picked is False
+            assert old_round.end_reason == "timeout"
+
+            old_participant = (
+                await session.execute(
+                    select(GameParticipant).where(GameParticipant.game_id == game_id)
+                )
+            ).scalar_one()
+            assert old_participant.final_score == 300
+            assert old_participant.turns_played == 0
+    finally:
+        await engine.dispose()

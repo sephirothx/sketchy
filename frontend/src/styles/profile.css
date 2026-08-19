@@ -1,0 +1,237 @@
+/* The profile page: identity header, stat tiles, and expandable game history. */
+
+.profile-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.profile-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+/* The back link carries its own bottom margin for the create-room layout,
+   which would double up against the bar's own spacing here. */
+.profile-top-bar .back-link {
+  margin-bottom: 0;
+}
+
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.profile-identity h1 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.profile-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  flex: none;
+}
+
+.profile-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.profile-claim p {
+  margin: 4px 0 12px;
+  font-size: 14px;
+}
+
+.profile-note {
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+/* auto-fit rather than a fixed count: the tiles are the one element that has
+   to survive both a phone and a wide desktop without a breakpoint per size. */
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.profile-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.profile-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.profile-stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.profile-games {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.profile-game {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+/* Outranks `.panel button`, which would otherwise paint the whole row the
+   lobby's primary blue - these rows are disclosure controls, not actions. */
+.profile-page .profile-game-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.profile-game-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.profile-game-room {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.profile-game-meta {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.profile-game-result {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: none;
+}
+
+.profile-game-rank {
+  font-weight: 700;
+  color: #475569;
+}
+
+.profile-game-rank.is-winner {
+  color: #15803d;
+}
+
+.profile-game-score {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.profile-game-chevron {
+  flex: none;
+  color: #64748b;
+}
+
+.profile-game-body {
+  border-top: 1px solid #e2e8f0;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.profile-standings {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.profile-standings li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* The name inside carries its own colour; the link must not repaint it, and
+   the browser's visited-link purple must never read as a player's colour. */
+.profile-standings a {
+  color: inherit;
+}
+
+.profile-standing-rank {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.2em;
+}
+
+.profile-standing-score {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+}
+
+/* The round table is the one element that cannot shrink to a phone: it scrolls
+   inside its own box rather than widening the page. */
+.profile-rounds {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  display: block;
+  overflow-x: auto;
+}
+
+.profile-rounds th,
+.profile-rounds td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.profile-rounds th {
+  color: #64748b;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.profile-round-word {
+  font-weight: 700;
+  color: #0f172a;
+}

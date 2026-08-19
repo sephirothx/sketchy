@@ -504,3 +504,30 @@ async def test_a_guest_with_no_name_cannot_be_seated():
     )
     assert response["ok"] is False
     assert room.player_list() == []
+
+
+@pytest.mark.asyncio
+async def test_changing_colour_in_a_room_also_stores_it_on_the_account():
+    """Otherwise the seat and the profile disagree about the same player."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    user_repo = FakeUserRepository()
+    user_repo.add_registered("user-1", "Painter")
+    player = room_manager.add_player(
+        room, "Painter", user_id="user-1", is_anonymous=False
+    )
+    player.sid = "sid-1"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": player.id})
+    sio.save_session = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["update_player_settings"](
+        "sid-1", {"nameColor": "#4f46e5"}
+    )
+
+    assert response == {"ok": True}
+    assert player.name_color == "#4f46e5"
+    assert user_repo.users["user-1"].name_color == "#4f46e5"

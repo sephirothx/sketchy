@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 from app.game import (
     CHOOSE_WORD_SECONDS,
@@ -41,6 +42,7 @@ from app.rooms import (
     STARTING_SCORE,
     normalize_name_color,
 )
+from app.services.game_history import build_game_history
 from app.presenters import (
     editable_room_settings_payload,
     round_ended_payload,
@@ -200,6 +202,9 @@ class GameFlowService:
             room.restart_vote_cooldown_until = 0
             room.last_game_scores = []
             room.last_game_drawings = []
+            # Only this game's leavers matter to its history, and the room may
+            # outlive many games.
+            room.departed_seats = {}
             for player in room.player_list():
                 player.score = (
                     0
@@ -474,6 +479,29 @@ class GameFlowService:
         def _round_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
             return round_ended_payload(room, drawer_bonus)
 
+        async def _record_game_history(room: Room, game: Game) -> None:
+            """Write the finished game to history: the only write this epic makes.
+
+            Failure is logged and swallowed. A database that is slow or down
+            must not keep the room from ending its game.
+            """
+            if not ctx.game_history_repo:
+                return
+            history = build_game_history(
+                room, game, finished_at=datetime.now(timezone.utc)
+            )
+            if history is None:
+                return
+            try:
+                await ctx.game_history_repo.save_game(
+                    history.record,
+                    history.participants,
+                    history.rounds,
+                    history.guesses,
+                )
+            except Exception:
+                logger.exception("Failed to persist game history for room %s", room.id)
+
         async def _finish_or_next(room: Room) -> None:
             game = room.game
             assert game is not None
@@ -510,6 +538,8 @@ class GameFlowService:
                                     )
                             except Exception:
                                 logger.exception("Failed to update word usage metrics for slug '%s'", slug)
+
+                await _record_game_history(room, game)
 
                 await sio.emit(
                     "game_ended",

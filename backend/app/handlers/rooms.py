@@ -282,6 +282,12 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
         await ctx.game_flow._emit_room_state(room)
         return {"ok": False, "error": "Create an account to choose a name colour"}
     player.name_color = normalize_name_color(payload.name_color) or player.name_color
+    # Keep the account in step with the seat, so the colour this player is
+    # using right now is the one their profile shows.
+    if ctx.user_repo is not None and player.user_id:
+        await ctx.user_repo.update_profile(
+            player.user_id, name_color=player.name_color
+        )
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}
 

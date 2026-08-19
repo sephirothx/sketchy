@@ -327,3 +327,38 @@ async def test_a_new_guest_starts_with_no_name(client):
     body = (await client.get("/api/auth/me")).json()
     assert body["displayName"] == ""
     assert body["isAnonymous"] is True
+
+
+# --- name colour ----------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_registered_player_colour_is_stored_on_the_account(client):
+    """Settings keeps the colour in localStorage; the account is what lets it
+    show up anywhere the player is not currently sitting."""
+    await client.post(
+        "/api/auth/register", json={"username": "colorist", "password": "a-good-password"}
+    )
+
+    response = await client.post("/api/auth/name-color", json={"nameColor": "#4F46E5"})
+
+    assert response.status_code == 200
+    assert response.json()["nameColor"] == "#4f46e5"
+    assert (await client.get("/api/auth/me")).json()["nameColor"] == "#4f46e5"
+
+
+@pytest.mark.asyncio
+async def test_a_guest_cannot_colour_their_name(client):
+    """Grey italics is the only cue an unclaimed name carries."""
+    await client.get("/api/auth/me")
+    response = await client.post("/api/auth/name-color", json={"nameColor": "#4f46e5"})
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_colour_that_is_not_a_colour_is_rejected(client):
+    await client.post(
+        "/api/auth/register", json={"username": "painter", "password": "a-good-password"}
+    )
+    assert (
+        await client.post("/api/auth/name-color", json={"nameColor": "red"})
+    ).status_code == 400

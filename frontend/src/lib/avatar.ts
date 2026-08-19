@@ -36,3 +36,21 @@ export function avatarColor(name: string, isAnonymous: boolean): string {
   }
   return REGISTERED_COLORS[hash % REGISTERED_COLORS.length];
 }
+
+/**
+ * The colour that stands for a player, wherever they appear.
+ *
+ * Their chosen colour from Settings when the account carries one; otherwise
+ * the deterministic fallback above, so a name is never left to inherit
+ * whatever the surrounding element happens to paint. Guests stay grey - the
+ * colour is part of what marks a name as unclaimed, so a guest never has one
+ * of their own to apply.
+ */
+export function identityColor(
+  name: string,
+  isAnonymous: boolean,
+  nameColor?: string | null,
+): string {
+  if (isAnonymous) return GUEST_AVATAR_COLOR;
+  return nameColor || avatarColor(name, isAnonymous);
+}
