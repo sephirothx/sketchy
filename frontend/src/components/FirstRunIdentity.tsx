@@ -16,6 +16,7 @@ import { ApiError } from "../lib/api";
  */
 export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}) {
   const user = useAuthStore((s) => s.user);
+  const hasResolved = useAuthStore((s) => s.hasResolved);
   const setDisplayName = useAuthStore((s) => s.setDisplayName);
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
@@ -25,6 +26,13 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Nothing until the initial GET /api/auth/me settles. A null user means
+  // "not known yet" as well as "nobody", and offering these controls in that
+  // window lets a submission race the provisioning request: both are
+  // cookieless, both create an account, and the later cookie discards the
+  // name that was just chosen.
+  if (!hasResolved) return null;
 
   // Once there is a name, or an account, this never appears again.
   const needsIdentity = !user || (user.isAnonymous && !user.displayName);

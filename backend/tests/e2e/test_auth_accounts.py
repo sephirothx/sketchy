@@ -1,4 +1,6 @@
 """Account identity end to end: guests, claiming, and seat ownership."""
+import asyncio
+
 import pytest
 from playwright.async_api import async_playwright
 
@@ -175,4 +177,115 @@ async def test_opening_the_same_room_twice_moves_the_seat_and_tells_the_old_tab(
             assert await seats.count() == 1
         finally:
             await context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
+    """The strongest ask lands where there is something to lose.
+
+    The overlay dismisses itself after ten seconds, so the countdown has to stop
+    while the claim form is open or it would vanish mid-password.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        guest_context = await browser.new_context()
+        host = await host_context.new_page()
+        guest = await guest_context.new_page()
+        host.set_default_timeout(20000)
+        guest.set_default_timeout(20000)
+        try:
+            await host.goto(BASE_URL)
+            await use_guest_name(host, "EndHost")
+            await host.click('button:has-text("Create room")')
+            rounds = int(await host.get_by_label("Rounds", exact=True).input_value())
+            while rounds > 1:
+                await host.get_by_role("button", name="Decrease Rounds").click()
+                rounds -= 1
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            code = (await host.inner_text(".room-copy-button")).split("Code:")[1].strip()
+
+            await guest.goto(BASE_URL)
+            await use_guest_name(guest, "EndGuest")
+            await guest.fill('input[placeholder="ABC123"]', code)
+            await guest.click('button:has-text("Join by code")')
+            await guest.wait_for_selector('[data-testid="waiting-room"]')
+
+            await host.click('button:has-text("Start game")')
+            await host.wait_for_selector(".game-layout")
+            await guest.wait_for_selector(".game-layout")
+
+            # Play the turns out: the drawer takes the first word, the other
+            # guesses it, until the game ends.
+            for _ in range(6):
+                if await host.query_selector('[data-testid="game-end-overlay"]'):
+                    break
+                drawer = host if await host.query_selector(".word-choices button") else guest
+                other = guest if drawer is host else host
+                if await drawer.query_selector(".word-choices button"):
+                    word = (
+                        await drawer.inner_text(".word-choices button:first-child")
+                    ).strip()
+                    await drawer.click(".word-choices button:first-child")
+                    await drawer.wait_for_selector("canvas.drawing-canvas")
+                    guess_input = other.locator(".chat-input input")
+                    await guess_input.fill(word)
+                    await guess_input.press("Enter")
+                await host.wait_for_timeout(3000)
+
+            await host.wait_for_selector('[data-testid="game-end-overlay"]', timeout=90000)
+            assert await host.is_visible(".game-end-claim")
+            assert "EndHost" in await host.inner_text(".game-end-claim-copy")
+
+            await host.click(".game-end-claim-action")
+            await host.wait_for_selector(".modal-card")
+            assert "EndHost" == await host.input_value(".auth-form input")
+
+            # Well past the ten-second dismissal had it kept running.
+            await host.wait_for_timeout(4000)
+            assert await host.is_visible('[data-testid="game-end-overlay"]')
+            assert "s" not in (
+                await host.inner_text(".game-end-actions button:last-child")
+            ).split("room")[-1]
+        finally:
+            await host_context.close()
+            await guest_context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_identity_controls_wait_for_provisioning_to_settle():
+    """No identity UI while GET /api/auth/me is still in flight.
+
+    A null user means "not known yet" as well as "nobody". Offering the
+    controls in that window lets a submission race provisioning: both requests
+    are cookieless, both create an account, and the later cookie discards the
+    name that was just chosen.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+
+        async def slow_provisioning(route):
+            await asyncio.sleep(1.5)
+            await route.continue_()
+
+        await page.route("**/api/auth/me", slow_provisioning)
+        try:
+            await page.goto(BASE_URL)
+            await page.wait_for_timeout(600)
+            assert await page.locator(".first-run").count() == 0
+            assert await page.locator(".identity-chip").count() == 0
+
+            await page.wait_for_selector(".first-run", timeout=10000)
+            await page.fill(".first-run-guest-row input", "RaceProof")
+            await page.click(".first-run-guest-submit")
+            await page.wait_for_selector('.identity-name:has-text("RaceProof")')
+
+            # The name must not be clobbered by a late provisioning response.
+            await page.wait_for_timeout(1500)
+            assert await page.inner_text(".identity-name") == "RaceProof"
+        finally:
             await browser.close()
