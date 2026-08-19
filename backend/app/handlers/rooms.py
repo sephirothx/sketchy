@@ -46,7 +46,7 @@ async def create_room(ctx: HandlerContext, sid, data):
     player = ctx.room_manager.add_player(
         room,
         identity.nickname,
-        name_color=normalize_name_color(payload.name_color),
+        name_color=identity.name_color or normalize_name_color(payload.name_color),
         user_id=identity.user_id,
         is_anonymous=identity.is_anonymous,
     )
@@ -183,8 +183,10 @@ async def join_room(ctx: HandlerContext, sid, data):
         # the path a guest returns through after registering or logging in
         # mid-game, so the seat has to pick up the new name and status.
         await _refresh_seat_identity(ctx, player, name_color)
-        if name_color and not player.is_anonymous:
-            player.name_color = name_color
+        if not player.is_anonymous:
+            stored = await _account_name_color(ctx, player.user_id)
+            if stored or name_color:
+                player.name_color = stored or name_color
         # _join_socket_room notifies and disconnects any socket that was
         # holding this seat before handing it to the new one.
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
@@ -203,7 +205,7 @@ async def join_room(ctx: HandlerContext, sid, data):
             room,
             identity.nickname,
             is_spectator=payload.as_spectator,
-            name_color=name_color,
+            name_color=identity.name_color or name_color,
             user_id=identity.user_id,
             is_anonymous=identity.is_anonymous,
         )
@@ -219,6 +221,14 @@ async def join_room(ctx: HandlerContext, sid, data):
 
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     return ctx.game_flow._session_ack(room, player)
+
+
+async def _account_name_color(ctx: HandlerContext, user_id: str | None) -> str | None:
+    """The colour stored on an account, if it has one."""
+    if ctx.user_repo is None or not user_id:
+        return None
+    account = await ctx.user_repo.get_by_id(user_id)
+    return normalize_name_color(account.name_color) if account else None
 
 
 async def _refresh_seat_identity(
@@ -238,7 +248,9 @@ async def _refresh_seat_identity(
     player.nickname = account.username
     player.is_anonymous = False
     player.name_color = (
-        normalize_name_color(name_color) or generate_random_name_color()
+        normalize_name_color(account.name_color)
+        or normalize_name_color(name_color)
+        or generate_random_name_color()
     )
 
 

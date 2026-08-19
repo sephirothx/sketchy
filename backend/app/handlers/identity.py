@@ -14,6 +14,10 @@ class PlayerIdentity:
     user_id: str | None
     nickname: str
     is_anonymous: bool
+    # The colour stored on the account, when it has one. None means the client
+    # may supply its own: either the player has never chosen a colour, or they
+    # are a guest, who is pinned to the guest grey regardless.
+    name_color: str | None = None
 
 
 class IdentityError(ValueError):
@@ -29,6 +33,12 @@ async def resolve_identity(
     is ignored - so a name shown in the player list is either a claimed account
     or an unclaimed guest, never one impersonating the other. A guest may pick
     any name that is not already a registered username.
+
+    Their colour comes from the account for the same reason. It is chosen in
+    Settings and kept there per browser, so trusting the payload let the same
+    player appear in one colour on the device they last picked it on and
+    another everywhere else - including on a profile, which can only read the
+    account.
     """
     session = await ctx.sio.get_session(sid) if sid else None
     user_id = session.get("user_id") if session else None
@@ -39,7 +49,10 @@ async def resolve_identity(
 
     if user is not None and not user.is_anonymous and user.username:
         return PlayerIdentity(
-            user_id=user.id, nickname=user.username, is_anonymous=False
+            user_id=user.id,
+            nickname=user.username,
+            is_anonymous=False,
+            name_color=user.name_color,
         )
 
     if user is not None:

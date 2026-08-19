@@ -564,3 +564,72 @@ async def test_a_failed_colour_write_still_updates_the_room():
     assert response == {"ok": True}
     assert player.name_color == "#4f46e5"
     assert any(call.args[0] == "room_state" for call in sio.emit.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_a_registered_player_is_seated_in_their_account_colour():
+    """The colour is chosen in Settings and kept per browser, so a second
+    device would otherwise seat the same player in a different colour."""
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_registered("user-1", "Painter")
+    await user_repo.update_profile("user-1", name_color="#4f46e5")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "user-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    # The client offers the colour this browser happens to hold.
+    response = await sio.handlers["/"]["create_room"](
+        "sid-1", {"nickname": "Painter", "nameColor": "#15803d"}
+    )
+
+    room = room_manager.get_room(response["roomId"])
+    player = room.players[response["playerId"]]
+    assert player.name_color == "#4f46e5"
+
+
+@pytest.mark.asyncio
+async def test_a_registered_player_without_a_stored_colour_keeps_the_client_one():
+    """Nothing to inherit yet: the account is backfilled from the client."""
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_registered("user-1", "Painter")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "user-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "sid-1", {"nickname": "Painter", "nameColor": "#15803d"}
+    )
+
+    room = room_manager.get_room(response["roomId"])
+    assert room.players[response["playerId"]].name_color == "#15803d"
+
+
+@pytest.mark.asyncio
+async def test_a_guest_is_still_pinned_to_the_guest_grey():
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_guest("guest-1", "Wanderer")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "guest-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "sid-1", {"nickname": "Wanderer", "nameColor": "#15803d"}
+    )
+
+    room = room_manager.get_room(response["roomId"])
+    assert room.players[response["playerId"]].name_color == ANONYMOUS_NAME_COLOR
