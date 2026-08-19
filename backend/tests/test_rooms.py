@@ -1,6 +1,12 @@
 from app.canvas_history import encode_canvas_history
 from app.game import Game
-from app.rooms import DrawingRecapEntry, NAME_COLOR_PATTERN, RoomFullError, RoomManager
+from app.rooms import (
+    ANONYMOUS_NAME_COLOR,
+    DrawingRecapEntry,
+    NAME_COLOR_PATTERN,
+    RoomFullError,
+    RoomManager,
+)
 
 
 def test_create_room_generates_unique_code():
@@ -56,15 +62,25 @@ def test_add_player_first_is_host():
     assert p2.is_host is False
 
 
-def test_add_player_uses_requested_name_color_or_random_default():
+def test_registered_player_uses_requested_name_color_or_random_default():
     rm = RoomManager()
     room = rm.create_room(name="Room")
 
-    chosen = rm.add_player(room, "Alice", name_color="#AABBCC")
-    generated = rm.add_player(room, "Bob", name_color="not-a-color")
+    chosen = rm.add_player(room, "Alice", name_color="#AABBCC", is_anonymous=False)
+    generated = rm.add_player(room, "Bob", name_color="not-a-color", is_anonymous=False)
 
     assert chosen.name_color == "#aabbcc"
     assert NAME_COLOR_PATTERN.fullmatch(generated.name_color)
+
+
+def test_anonymous_players_are_forced_to_the_guest_color():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+
+    guest = rm.add_player(room, "Alice", name_color="#AABBCC")
+
+    assert guest.is_anonymous is True
+    assert guest.name_color == ANONYMOUS_NAME_COLOR
 
 
 def test_add_player_respects_max_players():

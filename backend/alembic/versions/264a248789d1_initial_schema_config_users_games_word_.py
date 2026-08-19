@@ -46,8 +46,10 @@ def upgrade() -> None:
     sa.Column('name_color', sa.String(length=16), nullable=True),
     sa.Column('avatar_url', sa.String(length=512), nullable=True),
     sa.Column('is_anonymous', sa.Boolean(), nullable=False),
+    sa.Column('email', sa.String(length=255), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+    sa.Column('last_login_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('users', schema=None) as batch_op:

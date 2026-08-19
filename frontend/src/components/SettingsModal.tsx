@@ -1,4 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useAuthStore } from "../store/authStore";
+import { useGameStore } from "../store/gameStore";
+import { emitWithAck } from "../lib/socket";
+import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
+import { ApiError } from "../lib/api";
+import { AuthDialog, type AuthMode } from "./AccountMenu";
 import { SettingsIcon } from "./SettingsIcon";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { FieldHint, SegmentedControl, Switch } from "./RoomSetupControls";
@@ -53,6 +59,16 @@ function SettingsModalContent() {
   const [draftSoundEffects, setDraftSoundEffects] = useState<boolean>(soundEffects);
   const [draftVolume, setDraftVolume] = useState<number>(volume);
   const [draftNameColor, setDraftNameColor] = useState<string>(nameColor);
+  const authUser = useAuthStore((state) => state.user);
+  const setDisplayName = useAuthStore((state) => state.setDisplayName);
+  const login = useAuthStore((state) => state.login);
+  const register = useAuthStore((state) => state.register);
+  const logout = useAuthStore((state) => state.logout);
+  const activePlayerId = useGameStore((state) => state.playerId);
+  const isGuest = Boolean(authUser?.isAnonymous);
+  const [draftName, setDraftName] = useState<string>(authUser?.displayName ?? "");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [activeRebind, setActiveRebind] = useState<{
     action: keyof KeyBindings;
     slotIndex: number;
@@ -99,7 +115,47 @@ function SettingsModalContent() {
     closeSettings();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    const trimmedName = draftName.trim();
+    const nameChanged = isGuest && trimmedName !== (authUser?.displayName ?? "");
+    if (nameChanged) {
+      const invalid = nicknameError(trimmedName);
+      if (invalid) {
+        setNameError(invalid);
+        setActiveTab("general");
+        return;
+      }
+      try {
+        // In a room the socket owns the change so the seat and the other
+        // players update; outside one, writing the account is enough.
+        if (activePlayerId) {
+          const response = await emitWithAck<{ ok: boolean; error?: string }>(
+            "rename_player",
+            { nickname: trimmedName },
+          );
+          if (!response.ok) {
+            setNameError(response.error || "Could not change your name.");
+            setActiveTab("general");
+            return;
+          }
+          await useAuthStore.getState().fetchMe();
+        } else {
+          await setDisplayName(trimmedName);
+        }
+      } catch (error) {
+        // Surface the server's reason - "that name belongs to a registered
+        // player" is the whole point of the check, and a generic message would
+        // leave the player guessing why it was refused.
+        setNameError(
+          error instanceof ApiError
+            ? error.message
+            : "Could not change your name. Please try again.",
+        );
+        setActiveTab("general");
+        return;
+      }
+    }
+
     setAllSettings({
       keyBindings: draftKeyBindings,
       penCursor: draftPenCursor,
@@ -109,7 +165,11 @@ function SettingsModalContent() {
       volume: draftVolume,
       nameColor: draftNameColor,
     });
-    socket.emit("update_player_settings", { nameColor: draftNameColor });
+    // Guests are pinned to the guest grey server-side, so sending a colour
+    // would only be rejected.
+    if (!isGuest) {
+      socket.emit("update_player_settings", { nameColor: draftNameColor });
+    }
     closeSettings();
   };
 
@@ -176,6 +236,113 @@ function SettingsModalContent() {
           {activeTab === "general" && (
             <div className="settings-section">
               <div className="settings-fields">
+                <h4 className="settings-fields-heading">You</h4>
+
+                <div className="settings-labeled-field">
+                  <label
+                    className="settings-labeled-field-label"
+                    htmlFor="settings-display-name"
+                  >
+                    Name
+                    <FieldHint hint="This is how other players see you." />
+                  </label>
+                  <input
+                    id="settings-display-name"
+                    type="search"
+                    inputMode="text"
+                    value={isGuest ? draftName : (authUser?.username ?? "")}
+                    onChange={(event) => {
+                      setDraftName(event.target.value);
+                      setNameError(null);
+                    }}
+                    maxLength={MAX_NICKNAME_LENGTH}
+                    autoComplete="nickname"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    /* A registered player is their username; changing it here
+                       would let the two drift apart. */
+                    disabled={!isGuest}
+                    aria-describedby={nameError ? "settings-name-error" : undefined}
+                  />
+                  {nameError && (
+                    <p id="settings-name-error" className="auth-error" role="alert">
+                      {nameError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="settings-labeled-field settings-account-field">
+                  <span className="settings-labeled-field-label">Account</span>
+                  {isGuest ? (
+                    <div className="settings-account-row">
+                      <span className="settings-account-status">
+                        Playing as a guest — your name isn’t saved.
+                      </span>
+                      <button
+                        type="button"
+                        className="settings-account-action"
+                        onClick={() => setAuthMode("claim")}
+                      >
+                        Claim your name
+                      </button>
+                      <button
+                        type="button"
+                        className="auth-link"
+                        onClick={() => setAuthMode("login")}
+                      >
+                        Log in
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="settings-account-row">
+                      <span className="settings-account-status">
+                        Signed in as <strong>{authUser?.username}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        className="settings-account-action"
+                        onClick={() => void logout()}
+                      >
+                        Log out
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="settings-labeled-field name-color-setting">
+                  <span className="settings-labeled-field-label">
+                    Player name color
+                    <FieldHint hint="This color is visible to everyone in rooms you join." />
+                  </span>
+                  {isGuest ? (
+                    /* Guests are pinned to the guest grey server-side. Showing
+                       a working picker here would be a control that silently
+                       does nothing. */
+                    <p className="settings-locked-hint">
+                      Guests play in grey. Claim your name to pick a colour.
+                    </p>
+                  ) : (
+                    <div className="name-color-controls">
+                      <input
+                        id="name-color-input"
+                        type="color"
+                        value={draftNameColor}
+                        onChange={(event) => setDraftNameColor(event.target.value)}
+                        aria-label="Player name color"
+                      />
+                      <strong style={{ color: draftNameColor }}>Your colored name</strong>
+                      <button
+                        type="button"
+                        className="name-color-randomize"
+                        onClick={() => setDraftNameColor(randomNameColor(draftNameColor))}
+                      >
+                        Randomize
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <h4 className="settings-fields-heading">Appearance</h4>
                 <SegmentedControl
                   label="Theme"
@@ -185,30 +352,6 @@ function SettingsModalContent() {
                   options={THEME_OPTIONS}
                   onChange={setDraftTheme}
                 />
-
-                <div className="settings-labeled-field name-color-setting">
-                  <span className="settings-labeled-field-label">
-                    Player name color
-                    <FieldHint hint="This color is visible to everyone in rooms you join." />
-                  </span>
-                  <div className="name-color-controls">
-                    <input
-                      id="name-color-input"
-                      type="color"
-                      value={draftNameColor}
-                      onChange={(event) => setDraftNameColor(event.target.value)}
-                      aria-label="Player name color"
-                    />
-                    <strong style={{ color: draftNameColor }}>Your colored name</strong>
-                    <button
-                      type="button"
-                      className="name-color-randomize"
-                      onClick={() => setDraftNameColor(randomNameColor(draftNameColor))}
-                    >
-                      Randomize
-                    </button>
-                  </div>
-                </div>
 
                 <h4 className="settings-fields-heading">Audio</h4>
                 <Switch
@@ -344,11 +487,21 @@ function SettingsModalContent() {
           <button type="button" className="modal-button secondary" onClick={handleDiscard}>
             Discard
           </button>
-          <button type="button" className="modal-button" onClick={handleSave}>
+          <button type="button" className="modal-button" onClick={() => void handleSave()}>
             Save
           </button>
         </div>
       </div>
+
+      {authMode && (
+        <AuthDialog
+          mode={authMode}
+          suggestedUsername={isGuest ? (authUser?.displayName ?? "") : ""}
+          onClose={() => setAuthMode(null)}
+          onSwitchMode={setAuthMode}
+          onSubmit={authMode === "login" ? login : register}
+        />
+      )}
     </div>
   );
 }

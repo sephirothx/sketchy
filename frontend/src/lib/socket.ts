@@ -4,8 +4,14 @@ import type { AckResponse } from "../types";
 // No URL: connect to the origin that served the page. The backend serves the
 // frontend in production and E2E, and the Vite dev server proxies /socket.io,
 // so this is same-origin everywhere and carries the session cookie unchanged.
+//
+// autoConnect is off because the handshake reads the session cookie exactly
+// once, and on a first visit that cookie does not exist until GET /api/auth/me
+// has provisioned the account. Connecting eagerly would bind the socket to no
+// account at all, so the seat it takes could never be reclaimed after signing
+// up. App.tsx connects as soon as identity has settled.
 export const socket: Socket = io({
-  autoConnect: true,
+  autoConnect: false,
   transports: ["websocket", "polling"],
 });
 

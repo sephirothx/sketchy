@@ -2,6 +2,7 @@ import pytest
 from playwright.async_api import Page, async_playwright
 
 from tests.e2e.a11y import assert_no_axe_violations
+from tests.e2e.lobby_helpers import use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -26,7 +27,7 @@ async def _close(playwright, browser, context):
 
 async def _create_waiting_room(page: Page, nickname="A11yHost", *, rounds=None):
     await page.goto(BASE_URL)
-    await page.fill('input[placeholder="Your name"]', nickname)
+    await use_guest_name(page, nickname)
     await page.click('button:has-text("Create room")')
     if rounds is not None:
         current = int(await page.get_by_label("Rounds", exact=True).input_value())
@@ -41,7 +42,7 @@ async def _create_waiting_room(page: Page, nickname="A11yHost", *, rounds=None):
 
 async def _join_by_code(page: Page, code: str, nickname: str):
     await page.goto(BASE_URL)
-    await page.fill('input[placeholder="Your name"]', nickname)
+    await use_guest_name(page, nickname)
     await page.fill('input[placeholder="ABC123"]', code)
     await page.click('button:has-text("Join by code")')
     await page.wait_for_selector('[data-testid="waiting-room"]')
@@ -66,7 +67,7 @@ async def test_lobby_and_settings_axe_and_keyboard(color_scheme, theme):
     playwright, browser, context, page = await _open_chromium(color_scheme, theme)
     try:
         await page.goto(BASE_URL)
-        await page.wait_for_selector('input[placeholder="Your name"]')
+        await page.wait_for_selector('button:has-text("Create room")')
         await assert_no_axe_violations(page, f"lobby {theme}")
 
         settings_button = page.get_by_role("button", name="Game Settings")
@@ -105,7 +106,7 @@ async def test_create_room_and_invite_axe():
     playwright, browser, context, page = await _open_chromium()
     try:
         await page.goto(BASE_URL)
-        await page.fill('input[placeholder="Your name"]', "A11yCreator")
+        await use_guest_name(page, "A11yCreator")
         await page.click('button:has-text("Create room")')
         await page.wait_for_selector("text=Create a room")
         await assert_no_axe_violations(page, "create room")
@@ -122,7 +123,7 @@ async def test_create_room_and_invite_axe():
     playwright, browser, context, page = await _open_chromium()
     try:
         await page.goto(f"{BASE_URL}/room/{code}")
-        await page.wait_for_selector("#invite-nickname")
+        await page.wait_for_selector(".invite-join-form")
         await assert_no_axe_violations(page, "invite entry")
     finally:
         await _close(playwright, browser, context)

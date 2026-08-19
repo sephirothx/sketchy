@@ -3,12 +3,14 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { SettingsIcon } from "../components/SettingsIcon";
+import { AccountMenu } from "../components/AccountMenu";
+import { FirstRunIdentity } from "../components/FirstRunIdentity";
+import { currentPlayerName } from "../store/authStore";
 import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import type { AckResponse, RoomSummary } from "../types";
 
 const POLL_INTERVAL_MS = 4000;
@@ -68,13 +70,12 @@ function RemovedFromRoomDialog({
 export function LobbyBrowserPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const nickname = useGameStore((s) => s.nickname);
-  const setNickname = useGameStore((s) => s.setNickname);
   const openSettings = useSettingsStore((s) => s.openSettings);
   const nameColor = useSettingsStore((s) => s.nameColor);
   const setSession = useGameStore((s) => s.setSession);
+  const setExitingRoom = useGameStore((s) => s.setExitingRoom);
 
-  const [nicknameInput, setNicknameInput] = useState(nickname);
+
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +90,11 @@ export function LobbyBrowserPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [hideFullRooms, setHideFullRooms] = useState(false);
   const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
+
+  // Arriving at the lobby means any room exit has completed.
+  useEffect(() => {
+    setExitingRoom(false);
+  }, [setExitingRoom]);
 
   useEffect(() => {
     // The polling controller stops new work; this flag also prevents an
@@ -162,22 +168,12 @@ export function LobbyBrowserPage() {
     return true;
   });
 
-  function requireNickname(): boolean {
-    if (!nicknameInput.trim()) {
-      setError("Please enter a nickname first");
-      return false;
-    }
-    setNickname(nicknameInput.trim());
-    return true;
-  }
-
+  // No gate: every visitor already has a name, generated on their first load.
   function handleOpenCreateRoom() {
-    if (!requireNickname()) return;
     navigate("/create");
   }
 
   async function handleJoinByCode(asSpectator = false) {
-    if (!requireNickname()) return;
     if (!joinCode.trim()) {
       setError("Please enter a room code");
       return;
@@ -186,7 +182,6 @@ export function LobbyBrowserPage() {
   }
 
   async function handleJoinRoom(room: RoomSummary, asSpectator = false) {
-    if (!requireNickname()) return;
     await joinRoom({ roomId: room.id }, asSpectator, room.id);
   }
 
@@ -196,13 +191,13 @@ export function LobbyBrowserPage() {
     setError(null);
     try {
       const res = await emitWithAck<AckResponse>("join_room", {
-        nickname: nicknameInput.trim(),
+        nickname: currentPlayerName(),
         nameColor,
         asSpectator,
         ...target,
       });
-      if (res.ok && res.roomId && res.code && res.playerId && res.reconnectSecret) {
-        setSession({ roomId: res.roomId, code: res.code, playerId: res.playerId, reconnectSecret: res.reconnectSecret });
+      if (res.ok && res.roomId && res.code && res.playerId) {
+        setSession({ roomId: res.roomId, code: res.code, playerId: res.playerId });
         navigate(`/room/${res.code}`);
       } else {
         setError(res.error || "Failed to join room");
@@ -220,37 +215,20 @@ export function LobbyBrowserPage() {
         <div>
           <h1>Sketchy</h1>
         </div>
-        <button
-          type="button"
-          className="header-settings-button"
-          onClick={openSettings}
-          title="Game Settings"
-          aria-label="Game Settings"
-        >
-          <SettingsIcon size={16} />
-          <span className="header-action-label">Settings</span>
-        </button>
+        <div className="lobby-header-actions">
+          <AccountMenu />
+          <button
+            type="button"
+            className="header-settings-button"
+            onClick={openSettings}
+            title="Game Settings"
+            aria-label="Game Settings"
+          >
+            <SettingsIcon size={16} />
+            <span className="header-action-label">Settings</span>
+          </button>
+        </div>
       </div>
-
-      <section className="panel">
-        <label>
-          Nickname
-          {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
-          <input
-            type="search"
-            inputMode="text"
-            value={nicknameInput}
-            onChange={(e) => setNicknameInput(e.target.value)}
-            maxLength={MAX_NICKNAME_LENGTH}
-            placeholder="Your name"
-            autoComplete="nickname"
-            autoCapitalize="words"
-            spellCheck={false}
-            autoCorrect="off"
-            enterKeyHint="done"
-          />
-        </label>
-      </section>
 
       {criticalError && (
         <RemovedFromRoomDialog
@@ -258,6 +236,10 @@ export function LobbyBrowserPage() {
           onDismiss={() => setCriticalError(null)}
         />
       )}
+
+
+
+      <FirstRunIdentity />
 
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
 

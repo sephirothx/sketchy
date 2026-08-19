@@ -26,11 +26,18 @@ def canvas_action(game: Game, sequence: int) -> list[int]:
 
 
 def contains_secret(value, secret: str) -> bool:
+    """Whether a payload leaks a credential, by value or by telltale key.
+
+    The credential is now the JWT in the session cookie rather than a per-room
+    secret, but the property being guarded is unchanged: nothing that
+    identifies a player to the server may appear in anything broadcast to
+    other players.
+    """
     if value == secret:
         return True
     if isinstance(value, dict):
         return any(
-            key in {"reconnectSecret", "reconnect_secret"}
+            key in {"reconnectSecret", "reconnect_secret", "sessionToken", "userId", "user_id"}
             or contains_secret(item, secret)
             for key, item in value.items()
         )
@@ -39,11 +46,11 @@ def contains_secret(value, secret: str) -> bool:
     return False
 
 @pytest.mark.asyncio
-async def test_public_player_ids_are_broadcast_but_reconnect_secrets_are_private():
+async def test_public_player_ids_are_broadcast_but_account_identity_is_private():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value=None)
+    sio.get_session = AsyncMock(return_value={"user_id": "secret-user-id"})
     sio.save_session = AsyncMock()
     sio.enter_room = AsyncMock()
     sio.emit = AsyncMock()
@@ -55,8 +62,10 @@ async def test_public_player_ids_are_broadcast_but_reconnect_secrets_are_private
     assert room is not None
     host = room.players[response["playerId"]]
     assert response["playerId"] == host.id
-    assert response["reconnectSecret"] == host.reconnect_secret
-    assert host.id != host.reconnect_secret
+    # The acknowledgement hands back no credential at all now.
+    assert "reconnectSecret" not in response
+    assert host.user_id == "secret-user-id"
+    assert host.id != host.user_id
 
     room.last_game_scores = [
         {
@@ -80,7 +89,7 @@ async def test_public_player_ids_are_broadcast_but_reconnect_secrets_are_private
     )
     host.kick_votes.add(host.id)
     sio.get_session = AsyncMock(
-        return_value={"room_id": room.id, "player_id": host.id}
+        return_value={"room_id": room.id, "player_id": host.id, "user_id": host.user_id}
     )
     assert await sio.handlers["/"]["send_chat"](
         "host-sid", {"text": "hello"}
@@ -96,40 +105,49 @@ async def test_public_player_ids_are_broadcast_but_reconnect_secrets_are_private
         player["playerId"] == host.id
         for player in room.to_state_payload()["players"]
     )
-    assert all(not contains_secret(payload, host.reconnect_secret) for payload in shared_payloads)
+    assert all(not contains_secret(payload, host.user_id) for payload in shared_payloads)
 
 @pytest.mark.asyncio
 async def test_reconnect_supersedes_old_socket_and_rejects_stale_host_commands():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room")
-    host = room_manager.add_player(room, "Host")
+    host = room_manager.add_player(room, "Host", user_id="host-user")
     host.sid = "old-sid"
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value=None)
     sio.save_session = AsyncMock()
     sio.enter_room = AsyncMock()
     sio.disconnect = AsyncMock()
     sio.emit = AsyncMock()
 
+    # Knowing the public player id is not enough: a different account joining
+    # the room gets its own seat rather than taking over the host's.
+    sio.get_session = AsyncMock(return_value={"user_id": "someone-else"})
     impersonation = await sio.handlers["/"]["join_room"](
         "attacker-sid",
-        {"code": room.code, "reconnectSecret": host.id},
+        {"code": room.code, "nickname": "Attacker"},
     )
-    assert impersonation["ok"] is False
-    assert impersonation["invalidReconnectSecret"] is True
+    assert impersonation["ok"] is True
+    assert impersonation["playerId"] != host.id
     assert host.sid == "old-sid"
+    sio.disconnect.assert_not_awaited()
 
+    # The host's own account reclaims their seat and displaces the old socket.
+    sio.get_session = AsyncMock(return_value={"user_id": "host-user"})
     response = await sio.handlers["/"]["join_room"](
         "new-sid",
-        {"code": room.code, "reconnectSecret": host.reconnect_secret},
+        {"code": room.code, "nickname": "Host"},
     )
 
     assert response["ok"] is True
     assert response["playerId"] == host.id
     assert host.sid == "new-sid"
     sio.disconnect.assert_awaited_once_with("old-sid")
+    assert any(
+        call.args[0] == "session_superseded"
+        for call in sio.emit.await_args_list
+    )
 
     sio.get_session = AsyncMock(
         side_effect=lambda sid: {"room_id": room.id, "player_id": host.id}
@@ -167,39 +185,11 @@ async def test_session_player_id_cannot_impersonate_another_active_player():
     )
 
 @pytest.mark.asyncio
-async def test_join_with_expired_reconnect_secret_does_not_create_fallback_player():
+async def test_join_without_a_session_cookie_still_seats_the_player():
+    """A visitor whose browser sends no cookie plays, just without reconnect."""
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=False)
-    room_manager.add_player(room, "Host")
-
-    sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
-    sio.get_session = AsyncMock(return_value=None)
-    join_room = sio.handlers["/"]["join_room"]
-
-    response = await join_room(
-        "visitor-sid",
-        {"code": room.code, "reconnectSecret": "expired-secret", "nickname": ""},
-    )
-
-    assert response == {
-        "ok": False,
-        "error": "Your previous room session has expired",
-        "invalidReconnectSecret": True,
-    }
-    assert [player.nickname for player in room.player_list()] == ["Host"]
-
-@pytest.mark.asyncio
-async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase():
-    room_manager = RoomManager()
-    room = room_manager.create_room(name="Room", is_public=True)
-    drawer = room_manager.add_player(room, "Drawer")
-    room_manager.add_player(room, "Guesser")
-    drawer.connected = False
-    drawer.sid = None
-    room.game = Game(turn_order=list(room.players))
-    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.set_phase_deadline(15)
+    room_manager.add_player(room, "Host", user_id="host-user")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -209,13 +199,53 @@ async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase()
     sio.emit = AsyncMock()
     join_room = sio.handlers["/"]["join_room"]
 
+    response = await join_room("visitor-sid", {"code": room.code, "nickname": "Visitor"})
+
+    assert response["ok"] is True
+    seated = room.players[response["playerId"]]
+    assert seated.user_id is None
+    assert seated.is_anonymous is True
+    assert sorted(p.nickname for p in room.player_list()) == ["Host", "Visitor"]
+
+
+@pytest.mark.asyncio
+async def test_join_rejects_a_nickname_breaking_the_shared_name_rule():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=False)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value=None)
+    join_room = sio.handlers["/"]["join_room"]
+
+    for bad in ["ab", "has space", "Guest", "way-too-long-a-nickname"]:
+        response = await join_room("visitor-sid", {"code": room.code, "nickname": bad})
+        assert response["ok"] is False, bad
+    assert room.player_list() == []
+
+@pytest.mark.asyncio
+async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer", user_id="drawer-user")
+    room_manager.add_player(room, "Guesser")
+    drawer.connected = False
+    drawer.sid = None
+    room.game = Game(turn_order=list(room.players))
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.set_phase_deadline(15)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"user_id": "drawer-user"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+    join_room = sio.handlers["/"]["join_room"]
+
     response = await join_room(
         "new-sid",
-        {
-            "code": room.code,
-            "reconnectSecret": drawer.reconnect_secret,
-            "nickname": drawer.nickname,
-        },
+        {"code": room.code, "nickname": drawer.nickname},
     )
 
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
@@ -255,7 +285,7 @@ async def test_already_joined_socket_resyncs_active_drawing_state():
         "roomId": room.id,
         "code": room.code,
         "playerId": drawer.id,
-        "reconnectSecret": drawer.reconnect_secret,
+        "isAnonymous": drawer.is_anonymous,
     }
     assert "sync_game" in emitted_events
     assert "you_are_drawing" in emitted_events

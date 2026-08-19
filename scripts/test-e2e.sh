@@ -11,6 +11,7 @@ VENV_PY="$BACKEND_DIR/.venv/bin/python"
 VENV_PIP="$BACKEND_DIR/.venv/bin/pip"
 PORT="${PORT:-8000}"
 SERVER_LOG=""
+E2E_DB=""
 SERVER_PID=""
 STARTUP_FAILED=false
 
@@ -52,8 +53,15 @@ log "Building frontend for E2E tests"
 
 # Start background server
 SERVER_LOG="$(mktemp "${TMPDIR:-/tmp}/sketchy-e2e-server.XXXXXX")"
+# Usernames are permanently unique, so a database carried over from a previous
+# run would make account tests collide on the second run. Each run gets its own
+# throwaway database, removed on exit.
+E2E_DB="$(mktemp "${TMPDIR:-/tmp}/sketchy-e2e-db.XXXXXX")"
+rm -f "$E2E_DB"
 log "Starting background server on http://127.0.0.1:$PORT"
-(cd "$BACKEND_DIR" && "$BACKEND_DIR/.venv/bin/uvicorn" app.main:app --host 127.0.0.1 --port "$PORT" --log-level warning) >"$SERVER_LOG" 2>&1 &
+(cd "$BACKEND_DIR" && DATABASE_URL="sqlite+aiosqlite:///$E2E_DB" \
+  AUTH_LOGIN_LIMIT=1000 AUTH_REGISTER_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 \
+  "$BACKEND_DIR/.venv/bin/uvicorn" app.main:app --host 127.0.0.1 --port "$PORT" --log-level warning) >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
 cleanup() {
@@ -65,6 +73,7 @@ cleanup() {
     wait "$SERVER_PID" 2>/dev/null || true
   fi
   rm -f "$SERVER_LOG"
+  [[ -n "${E2E_DB:-}" ]] && rm -f "$E2E_DB"
 }
 trap cleanup EXIT
 

@@ -83,8 +83,28 @@ jobs:
           python -m venv backend/.venv
           backend/.venv/bin/pip install -q -r backend/requirements-dev.txt
 
+      # Cache the browser binaries so a green run touches the Playwright CDN
+      # not at all. Keyed on the pinned playwright version, so a bump
+      # re-downloads rather than reusing browsers the new client cannot drive.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('backend/requirements-dev.txt') }}
+
+      # Deliberately without --with-deps. That flag spent ~66s of a ~76s step
+      # running apt, and it is where this job hung twice on an unreachable
+      # Ubuntu mirror. Everything it installed was fonts (CJK, Thai, Cyrillic)
+      # and media codecs (x264, vpx, opus, dav1d) - the real browser runtime
+      # libraries (libnss3, libgbm, libatk, libasound2) are already on the
+      # runner image, which ships Chrome and Firefox. These tests draw on a
+      # canvas, mute audio, record no video, and assert only Latin text.
+      #
+      # If a browser ever fails to launch here, run `playwright install-deps`
+      # and add back only the package it names.
       - name: Install Playwright browsers
-        run: backend/.venv/bin/python -m playwright install --with-deps --only-shell chromium firefox
+        timeout-minutes: 5
+        run: backend/.venv/bin/python -m playwright install --only-shell chromium firefox
 
       - name: Install frontend dependencies
         run: npm ci

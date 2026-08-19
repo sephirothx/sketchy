@@ -1,5 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
+from tests.e2e.lobby_helpers import register_account, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -55,9 +56,14 @@ async def test_settings_dialog_pen_cursor_scenario():
 
         try:
             await page.goto(BASE_URL)
-            await page.fill('input[placeholder="Your name"]', "SettingsTester")
+            await use_guest_name(page, "SettingsTester")
             await page.click('button:has-text("Create room")')
             await page.click('button:has-text("Create room")')
+
+            # Name colours belong to registered players: a guest is pinned to
+            # the grey that marks their name as unclaimed, so claim the account
+            # before exercising the colour picker.
+            await register_account(page, "SettingsTester")
 
             # Open Settings Modal
             await page.wait_for_selector('button.header-settings-button')

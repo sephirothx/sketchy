@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
+from app.auth.middleware import SessionAuthMiddleware
+from app.auth.routes import create_auth_router
 from app.db import async_session_factory, init_db
 from app.db.seed import seed_word_lists
 from app.handlers import register_all_handlers
@@ -70,6 +72,7 @@ handler_context = register_all_handlers(
     user_repo=user_repo,
     game_history_repo=game_history_repo,
     word_list_repo=word_list_repo,
+    session_factory=async_session_factory,
 )
 
 
@@ -84,12 +87,18 @@ async def lifespan(_app: FastAPI):
 
 
 api = FastAPI(title="Sketchy", lifespan=lifespan)
+# No allow_credentials: the frontend is served from this same origin, so the
+# session cookie rides along without CORS involvement. Turning credentials on
+# alongside a wildcard origin is invalid anyway, and would be the only reason
+# to need CSRF tokens on top of SameSite=Lax.
 api.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+api.add_middleware(SessionAuthMiddleware, session_factory=async_session_factory)
+api.include_router(create_auth_router(user_repo, async_session_factory))
 
 
 @api.get("/api/health")

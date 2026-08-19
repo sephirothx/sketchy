@@ -2,15 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { RoomEntryMachine, type RoomEntrySnapshot, type RoomJoinMode } from "../lib/roomEntryState";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
+import { useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, RoomPreviewResponse } from "../types";
 
 export function useRoomEntry(code: string) {
-  const nickname = useGameStore((state) => state.nickname);
-  const setNickname = useGameStore((state) => state.setNickname);
+  const nickname = useAuthStore((state) => state.user?.displayName ?? "");
   const setSession = useGameStore((state) => state.setSession);
-  const getReconnectSecret = useGameStore((state) => state.getStoredReconnectSecret);
-  const clearReconnectSecret = useGameStore((state) => state.clearStoredReconnectSecret);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const machineRef = useRef<RoomEntryMachine | null>(null);
   const [snapshot, setSnapshot] = useState<RoomEntrySnapshot>({
@@ -20,14 +18,15 @@ export function useRoomEntry(code: string) {
 
   useEffect(() => {
     const machine = new RoomEntryMachine(code, nickname, {
-      getReconnectSecret,
-      clearReconnectSecret,
-      reconnect: ({ code: roomCode, nickname: playerNickname, reconnectSecret }) =>
+      reconnect: ({ code: roomCode, nickname: playerNickname }) =>
         emitWithAck<AckResponse>("join_room", {
           code: roomCode,
           nickname: playerNickname,
           nameColor,
-          reconnectSecret,
+          // Ask only whether this account already holds a seat. Without this
+          // the server would seat the visitor before they had chosen between
+          // playing and spectating.
+          resumeOnly: true,
         }),
       preview: (roomCode) =>
         emitWithAck<RoomPreviewResponse>("get_room_preview", { code: roomCode }),
@@ -38,7 +37,6 @@ export function useRoomEntry(code: string) {
           nameColor,
           asSpectator: mode === "spectator",
         }),
-      saveNickname: setNickname,
       acceptSession: setSession,
       requestErrorMessage: socketRequestErrorMessage,
     });
@@ -50,7 +48,7 @@ export function useRoomEntry(code: string) {
       machine.dispose();
       if (machineRef.current === machine) machineRef.current = null;
     };
-  }, [clearReconnectSecret, code, getReconnectSecret, nameColor, nickname, setNickname, setSession]);
+  }, [code, nameColor, nickname, setSession]);
 
   function setNicknameInput(value: string) {
     machineRef.current?.setNicknameInput(value);

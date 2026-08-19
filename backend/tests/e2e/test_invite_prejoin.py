@@ -1,14 +1,13 @@
 import pytest
 from playwright.async_api import async_playwright
+from tests.e2e.lobby_helpers import use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
 
 
 @pytest.mark.asyncio
-async def test_invite_preview_join_spectate_full_room_and_reconnect(
-    assert_input_contract,
-):
+async def test_invite_preview_join_spectate_full_room_and_reconnect():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         host_context = await browser.new_context()
@@ -23,7 +22,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect(
 
         try:
             await host_page.goto(BASE_URL)
-            await host_page.fill('input[placeholder="Your name"]', "InviteHost")
+            await use_guest_name(host_page, "InviteHost")
             await host_page.click('button:has-text("Create room")')
             await host_page.fill('input[placeholder="Leave blank for a random name!"]', "Invite Test Room")
             await host_page.get_by_role("button", name="Private").click()
@@ -37,23 +36,19 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect(
 
             # Previewing a private invite does not join the room.
             await spectator_page.goto(invite_url)
-            await spectator_page.wait_for_selector("#invite-nickname")
-            await assert_input_contract(spectator_page.locator("#invite-nickname"), {
-                "type": "search",
-                "inputMode": "text",
-                "autoComplete": "off",
-                "autoCapitalize": "words",
-                "spellCheck": False,
-                "autoCorrect": "off",
-                "enterKeyHint": "go",
-            })
+            # No name field here any more: the account already carries a
+            # name, shown and editable in the header.
+            assert await spectator_page.locator("#invite-nickname").count() == 0
+            await spectator_page.wait_for_selector(".first-run, .identity-chip")
+
             assert await spectator_page.is_visible("text=Invite Test Room")
             assert await spectator_page.is_visible("text=Private invite")
             assert await spectator_page.is_visible("text=1/3")
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
             # Visitors can explicitly spectate.
-            await spectator_page.fill("#invite-nickname", "InviteSpectator")
+            # The invite screen no longer asks for a name - the account has one.
+            await use_guest_name(spectator_page, "InviteSpectator")
             await spectator_page.click('button:has-text("Spectate")')
             await spectator_page.wait_for_selector(".room-copy-button")
             spectator_indicator = host_page.locator('[data-testid="spectator-indicator"]')
@@ -89,8 +84,8 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect(
 
             # Visitors can join as a player, and valid stored tokens reconnect on reload.
             await player_page.goto(invite_url)
-            await player_page.wait_for_selector("#invite-nickname")
-            await player_page.fill("#invite-nickname", "InvitePlayer")
+            await player_page.wait_for_selector(".first-run, .identity-chip")
+            await use_guest_name(player_page, "InvitePlayer")
             await player_page.click('button:has-text("Join game")')
             await player_page.wait_for_selector(".room-copy-button")
             await player_page.reload()
@@ -99,10 +94,10 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect(
 
             # Once active-player capacity is full, spectating remains available.
             await full_room_page.goto(invite_url)
-            await full_room_page.wait_for_selector("#invite-nickname")
+            await full_room_page.wait_for_selector(".first-run, .identity-chip")
             assert await full_room_page.is_disabled('button:has-text("Room full")')
             assert await full_room_page.is_visible("text=Spectating is still open.")
-            await full_room_page.fill("#invite-nickname", "LateSpectator")
+            await use_guest_name(full_room_page, "LateSpectator")
             await full_room_page.click('button:has-text("Spectate")')
             await full_room_page.wait_for_selector(".room-copy-button")
         finally:

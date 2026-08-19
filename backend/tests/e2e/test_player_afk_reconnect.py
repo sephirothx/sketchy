@@ -1,5 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
+from tests.e2e.lobby_helpers import use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -27,7 +28,7 @@ async def test_player_afk_and_disconnect_scenario():
         try:
             # Step 1: Host creates room
             await page1.goto(BASE_URL)
-            await page1.fill('input[placeholder="Your name"]', "HostPlayer")
+            await use_guest_name(page1, "HostPlayer")
             await page1.click('button:has-text("Create room")')
             await page1.click('button:has-text("Create room")')
 
@@ -37,7 +38,7 @@ async def test_player_afk_and_disconnect_scenario():
 
             # Step 2: Player joins room via Join by code
             await page2.goto(BASE_URL)
-            await page2.fill('input[placeholder="Your name"]', "AFKPlayer")
+            await use_guest_name(page2, "AFKPlayer")
             await page2.fill('input[placeholder="ABC123"]', code)
             await page2.click('button:has-text("Join by code")')
 
@@ -47,10 +48,10 @@ async def test_player_afk_and_disconnect_scenario():
             await page1.wait_for_selector('[data-testid="waiting-room"]')
 
             # Step 4: Player toggles AFK in Browser 2
-            await page2.click('button:has-text("AFK")')
+            await page2.click(".game-header-afk-button")
 
             # Verify AFK button text toggled to AFK 💤
-            await page2.wait_for_selector('button:has-text("AFK 💤")')
+            await page2.wait_for_selector('.game-header-afk-button:has-text("AFK 💤")')
 
             # Step 5: Player closes Browser 2 context
             await context2.close()

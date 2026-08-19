@@ -10,7 +10,7 @@ from app.game import (
     Game,
     Phase,
 )
-from app.handlers.auth import (
+from app.handlers.sessions import (
     existing_player_for_sid as resolve_existing_player_for_sid,
     require_current_player as resolve_current_player,
 )
@@ -328,9 +328,27 @@ class GameFlowService:
             superseded_sid = player.sid if player.sid != sid else None
             player.sid = sid
             player.connected = True
-            await sio.save_session(sid, {"room_id": room.id, "player_id": player.id})
+            # Preserve the account bound at handshake time: the session dict is
+            # replaced wholesale here, and losing user_id would strand the
+            # player with no way to reconnect to their own seat.
+            previous = await sio.get_session(sid) or {}
+            await sio.save_session(
+                sid,
+                {
+                    "room_id": room.id,
+                    "player_id": player.id,
+                    "user_id": previous.get("user_id"),
+                },
+            )
             await sio.enter_room(sid, room.id)
             if superseded_sid:
+                # Say why before cutting it off, otherwise the displaced tab
+                # just freezes on a board that no longer updates.
+                await sio.emit(
+                    "session_superseded",
+                    {"reason": "This room was opened in another tab."},
+                    to=superseded_sid,
+                )
                 await sio.disconnect(superseded_sid)
             timer_manager.cancel_disconnect_timer(player.id)
             await _emit_room_state(room)
@@ -470,6 +488,7 @@ class GameFlowService:
                         "playerId": p.id,
                         "nickname": p.nickname,
                         "nameColor": p.name_color,
+                        "isAnonymous": p.is_anonymous,
                         "score": p.score,
                     }
                     for p in sorted(room.player_list(), key=lambda p: -p.score)

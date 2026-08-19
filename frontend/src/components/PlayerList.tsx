@@ -4,6 +4,7 @@ import type { ModerationState, PlayerInfo } from "../types";
 import { socket } from "../lib/socket";
 import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
+import { playerNameClass, playerNameStyle } from "../lib/playerName";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -118,7 +119,11 @@ export function PlayerList({
               isAfk={p.isAfk}
             />
             <span className="player-name">
-              <FittedPlayerName nickname={p.nickname} nameColor={p.nameColor} />
+              <FittedPlayerName
+                nickname={p.nickname}
+                nameColor={p.nameColor}
+                isAnonymous={p.isAnonymous}
+              />
               {isMe && <span className="player-you-mark">you</span>}
               {!p.connected && <span className="visually-hidden">Disconnected</span>}
             </span>
@@ -161,12 +166,20 @@ function votePlayer(targetPlayerId: string, action: "kick" | "afk") {
 function FittedPlayerName({
   nickname,
   nameColor,
+  isAnonymous,
 }: {
   nickname: string;
   nameColor?: string;
+  isAnonymous?: boolean;
 }) {
   return (
-    <span className="colored-player-name" style={{ color: nameColor }}>
+    <span
+      className={playerNameClass(isAnonymous)}
+      style={playerNameStyle(nameColor, isAnonymous)}
+      // Guests are visually distinct, so state it for screen readers too
+      // rather than relying on the italics alone.
+      title={isAnonymous ? `${nickname} (guest)` : undefined}
+    >
       {nickname}
     </span>
   );

@@ -1,7 +1,23 @@
 import type { AckResponse, RoomPreviewResponse, RoomSummary } from "../types";
 
-/** Keep in sync with backend/app/handlers/payloads.py MAX_NICKNAME_LENGTH. */
+/** Keep in sync with backend/app/auth/names.py. Guest nicknames and account
+ * usernames share one rule, so a guest name can be claimed as a username. */
 export const MAX_NICKNAME_LENGTH = 16;
+export const MIN_NICKNAME_LENGTH = 3;
+export const NICKNAME_PATTERN = /^[a-zA-Z0-9_-]{3,16}$/;
+export const NICKNAME_RULE_MESSAGE =
+  "Use 3-16 characters: letters, numbers, hyphens or underscores. No spaces.";
+const RESERVED_NICKNAMES = new Set(["guest", "system", "admin", "sketchy", "server", "you"]);
+
+/** Mirrors the server rule so the form can object before a round trip. */
+export function nicknameError(value: string): string | null {
+  const trimmed = value.trim();
+  if (!NICKNAME_PATTERN.test(trimmed)) return NICKNAME_RULE_MESSAGE;
+  if (RESERVED_NICKNAMES.has(trimmed.toLowerCase())) {
+    return "That name is reserved. Please choose another.";
+  }
+  return null;
+}
 
 export type RoomJoinMode = "player" | "spectator";
 
@@ -15,7 +31,6 @@ export interface RoomSession {
   roomId: string;
   code: string;
   playerId: string;
-  reconnectSecret: string;
 }
 
 export interface RoomEntrySnapshot {
@@ -24,20 +39,14 @@ export interface RoomEntrySnapshot {
 }
 
 export interface RoomEntryDependencies {
-  getReconnectSecret: (code: string) => string | null;
-  clearReconnectSecret: (code: string) => void;
-  reconnect: (args: {
-    code: string;
-    nickname: string;
-    reconnectSecret: string;
-  }) => Promise<AckResponse>;
+  /** Rejoin an existing seat; the session cookie identifies the player. */
+  reconnect: (args: { code: string; nickname: string }) => Promise<AckResponse>;
   preview: (code: string) => Promise<RoomPreviewResponse>;
   join: (args: {
     code: string;
     nickname: string;
     mode: RoomJoinMode;
   }) => Promise<AckResponse>;
-  saveNickname: (nickname: string) => void;
   acceptSession: (session: RoomSession) => void;
   requestErrorMessage: (error: unknown, action: string) => string;
 }
@@ -45,18 +54,13 @@ export interface RoomEntryDependencies {
 type Listener = (snapshot: RoomEntrySnapshot) => void;
 
 function sessionFrom(response: AckResponse): RoomSession | null {
-  if (
-    !response.ok
-    || !response.roomId
-    || !response.code
-    || !response.playerId
-    || !response.reconnectSecret
-  ) return null;
+  if (!response.ok || !response.roomId || !response.code || !response.playerId) {
+    return null;
+  }
   return {
     roomId: response.roomId,
     code: response.code,
     playerId: response.playerId,
-    reconnectSecret: response.reconnectSecret,
   };
 }
 
@@ -98,38 +102,26 @@ export class RoomEntryMachine {
   async load(): Promise<void> {
     const version = ++this.requestVersion;
     this.publish({ ...this.snapshot, state: { status: "loading" } });
-    let notice: string | undefined;
 
     try {
-      const reconnectSecret = this.dependencies.getReconnectSecret(this.code);
-      if (reconnectSecret) {
-        const response = await this.dependencies.reconnect({
-          code: this.code,
-          nickname: this.snapshot.nicknameInput,
-          reconnectSecret,
-        });
-        if (!this.isCurrent(version)) return;
-
-        const session = sessionFrom(response);
-        if (session) {
-          this.dependencies.acceptSession(session);
-          return;
-        }
-        if (!response.invalidReconnectSecret) {
-          this.publish({
-            ...this.snapshot,
-            state: { status: "error", message: response.error || "Could not reconnect to this room" },
-          });
-          return;
-        }
-        this.dependencies.clearReconnectSecret(this.code);
-        notice = "Your previous session expired. Choose how you would like to rejoin.";
+      // Always attempt a rejoin: the session cookie is sent automatically, so
+      // the server can tell whether this account already holds a seat here.
+      // Anyone without one simply falls through to the invite preview.
+      const rejoin = await this.dependencies.reconnect({
+        code: this.code,
+        nickname: this.snapshot.nicknameInput,
+      });
+      if (!this.isCurrent(version)) return;
+      const existing = sessionFrom(rejoin);
+      if (existing) {
+        this.dependencies.acceptSession(existing);
+        return;
       }
 
       const response = await this.dependencies.preview(this.code);
       if (!this.isCurrent(version)) return;
       if (response.ok && response.room) {
-        this.publish({ ...this.snapshot, state: { status: "preview", room: response.room, notice } });
+        this.publish({ ...this.snapshot, state: { status: "preview", room: response.room } });
       } else {
         this.publish({
           ...this.snapshot,
@@ -150,10 +142,11 @@ export class RoomEntryMachine {
     if (current.status !== "preview") return;
 
     const nickname = this.snapshot.nicknameInput.trim();
-    if (!nickname) {
+    const invalid = nickname ? nicknameError(nickname) : "Enter a nickname to continue.";
+    if (invalid) {
       this.publish({
         ...this.snapshot,
-        state: { ...current, error: "Enter a nickname to continue." },
+        state: { ...current, error: invalid },
       });
       return;
     }
@@ -169,7 +162,6 @@ export class RoomEntryMachine {
       if (!this.isCurrent(version)) return;
       const session = sessionFrom(response);
       if (session) {
-        this.dependencies.saveNickname(nickname);
         this.dependencies.acceptSession(session);
         return;
       }

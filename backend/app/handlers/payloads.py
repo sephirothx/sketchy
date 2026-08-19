@@ -17,7 +17,7 @@ Command inventory (client request shape)
 ``create_room`` CreateRoomPayload; ``join_room`` JoinRoomPayload;
 ``get_room_preview`` RoomPreviewPayload; ``update_room_settings``
 UpdateRoomSettingsPayload; ``update_player_settings`` PlayerSettingsPayload;
-``get_recap_drawing`` RecapDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
+``rename_player`` RenamePlayerPayload; ``get_recap_drawing`` RecapDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
 ``vote_player`` VotePayload; ``cast_restart_vote`` RestartVotePayload;
 ``select_word`` SelectWordPayload; ``send_chat`` and
 ``guess`` TextPayload; ``buy_hint`` HintPayload; ``buy_wheel_letter``
@@ -35,6 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from app.game import HINT_MODES, SCORING_MODES
 from app.live_drawing import LiveDrawingPacket, decode_live_drawing
+from app.auth.names import MAX_NAME_LENGTH, NAME_RULE_MESSAGE, NameError_, validate_name
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import (
     DEFAULT_ROOM_DRAWING_SECONDS,
@@ -47,8 +48,9 @@ from app.words import MAX_RAW_INPUT_LENGTH, MAX_WORD_LENGTH
 
 MAX_CANVAS_SEQUENCE = 2**31 - 1
 MAX_ROOM_NAME_LENGTH = 40
+# Guest nicknames and account usernames share one rule (app/auth/names.py).
 # Keep in sync with frontend/src/lib/roomEntryState.ts MAX_NICKNAME_LENGTH.
-MAX_NICKNAME_LENGTH = 16
+MAX_NICKNAME_LENGTH = MAX_NAME_LENGTH
 MAX_IDENTIFIER_LENGTH = 128
 
 
@@ -145,7 +147,10 @@ class CreateRoomPayload(RoomSettingsFields):
     @field_validator("nickname")
     @classmethod
     def normalize_nickname(cls, value: str) -> str:
-        return value.strip() or "Player"
+        try:
+            return validate_name(value)
+        except NameError_ as error:
+            raise ValueError(str(error) or NAME_RULE_MESSAGE) from error
 
 
 class UpdateRoomSettingsPayload(RequestModel):
@@ -209,18 +214,25 @@ class UpdateRoomSettingsPayload(RequestModel):
 
 
 class JoinRoomPayload(RequestModel):
-    reconnect_secret: str | None = Field(default=None, alias="reconnectSecret", max_length=MAX_IDENTIFIER_LENGTH)
     room_id: str | None = Field(default=None, alias="roomId", max_length=MAX_IDENTIFIER_LENGTH)
     code: str | None = Field(default=None, max_length=16)
     nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
     name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
     as_spectator: bool = Field(default=False, alias="asSpectator")
     soft: bool = False
+    # "Do I already hold a seat here?" - used by the invite screen, which must
+    # not seat a visitor who is still deciding whether to play or spectate.
+    resume_only: bool = Field(default=False, alias="resumeOnly")
 
     @field_validator("nickname")
     @classmethod
     def normalize_nickname(cls, value: str) -> str:
-        return value.strip() or "Player"
+        # Only trimmed here, deliberately. A join carrying an empty or stale
+        # name still has to reach the handler, which resolves identity from the
+        # session cookie - rejecting it at the payload would stop a returning
+        # player from resuming their seat. resolve_identity applies the naming
+        # rule at the point a genuinely new seat is created.
+        return value.strip()
 
     @field_validator("code")
     @classmethod
@@ -245,6 +257,18 @@ class RoomPreviewPayload(RequestModel):
 
 class PlayerSettingsPayload(RequestModel):
     name_color: str = Field(alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+class RenamePlayerPayload(RequestModel):
+    nickname: str = Field(max_length=MAX_NICKNAME_LENGTH)
+
+    @field_validator("nickname")
+    @classmethod
+    def normalize_nickname(cls, value: str) -> str:
+        try:
+            return validate_name(value)
+        except NameError_ as error:
+            raise ValueError(str(error) or NAME_RULE_MESSAGE) from error
 
 
 class RecapDrawingPayload(RequestModel):

@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 from playwright.async_api import async_playwright
+from tests.e2e.lobby_helpers import use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -34,9 +35,13 @@ async def test_room_list_failure_retry_and_connection_banner():
             await page.wait_for_selector('text=No public rooms yet. Create one!')
             assert attempts >= 2
 
+            # Name the player before the connection drops: seeding it reloads
+            # the page, which offline emulation would block.
+            await use_guest_name(page, "OfflinePlayer")
+            await page.wait_for_selector('text=No public rooms yet. Create one!')
+
             await context.set_offline(True)
             await page.wait_for_selector('.connection-status-banner.offline:has-text("You’re offline")')
-            await page.fill('input[placeholder="Your name"]', "OfflinePlayer")
             await page.fill('input[placeholder="ABC123"]', "ABC123")
             await page.click('button:has-text("Join by code")')
             await page.wait_for_selector('.lobby-action-error:has-text("Connection lost")')
@@ -71,14 +76,14 @@ async def test_mid_session_socket_reconnect_rejoins_room():
 
         try:
             await host.goto(BASE_URL)
-            await host.fill('input[placeholder="Your name"]', "HostReconnect")
+            await use_guest_name(host, "HostReconnect")
             await host.click('button:has-text("Create room")')
             await host.click('button:has-text("Create room")')
             await host.wait_for_selector(".room-copy-button")
             code = (await host.inner_text(".room-copy-button")).split("Code:")[1].strip()
 
             await guest.goto(BASE_URL)
-            await guest.fill('input[placeholder="Your name"]', "GuestReconnect")
+            await use_guest_name(guest, "GuestReconnect")
             await guest.fill('input[placeholder="ABC123"]', code)
             await guest.click('button:has-text("Join by code")')
             await guest.wait_for_selector(".room-copy-button")

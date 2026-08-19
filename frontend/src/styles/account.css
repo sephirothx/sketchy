@@ -1,0 +1,390 @@
+/* Guest identity cues and the header account control. */
+
+/*
+ * Italics mark a name as unclaimed, and are the cue that survives a
+ * colour-vision deficiency or a greyscale display. The grey is set here rather
+ * than by the server because it has to clear 4.5:1 on both a white panel and a
+ * dark one, and no single hex does that: #888888 is only 3.54:1 on white.
+ *
+ * #6b7280 is 4.83:1 on white; the dark-theme override is 5.7:1 or better. No
+ * opacity - it would scale the contrast straight back down.
+ */
+.colored-player-name.is-guest {
+  font-style: italic;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+/* Groups the account control with Settings so the header stays one row. */
+.lobby-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.account-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  padding: 4px;
+}
+
+.account-dropdown button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.account-dropdown button:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  margin-top: 12px;
+}
+
+.auth-form label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.auth-form input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour. */
+  background: #fff;
+  /* Explicit, not `inherit`: the dialog sets a light text colour for its own
+     dark surface, which on a white field would be unreadable. */
+  color: #0f172a;
+}
+
+.auth-form .modal-button {
+  margin-top: 10px;
+}
+
+.auth-error {
+  color: #b91c1c;
+  font-size: 13px;
+  margin: 2px 0 0;
+}
+
+.auth-switch {
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+
+.auth-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #4f46e5;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.modal-dismiss {
+  margin-top: 8px;
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.7;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Keeps "Back to lobby" and the account control on one row. */
+.create-room-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+/* The identity chip: avatar, name, and a dot when the name is unclaimed. */
+.identity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 4px 12px 4px 4px;
+  cursor: pointer;
+  min-height: 36px;
+  max-width: 100%;
+}
+
+.identity-chip:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.identity-chip.is-compact {
+  padding: 4px;
+  gap: 0;
+}
+
+.identity-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  flex: none;
+}
+
+.identity-name {
+  font-weight: 600;
+  font-size: 14px;
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Marks a name as not yet claimed. Purely supplementary - the chip's
+ * aria-label says so in words, so nothing depends on seeing the dot.
+ */
+.identity-unclaimed {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+  flex: none;
+}
+
+.identity-chip.is-compact {
+  position: relative;
+}
+
+/* With no name to sit beside, the dot rides the avatar's top-right corner.
+   The ring keeps it legible against whichever colour the avatar has. */
+.identity-chip.is-compact .identity-unclaimed {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  box-shadow: 0 0 0 2px #0f172a;
+}
+
+/* First-run block: account primary, guest secondary. */
+.first-run {
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 16px;
+  background: rgba(127, 127, 127, 0.04);
+}
+
+.first-run-heading {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.first-run-copy {
+  margin: 0 0 14px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.first-run-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.first-run-signup {
+  border: none;
+  background: #4f46e5;
+  color: #fff;
+  border-radius: 10px;
+  padding: 11px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.first-run-signup:hover {
+  filter: brightness(1.08);
+}
+
+.first-run-login {
+  border: 1px solid #cbd5e1;
+  background: transparent;
+  color: inherit;
+  border-radius: 10px;
+  padding: 11px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.first-run-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 14px;
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.first-run-divider::before,
+.first-run-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #cbd5e1;
+}
+
+.first-run-guest-label {
+  display: block;
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 6px;
+}
+
+.first-run-guest-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.first-run-guest-row input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 9px 12px;
+  /* 16px keeps iOS from zooming the viewport on focus. */
+  font-size: 16px;
+  background: #fff;
+  color: #0f172a;
+}
+
+/* Deliberately plain: easy to use, clearly not the headline action. */
+.first-run-guest-submit {
+  border: 1px solid #cbd5e1;
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.settings-account-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-account-status {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.settings-account-action {
+  border: 1px solid #cbd5e1;
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.settings-locked-hint {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+/* Post-game claim prompt. */
+.game-end-claim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.game-end-claim-copy {
+  margin: 0;
+  font-size: 14px;
+}
+
+.game-end-claim-action {
+  border: none;
+  background: #4f46e5;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+@media (max-width: 560px) {
+  .identity-name {
+    max-width: 9ch;
+  }
+
+  /* The title leaves too little beside it, so the controls get their own row
+     rather than each wrapping onto a line of its own. */
+  .lobby-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .lobby-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

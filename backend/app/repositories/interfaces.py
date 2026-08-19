@@ -38,6 +38,7 @@ class UserData:
     is_anonymous: bool
     created_at: datetime
     updated_at: datetime
+    last_login_at: datetime
 
 
 @dataclass(frozen=True)
@@ -243,6 +244,19 @@ class UserRepository(ABC):
         avatar_url: str | None = None,
     ) -> UserData | None:
         """Update display settings for a user."""
+        ...
+
+    @abstractmethod
+    async def touch_last_login(
+        self, user_id: str, min_interval_seconds: float = 0.0
+    ) -> UserData | None:
+        """Refresh ``last_login_at``, skipping the write if it is recent enough.
+
+        ``GET /api/auth/me`` runs on every page load, so an unconditional write
+        would mean a database round trip per visitor per load. Callers that only
+        want a coarse "last seen" pass a non-zero interval; login and register
+        pass 0 to always record the event.
+        """
         ...
 
     @abstractmethod

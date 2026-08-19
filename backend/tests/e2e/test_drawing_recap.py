@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 from playwright.async_api import Page, async_playwright
+from tests.e2e.lobby_helpers import use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -34,7 +35,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
 
         try:
             await host.goto(BASE_URL)
-            await host.fill('input[placeholder="Your name"]', "RecapHost")
+            await use_guest_name(host, "RecapHost")
             await host.click('button:has-text("Create room")')
             await host.click('button:has-text("Create room")')
             await host.locator('[data-testid="waiting-room"]').wait_for()
@@ -43,7 +44,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             code = code_text.split("Code:")[1].strip()
 
             await guest.goto(BASE_URL)
-            await guest.fill('input[placeholder="Your name"]', "RecapGuest")
+            await use_guest_name(guest, "RecapGuest")
             await guest.fill('input[placeholder="ABC123"]', code)
             await guest.click('button:has-text("Join by code")')
             await guest.locator('[data-testid="waiting-room"]').wait_for()

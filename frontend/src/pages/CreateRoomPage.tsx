@@ -24,10 +24,11 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, HintMode, ScoringMode } from "../types";
+import { AccountMenu } from "../components/AccountMenu";
+import { currentPlayerName } from "../store/authStore";
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
-  const nickname = useGameStore((state) => state.nickname);
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const [roomName, setRoomName] = useState("");
@@ -49,11 +50,6 @@ export function CreateRoomPage() {
   const [busy, setBusy] = useState(false);
 
   async function handleCreate() {
-    const trimmedNickname = nickname.trim();
-    if (!trimmedNickname) {
-      navigate("/");
-      return;
-    }
     if (customWords.analysis.hasErrors) {
       setError("Fix the custom-word entries marked above before creating the room.");
       return;
@@ -62,12 +58,12 @@ export function CreateRoomPage() {
     setError(null);
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
-        nickname: trimmedNickname, nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
+        nickname: currentPlayerName(), nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customWords: customWords.value.trim(), customWordsOnly: customWords.only, hintMode, scoringMode,
         spectatorsSeeSolution, hideMaskedPrompt, wordListSlugs,
       });
-      if (response.ok && response.roomId && response.code && response.playerId && response.reconnectSecret) {
-        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId, reconnectSecret: response.reconnectSecret });
+      if (response.ok && response.roomId && response.code && response.playerId) {
+        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId });
         navigate(`/room/${response.code}`);
         return;
       }
@@ -86,7 +82,10 @@ export function CreateRoomPage() {
   }
 
   return <main className="create-room-page">
-    <button type="button" className="back-link" onClick={() => navigate("/")}>← Back to lobby</button>
+    <div className="create-room-top-bar">
+      <button type="button" className="back-link" onClick={() => navigate("/")}>← Back to lobby</button>
+      <AccountMenu />
+    </div>
     <section className="create-room-card">
       <div className="create-room-heading"><p>Room setup</p><h1>Create a room</h1></div>
       {error && <p className="create-room-error" role="alert">{error}</p>}
