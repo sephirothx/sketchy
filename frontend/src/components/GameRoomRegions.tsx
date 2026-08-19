@@ -20,7 +20,7 @@ export function ConnectedRoomPlayersPanel({ mode }: { mode: RoomShellMode }) {
   const drawerId = useGameStore((state) => state.drawerId);
   const myPlayerId = useGameStore((state) => state.playerId);
   const maxPlayers = useGameStore((state) => state.maxPlayers);
-  const showScores = useGameStore((state) => state.scoringMode === "default");
+  const showScores = useGameStore((state) => state.scoringMode !== "none");
   const finalScores = useGameStore((state) => state.finalScores);
   const moderation = useGameStore((state) => state.moderation);
 
@@ -256,7 +256,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           guesses={lastRoundResult.guesses}
           scores={lastRoundResult.scores}
           myPlayerId={playerId}
-          showScores={scoringMode === "default"}
+          showScores={scoringMode !== "none"}
         />
       )}
       {canDrawNow && (

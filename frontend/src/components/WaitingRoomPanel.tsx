@@ -82,9 +82,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               {props.drawingSeconds}s to draw
             </li>
             <li>
-              {props.scoringMode === "default"
-                ? "Points for fast, correct guesses"
-                : "No scorekeeping"}
+              {props.scoringMode === "none"
+                ? "No scorekeeping"
+                : props.scoringMode === "pressure"
+                  ? "Points drain faster once someone guesses"
+                  : "Points for fast, correct guesses"}
             </li>
             <li>{hintLabel(props.hintMode, props.hideMaskedPrompt)}</li>
             <li>

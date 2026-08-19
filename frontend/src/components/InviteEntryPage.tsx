@@ -83,7 +83,7 @@ export function InviteEntryPage({ code }: { code: string }) {
             <div><dt>Players</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? " · Full" : ""}</dd></div>
             <div><dt>Rounds</dt><dd>{room.rounds}</dd></div>
             <div><dt>Draw time</dt><dd>{room.drawingSeconds}s</dd></div>
-            <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "Just for fun" : "Points on"}</dd></div>
+            <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "Just for fun" : room.scoringMode === "pressure" ? "Pressure" : "Points on"}</dd></div>
           </dl>
 
           <ul className="invite-rule-list" aria-label="Room rules">

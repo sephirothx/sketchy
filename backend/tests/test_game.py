@@ -7,10 +7,15 @@ from app.canvas_history import (
 from app.game import (
     CLOSE_GUESS_MAX_DISTANCE,
     DRAWING_SECONDS,
+    HINT_BASE_COST,
+    PRESSURE_MAX_POINTS,
+    PRESSURE_MIN_POINTS,
+    PRESSURE_MULTIPLIER,
     Game,
     Phase,
     _bounded_damerau_levenshtein,
 )
+from app.rooms import DRAWING_TIME_OPTIONS
 from app.canvas_session import MAX_CANVAS_COMMITS
 from app.words import MAX_WORD_LENGTH
 
@@ -1023,3 +1028,176 @@ def test_per_turn_analytics_do_not_leak_into_the_next_turn():
     assert game.wrong_guesses == {}
     assert game.near_miss_count == 0
     assert game.word_auto_picked is False
+
+
+# ---------------------------------------------------------------------------
+# "pressure" scoring mode
+# ---------------------------------------------------------------------------
+
+
+def make_pressure_game(n_guessers=1, drawing_seconds=90.0):
+    """A pressure-mode game parked in DRAWING with the word chosen.
+
+    The clock is driven by assigning to `game.remaining_seconds`, matching
+    `test_submit_guess_records_elapsed_guess_time`.
+    """
+    tokens = ["drawer"] + [f"g{i}" for i in range(n_guessers)]
+    game = Game(
+        turn_order=tokens, scoring_mode="pressure", drawing_seconds=drawing_seconds
+    )
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    game.choose_word(game.current_drawer, game.word_choices[0])
+    return game
+
+
+def guess_at(game, token, elapsed):
+    game.remaining_seconds = lambda: game.drawing_seconds - elapsed
+    correct, points = game.submit_guess(token, game.word)
+    assert correct is True
+    return points
+
+
+def test_pressure_awards_the_maximum_on_an_instant_guess():
+    game = make_pressure_game()
+    assert guess_at(game, "g0", 0.0) == PRESSURE_MAX_POINTS
+
+
+def test_pressure_points_decrease_monotonically_with_time():
+    scores = []
+    for elapsed in (0, 5, 10, 20, 30, 45, 60):
+        game = make_pressure_game()
+        scores.append(guess_at(game, "g0", elapsed))
+    assert scores == sorted(scores, reverse=True)
+    assert len(set(scores)) == len(scores)
+
+
+def test_pressure_curve_is_independent_of_round_length():
+    """The whole point of deriving the rate from drawing_seconds: a guess at the
+    same *fraction* of the round is worth the same in a 15s room and a 300s one."""
+    for fraction in (0.0, 0.25, 0.5, 1.0):
+        values = set()
+        for drawing_seconds in DRAWING_TIME_OPTIONS:
+            game = make_pressure_game(drawing_seconds=float(drawing_seconds))
+            values.add(guess_at(game, "g0", drawing_seconds * fraction))
+        assert len(values) == 1, f"fraction {fraction} varied by room length: {values}"
+
+
+def test_pressure_unpressured_buzzer_is_a_fixed_share_of_the_maximum():
+    for drawing_seconds in DRAWING_TIME_OPTIONS:
+        game = make_pressure_game(drawing_seconds=float(drawing_seconds))
+        assert guess_at(game, "g0", drawing_seconds) == 32
+
+
+def test_pressure_multiplier_is_dormant_until_someone_guesses():
+    game = make_pressure_game(n_guessers=2)
+    assert game._pressure_multiplier() == 1.0
+    guess_at(game, "g0", 10.0)
+    assert game._pressure_multiplier() == PRESSURE_MULTIPLIER
+
+
+def test_pressure_simultaneous_guesses_score_identically():
+    game = make_pressure_game(n_guessers=2)
+    first = guess_at(game, "g0", 20.0)
+    second = guess_at(game, "g1", 20.0)
+    assert first == second
+
+
+def test_pressure_barely_punishes_a_photo_finish():
+    """The explicit design requirement: a guess landing right behind the first
+    correct one must not fall off a cliff.
+
+    Measured against what the same guess would have paid with the multiplier
+    dormant, so this isolates the pressure penalty from the ordinary per-second
+    decay that elapsed during the gap.
+    """
+    for gap in (0.1, 0.5, 1.0):
+        pressured = make_pressure_game(n_guessers=2)
+        guess_at(pressured, "g0", 20.0)
+        with_pressure = guess_at(pressured, "g1", 20.0 + gap)
+
+        alone = make_pressure_game()
+        without_pressure = guess_at(alone, "g0", 20.0 + gap)
+
+        penalty = without_pressure - with_pressure
+        assert penalty <= 3, f"gap {gap}s drew a {penalty}-point pressure penalty"
+
+
+def test_pressure_photo_finish_stays_close_to_the_winner():
+    """The player-visible half of the same requirement: losing the race by a
+    hair should cost a handful of points, not a tier."""
+    game = make_pressure_game(n_guessers=2)
+    first = guess_at(game, "g0", 20.0)
+    second = guess_at(game, "g1", 20.5)
+    assert first - second <= 5, f"half a second cost {first - second} points"
+
+
+def test_pressure_penalty_grows_with_the_gap():
+    penalties = []
+    for gap in (1.0, 5.0, 20.0):
+        pressured = make_pressure_game(n_guessers=2)
+        guess_at(pressured, "g0", 20.0)
+        with_pressure = guess_at(pressured, "g1", 20.0 + gap)
+
+        alone = make_pressure_game()
+        without_pressure = guess_at(alone, "g0", 20.0 + gap)
+
+        penalties.append(without_pressure - with_pressure)
+    assert penalties == sorted(penalties)
+    assert penalties[-1] >= 25
+
+
+def test_pressure_never_pays_less_than_the_floor():
+    for drawing_seconds in DRAWING_TIME_OPTIONS:
+        game = make_pressure_game(n_guessers=2, drawing_seconds=float(drawing_seconds))
+        guess_at(game, "g0", 0.0)
+        assert guess_at(game, "g1", drawing_seconds) == PRESSURE_MIN_POINTS
+
+
+def test_pressure_floor_always_covers_the_cheapest_hint():
+    assert PRESSURE_MIN_POINTS >= HINT_BASE_COST
+
+
+def test_pressure_decay_state_resets_between_turns():
+    game = make_pressure_game(n_guessers=2)
+    guess_at(game, "g0", 30.0)
+    guess_at(game, "g1", 40.0)
+    assert game.decay_time > 0
+
+    game.end_round(total_guesser_count=2)
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+
+    assert game.decay_time == 0.0
+    assert game.decay_marker_elapsed == 0.0
+
+
+def test_pressure_drawer_bonus_is_the_sum_of_guesser_points():
+    game = make_pressure_game(n_guessers=3)
+    total = sum(
+        guess_at(game, token, elapsed)
+        for token, elapsed in (("g0", 12.0), ("g1", 18.0), ("g2", 25.0))
+    )
+    assert game.end_round(total_guesser_count=3) == total
+
+
+def test_pressure_worked_example_matches_the_documented_curve():
+    """Pins the numbers the scoring mode was signed off on."""
+    game = make_pressure_game(n_guessers=5)
+    awarded = [
+        guess_at(game, token, elapsed)
+        for token, elapsed in (
+            ("g0", 12.0),
+            ("g1", 18.0),
+            ("g2", 25.0),
+            ("g3", 41.0),
+            ("g4", 68.0),
+        )
+    ]
+    assert awarded == [157, 123, 93, 49, 25]
+
+
+def test_default_scoring_is_unchanged_by_the_constant_refactor():
+    for elapsed, expected in ((0, 300), (40, 200), (80, 100)):
+        game = Game(turn_order=["drawer", "guesser"], drawing_seconds=80.0)
+        game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+        game.choose_word(game.current_drawer, game.word_choices[0])
+        assert guess_at(game, "guesser", elapsed) == expected

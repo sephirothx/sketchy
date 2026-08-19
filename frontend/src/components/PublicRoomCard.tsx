@@ -10,6 +10,7 @@ interface PublicRoomCardProps {
 function exceptionalRules(room: RoomSummary) {
   const rules: string[] = [];
   if (room.scoringMode === "none") rules.push("No scoring");
+  if (room.scoringMode === "pressure") rules.push("Pressure scoring");
   if (room.hideMaskedPrompt) rules.push("Hidden prompt");
   if (room.customWordCount > 0) {
     rules.push(room.customWordsOnly ? "Custom words only" : `${room.customWordCount} custom words`);
@@ -54,7 +55,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
         <details className="public-room-rules">
           <summary>View rules</summary>
           <ul>
-            <li>{room.scoringMode === "default" ? "Default scoring" : "No scorekeeping"}</li>
+            <li>{room.scoringMode === "none" ? "No scorekeeping" : room.scoringMode === "pressure" ? "Pressure scoring" : "Default scoring"}</li>
             <li>{hintDescription(room)}</li>
             <li>{room.customWordCount > 0 ? (room.customWordsOnly ? `${room.customWordCount} custom words only` : `${room.customWordCount} custom words plus the default list`) : "Built-in word list"}</li>
             <li>{room.spectatorsSeeSolution ? "Spectators can see the prompt" : "Spectators see the masked prompt"}</li>

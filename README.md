@@ -281,11 +281,10 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 ## Game flow
 
 1. **Lobby**: pick a nickname, then create a room (public or private, with a max player count
-   and number of rounds), choose default scoring or a score-free casual game, or join one by
-   code.
+   and number of rounds), pick a scoring mode, or join one by code.
 2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**.
 3. **Choosing word** (15s): the current drawer picks one of 3 word options.
-4. **Drawing** (80s): the drawer draws; everyone else sees a masked word (`_ _ _ _`) and
+4. **Drawing** (90s by default, configurable): the drawer draws; everyone else sees a masked word (`_ _ _ _`) and
    guesses in the chat. The round ends early once everyone's guessed correctly.
 5. **Round end** (5s): the word is revealed and scores update, then the next player's turn
    begins.
@@ -294,10 +293,19 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ### Scoring
 
-- Room creators can choose **Default scoring** or **No scoring**. No-scoring games still detect
-  correct guesses and end rounds normally, but everyone remains on zero points and no
-  leaderboard is shown.
-- A correct guess scores between 100 and 300 points based on time remaining: `round(100 + 200 * remaining_seconds / 80)` — guess quickly for up to 300 points, or 100 points minimum near the deadline.
+- Room creators can choose **Default scoring**, **Pressure scoring**, or **No scoring**.
+  No-scoring games still detect correct guesses and end rounds normally, but everyone remains
+  on zero points and no leaderboard is shown.
+- **Default**: a correct guess scores between 100 and 300 points, falling linearly with the time
+  left in the round: `round(100 + 200 * remaining_seconds / drawing_seconds)`. Guess quickly for
+  up to 300 points, or 100 points minimum at the deadline.
+- **Pressure**: a correct guess starts at 200 points and decays exponentially — roughly 2% per
+  second — and the decay rate **doubles for everyone still guessing once the first player gets
+  the word**. Points are floored at 25, so a late correct guess is always worth something. The
+  per-second rate is derived from the room's own drawing time, so the curve has the same shape in
+  a 15-second room and a 300-second one. Because the penalty scales with the *gap* after the first
+  correct guess rather than applying as a step, a near-simultaneous second guess loses only a
+  point or two.
 - The drawer receives the sum of points earned by all correct guessers in that round (`drawer_score = sum of guesser scores`), balancing drawing and guessing potential across complete rotations.
 
 ### Spectating

@@ -212,7 +212,7 @@ class GameFlowService:
                 player.score = (
                     0
                     if player.is_spectator
-                    else (STARTING_SCORE if room.scoring_mode == "default" else 0)
+                    else (STARTING_SCORE if room.scoring_mode != "none" else 0)
                 )
             room.state = "playing"
             room.game = Game(

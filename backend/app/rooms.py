@@ -457,7 +457,7 @@ class RoomManager:
                 if is_anonymous
                 else normalize_name_color(name_color) or generate_random_name_color()
             ),
-            score=0 if is_spectator else (STARTING_SCORE if room.scoring_mode == "default" else 0),
+            score=0 if is_spectator else (STARTING_SCORE if room.scoring_mode != "none" else 0),
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,
         )
