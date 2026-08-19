@@ -44,6 +44,11 @@ class User(Base):
 
     __tablename__ = "users"
 
+    # Expression-based, so `alembic revision --autogenerate` cannot see it on
+    # SQLite - the dialect has no way to reflect such an index, and skips it
+    # rather than emitting a spurious CREATE on every run. Any change to this
+    # index therefore has to be written into a migration by hand: autogenerate
+    # will report nothing and mean nothing by it.
     __table_args__ = (
         Index(
             "ix_users_username_lower",
@@ -97,7 +102,12 @@ class GameRecord(Base):
     total_rounds: Mapped[int] = mapped_column(Integer, nullable=False)
     player_count: Mapped[int] = mapped_column(Integer, nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Indexed because every read of a player's history sorts on it: the page
+    # query filters to the games they took part in and takes the newest first,
+    # which without this orders the whole matching set on each request.
+    finished_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
 
     participants: Mapped[list[GameParticipant]] = relationship(
         back_populates="game",
