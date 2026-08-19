@@ -5,12 +5,30 @@ camelCase throughout, matching what the frontend already consumes from
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.repositories.interfaces import (
     GameDetail,
     GameSummary,
     UserData,
     UserStats,
 )
+
+
+def _timestamp(value: datetime | None) -> str | None:
+    """Serialize a timestamp with an explicit offset.
+
+    Every one of these columns is ``DateTime(timezone=True)`` and every value
+    written is UTC, but SQLite has nowhere to keep the zone and hands back a
+    naive datetime. Serialized bare, an ISO string without an offset is parsed
+    by the browser as *local* time, silently shifting every game's time by the
+    viewer's offset.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
 
 
 def user_payload(user: UserData) -> dict:
@@ -20,8 +38,8 @@ def user_payload(user: UserData) -> dict:
         "displayName": user.display_name,
         "nameColor": user.name_color,
         "isAnonymous": user.is_anonymous,
-        "createdAt": user.created_at.isoformat() if user.created_at else None,
-        "lastLoginAt": user.last_login_at.isoformat() if user.last_login_at else None,
+        "createdAt": _timestamp(user.created_at),
+        "lastLoginAt": _timestamp(user.last_login_at),
     }
 
 
@@ -47,8 +65,8 @@ def game_summary_payload(summary: GameSummary) -> dict:
         "drawingSeconds": summary.drawing_seconds,
         "totalRounds": summary.total_rounds,
         "playerCount": summary.player_count,
-        "startedAt": summary.started_at.isoformat() if summary.started_at else None,
-        "finishedAt": summary.finished_at.isoformat() if summary.finished_at else None,
+        "startedAt": _timestamp(summary.started_at),
+        "finishedAt": _timestamp(summary.finished_at),
         "participants": [
             {
                 "userId": p.user_id,

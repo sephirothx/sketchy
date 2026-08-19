@@ -71,7 +71,10 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
   async function toggle() {
     const next = !expanded;
     setExpanded(next);
-    if (!next || detail || detailError) return;
+    if (!next || detail) return;
+    // Reopening retries: the previous attempt may simply have been a dropped
+    // connection, and the only other way back is a full reload.
+    setDetailError(null);
     try {
       setDetail(await fetchGameDetail(game.id));
     } catch (error) {
@@ -389,7 +392,17 @@ function ProfileView({ userId }: { userId: string }) {
           mode={authMode}
           suggestedUsername={authMode === "claim" ? subject?.displayName ?? "" : ""}
           onClose={() => setAuthMode(null)}
-          onSubmit={authMode === "login" ? login : register}
+          onSubmit={async (username, password) => {
+            const account = await (authMode === "login" ? login : register)(
+              username,
+              password,
+            );
+            // Claiming keeps the same user id, so this view never remounts and
+            // would otherwise keep showing the guest it loaded - name, badge,
+            // and an invitation to claim an account that now exists.
+            if (account.id === userId) setSubject(account);
+            return account;
+          }}
           onSwitchMode={setAuthMode}
         />
       )}

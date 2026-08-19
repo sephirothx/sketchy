@@ -1,6 +1,7 @@
 """Socket.IO handlers for the rooms domain."""
 from __future__ import annotations
 
+import logging
 from functools import partial
 
 from app.game import Phase
@@ -25,6 +26,8 @@ from app.rooms import (
     generate_random_name_color,
     normalize_name_color,
 )
+
+logger = logging.getLogger("sketchy.handlers.rooms")
 
 async def create_room(ctx: HandlerContext, sid, data):
     try:
@@ -283,11 +286,18 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
         return {"ok": False, "error": "Create an account to choose a name colour"}
     player.name_color = normalize_name_color(payload.name_color) or player.name_color
     # Keep the account in step with the seat, so the colour this player is
-    # using right now is the one their profile shows.
+    # using right now is the one their profile shows. A failure here must not
+    # cost the room its update: the seat has already changed colour, and
+    # skipping the broadcast would leave everyone else looking at the old one.
     if ctx.user_repo is not None and player.user_id:
-        await ctx.user_repo.update_profile(
-            player.user_id, name_color=player.name_color
-        )
+        try:
+            await ctx.user_repo.update_profile(
+                player.user_id, name_color=player.name_color
+            )
+        except Exception:
+            logger.exception(
+                "Failed to store name colour for user %s", player.user_id
+            )
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}
 

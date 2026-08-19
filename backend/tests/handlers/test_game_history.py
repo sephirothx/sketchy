@@ -9,7 +9,7 @@ import socketio
 
 from app.game import Game, Phase
 from app.handlers import register_all_handlers as register_handlers
-from app.rooms import RoomManager
+from app.rooms import RoomManager, STARTING_SCORE
 from tests.fake_game_history_repo import FakeGameHistoryRepository
 
 pytestmark = pytest.mark.asyncio
@@ -266,6 +266,91 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
 
     # Both players were in the rotation for both turns.
     assert {p.turns_played for p in saved.participants} == {2}
+
+
+async def test_the_result_is_snapshotted_before_the_room_reopens():
+    """A game starting in the gaps must not rewrite the finished game.
+
+    `_finish_or_next` marks the room waiting and then awaits, so a `start_game`
+    landing in one of those gaps resets every score and clears the departed
+    seats. The recorded game has to be the one that was actually played.
+    """
+    room_manager, room, players = build_room(rounds=1)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+
+    class RestartingWordRepo:
+        """Stands in for the word-stat writes, and restarts the room mid-way.
+
+        These run only once the game is finished, which is exactly the window
+        where the room is already reporting itself as waiting.
+        """
+
+        def __init__(self) -> None:
+            self.restarted = False
+
+        async def increment_word_offers(self, slug, words):
+            if not self.restarted:
+                self.restarted = True
+                await flow._start_fresh_game(room, room.player_list())
+
+        async def increment_word_stats(self, slug, word, correct, total):
+            return None
+
+    ctx.word_list_repo = RestartingWordRepo()
+    room.word_list_slugs = ["english_standard"]
+
+    await flow._start_fresh_game(room, room.player_list())
+    # Two players over one round is two turns; the interference lands on the
+    # second, which is the one that finishes the game.
+    expected_scores: dict[str, int] = {}
+    for _ in range(2):
+        game = room.game
+        game.force_word_choice()
+        game.set_phase_deadline(game.drawing_seconds)
+        guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
+        game.submit_guess(guesser.id, game.word)
+        await flow._end_round(room)
+        ctx.timers.cancel_phase_timer(room.id)
+        expected_scores = {p.user_id: p.score for p in room.player_list()}
+        await flow._finish_or_next(room)
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
+
+    assert ctx.word_list_repo.restarted, "the interleaving under test never happened"
+    assert len(history.saved) == 1
+    saved = history.saved[0]
+    assert len(saved.rounds) == 2
+    # The scores the game finished with, not the ones the restart reset to.
+    assert {p.user_id: p.final_score for p in saved.participants} == expected_scores
+    assert all(score > STARTING_SCORE for score in expected_scores.values())
+
+
+async def test_the_game_ends_for_players_before_the_write_is_attempted():
+    """A database round trip must not sit between a player and the result."""
+    room_manager, room, players = build_room(rounds=1)
+    order: list[str] = []
+
+    class SlowRepo(FakeGameHistoryRepository):
+        async def save_game(self, *args):
+            order.append("saved")
+            return await super().save_game(*args)
+
+    history = SlowRepo()
+    ctx = build_context(room_manager, history)
+    original_emit = ctx.sio.emit
+
+    async def tracking_emit(event, *args, **kwargs):
+        if event == "game_ended":
+            order.append("game_ended")
+        return await original_emit(event, *args, **kwargs)
+
+    ctx.sio.emit = tracking_emit
+
+    await play_to_completion(ctx, room, players)
+
+    assert order == ["game_ended", "saved"]
 
 
 async def test_a_failing_write_does_not_break_the_end_of_the_game():

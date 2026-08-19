@@ -149,6 +149,28 @@ async def test_history_pages_report_whether_more_remain(env):
     assert [p["finalRank"] for p in first["games"][0]["participants"]] == [1, 2]
 
 
+async def test_timestamps_are_serialized_with_an_offset(env):
+    """SQLite hands back naive datetimes, and an ISO string with no offset is
+    read by the browser as local time - shifting every game by the viewer's."""
+    http, users, history, _ = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    await record_game(history, users, winner=ann.id, loser=bob.id)
+
+    profile = (await http.get(f"/api/users/{ann.id}/stats")).json()
+    game = (await http.get(f"/api/users/{ann.id}/games")).json()["games"][0]
+
+    for label, value in (
+        ("createdAt", profile["user"]["createdAt"]),
+        ("lastLoginAt", profile["user"]["lastLoginAt"]),
+        ("startedAt", game["startedAt"]),
+        ("finishedAt", game["finishedAt"]),
+    ):
+        assert datetime.fromisoformat(value).tzinfo is not None, label
+
+    assert datetime.fromisoformat(game["startedAt"]) == START
+
+
 async def test_history_page_size_is_bounded(env):
     http, users, _, _ = env
     ann = await users.create_anonymous(display_name="Ann")

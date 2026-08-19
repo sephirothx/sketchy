@@ -1,10 +1,14 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
-import { useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
+import {
+  getFocusableElements,
+  useEscapeLayer,
+  useFocusTrap,
+} from "../hooks/useFocusTrap";
 
 export type AuthMode = "claim" | "login";
 
@@ -31,8 +35,34 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuId = useId();
 
   useEscapeLayer(menuOpen, () => setMenuOpen(false));
+  // Menu semantics come with menu behaviour: declaring role="menu" without it
+  // tells a screen reader to expect navigation that does not exist. The trap
+  // keeps Tab inside, moves focus to the first item on open, and returns it to
+  // the chip on close; the arrow keys are handled below.
+  useFocusTrap(menuRef, { active: menuOpen });
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    const items = menuRef.current ? getFocusableElements(menuRef.current) : [];
+    if (!items.length) return;
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      items[(currentIndex + 1) % items.length]?.focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      items[(currentIndex - 1 + items.length) % items.length]?.focus();
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      items[0]?.focus();
+    } else if (event.key === "End") {
+      event.preventDefault();
+      items[items.length - 1]?.focus();
+    }
+  }
 
   // A menu is dismissed by looking away from it. The chip itself is inside the
   // root, so clicking it still toggles rather than closing and reopening.
@@ -61,6 +91,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         className={compact ? "identity-chip is-compact" : "identity-chip"}
         aria-haspopup={opensDialogDirectly ? "dialog" : "menu"}
         aria-expanded={opensDialogDirectly ? undefined : menuOpen}
+        aria-controls={opensDialogDirectly || !menuOpen ? undefined : menuId}
         onClick={() =>
           opensDialogDirectly ? setMode("claim") : setMenuOpen((open) => !open)
         }
@@ -82,7 +113,15 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
       </button>
 
       {menuOpen && !opensDialogDirectly && (
-        <div className="account-dropdown" role="menu">
+        <div
+          ref={menuRef}
+          id={menuId}
+          className="account-dropdown"
+          role="menu"
+          aria-label="Account"
+          tabIndex={-1}
+          onKeyDown={handleMenuKeyDown}
+        >
           <button
             type="button"
             role="menuitem"

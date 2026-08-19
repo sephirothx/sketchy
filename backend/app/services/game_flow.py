@@ -55,6 +55,9 @@ from app.words import MAX_WORD_LENGTH, parse_custom_word_list
 logger = logging.getLogger("sketchy.game_flow")
 
 RECONNECT_GRACE_SECONDS = 30
+# Long enough for a healthy write on a loaded server, short enough that a hung
+# database cannot pin the coroutine that ends a game.
+HISTORY_WRITE_TIMEOUT_SECONDS = 10
 
 class GameFlowService:
     """Coordinate workflows that cross handler domains without owning registration."""
@@ -479,25 +482,34 @@ class GameFlowService:
         def _round_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
             return round_ended_payload(room, drawer_bonus)
 
-        async def _record_game_history(room: Room, game: Game) -> None:
-            """Write the finished game to history: the only write this epic makes.
+        async def _persist_game_history(room: Room, history) -> None:
+            """Write a finished game's snapshot: the only write this epic makes.
 
-            Failure is logged and swallowed. A database that is slow or down
-            must not keep the room from ending its game.
+            Runs after the room has been told the game ended, and is bounded,
+            because a database that is slow or down must not keep a room from
+            ending its game. Failure is logged and swallowed for the same
+            reason: there is nothing a player could do about it.
             """
-            if not ctx.game_history_repo:
-                return
-            history = build_game_history(
-                room, game, finished_at=datetime.now(timezone.utc)
-            )
-            if history is None:
+            if not ctx.game_history_repo or history is None:
                 return
             try:
-                await ctx.game_history_repo.save_game(
-                    history.record,
-                    history.participants,
-                    history.rounds,
-                    history.guesses,
+                await asyncio.wait_for(
+                    ctx.game_history_repo.save_game(
+                        history.record,
+                        history.participants,
+                        history.rounds,
+                        history.guesses,
+                    ),
+                    timeout=HISTORY_WRITE_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                # save_game runs in one transaction, so the cancellation this
+                # raises rolls the partial write back rather than leaving half
+                # a game behind.
+                logger.error(
+                    "Timed out persisting game history for room %s after %ss",
+                    room.id,
+                    HISTORY_WRITE_TIMEOUT_SECONDS,
                 )
             except Exception:
                 logger.exception("Failed to persist game history for room %s", room.id)
@@ -506,6 +518,18 @@ class GameFlowService:
             game = room.game
             assert game is not None
             if game.is_finished():
+                # Snapshot the result before anything is touched or awaited.
+                # Everything below mutates the room and then yields, and the
+                # room is already reporting itself as waiting by then - so a
+                # `start_game` landing in one of those gaps would reset scores
+                # and departed seats out from under a history built later.
+                history = (
+                    build_game_history(
+                        room, game, finished_at=datetime.now(timezone.utc)
+                    )
+                    if ctx.game_history_repo
+                    else None
+                )
                 timer_manager.cancel_restart_timer(room.id)
                 room.restart_vote = None
                 room.restart_vote_cooldown_until = 0
@@ -539,8 +563,6 @@ class GameFlowService:
                             except Exception:
                                 logger.exception("Failed to update word usage metrics for slug '%s'", slug)
 
-                await _record_game_history(room, game)
-
                 await sio.emit(
                     "game_ended",
                     {
@@ -550,6 +572,9 @@ class GameFlowService:
                     room=room.id,
                 )
                 await _emit_room_state(room)
+                # Last, so that nothing a player is waiting to see is behind a
+                # database round trip.
+                await _persist_game_history(room, history)
             else:
                 await _start_turn(room)
 
