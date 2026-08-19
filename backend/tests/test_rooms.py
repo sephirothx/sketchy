@@ -138,6 +138,20 @@ def test_scoring_mode_is_in_room_payloads():
     assert player.score == 0
 
 
+def test_pressure_mode_players_start_with_the_usual_balance():
+    """Only "none" zeroes the starting score -- every scored mode needs the
+    opening balance so hints are affordable in round one."""
+    from app.rooms import STARTING_SCORE
+
+    rm = RoomManager()
+    room = rm.create_room(name="Racy", is_public=True, scoring_mode="pressure")
+    player = rm.add_player(room, "Alice")
+
+    assert room.to_public_summary()["scoringMode"] == "pressure"
+    assert room.to_state_payload()["scoringMode"] == "pressure"
+    assert player.score == STARTING_SCORE
+
+
 def test_create_room_assigns_funny_random_name_when_unspecified():
     from app.rooms import ROOM_NAME_ADJECTIVES, ROOM_NAME_NOUNS
 

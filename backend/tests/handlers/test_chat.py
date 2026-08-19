@@ -551,3 +551,39 @@ async def test_chatting_removes_afk_status():
     guess = sio.handlers["/"]["guess"]
     await guess("p1-sid", {"text": "hello chat"})
     assert p1.is_afk is False
+
+
+@pytest.mark.asyncio
+async def test_pressure_room_credits_the_decayed_points():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Racy", scoring_mode="pressure")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+    room.state = "playing"
+    room.game = Game(
+        turn_order=[drawer.id, guesser.id],
+        scoring_mode="pressure",
+        drawing_seconds=90.0,
+        word_pool=["panda"],
+    )
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_word(drawer.id, "panda")
+    room.game.remaining_seconds = lambda: 90.0 - 12.0
+
+    opening_balance = guesser.score
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": guesser.id}
+    )
+    sio.emit = AsyncMock()
+
+    await sio.handlers["/"]["guess"]("guesser-sid", {"text": "panda"})
+
+    correct_guess = next(
+        call for call in sio.emit.await_args_list if call.args[0] == "correct_guess"
+    )
+    assert correct_guess.args[1]["points"] == 157
+    assert guesser.score == opening_balance + 157

@@ -390,7 +390,7 @@ async def become_player(ctx: HandlerContext, sid, data=None):
         return {"ok": False, "error": "Player slots are full"}
 
     player.is_spectator = False
-    player.score = STARTING_SCORE if room.scoring_mode == "default" else 0
+    player.score = STARTING_SCORE if room.scoring_mode != "none" else 0
     await ctx.sio.emit(
         "chat_message",
         {

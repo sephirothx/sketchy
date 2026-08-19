@@ -134,7 +134,7 @@ export function useGameSocketListeners() {
       }
       store.getState().applyGuessPoints(payload.playerId, payload.points);
       const pointsSuffix =
-        store.getState().scoringMode === "default" ? ` (+${payload.points})` : "";
+        store.getState().scoringMode !== "none" ? ` (+${payload.points})` : "";
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",

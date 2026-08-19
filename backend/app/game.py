@@ -24,7 +24,21 @@ DRAWING_SECONDS = 80
 ROUND_END_SECONDS = 5
 MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
-SCORING_MODES = ("none", "default")
+SCORING_MODES = ("none", "default", "pressure")
+
+# "pressure" mode: points bleed away as a percentage of what is still on the
+# table, and the bleed rate doubles once someone gets the word. The per-second
+# rate is derived from the room's own drawing time so the curve has the same
+# shape in a 15s room and a 300s one -- unpressured, a correct guess at the
+# buzzer is always worth ~16% of the maximum.
+PRESSURE_MAX_POINTS = 200
+PRESSURE_DECAY_PER_SECOND = 0.98  # measured at PRESSURE_REFERENCE_SECONDS
+PRESSURE_REFERENCE_SECONDS = 90.0
+PRESSURE_MULTIPLIER = 2.0  # applies once anyone has guessed correctly
+# Under the multiplier the accumulated decay time overshoots the reference
+# length, so the raw curve bottoms out below the cheapest hint. Floor it: being
+# last should sting, not make a correct guess worthless.
+PRESSURE_MIN_POINTS = 25
 
 # Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter / Game.buy_wheel_letter):
 # - "checkpoints" reveals letters to everyone at fixed points during drawing.
@@ -229,6 +243,11 @@ class Game:
     correct_guessers: set[str] = field(default_factory=set)
     guess_points: dict[str, int] = field(default_factory=dict)
     guess_times: dict[str, float] = field(default_factory=dict)
+    # "pressure" scoring accumulator: elapsed drawing seconds weighted by the
+    # multiplier in force for each stretch, plus the elapsed reading at the
+    # last advance. Never read outside pressure mode.
+    decay_time: float = 0.0
+    decay_marker_elapsed: float = 0.0
     canvas: CanvasSession = field(default_factory=CanvasSession)
     phase_deadline: float | None = None
     used_words: set[str] = field(default_factory=set)
@@ -330,6 +349,36 @@ class Game:
             return 0.0
         return max(0.0, self.phase_deadline - time.monotonic())
 
+    def elapsed_drawing_seconds(self) -> float:
+        """How far into the drawing phase we are, clamped to the round."""
+        return max(
+            0.0,
+            min(self.drawing_seconds, self.drawing_seconds - self.remaining_seconds()),
+        )
+
+    def _pressure_rate(self) -> float:
+        """Per-second decay factor, scaled so the curve keeps its shape in any
+        room length: PRESSURE_DECAY_PER_SECOND is the rate at a
+        PRESSURE_REFERENCE_SECONDS round, and shorter rounds burn faster."""
+        return PRESSURE_DECAY_PER_SECOND ** (
+            PRESSURE_REFERENCE_SECONDS / self.drawing_seconds
+        )
+
+    def _pressure_multiplier(self) -> float:
+        return PRESSURE_MULTIPLIER if self.correct_guessers else 1.0
+
+    def _advance_decay_clock(self) -> None:
+        """Bank the time since the last advance at the multiplier in force for it.
+
+        Called just before a guesser joins `correct_guessers`, so each stretch
+        is charged at the rate that actually applied during it.
+        """
+        elapsed = self.elapsed_drawing_seconds()
+        self.decay_time += (
+            max(0.0, elapsed - self.decay_marker_elapsed) * self._pressure_multiplier()
+        )
+        self.decay_marker_elapsed = elapsed
+
     def start_next_turn(
         self,
         afk_tokens: set[str] | None = None,
@@ -349,6 +398,8 @@ class Game:
         self.correct_guessers = set()
         self.guess_points = {}
         self.guess_times = {}
+        self.decay_time = 0.0
+        self.decay_marker_elapsed = 0.0
         self.canvas = CanvasSession(
             revision=self.canvas.revision + 1,
             generation=canvas_generation,
@@ -607,16 +658,26 @@ class Game:
             if self.guess_hint(token, text) is not None:
                 self.near_miss_count += 1
             return False, 0
-        self.correct_guessers.add(token)
-        self.guess_times[token] = max(
-            0.0,
-            min(self.drawing_seconds, self.drawing_seconds - self.remaining_seconds()),
-        )
+        self.guess_times[token] = self.elapsed_drawing_seconds()
         if self.scoring_mode == "none":
+            self.correct_guessers.add(token)
             self.guess_points[token] = 0
             return True, 0
-        remaining_ratio = self.remaining_seconds() / self.drawing_seconds
-        points = round(100 + 200 * remaining_ratio)
+        if self.scoring_mode == "pressure":
+            # Advance before this guesser lands, so the stretch ending here is
+            # charged at the pre-guess multiplier. Adding to correct_guessers
+            # below is what raises the rate for everyone still guessing.
+            self._advance_decay_clock()
+            points = max(
+                PRESSURE_MIN_POINTS,
+                round(PRESSURE_MAX_POINTS * self._pressure_rate() ** self.decay_time),
+            )
+        else:
+            remaining_ratio = self.remaining_seconds() / self.drawing_seconds
+            points = round(
+                MIN_GUESS_POINTS + (MAX_GUESS_POINTS - MIN_GUESS_POINTS) * remaining_ratio
+            )
+        self.correct_guessers.add(token)
         self.guess_points[token] = points
         return True, points
 
@@ -678,9 +739,7 @@ class Game:
                 correct_guess_count=len(self.correct_guessers),
                 total_guesser_count=total_guesser_count,
                 drawer_token=self.current_drawer or "",
-                duration_seconds=max(
-                    0.0, self.drawing_seconds - self.remaining_seconds()
-                ),
+                duration_seconds=self.elapsed_drawing_seconds(),
                 guesses=tuple(
                     TurnGuessRecord(
                         token=token,

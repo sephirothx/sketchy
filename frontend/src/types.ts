@@ -32,7 +32,7 @@ export interface RestartVoteState {
 }
 
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
-export type ScoringMode = "none" | "default";
+export type ScoringMode = "none" | "default" | "pressure";
 
 export interface WordListSummary {
   slug: string;
