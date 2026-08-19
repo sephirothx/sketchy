@@ -1082,10 +1082,16 @@ def test_pressure_curve_is_independent_of_round_length():
         assert len(values) == 1, f"fraction {fraction} varied by room length: {values}"
 
 
-def test_pressure_unpressured_buzzer_is_a_fixed_share_of_the_maximum():
+def test_pressure_unpressured_late_guess_is_a_fixed_share_of_the_maximum():
+    """Measured just short of the buzzer, where the raw curve still governs: by
+    the buzzer itself an unpressured guess has decayed into the floor."""
     for drawing_seconds in DRAWING_TIME_OPTIONS:
         game = make_pressure_game(drawing_seconds=float(drawing_seconds))
-        assert guess_at(game, "g0", drawing_seconds) == 32
+        assert guess_at(game, "g0", drawing_seconds * 0.95) == 53
+
+    for drawing_seconds in DRAWING_TIME_OPTIONS:
+        game = make_pressure_game(drawing_seconds=float(drawing_seconds))
+        assert guess_at(game, "g0", drawing_seconds) == PRESSURE_MIN_POINTS
 
 
 def test_pressure_multiplier_is_dormant_until_someone_guesses():
@@ -1119,7 +1125,7 @@ def test_pressure_barely_punishes_a_photo_finish():
         without_pressure = guess_at(alone, "g0", 20.0 + gap)
 
         penalty = without_pressure - with_pressure
-        assert penalty <= 3, f"gap {gap}s drew a {penalty}-point pressure penalty"
+        assert penalty <= 5, f"gap {gap}s drew a {penalty}-point pressure penalty"
 
 
 def test_pressure_photo_finish_stays_close_to_the_winner():
@@ -1192,7 +1198,7 @@ def test_pressure_worked_example_matches_the_documented_curve():
             ("g4", 68.0),
         )
     ]
-    assert awarded == [157, 123, 93, 49, 25]
+    assert awarded == [235, 185, 139, 73, 50]
 
 
 def test_default_scoring_is_unchanged_by_the_constant_refactor():

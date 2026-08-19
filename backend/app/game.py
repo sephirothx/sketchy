@@ -26,19 +26,21 @@ MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
 SCORING_MODES = ("none", "default", "pressure")
 
-# "pressure" mode: points bleed away as a percentage of what is still on the
-# table, and the bleed rate doubles once someone gets the word. The per-second
-# rate is derived from the room's own drawing time so the curve has the same
-# shape in a 15s room and a 300s one -- unpressured, a correct guess at the
-# buzzer is always worth ~16% of the maximum.
-PRESSURE_MAX_POINTS = 200
+# "pressure" mode: starts from the same MAX_GUESS_POINTS baseline as default
+# scoring, but points bleed away as a percentage of what is still on the table,
+# and the bleed rate doubles once someone gets the word. The per-second rate is
+# derived from the room's own drawing time so the curve has the same shape in a
+# 15s room and a 300s one -- unpressured, a correct guess late in the round is
+# always worth the same share of the maximum, until PRESSURE_MIN_POINTS takes
+# over in the last moments.
+PRESSURE_MAX_POINTS = MAX_GUESS_POINTS
 PRESSURE_DECAY_PER_SECOND = 0.98  # measured at PRESSURE_REFERENCE_SECONDS
 PRESSURE_REFERENCE_SECONDS = 90.0
 PRESSURE_MULTIPLIER = 2.0  # applies once anyone has guessed correctly
 # Under the multiplier the accumulated decay time overshoots the reference
 # length, so the raw curve bottoms out below the cheapest hint. Floor it: being
 # last should sting, not make a correct guess worthless.
-PRESSURE_MIN_POINTS = 25
+PRESSURE_MIN_POINTS = 50
 
 # Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter / Game.buy_wheel_letter):
 # - "checkpoints" reveals letters to everyone at fixed points during drawing.
