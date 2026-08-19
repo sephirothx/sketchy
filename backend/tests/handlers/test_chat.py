@@ -585,5 +585,5 @@ async def test_pressure_room_credits_the_decayed_points():
     correct_guess = next(
         call for call in sio.emit.await_args_list if call.args[0] == "correct_guess"
     )
-    assert correct_guess.args[1]["points"] == 157
-    assert guesser.score == opening_balance + 157
+    assert correct_guess.args[1]["points"] == 235
+    assert guesser.score == opening_balance + 235

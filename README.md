@@ -299,13 +299,13 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 - **Default**: a correct guess scores between 100 and 300 points, falling linearly with the time
   left in the round: `round(100 + 200 * remaining_seconds / drawing_seconds)`. Guess quickly for
   up to 300 points, or 100 points minimum at the deadline.
-- **Pressure**: a correct guess starts at 200 points and decays exponentially — roughly 2% per
-  second — and the decay rate **doubles for everyone still guessing once the first player gets
-  the word**. Points are floored at 25, so a late correct guess is always worth something. The
+- **Pressure**: a correct guess starts at 300 points, the same as default scoring, and decays
+  exponentially — roughly 2% per second — and the decay rate **doubles for everyone still
+  guessing once the first player gets the word**. Points are floored at 50, so a late correct guess is always worth something. The
   per-second rate is derived from the room's own drawing time, so the curve has the same shape in
   a 15-second room and a 300-second one. Because the penalty scales with the *gap* after the first
   correct guess rather than applying as a step, a near-simultaneous second guess loses only a
-  point or two.
+  handful of points.
 - The drawer receives the sum of points earned by all correct guessers in that round (`drawer_score = sum of guesser scores`), balancing drawing and guessing potential across complete rotations.
 
 ### Spectating

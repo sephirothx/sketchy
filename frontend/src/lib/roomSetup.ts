@@ -19,7 +19,7 @@ export const SCORING_OPTIONS: { value: ScoringMode; label: string; description: 
     value: "pressure",
     label: "Pressure",
     description:
-      "Starts at 200 and drops ~2% a second, then twice as fast once someone gets the word.",
+      "Starts at 300 and drops ~2% a second, then twice as fast once someone gets the word.",
   },
 ];
 
