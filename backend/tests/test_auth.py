@@ -319,20 +319,11 @@ async def test_claiming_an_account_aligns_display_name_with_username(client):
 
 
 @pytest.mark.asyncio
-async def test_new_guests_are_given_a_playable_name_without_being_asked(client):
-    """Nobody is prompted for a name, so one must already be waiting."""
-    from app.auth.names import is_valid_name
+async def test_a_new_guest_starts_with_no_name(client):
+    """An empty display name is the signal that this is someone's first run.
 
+    Nothing is invented for them: they either choose a name or sign up.
+    """
     body = (await client.get("/api/auth/me")).json()
-    assert body["displayName"], "a guest must never be nameless"
-    assert is_valid_name(body["displayName"])
-    assert body["displayName"].lower() != "guest"
-
-
-def test_generated_guest_names_always_satisfy_the_shared_rule():
-    from app.auth.names import generate_guest_name, is_valid_name
-
-    names = {generate_guest_name() for _ in range(300)}
-    assert all(is_valid_name(name) for name in names)
-    # Enough variety that a room full of guests is not all one name.
-    assert len(names) > 50
+    assert body["displayName"] == ""
+    assert body["isAnonymous"] is True

@@ -5,69 +5,60 @@ import { ApiError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 
-type Mode = "login" | "register";
+export type AuthMode = "claim" | "login";
 
 /**
- * Header account control.
+ * The single identity control.
  *
- * Guests see a plain "Log in" button rather than only an avatar dropdown: sign
- * in has to stay reachable even while a nickname dialog is covering the page,
- * and a guest has no reason to guess that their own avatar hides the login
- * form. Registering is offered as the primary action because it keeps the
- * stats the guest has already accumulated.
+ * One chip in place of the three separate controls this replaced: the avatar
+ * and name are who you are, and an unclaimed guest name carries a dot. Clicking
+ * is the only account affordance in the header - renaming lives in Settings, so
+ * there is nothing else a menu would hold.
+ *
+ * `compact` drops the name and shows the avatar alone, for the game-room header
+ * where the row is deliberately nowrap and every pixel is spoken for.
  */
-export function AccountMenu() {
+export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const user = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
   const logout = useAuthStore((s) => s.logout);
 
-  const [openMode, setOpenMode] = useState<Mode | null>(null);
+  const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const isRegistered = Boolean(user && !user.isAnonymous);
+
+  // Before identity resolves, and during a first run, there is no one to show.
+  if (!user || (user.isAnonymous && !user.displayName)) return null;
+
+  const isGuest = user.isAnonymous;
+  const shownName = isGuest ? user.displayName : (user.username ?? user.displayName);
 
   return (
     <div className="account-menu">
-      {isRegistered ? (
-        <button
-          type="button"
-          className="account-chip"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((open) => !open)}
+      <button
+        type="button"
+        className={compact ? "identity-chip is-compact" : "identity-chip"}
+        aria-haspopup={isGuest ? "dialog" : "menu"}
+        aria-expanded={isGuest ? undefined : menuOpen}
+        onClick={() => (isGuest ? setMode("claim") : setMenuOpen((open) => !open))}
+        aria-label={
+          isGuest
+            ? `${shownName}. Your name is not saved. Claim it.`
+            : `Signed in as ${shownName}`
+        }
+      >
+        <span
+          className="identity-avatar"
+          aria-hidden="true"
+          style={{ backgroundColor: avatarColor(shownName, isGuest) }}
         >
-          <span
-            className="account-avatar"
-            aria-hidden="true"
-            style={{ backgroundColor: avatarColor(user!.username ?? "", false) }}
-          >
-            {avatarInitial(user!.username ?? "")}
-          </span>
-          <span className="account-name">{user!.username}</span>
-        </button>
-      ) : (
-        <div className="account-guest">
-          <button
-            type="button"
-            className="account-action account-action-primary"
-            onClick={() => setOpenMode("register")}
-          >
-            {/* Same long/short pattern the header buttons already use, so the
-                controls stay on one row on a phone. */}
-            <span className="account-action-long">Create account</span>
-            <span className="account-action-short" aria-hidden="true">Sign up</span>
-          </button>
-          <button
-            type="button"
-            className="account-action"
-            onClick={() => setOpenMode("login")}
-          >
-            Log in
-          </button>
-        </div>
-      )}
+          {avatarInitial(shownName)}
+        </span>
+        {!compact && <span className="identity-name">{shownName}</span>}
+        {isGuest && <span className="identity-unclaimed" aria-hidden="true" />}
+      </button>
 
-      {menuOpen && isRegistered && (
+      {menuOpen && !isGuest && (
         <div className="account-dropdown" role="menu">
           <button
             type="button"
@@ -82,15 +73,13 @@ export function AccountMenu() {
         </div>
       )}
 
-      {openMode && (
+      {mode && (
         <AuthDialog
-          mode={openMode}
-          // Pre-fill the name they are already playing under, so claiming it is
-          // one click rather than a retype.
-          suggestedUsername={user && user.isAnonymous ? user.displayName : ""}
-          onClose={() => setOpenMode(null)}
-          onSwitchMode={(next) => setOpenMode(next)}
-          onSubmit={openMode === "login" ? login : register}
+          mode={mode}
+          suggestedUsername={isGuest ? user.displayName : ""}
+          onClose={() => setMode(null)}
+          onSwitchMode={setMode}
+          onSubmit={mode === "login" ? login : register}
         />
       )}
     </div>
@@ -104,10 +93,10 @@ export function AuthDialog({
   onSwitchMode,
   onSubmit,
 }: {
-  mode: Mode;
+  mode: AuthMode;
   suggestedUsername?: string;
   onClose: () => void;
-  onSwitchMode: (mode: Mode) => void;
+  onSwitchMode: (mode: AuthMode) => void;
   onSubmit: (username: string, password: string) => Promise<unknown>;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -119,13 +108,12 @@ export function AuthDialog({
   const [busy, setBusy] = useState(false);
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
-
-  const isRegister = mode === "register";
+  const isClaim = mode === "claim";
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
-    if (isRegister) {
+    if (isClaim) {
       const invalid = nicknameError(username);
       if (invalid) {
         setError(invalid);
@@ -168,22 +156,32 @@ export function AuthDialog({
         tabIndex={-1}
       >
         <h3 id={titleId} className="modal-title">
-          {isRegister ? "Create your account" : "Log in"}
+          {isClaim
+            ? suggestedUsername
+              ? `Claim ${suggestedUsername}`
+              : "Create your account"
+            : "Log in"}
         </h3>
-        {isRegister && (
+        {isClaim && (
           <p className="modal-body">
-            Keep your name and your stats across devices. Your games so far stay
-            with you.
+            {suggestedUsername
+              ? "Your name isn’t saved yet. Claim it so nobody else can take it, and keep it on every device."
+              : "Keep your name and your stats on every device."}
           </p>
         )}
 
         <form onSubmit={submit} className="auth-form">
           <label htmlFor={`${titleId}-username`}>Username</label>
+          {/* Pre-filled from the guest name but editable: this is where a typo
+              gets fixed, and where you pick another if yours is taken. */}
           <input
             id={`${titleId}-username`}
             ref={usernameRef}
             value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={(event) => {
+              setUsername(event.target.value);
+              setError(null);
+            }}
             maxLength={MAX_NICKNAME_LENGTH}
             inputMode="text"
             autoComplete="username"
@@ -199,29 +197,32 @@ export function AuthDialog({
             id={`${titleId}-password`}
             type="password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            autoComplete={isRegister ? "new-password" : "current-password"}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setError(null);
+            }}
+            autoComplete={isClaim ? "new-password" : "current-password"}
             required
           />
 
           {error && <p className="auth-error" role="alert">{error}</p>}
 
           <button type="submit" className="modal-button" disabled={busy}>
-            {busy ? "Please wait…" : isRegister ? "Create account" : "Log in"}
+            {busy ? "Please wait…" : isClaim ? "Claim my name" : "Log in"}
           </button>
         </form>
 
         <p className="auth-switch">
-          {isRegister ? "Already have an account? " : "New here? "}
+          {isClaim ? "Already registered? " : "New here? "}
           <button
             type="button"
             className="auth-link"
             onClick={() => {
               setError(null);
-              onSwitchMode(isRegister ? "login" : "register");
+              onSwitchMode(isClaim ? "login" : "claim");
             }}
           >
-            {isRegister ? "Log in" : "Create an account"}
+            {isClaim ? "Log in" : "Create an account"}
           </button>
         </p>
 

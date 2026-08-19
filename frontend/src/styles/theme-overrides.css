@@ -742,19 +742,6 @@
   background: rgba(0, 0, 0, 0.7);
 }
 
-[data-theme="dark"] .guest-name-chip,
-[data-theme="dark"] .guest-name-save,
-[data-theme="dark"] .guest-name-cancel {
-  border-color: #475569;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .guest-name-form input {
-  border-color: #475569;
-  background: #0f172a;
-  color: #f8fafc;
-}
-
 /* 5.71:1 on the dark panel, 6.96:1 on the page background. */
 [data-theme="dark"] .colored-player-name.is-guest {
   color: #94a3b8;
@@ -774,9 +761,31 @@
   color: #a5b4fc;
 }
 
-[data-theme="dark"] .account-action,
-[data-theme="dark"] .account-chip {
+[data-theme="dark"] .identity-chip,
+[data-theme="dark"] .first-run-login,
+[data-theme="dark"] .first-run-guest-submit,
+[data-theme="dark"] .settings-account-action {
   border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="light"] .identity-chip.is-compact .identity-unclaimed {
+  box-shadow: 0 0 0 2px #ffffff;
+}
+
+[data-theme="dark"] .first-run {
+  border-color: #334155;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .first-run-divider::before,
+[data-theme="dark"] .first-run-divider::after {
+  background: #334155;
+}
+
+[data-theme="dark"] .first-run-guest-row input {
+  border-color: #475569;
+  background: #0f172a;
   color: #f8fafc;
 }
 

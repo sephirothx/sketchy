@@ -39,7 +39,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             # No name field here any more: the account already carries a
             # name, shown and editable in the header.
             assert await spectator_page.locator("#invite-nickname").count() == 0
-            await spectator_page.wait_for_selector(".guest-name-chip")
+            await spectator_page.wait_for_selector(".first-run, .identity-chip")
 
             assert await spectator_page.is_visible("text=Invite Test Room")
             assert await spectator_page.is_visible("text=Private invite")
@@ -84,7 +84,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
 
             # Visitors can join as a player, and valid stored tokens reconnect on reload.
             await player_page.goto(invite_url)
-            await player_page.wait_for_selector(".guest-name-chip")
+            await player_page.wait_for_selector(".first-run, .identity-chip")
             await use_guest_name(player_page, "InvitePlayer")
             await player_page.click('button:has-text("Join game")')
             await player_page.wait_for_selector(".room-copy-button")
@@ -94,7 +94,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
 
             # Once active-player capacity is full, spectating remains available.
             await full_room_page.goto(invite_url)
-            await full_room_page.wait_for_selector(".guest-name-chip")
+            await full_room_page.wait_for_selector(".first-run, .identity-chip")
             assert await full_room_page.is_disabled('button:has-text("Room full")')
             assert await full_room_page.is_visible("text=Spectating is still open.")
             await use_guest_name(full_room_page, "LateSpectator")

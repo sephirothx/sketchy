@@ -308,7 +308,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               </span>
             </button>
           )}
-          <AccountMenu />
+          <AccountMenu compact />
           <button
             type="button"
             className="game-header-afk-button"

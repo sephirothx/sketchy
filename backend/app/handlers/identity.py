@@ -43,9 +43,13 @@ async def resolve_identity(
         )
 
     if user is not None:
-        # Guests are handed a name on their first visit and rename it
-        # explicitly, so the account is the authority. Trusting the socket
+        # The account is the authority for a guest's name. Trusting the socket
         # payload instead would let a client play under any name it liked.
+        if not user.display_name:
+            # Still on their first run. The client asks for a name before it
+            # offers to create or join, so reaching here means something went
+            # around the UI - never seat a nameless player.
+            raise IdentityError("Choose a name before joining a room.")
         return PlayerIdentity(
             user_id=user.id, nickname=user.display_name, is_anonymous=True
         )

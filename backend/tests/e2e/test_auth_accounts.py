@@ -70,26 +70,38 @@ async def test_registering_keeps_the_seat_and_drops_the_guest_styling():
 
 
 @pytest.mark.asyncio
-async def test_guest_is_given_a_name_and_can_change_it():
-    """Nobody is asked for a name; renaming is inline and never a gate."""
+async def test_first_run_offers_an_account_first_and_guest_play_second():
+    """The lobby is never gated, and the account is the headline action."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         page = await browser.new_page()
         try:
             await page.goto(BASE_URL)
-            chip = page.locator(".guest-name-chip")
-            await chip.wait_for(state="visible")
-            generated = await page.inner_text(".guest-name-value")
-            assert generated, "a guest must arrive already named"
+            await page.wait_for_selector(".first-run")
 
-            await chip.click()
-            await page.fill(".guest-name-form input", "Marta")
-            await page.click(".guest-name-save")
-            await page.wait_for_selector('.guest-name-value:has-text("Marta")')
+            # Nothing modal, and the lobby is fully usable behind it.
+            assert await page.locator(".modal-overlay").count() == 0
+            assert await page.is_visible('button:has-text("Create room")')
 
-            # The name belongs to the account, so it survives a reload.
+            # A returning registered player can reach Log in without ever being
+            # asked to invent a guest name.
+            assert await page.is_visible(".first-run-login")
+            assert await page.is_visible(".first-run-signup")
+
+            # Guest play is one field and one click.
+            await page.fill(".first-run-guest-row input", "ab")
+            await page.click(".first-run-guest-submit")
+            await page.wait_for_selector(".auth-error")
+
+            await page.fill(".first-run-guest-row input", "Marta")
+            await page.click(".first-run-guest-submit")
+            await page.wait_for_selector('.identity-name:has-text("Marta")')
+
+            # Asked once: the block never comes back.
+            assert await page.locator(".first-run").count() == 0
             await page.reload()
-            await page.wait_for_selector('.guest-name-value:has-text("Marta")')
+            await page.wait_for_selector('.identity-name:has-text("Marta")')
+            assert await page.locator(".first-run").count() == 0
 
             # And it is the name they play under.
             await page.click('button:has-text("Create room")')
@@ -103,7 +115,8 @@ async def test_guest_is_given_a_name_and_can_change_it():
 
 
 @pytest.mark.asyncio
-async def test_guest_cannot_rename_to_a_registered_username():
+async def test_guest_renames_from_settings_and_cannot_take_a_username():
+    """Renaming has exactly one home, and it respects registered names."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         owner_context = await browser.new_context()
@@ -115,16 +128,24 @@ async def test_guest_cannot_rename_to_a_registered_username():
             await register_account(owner, "TakenName")
 
             await guest.goto(BASE_URL)
-            await guest.wait_for_selector(".guest-name-chip")
-            before = await guest.inner_text(".guest-name-value")
-            await guest.click(".guest-name-chip")
-            await guest.fill(".guest-name-form input", "takenname")
-            await guest.click(".guest-name-save")
+            await use_guest_name(guest, "Wanderer")
 
-            await guest.wait_for_selector(".auth-error")
-            assert "registered player" in (await guest.inner_text(".auth-error"))
-            await guest.click(".guest-name-cancel")
-            assert await guest.inner_text(".guest-name-value") == before
+            await guest.click(".header-settings-button")
+            await guest.wait_for_selector("#settings-display-name")
+            # Guests are pinned to grey, so no colour picker is offered here.
+            assert await guest.locator("#name-color-input").count() == 0
+            assert await guest.is_visible(".settings-locked-hint")
+
+            await guest.fill("#settings-display-name", "takenname")
+            await guest.click('.settings-modal-footer button:has-text("Save")')
+            await guest.wait_for_selector("#settings-name-error")
+            assert "registered player" in (
+                await guest.inner_text("#settings-name-error")
+            )
+
+            await guest.fill("#settings-display-name", "Marta")
+            await guest.click('.settings-modal-footer button:has-text("Save")')
+            await guest.wait_for_selector('.identity-name:has-text("Marta")')
         finally:
             await owner_context.close()
             await guest_context.close()

@@ -8,7 +8,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from app.auth.names import generate_guest_name
 from app.db.models import (
     GameParticipant,
     GameRecord,
@@ -107,7 +106,10 @@ class SqlAlchemyUserRepository(UserRepository):
                     id=user_id or generate_uuid(),
                     username=None,
                     password_hash=None,
-                    display_name=display_name.strip() or generate_guest_name(),
+                    # Left empty on purpose: "has no name yet" is what tells
+                    # the client this is a first run. Nothing is invented for
+                    # the player - they choose, or they sign up.
+                    display_name=display_name.strip(),
                     name_color=name_color,
                     avatar_url=None,
                     is_anonymous=True,

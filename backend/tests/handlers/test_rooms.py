@@ -481,3 +481,26 @@ async def test_guest_seat_is_named_from_the_account_not_the_payload():
         "sid", {"code": room.code, "nickname": "SomethingElse"}
     )
     assert room.players[response["playerId"]].nickname == "BriskOtter"
+
+
+@pytest.mark.asyncio
+async def test_a_guest_with_no_name_cannot_be_seated():
+    """The name is asked for before create/join, so this only happens if
+    something bypassed the UI. It must not produce a nameless player."""
+    room_manager = RoomManager()
+    user_repo = FakeUserRepository()
+    user_repo.add_guest("guest-1", "")
+    room = room_manager.create_room(name="Room")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "guest-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["join_room"](
+        "sid", {"code": room.code, "nickname": "Sneaky"}
+    )
+    assert response["ok"] is False
+    assert room.player_list() == []

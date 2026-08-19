@@ -5,7 +5,7 @@ import { useSettingsStore } from "../store/settingsStore";
 import type { RoomSummary } from "../types";
 import { SettingsIcon } from "./SettingsIcon";
 import { AccountMenu } from "./AccountMenu";
-import { GuestNameControl } from "./GuestNameControl";
+import { FirstRunIdentity } from "./FirstRunIdentity";
 
 const INVITE_LOADING_DELAY_MS = 250;
 
@@ -49,7 +49,6 @@ export function InviteEntryPage({ code }: { code: string }) {
       <header className="invite-entry-header">
         <button type="button" className="invite-brand" onClick={() => navigate("/")}>Sketchy</button>
         <div className="lobby-header-actions">
-          <GuestNameControl />
           <AccountMenu />
           <button type="button" className="header-settings-button" onClick={openSettings} title="Game Settings">
             <SettingsIcon size={16} />
@@ -110,12 +109,10 @@ export function InviteEntryPage({ code }: { code: string }) {
               if (!room.isFull) void join("player");
             }}
           >
-            {/* No name field: the account already carries one, shown in the
-                header where it can also be changed. Asking again here would
-                be a second answer to a question nobody was asked. */}
-            <p className="invite-playing-as">
-              Joining as <GuestNameControl />
-            </p>
+            {/* Cold arrivals from an invite link need an identity before they
+                can join. Same block as the lobby: account first, guest name
+                inline underneath. It disappears once either exists. */}
+            <FirstRunIdentity compact />
             {entryError && <p id="invite-entry-error" className="invite-form-error" role="alert">{entryError}</p>}
             <div className="invite-actions">
               <button type="submit" className="invite-primary-button" disabled={busy || room.isFull}>

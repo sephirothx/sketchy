@@ -4,7 +4,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { AccountMenu } from "../components/AccountMenu";
-import { GuestNameControl } from "../components/GuestNameControl";
+import { FirstRunIdentity } from "../components/FirstRunIdentity";
 import { currentPlayerName } from "../store/authStore";
 import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
@@ -216,7 +216,6 @@ export function LobbyBrowserPage() {
           <h1>Sketchy</h1>
         </div>
         <div className="lobby-header-actions">
-          <GuestNameControl />
           <AccountMenu />
           <button
             type="button"
@@ -239,6 +238,8 @@ export function LobbyBrowserPage() {
       )}
 
 
+
+      <FirstRunIdentity />
 
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
 
