@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import use_guest_name
 
@@ -54,6 +55,56 @@ async def test_room_list_failure_retry_and_connection_banner():
 
 
 @pytest.mark.asyncio
+async def test_page_load_and_reload_never_show_the_connection_banner():
+    """The socket connects after the identity lookup - that gap is not an outage."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+
+        # The banner is only up while the socket opens, so polling for it would
+        # miss it. Watch the DOM from before the first script runs instead.
+        await page.add_init_script(
+            """
+            window.__bannerSeen = false;
+            const check = () => {
+              if (document.querySelector('.connection-status-banner')) {
+                window.__bannerSeen = true;
+              }
+            };
+            new MutationObserver(check).observe(document, {
+              childList: true,
+              subtree: true,
+            });
+            """
+        )
+
+        # Slow the identity lookup the socket waits on, so the gap this test is
+        # about is wide enough to be more than a timing coincidence.
+        async def handle_me(route):
+            await asyncio.sleep(0.5)
+            await route.continue_()
+
+        await page.route("**/api/auth/me", handle_me)
+
+        async def assert_no_banner_during_load():
+            await page.wait_for_selector(".lobby-page")
+            await page.wait_for_timeout(1000)
+            # `is False`, not falsy: an undefined flag means the watcher never
+            # ran, which would make this test pass without checking anything.
+            assert await page.evaluate("window.__bannerSeen") is False, (
+                "the connection banner appeared while the page was loading"
+            )
+
+        try:
+            await page.goto(BASE_URL)
+            await assert_no_banner_during_load()
+            await page.reload()
+            await assert_no_banner_during_load()
+        finally:
+            await browser.close()
+
+
+@pytest.mark.asyncio
 async def test_mid_session_socket_reconnect_rejoins_room():
     """Transport reconnect must rebind the active room session without a reload."""
     async with async_playwright() as p:
@@ -101,9 +152,17 @@ async def test_mid_session_socket_reconnect_rejoins_room():
                 "transport to sever - it may have fallen back to polling"
             )
             await live_sockets[-1].close()
-            await guest.wait_for_selector(
-                '.connection-status-banner.offline, .connection-status-banner.reconnecting'
-            )
+            # The banner waits a beat before announcing a drop, so a reconnect
+            # that beats it is a pass, not a miss - what matters is that the
+            # session comes back, which the assertions below cover. The banner
+            # appearing at all is covered by the offline test above.
+            try:
+                await guest.wait_for_selector(
+                    '.connection-status-banner.offline, .connection-status-banner.reconnecting',
+                    timeout=5000,
+                )
+            except PlaywrightTimeoutError:
+                pass
             await guest.wait_for_selector(".connection-status-banner", state="hidden", timeout=15000)
 
             await host.wait_for_selector("text=GuestReconnect reconnected", timeout=10000)
