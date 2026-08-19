@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
+from app.api.profiles import create_profile_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_session_factory, init_db
@@ -99,6 +100,7 @@ api.add_middleware(
 )
 api.add_middleware(SessionAuthMiddleware, session_factory=async_session_factory)
 api.include_router(create_auth_router(user_repo, async_session_factory))
+api.include_router(create_profile_router(user_repo, game_history_repo))
 
 
 @api.get("/api/health")

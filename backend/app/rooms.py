@@ -170,6 +170,22 @@ class RestartVote:
 
 
 @dataclass(frozen=True, slots=True)
+class DepartedSeat:
+    """What a player leaves behind when their seat is removed.
+
+    A player who drew in round 1 and quit is gone from `Room.players` by the
+    time the game ends, but their rounds and guesses still belong in the
+    recorded history - and so does their final standing.
+    """
+
+    player_id: str
+    nickname: str
+    user_id: str | None
+    is_spectator: bool
+    score: int
+
+
+@dataclass(frozen=True, slots=True)
 class DrawingRecapEntry:
     round_number: int
     turn_number: int
@@ -219,6 +235,7 @@ class Room:
     canvas_generation: int = 0
     last_game_scores: list[dict] = field(default_factory=list)
     last_game_drawings: list[DrawingRecapEntry] = field(default_factory=list)
+    departed_seats: dict[str, DepartedSeat] = field(default_factory=dict)
     restart_vote: RestartVote | None = None
     restart_vote_cooldown_until: float = 0
 
@@ -466,7 +483,15 @@ class RoomManager:
         )
 
     def remove_player(self, room: Room, player_id: str) -> None:
-        room.players.pop(player_id, None)
+        departing = room.players.pop(player_id, None)
+        if departing is not None:
+            room.departed_seats[player_id] = DepartedSeat(
+                player_id=player_id,
+                nickname=departing.nickname,
+                user_id=departing.user_id,
+                is_spectator=departing.is_spectator,
+                score=departing.score,
+            )
         for p in room.players.values():
             p.kick_votes.discard(player_id)
             p.afk_votes.discard(player_id)

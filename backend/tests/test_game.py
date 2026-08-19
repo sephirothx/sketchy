@@ -896,3 +896,130 @@ def test_hide_masked_prompt_returns_question_marks():
     # Guesser who answered correctly sees full word
     game.submit_guess("p1", word)
     assert game.masked_word("p1") == word
+
+
+# --- per-turn analytics kept for the game record --------------------------
+
+def test_hint_purchases_record_what_the_player_was_charged():
+    """The recorded spend has to match what the caller deducted.
+
+    `buy_hint` reads `hint_cost` and subtracts it from the score, so the game
+    records the same reading, taken before the purchase moves the price.
+    """
+    game = make_hint_game("testing", "purchase")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+
+    first_price = game.hint_cost(guesser)
+    assert game.buy_hint_letter(guesser, 0) is True
+    second_price = game.hint_cost(guesser)
+    assert game.buy_hint_letter(guesser, 1) is True
+
+    assert second_price > first_price
+    assert game.hint_purchases[guesser] == 2
+    assert game.hint_spend[guesser] == first_price + second_price
+
+
+def test_wheel_letter_purchases_record_their_own_prices():
+    game = make_hint_game("testing", "wheel")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+
+    price = game.wheel_hint_cost(guesser, "e")
+    assert game.buy_wheel_letter(guesser, "e") is True
+
+    assert game.hint_purchases[guesser] == 1
+    assert game.hint_spend[guesser] == price
+
+
+def test_a_rejected_purchase_costs_nothing():
+    game = make_hint_game("testing", "purchase")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    game.buy_hint_letter(guesser, 0)
+    spend = game.hint_spend[guesser]
+
+    assert game.buy_hint_letter(guesser, 0) is False
+    assert game.hint_spend[guesser] == spend
+
+
+def test_only_real_guess_attempts_are_counted_as_wrong():
+    game = make_hint_game("testing", "none")
+    drawer = game.current_drawer
+    guesser, other = [t for t in game.turn_order if t != drawer]
+
+    game.submit_guess(guesser, "banana")
+    game.submit_guess(drawer, "banana")       # the drawer is chatting
+    game.submit_guess(other, "testing")       # correct
+    game.submit_guess(other, "banana")        # already correct: chatting too
+
+    assert game.wrong_guesses == {guesser: 1}
+
+
+def test_near_misses_are_counted_separately():
+    game = make_hint_game("testing", "none")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+
+    game.submit_guess(guesser, "testng")   # one deletion: close
+    game.submit_guess(guesser, "aardvark")  # nowhere near
+
+    assert game.wrong_guesses[guesser] == 2
+    assert game.near_miss_count == 1
+
+
+def test_a_word_the_drawer_chose_is_not_marked_auto_picked():
+    game = make_game(n_players=2, rounds=1)
+    choices = game.start_next_turn(canvas_generation=1)
+    assert game.choose_word(game.current_drawer, choices[0]) is True
+    assert game.word_auto_picked is False
+
+
+def test_a_word_the_clock_picked_is_marked_auto_picked():
+    game = make_game(n_players=2, rounds=1)
+    game.start_next_turn(canvas_generation=1)
+    game.force_word_choice()
+    assert game.word_auto_picked is True
+
+
+def test_completed_turn_records_how_the_round_ended():
+    game = make_hint_game("testing", "none", n_players=2)
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    game.submit_guess(guesser, "testing")
+
+    game.end_round(total_guesser_count=1)
+
+    turn = game.completed_turns[-1]
+    assert turn.end_reason == "all_guessed"
+    assert turn.guesser_count == 1
+
+
+def test_a_round_nobody_solved_ends_on_the_clock():
+    game = make_hint_game("testing", "none", n_players=2)
+    game.end_round(total_guesser_count=1)
+    assert game.completed_turns[-1].end_reason == "timeout"
+
+
+def test_completed_turn_records_the_roster_and_the_drawing_effort():
+    game = make_hint_game("testing", "none", n_players=3)
+    game.canvas.record_stroke("draw_start", pen_start())
+    game.canvas.record_stroke("draw_end", {})
+
+    game.end_round(total_guesser_count=2)
+
+    turn = game.completed_turns[-1]
+    assert turn.present_tokens == tuple(game.turn_order)
+    assert turn.stroke_count == len(game.canvas.history)
+    assert turn.stroke_count > 0
+
+
+def test_per_turn_analytics_do_not_leak_into_the_next_turn():
+    game = make_hint_game("testing", "purchase", n_players=2)
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    game.buy_hint_letter(guesser, 0)
+    game.submit_guess(guesser, "banana")
+    game.end_round(total_guesser_count=1)
+
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+
+    assert game.hint_spend == {}
+    assert game.hint_purchases == {}
+    assert game.wrong_guesses == {}
+    assert game.near_miss_count == 0
+    assert game.word_auto_picked is False

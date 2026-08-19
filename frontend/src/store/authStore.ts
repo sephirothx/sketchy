@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { apiRequest, ApiError } from "../lib/api";
 import { socket } from "../lib/socket";
 import { useGameStore } from "./gameStore";
+import { useSettingsStore } from "./settingsStore";
 
 export interface AuthUser {
   id: string;
@@ -20,6 +21,7 @@ interface AuthStore {
   hasResolved: boolean;
   fetchMe: () => Promise<AuthUser | null>;
   setDisplayName: (displayName: string) => Promise<AuthUser>;
+  setNameColor: (nameColor: string) => Promise<AuthUser>;
   register: (username: string, password: string) => Promise<AuthUser>;
   login: (username: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
@@ -62,6 +64,37 @@ function releaseSeatBeforeIdentityChange(): void {
  * copy in the game store is what previously let the two drift apart on a fresh
  * device, where the local copy was empty but the account had a name.
  */
+/**
+ * Reconcile the colour in Settings with the one on the account.
+ *
+ * The account is the durable copy: it is the only place another player's view
+ * of this name can read a colour from, and it is what a second device inherits
+ * instead of the colour that device happened to generate. So an account that
+ * has a colour wins, and Settings adopts it.
+ *
+ * An account with no colour is a player who chose one before it was ever
+ * stored, or who has never opened Settings; their local choice is pushed up
+ * once so their name looks the same on their profile as it does in a room.
+ * Guests are skipped - their grey is the cue that the name is unclaimed.
+ */
+function reconcileNameColor(user: AuthUser | null): void {
+  if (!user || user.isAnonymous) return;
+  const settings = useSettingsStore.getState();
+  if (user.nameColor) {
+    if (user.nameColor !== settings.nameColor) settings.setNameColor(user.nameColor);
+    return;
+  }
+  if (!settings.nameColor) return;
+  void apiRequest<AuthUser>("/api/auth/name-color", {
+    method: "POST",
+    body: { nameColor: settings.nameColor },
+  })
+    .then((updated) => useAuthStore.setState({ user: updated }))
+    // Nothing here is worth interrupting the player over: the colour still
+    // applies locally and the next load tries again.
+    .catch(() => {});
+}
+
 let inFlightFetchMe: Promise<AuthUser | null> | null = null;
 
 export function currentPlayerName(): string {
@@ -85,6 +118,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       try {
         const user = await apiRequest<AuthUser>("/api/auth/me");
         set({ user, isLoading: false, hasResolved: true });
+        reconcileNameColor(user);
         return user;
       } catch {
         // Offline or the server is down. The app still works: play continues
@@ -107,12 +141,23 @@ export const useAuthStore = create<AuthStore>((set) => ({
     return user;
   },
 
+  setNameColor: async (nameColor) => {
+    useSettingsStore.getState().setNameColor(nameColor);
+    const user = await apiRequest<AuthUser>("/api/auth/name-color", {
+      method: "POST",
+      body: { nameColor },
+    });
+    set({ user, hasResolved: true });
+    return user;
+  },
+
   register: async (username, password) => {
     const user = await apiRequest<AuthUser>("/api/auth/register", {
       method: "POST",
       body: { username, password },
     });
     set({ user, hasResolved: true });
+    reconcileNameColor(user);
     reconnectSocketAsNewIdentity();
     return user;
   },
@@ -123,6 +168,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       body: { username, password },
     });
     set({ user, hasResolved: true });
+    reconcileNameColor(user);
     releaseSeatBeforeIdentityChange();
     reconnectSocketAsNewIdentity();
     return user;

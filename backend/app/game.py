@@ -12,6 +12,7 @@ import time
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from itertools import groupby
 
@@ -161,13 +162,58 @@ def _is_close_pair(guess: str, target: str) -> bool:
 
 
 @dataclass(frozen=True)
+class TurnGuessRecord:
+    """One correct guess, kept after the turn that produced it has ended."""
+
+    token: str
+    points_awarded: int
+    guess_time_seconds: float
+    # What the guess cost and what it took to get there. Hint spend comes
+    # straight off the player's score, so without it a low score is
+    # indistinguishable from an expensive one.
+    hints_used: int = 0
+    points_spent_on_hints: int = 0
+    wrong_guesses_before: int = 0
+
+
+@dataclass(frozen=True)
 class CompletedTurnStats:
+    """Everything a finished turn is worth remembering.
+
+    Snapshotted in `end_round` because `start_next_turn` clears the drawer,
+    `guess_points`, and `guess_times` on the way to the next turn - by game end
+    only the final turn would still be readable off the live `Game`, which is
+    not enough to record a game's history.
+    """
+
     round_number: int
     turn_number: int
     offered_words: list[str]
     chosen_word: str
     correct_guess_count: int
     total_guesser_count: int
+    drawer_token: str = ""
+    # Real elapsed drawing time, not the configured limit: a turn ends as soon
+    # as everyone has guessed.
+    duration_seconds: float = 0.0
+    guesses: tuple[TurnGuessRecord, ...] = ()
+    # Who could still have guessed. Without it, "two players guessed" could
+    # equally mean two out of two or two out of eight.
+    guesser_count: int = 0
+    # The drawer ran out of time and took the first offered word, rather than
+    # picking one - which is not a preference, and should not read as one.
+    word_auto_picked: bool = False
+    # Canvas actions committed during the turn. Separates a word nobody could
+    # guess from a drawer who drew nothing.
+    stroke_count: int = 0
+    # "all_guessed" or "timeout". A turn the drawer abandons never completes,
+    # so it is never recorded and cannot appear here.
+    end_reason: str = "timeout"
+    wrong_guess_count: int = 0
+    near_miss_count: int = 0
+    # Everyone still in the rotation as the turn ended, which is what makes a
+    # player who quit after one turn distinguishable from one who played on.
+    present_tokens: tuple[str, ...] = ()
 
 
 @dataclass
@@ -194,8 +240,28 @@ class Game:
     revealed_positions: set[int] = field(default_factory=set)
     purchased_hints: dict[str, set[int]] = field(default_factory=dict)  # slot hints ("purchase")
     purchased_letters: dict[str, set[str]] = field(default_factory=dict)  # letter hints ("wheel")
+    # Per-turn accounting kept for the game record. Points spent on hints are
+    # deducted from the player's score by the caller and are otherwise lost.
+    hint_spend: dict[str, int] = field(default_factory=dict)
+    hint_purchases: dict[str, int] = field(default_factory=dict)
+    wrong_guesses: dict[str, int] = field(default_factory=dict)
+    near_miss_count: int = 0
+    word_auto_picked: bool = False
     completed_turns: list[CompletedTurnStats] = field(default_factory=list)
+    # Wall clock, unlike the monotonic `phase_deadline`: persisted game records
+    # need a real timestamp, and a monotonic reading means nothing outside this
+    # process.
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # Every token that was ever in the rotation, including players who have
+    # since left. `turn_order` shrinks on departure, so it cannot answer "who
+    # played this game?" once the game is over.
+    roster: list[str] = field(default_factory=list)
     _cached_letter_frequencies: dict[str, float] | None = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        for token in self.turn_order:
+            if token not in self.roster:
+                self.roster.append(token)
 
     @property
     def total_turns(self) -> int:
@@ -214,6 +280,8 @@ class Game:
         """Add a mid-game player without moving the current turn cursor."""
         if token in self.turn_order:
             return
+        if token not in self.roster:
+            self.roster.append(token)
         current_round = self.round_number
         current_drawer = self.current_drawer
         self.turn_order.append(token)
@@ -289,6 +357,11 @@ class Game:
         self.revealed_positions = set()
         self.purchased_hints = {}
         self.purchased_letters = {}
+        self.hint_spend = {}
+        self.hint_purchases = {}
+        self.wrong_guesses = {}
+        self.near_miss_count = 0
+        self.word_auto_picked = False
         self.phase = Phase.CHOOSING_WORD
         return self.word_choices
 
@@ -302,6 +375,7 @@ class Game:
 
     def force_word_choice(self) -> None:
         if self.phase == Phase.CHOOSING_WORD and self.word_choices:
+            self.word_auto_picked = True
             self._set_word(self.word_choices[0])
 
     def _set_word(self, word: str) -> None:
@@ -423,6 +497,10 @@ class Game:
         purchased = self.purchased_hints.setdefault(token, set())
         if slot in purchased:
             return False
+        # Read the price before the purchase moves it: this is the same value
+        # the caller just charged, and recording it here keeps the two from
+        # drifting apart.
+        self._record_hint_spend(token, self.hint_cost(token))
         purchased.add(slot)
         return True
 
@@ -504,8 +582,13 @@ class Game:
         bought = self.purchased_letters.setdefault(token, set())
         if letter in bought:
             return False
+        self._record_hint_spend(token, self.wheel_hint_cost(token, letter))
         bought.add(letter)
         return True
+
+    def _record_hint_spend(self, token: str, cost: int) -> None:
+        self.hint_spend[token] = self.hint_spend.get(token, 0) + cost
+        self.hint_purchases[token] = self.hint_purchases.get(token, 0) + 1
 
     def submit_guess(self, token: str, text: str) -> tuple[bool, int]:
         if self.phase != Phase.DRAWING or not self.word:
@@ -517,6 +600,12 @@ class Game:
         normalized_guess = _normalize(text)
         normalized_word = _normalize(self.word)
         if normalized_guess != normalized_word:
+            # Counted here rather than at the caller so that only real attempts
+            # land: the drawer and players who already have it return above,
+            # and their messages are chat, not guesses.
+            self.wrong_guesses[token] = self.wrong_guesses.get(token, 0) + 1
+            if self.guess_hint(token, text) is not None:
+                self.near_miss_count += 1
             return False, 0
         self.correct_guessers.add(token)
         self.guess_times[token] = max(
@@ -588,6 +677,35 @@ class Game:
                 chosen_word=self.word or "",
                 correct_guess_count=len(self.correct_guessers),
                 total_guesser_count=total_guesser_count,
+                drawer_token=self.current_drawer or "",
+                duration_seconds=max(
+                    0.0, self.drawing_seconds - self.remaining_seconds()
+                ),
+                guesses=tuple(
+                    TurnGuessRecord(
+                        token=token,
+                        points_awarded=self.guess_points.get(token, 0),
+                        guess_time_seconds=self.guess_times.get(token, 0.0),
+                        hints_used=self.hint_purchases.get(token, 0),
+                        points_spent_on_hints=self.hint_spend.get(token, 0),
+                        wrong_guesses_before=self.wrong_guesses.get(token, 0),
+                    )
+                    for token in sorted(
+                        self.correct_guessers,
+                        key=lambda t: self.guess_times.get(t, 0.0),
+                    )
+                ),
+                guesser_count=total_guesser_count,
+                word_auto_picked=self.word_auto_picked,
+                stroke_count=len(self.canvas.history),
+                end_reason=(
+                    "all_guessed"
+                    if self.all_guessed(total_guesser_count)
+                    else "timeout"
+                ),
+                wrong_guess_count=sum(self.wrong_guesses.values()),
+                near_miss_count=self.near_miss_count,
+                present_tokens=tuple(self.turn_order),
             )
         )
         return sum(self.guess_points.values())

@@ -176,6 +176,7 @@ interface SettingsStore {
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
   setPenCursor: (penCursor: PenCursorStyle) => void;
+  setNameColor: (nameColor: string) => void;
   setTheme: (theme: AppTheme) => void;
   setConfettiEffects: (enabled: boolean) => void;
   setSoundEffects: (enabled: boolean) => void;
@@ -235,6 +236,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_pencursor", penCursor);
       return { penCursor };
+    }),
+  setNameColor: (nameColor) =>
+    set(() => {
+      localStorage.setItem("sketchy_namecolor", nameColor);
+      return { nameColor };
     }),
   setTheme: (theme) =>
     set(() => {

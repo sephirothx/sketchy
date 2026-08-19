@@ -41,9 +41,14 @@ async def register_account(page, username: str, password: str = "a-good-password
     simply stops being a guest on it.
     """
     # The claim dialog is reached from the identity chip once a guest is named,
-    # or from the first-run block before that.
+    # or from the first-run block before that. Outside a room the chip opens a
+    # menu first, since a guest has a profile to reach as well; the compact chip
+    # inside a room still goes straight to the dialog.
     if await page.locator(".identity-chip").count():
         await page.click(".identity-chip")
+        claim = page.get_by_role("menuitem", name="Claim your name")
+        if await claim.count():
+            await claim.click()
     else:
         await page.click(".first-run-signup")
     dialog = page.locator(".modal-card").filter(has_text="Password")

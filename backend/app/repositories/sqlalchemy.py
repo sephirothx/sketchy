@@ -344,6 +344,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             user_id=p.user_id,
                             final_score=p.final_score,
                             final_rank=p.final_rank,
+                            turns_played=p.turns_played,
                         )
                     )
 
@@ -360,6 +361,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             drawer_user_id=r.drawer_user_id,
                             word=r.word,
                             duration_seconds=r.duration_seconds,
+                            guesser_count=r.guesser_count,
+                            word_auto_picked=r.word_auto_picked,
+                            stroke_count=r.stroke_count,
+                            end_reason=r.end_reason,
+                            wrong_guess_count=r.wrong_guess_count,
+                            near_miss_count=r.near_miss_count,
                         )
                     )
 
@@ -376,6 +383,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             user_id=g.user_id,
                             points_awarded=g.points_awarded,
                             guess_time_seconds=g.guess_time_seconds,
+                            hints_used=g.hints_used,
+                            points_spent_on_hints=g.points_spent_on_hints,
+                            wrong_guesses_before=g.wrong_guesses_before,
                         )
                     )
 

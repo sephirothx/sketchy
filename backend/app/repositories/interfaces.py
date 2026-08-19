@@ -86,6 +86,7 @@ class GameParticipantInput:
     user_id: str
     final_score: int
     final_rank: int
+    turns_played: int = 0
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,12 @@ class RoundRecordInput:
     drawer_user_id: str
     word: str
     duration_seconds: float
+    guesser_count: int = 0
+    word_auto_picked: bool = False
+    stroke_count: int = 0
+    end_reason: str = "timeout"
+    wrong_guess_count: int = 0
+    near_miss_count: int = 0
     id: str | None = None
 
 
@@ -108,6 +115,9 @@ class RoundGuessInput:
     user_id: str
     points_awarded: int
     guess_time_seconds: float
+    hints_used: int = 0
+    points_spent_on_hints: int = 0
+    wrong_guesses_before: int = 0
 
 
 @dataclass(frozen=True)

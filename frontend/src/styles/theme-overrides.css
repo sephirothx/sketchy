@@ -145,6 +145,50 @@
 [data-theme="dark"] .room-state-playing { background: #78350f; color: #fde68a; }
 [data-theme="dark"] .public-room-badges span { background: #312e81; color: #c7d2fe; }
 
+/* Profile page. The tiles and game rows nest inside a .panel, so they take the
+   same darker fill as .public-room-card does; the expanded round detail goes a
+   step lighter to read as a layer above the row it opened from. */
+[data-theme="dark"] .profile-stat,
+[data-theme="dark"] .profile-game {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .profile-game-body {
+  background: #1e293b;
+  border-top-color: #334155;
+}
+
+[data-theme="dark"] .profile-stat-value,
+[data-theme="dark"] .profile-game-room,
+[data-theme="dark"] .profile-round-word {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .profile-stat-label,
+[data-theme="dark"] .profile-game-meta,
+[data-theme="dark"] .profile-game-score,
+[data-theme="dark"] .profile-game-chevron,
+[data-theme="dark"] .profile-standing-rank,
+[data-theme="dark"] .profile-rounds th {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .profile-game-rank,
+[data-theme="dark"] .profile-standing-score {
+  color: #cbd5e1;
+}
+
+/* #15803d is only 2.2:1 on this surface; #4ade80 clears 8:1. */
+[data-theme="dark"] .profile-game-rank.is-winner {
+  color: #4ade80;
+}
+
+[data-theme="dark"] .profile-rounds th,
+[data-theme="dark"] .profile-rounds td {
+  border-bottom-color: #334155;
+}
+
 [data-theme="dark"] .room-copy-button,
 [data-theme="dark"] .header-settings-button,
 [data-theme="dark"] .save-image-button {
