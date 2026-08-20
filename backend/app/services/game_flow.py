@@ -576,6 +576,25 @@ class GameFlowService:
             else:
                 await _start_turn(room)
 
+        async def _abandon_current_turn(room: Room) -> None:
+            """Give up the turn in progress: move to the next one, or end the game.
+
+            `_start_turn` on its own walks `turn_index` past the final turn,
+            which plays a turn the room never asked for and reports it as round
+            `rounds_total + 1`. `_finish_or_next` is what chooses between
+            advancing and ending, so every caller that drops a live turn goes
+            through here rather than reaching for `_start_turn` directly.
+
+            The phase timer is cancelled explicitly because ending the game
+            never reaches `_start_turn`, and so never reaches the
+            `replace_phase_timer` that would otherwise have retired it.
+            """
+            if not room.game:
+                return
+            timer_manager.cancel_phase_timer(room.id)
+            timer_manager.cancel_hint_timers(room.id)
+            await _finish_or_next(room)
+
         def _privileged_sids(
             room: Room,
             game: Game,
@@ -638,12 +657,7 @@ class GameFlowService:
                 room.state = "waiting"
                 room.game = None
             elif was_drawer:
-                timer_manager.cancel_phase_timer(room.id)
-                timer_manager.cancel_hint_timers(room.id)
-                if game.is_finished():
-                    await _finish_or_next(room)
-                else:
-                    await _start_turn(room)
+                await _abandon_current_turn(room)
 
         async def _existing_player_for_sid(sid: str, room_id: str) -> Player | None:
             """If this socket already has a live session in the target room, return its player.
@@ -676,6 +690,7 @@ class GameFlowService:
         self._end_round = _end_round
         self._round_ended_payload = _round_ended_payload
         self._finish_or_next = _finish_or_next
+        self._abandon_current_turn = _abandon_current_turn
         self._privileged_sids = _privileged_sids
         self._end_round_if_all_guessed = _end_round_if_all_guessed
         self._on_phase_timeout = _on_phase_timeout
