@@ -13,6 +13,7 @@
 .drawing-recap-canvas .canvas-stack { border: 0; border-radius: 0; }
 .drawing-recap-status { color: #64748b; text-align: center; }
 .drawing-recap-status p { margin: 0 0 10px; }
+.drawing-recap-status-detail { font-size: 0.9em; opacity: 0.85; }
 .drawing-recap-empty { background: #f8fafc; border-radius: 8px; color: #64748b; margin: 10px 0 0; padding: 9px 12px; text-align: center; }
 .drawing-recap-navigation { align-items: center; display: grid; gap: 12px; grid-template-columns: 1fr auto 1fr; margin-top: 16px; }
 .drawing-recap-navigation button:first-child { justify-self: start; }

@@ -8,6 +8,7 @@ from app.rooms import (
     NAME_COLOR_PATTERN,
     RoomFullError,
     RoomManager,
+    MAX_RECAP_CANVAS_BYTES,
 )
 
 
@@ -264,8 +265,82 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
         "drawerNameColor": drawer.name_color,
         "word": "apple",
         "actionCount": 0,
+        "available": True,
     }]
     assert "canvas" not in payload["lastGameDrawings"][0]
 
     room.state = "playing"
     assert room.to_state_payload()["lastGameDrawings"] == []
+
+
+def recap_entry(turn: int, canvas: bytes) -> DrawingRecapEntry:
+    return DrawingRecapEntry(
+        round_number=1,
+        turn_number=turn,
+        drawer_id=f"drawer-{turn}",
+        drawer_nickname=f"Drawer {turn}",
+        drawer_name_color=None,
+        word=f"word-{turn}",
+        action_count=1,
+        canvas_history=canvas,
+    )
+
+
+def test_a_full_length_game_of_real_drawings_keeps_every_one():
+    """The budget must never bind on a game anybody actually played."""
+    room = RoomManager().create_room(name="Room", is_public=True)
+    typical = b"x" * 10_000  # what a real drawing measures
+
+    # Sixteen players over ten rounds: the longest game the settings allow.
+    for turn in range(160):
+        room.record_drawing_recap(recap_entry(turn, typical))
+
+    assert all(drawing.is_available for drawing in room.last_game_drawings)
+
+
+def test_a_game_that_outgrows_its_budget_keeps_what_it_showed_first():
+    """A recap must not rearrange itself while somebody is reading it."""
+    room = RoomManager().create_room(name="Room", is_public=True)
+    huge = b"x" * (MAX_RECAP_CANVAS_BYTES // 4)
+
+    for turn in range(6):
+        room.record_drawing_recap(recap_entry(turn, huge))
+
+    # Every turn is still listed, with its word and its drawer.
+    assert len(room.last_game_drawings) == 6
+    assert [d.word for d in room.last_game_drawings] == [f"word-{t}" for t in range(6)]
+    # Four of these fill the budget exactly; the turns after it are the ones
+    # turned away, and nothing already kept was disturbed.
+    kept = [d.turn_number for d in room.last_game_drawings if d.is_available]
+    assert kept == [0, 1, 2, 3]
+    retained = sum(len(d.canvas_history or b"") for d in room.last_game_drawings)
+    assert retained <= MAX_RECAP_CANVAS_BYTES
+
+
+def test_the_recap_says_which_drawings_it_still_holds():
+    room = RoomManager().create_room(name="Room", is_public=True)
+    # Each of these is over half the budget, so no two can be held at once.
+    huge = b"x" * (MAX_RECAP_CANVAS_BYTES // 2 + 1)
+    for turn in range(3):
+        room.record_drawing_recap(recap_entry(turn, huge))
+
+    availability = [entry["available"] for entry in room.drawing_recap_metadata()]
+    assert availability == [True, False, False]
+    # Turning one drawing away does not close the recap: a small one still
+    # fits behind it, and what was already kept is untouched.
+    room.record_drawing_recap(recap_entry(3, b"tiny"))
+    assert [
+        entry["available"] for entry in room.drawing_recap_metadata()
+    ] == [True, False, False, True]
+
+
+def test_starting_a_game_gives_the_whole_budget_back():
+    room = RoomManager().create_room(name="Room", is_public=True)
+    for turn in range(4):
+        room.record_drawing_recap(recap_entry(turn, b"x" * (MAX_RECAP_CANVAS_BYTES // 3)))
+    assert not all(d.is_available for d in room.last_game_drawings)
+
+    # `_start_fresh_game` clears the list; the next game starts from nothing.
+    room.last_game_drawings = []
+    room.record_drawing_recap(recap_entry(0, b"x" * (MAX_RECAP_CANVAS_BYTES // 3)))
+    assert room.last_game_drawings[0].is_available

@@ -27,8 +27,12 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
     setPosition(Math.max(0, Math.min(entries.length - 1, nextPosition)));
   }, [entries.length]);
 
+  // The room tells us up front which bitmaps it still holds, so a dropped one
+  // is a state to render rather than a request to make and watch fail.
+  const unavailable = Boolean(entry) && entry.available === false;
+
   const loadDrawing = useCallback(async () => {
-    if (!entry) return;
+    if (!entry || entry.available === false) return;
     const loadGeneration = ++loadGenerationRef.current;
     const cached = cacheRef.current.get(entry.index);
     if (cached) {
@@ -107,7 +111,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
             <button
               type="button"
               className="drawing-recap-download"
-              disabled={actions === null || Boolean(error)}
+              disabled={actions === null || unavailable || Boolean(error)}
               onClick={() => canvasRef.current?.saveImage()}
             >
               Download drawing
@@ -118,8 +122,18 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
           </div>
         </header>
 
-        <div className="drawing-recap-canvas" aria-busy={actions === null && !error}>
-          {error ? (
+        <div
+          className="drawing-recap-canvas"
+          aria-busy={actions === null && !error && !unavailable}
+        >
+          {unavailable ? (
+            <div className="drawing-recap-status">
+              <p>This drawing was not kept.</p>
+              <p className="drawing-recap-status-detail">
+                The room ran out of room for it. Later turns were kept instead.
+              </p>
+            </div>
+          ) : error ? (
             <div className="drawing-recap-status" role="alert">
               <p>{error}</p>
               <button type="button" onClick={() => void loadDrawing()}>Try again</button>

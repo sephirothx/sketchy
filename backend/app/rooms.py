@@ -5,7 +5,7 @@ import random
 import re
 import string
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal, Optional
 
 from app.game import Game
@@ -16,6 +16,16 @@ DEFAULT_ROOM_HINT_MODE = "checkpoints"
 DRAWING_TIME_OPTIONS = (15, 30, 60, 90, 120, 180, 240, 300)
 MAX_PLAYERS_MIN = 2
 MAX_PLAYERS_MAX = 16
+
+# How much drawing a room keeps for the recap, across the whole game.
+#
+# Every turn's canvas is held until a new game starts, so this is the one thing
+# in a room that grows with the length of a game: sixteen players over ten
+# rounds is a hundred and sixty turns. Real drawings run about 10 KB, so a
+# full-length game of them keeps everything with room to spare - the budget
+# only ever binds on a client sending deliberately enormous histories, where
+# turning the later ones away is the right outcome.
+MAX_RECAP_CANVAS_BYTES = 8 * 1024 * 1024
 
 
 def nearest_drawing_seconds(value: int) -> int:
@@ -193,7 +203,15 @@ class DrawingRecapEntry:
     drawer_name_color: str | None
     word: str
     action_count: int
-    canvas_history: bytes
+    # None once a game's drawings outgrow the room's budget and this one no
+    # longer fits. The entry itself stays: a recap that quietly listed fewer
+    # turns than were played would be a worse answer than one admitting a
+    # drawing is gone.
+    canvas_history: bytes | None
+
+    @property
+    def is_available(self) -> bool:
+        return self.canvas_history is not None
 
     def metadata(self, index: int) -> dict:
         return {
@@ -205,6 +223,7 @@ class DrawingRecapEntry:
             "drawerNameColor": self.drawer_name_color,
             "word": self.word,
             "actionCount": self.action_count,
+            "available": self.is_available,
         }
 
     def payload(self, index: int) -> dict:
@@ -262,6 +281,26 @@ class Room:
             "eligibleVoterIds": eligible_voter_ids,
             "requiredVotes": (len(eligible_voter_ids) // 2) + 1,
         }
+
+    def record_drawing_recap(self, entry: DrawingRecapEntry) -> None:
+        """Keep this turn's drawing if the room still has room for it.
+
+        The drawings a game keeps are the ones it showed first, so a recap
+        does not rearrange itself while somebody is reading it. Only the
+        bitmap is given up - the turn stays listed with its word and its
+        drawer, because a recap quietly showing fewer turns than were played
+        would be a worse answer than one admitting a drawing is gone.
+
+        Per drawing rather than once and for all: a small drawing still fits
+        after a large one was turned away.
+        """
+        retained = sum(
+            len(drawing.canvas_history or b"")
+            for drawing in self.last_game_drawings
+        )
+        if retained + len(entry.canvas_history or b"") > MAX_RECAP_CANVAS_BYTES:
+            entry = replace(entry, canvas_history=None)
+        self.last_game_drawings.append(entry)
 
     def drawing_recap_metadata(self) -> list[dict]:
         return [

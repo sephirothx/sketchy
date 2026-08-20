@@ -95,10 +95,17 @@ async def get_recap_drawing(ctx: HandlerContext, sid, data):
     room, _ = current
     if payload.index >= len(room.last_game_drawings):
         return {"ok": False, "error": "Drawing not found"}
-    return {
-        "ok": True,
-        "drawing": room.last_game_drawings[payload.index].payload(payload.index),
-    }
+    drawing = room.last_game_drawings[payload.index]
+    if not drawing.is_available:
+        # Given up to keep the room's recap inside its budget. Distinct from
+        # "not found" so the client can say so plainly instead of offering a
+        # retry for something that is never coming back.
+        return {
+            "ok": False,
+            "error": "This drawing was not kept",
+            "unavailable": True,
+        }
+    return {"ok": True, "drawing": drawing.payload(payload.index)}
 
 
 async def update_room_settings(ctx: HandlerContext, sid, data):
