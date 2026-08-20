@@ -174,6 +174,8 @@ export interface DrawingRecapMetadata {
   drawerNameColor?: string;
   word: string;
   actionCount: number;
+  /** False once the room gave this bitmap up to stay inside its recap budget. */
+  available?: boolean;
 }
 
 export interface DrawingRecapEntry extends DrawingRecapMetadata {

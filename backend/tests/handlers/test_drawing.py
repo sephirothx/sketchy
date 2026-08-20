@@ -542,6 +542,7 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
         "drawerNameColor": player.name_color,
         "word": "tree",
         "actionCount": 1,
+        "available": True,
         "canvas": canvas,
     }
     assert room.last_game_drawings[0].canvas_history == canvas

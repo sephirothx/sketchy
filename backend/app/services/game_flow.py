@@ -462,7 +462,7 @@ class GameFlowService:
             drawer = room.players.get(game.current_drawer)
             if drawer:
                 drawer.score += drawer_bonus
-            room.last_game_drawings.append(
+            room.record_drawing_recap(
                 DrawingRecapEntry(
                     round_number=game.round_number,
                     turn_number=len(room.last_game_drawings) + 1,
