@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -11,10 +12,12 @@ from app.canvas_history import (
     decode_canvas_history,
     encode_canvas_history,
 )
+from app.canvas_history import CLEAR_TAG, FILL_TAG, PATH_TAG, SHAPE_TAG
 from app.canvas_session import (
     CanvasSession,
     MAX_TURN_REPLAY_WORK,
     REPLAY_WORK_BY_EVENT,
+    REPLAY_WORK_BY_TAG,
 )
 from app.live_drawing import decode_live_drawing, encode_live_drawing
 
@@ -250,3 +253,34 @@ def test_clearing_the_canvas_returns_the_whole_budget():
     assert canvas.record_stroke("draw_start", path_payload()) is True
     assert canvas.replay_work == REPLAY_WORK_BY_EVENT["draw_start"]
     assert len(canvas.history) == 1
+
+
+def test_the_client_cost_model_still_agrees_with_this_one():
+    """The browser keeps its own copy so it can grey the fill tool out early.
+
+    Two copies of a cost model drift, and drifting here is quiet: the client
+    would refuse fills the server would have taken, or offer fills the server
+    refuses - which is the silent stop the affordance exists to prevent.
+    """
+    source = (
+        Path(__file__).parents[2] / "frontend" / "src" / "lib" / "canvasHistory.ts"
+    ).read_text()
+
+    table = re.search(
+        r"REPLAY_WORK_BY_KIND[^=]*=\s*\{(?P<body>[^}]*)\}", source
+    )
+    assert table, "the client no longer declares REPLAY_WORK_BY_KIND"
+    client_costs = {
+        kind: int(cost)
+        for kind, cost in re.findall(r"(\w+):\s*(\d+)", table.group("body"))
+    }
+    assert client_costs == {
+        "path": REPLAY_WORK_BY_TAG[PATH_TAG],
+        "shape": REPLAY_WORK_BY_TAG[SHAPE_TAG],
+        "fill": REPLAY_WORK_BY_TAG[FILL_TAG],
+        "clear": REPLAY_WORK_BY_TAG[CLEAR_TAG],
+    }
+
+    budget = re.search(r"MAX_TURN_REPLAY_WORK\s*=\s*([\d_]+)", source)
+    assert budget, "the client no longer declares MAX_TURN_REPLAY_WORK"
+    assert int(budget.group(1).replace("_", "")) == MAX_TURN_REPLAY_WORK
