@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { MAX_WORD_LENGTH } from "../lib/customWords";
 import { chatAnnouncement } from "../lib/chatAnnouncements";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { recordRender } from "../lib/renderDiagnostics";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
@@ -69,6 +70,10 @@ export function RoomChatPanel({
   const listRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const blurTimeoutRef = useRef<number | null>(null);
+  const wasFocusedRef = useRef(false);
+  // Matches the mobile block in game-room.css so JS and CSS agree on the breakpoint.
+  const isMobile = useMediaQuery("(max-width: 900px)");
+  const inputVisible = mode !== "playing" || !isDrawer;
 
   useEffect(() => {
     return () => {
@@ -81,7 +86,23 @@ export function RoomChatPanel({
     };
   }, [onFocusChange]);
 
+  // The form unmounts while drawing; report focus lost without touching the DOM
+  // so guess-focused cannot stick to a node that no longer exists.
   useEffect(() => {
+    if (inputVisible) return;
+    if (blurTimeoutRef.current != null) {
+      window.clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+    onFocusChange?.(false);
+  }, [inputVisible, onFocusChange]);
+
+  // Mobile only: dismiss the soft keyboard once guessing stops, so it does not
+  // cover the canvas or the round-end overlay. On desktop there is no keyboard
+  // and guess-focused is already mobile-gated, so blurring would only cost the
+  // caret between turns.
+  useEffect(() => {
+    if (!isMobile) return;
     if (!canGuess || isDrawer) {
       if (blurTimeoutRef.current != null) {
         window.clearTimeout(blurTimeoutRef.current);
@@ -90,7 +111,19 @@ export function RoomChatPanel({
       inputRef.current?.blur();
       onFocusChange?.(false);
     }
-  }, [canGuess, isDrawer, onFocusChange]);
+  }, [isMobile, canGuess, isDrawer, onFocusChange]);
+
+  // Desktop only: put the caret back when a guessable turn starts, but only if
+  // the input held focus when it was taken away and nothing else claimed it —
+  // never steal focus from an open dialog. Deliberately not done on mobile,
+  // where it would pop the keyboard open every turn.
+  useEffect(() => {
+    if (isMobile || !canGuess || isDrawer) return;
+    if (!wasFocusedRef.current) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    inputRef.current?.focus();
+  }, [isMobile, canGuess, isDrawer]);
 
   useEffect(() => {
     if (!guessFlash) return;
@@ -250,8 +283,6 @@ export function RoomChatPanel({
     return typed === target ? "guess-hint-correct" : "guess-hint-wrong";
   }
 
-  const inputVisible = mode !== "playing" || !isDrawer;
-
   return (
     <section
       className={`room-chat-panel guess-chat${mode === "waiting" ? " waiting-chat" : ""}`}
@@ -362,6 +393,7 @@ export function RoomChatPanel({
                 onChange={(event) => setText(event.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={() => {
+                  wasFocusedRef.current = true;
                   if (blurTimeoutRef.current != null) {
                     window.clearTimeout(blurTimeoutRef.current);
                     blurTimeoutRef.current = null;
@@ -369,6 +401,7 @@ export function RoomChatPanel({
                   onFocusChange?.(true);
                 }}
                 onBlur={() => {
+                  wasFocusedRef.current = false;
                   if (blurTimeoutRef.current != null) {
                     window.clearTimeout(blurTimeoutRef.current);
                   }

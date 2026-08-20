@@ -336,6 +336,42 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             # Verify chat message container is present
             await guesser_page.wait_for_selector('.chat-messages')
 
+            # Step 8: On desktop the caret survives the turn boundary. Guessing
+            # correctly and the round ending both drop canGuess, but only the
+            # mobile layout has a reason to dismiss the input.
+            await guess_input.focus()
+            assert await guess_input.evaluate("input => document.activeElement === input")
+            word = await drawer_page.locator('.word-reveal').inner_text()
+            await guess_input.fill(word)
+            await guess_input.press('Enter')
+            await guesser_page.wait_for_selector('[data-testid="round-end-overlay"]')
+            assert await guess_input.evaluate("input => document.activeElement === input")
+            assert not await guesser_page.query_selector('.game-room.guess-focused')
+
+            # Step 9: The next turn swaps roles. On mobile the turn boundary must
+            # still dismiss the soft keyboard, so the canvas and the round-end
+            # overlay are not left behind it.
+            await guesser_page.wait_for_selector(
+                '[data-testid="round-end-overlay"]', state="detached"
+            )
+            next_drawer = page1 if await page1.query_selector('.word-choices') else page2
+            next_guesser = page2 if next_drawer is page1 else page1
+            if await next_drawer.query_selector('.word-choices button'):
+                await next_drawer.click('.word-choices button:first-child')
+            await next_drawer.wait_for_selector('.word-reveal')
+            await next_guesser.set_viewport_size({"width": 390, "height": 844})
+            mobile_input = next_guesser.locator('.chat-input input')
+            await mobile_input.focus()
+            await next_guesser.wait_for_selector('.game-room.guess-focused')
+            next_word = await next_drawer.locator('.word-reveal').inner_text()
+            await mobile_input.fill(next_word)
+            await mobile_input.press('Enter')
+            await next_guesser.wait_for_selector('[data-testid="round-end-overlay"]')
+            assert not await mobile_input.evaluate(
+                "input => document.activeElement === input"
+            )
+            assert not await next_guesser.query_selector('.game-room.guess-focused')
+
         finally:
             await context1.close()
             await context2.close()
