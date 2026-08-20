@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
+import { useGameStore } from "../store/gameStore";
 import type { DrawTool } from "../types";
 
 export function useToolbarState(isDrawer: boolean) {
@@ -19,6 +21,25 @@ export function useToolbarState(isDrawer: boolean) {
       setEraserWidth(24);
     }
   }
+
+  // The fill tool greys out once this turn's replay budget can no longer
+  // afford one. Holding a tool that is no longer selectable would leave the
+  // pointer doing nothing, so hand the drawer back the pen.
+  const fillAvailable = useCanvasBudgetStore((state) => state.fillAvailable);
+  if (!fillAvailable && tool === "fill") setTool("pen");
+
+  // Said once, and to the drawer alone: on a phone there is no tooltip to
+  // hover, so a disabled button on its own explains nothing.
+  useEffect(() => {
+    if (!isDrawer || fillAvailable) return;
+    useGameStore.getState().addMessage({
+      id: `${Date.now()}-fill-budget`,
+      nickname: "",
+      text: "Fill is unavailable for the rest of this turn.",
+      correct: false,
+      system: true,
+    });
+  }, [fillAvailable, isDrawer]);
 
   const activeWidth = tool === "eraser" ? eraserWidth : brushWidth;
 

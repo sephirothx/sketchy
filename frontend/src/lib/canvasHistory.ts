@@ -13,6 +13,24 @@ const CANVAS_HISTORY_VERSION = 1;
 const MAX_BRUSH_WIDTH = 64;
 const MAX_NORMALIZED_COORDINATE_MAGNITUDE = 1_000_000;
 const MAX_CANVAS_ACTIONS = 20_000;
+/**
+ * What each action costs a joining client to replay, relative to a stroke.
+ *
+ * Mirrors REPLAY_WORK_BY_TAG and MAX_TURN_REPLAY_WORK in
+ * `backend/app/canvas_session.py`, which is the authority: the server refuses
+ * anything past the budget. The client keeps its own copy so it can grey the
+ * fill tool out *before* the budget runs down, rather than letting the drawer
+ * find out by having strokes silently stop landing.
+ *
+ * A test asserts the two tables still agree.
+ */
+export const REPLAY_WORK_BY_KIND: Record<DecodedCanvasAction["kind"], number> = {
+  path: 1,
+  shape: 1,
+  fill: 200,
+  clear: 0,
+};
+export const MAX_TURN_REPLAY_WORK = 20_000;
 const MAX_CANVAS_POINTS = 25_000;
 const HISTORY_SHAPES: ShapeType[] = ["rectangle", "ellipse", "triangle"];
 const BINARY_HISTORY_MAGIC = [0x53, 0x4b, 0x43, 0x48]; // "SKCH"
@@ -115,6 +133,31 @@ export function calculateCanvasHistoryHash(
   actions: DecodedCanvasAction[],
 ): number {
   return actions.reduce(extendHistoryHash, 0);
+}
+
+/**
+ * What this turn has already spent of its replay budget.
+ *
+ * Derived from the history rather than counted alongside it, so it cannot
+ * drift: undo hands its cost back because the action leaves the array, and a
+ * clear that discards the history discards its cost with it.
+ */
+export function canvasReplayWork(actions: DecodedCanvasAction[]): number {
+  let work = 0;
+  for (const action of actions) work += REPLAY_WORK_BY_KIND[action.kind];
+  return work;
+}
+
+/**
+ * Whether another fill still fits in this turn's budget.
+ *
+ * Strictly greater, not equal: a fill that spent the last of the budget would
+ * leave the drawer with nothing at all, and the pen going dead mid-turn is a
+ * far worse surprise than the fill tool greying out one fill early.
+ */
+export function canFillWithinBudget(actions: DecodedCanvasAction[]): boolean {
+  return MAX_TURN_REPLAY_WORK - canvasReplayWork(actions)
+    > REPLAY_WORK_BY_KIND.fill;
 }
 
 function isRevision(value: unknown): value is number {

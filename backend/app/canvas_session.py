@@ -42,11 +42,16 @@ REPLAY_WORK_BY_EVENT = {
     "draw_fill": REPLAY_WORK_BY_TAG[FILL_TAG],
 }
 
-# Roughly fifty worst-case fills, or ten thousand strokes: about 1.3s of
-# replay on a four-times-throttled mobile client. Sized from the model in
-# issue #257; a busy real drawing measures around a third of it, and the
-# benchmark's realistic fixture well under that.
-MAX_TURN_REPLAY_WORK = 10_000
+# Roughly a hundred worst-case fills: about 2.4s of replay on a
+# four-times-throttled mobile client, against the eight minutes an unbounded
+# turn of fills used to cost. Cheap actions cannot reach it - MAX_CANVAS_ACTIONS
+# binds first - so in practice this is a fill budget.
+#
+# The client greys the fill tool out before the budget can run down (see
+# `canvasReplayWork` in the frontend), so a drawer meets this as a disabled
+# button rather than as a refusal. This value is the authoritative backstop for
+# a client that does not, and the client is deliberately the stricter of the two.
+MAX_TURN_REPLAY_WORK = 20_000
 
 
 @dataclass

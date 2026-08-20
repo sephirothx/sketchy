@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ClientCanvasHistory,
+  canFillWithinBudget,
   decodeCanvasHistory,
 } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
@@ -9,6 +10,7 @@ import type { CanvasSyncRequester } from "../lib/canvasSyncRequests";
 import { decodeLiveDrawing, encodeClear } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
 import { emitWithAck, socket } from "../lib/socket";
+import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 
 const MAX_PENDING_CANVAS_ACTIONS = 256;
 
@@ -59,6 +61,15 @@ export function useCanvasProtocol(
     );
   }
 
+  // Republished wherever an action enters or leaves the history, which is the
+  // only thing that moves the budget. Extending a path does not: its points
+  // ride inside one replayed action.
+  const publishFillAvailability = useCallback((): void => {
+    useCanvasBudgetStore.getState().setFillAvailable(
+      canFillWithinBudget(historyRef.current.actions),
+    );
+  }, []);
+
   const requestAuthoritativeSync = useCallback((discardPending = true): void => {
     if (discardPending) {
       pendingMutationsRef.current.clear();
@@ -98,8 +109,9 @@ export function useCanvasProtocol(
     });
     activeOutgoingSequenceRef.current = isPath ? sequence : null;
     socket.emit("draw", frame, [generation, sequence]);
+    publishFillAvailability();
     return sequence;
-  }, [allocateSequence, requestAuthoritativeSync]);
+  }, [allocateSequence, publishFillAvailability, requestAuthoritativeSync]);
 
   const sendPathFrame = useCallback((frame: DrawingFrame): void => {
     const sequence = activeOutgoingSequenceRef.current;
@@ -143,6 +155,7 @@ export function useCanvasProtocol(
       expectedHash: historyRef.current.historyHash!,
     });
     renderer.replay(historyRef.current.actions);
+    publishFillAvailability();
     void emitWithAck<{ ok: boolean; error?: string }>("undo_stroke", request)
       .then((response) => {
         if (!response?.ok && response?.error !== "Drawing actions are out of sequence") {
@@ -150,7 +163,7 @@ export function useCanvasProtocol(
         }
       })
       .catch(() => requestAuthoritativeSync(false));
-  }, [allocateSequence, renderer, requestAuthoritativeSync]);
+  }, [allocateSequence, publishFillAvailability, renderer, requestAuthoritativeSync]);
 
   const requestClear = useCallback(() => {
     if (activeOutgoingSequenceRef.current !== null) return;
@@ -167,6 +180,7 @@ export function useCanvasProtocol(
       }
       historyRef.current.apply(packet);
       renderer.apply(packet);
+      publishFillAvailability();
     };
 
     const finishQueuedSync = () => {
@@ -185,6 +199,7 @@ export function useCanvasProtocol(
       historyRef.current.replace(actions, revision, generation, sequence, historyHash);
       nextSequenceRef.current = committedSequence + 1;
       renderer.replay(actions);
+      publishFillAvailability();
       finishQueuedSync();
     };
 
@@ -278,6 +293,7 @@ export function useCanvasProtocol(
       }
       nextSequenceRef.current = (pendingSequences.at(-1) ?? committedSequence) + 1;
       renderer.replay(historyRef.current.actions);
+      publishFillAvailability();
       finishQueuedSync();
     };
 
@@ -314,6 +330,7 @@ export function useCanvasProtocol(
       }
       pendingMutationsRef.current.delete(sequence);
       renderer.replay(historyRef.current.actions);
+      publishFillAvailability();
     };
 
     const onRequestCanvasActions = (payload: unknown) => {
@@ -371,6 +388,7 @@ export function useCanvasProtocol(
       // the new turn would suppress the syncs that turn goes on to need.
       syncRequestsRef.current!.reset();
       renderer.clear();
+      publishFillAvailability();
     };
 
     socket.on("draw", onDraw);
@@ -393,7 +411,7 @@ export function useCanvasProtocol(
       socket.off("canvas_reset", onCanvasReset);
       syncRequestsRef.current!.reset();
     };
-  }, [renderer, requestAuthoritativeSync]);
+  }, [publishFillAvailability, renderer, requestAuthoritativeSync]);
 
   return useMemo(() => ({
     beginDrawAction,

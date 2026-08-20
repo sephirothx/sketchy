@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
+import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 import { recordRender } from "../lib/renderDiagnostics";
@@ -130,6 +131,12 @@ export function Toolbar({
 }: ToolbarProps) {
   recordRender("toolbar");
   const isMobile = useMediaQuery("(max-width: 900px)");
+  const fillAvailable = useCanvasBudgetStore((state) => state.fillAvailable);
+  const disabledReason = (value: DrawTool): string | null => (
+    value === "fill" && !fillAvailable
+      ? "Fill is unavailable for the rest of this turn"
+      : null
+  );
   const isCustomColor = !COLORS.includes(color);
   const activeColor = tool === "eraser" ? "#6c757d" : color;
   const [sizePickerOpen, setSizePickerOpen] = useState(false);
@@ -382,7 +389,8 @@ export function Toolbar({
                     key={t.value}
                     type="button"
                     className={`tool-button toolbar-mobile-tool${t.value === tool ? " selected" : ""}`}
-                    aria-label={t.name}
+                    disabled={disabledReason(t.value) !== null}
+                    aria-label={disabledReason(t.value) ?? t.name}
                     onClick={() => {
                       onToolChange(t.value);
                       setMobilePanel(null);
@@ -461,13 +469,15 @@ export function Toolbar({
         <div className="toolbar">
           <div className="toolbar-group toolbar-tools" aria-label="Drawing tools">
             {TOOLS.map((t) => {
-              const label = getToolLabel(t.value, t.name);
+              const unavailable = disabledReason(t.value);
+              const label = unavailable ?? getToolLabel(t.value, t.name);
               const badge = getToolBadge(t.value);
               return (
                 <button
                   key={t.value}
                   className={`tool-button${t.value === tool ? " selected" : ""}`}
                   onClick={() => onToolChange(t.value)}
+                  disabled={unavailable !== null}
                   aria-label={label}
                   title={label}
                 >
