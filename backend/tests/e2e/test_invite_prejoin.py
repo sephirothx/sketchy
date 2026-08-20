@@ -83,9 +83,19 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             assert not await host_page.is_visible('[data-testid="spectator-indicator"]')
 
             # Visitors can join as a player, and valid stored tokens reconnect on reload.
+            # This one names itself through the first-run block on the invite
+            # screen rather than through use_guest_name, because that is the
+            # cold path an invite link actually lands on: the block ships its
+            # own <form>, and putting it inside another one used to leave the
+            # submit unhandled, so the browser navigated and the page reloaded
+            # with the typed name thrown away.
             await player_page.goto(invite_url)
-            await player_page.wait_for_selector(".first-run, .identity-chip")
-            await use_guest_name(player_page, "InvitePlayer")
+            await player_page.wait_for_selector(".first-run")
+            await player_page.evaluate("() => { window.__notReloaded = true; }")
+            await player_page.fill(".first-run-guest-row input", "InvitePlayer")
+            await player_page.click(".first-run-guest-submit")
+            await player_page.wait_for_selector(".identity-chip")
+            assert await player_page.evaluate("() => window.__notReloaded === true")
             await player_page.click('button:has-text("Join game")')
             await player_page.wait_for_selector(".room-copy-button")
             await player_page.reload()

@@ -101,21 +101,24 @@ export function InviteEntryPage({ code }: { code: string }) {
           )}
           {notice && <p className="invite-notice">{notice}</p>}
 
-          <form
-            className="invite-join-form"
-            autoComplete="off"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!room.isFull) void join("player");
-            }}
-          >
+          {/* A plain container, not a <form>: this block has no fields of its
+              own any more, and the identity block below brings its own forms
+              for the guest name and the account dialog. Nesting those inside a
+              form is invalid HTML - React leaves the inner onSubmit unwired, so
+              the browser submits natively and reloads the invite page instead. */}
+          <div className="invite-join-form">
             {/* Cold arrivals from an invite link need an identity before they
                 can join. Same block as the lobby: account first, guest name
                 inline underneath. It disappears once either exists. */}
             <FirstRunIdentity compact />
             {entryError && <p id="invite-entry-error" className="invite-form-error" role="alert">{entryError}</p>}
             <div className="invite-actions">
-              <button type="submit" className="invite-primary-button" disabled={busy || room.isFull}>
+              <button
+                type="button"
+                className="invite-primary-button"
+                disabled={busy || room.isFull}
+                onClick={() => void join("player")}
+              >
                 {room.isFull ? "Room full" : busy ? "Joining…" : room.state === "playing" ? "Join game in progress" : "Join game"}
               </button>
               <button
@@ -128,7 +131,7 @@ export function InviteEntryPage({ code }: { code: string }) {
               </button>
             </div>
             {room.isFull && <p className="invite-action-hint">Player slots are full. Spectating is still open.</p>}
-          </form>
+          </div>
         </main>
       )}
     </div>
