@@ -43,6 +43,7 @@ from app.rooms import (
     normalize_name_color,
 )
 from app.services.game_history import build_game_history
+from app.services.word_usage import tally_word_usage
 from app.presenters import (
     editable_room_settings_payload,
     round_ended_payload,
@@ -58,10 +59,10 @@ RECONNECT_GRACE_SECONDS = 30
 # Long enough for a healthy write on a loaded server, short enough that a hung
 # database cannot pin the coroutine that ends a game.
 HISTORY_WRITE_TIMEOUT_SECONDS = 10
-# Word-usage metrics are one statement per turn per word list rather than a
-# single transaction, so they get their own budget - but the same ceiling, so
-# the two post-game writes together cannot pin the coroutine for longer than a
-# player would wait before reloading anyway.
+# Word-usage metrics are a separate transaction from the history write, so
+# they get their own budget - but the same ceiling, so the two post-game
+# writes together cannot pin the coroutine for longer than a player would
+# wait before reloading anyway.
 WORD_USAGE_WRITE_TIMEOUT_SECONDS = 10
 
 class GameFlowService:
@@ -526,42 +527,22 @@ class GameFlowService:
 
             Runs after the room has been told the game ended, and is bounded,
             for the same reasons as `_persist_game_history`: nothing a player
-            can see depends on these counters, and this walks one statement per
-            turn per list rather than a single transaction, so a database that
-            is slow or locked has all the more room to hold a room open.
+            can see depends on these counters, so a database that is slow or
+            locked must not be able to hold a room open waiting for them.
 
-            Each write is guarded individually so one bad list does not cost
-            the rest their counters, while the timeout still bounds the walk as
-            a whole. A cancelled walk leaves the writes it already committed,
-            which is what the per-write transactions mean anyway.
+            The whole game goes in one call, and the repository writes it in
+            one transaction. Failure is logged and swallowed, like the history
+            write: there is nothing a player could do about it.
             """
             if not ctx.word_list_repo or not word_list_slugs:
                 return
-
-            async def _write() -> None:
-                for turn in game.completed_turns:
-                    for slug in word_list_slugs:
-                        try:
-                            if turn.offered_words:
-                                await ctx.word_list_repo.increment_word_offers(
-                                    slug, turn.offered_words
-                                )
-                            if turn.chosen_word:
-                                await ctx.word_list_repo.increment_word_stats(
-                                    slug,
-                                    turn.chosen_word,
-                                    turn.correct_guess_count,
-                                    turn.total_guesser_count,
-                                )
-                        except Exception:
-                            logger.exception(
-                                "Failed to update word usage metrics for slug '%s'",
-                                slug,
-                            )
-
+            usage = tally_word_usage(game.completed_turns)
+            if not usage:
+                return
             try:
                 await asyncio.wait_for(
-                    _write(), timeout=WORD_USAGE_WRITE_TIMEOUT_SECONDS
+                    ctx.word_list_repo.record_word_usage(word_list_slugs, usage),
+                    timeout=WORD_USAGE_WRITE_TIMEOUT_SECONDS,
                 )
             except asyncio.TimeoutError:
                 logger.error(
@@ -569,6 +550,8 @@ class GameFlowService:
                     room.id,
                     WORD_USAGE_WRITE_TIMEOUT_SECONDS,
                 )
+            except Exception:
+                logger.exception("Failed to record word usage for room %s", room.id)
 
         async def _finish_or_next(room: Room) -> None:
             game = room.game

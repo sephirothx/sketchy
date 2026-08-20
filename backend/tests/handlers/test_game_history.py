@@ -306,13 +306,10 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
         def __init__(self) -> None:
             self.restarted = False
 
-        async def increment_word_offers(self, slug, words):
+        async def record_word_usage(self, slugs, usage):
             if not self.restarted:
                 self.restarted = True
                 await flow._start_fresh_game(room, room.player_list())
-
-        async def increment_word_stats(self, slug, word, correct, total):
-            return None
 
     ctx.word_list_repo = RestartingWordRepo()
     room.word_list_slugs = ["english_standard"]
@@ -395,31 +392,18 @@ async def test_history_is_skipped_entirely_without_a_repository():
 
 
 class FakeWordListRepository:
-    """Records metric writes, and can stand in for a locked or failing database."""
+    """Records the batched write, and can stand in for a locked database."""
 
-    def __init__(self, *, timeline=None, hang=False, failing_slug=None):
+    def __init__(self, *, timeline=None, hang=False):
         self.calls: list[tuple] = []
         self._timeline = timeline if timeline is not None else []
         self._hang = hang
-        self._failing_slug = failing_slug
 
-    async def _enter(self, slug: str) -> None:
+    async def record_word_usage(self, word_list_slugs, usage):
         if self._hang:
             await asyncio.sleep(3600)
-        if slug == self._failing_slug:
-            raise RuntimeError(f"word list '{slug}' is unavailable")
-
-    async def increment_word_offers(self, word_list_slug, word_texts):
-        await self._enter(word_list_slug)
-        self.calls.append(("offers", word_list_slug))
-        self._timeline.append(("word", word_list_slug))
-
-    async def increment_word_stats(
-        self, word_list_slug, word_text, correct_guesses, total_guessers
-    ):
-        await self._enter(word_list_slug)
-        self.calls.append(("stats", word_list_slug, word_text))
-        self._timeline.append(("word", word_list_slug))
+        self.calls.append((tuple(word_list_slugs), usage))
+        self._timeline.append(("word", tuple(word_list_slugs)))
 
 
 def emitted_payload(ctx, event: str):
@@ -468,15 +452,20 @@ async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
     assert room.game is None
 
 
-async def test_one_unavailable_word_list_does_not_cost_the_others_their_counters():
-    """The per-write guard has to survive being wrapped in a timeout."""
-    room_manager, room, players = build_room(rounds=1)
-    room.word_list_slugs = ["broken", "english_standard"]
-    words = FakeWordListRepository(failing_slug="broken")
+async def test_every_turn_and_list_is_folded_into_a_single_write():
+    """The whole game goes down in one call, not one per turn per list."""
+    room_manager, room, players = build_room(rounds=2)
+    room.word_list_slugs = ["english_standard", "english_extended"]
+    words = FakeWordListRepository()
     ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
 
     await play_to_completion(ctx, room, players)
 
-    assert all(call[1] == "english_standard" for call in words.calls)
-    # Two turns in a one-round two-player game, each writing offers and stats.
-    assert len(words.calls) == 4
+    # Two players over two rounds is four turns, each offering three words and
+    # drawing one - and previously two writes per turn per list, so sixteen.
+    assert len(words.calls) == 1
+    slugs, usage = words.calls[0]
+    assert slugs == ("english_standard", "english_extended")
+    assert sum(usage.offers.values()) == 12
+    assert sum(totals.picks for totals in usage.picks.values()) == 4
+    assert all(word == word.strip().lower() for word in usage.offers)
