@@ -3,10 +3,16 @@ import test from "node:test";
 
 import {
   canFillWithinBudget,
+  canStartStrokeWithinBudget,
+  canvasPointCount,
   canvasReplayWork,
   MAX_TURN_REPLAY_WORK,
+  pointsFitWithinBudget,
   REPLAY_WORK_BY_KIND,
 } from "../src/lib/canvasHistory.ts";
+
+// Mirrors MAX_CANVAS_POINTS, which the module keeps to itself.
+const MAX_CANVAS_POINTS = 25_000;
 
 const fill = (x = 10) => ({ kind: "fill", color: "#123456", x, y: 20 });
 const stroke = (points = 1) => ({
@@ -85,4 +91,42 @@ test("undoing hands the budget back, because the action leaves the history", () 
   assert.equal(canFillWithinBudget(actions), false);
   actions.pop();
   assert.equal(canFillWithinBudget(actions), true);
+});
+
+
+test("points ride inside a path, so they cost no replay work", () => {
+  const long = [stroke(20_000)];
+  assert.equal(canvasReplayWork(long), REPLAY_WORK_BY_KIND.path);
+  assert.equal(canvasPointCount(long), 20_000);
+  // The two budgets are independent: this turn has spent almost all of one
+  // and essentially none of the other.
+  assert.ok(canFillWithinBudget(long));
+  assert.ok(canStartStrokeWithinBudget(long));
+});
+
+test("only path points are counted", () => {
+  assert.equal(canvasPointCount([shape(), fill(), { kind: "clear" }]), 0);
+});
+
+test("a stroke cannot be started once the points are spent", () => {
+  const spent = [stroke(MAX_CANVAS_POINTS)];
+  assert.equal(canStartStrokeWithinBudget(spent), false);
+  // Shapes and fills do not spend points, so they outlive the pen.
+  assert.ok(canFillWithinBudget(spent));
+});
+
+test("a batch is taken whole or not at all", () => {
+  // The server refuses a whole batch rather than taking part of it, so
+  // keeping the part that fits would put the two histories out of step.
+  const nearlySpent = [stroke(MAX_CANVAS_POINTS - 4)];
+  assert.equal(pointsFitWithinBudget(nearlySpent, 4), true);
+  assert.equal(pointsFitWithinBudget(nearlySpent, 5), false);
+  assert.equal(canStartStrokeWithinBudget(nearlySpent), true);
+});
+
+test("undoing a long stroke hands its points back", () => {
+  const actions = [stroke(MAX_CANVAS_POINTS)];
+  assert.equal(canStartStrokeWithinBudget(actions), false);
+  actions.pop();
+  assert.equal(canStartStrokeWithinBudget(actions), true);
 });

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ClientCanvasHistory,
   canFillWithinBudget,
+  canStartStrokeWithinBudget,
   decodeCanvasHistory,
+  pointsFitWithinBudget,
 } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { createCanvasSyncRequester } from "../lib/canvasSyncRequests";
@@ -64,10 +66,12 @@ export function useCanvasProtocol(
   // Republished wherever an action enters or leaves the history, which is the
   // only thing that moves the budget. Extending a path does not: its points
   // ride inside one replayed action.
-  const publishFillAvailability = useCallback((): void => {
-    useCanvasBudgetStore.getState().setFillAvailable(
-      canFillWithinBudget(historyRef.current.actions),
-    );
+  const publishBudgets = useCallback((): void => {
+    const actions = historyRef.current.actions;
+    useCanvasBudgetStore.getState().setBudgets({
+      fill: canFillWithinBudget(actions),
+      stroke: canStartStrokeWithinBudget(actions),
+    });
   }, []);
 
   const requestAuthoritativeSync = useCallback((discardPending = true): void => {
@@ -109,9 +113,9 @@ export function useCanvasProtocol(
     });
     activeOutgoingSequenceRef.current = isPath ? sequence : null;
     socket.emit("draw", frame, [generation, sequence]);
-    publishFillAvailability();
+    publishBudgets();
     return sequence;
-  }, [allocateSequence, publishFillAvailability, requestAuthoritativeSync]);
+  }, [allocateSequence, publishBudgets, requestAuthoritativeSync]);
 
   const sendPathFrame = useCallback((frame: DrawingFrame): void => {
     const sequence = activeOutgoingSequenceRef.current;
@@ -119,13 +123,26 @@ export function useCanvasProtocol(
     const pending = pendingMutationsRef.current.get(sequence);
     const packet = decodeLiveDrawing(frame);
     if (!pending || pending.kind !== "draw" || !packet) return;
+    if (
+      packet.event === "draw_move"
+      && !pointsFitWithinBudget(
+        historyRef.current.actions,
+        packet.payload.points.length,
+      )
+    ) {
+      // The server refuses a batch whole, so taking part of it here would put
+      // the two histories out of step. Drop it and let the stroke end where
+      // the budget ran out.
+      return;
+    }
     if (!historyRef.current.apply(packet)) {
       requestAuthoritativeSync();
       return;
     }
     pending.frames.push(frame);
     socket.emit("draw", frame);
-  }, [requestAuthoritativeSync]);
+    if (packet.event === "draw_move") publishBudgets();
+  }, [publishBudgets, requestAuthoritativeSync]);
 
   const finishPathAction = useCallback((): void => {
     const sequence = activeOutgoingSequenceRef.current;
@@ -155,7 +172,7 @@ export function useCanvasProtocol(
       expectedHash: historyRef.current.historyHash!,
     });
     renderer.replay(historyRef.current.actions);
-    publishFillAvailability();
+    publishBudgets();
     void emitWithAck<{ ok: boolean; error?: string }>("undo_stroke", request)
       .then((response) => {
         if (!response?.ok && response?.error !== "Drawing actions are out of sequence") {
@@ -163,7 +180,7 @@ export function useCanvasProtocol(
         }
       })
       .catch(() => requestAuthoritativeSync(false));
-  }, [allocateSequence, publishFillAvailability, renderer, requestAuthoritativeSync]);
+  }, [allocateSequence, publishBudgets, renderer, requestAuthoritativeSync]);
 
   const requestClear = useCallback(() => {
     if (activeOutgoingSequenceRef.current !== null) return;
@@ -180,7 +197,7 @@ export function useCanvasProtocol(
       }
       historyRef.current.apply(packet);
       renderer.apply(packet);
-      publishFillAvailability();
+      publishBudgets();
     };
 
     const finishQueuedSync = () => {
@@ -199,7 +216,7 @@ export function useCanvasProtocol(
       historyRef.current.replace(actions, revision, generation, sequence, historyHash);
       nextSequenceRef.current = committedSequence + 1;
       renderer.replay(actions);
-      publishFillAvailability();
+      publishBudgets();
       finishQueuedSync();
     };
 
@@ -293,7 +310,7 @@ export function useCanvasProtocol(
       }
       nextSequenceRef.current = (pendingSequences.at(-1) ?? committedSequence) + 1;
       renderer.replay(historyRef.current.actions);
-      publishFillAvailability();
+      publishBudgets();
       finishQueuedSync();
     };
 
@@ -330,7 +347,7 @@ export function useCanvasProtocol(
       }
       pendingMutationsRef.current.delete(sequence);
       renderer.replay(historyRef.current.actions);
-      publishFillAvailability();
+      publishBudgets();
     };
 
     const onRequestCanvasActions = (payload: unknown) => {
@@ -388,7 +405,7 @@ export function useCanvasProtocol(
       // the new turn would suppress the syncs that turn goes on to need.
       syncRequestsRef.current!.reset();
       renderer.clear();
-      publishFillAvailability();
+      publishBudgets();
     };
 
     socket.on("draw", onDraw);
@@ -411,7 +428,7 @@ export function useCanvasProtocol(
       socket.off("canvas_reset", onCanvasReset);
       syncRequestsRef.current!.reset();
     };
-  }, [publishFillAvailability, renderer, requestAuthoritativeSync]);
+  }, [publishBudgets, renderer, requestAuthoritativeSync]);
 
   return useMemo(() => ({
     beginDrawAction,

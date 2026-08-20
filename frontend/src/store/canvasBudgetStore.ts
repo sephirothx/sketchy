@@ -9,13 +9,26 @@ interface CanvasBudgetStore {
    * `canvasCommands` in the other direction.
    */
   fillAvailable: boolean;
-  setFillAvailable: (available: boolean) => void;
+  /**
+   * Whether the pen and eraser can still be used this turn.
+   *
+   * Its own budget: points cost no replay work, so a turn can run out of
+   * these while the fill budget is barely touched. Shapes and fill are
+   * unaffected - neither spends a point.
+   */
+  strokeAvailable: boolean;
+  setBudgets: (budgets: { fill: boolean; stroke: boolean }) => void;
 }
 
 export const useCanvasBudgetStore = create<CanvasBudgetStore>((set) => ({
   fillAvailable: true,
-  // Published after every action, but it only changes once a turn at most, so
-  // hold the existing state identity rather than waking every subscriber.
-  setFillAvailable: (fillAvailable) =>
-    set((state) => (state.fillAvailable === fillAvailable ? state : { fillAvailable })),
+  strokeAvailable: true,
+  // Published after every action, but each flips once a turn at most, so hold
+  // the existing state identity rather than waking every subscriber.
+  setBudgets: ({ fill, stroke }) =>
+    set((state) => (
+      state.fillAvailable === fill && state.strokeAvailable === stroke
+        ? state
+        : { fillAvailable: fill, strokeAvailable: stroke }
+    )),
 }));

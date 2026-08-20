@@ -26,7 +26,8 @@ export function useToolbarState(isDrawer: boolean) {
   // afford one. Holding a tool that is no longer selectable would leave the
   // pointer doing nothing, so hand the drawer back the pen.
   const fillAvailable = useCanvasBudgetStore((state) => state.fillAvailable);
-  if (!fillAvailable && tool === "fill") setTool("pen");
+  const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
+  if (!fillAvailable && tool === "fill" && strokeAvailable) setTool("pen");
 
   // Said once, and to the drawer alone: on a phone there is no tooltip to
   // hover, so a disabled button on its own explains nothing.
@@ -40,6 +41,17 @@ export function useToolbarState(isDrawer: boolean) {
       system: true,
     });
   }, [fillAvailable, isDrawer]);
+
+  useEffect(() => {
+    if (!isDrawer || strokeAvailable) return;
+    useGameStore.getState().addMessage({
+      id: `${Date.now()}-stroke-budget`,
+      nickname: "",
+      text: "Drawing by hand is unavailable for the rest of this turn. Shapes still work.",
+      correct: false,
+      system: true,
+    });
+  }, [isDrawer, strokeAvailable]);
 
   const activeWidth = tool === "eraser" ? eraserWidth : brushWidth;
 

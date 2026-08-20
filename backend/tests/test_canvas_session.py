@@ -12,7 +12,14 @@ from app.canvas_history import (
     decode_canvas_history,
     encode_canvas_history,
 )
-from app.canvas_history import CLEAR_TAG, FILL_TAG, PATH_TAG, SHAPE_TAG
+from app.canvas_history import (
+    CLEAR_TAG,
+    FILL_TAG,
+    MAX_CANVAS_ACTIONS,
+    MAX_CANVAS_POINTS,
+    PATH_TAG,
+    SHAPE_TAG,
+)
 from app.canvas_session import (
     CanvasSession,
     MAX_TURN_REPLAY_WORK,
@@ -281,6 +288,13 @@ def test_the_client_cost_model_still_agrees_with_this_one():
         "clear": REPLAY_WORK_BY_TAG[CLEAR_TAG],
     }
 
-    budget = re.search(r"MAX_TURN_REPLAY_WORK\s*=\s*([\d_]+)", source)
-    assert budget, "the client no longer declares MAX_TURN_REPLAY_WORK"
-    assert int(budget.group(1).replace("_", "")) == MAX_TURN_REPLAY_WORK
+    for name, expected in (
+        ("MAX_TURN_REPLAY_WORK", MAX_TURN_REPLAY_WORK),
+        # Long duplicated without a guard. The client now greys the pen out on
+        # this one too, so a divergence would take the affordance with it.
+        ("MAX_CANVAS_POINTS", MAX_CANVAS_POINTS),
+        ("MAX_CANVAS_ACTIONS", MAX_CANVAS_ACTIONS),
+    ):
+        declared = re.search(rf"{name}\s*=\s*([\d_]+)", source)
+        assert declared, f"the client no longer declares {name}"
+        assert int(declared.group(1).replace("_", "")) == expected, name
