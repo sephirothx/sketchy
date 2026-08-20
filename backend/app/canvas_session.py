@@ -9,7 +9,10 @@ from app.canvas_history import (
     HISTORY_HASH_INITIAL,
     MAX_CANVAS_ACTIONS,
     MAX_CANVAS_POINTS,
+    CLEAR_TAG,
+    FILL_TAG,
     PATH_TAG,
+    SHAPE_TAG,
     PackedCanvasHistory,
     canvas_history_hash,
     color_to_int,
@@ -21,6 +24,29 @@ from app.canvas_history import (
 # window lets the server answer ordinary duplicate deliveries without allowing
 # per-turn acknowledgement state to grow with the sequence number forever.
 MAX_CANVAS_COMMITS = 512
+
+# What each action costs to replay, relative to a path. Every client that
+# joins or resynchronizes replays the whole turn, so this is other people's
+# time, not the drawer's - which is what makes an unbounded turn a way to
+# grief a room rather than merely a way to waste a server.
+#
+# A fill repaints all 480,000 pixels in the worst case, against a fraction of
+# them for a path or a shape; 200 is the ratio measured in Chromium (6.1ms
+# against ~0.02ms). The cost is a constant because the server never
+# rasterizes: it cannot tell a fill bounded by surrounding strokes, which is
+# what real fills are, from one flooding an empty canvas.
+REPLAY_WORK_BY_TAG = {PATH_TAG: 1, SHAPE_TAG: 1, FILL_TAG: 200, CLEAR_TAG: 0}
+REPLAY_WORK_BY_EVENT = {
+    "draw_start": REPLAY_WORK_BY_TAG[PATH_TAG],
+    "draw_shape": REPLAY_WORK_BY_TAG[SHAPE_TAG],
+    "draw_fill": REPLAY_WORK_BY_TAG[FILL_TAG],
+}
+
+# Roughly fifty worst-case fills, or ten thousand strokes: about 1.3s of
+# replay on a four-times-throttled mobile client. Sized from the model in
+# issue #257; a busy real drawing measures around a third of it, and the
+# benchmark's realistic fixture well under that.
+MAX_TURN_REPLAY_WORK = 10_000
 
 
 @dataclass
@@ -38,6 +64,7 @@ class CanvasSession:
     discarding_draw_sequence: bool = field(default=False, repr=False, compare=False)
     active_path_index: int | None = field(default=None, repr=False, compare=False)
     point_count: int = field(default=0, repr=False, compare=False)
+    replay_work: int = field(default=0, repr=False, compare=False)
 
     def record_stroke(self, event: str, payload: dict) -> bool:
         if self.history.last_is_clear():
@@ -47,6 +74,7 @@ class CanvasSession:
             self.hashes.clear()
             self.active_path_index = None
             self.point_count = 0
+            self.replay_work = 0
         if event == "draw_move":
             if self.active_path_index is None:
                 return False
@@ -66,6 +94,9 @@ class CanvasSession:
             return True
         if len(self.history) >= MAX_CANVAS_ACTIONS:
             return False
+        cost = REPLAY_WORK_BY_EVENT.get(event, 0)
+        if self.replay_work + cost > MAX_TURN_REPLAY_WORK:
+            return False
         self.active_path_index = None
         if event == "draw_start":
             if self.point_count >= MAX_CANVAS_POINTS:
@@ -76,6 +107,7 @@ class CanvasSession:
                 width=payload["width"],
             )
             self.point_count += 1
+            self.replay_work += cost
             self.revision += 1
             return True
         if event == "draw_shape":
@@ -94,6 +126,7 @@ class CanvasSession:
             )
         else:
             return False
+        self.replay_work += cost
         self.revision += 1
         self._finalize_history_action()
         return True
@@ -177,6 +210,7 @@ class CanvasSession:
         if removed.tag != PATH_TAG:
             return False
         self.point_count -= removed.point_count
+        self._refund_replay_work(removed.tag)
         self.revision -= 1
         del self.hashes[len(self.history):]
         self.active_path_index = None
@@ -191,5 +225,18 @@ class CanvasSession:
         del self.hashes[len(self.history):]
         if removed.tag == PATH_TAG:
             self.point_count -= removed.point_count
+        self._refund_replay_work(removed.tag)
         self.revision += 1
         return True
+
+    def _refund_replay_work(self, tag: int) -> None:
+        """Hand back what a removed action was charged.
+
+        Undo takes the action out of the history, so it takes it out of what
+        every joining client has to replay too - a drawer who undoes a fill
+        should get that budget back rather than being held to a turn they
+        walked away from.
+        """
+        self.replay_work = max(
+            0, self.replay_work - REPLAY_WORK_BY_TAG.get(tag, 0)
+        )
