@@ -4,6 +4,8 @@ import {
   decodeCanvasHistory,
 } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
+import { createCanvasSyncRequester } from "../lib/canvasSyncRequests";
+import type { CanvasSyncRequester } from "../lib/canvasSyncRequests";
 import { decodeLiveDrawing, encodeClear } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
 import { emitWithAck, socket } from "../lib/socket";
@@ -50,21 +52,19 @@ export function useCanvasProtocol(
   const nextSequenceRef = useRef(1);
   const pendingMutationsRef = useRef(new Map<number, PendingCanvasMutation>());
   const activeOutgoingSequenceRef = useRef<number | null>(null);
-  const syncInFlightRef = useRef(false);
-  const syncQueuedRef = useRef(false);
+  const syncRequestsRef = useRef<CanvasSyncRequester | null>(null);
+  if (syncRequestsRef.current == null) {
+    syncRequestsRef.current = createCanvasSyncRequester(
+      () => socket.emit("request_sync_strokes"),
+    );
+  }
 
   const requestAuthoritativeSync = useCallback((discardPending = true): void => {
     if (discardPending) {
       pendingMutationsRef.current.clear();
       activeOutgoingSequenceRef.current = null;
     }
-    if (syncInFlightRef.current) {
-      syncQueuedRef.current = true;
-      return;
-    }
-    syncInFlightRef.current = true;
-    syncQueuedRef.current = false;
-    socket.emit("request_sync_strokes");
+    syncRequestsRef.current!.request();
   }, []);
 
   const allocateSequence = useCallback((): number | null => {
@@ -170,9 +170,7 @@ export function useCanvasProtocol(
     };
 
     const finishQueuedSync = () => {
-      if (!syncQueuedRef.current) return;
-      syncQueuedRef.current = false;
-      requestAuthoritativeSync();
+      syncRequestsRef.current!.drainQueued();
     };
 
     const restoreAuthoritative = (
@@ -197,7 +195,7 @@ export function useCanvasProtocol(
       sequence: unknown,
       historyHash: unknown,
     ) => {
-      syncInFlightRef.current = false;
+      syncRequestsRef.current!.arrived();
       const actions = decodeCanvasHistory(payload);
       if (!actions || !historyRef.current.replace(
         actions, revision, generation, sequence, historyHash,
@@ -368,6 +366,10 @@ export function useCanvasProtocol(
       pendingMutationsRef.current.clear();
       activeOutgoingSequenceRef.current = null;
       nextSequenceRef.current = 1;
+      // A new turn replaces the history wholesale, so a sync still owed
+      // against the old generation is worthless - and carrying its latch into
+      // the new turn would suppress the syncs that turn goes on to need.
+      syncRequestsRef.current!.reset();
       renderer.clear();
     };
 
@@ -377,7 +379,10 @@ export function useCanvasProtocol(
     socket.on("canvas_undo", onUndoStroke);
     socket.on("request_canvas_actions", onRequestCanvasActions);
     socket.on("canvas_reset", onCanvasReset);
-    socket.emit("request_sync_strokes");
+    // Through the requester rather than a bare emit: this one is the most
+    // likely of all to go unanswered, since the canvas can mount before the
+    // socket has finished binding itself to a seat in the room.
+    syncRequestsRef.current!.request();
 
     return () => {
       socket.off("draw", onDraw);
@@ -386,6 +391,7 @@ export function useCanvasProtocol(
       socket.off("canvas_undo", onUndoStroke);
       socket.off("request_canvas_actions", onRequestCanvasActions);
       socket.off("canvas_reset", onCanvasReset);
+      syncRequestsRef.current!.reset();
     };
   }, [renderer, requestAuthoritativeSync]);
 
