@@ -23,6 +23,8 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from app.canvas_history import (  # noqa: E402
+    CANVAS_HEIGHT,
+    CANVAS_WIDTH,
     ClearAction,
     FillAction,
     MAX_BINARY_CANVAS_HISTORY_BYTES,
@@ -276,11 +278,107 @@ def theoretical_max_history() -> PackedCanvasHistory:
     return history
 
 
+def _append_grid(history: PackedCanvasHistory, cell_pixels: int) -> None:
+    """Rule the canvas into cells, so a fill inside one stops at its walls.
+
+    Six pixels wide because the flood fill is eight-connected: a hairline
+    would let colour leak diagonally through the corners and the cells would
+    not actually bound anything.
+    """
+    for x in range(cell_pixels, CANVAS_WIDTH, cell_pixels):
+        history.append_path(
+            [(x / CANVAS_WIDTH, 0.0), (x / CANVAS_WIDTH, 1.0)],
+            color=0x000000,
+            width=6,
+        )
+    for y in range(cell_pixels, CANVAS_HEIGHT, cell_pixels):
+        history.append_path(
+            [(0.0, y / CANVAS_HEIGHT), (1.0, y / CANVAS_HEIGHT)],
+            color=0x000000,
+            width=6,
+        )
+
+
+def bounded_fill_history(
+    fill_count: int = 100,
+    cell_pixels: int = 50,
+) -> PackedCanvasHistory:
+    """Fills that land inside something, which is what real fills do.
+
+    `fill_heavy_history` is the same workload with the walls taken away: it
+    fills an empty canvas, never repeating a colour, so every one of its fills
+    repaints all 480,000 pixels. That is the ceiling, not the common case -
+    once anything has been drawn, a fill covers a region. Same fill count and
+    the same never-repeating colours as the fill-heavy fixture, so the only
+    variable is whether the fills are bounded.
+    """
+    history = PackedCanvasHistory()
+    _append_grid(history, cell_pixels)
+    columns = CANVAS_WIDTH // cell_pixels
+    rows = CANVAS_HEIGHT // cell_pixels
+    for index in range(fill_count):
+        history.append_fill(
+            x=(index % columns) * cell_pixels + cell_pixels // 2,
+            y=((index // columns) % rows) * cell_pixels + cell_pixels // 2,
+            color=(index * 654_319) & 0xFFFFFF,
+        )
+    return history
+
+
+def realistic_history() -> PackedCanvasHistory:
+    """A busy drawing at the top of what a person actually produces.
+
+    The near-limit fixtures answer "what is the worst a client could send?".
+    This one answers "what does a late join cost in a real room?", which is
+    the number a latency budget should be set against. Sized well above a
+    typical turn - 600 strokes and a dozen fills is a determined drawer with
+    the whole clock - but nowhere near the 20,000-action ceiling, which no
+    human reaches with a pointer.
+    """
+    history = PackedCanvasHistory()
+    _append_grid(history, 200)
+    for index in range(600):
+        x = ((index * 37) % 780) / CANVAS_WIDTH
+        y = ((index * 53) % 580) / CANVAS_HEIGHT
+        points = [(x, y)]
+        for step in range(1, 12):
+            points.append(
+                (
+                    min(0.99, x + ((index + step * 7) % 13) / CANVAS_WIDTH),
+                    min(0.99, y + ((index + step * 5) % 11) / CANVAS_HEIGHT),
+                )
+            )
+        history.append_path(
+            points,
+            color=(index * 977) & 0xFFFFFF,
+            width=index % 8 + 2,
+        )
+    for index in range(8):
+        x = (index % 4) / 4
+        y = (index // 4) / 4
+        history.append_shape(
+            shape=("rectangle", "ellipse", "triangle")[index % 3],
+            start=(x, y),
+            end=(min(1.0, x + 0.2), min(1.0, y + 0.2)),
+            color=(index * 123_457) & 0xFFFFFF,
+            width=index % 6 + 2,
+        )
+    for index in range(12):
+        history.append_fill(
+            x=(index % 4) * 200 + 100,
+            y=(index // 4) * 200 + 100,
+            color=(index * 654_319) & 0xFFFFFF,
+        )
+    return history
+
+
 def near_limit_histories() -> dict[str, PackedCanvasHistory]:
     return {
         "path-heavy": path_heavy_history(),
         "shape-heavy": shape_heavy_history(),
         "fill-heavy": fill_heavy_history(),
+        "fill-bounded": bounded_fill_history(),
+        "realistic": realistic_history(),
         "mixed": mixed_history(),
         "theoretical-max": theoretical_max_history(),
     }

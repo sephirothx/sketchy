@@ -49,6 +49,12 @@ REPLAY_LIMITS = {
     "shape-heavy": None,
     "fill-heavy": 100,
     "mixed": 400,
+    # Replayed whole. Sampling would drop the strokes that make the fills
+    # bounded in the first place, which is the entire point of the fixture -
+    # and both are small enough to replay in full anyway, so these two numbers
+    # are measured rather than projected.
+    "fill-bounded": None,
+    "realistic": None,
 }
 
 
