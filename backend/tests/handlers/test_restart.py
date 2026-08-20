@@ -8,7 +8,7 @@ from app.canvas_history import encode_canvas_history
 from app.game import Game, Phase
 from app.handlers import register_all_handlers as register_handlers
 from app.live_drawing import encode_live_drawing
-from app.rooms import DrawingRecapEntry, RestartVote, RoomManager, STARTING_SCORE
+from app.rooms import DrawingRecapEntry, RestartVote, RoomManager
 
 
 def active_room(player_count: int = 3):
@@ -257,8 +257,8 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     assert room.game.canvas.generation > old_generation
     assert room.last_game_drawings == []
     assert room.last_game_scores == []
-    assert proposer.score == STARTING_SCORE
-    assert voter.score == STARTING_SCORE
+    assert proposer.score == 0
+    assert voter.score == 0
     assert room.restart_vote is None
     assert room.restart_vote_cooldown_until == 0
 

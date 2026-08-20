@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock
 import pytest
 import socketio
 
-from app.game import Game, Phase
+from app.game import MAX_GUESS_POINTS, MIN_GUESS_POINTS, Game, Phase
 from app.handlers import register_all_handlers as register_handlers
-from app.rooms import RoomManager, STARTING_SCORE
+from app.rooms import RoomManager
 from tests.fake_game_history_repo import FakeGameHistoryRepository
 
 pytestmark = pytest.mark.asyncio
@@ -238,7 +238,9 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     price = game.hint_cost(guesser.id)
     assert game.buy_hint_letter(guesser.id, 0) is True
     game.submit_guess(guesser.id, "definitely-not-the-word")
-    game.submit_guess(guesser.id, game.word)
+    gross = game.remaining_seconds() / game.drawing_seconds
+    gross = round(MIN_GUESS_POINTS + (MAX_GUESS_POINTS - MIN_GUESS_POINTS) * gross)
+    _, awarded = game.submit_guess(guesser.id, game.word)
 
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -262,6 +264,8 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     hinted = next(g for g in saved.guesses if g.round_index == 0)
     assert hinted.hints_used == 1
     assert hinted.points_spent_on_hints == price
+    # What lands in history is what the player actually banked: net of hints.
+    assert hinted.points_awarded == awarded == gross - price
     assert hinted.wrong_guesses_before == 1
 
     # Both players were in the rotation for both turns.
@@ -324,7 +328,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     assert len(saved.rounds) == 2
     # The scores the game finished with, not the ones the restart reset to.
     assert {p.user_id: p.final_score for p in saved.participants} == expected_scores
-    assert all(score > STARTING_SCORE for score in expected_scores.values())
+    assert all(score > 0 for score in expected_scores.values())
 
 
 async def test_the_game_ends_for_players_before_the_write_is_attempted():

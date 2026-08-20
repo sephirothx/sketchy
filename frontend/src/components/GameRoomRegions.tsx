@@ -146,6 +146,9 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const scoringMode = useGameStore((state) => state.scoringMode);
   const nextHintCost = useGameStore((state) => state.nextHintCost);
   const letterPrices = useGameStore((state) => state.letterPrices);
+  const hintSpend = useGameStore((state) => state.hintSpend);
+  const hintBudget = useGameStore((state) => state.hintBudget);
+  const lastGuessBreakdown = useGameStore((state) => state.lastGuessBreakdown);
   const myWord = useGameStore((state) => state.myWord);
   const guessedWord = useGameStore((state) => state.guessedWord);
   const wordChoices = useGameStore((state) => state.wordChoices);
@@ -227,9 +230,10 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         revealedWord={phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord}
         hintMode={hintMode}
         canBuyHint={phase === "drawing" && !amDrawer && !guessedWord}
-        myScore={me?.score ?? 0}
         nextHintCost={nextHintCost}
         letterPrices={letterPrices}
+        hintSpend={hintSpend}
+        hintBudget={hintBudget}
       />
       <Canvas
         ref={canvasRef}
@@ -257,6 +261,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           scores={lastRoundResult.scores}
           myPlayerId={playerId}
           showScores={scoringMode !== "none"}
+          myBreakdown={lastGuessBreakdown}
         />
       )}
       {canDrawNow && (

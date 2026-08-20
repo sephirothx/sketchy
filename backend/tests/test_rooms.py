@@ -1,3 +1,5 @@
+import pytest
+
 from app.canvas_history import encode_canvas_history
 from app.game import Game
 from app.rooms import (
@@ -138,18 +140,16 @@ def test_scoring_mode_is_in_room_payloads():
     assert player.score == 0
 
 
-def test_pressure_mode_players_start_with_the_usual_balance():
-    """Only "none" zeroes the starting score -- every scored mode needs the
-    opening balance so hints are affordable in round one."""
-    from app.rooms import STARTING_SCORE
-
+@pytest.mark.parametrize("scoring_mode", ["none", "default", "pressure"])
+def test_every_scoring_mode_starts_players_at_zero(scoring_mode):
+    """Hints are bought on credit, so no mode needs an opening balance."""
     rm = RoomManager()
-    room = rm.create_room(name="Racy", is_public=True, scoring_mode="pressure")
+    room = rm.create_room(name="Racy", is_public=True, scoring_mode=scoring_mode)
     player = rm.add_player(room, "Alice")
 
-    assert room.to_public_summary()["scoringMode"] == "pressure"
-    assert room.to_state_payload()["scoringMode"] == "pressure"
-    assert player.score == STARTING_SCORE
+    assert room.to_public_summary()["scoringMode"] == scoring_mode
+    assert room.to_state_payload()["scoringMode"] == scoring_mode
+    assert player.score == 0
 
 
 def test_create_room_assigns_funny_random_name_when_unspecified():

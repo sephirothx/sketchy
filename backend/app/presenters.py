@@ -1,7 +1,7 @@
 """Pure construction of Socket.IO response and broadcast payloads."""
 from __future__ import annotations
 
-from app.game import Game, ROUND_END_SECONDS
+from app.game import Game, MAX_HINT_SPEND, ROUND_END_SECONDS
 from app.rooms import Player, Room
 
 
@@ -61,6 +61,10 @@ def turn_payload(
             if player_id and game.hint_mode == "wheel"
             else None
         ),
+        # What this player has committed to hints so far this turn, and the
+        # ceiling on it. Private: only ever sent on a per-socket emit.
+        "hintSpend": game.hint_spend.get(player_id, 0) if player_id else 0,
+        "hintBudget": MAX_HINT_SPEND,
     }
 
 

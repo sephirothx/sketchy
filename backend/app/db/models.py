@@ -226,8 +226,10 @@ class RoundGuess(Base):
     )
     points_awarded: Mapped[int] = mapped_column(Integer, nullable=False)
     guess_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
-    # Hints are paid for out of the player's score, so without these a cheap
-    # win and an expensive one are the same number.
+    # `points_awarded` is already net of the hints bought that turn, so without
+    # these a cheap win and an expensive one are the same number. Only settled
+    # spend is recorded: hints are free to a player who never guesses, and they
+    # leave no row here at all.
     hints_used: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )

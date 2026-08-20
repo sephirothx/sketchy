@@ -17,7 +17,7 @@ from app.handlers import register_all_handlers as register_handlers
 from app.game import DRAWING_SECONDS, Game, Phase
 from app.live_drawing import encode_live_drawing
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
-from app.rooms import DrawingRecapEntry, STARTING_SCORE, RoomManager
+from app.rooms import DrawingRecapEntry, RoomManager
 from app.words import MAX_WORD_LENGTH
 
 
