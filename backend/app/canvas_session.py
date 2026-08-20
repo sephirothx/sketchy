@@ -119,6 +119,13 @@ class CanvasSession:
     def hash(self) -> int:
         if len(self.hashes) == len(self.history):
             return self.hashes[-1] if self.hashes else HISTORY_HASH_INITIAL
+        if len(self.hashes) == len(self.history) - 1:
+            # A path is still being drawn, so its own record is the only one
+            # missing from the prefix array. Hash it onto the stored prefix
+            # instead of rescanning every action behind it: this is the state
+            # every sync and undo lands in while the drawer holds the pen.
+            previous = self.hashes[-1] if self.hashes else HISTORY_HASH_INITIAL
+            return extend_history_hash(previous, self.history.record_bytes(-1))
         return canvas_history_hash(self.history)
 
     def _finalize_history_action(self) -> None:
