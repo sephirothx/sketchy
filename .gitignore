@@ -3,8 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
-.venv/
-venv/
+.venv
+venv
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -12,7 +12,7 @@ venv/
 *.sqlite*
 
 # --- Node / frontend ---
-node_modules/
+node_modules
 dist/
 dist-ssr/
 *.local

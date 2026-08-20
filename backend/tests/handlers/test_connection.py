@@ -14,10 +14,10 @@ from app.canvas_history import (
     encode_canvas_history,
 )
 from app.handlers import register_all_handlers as register_handlers
-from app.game import DRAWING_SECONDS, Game, Phase
+from app.game import DRAWING_SECONDS, MAX_HINT_SPEND, Game, Phase
 from app.live_drawing import encode_live_drawing
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
-from app.rooms import DrawingRecapEntry, STARTING_SCORE, RoomManager
+from app.rooms import DrawingRecapEntry, RoomManager
 from app.words import MAX_WORD_LENGTH
 
 
@@ -291,6 +291,38 @@ async def test_already_joined_socket_resyncs_active_drawing_state():
     assert "you_are_drawing" in emitted_events
     assert "player_reconnected" not in emitted_events
     assert "player_joined" not in emitted_events
+
+@pytest.mark.asyncio
+async def test_sync_game_carries_the_running_hint_spend():
+    """A reconnect is the only way the client's running hint total can be
+    lost, so sync_game has to restore it."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, hint_mode="purchase")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    guesser.sid = "guesser-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=list(room.players), hint_mode="purchase")
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_word_choice()
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+    assert room.game.current_drawer == drawer.id
+    assert room.game.buy_hint_letter(guesser.id, 0) is True
+    spend = room.game.hint_spend[guesser.id]
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    sio.emit = AsyncMock()
+    join_room = sio.handlers["/"]["join_room"]
+
+    await join_room("guesser-sid", {"code": room.code, "nickname": guesser.nickname})
+
+    sync = next(
+        call.args[1] for call in sio.emit.await_args_list if call.args[0] == "sync_game"
+    )
+    assert sync["hintSpend"] == spend
+    assert sync["hintBudget"] == MAX_HINT_SPEND
 
 @pytest.mark.asyncio
 async def test_already_joined_socket_resyncs_round_end_overlay():

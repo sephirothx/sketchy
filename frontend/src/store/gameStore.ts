@@ -9,6 +9,7 @@ import type {
   PlayerInfo,
   RoomStatePayload,
   RestartVoteState,
+  GuessBreakdown,
   RoundEndedPayload,
   ScoringMode,
 } from "../types";
@@ -54,6 +55,11 @@ interface GameStore {
   phaseStartedAt: number;
   nextHintCost: number | null;
   letterPrices: Record<string, number> | null;
+  /** Points committed to hints so far this turn, and the ceiling on them. */
+  hintSpend: number;
+  hintBudget: number;
+  /** Set when I guess correctly; cleared when the next turn starts. */
+  lastGuessBreakdown: GuessBreakdown | null;
 
   messages: ChatMessage[];
   lastRoundResult: RoundEndedPayload | null;
@@ -86,14 +92,17 @@ interface GameStore {
     seconds: number;
     hintCost?: number | null;
     letterPrices?: Record<string, number> | null;
+    hintSpend?: number;
+    hintBudget?: number;
   }) => void;
   setMyWord: (word: string | null) => void;
-  setGuessedWord: (word: string | null) => void;
+  setGuessedWord: (word: string | null, breakdown?: GuessBreakdown | null) => void;
   setMaskedWord: (word: string) => void;
   setHintRevealed: (payload: {
     maskedWord: string;
     hintCost?: number | null;
     letterPrices?: Record<string, number> | null;
+    hintSpend?: number;
   }) => void;
   endRound: (payload: RoundEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
@@ -115,6 +124,9 @@ const initialGameFields = {
   phaseStartedAt: 0,
   nextHintCost: null as number | null,
   letterPrices: null as Record<string, number> | null,
+  hintSpend: 0,
+  hintBudget: 300,
+  lastGuessBreakdown: null as GuessBreakdown | null,
   messages: [] as ChatMessage[],
   lastRoundResult: null as RoundEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
@@ -202,8 +214,8 @@ export const useGameStore = create<GameStore>((set) => ({
     }),
   setMyWordChoices: (choices, seconds) =>
     set({ wordChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
-  startDrawing: ({ drawerId, maskedWord, roundNumber, totalRounds, seconds, hintCost, letterPrices }) =>
-    set({
+  startDrawing: ({ drawerId, maskedWord, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, hintBudget }) =>
+    set((s) => ({
       phase: "drawing",
       drawerId,
       maskedWord,
@@ -214,15 +226,25 @@ export const useGameStore = create<GameStore>((set) => ({
       wordChoices: [],
       nextHintCost: hintCost ?? null,
       letterPrices: letterPrices ?? null,
-    }),
+      // Driven by both turn_started and sync_game, so a mid-turn reconnect
+      // restores the real spend instead of zeroing it.
+      hintSpend: hintSpend ?? 0,
+      hintBudget: hintBudget ?? s.hintBudget,
+      lastGuessBreakdown: null,
+    })),
   setMyWord: (word) => set({ myWord: word }),
-  setGuessedWord: (word) => set({ guessedWord: word }),
+  setGuessedWord: (word, breakdown) =>
+    set((s) => ({
+      guessedWord: word,
+      lastGuessBreakdown: breakdown !== undefined ? breakdown : s.lastGuessBreakdown,
+    })),
   setMaskedWord: (word) => set({ maskedWord: word }),
-  setHintRevealed: ({ maskedWord, hintCost, letterPrices }) =>
+  setHintRevealed: ({ maskedWord, hintCost, letterPrices, hintSpend }) =>
     set((s) => ({
       maskedWord,
       nextHintCost: hintCost ?? s.nextHintCost,
       letterPrices: letterPrices !== undefined ? letterPrices : s.letterPrices,
+      hintSpend: hintSpend ?? s.hintSpend,
     })),
   endRound: (payload) =>
     set((s) => ({

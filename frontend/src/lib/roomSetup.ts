@@ -33,11 +33,13 @@ export const HINT_OPTIONS: { value: HintMode; label: string; description: string
   {
     value: "purchase",
     label: "Buy letters",
-    description: "Players spend points to uncover one letter position, visible only to them.",
+    description:
+      "Uncover one letter position, visible only to you - the cost comes out of the points that turn's guess earns.",
   },
   {
     value: "wheel",
     label: "Wheel of Fortune",
-    description: "Players spend points to buy a letter and reveal every match for themselves.",
+    description:
+      "Buy a letter and reveal every match for yourself - the cost comes out of the points that turn's guess earns.",
   },
 ];

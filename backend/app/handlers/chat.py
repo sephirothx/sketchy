@@ -150,7 +150,20 @@ async def guess(ctx: HandlerContext, sid, data):
         {"playerId": player.id, "nickname": player.nickname, "points": points},
         room=room.id,
     )
-    await ctx.sio.emit("you_guessed_correctly", {"word": game.word}, to=player.sid)
+    hint_spend = game.hint_spend.get(player.id, 0)
+    await ctx.sio.emit(
+        "you_guessed_correctly",
+        {
+            "word": game.word,
+            "points": points,
+            # `points` is already net of the hints this player bought, and the
+            # deduction clamps at zero, so the gross figure can't be recovered
+            # client-side. Send it so the round-end breakdown adds up.
+            "basePoints": points + hint_spend,
+            "hintSpend": hint_spend,
+        },
+        to=player.sid,
+    )
     recipients = ctx.game_flow._privileged_sids(room, game)
     if recipients:
         await ctx.sio.emit(
@@ -175,19 +188,25 @@ async def buy_hint(ctx: HandlerContext, sid, data):
     if game.hint_mode != "purchase":
         return {"ok": False, "error": "Hint purchasing is disabled in this room"}
     cost = game.hint_cost(player.id)
-    if player.score < cost:
-        return {"ok": False, "error": "Not enough points"}
+    # Hints are bought on credit - nothing is charged here. The game settles
+    # the turn's spend against the points a correct guess earns; this check
+    # only exists to give the budget case its own message.
+    if cost > game.hint_spend_remaining(player.id):
+        return {"ok": False, "error": "You've used up this turn's hint budget"}
     if not game.buy_hint_letter(player.id, payload.slot):
         return {"ok": False, "error": "Hint unavailable"}
 
-    player.score -= cost
+    hint_spend = game.hint_spend.get(player.id, 0)
     await ctx.sio.emit(
         "hint_revealed",
-        {"maskedWord": game.masked_word(player.id), "hintCost": game.hint_cost(player.id)},
+        {
+            "maskedWord": game.masked_word(player.id),
+            "hintCost": game.hint_cost(player.id),
+            "hintSpend": hint_spend,
+        },
         to=sid,
     )
-    await ctx.game_flow._emit_room_state(room)
-    return {"ok": True, "cost": cost}
+    return {"ok": True, "cost": cost, "hintSpend": hint_spend}
 
 
 async def buy_wheel_letter(ctx: HandlerContext, sid, data):
@@ -204,32 +223,33 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
         return {"ok": False, "error": "Letter buying is disabled in this room"}
     letter = payload.letter
     cost = game.wheel_hint_cost(player.id, letter)
-    if player.score < cost:
-        return {"ok": False, "error": "Not enough points"}
+    if cost > game.hint_spend_remaining(player.id):
+        return {"ok": False, "error": "You've used up this turn's hint budget"}
     if not game.buy_wheel_letter(player.id, letter):
         return {"ok": False, "error": "Letter unavailable"}
 
-    player.score -= cost
+    hint_spend = game.hint_spend.get(player.id, 0)
     found_count = sum(1 for i in game.letter_positions if game.word[i].lower() == letter)
     await ctx.sio.emit(
         "hint_revealed",
         {
             "maskedWord": game.masked_word(player.id),
             "letterPrices": game.wheel_letter_prices(player.id),
+            "hintSpend": hint_spend,
         },
         to=sid,
     )
+    price = f"'{letter.upper()}' -{cost} pts"
     if found_count:
-        feedback = f"You bought '{letter.upper()}' for {cost} pts - found {found_count} time{'s' if found_count != 1 else ''}!"
+        feedback = f"{price} - found {found_count} time{'s' if found_count != 1 else ''}!"
     else:
-        feedback = f"You bought '{letter.upper()}' for {cost} pts - not in the word."
+        feedback = f"{price} - not in the word."
     await ctx.sio.emit(
         "chat_message",
         {"playerId": "", "nickname": "", "text": feedback, "correct": False, "system": True},
         to=sid,
     )
-    await ctx.game_flow._emit_room_state(room)
-    return {"ok": True, "cost": cost, "found": found_count}
+    return {"ok": True, "cost": cost, "found": found_count, "hintSpend": hint_spend}
 
 
 def register(ctx: HandlerContext) -> None:

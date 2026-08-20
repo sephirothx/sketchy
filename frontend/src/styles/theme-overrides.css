@@ -224,6 +224,18 @@
   border-color: #475569;
 }
 
+[data-theme="dark"] .hint-blank {
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .hint-blank:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+[data-theme="dark"] .hint-blank:disabled {
+  color: inherit;
+}
+
 [data-theme="dark"] .wheel-letter-btn {
   background: #1e293b;
   border-color: #3b82f6;
@@ -733,6 +745,19 @@
 
 [data-theme="dark"] .round-score-rank,
 [data-theme="dark"] .round-score-delta {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .round-hint-debt,
+[data-theme="dark"] .hint-price-warning {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .hint-spend-total {
+  color: #fdba74;
+}
+
+[data-theme="dark"] .hint-wheel-label {
   color: #94a3b8;
 }
 

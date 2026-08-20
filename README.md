@@ -293,6 +293,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ### Scoring
 
+- Everyone starts a game on zero points, in every scoring mode.
 - Room creators can choose **Default scoring**, **Pressure scoring**, or **No scoring**.
   No-scoring games still detect correct guesses and end rounds normally, but everyone remains
   on zero points and no leaderboard is shown.
@@ -306,7 +307,14 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
   a 15-second room and a 300-second one. Because the penalty scales with the *gap* after the first
   correct guess rather than applying as a step, a near-simultaneous second guess loses only a
   handful of points.
-- The drawer receives the sum of points earned by all correct guessers in that round (`drawer_score = sum of guesser scores`), balancing drawing and guessing potential across complete rotations.
+- **Hints are bought on credit.** In the **Buy letters** and **Wheel of Fortune** hint modes,
+  nothing is charged when a hint is bought. Instead, the turn's total hint cost is subtracted from
+  the points that turn's correct guess earns, floored at zero: `turn_score = max(0, guess_points -
+  hint_spend)`. A turn can be wiped out, but a player's running total never goes down, and hints
+  cost nothing at all to a player who never guesses the word. Spend is capped at 300 per turn — the
+  most a single guess can ever be worth. In Pressure mode the 50-point floor guarantees the *gross*
+  award only; the hint debt is settled after it.
+- The drawer receives the sum of points earned by all correct guessers in that round (`drawer_score = sum of guesser scores`, after each guesser's hint spend), balancing drawing and guessing potential across complete rotations.
 
 ### Spectating
 

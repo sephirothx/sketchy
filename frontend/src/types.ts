@@ -149,6 +149,17 @@ export interface RoundEndedPayload {
   scores: RoundScoreEntry[];
 }
 
+/**
+ * How one player's turn score was arrived at: hints are bought on credit and
+ * settled against the guess, so the gross figure can't be recovered from the
+ * net one once the deduction clamps at zero.
+ */
+export interface GuessBreakdown {
+  points: number;
+  basePoints: number;
+  hintSpend: number;
+}
+
 export interface GameEndedPayload {
   scores: ScoreEntry[];
   drawings: DrawingRecapMetadata[];

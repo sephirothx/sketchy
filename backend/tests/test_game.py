@@ -8,6 +8,9 @@ from app.game import (
     CLOSE_GUESS_MAX_DISTANCE,
     DRAWING_SECONDS,
     HINT_BASE_COST,
+    MAX_GUESS_POINTS,
+    MAX_HINT_SPEND,
+    MIN_GUESS_POINTS,
     PRESSURE_MAX_POINTS,
     PRESSURE_MIN_POINTS,
     PRESSURE_MULTIPLIER,
@@ -906,10 +909,10 @@ def test_hide_masked_prompt_returns_question_marks():
 # --- per-turn analytics kept for the game record --------------------------
 
 def test_hint_purchases_record_what_the_player_was_charged():
-    """The recorded spend has to match what the caller deducted.
+    """The recorded debt has to match the price the player was quoted.
 
-    `buy_hint` reads `hint_cost` and subtracts it from the score, so the game
-    records the same reading, taken before the purchase moves the price.
+    `buy_hint` reads `hint_cost` to answer the client, so the game records the
+    same reading, taken before the purchase moves the price.
     """
     game = make_hint_game("testing", "purchase")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
@@ -943,6 +946,139 @@ def test_a_rejected_purchase_costs_nothing():
 
     assert game.buy_hint_letter(guesser, 0) is False
     assert game.hint_spend[guesser] == spend
+
+
+# --- hints are bought on credit and settled against the turn's guess ------
+
+def guess_with_remaining(game, token, remaining):
+    """Guess the word with the drawing clock parked at `remaining` seconds."""
+    game.remaining_seconds = lambda: remaining
+    return game.submit_guess(token, game.word)
+
+
+def test_hint_spend_is_deducted_from_a_correct_guess():
+    game = make_hint_game("testing", "purchase")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.buy_hint_letter(guesser, 0) is True
+    assert game.buy_hint_letter(guesser, 1) is True
+    spend = game.hint_spend[guesser]
+
+    correct, points = guess_with_remaining(game, guesser, game.drawing_seconds)
+
+    assert correct is True
+    assert points == MAX_GUESS_POINTS - spend
+    assert game.guess_points[guesser] == MAX_GUESS_POINTS - spend
+
+
+def test_hint_spend_cannot_push_a_turn_below_zero():
+    game = make_hint_game("testing", "purchase")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    for slot in range(5):  # 12 + 24 + 36 + 48 + 60 = 180
+        assert game.buy_hint_letter(guesser, slot) is True
+    assert game.hint_spend[guesser] > MIN_GUESS_POINTS
+
+    # Guessing on the buzzer is worth MIN_GUESS_POINTS, less than the debt.
+    correct, points = guess_with_remaining(game, guesser, 0.0)
+
+    assert correct is True
+    assert points == 0
+    assert game.guess_points[guesser] == 0
+
+
+def test_hints_cost_nothing_without_a_correct_guess():
+    game = make_hint_game("testing", "purchase")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.buy_hint_letter(guesser, 0) is True
+
+    drawer_bonus = game.end_round(total_guesser_count=2)
+
+    assert drawer_bonus == 0
+    assert game.completed_turns[-1].guesses == ()
+    assert game.hint_spend[guesser] == HINT_BASE_COST
+
+
+def test_hint_spend_only_charges_the_buyer():
+    game = make_hint_game("testing", "purchase", n_players=3)
+    buyer, bystander = [t for t in game.turn_order if t != game.current_drawer]
+    assert game.buy_hint_letter(buyer, 0) is True
+
+    _, bystander_points = guess_with_remaining(game, bystander, game.drawing_seconds)
+    _, buyer_points = guess_with_remaining(game, buyer, game.drawing_seconds)
+
+    assert bystander_points == MAX_GUESS_POINTS
+    assert buyer_points == MAX_GUESS_POINTS - HINT_BASE_COST
+
+
+def test_drawer_bonus_is_the_sum_of_post_hint_points():
+    game = make_hint_game("testing", "purchase", n_players=3)
+    buyer, bystander = [t for t in game.turn_order if t != game.current_drawer]
+    assert game.buy_hint_letter(buyer, 0) is True
+    guess_with_remaining(game, bystander, game.drawing_seconds)
+    guess_with_remaining(game, buyer, game.drawing_seconds)
+
+    drawer_bonus = game.end_round(total_guesser_count=2)
+
+    assert drawer_bonus == sum(game.guess_points.values())
+    assert drawer_bonus == 2 * MAX_GUESS_POINTS - HINT_BASE_COST
+
+
+def test_hint_spend_resets_between_turns():
+    game = make_hint_game("testing", "purchase")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.buy_hint_letter(guesser, 0) is True
+
+    game.end_round(total_guesser_count=2)
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+
+    assert game.hint_spend == {}
+    assert game.hint_spend_remaining(guesser) == MAX_HINT_SPEND
+
+
+# --- the per-turn hint budget ---------------------------------------------
+
+def test_hint_spend_cannot_exceed_the_best_possible_guess():
+    """The cap is the point past which more hints could never pay for
+    themselves, so it tracks the best a turn can award."""
+    assert MAX_HINT_SPEND == MAX_GUESS_POINTS
+
+
+def test_hint_spend_remaining_tracks_the_cap():
+    game = make_hint_game("testing", "purchase")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    assert game.hint_spend_remaining(guesser) == MAX_HINT_SPEND
+
+    game.buy_hint_letter(guesser, 0)
+    assert game.hint_spend_remaining(guesser) == MAX_HINT_SPEND - HINT_BASE_COST
+
+    game.hint_spend[guesser] = MAX_HINT_SPEND + 500
+    assert game.hint_spend_remaining(guesser) == 0
+
+
+def test_a_purchase_over_the_turn_budget_is_rejected():
+    # 12 + 24 + 36 + 48 + 60 + 72 = 252; a seventh hint costs 84 and would
+    # take the turn past MAX_HINT_SPEND.
+    game = make_hint_game("testing", "purchase")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    for slot in range(6):
+        assert game.buy_hint_letter(guesser, slot) is True
+    spend = game.hint_spend[guesser]
+    assert spend + game.hint_cost(guesser) > MAX_HINT_SPEND
+
+    assert game.buy_hint_letter(guesser, 6) is False
+    assert game.hint_spend[guesser] == spend
+    assert 6 not in game.purchased_hints[guesser]
+    assert "_" in game.masked_word(guesser)
+
+
+def test_an_over_budget_wheel_letter_is_rejected():
+    game = make_hint_game("testing", "wheel")
+    guesser = next(t for t in game.turn_order if t != game.current_drawer)
+    game.hint_spend[guesser] = MAX_HINT_SPEND - 1
+    assert game.wheel_hint_cost(guesser, "e") > 1
+
+    assert game.buy_wheel_letter(guesser, "e") is False
+    assert game.hint_spend[guesser] == MAX_HINT_SPEND - 1
+    assert game.purchased_letters.get(guesser, set()) == set()
 
 
 def test_only_real_guess_attempts_are_counted_as_wrong():
@@ -1159,8 +1295,14 @@ def test_pressure_never_pays_less_than_the_floor():
         assert guess_at(game, "g1", drawing_seconds) == PRESSURE_MIN_POINTS
 
 
-def test_pressure_floor_always_covers_the_cheapest_hint():
-    assert PRESSURE_MIN_POINTS >= HINT_BASE_COST
+def test_the_pressure_floor_does_not_protect_hint_debt():
+    """PRESSURE_MIN_POINTS floors the gross award; the debt is settled after."""
+    game = make_pressure_game(n_guessers=2, drawing_seconds=90.0)
+    game.hint_mode = "purchase"
+    guess_at(game, "g0", 0.0)
+    game.hint_spend["g1"] = PRESSURE_MIN_POINTS + 10
+
+    assert guess_at(game, "g1", 90.0) == 0
 
 
 def test_pressure_decay_state_resets_between_turns():

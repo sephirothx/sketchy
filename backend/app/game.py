@@ -26,6 +26,13 @@ MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
 SCORING_MODES = ("none", "default", "pressure")
 
+# A turn's hint spend is settled against that turn's guess, so committing more
+# than the best possible guess is worth would just be an unpayable debt. Cap it
+# there: the worst a turn can do is come out at zero, never below. In practice
+# the escalating per-hint price binds first (12 + 24 + 36 + ... = 252 after
+# six), so this is a safety rail rather than a balance lever.
+MAX_HINT_SPEND = MAX_GUESS_POINTS
+
 # "pressure" mode: starts from the same MAX_GUESS_POINTS baseline as default
 # scoring, but points bleed away as a percentage of what is still on the table,
 # and the bleed rate doubles once someone gets the word. The per-second rate is
@@ -38,8 +45,10 @@ PRESSURE_DECAY_PER_SECOND = 0.98  # measured at PRESSURE_REFERENCE_SECONDS
 PRESSURE_REFERENCE_SECONDS = 90.0
 PRESSURE_MULTIPLIER = 2.0  # applies once anyone has guessed correctly
 # Under the multiplier the accumulated decay time overshoots the reference
-# length, so the raw curve bottoms out below the cheapest hint. Floor it: being
-# last should sting, not make a correct guess worthless.
+# length, so the raw curve bottoms out near zero. Floor it: being last should
+# sting, not make a correct guess worthless. The floor guarantees the gross
+# award only - this turn's hint debt is settled after it, so a heavily hinted
+# last-place guess can still come out at zero.
 PRESSURE_MIN_POINTS = 50
 
 # Hint letters (see Game.reveal_hint_letter / Game.buy_hint_letter / Game.buy_wheel_letter):
@@ -53,7 +62,7 @@ PRESSURE_MIN_POINTS = 50
 #   room's word pool cost more than rare ones) and is charged whether or not
 #   the letter turns out to be in the word.
 HINT_MODES = ("none", "checkpoints", "purchase", "wheel")
-# Each hint a player buys in a turn costs more than the last: 5, 10, 15, ...
+# Each hint a player buys in a turn costs more than the last: 12, 24, 36, ...
 HINT_BASE_COST = 12
 MIN_HIDDEN_LETTERS = 2
 
@@ -184,9 +193,11 @@ class TurnGuessRecord:
     token: str
     points_awarded: int
     guess_time_seconds: float
-    # What the guess cost and what it took to get there. Hint spend comes
-    # straight off the player's score, so without it a low score is
-    # indistinguishable from an expensive one.
+    # What the guess cost and what it took to get there. `points_awarded` is
+    # already net of the hint spend, so without this a cheap guess and an
+    # expensive one look alike. Only settled spend appears here: a player who
+    # bought hints and never guessed leaves no record at all, because they were
+    # never charged.
     hints_used: int = 0
     points_spent_on_hints: int = 0
     wrong_guesses_before: int = 0
@@ -261,8 +272,9 @@ class Game:
     revealed_positions: set[int] = field(default_factory=set)
     purchased_hints: dict[str, set[int]] = field(default_factory=dict)  # slot hints ("purchase")
     purchased_letters: dict[str, set[str]] = field(default_factory=dict)  # letter hints ("wheel")
-    # Per-turn accounting kept for the game record. Points spent on hints are
-    # deducted from the player's score by the caller and are otherwise lost.
+    # Per-turn accounting, also kept for the game record. Hints are bought on
+    # credit: nothing is charged up front, and `submit_guess` settles the whole
+    # turn's spend against the points that turn's correct guess earns.
     hint_spend: dict[str, int] = field(default_factory=dict)
     hint_purchases: dict[str, int] = field(default_factory=dict)
     wrong_guesses: dict[str, int] = field(default_factory=dict)
@@ -525,8 +537,8 @@ class Game:
     def hint_cost(self, token: str) -> int:
         """Cost in points of the next hint `token` would buy this turn.
 
-        Scales up with each hint the player already bought this turn (5,
-        10, 15, ...), so hints stay useful early but can't be spammed cheaply.
+        Scales up with each hint the player already bought this turn (12,
+        24, 36, ...), so hints stay useful early but can't be spammed cheaply.
         """
         already_bought = len(self.purchased_hints.get(token, set()))
         return HINT_BASE_COST * (already_bought + 1)
@@ -534,10 +546,12 @@ class Game:
     def buy_hint_letter(self, token: str, slot: int) -> bool:
         """Reveal a specific letter slot for `token` only (hint_mode="purchase").
 
-        The caller is responsible for checking/deducting points - this only
-        validates and records which slot was unlocked. Returns False if the
-        slot is invalid, already revealed (publicly or to this player), or
-        the token isn't an eligible guesser right now.
+        Nothing is charged here or by the caller: the price is added to this
+        turn's `hint_spend`, which `submit_guess` settles against the points a
+        correct guess earns. Returns False if the slot is invalid, already
+        revealed (publicly or to this player), the token isn't an eligible
+        guesser right now, or the price would take the turn's spend past
+        MAX_HINT_SPEND.
         """
         if self.hint_mode != "purchase" or self.phase != Phase.DRAWING or not self.word:
             return False
@@ -550,10 +564,12 @@ class Game:
         purchased = self.purchased_hints.setdefault(token, set())
         if slot in purchased:
             return False
-        # Read the price before the purchase moves it: this is the same value
-        # the caller just charged, and recording it here keeps the two from
-        # drifting apart.
-        self._record_hint_spend(token, self.hint_cost(token))
+        # Read the price before the purchase moves it, so the debt recorded
+        # here is the one the player was quoted.
+        cost = self.hint_cost(token)
+        if cost > self.hint_spend_remaining(token):
+            return False
+        self._record_hint_spend(token, cost)
         purchased.add(slot)
         return True
 
@@ -620,10 +636,11 @@ class Game:
         """Buy a whole letter for `token` only (hint_mode="wheel").
 
         Every occurrence of `letter` in the word will be shown to this player
-        (via `masked_word`) regardless of whether it's actually present - the
-        caller is responsible for checking/deducting points before calling
-        this. Returns False if the letter is invalid, already bought by this
-        player this turn, or the token isn't an eligible guesser right now.
+        (via `masked_word`) regardless of whether it's actually present, and
+        the price is charged either way - on credit, like `buy_hint_letter`.
+        Returns False if the letter is invalid, already bought by this player
+        this turn, the token isn't an eligible guesser right now, or the price
+        would take the turn's spend past MAX_HINT_SPEND.
         """
         if self.hint_mode != "wheel" or self.phase != Phase.DRAWING or not self.word:
             return False
@@ -635,9 +652,16 @@ class Game:
         bought = self.purchased_letters.setdefault(token, set())
         if letter in bought:
             return False
-        self._record_hint_spend(token, self.wheel_hint_cost(token, letter))
+        cost = self.wheel_hint_cost(token, letter)
+        if cost > self.hint_spend_remaining(token):
+            return False
+        self._record_hint_spend(token, cost)
         bought.add(letter)
         return True
+
+    def hint_spend_remaining(self, token: str) -> int:
+        """How much more `token` may still commit to hints this turn."""
+        return max(0, MAX_HINT_SPEND - self.hint_spend.get(token, 0))
 
     def _record_hint_spend(self, token: str, cost: int) -> None:
         self.hint_spend[token] = self.hint_spend.get(token, 0) + cost
@@ -679,6 +703,9 @@ class Game:
             points = round(
                 MIN_GUESS_POINTS + (MAX_GUESS_POINTS - MIN_GUESS_POINTS) * remaining_ratio
             )
+        # Hints are bought on credit and settled here: the turn pays for them
+        # out of what it earned, and a turn that earned nothing owes nothing.
+        points = max(0, points - self.hint_spend.get(token, 0))
         self.correct_guessers.add(token)
         self.guess_points[token] = points
         return True, points

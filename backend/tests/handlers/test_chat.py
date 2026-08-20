@@ -14,10 +14,10 @@ from app.canvas_history import (
     encode_canvas_history,
 )
 from app.handlers import register_all_handlers as register_handlers
-from app.game import DRAWING_SECONDS, Game, Phase
+from app.game import DRAWING_SECONDS, MAX_GUESS_POINTS, MAX_HINT_SPEND, Game, Phase
 from app.live_drawing import encode_live_drawing
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
-from app.rooms import DrawingRecapEntry, STARTING_SCORE, RoomManager
+from app.rooms import DrawingRecapEntry, RoomManager
 from app.words import MAX_WORD_LENGTH
 
 
@@ -232,7 +232,7 @@ async def test_simultaneous_final_guesses_end_round_once():
     )
 
     drawer_bonus = sum(room.game.guess_points.values())
-    assert players[0].score == STARTING_SCORE + drawer_bonus
+    assert players[0].score == drawer_bonus
     assert [call.args[0] for call in sio.emit.await_args_list].count("round_ended") == 1
     round_ended_payload = next(
         call.args[1] for call in sio.emit.await_args_list if call.args[0] == "round_ended"
@@ -276,22 +276,95 @@ async def test_buy_hint_purchase_mode():
     drawer_res = await buy_hint("drawer-sid", {"slot": 0})
     assert drawer_res == {"ok": False, "error": "Hint unavailable"}
 
-    # Guesser buying a valid hint slot
+    # Guesser buying a valid hint slot. Hints are bought on credit, so the
+    # score does not move and the debt shows up in hint_spend instead.
     initial_score = guesser.score
     res = await buy_hint("guesser-sid", {"slot": 0})
     assert res["ok"] is True
     assert res["cost"] == 12
-    assert guesser.score == initial_score - 12
+    assert res["hintSpend"] == 12
+    assert guesser.score == initial_score
+    assert room.game.hint_spend[guesser.id] == 12
     assert 0 in room.game.purchased_hints[guesser.id]
 
-    # Check hint_revealed event emission
+    # Buying does not touch any public state, so nothing is broadcast.
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
     assert "hint_revealed" in emitted_events
+    assert "room_state" not in emitted_events
 
-    # Guesser with insufficient points
-    guesser.score = 5
+    # Guesser who has already committed the whole turn budget
+    room.game.hint_spend[guesser.id] = MAX_HINT_SPEND
     res_broke = await buy_hint("guesser-sid", {"slot": 1})
-    assert res_broke == {"ok": False, "error": "Not enough points"}
+    assert res_broke == {"ok": False, "error": "You've used up this turn's hint budget"}
+    assert 1 not in room.game.purchased_hints[guesser.id]
+
+    timer = timers.phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+@pytest.mark.asyncio
+async def test_a_correct_guess_is_credited_net_of_hints():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, hint_mode="purchase")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+
+    room.game = Game(
+        turn_order=[drawer.id, guesser.id],
+        hint_mode="purchase",
+        word_pool=["apple"],
+    )
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_word(drawer.id, "apple")
+    room.game.set_phase_deadline(room.game.drawing_seconds)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    timers = register_handlers(sio, room_manager).timers
+    sessions = {
+        "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
+        "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    buy_hint = sio.handlers["/"]["buy_hint"]
+    assert (await buy_hint("guesser-sid", {"slot": 0}))["ok"] is True
+    assert (await buy_hint("guesser-sid", {"slot": 1}))["ok"] is True
+    spend = room.game.hint_spend[guesser.id]
+
+    # The running total is reported on every purchase, privately.
+    hint_revealed = [
+        call.args[1] for call in sio.emit.await_args_list if call.args[0] == "hint_revealed"
+    ]
+    assert [payload["hintSpend"] for payload in hint_revealed] == [12, 12 + 24]
+    assert guesser.score == 0
+
+    await sio.handlers["/"]["guess"]("guesser-sid", {"text": "apple"})
+
+    net = room.game.guess_points[guesser.id]
+    assert net == MAX_GUESS_POINTS - spend
+    assert guesser.score == net
+
+    broadcast = next(
+        call.args[1] for call in sio.emit.await_args_list if call.args[0] == "correct_guess"
+    )
+    assert broadcast["points"] == net
+
+    private = next(
+        call.args[1]
+        for call in sio.emit.await_args_list
+        if call.args[0] == "you_guessed_correctly"
+    )
+    assert private == {
+        "word": "apple",
+        "points": net,
+        "basePoints": MAX_GUESS_POINTS,
+        "hintSpend": spend,
+    }
 
     timer = timers.phase_timers.pop(room.id, None)
     if timer:
@@ -327,12 +400,12 @@ async def test_buy_wheel_letter():
     assert inv_res == {"ok": False, "error": "Invalid letter"}
 
     # Buy letter 'a' (present 3 times in 'banana')
-    guesser.score = 500
     initial_score = guesser.score
     res = await buy_wheel_letter("guesser-sid", {"letter": "a"})
     assert res["ok"] is True
     assert res["found"] == 3
-    assert guesser.score < initial_score
+    assert guesser.score == initial_score
+    assert res["hintSpend"] == room.game.hint_spend[guesser.id] > 0
     assert "a" in room.game.purchased_letters[guesser.id]
 
     # Attempting to buy the same letter again should fail
@@ -342,7 +415,8 @@ async def test_buy_wheel_letter():
     # Verify system message emission
     emitted = [call.args for call in sio.emit.await_args_list]
     chat_emits = [args for args in emitted if args[0] == "chat_message"]
-    assert any("You bought 'A'" in args[1]["text"] for args in chat_emits)
+    assert any(args[1]["text"].startswith("'A' -") for args in chat_emits)
+    assert "room_state" not in [args[0] for args in emitted]
 
     timer = timers.phase_timers.pop(room.id, None)
     if timer:

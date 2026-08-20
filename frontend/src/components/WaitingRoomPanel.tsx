@@ -29,7 +29,7 @@ function hintLabel(mode: HintMode, hidden: boolean) {
   if (hidden) return "Blanks hidden from guessers";
   return ({
     checkpoints: "Timed letter hints",
-    purchase: "Buy letters with points",
+    purchase: "Buy letters against your turn score",
     wheel: "Wheel of Fortune letter buys",
     none: "No letter hints",
   })[mode];

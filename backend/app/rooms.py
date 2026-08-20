@@ -11,7 +11,6 @@ from typing import Literal, Optional
 from app.game import Game
 from app.words import WORDS
 
-STARTING_SCORE = 50
 DEFAULT_ROOM_DRAWING_SECONDS = 90
 DEFAULT_ROOM_HINT_MODE = "checkpoints"
 DRAWING_TIME_OPTIONS = (15, 30, 60, 90, 120, 180, 240, 300)
@@ -120,7 +119,7 @@ class Player:
     is_anonymous: bool = True
     name_color: str = field(default_factory=generate_random_name_color)
     sid: Optional[str] = None
-    score: int = STARTING_SCORE
+    score: int = 0
     connected: bool = True
     is_host: bool = False
     is_spectator: bool = False
@@ -457,7 +456,7 @@ class RoomManager:
                 if is_anonymous
                 else normalize_name_color(name_color) or generate_random_name_color()
             ),
-            score=0 if is_spectator else (STARTING_SCORE if room.scoring_mode != "none" else 0),
+            score=0,
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,
         )

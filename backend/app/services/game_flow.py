@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from app.game import (
     CHOOSE_WORD_SECONDS,
+    MAX_HINT_SPEND,
     ROUND_END_SECONDS,
     Game,
     Phase,
@@ -39,7 +40,6 @@ from app.rooms import (
     Player,
     Room,
     RoomFullError,
-    STARTING_SCORE,
     normalize_name_color,
 )
 from app.services.game_history import build_game_history
@@ -209,11 +209,7 @@ class GameFlowService:
             # outlive many games.
             room.departed_seats = {}
             for player in room.player_list():
-                player.score = (
-                    0
-                    if player.is_spectator
-                    else (STARTING_SCORE if room.scoring_mode != "none" else 0)
-                )
+                player.score = 0
             room.state = "playing"
             room.game = Game(
                 turn_order=[player.id for player in active_players],
@@ -436,6 +432,8 @@ class GameFlowService:
                         "seconds": game.drawing_seconds,
                         "hintCost": game.hint_cost(p.id),
                         "letterPrices": game.wheel_letter_prices(p.id) if game.hint_mode == "wheel" else None,
+                        "hintSpend": 0,
+                        "hintBudget": MAX_HINT_SPEND,
                     },
                     to=p.sid,
                 )

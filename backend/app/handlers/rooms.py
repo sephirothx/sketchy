@@ -22,7 +22,6 @@ from app.handlers.identity import IdentityError, resolve_identity
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     RoomFullError,
-    STARTING_SCORE,
     generate_random_name_color,
     normalize_name_color,
 )
@@ -390,7 +389,7 @@ async def become_player(ctx: HandlerContext, sid, data=None):
         return {"ok": False, "error": "Player slots are full"}
 
     player.is_spectator = False
-    player.score = STARTING_SCORE if room.scoring_mode != "none" else 0
+    player.score = 0
     await ctx.sio.emit(
         "chat_message",
         {

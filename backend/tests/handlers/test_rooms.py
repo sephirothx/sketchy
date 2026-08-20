@@ -20,7 +20,6 @@ from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     DrawingRecapEntry,
-    STARTING_SCORE,
     RoomManager,
 )
 from tests.fake_user_repo import FakeUserRepository
@@ -217,7 +216,7 @@ async def test_waiting_spectator_can_become_player_when_space_is_available():
 
     assert response == {"ok": True}
     assert spectator.is_spectator is False
-    assert spectator.score == STARTING_SCORE
+    assert spectator.score == 0
     assert any(
         call.args[0] == "room_state"
         and any(

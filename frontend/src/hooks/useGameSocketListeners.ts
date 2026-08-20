@@ -109,6 +109,8 @@ export function useGameSocketListeners() {
       seconds: number;
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
+      hintSpend?: number;
+      hintBudget?: number;
     }) => {
       playRoundStartSound();
       store.getState().startDrawing(payload);
@@ -144,16 +146,31 @@ export function useGameSocketListeners() {
       });
     };
 
-    const onYouGuessedCorrectly = (payload: { word: string }) => {
+    const onYouGuessedCorrectly = (payload: {
+      word: string;
+      points?: number;
+      basePoints?: number;
+      hintSpend?: number;
+    }) => {
       triggerConfettiBurst();
       playMyCorrectGuessSound();
-      store.getState().setGuessedWord(payload.word);
+      store.getState().setGuessedWord(
+        payload.word,
+        payload.basePoints === undefined
+          ? null
+          : {
+              points: payload.points ?? 0,
+              basePoints: payload.basePoints,
+              hintSpend: payload.hintSpend ?? 0,
+            },
+      );
     };
 
     const onHintRevealed = (payload: {
       maskedWord: string;
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
+      hintSpend?: number;
     }) => {
       store.getState().setHintRevealed(payload);
     };
@@ -183,6 +200,8 @@ export function useGameSocketListeners() {
       remainingSeconds: number;
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
+      hintSpend?: number;
+      hintBudget?: number;
     }) => {
       if (payload.phase === "choosing_word") {
         store.getState().startChoosing({
@@ -200,6 +219,8 @@ export function useGameSocketListeners() {
           seconds: payload.remainingSeconds,
           hintCost: payload.hintCost,
           letterPrices: payload.letterPrices,
+          hintSpend: payload.hintSpend,
+          hintBudget: payload.hintBudget,
         });
       }
     };

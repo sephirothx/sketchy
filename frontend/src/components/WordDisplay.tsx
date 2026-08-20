@@ -12,9 +12,11 @@ interface WordDisplayProps {
   revealedWord?: string | null;
   hintMode?: HintMode;
   canBuyHint?: boolean;
-  myScore?: number;
   nextHintCost?: number | null;
   letterPrices?: Record<string, number> | null;
+  /** Points already committed to hints this turn, and the ceiling on them. */
+  hintSpend?: number;
+  hintBudget?: number;
 }
 
 // tightly spaced blanks per word, followed by each word's letter count (in
@@ -87,9 +89,10 @@ export function WordDisplay({
   revealedWord,
   hintMode = "none",
   canBuyHint = false,
-  myScore = 0,
   nextHintCost = null,
   letterPrices = null,
+  hintSpend = 0,
+  hintBudget = 300,
 }: WordDisplayProps) {
   const { notify } = useToast();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -128,13 +131,29 @@ export function WordDisplay({
 
   const canBuy = hintMode === "purchase" && canBuyHint && !isDrawer && !revealedWord && nextHintCost != null;
   const canBuyWheel = hintMode === "wheel" && canBuyHint && !isDrawer && !revealedWord && letterPrices != null;
+  // Hints are bought on credit against this turn's guess, so what limits them
+  // is the turn's budget, not the running score.
+  const remaining = hintBudget - hintSpend;
 
   return (
     <div className="word-display">
-      {canBuy && (
-        <p className="hint-price">
-          Click a blank to reveal it - costs <strong>{nextHintCost}</strong> pts
-          {myScore < nextHintCost && <span className="hint-price-warning"> (not enough points)</span>}
+      {(canBuy || canBuyWheel) && (
+        <p className="hint-meta">
+          {canBuy && (
+            nextHintCost > remaining ? (
+              <span className="hint-price-warning">Budget spent</span>
+            ) : (
+              <span className="hint-price">Next hint: {nextHintCost}</span>
+            )
+          )}
+          {hintSpend > 0 && (
+            <span
+              className="hint-spend-total"
+              title="Deducted from your score if you guess the word"
+            >
+              Total: {hintSpend}
+            </span>
+          )}
         </p>
       )}
       {revealedWord ? (
@@ -146,7 +165,7 @@ export function WordDisplay({
           {renderMaskedWord(
             maskedWord,
             canBuy ? {
-              canAfford: myScore >= nextHintCost,
+              canAfford: nextHintCost <= remaining,
               cost: nextHintCost,
               busy: pendingAction !== null,
               onBuy: (slot) => void runAction(`hint:${slot}`, "buy_hint", { slot }, "buy the hint"),
@@ -156,7 +175,7 @@ export function WordDisplay({
       )}
       {canBuyWheel && (
         <div className="wheel-hint-panel">
-          <p className="hint-price">Buy a letter to reveal every occurrence:</p>
+          <p className="hint-wheel-label">Buy a letter - reveals every match</p>
           <div className="wheel-letter-grid">
             {Object.entries(letterPrices)
               .sort(([a], [b]) => a.localeCompare(b))
@@ -165,7 +184,7 @@ export function WordDisplay({
                   key={letter}
                   type="button"
                   className="wheel-letter-btn"
-                  disabled={myScore < price || pendingAction !== null}
+                  disabled={price > remaining || pendingAction !== null}
                   title={`Buy "${letter.toUpperCase()}" for ${price} points`}
                   onClick={() => void runAction(`letter:${letter}`, "buy_wheel_letter", { letter }, "buy the letter hint")}
                 >

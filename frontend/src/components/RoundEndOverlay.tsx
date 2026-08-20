@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RoundEndedPayload, RoundScoreEntry } from "../types";
+import type { GuessBreakdown, RoundEndedPayload, RoundScoreEntry } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 
 interface RoundEndOverlayProps {
@@ -10,6 +10,8 @@ interface RoundEndOverlayProps {
   guesses?: RoundEndedPayload["guesses"];
   scores: RoundScoreEntry[];
   showScores?: boolean;
+  /** How my own turn score was arrived at, when I bought hints this turn. */
+  myBreakdown?: GuessBreakdown | null;
 }
 
 // Must match the height of .round-score-row in App.css - used to compute how
@@ -38,6 +40,7 @@ export function RoundEndOverlay({
   guesses = [],
   scores,
   showScores = true,
+  myBreakdown = null,
 }: RoundEndOverlayProps) {
   // Rows render in their final (new-rank) order the whole time, but start
   // visually offset to where they *used* to rank. After a short pause (so
@@ -67,7 +70,21 @@ export function RoundEndOverlay({
         <p className="round-end-word">
           The word was <strong>{word}</strong>
         </p>
-        {showScores && mine && <p className="round-personal-result">Your round: <strong>{mine.delta >= 0 ? `+${mine.delta}` : mine.delta} points</strong> · now #{mine.newRank}</p>}
+        {showScores && mine && (
+          <p className="round-personal-result">
+            Your round:{" "}
+            {myBreakdown && myBreakdown.hintSpend > 0 ? (
+              <strong>
+                +{myBreakdown.basePoints}{" "}
+                <span className="round-hint-debt">-{myBreakdown.hintSpend} hints</span> ={" "}
+                {myBreakdown.points} points
+              </strong>
+            ) : (
+              <strong>{mine.delta >= 0 ? `+${mine.delta}` : mine.delta} points</strong>
+            )}{" "}
+            · now #{mine.newRank}
+          </p>
+        )}
         {guesses.length > 0 ? (
           <>
             <h4 className="round-guesses-heading">Correct guesses</h4>
