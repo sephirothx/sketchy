@@ -252,12 +252,22 @@ The `mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override
 the port with `PORT=<number>` when needed.
 
 The canvas-history benchmarks construct deterministic path-heavy, shape-heavy,
-fill-heavy, mixed, and theoretical-maximum histories. The Python benchmark
-reports packed payload, retained server memory, and encode/decode costs. The
-browser benchmark runs the production decoder and renderer for cold late-join
-and repeated reconnect-style replay; expensive fill/mixed histories are evenly
-sampled and clearly reported as diagnostic projections rather than full-run
-timings.
+fill-heavy, fill-bounded, realistic, mixed, and theoretical-maximum histories.
+The Python benchmark reports packed payload, retained server memory, and
+encode/decode costs. The browser benchmark runs the production decoder and
+renderer for cold late-join and repeated reconnect-style replay; expensive
+fill/mixed histories are evenly sampled and clearly reported as diagnostic
+projections rather than full-run timings.
+
+Read the fill fixtures as a pair. `fill-heavy` is a ceiling, not a workload: it
+fills an empty canvas and never repeats a colour, so every fill repaints all
+480,000 pixels, which is the most a client could ever ask of a replay rather
+than what one costs. `fill-bounded` is the same fill count with the canvas
+ruled into cells first, and runs an order of magnitude cheaper, because a real
+fill lands inside something once anything has been drawn. `realistic` is a busy
+drawing rather than a limit, and is the fixture to set a latency budget
+against. `fill-bounded` and `realistic` are replayed whole rather than
+sampled, so neither of their numbers is a projection.
 
 `game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 
