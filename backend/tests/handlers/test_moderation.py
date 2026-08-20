@@ -213,3 +213,120 @@ async def test_votes_removed_when_player_leaves_or_disconnects():
     # P1 disconnects -> P1's votes are removed from P2
     await disconnect("p1-sid")
     assert p1.id not in p2.afk_votes
+
+
+async def _drain_phase_timer(timers, room_id: str) -> None:
+    timer = timers.phase_timers.pop(room_id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+def _afk_room_on_its_final_turn():
+    """A three-player, one-round game sitting on turn 3 of 3, still choosing."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    p1 = room_manager.add_player(room, "P1")
+    p2 = room_manager.add_player(room, "P2")
+    p3 = room_manager.add_player(room, "P3")
+    p1.sid, p2.sid, p3.sid = "p1-sid", "p2-sid", "p3-sid"
+
+    room.state = "playing"
+    room.game = Game(turn_order=[p1.id, p2.id, p3.id], rounds_total=1)
+    for _ in range(3):
+        room.game.start_next_turn(
+            canvas_generation=room.allocate_canvas_generation()
+        )
+    assert room.game.is_finished()
+    assert room.game.current_drawer == p3.id
+    assert room.game.phase == Phase.CHOOSING_WORD
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sessions = {
+        "p1-sid": {"room_id": room.id, "player_id": p1.id},
+        "p2-sid": {"room_id": room.id, "player_id": p2.id},
+        "p3-sid": {"room_id": room.id, "player_id": p3.id},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+    return room_manager, room, (p1, p2, p3), sio, ctx
+
+
+def _emitted(sio, event: str) -> bool:
+    return any(call.args[0] == event for call in sio.emit.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_afk_toggle_by_final_drawer_ends_the_game_instead_of_overrunning():
+    """Going AFK while choosing the last word must not buy the room a bonus turn."""
+    _, room, (_, _, p3), sio, ctx = _afk_room_on_its_final_turn()
+
+    await sio.handlers["/"]["toggle_afk"]("p3-sid", {"afk": True})
+
+    assert p3.is_afk is True
+    assert room.game is None
+    assert room.state == "waiting"
+    assert _emitted(sio, "game_ended")
+    # Advancing instead would have wrapped the rotation and reported round 2
+    # of a one-round game.
+    assert not _emitted(sio, "turn_starting")
+    # Ending never reaches _start_turn, so nothing else retires the pending
+    # word-choice timer.
+    assert room.id not in ctx.timers.phase_timers
+
+
+@pytest.mark.asyncio
+async def test_vote_afk_on_final_drawer_ends_the_game_instead_of_overrunning():
+    """The voted-AFK path has to end the game on the last turn as well."""
+    _, room, (_, _, p3), sio, ctx = _afk_room_on_its_final_turn()
+    vote_player = sio.handlers["/"]["vote_player"]
+
+    await vote_player("p1-sid", {"targetPlayerId": p3.id, "action": "afk"})
+    assert room.game is not None, "one vote is short of the majority"
+
+    await vote_player("p2-sid", {"targetPlayerId": p3.id, "action": "afk"})
+
+    assert p3.is_afk is True
+    assert room.game is None
+    assert room.state == "waiting"
+    assert _emitted(sio, "game_ended")
+    assert not _emitted(sio, "turn_starting")
+    assert room.id not in ctx.timers.phase_timers
+
+
+@pytest.mark.asyncio
+async def test_afk_toggle_mid_game_still_advances_to_the_next_turn():
+    """The fix must not end games early: only the final turn ends the game."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    p1 = room_manager.add_player(room, "P1")
+    p2 = room_manager.add_player(room, "P2")
+    p3 = room_manager.add_player(room, "P3")
+    p1.sid, p2.sid, p3.sid = "p1-sid", "p2-sid", "p3-sid"
+
+    room.state = "playing"
+    room.game = Game(turn_order=[p1.id, p2.id, p3.id], rounds_total=2)
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    assert not room.game.is_finished()
+    assert room.game.current_drawer == p1.id
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        side_effect=lambda sid: {"room_id": room.id, "player_id": p1.id}
+    )
+    sio.emit = AsyncMock()
+
+    await sio.handlers["/"]["toggle_afk"]("p1-sid", {"afk": True})
+
+    assert room.game is not None
+    assert room.state == "playing"
+    assert room.game.turn_index == 1
+    assert room.game.current_drawer == p2.id
+    assert room.game.phase == Phase.CHOOSING_WORD
+    assert _emitted(sio, "turn_starting")
+    assert not _emitted(sio, "game_ended")
+
+    await _drain_phase_timer(ctx.timers, room.id)

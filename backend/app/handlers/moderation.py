@@ -30,7 +30,7 @@ async def toggle_afk(ctx: HandlerContext, sid, data=None):
     if room.game and room.state == "playing":
         if player.is_afk and player.id == room.game.current_drawer:
             if room.game.phase == Phase.CHOOSING_WORD:
-                await ctx.game_flow._start_turn(room)
+                await ctx.game_flow._abandon_current_turn(room)
             elif room.game.phase == Phase.DRAWING:
                 await ctx.game_flow._end_round(room)
         else:
@@ -108,7 +108,7 @@ async def vote_player(ctx: HandlerContext, sid, data):
             if room.game and room.state == "playing":
                 if target.id == room.game.current_drawer:
                     if room.game.phase == Phase.CHOOSING_WORD:
-                        await ctx.game_flow._start_turn(room)
+                        await ctx.game_flow._abandon_current_turn(room)
                     elif room.game.phase == Phase.DRAWING:
                         await ctx.game_flow._end_round(room)
                 else:
