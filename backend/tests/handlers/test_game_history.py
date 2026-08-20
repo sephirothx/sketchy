@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import socketio
@@ -10,6 +10,7 @@ import socketio
 from app.game import MAX_GUESS_POINTS, MIN_GUESS_POINTS, Game, Phase
 from app.handlers import register_all_handlers as register_handlers
 from app.rooms import RoomManager
+from app.services import game_flow
 from tests.fake_game_history_repo import FakeGameHistoryRepository
 
 pytestmark = pytest.mark.asyncio
@@ -28,10 +29,21 @@ def build_room(*, rounds: int = 1, accounts: dict[str, str | None] | None = None
     return room_manager, room, players
 
 
-def build_context(room_manager, history_repo):
+def build_context(room_manager, history_repo, word_list_repo=None, timeline=None):
     sio = socketio.AsyncServer(async_mode="asgi")
-    ctx = register_handlers(sio, room_manager, game_history_repo=history_repo)
-    sio.emit = AsyncMock()
+    ctx = register_handlers(
+        sio,
+        room_manager,
+        game_history_repo=history_repo,
+        word_list_repo=word_list_repo,
+    )
+    if timeline is None:
+        sio.emit = AsyncMock()
+    else:
+        async def _record(event, *_args, **_kwargs):
+            timeline.append(("emit", event))
+
+        sio.emit = AsyncMock(side_effect=_record)
     sio.get_session = AsyncMock(return_value=None)
     sio.save_session = AsyncMock()
     return ctx
@@ -380,3 +392,91 @@ async def test_history_is_skipped_entirely_without_a_repository():
     await play_to_completion(ctx, room, players)
 
     assert room.state == "waiting"
+
+
+class FakeWordListRepository:
+    """Records metric writes, and can stand in for a locked or failing database."""
+
+    def __init__(self, *, timeline=None, hang=False, failing_slug=None):
+        self.calls: list[tuple] = []
+        self._timeline = timeline if timeline is not None else []
+        self._hang = hang
+        self._failing_slug = failing_slug
+
+    async def _enter(self, slug: str) -> None:
+        if self._hang:
+            await asyncio.sleep(3600)
+        if slug == self._failing_slug:
+            raise RuntimeError(f"word list '{slug}' is unavailable")
+
+    async def increment_word_offers(self, word_list_slug, word_texts):
+        await self._enter(word_list_slug)
+        self.calls.append(("offers", word_list_slug))
+        self._timeline.append(("word", word_list_slug))
+
+    async def increment_word_stats(
+        self, word_list_slug, word_text, correct_guesses, total_guessers
+    ):
+        await self._enter(word_list_slug)
+        self.calls.append(("stats", word_list_slug, word_text))
+        self._timeline.append(("word", word_list_slug))
+
+
+def emitted_payload(ctx, event: str):
+    for call in ctx.sio.emit.await_args_list:
+        if call.args[0] == event:
+            return call.args[1]
+    return None
+
+
+async def test_game_ended_is_emitted_before_any_word_usage_is_written():
+    """Nothing a player is waiting to see may sit behind the metric writes."""
+    timeline: list[tuple] = []
+    room_manager, room, players = build_room(rounds=1)
+    room.word_list_slugs = ["english_standard", "english_extended"]
+    words = FakeWordListRepository(timeline=timeline)
+    ctx = build_context(
+        room_manager, FakeGameHistoryRepository(), words, timeline=timeline
+    )
+
+    await play_to_completion(ctx, room, players)
+
+    assert ("emit", "game_ended") in timeline
+    assert words.calls, "the metrics still have to be recorded"
+    first_write = next(i for i, entry in enumerate(timeline) if entry[0] == "word")
+    assert timeline.index(("emit", "game_ended")) < first_write
+    assert timeline.index(("emit", "room_state")) < first_write
+
+
+async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
+    """A locked database must cost the counters, not the room."""
+    room_manager, room, players = build_room(rounds=1)
+    room.word_list_slugs = ["english_standard"]
+    words = FakeWordListRepository(hang=True)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
+
+    with patch.object(game_flow, "WORD_USAGE_WRITE_TIMEOUT_SECONDS", 0.05):
+        await play_to_completion(ctx, room, players)
+
+    assert words.calls == [], "the hung writes never landed"
+    # The room was still told the game ended, with the real standings rather
+    # than the blank list a racing `start_game` would have left behind.
+    payload = emitted_payload(ctx, "game_ended")
+    assert payload is not None
+    assert [entry["nickname"] for entry in payload["scores"]]
+    assert room.state == "waiting"
+    assert room.game is None
+
+
+async def test_one_unavailable_word_list_does_not_cost_the_others_their_counters():
+    """The per-write guard has to survive being wrapped in a timeout."""
+    room_manager, room, players = build_room(rounds=1)
+    room.word_list_slugs = ["broken", "english_standard"]
+    words = FakeWordListRepository(failing_slug="broken")
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
+
+    await play_to_completion(ctx, room, players)
+
+    assert all(call[1] == "english_standard" for call in words.calls)
+    # Two turns in a one-round two-player game, each writing offers and stats.
+    assert len(words.calls) == 4

@@ -58,6 +58,11 @@ RECONNECT_GRACE_SECONDS = 30
 # Long enough for a healthy write on a loaded server, short enough that a hung
 # database cannot pin the coroutine that ends a game.
 HISTORY_WRITE_TIMEOUT_SECONDS = 10
+# Word-usage metrics are one statement per turn per word list rather than a
+# single transaction, so they get their own budget - but the same ceiling, so
+# the two post-game writes together cannot pin the coroutine for longer than a
+# player would wait before reloading anyway.
+WORD_USAGE_WRITE_TIMEOUT_SECONDS = 10
 
 class GameFlowService:
     """Coordinate workflows that cross handler domains without owning registration."""
@@ -512,6 +517,59 @@ class GameFlowService:
             except Exception:
                 logger.exception("Failed to persist game history for room %s", room.id)
 
+        async def _record_word_usage(
+            room: Room,
+            game: Game,
+            word_list_slugs: list[str],
+        ) -> None:
+            """Fold a finished game's prompts into the word-list metrics.
+
+            Runs after the room has been told the game ended, and is bounded,
+            for the same reasons as `_persist_game_history`: nothing a player
+            can see depends on these counters, and this walks one statement per
+            turn per list rather than a single transaction, so a database that
+            is slow or locked has all the more room to hold a room open.
+
+            Each write is guarded individually so one bad list does not cost
+            the rest their counters, while the timeout still bounds the walk as
+            a whole. A cancelled walk leaves the writes it already committed,
+            which is what the per-write transactions mean anyway.
+            """
+            if not ctx.word_list_repo or not word_list_slugs:
+                return
+
+            async def _write() -> None:
+                for turn in game.completed_turns:
+                    for slug in word_list_slugs:
+                        try:
+                            if turn.offered_words:
+                                await ctx.word_list_repo.increment_word_offers(
+                                    slug, turn.offered_words
+                                )
+                            if turn.chosen_word:
+                                await ctx.word_list_repo.increment_word_stats(
+                                    slug,
+                                    turn.chosen_word,
+                                    turn.correct_guess_count,
+                                    turn.total_guesser_count,
+                                )
+                        except Exception:
+                            logger.exception(
+                                "Failed to update word usage metrics for slug '%s'",
+                                slug,
+                            )
+
+            try:
+                await asyncio.wait_for(
+                    _write(), timeout=WORD_USAGE_WRITE_TIMEOUT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Timed out recording word usage for room %s after %ss",
+                    room.id,
+                    WORD_USAGE_WRITE_TIMEOUT_SECONDS,
+                )
+
         async def _finish_or_next(room: Room) -> None:
             game = room.game
             assert game is not None
@@ -528,6 +586,10 @@ class GameFlowService:
                     if ctx.game_history_repo
                     else None
                 )
+                # Snapshotted for the same reason: the room is an editable
+                # waiting room again by the time the metrics are written, so
+                # the host can change its word lists out from under them.
+                word_list_slugs = list(room.word_list_slugs)
                 timer_manager.cancel_restart_timer(room.id)
                 room.restart_vote = None
                 room.restart_vote_cooldown_until = 0
@@ -544,23 +606,9 @@ class GameFlowService:
                     for p in sorted(room.player_list(), key=lambda p: -p.score)
                 ]
 
-                # Update word usage tracking metrics in DB
-                if ctx.word_list_repo and room.word_list_slugs:
-                    for turn in game.completed_turns:
-                        for slug in room.word_list_slugs:
-                            try:
-                                if turn.offered_words:
-                                    await ctx.word_list_repo.increment_word_offers(slug, turn.offered_words)
-                                if turn.chosen_word:
-                                    await ctx.word_list_repo.increment_word_stats(
-                                        slug,
-                                        turn.chosen_word,
-                                        turn.correct_guess_count,
-                                        turn.total_guesser_count,
-                                    )
-                            except Exception:
-                                logger.exception("Failed to update word usage metrics for slug '%s'", slug)
-
+                # No await between the snapshot above and this emit, so a
+                # `start_game` cannot land in between and blank the scores the
+                # room is about to be shown.
                 await sio.emit(
                     "game_ended",
                     {
@@ -573,6 +621,7 @@ class GameFlowService:
                 # Last, so that nothing a player is waiting to see is behind a
                 # database round trip.
                 await _persist_game_history(room, history)
+                await _record_word_usage(room, game, word_list_slugs)
             else:
                 await _start_turn(room)
 
