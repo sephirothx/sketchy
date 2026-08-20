@@ -160,6 +160,42 @@ export function canFillWithinBudget(actions: DecodedCanvasAction[]): boolean {
     > REPLAY_WORK_BY_KIND.fill;
 }
 
+/**
+ * How many path points this turn has spent, against MAX_CANVAS_POINTS.
+ *
+ * A second budget, and orthogonal to the replay one: points ride inside a
+ * path action, so they cost no replay work at all. A drawer can exhaust this
+ * one with a hundred long strokes while barely touching the other, which is
+ * why the fill affordance does not cover it.
+ */
+export function canvasPointCount(actions: DecodedCanvasAction[]): number {
+  let points = 0;
+  for (const action of actions) {
+    if (action.kind === "path") points += action.points.length;
+  }
+  return points;
+}
+
+/** Whether a stroke can still be started at all. */
+export function canStartStrokeWithinBudget(
+  actions: DecodedCanvasAction[],
+): boolean {
+  return canvasPointCount(actions) < MAX_CANVAS_POINTS;
+}
+
+/**
+ * Whether this many more points still fit.
+ *
+ * All of them or none: the server refuses a batch whole rather than taking
+ * part of it, so a client that kept the ones that fit would diverge from it.
+ */
+export function pointsFitWithinBudget(
+  actions: DecodedCanvasAction[],
+  count: number,
+): boolean {
+  return canvasPointCount(actions) + count <= MAX_CANVAS_POINTS;
+}
+
 function isRevision(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }

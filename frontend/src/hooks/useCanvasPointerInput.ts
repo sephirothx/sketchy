@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import {
   CANVAS_COORDINATE_SCALE,
@@ -58,6 +59,12 @@ export function useCanvasPointerInput(
     tool,
     penCursor,
   } = settings;
+  // Painting locally past the point budget would put pixels on screen that
+  // the server never accepted, and they would vanish at the next replay. Read
+  // straight from the store: the handlers below are rebuilt every render, so
+  // they always close over the current answer.
+  const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
+
   const activePointerIdRef = useRef<number | null>(null);
   const pendingPointsRef = useRef<StrokePoint[]>([]);
   const lastPointRef = useRef<StrokePoint | null>(null);
@@ -194,6 +201,10 @@ export function useCanvasPointerInput(
       clearPreview();
       drawCircleCursorPreview(point, brushWidth);
     }
+    if ((tool === "pen" || tool === "eraser") && !strokeAvailable) {
+      activePointerIdRef.current = null;
+      return;
+    }
     inputActiveRef.current = true;
     lastPointRef.current = point;
     if (tool === "pen" || tool === "eraser") {
@@ -231,6 +242,12 @@ export function useCanvasPointerInput(
     }
     if (!inputActiveRef.current || tool === "fill") return;
     if (tool === "pen" || tool === "eraser") {
+      if (!strokeAvailable) {
+        // The budget ran out under the pen. Close the stroke here so the
+        // drawing stops in the same place on every screen.
+        handlePointerUp(event);
+        return;
+      }
       if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point);
       lastPointRef.current = point;
       pendingPointsRef.current.push(point);

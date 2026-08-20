@@ -132,11 +132,17 @@ export function Toolbar({
   recordRender("toolbar");
   const isMobile = useMediaQuery("(max-width: 900px)");
   const fillAvailable = useCanvasBudgetStore((state) => state.fillAvailable);
-  const disabledReason = (value: DrawTool): string | null => (
-    value === "fill" && !fillAvailable
-      ? "Fill is unavailable for the rest of this turn"
-      : null
-  );
+  const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
+  const disabledReason = (value: DrawTool): string | null => {
+    if (value === "fill" && !fillAvailable) {
+      return "Fill is unavailable for the rest of this turn";
+    }
+    // Shapes cost no points, so they outlive the pen.
+    if ((value === "pen" || value === "eraser") && !strokeAvailable) {
+      return "Drawing by hand is unavailable for the rest of this turn";
+    }
+    return null;
+  };
   const isCustomColor = !COLORS.includes(color);
   const activeColor = tool === "eraser" ? "#6c757d" : color;
   const [sizePickerOpen, setSizePickerOpen] = useState(false);
