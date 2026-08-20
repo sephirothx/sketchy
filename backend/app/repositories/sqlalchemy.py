@@ -1,6 +1,8 @@
 """SQLAlchemy implementations of domain repository interfaces."""
 from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, case, distinct, func, select, update
@@ -38,7 +40,9 @@ from app.repositories.interfaces import (
     UsernameTakenError,
     WordListRepository,
     WordListSummary,
+    WordPickTotals,
     WordStatsSummary,
+    WordUsage,
 )
 
 MAX_PAGINATION_LIMIT = 100
@@ -647,62 +651,68 @@ class SqlAlchemyWordListRepository(WordListRepository):
             await session.refresh(wl)
             return _to_word_list_summary(wl)
 
-    async def increment_word_offers(
+    async def record_word_usage(
         self,
-        word_list_slug: str,
-        word_texts: list[str],
+        word_list_slugs: Sequence[str],
+        usage: WordUsage,
     ) -> None:
-        if not word_texts:
+        """Apply a whole game's counters to every named list in one transaction.
+
+        Words carrying the same increment are updated together, so the cost is
+        a handful of statements rather than one per word per list. A game ends
+        with as many turns as it had players and rounds, and this used to be a
+        commit apiece.
+        """
+        slugs = list(word_list_slugs)
+        if not slugs or not usage:
             return
         async with self._session_factory() as session:
             async with session.begin():
-                wl_stmt = select(WordList.id).where(WordList.slug == word_list_slug)
-                wl_id = (await session.execute(wl_stmt)).scalar_one_or_none()
-                if not wl_id:
+                list_ids = (
+                    await session.execute(
+                        select(WordList.id).where(WordList.slug.in_(slugs))
+                    )
+                ).scalars().all()
+                if not list_ids:
                     return
 
-                lower_texts = [t.strip().lower() for t in word_texts]
-                stmt = (
-                    update(Word)
-                    .where(
-                        and_(
-                            Word.word_list_id == wl_id,
-                            Word.text.in_(lower_texts),
+                offers_by_count: dict[int, list[str]] = defaultdict(list)
+                for text, count in usage.offers.items():
+                    offers_by_count[count].append(text)
+                for count, texts in offers_by_count.items():
+                    await session.execute(
+                        update(Word)
+                        .where(
+                            and_(
+                                Word.word_list_id.in_(list_ids),
+                                Word.text.in_(texts),
+                            )
+                        )
+                        .values(offer_count=Word.offer_count + count)
+                    )
+
+                picks_by_totals: dict[WordPickTotals, list[str]] = defaultdict(list)
+                for text, totals in usage.picks.items():
+                    picks_by_totals[totals].append(text)
+                for totals, texts in picks_by_totals.items():
+                    await session.execute(
+                        update(Word)
+                        .where(
+                            and_(
+                                Word.word_list_id.in_(list_ids),
+                                Word.text.in_(texts),
+                            )
+                        )
+                        .values(
+                            pick_count=Word.pick_count + totals.picks,
+                            correct_guess_count=(
+                                Word.correct_guess_count + totals.correct_guesses
+                            ),
+                            total_guesser_count=(
+                                Word.total_guesser_count + totals.total_guessers
+                            ),
                         )
                     )
-                    .values(offer_count=Word.offer_count + 1)
-                )
-                await session.execute(stmt)
-
-    async def increment_word_stats(
-        self,
-        word_list_slug: str,
-        word_text: str,
-        correct_guesses: int,
-        total_guessers: int,
-    ) -> None:
-        async with self._session_factory() as session:
-            async with session.begin():
-                wl_stmt = select(WordList.id).where(WordList.slug == word_list_slug)
-                wl_id = (await session.execute(wl_stmt)).scalar_one_or_none()
-                if not wl_id:
-                    return
-
-                stmt = (
-                    update(Word)
-                    .where(
-                        and_(
-                            Word.word_list_id == wl_id,
-                            Word.text == word_text.strip().lower(),
-                        )
-                    )
-                    .values(
-                        pick_count=Word.pick_count + 1,
-                        correct_guess_count=Word.correct_guess_count + correct_guesses,
-                        total_guesser_count=Word.total_guesser_count + total_guessers,
-                    )
-                )
-                await session.execute(stmt)
 
     async def get_word_stats(
         self,

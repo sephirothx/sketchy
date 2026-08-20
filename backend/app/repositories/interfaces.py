@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -206,6 +207,35 @@ class WordStatsSummary:
     correct_guess_ratio: float
 
 
+@dataclass(frozen=True, slots=True)
+class WordPickTotals:
+    """What being drawn cost one word over a whole game.
+
+    More than one turn can land on the same word: a pool too small to keep
+    excluding what it has already used starts offering repeats.
+    """
+
+    picks: int
+    correct_guesses: int
+    total_guessers: int
+
+
+@dataclass(frozen=True, slots=True)
+class WordUsage:
+    """One finished game's effect on a word list's counters.
+
+    Keyed by the word as stored - trimmed and lower-cased - so the repository
+    matches rows without re-deriving it. Aggregated across the game's turns,
+    which is what lets the whole game be written in a few statements.
+    """
+
+    offers: Mapping[str, int]
+    picks: Mapping[str, WordPickTotals]
+
+    def __bool__(self) -> bool:
+        return bool(self.offers or self.picks)
+
+
 class UserRepository(ABC):
     """Data access boundary for user profiles and accounts."""
 
@@ -346,23 +376,17 @@ class WordListRepository(ABC):
         ...
 
     @abstractmethod
-    async def increment_word_offers(
+    async def record_word_usage(
         self,
-        word_list_slug: str,
-        word_texts: list[str],
+        word_list_slugs: Sequence[str],
+        usage: WordUsage,
     ) -> None:
-        """Increment the offer_count for words presented as options to the drawer."""
-        ...
+        """Apply one finished game's offers and picks to every named list.
 
-    @abstractmethod
-    async def increment_word_stats(
-        self,
-        word_list_slug: str,
-        word_text: str,
-        correct_guesses: int,
-        total_guessers: int,
-    ) -> None:
-        """Increment pick count, correct guess count, and potential guesser count for a drawn word."""
+        One call for the whole game rather than one per word per list: this
+        runs at the moment a game ends, and a transaction per turn is the
+        difference between a handful of statements and dozens of commits.
+        """
         ...
 
     @abstractmethod

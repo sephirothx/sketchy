@@ -21,6 +21,8 @@ from app.repositories.interfaces import (
     RoundGuessInput,
     RoundRecordInput,
     UsernameTakenError,
+    WordPickTotals,
+    WordUsage,
 )
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -238,10 +240,18 @@ async def test_word_list_repository():
         slug_words = await repo.get_words_by_slugs(["standard"])
         assert slug_words == ["apple", "banana", "cherry"]
 
-        # 5. Increment offers
-        await repo.increment_word_offers("standard", ["apple", "banana", "dragon"])
-        # 6. Increment stats (pick and guess counts)
-        await repo.increment_word_stats("standard", "apple", correct_guesses=3, total_guessers=4)
+        # 5. Record one finished game's offers and picks
+        await repo.record_word_usage(
+            ["standard"],
+            WordUsage(
+                offers={"apple": 1, "banana": 1, "dragon": 1},
+                picks={
+                    "apple": WordPickTotals(
+                        picks=1, correct_guesses=3, total_guessers=4
+                    )
+                },
+            ),
+        )
 
         stats = await repo.get_word_stats("standard")
         apple_stat = next(s for s in stats if s.text == "apple")
@@ -366,5 +376,103 @@ async def test_save_game_persists_the_analytics_columns():
                 ).scalars()
             }
             assert played == {drawer.id: 2, guesser.id: 1}
+    finally:
+        await engine.dispose()
+
+
+async def _seed_two_lists(repo):
+    await repo.upsert_bundled(
+        slug="alpha",
+        name="Alpha",
+        description="",
+        language="en",
+        words=["apple", "banana"],
+        version=1,
+    )
+    await repo.upsert_bundled(
+        slug="beta",
+        name="Beta",
+        description="",
+        language="en",
+        words=["apple", "castle"],
+        version=1,
+    )
+
+
+def _stat(stats, text):
+    return next(entry for entry in stats if entry.text == text)
+
+
+async def test_word_usage_reaches_every_named_list_in_one_call():
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyWordListRepository(factory)
+        await _seed_two_lists(repo)
+
+        await repo.record_word_usage(
+            ["alpha", "beta"],
+            WordUsage(
+                offers={"apple": 3, "banana": 1, "castle": 1},
+                picks={
+                    "apple": WordPickTotals(
+                        picks=2, correct_guesses=5, total_guessers=8
+                    )
+                },
+            ),
+        )
+
+        for slug in ("alpha", "beta"):
+            stats = await repo.get_word_stats(slug)
+            apple = _stat(stats, "apple")
+            # A word offered three times over a game moves by three, not one.
+            assert apple.offer_count == 3
+            assert apple.pick_count == 2
+            assert apple.correct_guess_count == 5
+            assert apple.total_guesser_count == 8
+
+        # Words are only touched in the lists that actually contain them.
+        assert _stat(await repo.get_word_stats("alpha"), "banana").offer_count == 1
+        assert _stat(await repo.get_word_stats("beta"), "castle").offer_count == 1
+    finally:
+        await engine.dispose()
+
+
+async def test_a_slug_that_no_longer_exists_does_not_cost_the_others():
+    """A room outlives the lists it was created with; a deleted one is not fatal."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyWordListRepository(factory)
+        await _seed_two_lists(repo)
+
+        await repo.record_word_usage(
+            ["alpha", "gone-missing"],
+            WordUsage(
+                offers={"apple": 1},
+                picks={
+                    "apple": WordPickTotals(
+                        picks=1, correct_guesses=1, total_guessers=2
+                    )
+                },
+            ),
+        )
+
+        assert _stat(await repo.get_word_stats("alpha"), "apple").pick_count == 1
+        # And a call naming only missing lists is a no-op rather than an error.
+        await repo.record_word_usage(["gone-missing"], WordUsage(offers={"apple": 1}, picks={}))
+        assert _stat(await repo.get_word_stats("alpha"), "apple").offer_count == 1
+    finally:
+        await engine.dispose()
+
+
+async def test_recording_nothing_touches_no_counters():
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyWordListRepository(factory)
+        await _seed_two_lists(repo)
+
+        await repo.record_word_usage([], WordUsage(offers={"apple": 1}, picks={}))
+        await repo.record_word_usage(["alpha"], WordUsage(offers={}, picks={}))
+
+        assert _stat(await repo.get_word_stats("alpha"), "apple").offer_count == 0
     finally:
         await engine.dispose()

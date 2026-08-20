@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.db.models import Base
 from app.db.seed import seed_word_lists
 from app.game import Game, Phase
+from app.repositories.interfaces import WordPickTotals, WordUsage
 from app.repositories.sqlalchemy import SqlAlchemyWordListRepository
 from app.rooms import RoomManager
 
@@ -58,10 +59,19 @@ async def test_word_usage_tracking_metrics():
         repo = SqlAlchemyWordListRepository(factory)
         await seed_word_lists(repo)
 
-        # Offer words: "apple", "banana", "robot" in english_standard
-        await repo.increment_word_offers("english_standard", ["apple", "banana", "robot"])
-        # Pick "robot" and guess with 2 correct out of 3 potential
-        await repo.increment_word_stats("english_standard", "robot", correct_guesses=2, total_guessers=3)
+        # One game: "apple", "banana" and "robot" offered, "robot" drawn and
+        # guessed by 2 of 3 possible guessers.
+        await repo.record_word_usage(
+            ["english_standard"],
+            WordUsage(
+                offers={"apple": 1, "banana": 1, "robot": 1},
+                picks={
+                    "robot": WordPickTotals(
+                        picks=1, correct_guesses=2, total_guessers=3
+                    )
+                },
+            ),
+        )
 
         word_stats_list = await repo.get_word_stats("english_standard")
         stats = next((w for w in word_stats_list if w.text == "robot"), None)

@@ -22,7 +22,9 @@ from app.repositories.interfaces import (
     UsernameTakenError,
     WordListRepository,
     WordListSummary,
+    WordPickTotals,
     WordStatsSummary,
+    WordUsage,
 )
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -54,5 +56,7 @@ __all__ = [
     "UsernameTakenError",
     "WordListRepository",
     "WordListSummary",
+    "WordPickTotals",
     "WordStatsSummary",
+    "WordUsage",
 ]
