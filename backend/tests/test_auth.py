@@ -124,6 +124,69 @@ def test_rate_limiter_is_per_key():
     assert limiter.check("b") is True
 
 
+class FakeClock:
+    """A monotonic reading the test moves by hand."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+def test_clients_that_have_aged_out_stop_being_tracked():
+    """Every distinct caller used to leave a permanent entry behind."""
+    clock = FakeClock()
+    limiter = RateLimiter(limit=5, window_seconds=60, clock=clock)
+
+    for index in range(100):
+        assert limiter.check(f"visitor-{index}") is True
+    assert limiter.tracked_keys() == 100
+
+    # A whole window later, none of them can refuse anything any more.
+    clock.advance(61)
+    assert limiter.check("someone-else") is True
+    assert limiter.tracked_keys() == 1
+
+
+def test_a_client_still_inside_its_window_is_never_forgotten():
+    """Sweeping must not hand a saturated client a fresh allowance."""
+    clock = FakeClock()
+    limiter = RateLimiter(limit=2, window_seconds=60, clock=clock)
+
+    assert limiter.check("attacker") is True
+    assert limiter.check("attacker") is True
+    assert limiter.check("attacker") is False
+
+    # Long enough to trigger a sweep, but not to expire the attempts.
+    clock.advance(59)
+    for index in range(50):
+        limiter.check(f"noise-{index}")
+    assert limiter.check("attacker") is False, "the limit outlived the sweep"
+
+    # Only once the attempts themselves age out does the allowance return.
+    clock.advance(2)
+    assert limiter.check("attacker") is True
+
+
+def test_flooding_the_limiter_cannot_evict_a_saturated_bucket():
+    """A size cap would let a client buy its way out; ageing must not."""
+    clock = FakeClock()
+    limiter = RateLimiter(limit=1, window_seconds=300, clock=clock)
+
+    assert limiter.check("attacker") is True
+    assert limiter.check("attacker") is False
+
+    for index in range(5_000):
+        clock.advance(0.01)
+        limiter.check(f"flood-{index}")
+
+    assert limiter.check("attacker") is False
+
+
 # --- REST -----------------------------------------------------------------
 
 @pytest.mark.asyncio
