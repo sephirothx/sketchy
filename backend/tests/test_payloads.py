@@ -183,3 +183,40 @@ async def test_malformed_canvas_requests_do_not_partially_mutate_history():
     assert room.game.canvas.history == []
     assert room.game.canvas.sequence == 0
     sio.emit.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("update", "expected"),
+    (
+        ({"hideMaskedPrompt": True}, "none"),
+        ({"scoringMode": "none"}, "none"),
+        ({"scoringMode": "default"}, "wheel"),
+    ),
+)
+@pytest.mark.asyncio
+async def test_updating_settings_reapplies_the_hint_rule(update, expected):
+    """The rule has to be re-evaluated against the merged settings.
+
+    An update carries only the fields that changed, so turning scoring off on
+    its own has to disable the paid hints the room was already using - the
+    incoming payload never mentions them.
+    """
+    room_manager = RoomManager()
+    room = room_manager.create_room(
+        name="Room", scoring_mode="default", hint_mode="wheel"
+    )
+    host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
+    assert room.hint_mode == "wheel"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": host.id}
+    )
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["update_room_settings"]("host-sid", update)
+
+    assert response["ok"] is True
+    assert room.hint_mode == expected
