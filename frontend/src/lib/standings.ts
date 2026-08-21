@@ -77,3 +77,32 @@ export function rowStartOffsets(
   );
 }
 
+/**
+ * Whether the standings had an order before this turn.
+ *
+ * False on the first turn of a game, where every player comes in on zero and
+ * so shares first place. There is nothing to slide from and nobody has really
+ * lost ground, so the rows are introduced rather than rearranged.
+ */
+export function hasPreviousOrder(
+  entries: { previousRank: number }[],
+): boolean {
+  return entries.some((entry) => entry.previousRank !== entries[0].previousRank);
+}
+
+/** Milliseconds between one row entering and the next. */
+export const ENTRANCE_STAGGER_MS = 110;
+
+/**
+ * When each row enters, lowest place first so the list builds up to the leader.
+ *
+ * Entries arrive in final order, best first, so the delays run backwards: the
+ * last row starts immediately and the top row waits for everyone below it.
+ */
+export function entranceDelays(rowCount: number): number[] {
+  return Array.from(
+    { length: rowCount },
+    (_value, index) => (rowCount - 1 - index) * ENTRANCE_STAGGER_MS,
+  );
+}
+

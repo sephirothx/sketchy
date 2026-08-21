@@ -4,7 +4,10 @@ import test from "node:test";
 import {
   MAX_NAMED_WINNERS,
   competitionRanks,
+  ENTRANCE_STAGGER_MS,
   crownOutcome,
+  entranceDelays,
+  hasPreviousOrder,
   placementLabel,
   rowStartOffsets,
 } from "../src/lib/standings.ts";
@@ -104,4 +107,45 @@ test("a row never starts outside the list it belongs to", () => {
     const seat = index + offset;
     assert.ok(seat >= 0 && seat < entries.length, `row ${index} starts at ${seat}`);
   });
+});
+
+test("the first turn has no previous order to rearrange from", () => {
+  // Everyone comes in on zero, so everyone shares first place.
+  assert.equal(
+    hasPreviousOrder([
+      { previousRank: 1 },
+      { previousRank: 1 },
+      { previousRank: 1 },
+    ]),
+    false,
+  );
+});
+
+test("once anyone is ahead there is an order to rearrange", () => {
+  assert.equal(
+    hasPreviousOrder([{ previousRank: 1 }, { previousRank: 2 }]),
+    true,
+  );
+  // A tie further down still counts: someone is ahead of it.
+  assert.equal(
+    hasPreviousOrder([
+      { previousRank: 1 },
+      { previousRank: 2 },
+      { previousRank: 2 },
+    ]),
+    true,
+  );
+});
+
+test("rows enter lowest place first, building up to the leader", () => {
+  const delays = entranceDelays(3);
+  // Index 0 is the leader, so it waits the longest; the last row starts at once.
+  assert.deepEqual(delays, [2 * ENTRANCE_STAGGER_MS, ENTRANCE_STAGGER_MS, 0]);
+  assert.equal(delays[delays.length - 1], 0);
+  assert.ok(delays[0] > delays[delays.length - 1]);
+});
+
+test("a lone player waits for nobody", () => {
+  assert.deepEqual(entranceDelays(1), [0]);
+  assert.deepEqual(entranceDelays(0), []);
 });
