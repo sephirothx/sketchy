@@ -113,7 +113,7 @@ class GameRecord(Base):
         back_populates="game",
         cascade="all, delete-orphan",
     )
-    rounds: Mapped[list[RoundRecord]] = relationship(
+    turns: Mapped[list[TurnRecord]] = relationship(
         back_populates="game",
         cascade="all, delete-orphan",
     )
@@ -149,10 +149,10 @@ class GameParticipant(Base):
     user: Mapped[User] = relationship()
 
 
-class RoundRecord(Base):
+class TurnRecord(Base):
     """Individual round turn details within a finished game."""
 
-    __tablename__ = "round_records"
+    __tablename__ = "turn_records"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     game_id: Mapped[str] = mapped_column(
@@ -198,23 +198,23 @@ class RoundRecord(Base):
         Integer, default=0, server_default=text("0"), nullable=False
     )
 
-    game: Mapped[GameRecord] = relationship(back_populates="rounds")
+    game: Mapped[GameRecord] = relationship(back_populates="turns")
     drawer: Mapped[User] = relationship()
-    guesses: Mapped[list[RoundGuess]] = relationship(
-        back_populates="round_record",
+    guesses: Mapped[list[TurnGuess]] = relationship(
+        back_populates="turn_record",
         cascade="all, delete-orphan",
     )
 
 
-class RoundGuess(Base):
+class TurnGuess(Base):
     """Correct guess recorded for a player in a specific round."""
 
-    __tablename__ = "round_guesses"
+    __tablename__ = "turn_guesses"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    round_id: Mapped[str] = mapped_column(
+    turn_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("round_records.id", ondelete="CASCADE"),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -240,7 +240,7 @@ class RoundGuess(Base):
         Integer, default=0, server_default=text("0"), nullable=False
     )
 
-    round_record: Mapped[RoundRecord] = relationship(back_populates="guesses")
+    turn_record: Mapped[TurnRecord] = relationship(back_populates="guesses")
     user: Mapped[User] = relationship()
 
 

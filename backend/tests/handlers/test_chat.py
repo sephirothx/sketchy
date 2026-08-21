@@ -207,12 +207,12 @@ async def test_simultaneous_final_guesses_end_round_once():
 
     drawer_bonus = sum(room.game.guess_points.values())
     assert players[0].score == drawer_bonus
-    assert [call.args[0] for call in sio.emit.await_args_list].count("round_ended") == 1
-    round_ended_payload = next(
-        call.args[1] for call in sio.emit.await_args_list if call.args[0] == "round_ended"
+    assert [call.args[0] for call in sio.emit.await_args_list].count("turn_ended") == 1
+    turn_ended_payload = next(
+        call.args[1] for call in sio.emit.await_args_list if call.args[0] == "turn_ended"
     )
-    assert {guess["nickname"] for guess in round_ended_payload["guesses"]} == {"One", "Two"}
-    assert all(0 <= guess["seconds"] <= DRAWING_SECONDS for guess in round_ended_payload["guesses"])
+    assert {guess["nickname"] for guess in turn_ended_payload["guesses"]} == {"One", "Two"}
+    assert all(0 <= guess["seconds"] <= DRAWING_SECONDS for guess in turn_ended_payload["guesses"])
 
     timer = timers.phase_timers.pop(room.id)
     timer.cancel()

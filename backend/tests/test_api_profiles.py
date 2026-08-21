@@ -17,8 +17,8 @@ from app.db.models import Base
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
-    RoundGuessInput,
-    RoundRecordInput,
+    TurnGuessInput,
+    TurnRecordInput,
 )
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -74,7 +74,7 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
             GameParticipantInput(user_id=loser, final_score=100, final_rank=2),
         ],
         [
-            RoundRecordInput(
+            TurnRecordInput(
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=winner,
@@ -83,8 +83,8 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
             )
         ],
         [
-            RoundGuessInput(
-                round_index=0,
+            TurnGuessInput(
+                turn_index=0,
                 user_id=loser,
                 points_awarded=100,
                 guess_time_seconds=12.0,
@@ -178,7 +178,7 @@ async def test_history_page_size_is_bounded(env):
     assert (await http.get(f"/api/users/{ann.id}/games?offset=-1")).status_code == 422
 
 
-async def test_participants_see_the_round_by_round_detail(env):
+async def test_participants_see_the_turn_by_turn_detail(env):
     http, users, history, session_factory = env
     ann = await users.create_anonymous(display_name="Ann")
     bob = await users.create_anonymous(display_name="Bob")
@@ -188,11 +188,11 @@ async def test_participants_see_the_round_by_round_detail(env):
     body = (await http.get(f"/api/games/{game_id}")).json()
 
     assert body["roomName"] == "Studio 0"
-    assert len(body["rounds"]) == 1
-    assert body["rounds"][0]["word"] == "jackpot"
-    assert body["rounds"][0]["drawerDisplayName"] == "Ann"
-    assert body["rounds"][0]["guesses"][0]["displayName"] == "Bob"
-    assert body["rounds"][0]["guesses"][0]["pointsAwarded"] == 100
+    assert len(body["turns"]) == 1
+    assert body["turns"][0]["word"] == "jackpot"
+    assert body["turns"][0]["drawerDisplayName"] == "Ann"
+    assert body["turns"][0]["guesses"][0]["displayName"] == "Bob"
+    assert body["turns"][0]["guesses"][0]["pointsAwarded"] == 100
 
 
 async def test_a_stranger_cannot_read_the_words_of_a_game_they_did_not_play(env):

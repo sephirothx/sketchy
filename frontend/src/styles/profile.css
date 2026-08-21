@@ -208,7 +208,7 @@
 
 /* The round table is the one element that cannot shrink to a phone: it scrolls
    inside its own box rather than widening the page. */
-.profile-rounds {
+.profile-turns {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
@@ -216,22 +216,22 @@
   overflow-x: auto;
 }
 
-.profile-rounds th,
-.profile-rounds td {
+.profile-turns th,
+.profile-turns td {
   padding: 6px 10px;
   text-align: left;
   border-bottom: 1px solid #e2e8f0;
   white-space: nowrap;
 }
 
-.profile-rounds th {
+.profile-turns th {
   color: #64748b;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.profile-round-word {
+.profile-turn-prompt {
   font-weight: 700;
   color: #0f172a;
 }

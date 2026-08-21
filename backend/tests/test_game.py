@@ -248,7 +248,7 @@ def test_end_round_awards_drawer_bonus_per_guesser():
         game.submit_guess(token, game.word)
     bonus = game.end_round()
     assert bonus == 300 * len(others)
-    assert game.phase == Phase.ROUND_END
+    assert game.phase == Phase.TURN_RESULTS
 
 
 def test_end_round_is_idempotent():

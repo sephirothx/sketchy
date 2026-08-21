@@ -7,7 +7,7 @@ export interface ProfileStats {
   winRate: number;
   totalScore: number;
   averageScore: number;
-  roundsPlayed: number;
+  turnsPlayed: number;
   wordsGuessed: number;
   drawingsMade: number;
 }
@@ -41,7 +41,7 @@ export interface RoundGuess {
   guessTimeSeconds: number;
 }
 
-export interface GameRound {
+export interface GameTurn {
   roundNumber: number;
   turnNumber: number;
   drawerUserId: string;
@@ -51,7 +51,7 @@ export interface GameRound {
   guesses: RoundGuess[];
 }
 
-export type GameDetail = GameSummary & { rounds: GameRound[] };
+export type GameDetail = GameSummary & { turns: GameTurn[] };
 
 export const HISTORY_PAGE_SIZE = 10;
 

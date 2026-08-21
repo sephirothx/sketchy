@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { GuessBreakdown, RoundEndedPayload, RoundScoreEntry } from "../types";
+import type { GuessBreakdown, TurnEndedPayload, RoundScoreEntry } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 
 interface TurnResultsOverlayProps {
@@ -7,7 +7,7 @@ interface TurnResultsOverlayProps {
   drawerId: string;
   drawerBonus: number;
   myPlayerId: string | null;
-  guesses?: RoundEndedPayload["guesses"];
+  guesses?: TurnEndedPayload["guesses"];
   scores: RoundScoreEntry[];
   showScores?: boolean;
   /** How my own turn score was arrived at, when I bought hints this turn. */

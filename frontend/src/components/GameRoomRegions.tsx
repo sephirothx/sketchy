@@ -152,7 +152,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const totalRounds = useGameStore((state) => state.totalRounds);
   const phaseSeconds = useGameStore((state) => state.phaseSeconds);
   const phaseStartedAt = useGameStore((state) => state.phaseStartedAt);
-  const lastRoundResult = useGameStore((state) => state.lastRoundResult);
+  const lastTurnResult = useGameStore((state) => state.lastTurnResult);
   const spectatorsSeeSolution = useGameStore((state) => state.spectatorsSeeSolution);
   const me = useGameStore(selectMe);
   const drawerNickname = useGameStore((state) =>
@@ -171,8 +171,8 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
       ? splitMaskedPrompt(maskedWord).blanks.trim()
       : null);
   const solutionWord =
-    phase === "round_end"
-      ? lastRoundResult?.word ?? null
+    phase === "turn_results"
+      ? lastTurnResult?.word ?? null
       : isDrawerPerson && phase === "drawing"
         ? drawerWord
         : guessedWord
@@ -211,7 +211,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         <span>
           Round {roundNumber}/{totalRounds}
         </span>
-        {phase !== "round_end" && (
+        {phase !== "turn_results" && (
           <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
         )}
       </div>
@@ -220,7 +220,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         myWord={myWord}
         maskedWord={maskedWord}
         wordChoices={wordChoices}
-        revealedWord={phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord}
+        revealedWord={phase === "turn_results" ? lastTurnResult?.word ?? null : guessedWord}
         hintMode={hintMode}
         canBuyHint={phase === "drawing" && !amDrawer && !guessedWord}
         nextHintCost={nextHintCost}
@@ -245,13 +245,13 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           ) : null
         }
       />
-      {phase === "round_end" && lastRoundResult && (
+      {phase === "turn_results" && lastTurnResult && (
         <TurnResultsOverlay
-          word={lastRoundResult.word}
-          drawerId={lastRoundResult.drawerId}
-          drawerBonus={lastRoundResult.drawerBonus}
-          guesses={lastRoundResult.guesses}
-          scores={lastRoundResult.scores}
+          word={lastTurnResult.word}
+          drawerId={lastTurnResult.drawerId}
+          drawerBonus={lastTurnResult.drawerBonus}
+          guesses={lastTurnResult.guesses}
+          scores={lastTurnResult.scores}
           myPlayerId={playerId}
           showScores={scoringMode !== "none"}
           myBreakdown={lastGuessBreakdown}

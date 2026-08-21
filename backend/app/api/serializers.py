@@ -50,7 +50,7 @@ def stats_payload(stats: UserStats) -> dict:
         "winRate": stats.win_rate,
         "totalScore": stats.total_score,
         "averageScore": stats.average_score,
-        "roundsPlayed": stats.rounds_played,
+        "turnsPlayed": stats.turns_played,
         "wordsGuessed": stats.words_guessed,
         "drawingsMade": stats.drawings_made,
     }
@@ -84,7 +84,7 @@ def game_summary_payload(summary: GameSummary) -> dict:
 def game_detail_payload(detail: GameDetail) -> dict:
     return {
         **game_summary_payload(detail.summary),
-        "rounds": [
+        "turns": [
             {
                 "roundNumber": r.round_number,
                 "turnNumber": r.turn_number,
@@ -102,6 +102,6 @@ def game_detail_payload(detail: GameDetail) -> dict:
                     for g in r.guesses
                 ],
             }
-            for r in detail.rounds
+            for r in detail.turns
         ],
     }

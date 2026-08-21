@@ -291,7 +291,7 @@ async def test_sync_game_carries_the_running_hint_spend():
     assert sync["hintBudget"] == MAX_HINT_SPEND
 
 @pytest.mark.asyncio
-async def test_already_joined_socket_resyncs_round_end_overlay():
+async def test_already_joined_socket_resyncs_turn_results_overlay():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     drawer = room_manager.add_player(room, "Drawer")
@@ -318,11 +318,11 @@ async def test_already_joined_socket_resyncs_round_end_overlay():
         {"code": room.code, "nickname": drawer.nickname},
     )
 
-    round_ended_calls = [call for call in sio.emit.await_args_list if call.args[0] == "round_ended"]
+    turn_ended_calls = [call for call in sio.emit.await_args_list if call.args[0] == "turn_ended"]
     assert response["ok"] is True
-    assert round_ended_calls
-    assert round_ended_calls[0].kwargs.get("to") == "drawer-sid"
-    assert round_ended_calls[0].args[1]["word"] == room.game.word
+    assert turn_ended_calls
+    assert turn_ended_calls[0].kwargs.get("to") == "drawer-sid"
+    assert turn_ended_calls[0].args[1]["word"] == room.game.word
 
 @pytest.mark.asyncio
 async def test_session_ping_reports_phase_or_needs_rebind():

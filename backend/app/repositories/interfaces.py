@@ -60,7 +60,7 @@ class UserStats:
     win_rate: float = 0.0
     total_score: int = 0
     average_score: float = 0.0
-    rounds_played: int = 0
+    turns_played: int = 0
     words_guessed: int = 0
     drawings_made: int = 0
 
@@ -91,7 +91,7 @@ class GameParticipantInput:
 
 
 @dataclass(frozen=True)
-class RoundRecordInput:
+class TurnRecordInput:
     """Input payload for an individual turn/round in a game."""
 
     round_number: int
@@ -109,10 +109,10 @@ class RoundRecordInput:
 
 
 @dataclass(frozen=True)
-class RoundGuessInput:
+class TurnGuessInput:
     """Input payload for a correct guess in a round."""
 
-    round_index: int  # 0-based index matching the list of RoundRecordInput
+    turn_index: int  # 0-based index matching the list of TurnRecordInput
     user_id: str
     points_awarded: int
     guess_time_seconds: float
@@ -150,7 +150,7 @@ class GameSummary:
 
 
 @dataclass(frozen=True)
-class RoundGuessDetail:
+class TurnGuessDetail:
     """Detailed guess event in a past round."""
 
     user_id: str
@@ -160,7 +160,7 @@ class RoundGuessDetail:
 
 
 @dataclass(frozen=True)
-class RoundDetail:
+class TurnDetail:
     """Detailed view of a single turn in a past game."""
 
     round_number: int
@@ -169,15 +169,15 @@ class RoundDetail:
     drawer_display_name: str
     word: str
     duration_seconds: float
-    guesses: list[RoundGuessDetail] = field(default_factory=list)
+    guesses: list[TurnGuessDetail] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class GameDetail:
-    """Complete detail view of a past game including all rounds and guesses."""
+    """Complete detail view of a past game including all turns and guesses."""
 
     summary: GameSummary
-    rounds: list[RoundDetail] = field(default_factory=list)
+    turns: list[TurnDetail] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -313,10 +313,10 @@ class GameHistoryRepository(ABC):
         self,
         game_record: GameRecordInput,
         participants: list[GameParticipantInput],
-        rounds: list[RoundRecordInput],
-        guesses: list[RoundGuessInput],
+        turns: list[TurnRecordInput],
+        guesses: list[TurnGuessInput],
     ) -> str:
-        """Persist a completed game along with participants, rounds, and guesses in a single transaction."""
+        """Persist a completed game along with participants, turns, and guesses in a single transaction."""
         ...
 
     @abstractmethod

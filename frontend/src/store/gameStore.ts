@@ -10,7 +10,7 @@ import type {
   RoomStatePayload,
   RestartVoteState,
   GuessBreakdown,
-  RoundEndedPayload,
+  TurnEndedPayload,
   ScoringMode,
 } from "../types";
 
@@ -62,7 +62,7 @@ interface GameStore {
   lastGuessBreakdown: GuessBreakdown | null;
 
   messages: ChatMessage[];
-  lastRoundResult: RoundEndedPayload | null;
+  lastTurnResult: TurnEndedPayload | null;
   finalScores: GameEndedPayload["scores"] | null;
   drawingRecap: DrawingRecapMetadata[];
   error: string | null;
@@ -104,7 +104,7 @@ interface GameStore {
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
   }) => void;
-  endRound: (payload: RoundEndedPayload) => void;
+  endRound: (payload: TurnEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
   dismissGameEnd: () => void;
   setError: (error: string | null) => void;
@@ -128,7 +128,7 @@ const initialGameFields = {
   hintBudget: 300,
   lastGuessBreakdown: null as GuessBreakdown | null,
   messages: [] as ChatMessage[],
-  lastRoundResult: null as RoundEndedPayload | null,
+  lastTurnResult: null as TurnEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
   drawingRecap: [] as DrawingRecapMetadata[],
 };
@@ -210,7 +210,7 @@ export const useGameStore = create<GameStore>((set) => ({
       myWord: null,
       guessedWord: null,
       wordChoices: [],
-      lastRoundResult: null,
+      lastTurnResult: null,
     }),
   setMyWordChoices: (choices, seconds) =>
     set({ wordChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
@@ -248,8 +248,8 @@ export const useGameStore = create<GameStore>((set) => ({
     })),
   endRound: (payload) =>
     set((s) => ({
-      phase: "round_end",
-      lastRoundResult: payload,
+      phase: "turn_results",
+      lastTurnResult: payload,
       phaseSeconds: payload.seconds ?? 0,
       phaseStartedAt: Date.now(),
       players: s.players.map((p) => {

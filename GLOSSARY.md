@@ -158,12 +158,14 @@ and test IDs were brought in line in the change that emptied this section.
 Two categories deliberately still use the old words, and neither is a player-facing
 name:
 
-- **Wire and REST names** — the `round_end` phase and `round_ended` event, and the
-  `word`, `wordChoices`, `customWords`, and `wordListSlugs` payload keys, plus
-  `/api/word-lists`. Renaming these is a protocol change on both sides; the store
-  fields that mirror a payload key keep the key's name so the mapping stays obvious.
+- **Wire and REST names** — the `word`, `wordChoices`, `customWords`, and
+  `wordListSlugs` payload keys, plus `/api/word-lists`. Renaming these is a
+  protocol change on both sides; the store fields that mirror a payload key keep
+  the key's name so the mapping stays obvious.
   `backend/tests/test_wire_contract.py` holds the two sides to the same names, so
-  renaming one of these is allowed but half-renaming it is not.
+  renaming one of these is allowed but half-renaming it is not. The round/turn
+  names have already been carried through — the phase is `turn_results` and the
+  event is `turn_ended`, all the way into the `turn_records` table.
 - **Stored keys** — the `sketchy_pencursor` preference and the `pen` key binding.
   Renaming either would silently discard a setting a player had already chosen.
 

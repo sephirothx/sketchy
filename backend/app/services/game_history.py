@@ -13,8 +13,8 @@ from app.game import Game
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
-    RoundGuessInput,
-    RoundRecordInput,
+    TurnGuessInput,
+    TurnRecordInput,
 )
 from app.rooms import Room
 
@@ -25,7 +25,7 @@ from app.rooms import Room
 #
 # Note this counts seats that *played*, not seats still present. A player who
 # leaves mid-game remains a participant, so an opponent walking out does not
-# erase the rounds that were genuinely played.
+# erase the turns that were genuinely played.
 MIN_RECORDED_PARTICIPANTS = 2
 
 
@@ -35,8 +35,8 @@ class GameHistoryWrite:
 
     record: GameRecordInput
     participants: list[GameParticipantInput]
-    rounds: list[RoundRecordInput]
-    guesses: list[RoundGuessInput]
+    turns: list[TurnRecordInput]
+    guesses: list[TurnGuessInput]
 
 
 @dataclass
@@ -140,17 +140,17 @@ def build_game_history(
     if len(participants) < MIN_RECORDED_PARTICIPANTS:
         return None
 
-    rounds: list[RoundRecordInput] = []
-    guesses: list[RoundGuessInput] = []
+    turns: list[TurnRecordInput] = []
+    guesses: list[TurnGuessInput] = []
     for turn in game.completed_turns:
         drawer = seats.get(turn.drawer_token)
         if drawer is None:
-            # Nothing to hang the round off: `RoundRecord.drawer_user_id` is a
+            # Nothing to hang the turn off: `TurnRecord.drawer_user_id` is a
             # NOT NULL foreign key. The rest of the game still persists.
             continue
-        round_index = len(rounds)
-        rounds.append(
-            RoundRecordInput(
+        turn_index = len(turns)
+        turns.append(
+            TurnRecordInput(
                 round_number=turn.round_number,
                 turn_number=turn.turn_number,
                 drawer_user_id=drawer.user_id,
@@ -169,8 +169,8 @@ def build_game_history(
             if guesser is None:
                 continue
             guesses.append(
-                RoundGuessInput(
-                    round_index=round_index,
+                TurnGuessInput(
+                    turn_index=turn_index,
                     user_id=guesser.user_id,
                     points_awarded=guess.points_awarded,
                     guess_time_seconds=guess.guess_time_seconds,
@@ -192,6 +192,6 @@ def build_game_history(
             finished_at=finished_at,
         ),
         participants=participants,
-        rounds=rounds,
+        turns=turns,
         guesses=guesses,
     )

@@ -10,16 +10,16 @@ from sqlalchemy import select
 from app.db.models import (
     Base,
     GameParticipant,
-    RoundGuess,
-    RoundRecord,
+    TurnGuess,
+    TurnRecord,
 )
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     GameParticipantInput,
     GameRecordInput,
     InvalidProfileDataError,
-    RoundGuessInput,
-    RoundRecordInput,
+    TurnGuessInput,
+    TurnRecordInput,
     UsernameTakenError,
     WordPickTotals,
     WordUsage,
@@ -137,7 +137,7 @@ async def test_game_history_repository():
             GameParticipantInput(user_id=u2.id, final_score=200, final_rank=2),
         ]
         rounds = [
-            RoundRecordInput(
+            TurnRecordInput(
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=u1.id,
@@ -146,8 +146,8 @@ async def test_game_history_repository():
             )
         ]
         guesses = [
-            RoundGuessInput(
-                round_index=0,
+            TurnGuessInput(
+                turn_index=0,
                 user_id=u2.id,
                 points_awarded=200,
                 guess_time_seconds=10.0,
@@ -157,10 +157,10 @@ async def test_game_history_repository():
         game_id = await history_repo.save_game(game_input, participants, rounds, guesses)
         assert game_id is not None
 
-        # Invalid guess round_index fails loudly
+        # Invalid guess turn_index fails loudly
         invalid_guesses = [
-            RoundGuessInput(
-                round_index=99,
+            TurnGuessInput(
+                turn_index=99,
                 user_id=u2.id,
                 points_awarded=100,
                 guess_time_seconds=5.0,
@@ -180,11 +180,11 @@ async def test_game_history_repository():
         detail = await history_repo.get_game_detail(game_id, requesting_user_id=u1.id)
         assert detail is not None
         assert detail.summary.id == game_id
-        assert len(detail.rounds) == 1
-        assert detail.rounds[0].word == "guitar"
-        assert len(detail.rounds[0].guesses) == 1
-        assert detail.rounds[0].guesses[0].user_id == u2.id
-        assert detail.rounds[0].guesses[0].points_awarded == 200
+        assert len(detail.turns) == 1
+        assert detail.turns[0].word == "guitar"
+        assert len(detail.turns[0].guesses) == 1
+        assert detail.turns[0].guesses[0].user_id == u2.id
+        assert detail.turns[0].guesses[0].points_awarded == 200
 
         # Check game detail for non-participant (scoped out)
         unauthorized_detail = await history_repo.get_game_detail(game_id, requesting_user_id=u3.id)
@@ -318,7 +318,7 @@ async def test_save_game_persists_the_analytics_columns():
                 ),
             ],
             [
-                RoundRecordInput(
+                TurnRecordInput(
                     round_number=1,
                     turn_number=1,
                     drawer_user_id=drawer.id,
@@ -333,8 +333,8 @@ async def test_save_game_persists_the_analytics_columns():
                 )
             ],
             [
-                RoundGuessInput(
-                    round_index=0,
+                TurnGuessInput(
+                    turn_index=0,
                     user_id=guesser.id,
                     points_awarded=200,
                     guess_time_seconds=12.5,
@@ -348,7 +348,7 @@ async def test_save_game_persists_the_analytics_columns():
         async with factory() as session:
             round_row = (
                 await session.execute(
-                    select(RoundRecord).where(RoundRecord.game_id == game_id)
+                    select(TurnRecord).where(TurnRecord.game_id == game_id)
                 )
             ).scalar_one()
             assert round_row.guesser_count == 4
@@ -360,7 +360,7 @@ async def test_save_game_persists_the_analytics_columns():
 
             guess_row = (
                 await session.execute(
-                    select(RoundGuess).where(RoundGuess.round_id == round_row.id)
+                    select(TurnGuess).where(TurnGuess.turn_id == round_row.id)
                 )
             ).scalar_one()
             assert guess_row.hints_used == 2

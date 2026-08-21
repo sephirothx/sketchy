@@ -83,9 +83,9 @@ async def test_completed_game_records_every_round_with_participants_and_guesses(
     assert len(history.saved) == 1
     saved = history.saved[0]
     # Two players, two rounds each taking a turn: four turns, all recorded.
-    assert len(saved.rounds) == 4
-    assert [r.turn_number for r in saved.rounds] == [1, 2, 3, 4]
-    assert all(r.word for r in saved.rounds)
+    assert len(saved.turns) == 4
+    assert [r.turn_number for r in saved.turns] == [1, 2, 3, 4]
+    assert all(r.word for r in saved.turns)
     assert {p.user_id for p in saved.participants} == {"user-ann", "user-bob"}
     assert saved.record.player_count == 2
     assert saved.record.room_name == "Studio"
@@ -93,7 +93,7 @@ async def test_completed_game_records_every_round_with_participants_and_guesses(
     assert saved.record.finished_at >= saved.record.started_at
     # Every turn has exactly one eligible guesser, and they all guessed.
     assert len(saved.guesses) == 4
-    assert {g.round_index for g in saved.guesses} == {0, 1, 2, 3}
+    assert {g.turn_index for g in saved.guesses} == {0, 1, 2, 3}
 
 
 async def test_seat_without_an_account_is_skipped_and_the_rest_still_persists():
@@ -110,8 +110,8 @@ async def test_seat_without_an_account_is_skipped_and_the_rest_still_persists():
     assert {p.user_id for p in saved.participants} == {"user-ann", "user-bob"}
     assert saved.record.player_count == 2
     # Three turns were played but Cid's cannot be hung off a drawer account.
-    assert len(saved.rounds) == 2
-    assert all(r.drawer_user_id in {"user-ann", "user-bob"} for r in saved.rounds)
+    assert len(saved.turns) == 2
+    assert all(r.drawer_user_id in {"user-ann", "user-bob"} for r in saved.turns)
     assert all(g.user_id in {"user-ann", "user-bob"} for g in saved.guesses)
 
 
@@ -145,10 +145,10 @@ async def test_departed_player_still_counts_as_a_participant():
     assert len(history.saved) == 1
     saved = history.saved[0]
     assert {p.user_id for p in saved.participants} == {"user-ann", "user-bob"}
-    assert any(r.drawer_user_id == "user-ann" for r in saved.rounds)
+    assert any(r.drawer_user_id == "user-ann" for r in saved.turns)
 
 
-async def test_restart_discards_the_rounds_played_so_far():
+async def test_restart_discards_the_turns_played_so_far():
     room_manager, room, players = build_room(rounds=1)
     history = FakeGameHistoryRepository()
     ctx = build_context(room_manager, history)
@@ -168,7 +168,7 @@ async def test_restart_discards_the_rounds_played_so_far():
 
     assert len(history.saved) == 1
     # Only the restarted game's turns, never the abandoned one's.
-    assert len(history.saved[0].rounds) == 2
+    assert len(history.saved[0].turns) == 2
 
 
 async def test_abandoned_game_is_never_persisted():
@@ -206,7 +206,7 @@ async def test_a_game_with_only_one_account_is_not_recorded():
     assert history.saved == []
 
 
-async def test_an_opponent_leaving_does_not_erase_the_rounds_played():
+async def test_an_opponent_leaving_does_not_erase_the_turns_played():
     room_manager, room, players = build_room(rounds=1)
     history = FakeGameHistoryRepository()
     ctx = build_context(room_manager, history)
@@ -230,7 +230,7 @@ async def test_an_opponent_leaving_does_not_erase_the_rounds_played():
     assert len(history.saved) == 1
     saved = history.saved[0]
     assert {p.user_id for p in saved.participants} == {"user-ann", "user-bob"}
-    assert len(saved.rounds) == 1
+    assert len(saved.turns) == 1
 
 
 async def test_a_real_game_carries_its_analytics_through_to_the_write():
@@ -267,13 +267,13 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     await ctx.timers.close()
 
     saved = history.saved[0]
-    first_round = saved.rounds[0]
+    first_round = saved.turns[0]
     assert first_round.guesser_count == 1
     assert first_round.word_auto_picked is True
     assert first_round.end_reason == "all_guessed"
     assert first_round.wrong_guess_count == 1
 
-    hinted = next(g for g in saved.guesses if g.round_index == 0)
+    hinted = next(g for g in saved.guesses if g.turn_index == 0)
     assert hinted.hints_used == 1
     assert hinted.points_spent_on_hints == price
     # What lands in history is what the player actually banked: net of hints.
@@ -334,7 +334,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     assert ctx.word_list_repo.restarted, "the interleaving under test never happened"
     assert len(history.saved) == 1
     saved = history.saved[0]
-    assert len(saved.rounds) == 2
+    assert len(saved.turns) == 2
     # The scores the game finished with, not the ones the restart reset to.
     assert {p.user_id: p.final_score for p in saved.participants} == expected_scores
     assert all(score > 0 for score in expected_scores.values())
