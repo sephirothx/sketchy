@@ -46,6 +46,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
   const drawingRecap = useGameStore((s) => s.drawingRecap);
+  const gameHighlights = useGameStore((s) => s.gameHighlights);
   const restartVote = useGameStore((s) => s.restartVote);
   const restartVoteCooldownUntil = useGameStore((s) => s.restartVoteCooldownUntil);
   const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
@@ -421,6 +422,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               onContinue={dismissGameEnd}
               drawingCount={drawingRecap.length}
               onViewDrawings={handleViewDrawingsFromGameEnd}
+              highlights={gameHighlights}
             />
           ) : roomView === "waiting" ? (
             <ConnectedWaitingRoomPanel

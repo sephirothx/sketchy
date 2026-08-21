@@ -3,6 +3,7 @@ import type {
   ChatMessage,
   DrawingRecapMetadata,
   GameEndedPayload,
+  GameHighlight,
   GamePhase,
   HintMode,
   ModerationState,
@@ -65,6 +66,7 @@ interface GameStore {
   lastTurnResult: TurnEndedPayload | null;
   finalScores: GameEndedPayload["scores"] | null;
   drawingRecap: DrawingRecapMetadata[];
+  gameHighlights: GameHighlight[];
   error: string | null;
 
   setSession: (session: {
@@ -131,6 +133,7 @@ const initialGameFields = {
   lastTurnResult: null as TurnEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
   drawingRecap: [] as DrawingRecapMetadata[],
+  gameHighlights: [] as GameHighlight[],
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -188,6 +191,7 @@ export const useGameStore = create<GameStore>((set) => ({
         ? payload.lastGameScores
         : payload.state === "playing" ? null : state.finalScores,
       drawingRecap: payload.lastGameDrawings ?? state.drawingRecap,
+      gameHighlights: payload.lastGameHighlights ?? state.gameHighlights,
       moderation: payload.moderation,
       restartVote: payload.restartVote ?? null,
       restartVoteCooldownUntil: payload.restartVoteCooldownUntil ?? 0,
@@ -261,6 +265,7 @@ export const useGameStore = create<GameStore>((set) => ({
     phase: "game_end",
     finalScores: payload.scores,
     drawingRecap: payload.drawings ?? [],
+    gameHighlights: payload.highlights ?? [],
     roomState: "waiting",
   }),
   dismissGameEnd: () => set({ phase: "idle" }),

@@ -18,6 +18,10 @@ copy and docs alike. Read it before naming anything a player can see.
 - Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
 - Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — save the current canvas directly as a PNG file at any time.
+- Game highlights — the game over screen names the hardest prompt, the fastest guess, the
+  best drawer, and the quickest guesser on average. Derived from guess counts and timings
+  rather than points, so the same four appear in a no-scoring game, and each is dropped
+  when the game gives it nothing to say.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
@@ -134,6 +138,7 @@ backend/
       payloads.py    Typed boundary models and parsers for every client command
     services/
       game_flow.py Shared turn, round, timer, and player-removal workflows
+      game_highlights.py Pure derivation of a finished game's highlights
       timers.py    Application-owned asynchronous timer lifecycle
     presenters.py Pure construction of room, turn, round, and session payloads
     game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable

@@ -577,6 +577,23 @@
   color: #cbd5e1;
 }
 
+[data-theme="dark"] .game-end-highlights {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .game-end-highlights li {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .game-end-highlights h2,
+[data-theme="dark"] .game-end-highlight-label {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .game-end-highlight-value {
+  color: #86efac;
+}
+
 [data-theme="dark"] .room-spectator-indicator {
   background: #0f172a;
   border-color: #475569;

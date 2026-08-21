@@ -21,6 +21,7 @@ from app.handlers.payloads import (
     UpdateRoomSettingsPayload,
 )
 from app.rooms import DrawingRecapEntry, Player, Room, resolve_hint_mode
+from app.services.game_highlights import build_game_highlights
 from app.services.game_history import build_game_history
 from app.services.prompt_usage import tally_prompt_usage
 from app.presenters import (
@@ -203,6 +204,7 @@ class GameFlowService:
         room.restart_vote = None
         room.restart_vote_cooldown_until = 0
         room.last_game_scores = []
+        room.last_game_highlights = []
         room.last_game_drawings = []
         # Only this game's leavers matter to its history, and the room may
         # outlive many games.
@@ -567,6 +569,10 @@ class GameFlowService:
                 }
                 for p in sorted(room.player_list(), key=lambda p: -p.score)
             ]
+            # Built from the snapshot above, before the emit and before any
+            # await, for the same reason the scores are: by the time anything
+            # yields, the room is an editable waiting room again.
+            room.last_game_highlights = build_game_highlights(room, game)
 
             # No await between the snapshot above and this emit, so a
             # `start_game` cannot land in between and blank the scores the
@@ -575,6 +581,7 @@ class GameFlowService:
                 "game_ended",
                 {
                     "scores": room.last_game_scores,
+                    "highlights": room.last_game_highlights,
                     "drawings": room.drawing_recap_metadata(),
                 },
                 room=room.id,

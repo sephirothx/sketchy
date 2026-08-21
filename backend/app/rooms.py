@@ -213,6 +213,11 @@ class DepartedSeat:
     user_id: str | None
     is_spectator: bool
     score: int
+    # How the name renders. Carried because a departed player can still hold a
+    # game highlight, and a name shown there in a different style than the one
+    # it had all game reads as a different person.
+    name_color: str | None = None
+    is_anonymous: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,6 +278,7 @@ class Room:
     game: Optional[Game] = None
     canvas_generation: int = 0
     last_game_scores: list[dict] = field(default_factory=list)
+    last_game_highlights: list[dict] = field(default_factory=list)
     last_game_drawings: list[DrawingRecapEntry] = field(default_factory=list)
     departed_seats: dict[str, DepartedSeat] = field(default_factory=dict)
     restart_vote: RestartVote | None = None
@@ -420,6 +426,9 @@ class Room:
             "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
             "lastGameScores": self.last_game_scores,
+            "lastGameHighlights": (
+                self.last_game_highlights if self.state == "waiting" else []
+            ),
             "lastGameDrawings": (
                 self.drawing_recap_metadata()
                 if self.state == "waiting"
@@ -576,6 +585,8 @@ class RoomManager:
                 user_id=departing.user_id,
                 is_spectator=departing.is_spectator,
                 score=departing.score,
+                name_color=departing.name_color,
+                is_anonymous=departing.is_anonymous,
             )
         for p in room.players.values():
             p.kick_votes.discard(player_id)
