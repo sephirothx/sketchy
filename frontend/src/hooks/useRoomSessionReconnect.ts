@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { emitWithAck, socket } from "../lib/socket";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
+import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
 import { currentPlayerName } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
@@ -57,12 +58,9 @@ export function useRoomSessionReconnect() {
         soft,
       });
       if (cancelled) return;
-      if (response.ok && response.roomId && response.code && response.playerId) {
-        useGameStore.getState().setSession({
-          roomId: response.roomId,
-          code: response.code,
-          playerId: response.playerId,
-        });
+      const session = sessionFrom(response);
+      if (session) {
+        useGameStore.getState().setSession(session);
         setRoomBindingStatus("ready");
         return;
       }

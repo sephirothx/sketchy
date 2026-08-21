@@ -16,7 +16,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     try:
         payload = parse_draw_payload(data, action_identity)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     packet = payload.packet
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
@@ -118,7 +118,7 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
     try:
         payload = parse_undo_payload(data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
         return
@@ -163,7 +163,7 @@ async def request_sync_strokes(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if current and current[0].game:
         room, _ = current

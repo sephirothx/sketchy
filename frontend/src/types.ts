@@ -234,6 +234,8 @@ export interface AckResponse {
   field?: string;
   isAnonymous?: boolean;
   needsRebind?: boolean;
+  /** The player slots are taken - spectating is still open. */
+  roomFull?: boolean;
 }
 
 export interface RoomPreviewResponse extends AckResponse {

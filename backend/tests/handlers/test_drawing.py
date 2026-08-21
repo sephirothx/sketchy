@@ -14,29 +14,11 @@ from app.canvas_history import (
     encode_canvas_history,
 )
 from app.handlers import register_all_handlers as register_handlers
-from app.game import DRAWING_SECONDS, Game, Phase
+from tests.handlers.helpers import canvas_action
+from app.game import DRAWING_SECONDS, Game
 from app.live_drawing import encode_live_drawing
-from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import DrawingRecapEntry, RoomManager
-from app.words import MAX_WORD_LENGTH
 
-
-def canvas_action(game: Game, sequence: int) -> list[int]:
-    return [game.canvas.generation, sequence]
-
-
-def contains_secret(value, secret: str) -> bool:
-    if value == secret:
-        return True
-    if isinstance(value, dict):
-        return any(
-            key in {"reconnectSecret", "reconnect_secret"}
-            or contains_secret(item, secret)
-            for key, item in value.items()
-        )
-    if isinstance(value, (list, tuple, set)):
-        return any(contains_secret(item, secret) for item in value)
-    return False
 
 @pytest.mark.asyncio
 async def test_draw_handler_rejects_events_outside_drawing_phase():

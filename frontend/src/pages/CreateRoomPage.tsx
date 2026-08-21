@@ -21,6 +21,7 @@ import {
 } from "../lib/roomSetup";
 import { createCustomWordsState, customWordsReducer } from "../lib/customWords";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, HintMode, ScoringMode } from "../types";
@@ -62,9 +63,10 @@ export function CreateRoomPage() {
         customWords: customWords.value.trim(), customWordsOnly: customWords.only, hintMode, scoringMode,
         spectatorsSeeSolution, hideMaskedPrompt, wordListSlugs,
       });
-      if (response.ok && response.roomId && response.code && response.playerId) {
-        setSession({ roomId: response.roomId, code: response.code, playerId: response.playerId });
-        navigate(`/room/${response.code}`);
+      const session = sessionFrom(response);
+      if (session) {
+        setSession(session);
+        navigate(`/room/${session.code}`);
         return;
       }
       setError(response.error || "Failed to create room");

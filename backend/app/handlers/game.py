@@ -15,12 +15,12 @@ async def start_game(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
         return {"ok": False, "error": "Only the host can start the game"}
     room, _ = current
-    active_players = [p for p in room.connected_players() if not p.is_spectator and not p.is_afk]
+    active_players = room.active_players()
     if len(active_players) < 2:
         return {"ok": False, "error": "Need at least 2 active non-AFK players to start"}
     if room.state == "playing":
@@ -34,7 +34,7 @@ async def select_word(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(SelectWordPayload, data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
         return {"ok": False, "error": "Game is not ready for word selection"}

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from functools import partial
 
-from app.game import Phase
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     PayloadError,
@@ -11,12 +10,14 @@ from app.handlers.payloads import (
     VotePayload,
     parse_payload,
 )
+from app.rooms import majority_of
+
 
 async def toggle_afk(ctx: HandlerContext, sid, data=None):
     try:
         payload = parse_payload(ToggleAfkPayload, data, allow_none=True)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in this room"}
@@ -27,14 +28,7 @@ async def toggle_afk(ctx: HandlerContext, sid, data=None):
     player.is_afk = target_afk
     await ctx.game_flow._emit_room_state(room)
 
-    if room.game and room.state == "playing":
-        if player.is_afk and player.id == room.game.current_drawer:
-            if room.game.phase == Phase.CHOOSING_WORD:
-                await ctx.game_flow._abandon_current_turn(room)
-            elif room.game.phase == Phase.DRAWING:
-                await ctx.game_flow._end_round(room)
-        else:
-            await ctx.game_flow._end_round_if_all_guessed(room)
+    await ctx.game_flow.apply_afk_consequences(room, player)
 
     return {"ok": True, "isAfk": player.is_afk}
 
@@ -43,7 +37,7 @@ async def vote_player(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(VotePayload, data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in this room"}
@@ -64,7 +58,7 @@ async def vote_player(ctx: HandlerContext, sid, data):
     eligible_voter_ids = {player.id for player in room.moderation_voters()}
     target.kick_votes.intersection_update(eligible_voter_ids)
     target.afk_votes.intersection_update(eligible_voter_ids)
-    required_votes = (len(eligible_voter_ids) // 2) + 1
+    required_votes = majority_of(len(eligible_voter_ids))
 
     if action == "kick":
         if voter.id in target.kick_votes:
@@ -79,11 +73,7 @@ async def vote_player(ctx: HandlerContext, sid, data):
             if target_sid:
                 await ctx.sio.emit("kicked", {"reason": "You were kicked from the room by vote."}, to=target_sid)
                 await ctx.sio.leave_room(target_sid, room.id)
-            await ctx.sio.emit(
-                "chat_message",
-                {"playerId": "", "nickname": "", "text": f"{target.nickname} was kicked by vote.", "correct": False, "system": True},
-                room=room.id,
-            )
+            await ctx.game_flow.announce(room, f"{target.nickname} was kicked by vote.")
             if room.game and room.state == "playing":
                 await ctx.game_flow._remove_player_from_game(room, target.id)
             await ctx.game_flow._emit_room_state(room)
@@ -100,19 +90,8 @@ async def vote_player(ctx: HandlerContext, sid, data):
             target.afk_votes.clear()
             if target.sid:
                 await ctx.sio.emit("voted_afk", {"message": "You were marked AFK by room vote."}, to=target.sid)
-            await ctx.sio.emit(
-                "chat_message",
-                {"playerId": "", "nickname": "", "text": f"{target.nickname} was marked AFK by vote.", "correct": False, "system": True},
-                room=room.id,
-            )
-            if room.game and room.state == "playing":
-                if target.id == room.game.current_drawer:
-                    if room.game.phase == Phase.CHOOSING_WORD:
-                        await ctx.game_flow._abandon_current_turn(room)
-                    elif room.game.phase == Phase.DRAWING:
-                        await ctx.game_flow._end_round(room)
-                else:
-                    await ctx.game_flow._end_round_if_all_guessed(room)
+            await ctx.game_flow.announce(room, f"{target.nickname} was marked AFK by vote.")
+            await ctx.game_flow.apply_afk_consequences(room, target)
             await ctx.game_flow._emit_room_state(room)
             return {"ok": True, "action": "afk", "executed": True}
 

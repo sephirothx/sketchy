@@ -13,11 +13,22 @@ from app.handlers.payloads import (
 )
 from app.words import MAX_WORD_LENGTH
 
+def _chat_line(player, text: str, **extra) -> dict:
+    """A chat line attributed to `player`, plus any per-case flags."""
+    return {
+        "playerId": player.id,
+        "nickname": player.nickname,
+        "text": text,
+        "correct": False,
+        **extra,
+    }
+
+
 async def send_chat(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(TextPayload, data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in a room"}
@@ -32,7 +43,7 @@ async def send_chat(ctx: HandlerContext, sid, data):
         await ctx.game_flow._emit_room_state(room)
     await ctx.sio.emit(
         "chat_message",
-        {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False, "isSpectator": player.is_spectator},
+        _chat_line(player, text, isSpectator=player.is_spectator),
         room=room.id,
     )
     return {"ok": True}
@@ -42,7 +53,7 @@ async def guess(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(TextPayload, data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
         return
@@ -65,35 +76,14 @@ async def guess(ctx: HandlerContext, sid, data):
     # client can render a clear "restricted visibility" indicator.
     # Spectators and players who have already guessed correctly can chat,
     # but their messages are restricted to the drawer, other correct guessers, and spectators.
-    if player.is_spectator:
+    if player.is_spectator or player.id in game.correct_guessers:
         recipients = ctx.game_flow._privileged_sids(room, game)
         if recipients:
             await ctx.sio.emit(
                 "chat_message",
-                {
-                    "playerId": player.id,
-                    "nickname": player.nickname,
-                    "text": text,
-                    "correct": False,
-                    "restricted": True,
-                    "isSpectator": True,
-                },
-                to=recipients,
-            )
-        return
-
-    if player.id in game.correct_guessers:
-        recipients = ctx.game_flow._privileged_sids(room, game)
-        if recipients:
-            await ctx.sio.emit(
-                "chat_message",
-                {
-                    "playerId": player.id,
-                    "nickname": player.nickname,
-                    "text": text,
-                    "correct": False,
-                    "restricted": True,
-                },
+                _chat_line(
+                    player, text, restricted=True, isSpectator=player.is_spectator
+                ),
                 to=recipients,
             )
         return
@@ -101,7 +91,7 @@ async def guess(ctx: HandlerContext, sid, data):
     if len(text) > MAX_WORD_LENGTH:
         await ctx.sio.emit(
             "chat_message",
-            {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False},
+            _chat_line(player, text),
             room=room.id,
         )
         return
@@ -115,31 +105,25 @@ async def guess(ctx: HandlerContext, sid, data):
             # not broadcast to the rest of the room.
             await ctx.sio.emit(
                 "chat_message",
-                {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False},
+                _chat_line(player, text),
                 to=sid,
             )
             await ctx.sio.emit(
                 "chat_message",
-                {
-                    "playerId": player.id,
-                    "nickname": player.nickname,
-                    "text": hint_text,
-                    "correct": False,
-                    "close": True,
-                },
+                _chat_line(player, hint_text, close=True),
                 to=sid,
             )
             recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
             if recipients:
                 await ctx.sio.emit(
                     "chat_message",
-                    {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False},
+                    _chat_line(player, text),
                     to=recipients,
                 )
         else:
             await ctx.sio.emit(
                 "chat_message",
-                {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": False},
+                _chat_line(player, text),
                 room=room.id,
             )
         return
@@ -168,7 +152,7 @@ async def guess(ctx: HandlerContext, sid, data):
     if recipients:
         await ctx.sio.emit(
             "chat_message",
-            {"playerId": player.id, "nickname": player.nickname, "text": text, "correct": True},
+            _chat_line(player, text, correct=True),
             to=recipients,
         )
 
@@ -244,11 +228,7 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
         feedback = f"{price} - found {found_count} time{'s' if found_count != 1 else ''}!"
     else:
         feedback = f"{price} - not in the word."
-    await ctx.sio.emit(
-        "chat_message",
-        {"playerId": "", "nickname": "", "text": feedback, "correct": False, "system": True},
-        to=sid,
-    )
+    await ctx.game_flow.announce(room, feedback, to=sid)
     return {"ok": True, "cost": cost, "found": found_count, "hintSpend": hint_spend}
 
 

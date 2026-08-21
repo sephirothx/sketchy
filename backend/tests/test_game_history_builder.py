@@ -165,7 +165,6 @@ def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
                     wrong_guesses_before=4,
                 ),
             ),
-            guesser_count=3,
             word_auto_picked=True,
             stroke_count=17,
             end_reason="timeout",

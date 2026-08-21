@@ -46,12 +46,3 @@ def validate_name(value: object) -> str:
     if name.lower() in RESERVED_NAMES:
         raise NameError_("That name is reserved. Please choose another.")
     return name
-
-
-def is_valid_name(value: object) -> bool:
-    try:
-        validate_name(value)
-    except NameError_:
-        return False
-    return True
-

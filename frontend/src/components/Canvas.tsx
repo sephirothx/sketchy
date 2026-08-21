@@ -52,6 +52,11 @@ function createProtocolRenderer(
   contextRef: RefObject<CanvasRenderingContext2D | null>,
 ): CanvasProtocolRenderer {
   let replayGeneration = 0;
+  // One scratch canvas for the lifetime of the renderer. A replay used to
+  // allocate a fresh 800x600 backing store (~1.9 MB) on every undo and sync;
+  // renderCanvasActions overwrites every pixel, so nothing stale carries over.
+  let scratch: HTMLCanvasElement | null = null;
+  let scratchContext: CanvasRenderingContext2D | null = null;
   const remoteState: {
     last: StrokePoint | null;
     color: string;
@@ -112,17 +117,19 @@ function createProtocolRenderer(
 
   const replay = (actions: DecodedCanvasAction[]) => {
     const currentReplay = ++replayGeneration;
-    const offscreen = document.createElement("canvas");
-    offscreen.width = CANVAS_WIDTH;
-    offscreen.height = CANVAS_HEIGHT;
-    const offscreenContext = offscreen.getContext("2d", { willReadFrequently: true });
-    if (!offscreenContext) return;
-    renderCanvasActions(offscreenContext, actions);
+    if (!scratch) {
+      scratch = document.createElement("canvas");
+      scratch.width = CANVAS_WIDTH;
+      scratch.height = CANVAS_HEIGHT;
+      scratchContext = scratch.getContext("2d", { willReadFrequently: true });
+    }
+    if (!scratchContext) return;
+    renderCanvasActions(scratchContext, actions);
     const canvas = canvasRef.current;
     const context = contextRef.current;
     if (currentReplay === replayGeneration && canvas && context) {
       context.clearRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(offscreen, 0, 0);
+      context.drawImage(scratch, 0, 0);
     }
     remoteState.last = null;
   };

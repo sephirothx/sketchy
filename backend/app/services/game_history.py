@@ -156,7 +156,7 @@ def build_game_history(
                 drawer_user_id=drawer.user_id,
                 word=turn.chosen_word,
                 duration_seconds=turn.duration_seconds,
-                guesser_count=turn.guesser_count,
+                guesser_count=turn.total_guesser_count,
                 word_auto_picked=turn.word_auto_picked,
                 stroke_count=turn.stroke_count,
                 end_reason=turn.end_reason,

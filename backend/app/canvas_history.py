@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import struct
+import sys
 import zlib
 from array import array
 from collections.abc import Iterator, Sequence
@@ -37,6 +38,12 @@ _FILL_ACTION = struct.Struct("<B3sHH")
 _CLEAR_ACTION = struct.Struct("<B")
 _BINARY_HEADER = struct.Struct("<4sBH")
 _BINARY_OFFSET = struct.Struct("<I")
+# array("I") is the wire layout for the offset table already, so the table can
+# move as one block instead of one struct call per action - as long as the
+# platform agrees on width and byte order.
+_OFFSETS_ARE_WIRE_LAYOUT = (
+    array("I").itemsize == _BINARY_OFFSET.size and sys.byteorder == "little"
+)
 _HASH_RECORD_LENGTH = struct.Struct("<I")
 
 # The largest valid history uses all 20,000 action slots, puts all 25,000
@@ -339,9 +346,13 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
                 len(self),
             )
         )
-        for offset in self.offsets:
-            payload.extend(_BINARY_OFFSET.pack(offset))
-        payload.extend(_BINARY_OFFSET.pack(len(self.data)))
+        table = self.offsets[:]
+        table.append(len(self.data))
+        if _OFFSETS_ARE_WIRE_LAYOUT:
+            payload.extend(table.tobytes())
+        else:
+            for offset in table:
+                payload.extend(_BINARY_OFFSET.pack(offset))
         payload.extend(self.data)
         return bytes(payload)
 
@@ -430,13 +441,18 @@ def decode_binary_canvas_history(payload) -> PackedCanvasHistory:
     )
     if data_start > len(view):
         raise ValueError("binary canvas history offset table is truncated")
-    offsets_with_end = [
-        _BINARY_OFFSET.unpack_from(
-            view,
-            _BINARY_HEADER.size + index * _BINARY_OFFSET.size,
-        )[0]
-        for index in range(action_count + 1)
-    ]
+    if _OFFSETS_ARE_WIRE_LAYOUT:
+        table = array("I")
+        table.frombytes(view[_BINARY_HEADER.size:data_start])
+        offsets_with_end = table.tolist()
+    else:
+        offsets_with_end = [
+            _BINARY_OFFSET.unpack_from(
+                view,
+                _BINARY_HEADER.size + index * _BINARY_OFFSET.size,
+            )[0]
+            for index in range(action_count + 1)
+        ]
     data_length = len(view) - data_start
     if (
         offsets_with_end[0] != 0

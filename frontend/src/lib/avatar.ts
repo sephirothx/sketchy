@@ -1,16 +1,6 @@
 /** Letter avatars derived from a name — no network request, no upload. */
 
-const REGISTERED_COLORS = [
-  "#e11d48",
-  "#c2410c",
-  "#a16207",
-  "#15803d",
-  "#0f766e",
-  "#0369a1",
-  "#4f46e5",
-  "#7e22ce",
-  "#be185d",
-] as const;
+import { NAME_COLOR_PALETTE } from "../store/settingsStore";
 
 export const GUEST_AVATAR_COLOR = "#888888";
 
@@ -34,7 +24,7 @@ export function avatarColor(name: string, isAnonymous: boolean): string {
   for (let i = 0; i < name.length; i += 1) {
     hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   }
-  return REGISTERED_COLORS[hash % REGISTERED_COLORS.length];
+  return NAME_COLOR_PALETTE[hash % NAME_COLOR_PALETTE.length];
 }
 
 /**

@@ -276,7 +276,10 @@ export function useCanvasPointerInput(
     }
   }
 
+  // Only the drawer ever queues points, so only the drawer needs the timer.
+  // Guessers were waking a throttled CPU 25x a second to find nothing to send.
   useEffect(() => {
+    if (!isDrawer) return;
     const flushTimer = setInterval(() => {
       if (pendingPointsRef.current.length === 0) return;
       const points = pendingPointsRef.current;
@@ -284,7 +287,7 @@ export function useCanvasPointerInput(
       protocol.sendPathFrame(encodePathPoints({ points }));
     }, FLUSH_INTERVAL_MS);
     return () => clearInterval(flushTimer);
-  }, [protocol]);
+  }, [isDrawer, protocol]);
 
   useEffect(() => () => {
     if (!inputActiveRef.current) return;

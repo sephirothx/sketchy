@@ -178,7 +178,7 @@ test("a superseded load cannot overwrite the newest preview", async () => {
 
 test("a room-full player response returns to preview while keeping spectator join available", async () => {
   const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
-    join: async () => ({ ok: false, error: "Room is full" }),
+    join: async () => ({ ok: false, error: "Room is full", roomFull: true }),
   }));
 
   await machine.load();

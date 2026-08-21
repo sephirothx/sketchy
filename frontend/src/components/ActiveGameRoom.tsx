@@ -19,7 +19,7 @@ import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { SettingsIcon } from "../components/SettingsIcon";
-import { useGameStore } from "../store/gameStore";
+import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { recordRender } from "../lib/renderDiagnostics";
 import type { AckResponse } from "../types";
@@ -43,22 +43,16 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   const roomState = useGameStore((s) => s.roomState);
   const phase = useGameStore((s) => s.phase);
-  const drawerId = useGameStore((s) => s.drawerId);
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
   const drawingRecap = useGameStore((s) => s.drawingRecap);
   const restartVote = useGameStore((s) => s.restartVote);
   const restartVoteCooldownUntil = useGameStore((s) => s.restartVoteCooldownUntil);
   const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
-  const isConnected = useGameStore((s) =>
-    s.players.find((player) => player.playerId === s.playerId)?.connected ?? false,
-  );
-  const isAfk = useGameStore((s) =>
-    s.players.find((player) => player.playerId === s.playerId)?.isAfk ?? false,
-  );
-  const isSpectator = useGameStore((s) =>
-    s.players.find((player) => player.playerId === s.playerId)?.isSpectator ?? false,
-  );
+  // One roster scan, not one per field.
+  const isConnected = useGameStore((s) => selectMe(s)?.connected ?? false);
+  const isAfk = useGameStore((s) => selectMe(s)?.isAfk ?? false);
+  const isSpectator = useGameStore((s) => selectMe(s)?.isSpectator ?? false);
 
   const normalizedCode = code.trim().toUpperCase();
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -214,8 +208,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     setRecapOpen(true);
   }
 
-  const amDrawer =
-    (phase === "drawing" || phase === "choosing_word") && drawerId === playerId;
+  const amDrawer = useGameStore(selectAmDrawer);
   const me = playerId
     ? { playerId, connected: isConnected, isAfk, isSpectator }
     : undefined;

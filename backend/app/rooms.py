@@ -28,6 +28,26 @@ MAX_PLAYERS_MAX = 16
 MAX_RECAP_CANVAS_BYTES = 8 * 1024 * 1024
 
 
+def resolve_hint_mode(
+    hint_mode: str, scoring_mode: str, hide_masked_prompt: bool
+) -> str:
+    """Force hints off where the rest of the settings leave nothing to hint at.
+
+    A hidden prompt has no blanks to reveal, and a paid hint costs points a
+    room that is not scoring cannot charge.
+    """
+    if hide_masked_prompt or (
+        scoring_mode == "none" and hint_mode in {"purchase", "wheel"}
+    ):
+        return "none"
+    return hint_mode
+
+
+def majority_of(population: int) -> int:
+    """Votes needed to carry a strict majority of `population`."""
+    return (population // 2) + 1
+
+
 def nearest_drawing_seconds(value: int) -> int:
     """Snap a drawing-time request onto the allowed preset list."""
     return min(DRAWING_TIME_OPTIONS, key=lambda option: (abs(option - value), option))
@@ -150,7 +170,7 @@ class RestartVote:
 
     @property
     def required_votes(self) -> int:
-        return (len(self.eligible_voter_ids) // 2) + 1
+        return majority_of(len(self.eligible_voter_ids))
 
     def payload(self) -> dict:
         return {
@@ -263,6 +283,27 @@ class Room:
     def connected_players(self) -> list[Player]:
         return [p for p in self.players.values() if p.connected]
 
+    def seated_players(self) -> list[Player]:
+        """Everyone holding a player seat, connected or not. Spectators are not."""
+        return [p for p in self.players.values() if not p.is_spectator]
+
+    def active_players(self) -> list[Player]:
+        """Seated players the game is currently waiting on: here, and not AFK."""
+        return [
+            p
+            for p in self.players.values()
+            if p.connected and not p.is_spectator and not p.is_afk
+        ]
+
+    def eligible_guessers(self) -> list[Player]:
+        """Active players who still owe this turn a guess - everyone but the drawer.
+
+        Decides both when a round can end early and the guesser count recorded
+        against the turn, so the two can never disagree.
+        """
+        drawer = self.game.current_drawer if self.game else None
+        return [p for p in self.active_players() if p.id != drawer]
+
     def moderation_voters(self) -> list[Player]:
         """Return players eligible to cast and count toward moderation votes.
 
@@ -279,7 +320,7 @@ class Room:
         eligible_voter_ids = [p.id for p in self.moderation_voters()]
         return {
             "eligibleVoterIds": eligible_voter_ids,
-            "requiredVotes": (len(eligible_voter_ids) // 2) + 1,
+            "requiredVotes": majority_of(len(eligible_voter_ids)),
         }
 
     def record_drawing_recap(self, entry: DrawingRecapEntry) -> None:
@@ -331,7 +372,7 @@ class Room:
         return self.custom_words + [w for w in base_words if w.lower() not in seen]
 
     def to_public_summary(self) -> dict:
-        active_players = [p for p in self.players.values() if not p.is_spectator]
+        active_players = self.seated_players()
         spectators = [p for p in self.players.values() if p.is_spectator]
         return {
             "id": self.id,
@@ -425,8 +466,7 @@ class RoomManager:
     ) -> Room:
         room_id = str(uuid.uuid4())
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
-        if hide_masked_prompt:
-            hint_mode = "none"
+        hint_mode = resolve_hint_mode(hint_mode, scoring_mode, hide_masked_prompt)
         room = Room(
             id=room_id,
             code=self._generate_unique_code(),
@@ -481,7 +521,7 @@ class RoomManager:
         user_id: str | None = None,
         is_anonymous: bool = True,
     ) -> Player:
-        active_players = [p for p in room.players.values() if not p.is_spectator]
+        active_players = room.seated_players()
         if not is_spectator and len(active_players) >= room.max_players:
             raise RoomFullError("Room is full")
         player_id = str(uuid.uuid4())

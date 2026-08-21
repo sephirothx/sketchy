@@ -19,6 +19,7 @@ from app.handlers.payloads import (
     parse_payload,
 )
 from app.handlers.identity import IdentityError, resolve_identity
+from app.presenters import editable_room_settings_payload, session_payload
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     RoomFullError,
@@ -32,7 +33,7 @@ async def create_room(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(CreateRoomPayload, data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     try:
         identity = await resolve_identity(ctx, sid, payload.nickname)
     except IdentityError as error:
@@ -50,26 +51,26 @@ async def create_room(ctx: HandlerContext, sid, data):
         is_anonymous=identity.is_anonymous,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
-    return ctx.game_flow._session_ack(room, player)
+    return session_payload(room, player)
 
 
 async def get_room_settings(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
         return {"ok": False, "error": "Only the host can view room settings"}
     room, _ = current
-    return {"ok": True, "settings": ctx.game_flow.editable_room_settings(room)}
+    return {"ok": True, "settings": editable_room_settings_payload(room)}
 
 
 async def get_custom_words(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in this room"}
@@ -112,7 +113,7 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(UpdateRoomSettingsPayload, data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
         return {"ok": False, "error": "Only the host can change room settings"}
@@ -120,14 +121,14 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
     if room.state != "waiting" or room.game:
         return {"ok": False, "error": "Settings can only be changed in the waiting room"}
     settings = await ctx.game_flow.room_settings_from_payload(payload, fallback=room)
-    active_count = len([p for p in room.player_list() if not p.is_spectator])
+    active_count = len(room.seated_players())
     if settings["max_players"] < active_count:
         return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}
     if not settings["custom_words"]:
         settings["custom_words_only"] = False
     for key, value in settings.items():
         setattr(room, key, value)
-    await ctx.sio.emit("chat_message", {"playerId": "", "nickname": "", "text": "The host updated the room settings.", "correct": False, "system": True}, room=room.id)
+    await ctx.game_flow.announce(room, "The host updated the room settings.")
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}
 
@@ -137,7 +138,7 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(RoomPreviewPayload, data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     room = ctx.room_manager.get_room_by_code(payload.code)
     if not room:
         return {"ok": False, "error": "Room not found"}
@@ -148,7 +149,7 @@ async def join_room(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(JoinRoomPayload, data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     name_color = normalize_name_color(payload.name_color)
 
     room = ctx.room_manager.get_room(payload.room_id) or ctx.room_manager.get_room_by_code(payload.code)
@@ -175,7 +176,7 @@ async def join_room(ctx: HandlerContext, sid, data):
             already_joined,
             sync_canvas=not payload.soft,
         )
-        return ctx.game_flow._session_ack(room, already_joined)
+        return session_payload(room, already_joined)
 
     session = await ctx.sio.get_session(sid) if sid else None
     user_id = session.get("user_id") if session else None
@@ -196,7 +197,7 @@ async def join_room(ctx: HandlerContext, sid, data):
         # _join_socket_room notifies and disconnects any socket that was
         # holding this seat before handing it to the new one.
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
-        return ctx.game_flow._session_ack(room, player)
+        return session_payload(room, player)
 
     if payload.resume_only:
         return {"ok": False, "error": "No existing session in this room"}
@@ -216,7 +217,9 @@ async def join_room(ctx: HandlerContext, sid, data):
             is_anonymous=identity.is_anonymous,
         )
     except RoomFullError:
-        return {"ok": False, "error": "Room is full"}
+        # Flagged rather than left for the client to recognise by its prose:
+        # the "you can still spectate" offer hangs off this exact case.
+        return {"ok": False, "error": "Room is full", "roomFull": True}
 
     # A game already in progress keeps running its existing turn_order -
     # joining mid-game just enrolls the new player into future turns
@@ -226,7 +229,7 @@ async def join_room(ctx: HandlerContext, sid, data):
         room.game.add_player_to_rotation(player.id)
 
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
-    return ctx.game_flow._session_ack(room, player)
+    return session_payload(room, player)
 
 
 async def _account_name_color(ctx: HandlerContext, user_id: str | None) -> str | None:
@@ -265,7 +268,7 @@ async def session_ping(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return [0]
@@ -331,7 +334,7 @@ async def rename_player(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(RenamePlayerPayload, data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in this room"}
@@ -362,17 +365,7 @@ async def rename_player(ctx: HandlerContext, sid, data):
     if ctx.user_repo is not None and player.user_id:
         await ctx.user_repo.update_profile(player.user_id, display_name=nickname)
 
-    await ctx.sio.emit(
-        "chat_message",
-        {
-            "playerId": "",
-            "nickname": "",
-            "text": f"{previous} is now known as {nickname}.",
-            "correct": False,
-            "system": True,
-        },
-        room=room.id,
-    )
+    await ctx.game_flow.announce(room, f"{previous} is now known as {nickname}.")
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True, "nickname": nickname}
 
@@ -381,7 +374,7 @@ async def become_player(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in this room"}
@@ -391,23 +384,13 @@ async def become_player(ctx: HandlerContext, sid, data=None):
     if not player.is_spectator:
         return {"ok": False, "error": "You are already a player"}
 
-    active_count = len([candidate for candidate in room.players.values() if not candidate.is_spectator])
+    active_count = len(room.seated_players())
     if active_count >= room.max_players:
         return {"ok": False, "error": "Player slots are full"}
 
     player.is_spectator = False
     player.score = 0
-    await ctx.sio.emit(
-        "chat_message",
-        {
-            "playerId": "",
-            "nickname": "",
-            "text": f"{player.nickname} joined as a player.",
-            "correct": False,
-            "system": True,
-        },
-        room=room.id,
-    )
+    await ctx.game_flow.announce(room, f"{player.nickname} joined as a player.")
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}
 
@@ -416,7 +399,7 @@ async def leave_room(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
     except PayloadError as error:
-        return ctx.game_flow.validation_error(error)
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return

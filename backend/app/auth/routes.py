@@ -6,7 +6,7 @@ import os
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.auth.jwt import COOKIE_NAME, create_token, get_or_create_secret, should_refresh
+from app.auth.jwt import create_token, get_or_create_secret, should_refresh
 from app.auth.middleware import (
     clear_session_cookie,
     is_secure_request,

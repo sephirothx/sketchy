@@ -1,49 +1,15 @@
 import asyncio
-from contextlib import suppress
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 import socketio
 
-from app.canvas_history import (
-    ClearAction,
-    FillAction,
-    PathAction,
-    ShapeAction,
-    decode_binary_canvas_history,
-    encode_canvas_history,
-)
+from app.canvas_history import encode_canvas_history
 from app.handlers import register_all_handlers as register_handlers
-from app.game import DRAWING_SECONDS, MAX_HINT_SPEND, Game, Phase
-from app.live_drawing import encode_live_drawing
-from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
+from tests.handlers.helpers import contains_secret
+from app.game import DRAWING_SECONDS, MAX_HINT_SPEND, Game
 from app.rooms import DrawingRecapEntry, RoomManager
-from app.words import MAX_WORD_LENGTH
 
-
-def canvas_action(game: Game, sequence: int) -> list[int]:
-    return [game.canvas.generation, sequence]
-
-
-def contains_secret(value, secret: str) -> bool:
-    """Whether a payload leaks a credential, by value or by telltale key.
-
-    The credential is now the JWT in the session cookie rather than a per-room
-    secret, but the property being guarded is unchanged: nothing that
-    identifies a player to the server may appear in anything broadcast to
-    other players.
-    """
-    if value == secret:
-        return True
-    if isinstance(value, dict):
-        return any(
-            key in {"reconnectSecret", "reconnect_secret", "sessionToken", "userId", "user_id"}
-            or contains_secret(item, secret)
-            for key, item in value.items()
-        )
-    if isinstance(value, (list, tuple, set)):
-        return any(contains_secret(item, secret) for item in value)
-    return False
 
 @pytest.mark.asyncio
 async def test_public_player_ids_are_broadcast_but_account_identity_is_private():

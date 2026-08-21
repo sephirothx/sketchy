@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { useEscapeLayer } from "../hooks/useFocusTrap";
 import type { AckResponse } from "../types";
 
 interface CustomWordsResponse extends AckResponse {
@@ -282,19 +283,16 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
     );
   }
 
+  useEscapeLayer(activeWord !== null, () => setActiveWord(null));
+
   useEffect(() => {
     if (!activeWord) return;
     const dismissOnPointerDown = (event: PointerEvent) => {
       if (!activeWord.anchor.contains(event.target as Node)) setActiveWord(null);
     };
-    const dismissOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setActiveWord(null);
-    };
     document.addEventListener("pointerdown", dismissOnPointerDown, true);
-    document.addEventListener("keydown", dismissOnEscape);
     return () => {
       document.removeEventListener("pointerdown", dismissOnPointerDown, true);
-      document.removeEventListener("keydown", dismissOnEscape);
     };
   }, [activeWord]);
 

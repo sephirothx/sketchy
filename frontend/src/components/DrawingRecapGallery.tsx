@@ -4,6 +4,7 @@ import { CanvasSnapshot } from "./CanvasSnapshot";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { useEscapeLayer } from "../hooks/useFocusTrap";
 import type { DrawingRecapMetadata, DrawingRecapResponse } from "../types";
 
 interface DrawingRecapGalleryProps {
@@ -73,9 +74,10 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
     };
   }, [loadDrawing]);
 
+  useEscapeLayer(true, onClose);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
       if (event.key === "ArrowLeft" && position > 0) {
         changePosition(position - 1);
       }
@@ -85,7 +87,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [changePosition, entries.length, onClose, position]);
+  }, [changePosition, entries.length, position]);
 
   if (!entry) return null;
 

@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.db.models import Base
 from app.db.seed import seed_word_lists
-from app.game import Game, Phase
 from app.repositories.interfaces import WordPickTotals, WordUsage
 from app.repositories.sqlalchemy import SqlAlchemyWordListRepository
 from app.rooms import RoomManager

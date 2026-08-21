@@ -12,7 +12,7 @@ import { WordDisplay } from "./WordDisplay";
 import { useToolbarState } from "../hooks/useToolbarState";
 import { splitMaskedWord } from "../lib/maskedWord";
 import { recordRender } from "../lib/renderDiagnostics";
-import { useGameStore } from "../store/gameStore";
+import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import type { RoomShellMode } from "./RoomShell";
 
 export function ConnectedRoomPlayersPanel({ mode }: { mode: RoomShellMode }) {
@@ -50,14 +50,12 @@ export function ConnectedRoomChatPanel({
   const messages = useGameStore((state) => state.messages);
   const players = useGameStore((state) => state.players);
   const phase = useGameStore((state) => state.phase);
-  const drawerId = useGameStore((state) => state.drawerId);
   const myPlayerId = useGameStore((state) => state.playerId);
   const guessedWord = useGameStore((state) => state.guessedWord);
   const maskedWord = useGameStore((state) => state.maskedWord);
   const hideMaskedPrompt = useGameStore((state) => state.hideMaskedPrompt);
   const me = players.find((player) => player.playerId === myPlayerId);
-  const isDrawer =
-    (phase === "drawing" || phase === "choosing_word") && drawerId === myPlayerId;
+  const isDrawer = useGameStore(selectAmDrawer);
   const canGuess =
     phase === "drawing" && !isDrawer && !me?.isSpectator && !guessedWord;
 
@@ -106,9 +104,7 @@ export function ConnectedWaitingRoomPanel({
   const wordListSlugs = useGameStore((state) => state.wordListSlugs);
   const players = useGameStore((state) => state.players);
   const myPlayerId = useGameStore((state) => state.playerId);
-  const isHost = useGameStore((state) =>
-    state.players.find((player) => player.playerId === state.playerId)?.isHost ?? false,
-  );
+  const isHost = useGameStore((state) => selectMe(state)?.isHost ?? false);
 
   return (
     <WaitingRoomPanel
@@ -158,9 +154,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const phaseStartedAt = useGameStore((state) => state.phaseStartedAt);
   const lastRoundResult = useGameStore((state) => state.lastRoundResult);
   const spectatorsSeeSolution = useGameStore((state) => state.spectatorsSeeSolution);
-  const me = useGameStore((state) =>
-    state.players.find((player) => player.playerId === state.playerId),
-  );
+  const me = useGameStore(selectMe);
   const drawerNickname = useGameStore((state) =>
     state.players.find((player) => player.playerId === state.drawerId)?.nickname,
   );
@@ -168,8 +162,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
     state.players.find((player) => player.playerId === state.drawerId)?.nameColor,
   );
 
-  const amDrawer =
-    (phase === "drawing" || phase === "choosing_word") && drawerId === playerId;
+  const amDrawer = useGameStore(selectAmDrawer);
   const canDrawNow = phase === "drawing" && drawerId === playerId;
   const isDrawerPerson = drawerId === playerId;
   const drawerWord =

@@ -5,6 +5,18 @@ from app.game import Game, MAX_HINT_SPEND, ROUND_END_SECONDS
 from app.rooms import Player, Room
 
 
+def system_chat_message(text: str) -> dict:
+    """A chat line spoken by the room itself. Authorless by construction, so no
+    caller can accidentally attribute one to a player."""
+    return {
+        "playerId": "",
+        "nickname": "",
+        "text": text,
+        "correct": False,
+        "system": True,
+    }
+
+
 def room_state_payload(room: Room) -> dict:
     return room.to_state_payload()
 
