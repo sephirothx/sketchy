@@ -10,6 +10,12 @@ FRONTEND_DIR="$ROOT_DIR/frontend"
 VENV_PY="$BACKEND_DIR/.venv/bin/python"
 VENV_PIP="$BACKEND_DIR/.venv/bin/pip"
 PORT="${PORT:-8000}"
+# Playwright work is mostly browser processes waiting on the server, so more
+# workers than cores just adds contention and makes timing-sensitive tests
+# flake. Cap at 8: measured stable here, and CI boxes with fewer cores get
+# their own count.
+cpu_count="$( (sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null) || echo 2)"
+E2E_WORKERS="${E2E_WORKERS:-$(( cpu_count > 8 ? 8 : cpu_count ))}"
 SERVER_LOG=""
 E2E_DB=""
 SERVER_PID=""
@@ -61,6 +67,7 @@ rm -f "$E2E_DB"
 log "Starting background server on http://127.0.0.1:$PORT"
 (cd "$BACKEND_DIR" && DATABASE_URL="sqlite+aiosqlite:///$E2E_DB" \
   AUTH_LOGIN_LIMIT=1000 AUTH_REGISTER_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 \
+  TURN_RESULTS_SECONDS=0.5 \
   "$BACKEND_DIR/.venv/bin/uvicorn" app.main:app --host 127.0.0.1 --port "$PORT" --log-level warning) >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
@@ -98,5 +105,8 @@ if [[ "$server_healthy" == false ]]; then
   fail_startup "health check did not pass within 15 seconds"
 fi
 
-log "Running Playwright Multi-Browser E2E Tests"
-(cd "$BACKEND_DIR" && .venv/bin/pytest tests/e2e -v -n 2 --dist=loadfile)
+log "Running Playwright Multi-Browser E2E Tests ($E2E_WORKERS workers)"
+# --dist=load spreads individual tests rather than whole files, so one slow file
+# no longer sets the floor for the whole run. Each test builds its own room and
+# its own browser, so nothing in a file depends on its neighbours.
+(cd "$BACKEND_DIR" && .venv/bin/pytest tests/e2e -n "$E2E_WORKERS" --dist=load)
