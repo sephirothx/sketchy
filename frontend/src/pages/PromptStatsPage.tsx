@@ -179,7 +179,7 @@ export function PromptStatsPage() {
                 <th scope="col">How it goes</th>
                 <th scope="col">Guessed</th>
                 <th scope="col">Picked</th>
-                <th scope="col">Guessers</th>
+                <th scope="col">Drawn</th>
               </tr>
             </thead>
             <tbody>
@@ -189,7 +189,7 @@ export function PromptStatsPage() {
                   <td>{row.band}</td>
                   <td>{row.guessedLabel}</td>
                   <td>{row.pickedLabel}</td>
-                  <td>{row.totalGuesserCount}</td>
+                  <td>{row.drawnLabel}</td>
                 </tr>
               ))}
             </tbody>

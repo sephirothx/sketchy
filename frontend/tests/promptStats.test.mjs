@@ -57,12 +57,23 @@ test("an unrated prompt shows no difficulty rather than a measured-looking zero"
       isRated: false,
       correctGuessRatio: 0,
       pickRate: 0,
+      pickCount: 0,
       totalGuesserCount: 1,
     }),
   ]);
   assert.equal(row.guessedLabel, "—");
   assert.equal(row.pickedLabel, "—");
   assert.notEqual(row.band, "Rarely guessed");
+  // How often it has been drawn is a plain count, true either way.
+  assert.equal(row.drawnLabel, "0");
+});
+
+test("times drawn is reported for rated and unrated prompts alike", () => {
+  const rows = statsRows([
+    prompt("often", { pickCount: 27 }),
+    prompt("once", { pickCount: 1, isRated: false }),
+  ]);
+  assert.deepEqual(rows.map((row) => row.drawnLabel), ["27", "1"]);
 });
 
 test("rows keep the server's order and gain their display fields", () => {
@@ -72,6 +83,7 @@ test("rows keep the server's order and gain their display fields", () => {
   ]);
   assert.deepEqual(rows.map((row) => row.text), ["roller coaster", "cat"]);
   assert.equal(rows[0].guessedLabel, "10%");
+  assert.equal(rows[0].drawnLabel, "5");
   assert.equal(rows[0].band, "Rarely guessed");
   assert.equal(rows[1].band, "Gets guessed");
   assert.equal(rows[1].pickedLabel, "90%");

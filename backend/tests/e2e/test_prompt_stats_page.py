@@ -27,15 +27,18 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             expected = 592 if selected == "english_extended" else 260
             assert listed == expected, f"listed {listed} of {expected} prompts"
 
-            # A ranked row is ranked on a real sample; the suite shares one
-            # server with tests playing games, so which rows those are is not
-            # ours to predict - only that nothing thin is ranked.
+            # Which rows are ranked is not ours to predict - the suite shares
+            # one server with tests playing games - but a ranked row must show
+            # a measurement and an unranked one must not pretend to.
             for index in range(listed):
                 row = rows.nth(index)
+                cells = await row.locator("td").all_inner_texts()
+                band, guessed = cells[0], cells[1]
                 if "is-unrated" in (await row.get_attribute("class") or ""):
-                    continue
-                guessers = await row.locator("td").last.inner_text()
-                assert int(guessers) >= 5, f"ranked a prompt with {guessers} guessers"
+                    assert guessed == "—", f"unranked row shows a figure: {cells}"
+                    assert band == "Not played enough", f"unranked row banded: {cells}"
+                else:
+                    assert guessed.endswith("%"), f"ranked row shows no figure: {cells}"
 
             # Search narrows the list without leaving the page.
             await page.fill("#prompt-stats-search", "zzzz-no-such-prompt")

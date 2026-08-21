@@ -75,6 +75,8 @@ export function searchNote(query: string, matches: number): string | null {
  *
  * An unrated prompt gets no band and no percentages: it has been offered too
  * little to have a difficulty, and printing "0%" beside it would read as one.
+ * How many times it has been drawn is a plain count either way, and true of a
+ * prompt drawn twice as much as one drawn fifty times.
  */
 export function statsRows(prompts: PromptStats[]) {
   return prompts.map((prompt) => ({
@@ -82,5 +84,6 @@ export function statsRows(prompts: PromptStats[]) {
     guessedLabel: prompt.isRated ? ratioLabel(prompt.correctGuessRatio) : "—",
     band: prompt.isRated ? difficultyBand(prompt.correctGuessRatio) : "Not played enough",
     pickedLabel: prompt.isRated ? ratioLabel(prompt.pickRate) : "—",
+    drawnLabel: String(prompt.pickCount),
   }));
 }
