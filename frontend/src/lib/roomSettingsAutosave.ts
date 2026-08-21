@@ -130,15 +130,22 @@ export function createRoomSettingsSaver(
     const owed = takePending && pending;
     if (unsent.size === 0 && !owed) return null;
     const patch: RoomSettingsPatch = {};
-    for (const sequence of [...unsent.keys()].sort((a, b) => a - b)) {
-      Object.assign(patch, unsent.get(sequence));
+    for (const [, lost] of [...unsent.entries()].sort(([a], [b]) => a - b)) {
+      for (const [field, value] of Object.entries(lost)) {
+        // A change still waiting out its delay is the newer intent even though
+        // it has not been sent yet, so a lost value underneath it is not worth
+        // recovering: putting it back would show everyone the old setting for
+        // as long as the delay has left to run.
+        if (pending && field in pending) continue;
+        Object.assign(patch, { [field]: value });
+      }
     }
     unsent.clear();
     if (owed) {
       Object.assign(patch, pending);
       pending = null;
     }
-    return patch;
+    return Object.keys(patch).length > 0 ? patch : null;
   }
 
   function settled(): SaveStatus {

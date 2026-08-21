@@ -208,6 +208,25 @@ test("an edit made while offline wins over the patch that failed to send", async
   assert.deepEqual(environment.sent.at(-1), { rounds: 7, name: "Studio" });
 });
 
+test("a lost value is not put back under one the host has since retyped", async () => {
+  const environment = createEnvironment();
+  const saver = createRoomSettingsSaver(environment);
+
+  saver.queue({ name: "A" }, TYPING_SAVE_DELAY_MS);
+  environment.elapse();
+  saver.queue({ isPublic: false });
+  environment.elapse();
+
+  await environment.fail();  // the name never made it
+  saver.queue({ name: "AB" }, TYPING_SAVE_DELAY_MS);  // and is still being typed
+  await environment.ack();   // the visibility did, so the lost patch is retried
+
+  assert.equal(environment.sent.length, 2, "there is nothing left worth recovering");
+
+  environment.elapse();
+  assert.deepEqual(environment.sent.at(-1), { name: "AB" });
+});
+
 test("status runs pending, saving, saved, then goes quiet", async () => {
   const environment = createEnvironment();
   const saver = createRoomSettingsSaver(environment);
