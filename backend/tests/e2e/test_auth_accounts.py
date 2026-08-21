@@ -219,6 +219,11 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
 
             # Play the turns out: the drawer takes the first prompt, the other
             # guesses it, until the game ends.
+            #
+            # Waits on the next phase actually arriving rather than on a fixed
+            # sleep. The turn-results pause is configurable and E2E runs it at
+            # half a second, so a sleep long enough to be safe here would be
+            # several times the thing it is waiting for.
             for _ in range(6):
                 if await host.query_selector('[data-testid="game-end-overlay"]'):
                     break
@@ -233,7 +238,14 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
                     guess_input = other.locator(".chat-input input")
                     await guess_input.fill(prompt)
                     await guess_input.press("Enter")
-                await host.wait_for_timeout(3000)
+                for _ in range(150):
+                    if await host.query_selector('[data-testid="game-end-overlay"]'):
+                        break
+                    if await host.query_selector(".prompt-choices button") or (
+                        await guest.query_selector(".prompt-choices button")
+                    ):
+                        break
+                    await asyncio.sleep(0.1)
 
             await host.wait_for_selector('[data-testid="game-end-overlay"]', timeout=90000)
             assert await host.is_visible(".game-end-claim")

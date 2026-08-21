@@ -257,6 +257,16 @@ plays whole games end to end and the production five-second pause after every
 turn otherwise dominates the run. Clients read the phase length off the
 payload, so a shortened pause is still a faithful turn.
 
+Two rules keep the suite fast as it grows. A test waits on the condition it
+actually cares about — the next phase arriving, the element appearing — never on
+a fixed sleep sized to outlast it, because such a sleep costs its full length on
+every run and silently stops covering anything when the thing it waits for gets
+slower. And where a test genuinely has to sit out a production interval, such as
+the lobby's four-second room-list poll, it fast-forwards the page's own clock
+with Playwright's `page.clock` rather than spending the time. That keeps the
+interval a production constant instead of something bent for the tests, and it
+is the tool to reach for before making a timing value configurable.
+
 The canvas benchmark starts the built application on an isolated local port
 (`8765` by default), creates a real two-player game, and reports
 drawer-to-guesser stroke latency, large-fill latency, Undo/replay latency,
