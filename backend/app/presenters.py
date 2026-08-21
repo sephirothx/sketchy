@@ -105,7 +105,7 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
         player.id: rank for rank, player in enumerate(ranked, start=1)
     }
     return {
-        "word": game.word,
+        "prompt": game.prompt,
         "drawerId": game.current_drawer,
         "drawerBonus": drawer_bonus,
         "seconds": (

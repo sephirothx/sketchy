@@ -6,7 +6,7 @@ from functools import partial
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     PayloadError,
-    SelectWordPayload,
+    SelectPromptPayload,
     parse_empty_payload,
     parse_payload,
 )
@@ -32,14 +32,14 @@ async def start_game(ctx: HandlerContext, sid, data=None):
 
 async def select_prompt(ctx: HandlerContext, sid, data):
     try:
-        payload = parse_payload(SelectWordPayload, data)
+        payload = parse_payload(SelectPromptPayload, data)
     except PayloadError as error:
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
         return {"ok": False, "error": "Game is not ready for prompt selection"}
     room, player = current
-    if not room.game.choose_word(player.id, payload.word):
+    if not room.game.choose_prompt(player.id, payload.prompt):
         return {"ok": False, "error": "That prompt is no longer available"}
     ctx.timers.cancel_phase_timer(room.id)
     await ctx.game_flow._begin_drawing(room)

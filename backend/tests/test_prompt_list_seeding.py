@@ -1,4 +1,4 @@
-"""Unit tests for word list seeding, REST API, selection, and usage metrics."""
+"""Unit tests for prompt list seeding, REST API, selection, and usage metrics."""
 from __future__ import annotations
 
 import pytest

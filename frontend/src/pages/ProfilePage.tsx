@@ -171,7 +171,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                 {detail.turns.map((turn) => (
                   <tr key={`${turn.roundNumber}-${turn.turnNumber}`}>
                     <td>{turn.roundNumber}</td>
-                    <td className="profile-turn-prompt">{turn.word}</td>
+                    <td className="profile-turn-prompt">{turn.prompt}</td>
                     <td>{named(turn.drawerUserId, turn.drawerDisplayName)}</td>
                     <td>{formatDuration(turn.durationSeconds)}</td>
                     <td>

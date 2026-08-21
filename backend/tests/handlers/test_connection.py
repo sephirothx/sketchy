@@ -48,7 +48,7 @@ async def test_public_player_ids_are_broadcast_but_account_identity_is_private()
             drawer_id=host.id,
             drawer_nickname=host.nickname,
             drawer_name_color=host.name_color,
-            word="apple",
+            prompt="apple",
             action_count=0,
             canvas_history=encode_canvas_history([]),
         )
@@ -322,7 +322,7 @@ async def test_already_joined_socket_resyncs_turn_results_overlay():
     assert response["ok"] is True
     assert turn_ended_calls
     assert turn_ended_calls[0].kwargs.get("to") == "drawer-sid"
-    assert turn_ended_calls[0].args[1]["word"] == room.game.word
+    assert turn_ended_calls[0].args[1]["prompt"] == room.game.prompt
 
 @pytest.mark.asyncio
 async def test_session_ping_reports_phase_or_needs_rebind():

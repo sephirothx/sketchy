@@ -68,7 +68,7 @@ async def guess(ctx: HandlerContext, sid, data):
 
     game = room.game
 
-    # Once a player has already found the word this round, anything else
+    # Once a player has already found the prompt this round, anything else
     # they type could spoil it for players who haven't guessed yet (or
     # just be confusing out-of-context chatter). Keep the rest of their
     # messages for the round visible only to the drawer and other
@@ -138,7 +138,7 @@ async def guess(ctx: HandlerContext, sid, data):
     await ctx.sio.emit(
         "you_guessed_correctly",
         {
-            "word": game.word,
+            "prompt": game.prompt,
             "points": points,
             # `points` is already net of the hints this player bought, and the
             # deduction clamps at zero, so the gross figure can't be recovered
@@ -213,7 +213,7 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
         return {"ok": False, "error": "Letter unavailable"}
 
     hint_spend = game.hint_spend.get(player.id, 0)
-    found_count = sum(1 for i in game.letter_positions if game.word[i].lower() == letter)
+    found_count = sum(1 for i in game.letter_positions if game.prompt[i].lower() == letter)
     await ctx.sio.emit(
         "hint_revealed",
         {
@@ -227,7 +227,7 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
     if found_count:
         feedback = f"{price} - found {found_count} time{'s' if found_count != 1 else ''}!"
     else:
-        feedback = f"{price} - not in the word."
+        feedback = f"{price} - not in the prompt."
     await ctx.game_flow.announce(room, feedback, to=sid)
     return {"ok": True, "cost": cost, "found": found_count, "hintSpend": hint_spend}
 

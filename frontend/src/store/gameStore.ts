@@ -95,9 +95,9 @@ interface GameStore {
     hintSpend?: number;
     hintBudget?: number;
   }) => void;
-  setMyPrompt: (word: string | null) => void;
-  setGuessedPrompt: (word: string | null, breakdown?: GuessBreakdown | null) => void;
-  setMaskedPrompt: (word: string) => void;
+  setMyPrompt: (prompt: string | null) => void;
+  setGuessedPrompt: (prompt: string | null, breakdown?: GuessBreakdown | null) => void;
+  setMaskedPrompt: (prompt: string) => void;
   setHintRevealed: (payload: {
     maskedPrompt: string;
     hintCost?: number | null;
@@ -232,13 +232,13 @@ export const useGameStore = create<GameStore>((set) => ({
       hintBudget: hintBudget ?? s.hintBudget,
       lastGuessBreakdown: null,
     })),
-  setMyPrompt: (word) => set({ myPrompt: word }),
-  setGuessedPrompt: (word, breakdown) =>
+  setMyPrompt: (prompt) => set({ myPrompt: prompt }),
+  setGuessedPrompt: (prompt, breakdown) =>
     set((s) => ({
-      guessedPrompt: word,
+      guessedPrompt: prompt,
       lastGuessBreakdown: breakdown !== undefined ? breakdown : s.lastGuessBreakdown,
     })),
-  setMaskedPrompt: (word) => set({ maskedPrompt: word }),
+  setMaskedPrompt: (prompt) => set({ maskedPrompt: prompt }),
   setHintRevealed: ({ maskedPrompt, hintCost, letterPrices, hintSpend }) =>
     set((s) => ({
       maskedPrompt,

@@ -445,7 +445,7 @@ async def test_finished_drawing_turn_is_captured_for_recap():
         prompt_pool=["apple"],
     )
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.choose_word(drawer.id, "apple")
+    room.game.choose_prompt(drawer.id, "apple")
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -474,7 +474,7 @@ async def test_finished_drawing_turn_is_captured_for_recap():
     assert recap.drawer_id == drawer.id
     assert recap.drawer_nickname == "Drawer"
     assert recap.drawer_name_color == "#123abc"
-    assert recap.word == "apple"
+    assert recap.prompt == "apple"
     assert recap.action_count == 1
     assert decode_binary_canvas_history(recap.canvas_history) == [
         FillAction(x=200, y=300, color=0x123456),
@@ -499,7 +499,7 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
             drawer_id=player.id,
             drawer_nickname=player.nickname,
             drawer_name_color=player.name_color,
-            word="tree",
+            prompt="tree",
             action_count=1,
             canvas_history=canvas,
         )
@@ -522,7 +522,7 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
         "drawerId": player.id,
         "drawerNickname": "Player",
         "drawerNameColor": player.name_color,
-        "word": "tree",
+        "prompt": "tree",
         "actionCount": 1,
         "available": True,
         "canvas": canvas,

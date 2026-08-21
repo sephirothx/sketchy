@@ -13,9 +13,9 @@ from app.game import CompletedTurnStats
 from app.repositories.interfaces import WordPickTotals, WordUsage
 
 
-def _stored_form(word: str) -> str:
-    """Match how `upsert_bundled` stores a word, so rows can be found by text."""
-    return word.strip().lower()
+def _stored_form(prompt: str) -> str:
+    """Match how `upsert_bundled` stores a prompt, so rows can be found by text."""
+    return prompt.strip().lower()
 
 
 def tally_word_usage(turns: Iterable[CompletedTurnStats]) -> WordUsage:
@@ -23,7 +23,7 @@ def tally_word_usage(turns: Iterable[CompletedTurnStats]) -> WordUsage:
 
     Aggregating rather than replaying turn by turn is what lets a whole game
     be written in a few statements. It also has to be aggregation rather than
-    a set: the same word can be offered in several turns, and a pool too small
+    a set: the same prompt can be offered in several turns, and a pool too small
     to keep excluding what it has already used can have it chosen twice too.
 
     Words that no list contains - a room's custom prompts, which live only in
@@ -36,9 +36,9 @@ def tally_word_usage(turns: Iterable[CompletedTurnStats]) -> WordUsage:
 
     for turn in turns:
         for offered in turn.offered_words:
-            word = _stored_form(offered)
-            if word:
-                offers[word] += 1
+            prompt = _stored_form(offered)
+            if prompt:
+                offers[prompt] += 1
         chosen = _stored_form(turn.chosen_word)
         if not chosen:
             continue
@@ -49,11 +49,11 @@ def tally_word_usage(turns: Iterable[CompletedTurnStats]) -> WordUsage:
     return WordUsage(
         offers=dict(offers),
         picks={
-            word: WordPickTotals(
+            prompt: WordPickTotals(
                 picks=count,
-                correct_guesses=correct_guesses[word],
-                total_guessers=total_guessers[word],
+                correct_guesses=correct_guesses[prompt],
+                total_guessers=total_guessers[prompt],
             )
-            for word, count in picks.items()
+            for prompt, count in picks.items()
         },
     )

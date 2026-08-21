@@ -169,19 +169,19 @@ class TurnRecord(Base):
         nullable=False,
         index=True,
     )
-    word: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt: Mapped[str] = mapped_column(String(64), nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     # How many players could still have guessed. Correct-guess counts are
     # uninterpretable without it: two of two is not two of eight.
     guesser_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
-    # The drawer let the clock run out and took the first offered word. Not a
+    # The drawer let the clock run out and took the first offered prompt. Not a
     # preference, and it should not be counted as one.
     prompt_auto_picked: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("0"), nullable=False
     )
-    # Canvas actions committed during the turn: separates an impossible word
+    # Canvas actions committed during the turn: separates an impossible prompt
     # from a drawer who drew nothing.
     stroke_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
@@ -245,7 +245,7 @@ class TurnGuess(Base):
 
 
 class PromptList(Base):
-    """Curated or custom word collection."""
+    """Curated or custom prompt collection."""
 
     __tablename__ = "prompt_lists"
 
@@ -265,7 +265,7 @@ class PromptList(Base):
 
 
 class Prompt(Base):
-    """Individual word belonging to a word list with usage statistics."""
+    """Individual prompt belonging to a prompt list with usage statistics."""
 
     __tablename__ = "prompts"
 

@@ -97,7 +97,7 @@ class TurnRecordInput:
     round_number: int
     turn_number: int
     drawer_user_id: str
-    word: str
+    prompt: str
     duration_seconds: float
     guesser_count: int = 0
     prompt_auto_picked: bool = False
@@ -167,7 +167,7 @@ class TurnDetail:
     turn_number: int
     drawer_user_id: str
     drawer_display_name: str
-    word: str
+    prompt: str
     duration_seconds: float
     guesses: list[TurnGuessDetail] = field(default_factory=list)
 
@@ -196,7 +196,7 @@ class PromptListSummary:
 
 @dataclass(frozen=True)
 class WordStatsSummary:
-    """Detailed statistics and derived difficulty metrics for a word."""
+    """Detailed statistics and derived difficulty metrics for a prompt."""
 
     text: str
     offer_count: int
@@ -209,9 +209,9 @@ class WordStatsSummary:
 
 @dataclass(frozen=True, slots=True)
 class WordPickTotals:
-    """What being drawn cost one word over a whole game.
+    """What being drawn cost one prompt over a whole game.
 
-    More than one turn can land on the same word: a pool too small to keep
+    More than one turn can land on the same prompt: a pool too small to keep
     excluding what it has already used starts offering repeats.
     """
 
@@ -224,7 +224,7 @@ class WordPickTotals:
 class WordUsage:
     """One finished game's effect on a prompt list's counters.
 
-    Keyed by the word as stored - trimmed and lower-cased - so the repository
+    Keyed by the prompt as stored - trimmed and lower-cased - so the repository
     matches rows without re-deriving it. Aggregated across the game's turns,
     which is what lets the whole game be written in a few statements.
     """
@@ -340,7 +340,7 @@ class GameHistoryRepository(ABC):
 
 
 class PromptListRepository(ABC):
-    """Data access boundary for curated prompt lists and word usage statistics."""
+    """Data access boundary for curated prompt lists and prompt usage statistics."""
 
     @abstractmethod
     async def list_all(self) -> list[PromptListSummary]:
@@ -354,12 +354,12 @@ class PromptListRepository(ABC):
 
     @abstractmethod
     async def get_words(self, prompt_list_id: str) -> list[str]:
-        """Retrieve word strings belonging to a specific list."""
+        """Retrieve prompt strings belonging to a specific list."""
         ...
 
     @abstractmethod
     async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:
-        """Retrieve deduplicated word strings across multiple prompt list slugs."""
+        """Retrieve deduplicated prompt strings across multiple prompt list slugs."""
         ...
 
     @abstractmethod
@@ -383,7 +383,7 @@ class PromptListRepository(ABC):
     ) -> None:
         """Apply one finished game's offers and picks to every named list.
 
-        One call for the whole game rather than one per word per list: this
+        One call for the whole game rather than one per prompt per list: this
         runs at the moment a game ends, and a transaction per turn is the
         difference between a handful of statements and dozens of commits.
         """

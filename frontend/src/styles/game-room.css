@@ -783,7 +783,7 @@
     min-height: 0;
   }
 
-  /* Density mode: hide chrome; fill vv with canvas + word + input */
+  /* Density mode: hide chrome; fill vv with canvas + prompt + input */
   .game-room.guess-focused {
     padding: 4px 6px;
     overflow: hidden;

@@ -196,8 +196,8 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         )
 
         await host_page.set_viewport_size({"width": 1280, "height": 720})
-        word = await drawer_page.locator(".prompt-reveal").inner_text()
-        await guesser_page.locator(".chat-input input").fill(word)
+        prompt = await drawer_page.locator(".prompt-reveal").inner_text()
+        await guesser_page.locator(".chat-input input").fill(prompt)
         await guesser_page.locator(".chat-input input").press("Enter")
         await guesser_page.wait_for_selector('[data-testid="turn-results-overlay"]')
         await assert_no_axe_violations(guesser_page, "round end")

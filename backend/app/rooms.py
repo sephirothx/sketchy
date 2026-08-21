@@ -221,7 +221,7 @@ class DrawingRecapEntry:
     drawer_id: str
     drawer_nickname: str
     drawer_name_color: str | None
-    word: str
+    prompt: str
     action_count: int
     # None once a game's drawings outgrow the room's budget and this one no
     # longer fits. The entry itself stays: a recap that quietly listed fewer
@@ -241,7 +241,7 @@ class DrawingRecapEntry:
             "drawerId": self.drawer_id,
             "drawerNickname": self.drawer_nickname,
             "drawerNameColor": self.drawer_name_color,
-            "word": self.word,
+            "prompt": self.prompt,
             "actionCount": self.action_count,
             "available": self.is_available,
         }
@@ -328,7 +328,7 @@ class Room:
 
         The drawings a game keeps are the ones it showed first, so a recap
         does not rearrange itself while somebody is reading it. Only the
-        bitmap is given up - the turn stays listed with its word and its
+        bitmap is given up - the turn stays listed with its prompt and its
         drawer, because a recap quietly showing fewer turns than were played
         would be a worse answer than one admitting a drawing is gone.
 
@@ -355,7 +355,7 @@ class Room:
         return self.canvas_generation
 
     def effective_word_pool(self) -> list[str] | None:
-        """Return the word pool a Game should draw from, or None for the default list.
+        """Return the prompt pool a Game should draw from, or None for the default list.
 
         If custom_prompts_only is set and custom words exist, returns just the custom words.
         Otherwise, merges custom words with curated words (or fallback PROMPTS if none provided),

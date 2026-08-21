@@ -135,7 +135,7 @@ export interface RoundScoreEntry extends ScoreEntry {
 }
 
 export interface TurnEndedPayload {
-  word: string;
+  prompt: string;
   drawerId: string;
   drawerBonus: number;
   seconds?: number;
@@ -172,7 +172,7 @@ export interface DrawingRecapMetadata {
   drawerId: string;
   drawerNickname: string;
   drawerNameColor?: string;
-  word: string;
+  prompt: string;
   actionCount: number;
   /** False once the room gave this bitmap up to stay inside its recap budget. */
   available?: boolean;

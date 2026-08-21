@@ -14,7 +14,7 @@ async def seed_prompt_lists(
     repo: PromptListRepository,
     directory: Path | None = None,
 ) -> list[PromptListSummary]:
-    """Scan and upsert all bundled word list JSON definitions into the database."""
+    """Scan and upsert all bundled prompt list JSON definitions into the database."""
     target_dir = directory or DEFAULT_PROMPT_LISTS_DIR
     if not target_dir.is_dir():
         logger.warning("Prompt lists directory not found at %s", target_dir)
@@ -43,6 +43,6 @@ async def seed_prompt_lists(
             seeded.append(summary)
             logger.info("Seeded bundled prompt list '%s' (v%d, %d prompts)", slug, version, len(prompts))
         except Exception:
-            logger.exception("Failed to seed word list from %s", file_path)
+            logger.exception("Failed to seed prompt list from %s", file_path)
 
     return seeded

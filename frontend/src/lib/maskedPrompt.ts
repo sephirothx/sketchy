@@ -1,5 +1,5 @@
 // The backend renders maskedPrompt as e.g. "_ _ _ _  _ _  _ _ _ _ _  4 2 5" -
-// tightly spaced blanks per word, followed by each word's letter count (in
+// tightly spaced blanks per prompt, followed by each prompt's letter count (in
 // order) at the very end. Digits only ever appear in that trailing count
 // list, so splitting on the first digit cleanly separates the two parts.
 export function splitMaskedPrompt(masked: string): { blanks: string; counts: string[] } {

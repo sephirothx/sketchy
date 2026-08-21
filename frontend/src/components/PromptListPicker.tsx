@@ -59,7 +59,7 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
   if (fetchError && promptLists.length === 0) {
     return (
       <div className="prompt-list-picker-fallback">
-        <p className="prompt-list-fallback-note">Using default word list ({fetchError})</p>
+        <p className="prompt-list-fallback-note">Using default prompt list ({fetchError})</p>
       </div>
     );
   }
@@ -79,7 +79,7 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
               className={`prompt-list-chip ${isSelected ? "is-selected" : ""}`}
               aria-pressed={isSelected}
               disabled={disabled || (isSelected && isOnlySelected)}
-              title={wl.description || `${wl.name} (${wl.promptCount} words)`}
+              title={wl.description || `${wl.name} (${wl.promptCount} prompts)`}
               onClick={() => handleToggle(wl.slug)}
             >
               <span className="prompt-list-chip-status" aria-hidden="true">

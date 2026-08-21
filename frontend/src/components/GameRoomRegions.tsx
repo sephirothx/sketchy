@@ -172,7 +172,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
       : null);
   const solutionPrompt =
     phase === "turn_results"
-      ? lastTurnResult?.word ?? null
+      ? lastTurnResult?.prompt ?? null
       : isDrawerPerson && phase === "drawing"
         ? drawerPrompt
         : guessedPrompt
@@ -220,7 +220,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         myPrompt={myPrompt}
         maskedPrompt={maskedPrompt}
         promptChoices={promptChoices}
-        revealedPrompt={phase === "turn_results" ? lastTurnResult?.word ?? null : guessedPrompt}
+        revealedPrompt={phase === "turn_results" ? lastTurnResult?.prompt ?? null : guessedPrompt}
         hintMode={hintMode}
         canBuyHint={phase === "drawing" && !amDrawer && !guessedPrompt}
         nextHintCost={nextHintCost}
@@ -247,7 +247,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
       />
       {phase === "turn_results" && lastTurnResult && (
         <TurnResultsOverlay
-          word={lastTurnResult.word}
+          prompt={lastTurnResult.prompt}
           drawerId={lastTurnResult.drawerId}
           drawerBonus={lastTurnResult.drawerBonus}
           guesses={lastTurnResult.guesses}

@@ -46,7 +46,7 @@ export interface GameTurn {
   turnNumber: number;
   drawerUserId: string;
   drawerDisplayName: string;
-  word: string;
+  prompt: string;
   durationSeconds: number;
   guesses: RoundGuess[];
 }

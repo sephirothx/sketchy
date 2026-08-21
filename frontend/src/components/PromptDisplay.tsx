@@ -19,7 +19,7 @@ interface WordDisplayProps {
   hintBudget?: number;
 }
 
-// tightly spaced blanks per word, followed by each word's letter count (in
+// tightly spaced blanks per prompt, followed by each prompt's letter count (in
 // order) at the very end. Digits only ever appear in that trailing count
 // list, so splitting on the first digit cleanly separates the two parts.
 function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
@@ -115,9 +115,9 @@ export function PromptDisplay({
       <div className="prompt-display choosing">
         <p>Choose a prompt to draw:</p>
         <div className="prompt-choices">
-          {promptChoices.map((word) => (
-            <button key={word} disabled={pendingAction !== null} onClick={() => void runAction(`word:${word}`, "select_prompt", { word }, "select the prompt")}>
-              {pendingAction === `word:${word}` ? "Choosing…" : word}
+          {promptChoices.map((prompt) => (
+            <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${prompt}`, "select_prompt", { prompt }, "select the prompt")}>
+              {pendingAction === `prompt:${prompt}` ? "Choosing…" : prompt}
             </button>
           ))}
         </div>

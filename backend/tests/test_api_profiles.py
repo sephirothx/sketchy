@@ -78,7 +78,7 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=winner,
-                word="jackpot",
+                prompt="jackpot",
                 duration_seconds=42.5,
             )
         ],
@@ -189,7 +189,7 @@ async def test_participants_see_the_turn_by_turn_detail(env):
 
     assert body["roomName"] == "Studio 0"
     assert len(body["turns"]) == 1
-    assert body["turns"][0]["word"] == "jackpot"
+    assert body["turns"][0]["prompt"] == "jackpot"
     assert body["turns"][0]["drawerDisplayName"] == "Ann"
     assert body["turns"][0]["guesses"][0]["displayName"] == "Bob"
     assert body["turns"][0]["guesses"][0]["pointsAwarded"] == 100

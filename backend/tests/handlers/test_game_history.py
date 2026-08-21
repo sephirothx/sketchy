@@ -66,7 +66,7 @@ async def play_to_completion(ctx, room, players, *, guessers=None):
                 continue
             if guessers is not None and player.nickname not in guessers:
                 continue
-            game.submit_guess(player.id, game.word)
+            game.submit_guess(player.id, game.prompt)
         await flow._end_round(room)
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
@@ -85,7 +85,7 @@ async def test_completed_game_records_every_round_with_participants_and_guesses(
     # Two players, two rounds each taking a turn: four turns, all recorded.
     assert len(saved.turns) == 4
     assert [r.turn_number for r in saved.turns] == [1, 2, 3, 4]
-    assert all(r.word for r in saved.turns)
+    assert all(r.prompt for r in saved.turns)
     assert {p.user_id for p in saved.participants} == {"user-ann", "user-bob"}
     assert saved.record.player_count == 2
     assert saved.record.room_name == "Studio"
@@ -249,10 +249,10 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
 
     price = game.hint_cost(guesser.id)
     assert game.buy_hint_letter(guesser.id, 0) is True
-    game.submit_guess(guesser.id, "definitely-not-the-word")
+    game.submit_guess(guesser.id, "definitely-not-the-prompt")
     gross = game.remaining_seconds() / game.drawing_seconds
     gross = round(MIN_GUESS_POINTS + (MAX_GUESS_POINTS - MIN_GUESS_POINTS) * gross)
-    _, awarded = game.submit_guess(guesser.id, game.word)
+    _, awarded = game.submit_guess(guesser.id, game.prompt)
 
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -297,7 +297,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     flow = ctx.game_flow
 
     class RestartingWordRepo:
-        """Stands in for the word-stat writes, and restarts the room mid-way.
+        """Stands in for the prompt-stat writes, and restarts the room mid-way.
 
         These run only once the game is finished, which is exactly the window
         where the room is already reporting itself as waiting.
@@ -323,7 +323,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
         game.force_word_choice()
         game.set_phase_deadline(game.drawing_seconds)
         guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
-        game.submit_guess(guesser.id, game.word)
+        game.submit_guess(guesser.id, game.prompt)
         await flow._end_round(room)
         ctx.timers.cancel_phase_timer(room.id)
         expected_scores = {p.user_id: p.score for p in room.player_list()}
@@ -403,7 +403,7 @@ class FakeWordListRepository:
         if self._hang:
             await asyncio.sleep(3600)
         self.calls.append((tuple(prompt_list_slugs), usage))
-        self._timeline.append(("word", tuple(prompt_list_slugs)))
+        self._timeline.append(("prompt", tuple(prompt_list_slugs)))
 
 
 def emitted_payload(ctx, event: str):
@@ -427,7 +427,7 @@ async def test_game_ended_is_emitted_before_any_word_usage_is_written():
 
     assert ("emit", "game_ended") in timeline
     assert words.calls, "the metrics still have to be recorded"
-    first_write = next(i for i, entry in enumerate(timeline) if entry[0] == "word")
+    first_write = next(i for i, entry in enumerate(timeline) if entry[0] == "prompt")
     assert timeline.index(("emit", "game_ended")) < first_write
     assert timeline.index(("emit", "room_state")) < first_write
 
@@ -468,4 +468,4 @@ async def test_every_turn_and_list_is_folded_into_a_single_write():
     assert slugs == ("english_standard", "english_extended")
     assert sum(usage.offers.values()) == 12
     assert sum(totals.picks for totals in usage.picks.values()) == 4
-    assert all(word == word.strip().lower() for word in usage.offers)
+    assert all(prompt == prompt.strip().lower() for prompt in usage.offers)

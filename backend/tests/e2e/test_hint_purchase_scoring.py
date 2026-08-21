@@ -9,20 +9,20 @@ from tests.e2e.lobby_helpers import use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-async def choose_word(pages: list[Page]) -> tuple[Page, Page, str]:
+async def choose_prompt(pages: list[Page]) -> tuple[Page, Page, str]:
     for _ in range(120):
         for page in pages:
             if await page.locator(".prompt-choices").count():
                 drawer = page
                 guesser = pages[1] if page is pages[0] else pages[0]
                 choice = drawer.locator(".prompt-choices button").first
-                word = (await choice.inner_text()).strip()
+                prompt = (await choice.inner_text()).strip()
                 await choice.click()
                 await drawer.locator(".prompt-choices").wait_for(state="detached")
                 await drawer.locator("canvas.drawing-canvas").wait_for()
-                return drawer, guesser, word
+                return drawer, guesser, prompt
         await asyncio.sleep(0.1)
-    raise AssertionError("No drawer received word choices within 12 seconds")
+    raise AssertionError("No drawer received prompt choices within 12 seconds")
 
 
 @pytest.mark.asyncio
@@ -58,8 +58,8 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await host.get_by_role("button", name="Save settings").click()
             await host.get_by_role("button", name="Start game").click()
 
-            drawer, guesser, word = await choose_word([host, guest])
-            assert word == "elephant"
+            drawer, guesser, prompt = await choose_prompt([host, guest])
+            assert prompt == "elephant"
 
             my_score = guesser.locator(".player-row.is-self .player-score")
             assert (await my_score.inner_text()).strip() == "0"
@@ -72,7 +72,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             assert (await spend_line.inner_text()).strip() == "Total: 12"
             assert (await my_score.inner_text()).strip() == "0"
 
-            await guesser.fill(".chat-input input", word)
+            await guesser.fill(".chat-input input", prompt)
             await guesser.keyboard.press("Enter")
 
             personal = guesser.locator(".turn-results-personal")

@@ -22,7 +22,7 @@ async def test_toggle_afk_socket_handler_and_not_waited_for():
     room.state = "playing"
     room.game = Game(turn_order=[p1.id, p2.id, p3.id], rounds_total=1)
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game._set_word("banana")
+    room.game._set_prompt("banana")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     timers = register_handlers(sio, room_manager).timers
@@ -232,7 +232,7 @@ def _emitted(sio, event: str) -> bool:
 
 @pytest.mark.asyncio
 async def test_afk_toggle_by_final_drawer_ends_the_game_instead_of_overrunning():
-    """Going AFK while choosing the last word must not buy the room a bonus turn."""
+    """Going AFK while choosing the last prompt must not buy the room a bonus turn."""
     _, room, (_, _, p3), sio, ctx = _afk_room_on_its_final_turn()
 
     await sio.handlers["/"]["toggle_afk"]("p3-sid", {"afk": True})
@@ -245,7 +245,7 @@ async def test_afk_toggle_by_final_drawer_ends_the_game_instead_of_overrunning()
     # of a one-round game.
     assert not _emitted(sio, "turn_starting")
     # Ending never reaches _start_turn, so nothing else retires the pending
-    # word-choice timer.
+    # prompt-choice timer.
     assert room.id not in ctx.timers.phase_timers
 
 

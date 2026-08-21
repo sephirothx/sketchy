@@ -28,7 +28,7 @@ export function ChoosingPromptOverlay({
           >
             {drawerNickname}
           </strong>{" "}
-          is choosing a word…
+          is choosing a prompt…
         </p>
         <p className="choosing-prompt-hint">
           Drawing will begin as soon as they choose.

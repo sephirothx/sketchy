@@ -1,4 +1,4 @@
-"""Folding a finished game's turns into word-list counters."""
+"""Folding a finished game's turns into prompt-list counters."""
 from __future__ import annotations
 
 from app.game import CompletedTurnStats
@@ -62,8 +62,8 @@ def test_words_are_tallied_in_the_form_the_word_lists_store():
 
 
 def test_a_turn_nobody_finished_still_records_its_offers():
-    """An abandoned word was still shown to the drawer, and that is the point
-    of offer_count: it is the denominator for how often a word gets picked."""
+    """An abandoned prompt was still shown to the drawer, and that is the point
+    of offer_count: it is the denominator for how often a prompt gets picked."""
     usage = tally_word_usage([turn(offered=["apple", "banana"], chosen="")])
 
     assert usage.offers == {"apple": 1, "banana": 1}

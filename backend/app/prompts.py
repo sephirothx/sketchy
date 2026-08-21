@@ -1,4 +1,4 @@
-"""Static prompt list used for round word selection."""
+"""Static prompt list used for round prompt selection."""
 import random
 import re
 
@@ -45,22 +45,22 @@ def random_word_choices(
 def parse_custom_word_list(raw: str) -> list[str]:
     """Parse comma- or newline-separated custom prompts into a clean, deduped list.
 
-    Entries may be multi-word expressions (e.g. "red panda"), not just single
-    prompts. Blank entries and duplicates (case-insensitive) are dropped,
+    Entries may be several words long (e.g. "red panda"), not just single
+    words. Blank entries and duplicates (case-insensitive) are dropped,
     entries longer than `MAX_PROMPT_LENGTH` are rejected, and the overall list
     is capped to avoid abuse via an excessively large payload.
     """
     seen: set[str] = set()
     prompts: list[str] = []
     for part in re.split(r"[,\r\n]+", raw[:MAX_RAW_INPUT_LENGTH]):
-        word = part.strip()
-        if not word or len(word) > MAX_PROMPT_LENGTH:
+        prompt = part.strip()
+        if not prompt or len(prompt) > MAX_PROMPT_LENGTH:
             continue
-        key = word.lower()
+        key = prompt.lower()
         if key in seen:
             continue
         seen.add(key)
-        prompts.append(word)
+        prompts.append(prompt)
         if len(prompts) >= MAX_CUSTOM_PROMPTS:
             break
     return prompts

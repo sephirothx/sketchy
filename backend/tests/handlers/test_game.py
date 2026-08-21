@@ -58,7 +58,7 @@ async def test_starting_new_game_clears_previous_drawing_recap():
             drawer_id=host.id,
             drawer_nickname=host.nickname,
             drawer_name_color=host.name_color,
-            word="old",
+            prompt="old",
             action_count=0,
             canvas_history=encode_canvas_history([]),
         )
@@ -106,10 +106,10 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     sio.emit = AsyncMock()
 
     select_prompt = sio.handlers["/"]["select_prompt"]
-    rejected = await select_prompt("drawer-sid", {"word": "not-a-choice"})
+    rejected = await select_prompt("drawer-sid", {"prompt": "not-a-choice"})
     assert rejected == {"ok": False, "error": "That prompt is no longer available"}
 
-    accepted = await select_prompt("drawer-sid", {"word": "banana"})
+    accepted = await select_prompt("drawer-sid", {"prompt": "banana"})
     assert accepted == {"ok": True}
     await asyncio.sleep(0.1)
 

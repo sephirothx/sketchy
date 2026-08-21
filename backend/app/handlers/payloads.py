@@ -19,10 +19,10 @@ Command inventory (client request shape)
 UpdateRoomSettingsPayload; ``update_player_settings`` PlayerSettingsPayload;
 ``rename_player`` RenamePlayerPayload; ``get_recap_drawing`` RecapDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
 ``vote_player`` VotePayload; ``cast_restart_vote`` RestartVotePayload;
-``select_prompt`` SelectWordPayload; ``send_chat`` and
+``select_prompt`` SelectPromptPayload; ``send_chat`` and
 ``guess`` TextPayload; ``buy_hint`` HintPayload; ``buy_wheel_letter``
 WheelLetterPayload; ``draw`` DrawPayload; ``undo_stroke`` UndoPayload. The
-remaining commands (room/custom-word reads, promotion, leave, game start,
+remaining commands (room/custom-prompt reads, promotion, leave, game start,
 session ping, and canvas sync) have EmptyPayload.
 """
 
@@ -77,11 +77,11 @@ class EmptyPayload(RequestModel):
     pass
 
 
-MAX_WORD_LISTS = 20
+MAX_PROMPT_LISTS = 20
 
 
 def _clean_slugs(slugs: list[str]) -> list[str]:
-    """Trim, lowercase and dedupe word-list slugs, order preserved.
+    """Trim, lowercase and dedupe prompt-list slugs, order preserved.
 
     Returns [] when nothing survives, leaving each caller to decide what an
     empty selection means: create falls back to the default list, update
@@ -94,8 +94,8 @@ def _clean_slugs(slugs: list[str]) -> list[str]:
         if trimmed and trimmed not in seen:
             seen.add(trimmed)
             cleaned.append(trimmed)
-    if len(cleaned) > MAX_WORD_LISTS:
-        raise ValueError(f"too many word lists selected (max {MAX_WORD_LISTS})")
+    if len(cleaned) > MAX_PROMPT_LISTS:
+        raise ValueError(f"too many prompt lists selected (max {MAX_PROMPT_LISTS})")
     return cleaned
 
 
@@ -192,7 +192,7 @@ class UpdateRoomSettingsPayload(RequestModel):
             return None
         cleaned = _clean_slugs(slugs)
         if not cleaned:
-            raise ValueError("at least one word list must be selected")
+            raise ValueError("at least one prompt list must be selected")
         return cleaned
 
     @field_validator("name", "custom_prompts")
@@ -291,8 +291,8 @@ class RestartVotePayload(RequestModel):
     vote: bool
 
 
-class SelectWordPayload(RequestModel):
-    word: str = Field(min_length=1, max_length=MAX_PROMPT_LENGTH)
+class SelectPromptPayload(RequestModel):
+    prompt: str = Field(min_length=1, max_length=MAX_PROMPT_LENGTH)
 
 
 class TextPayload(RequestModel):

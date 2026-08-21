@@ -389,7 +389,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             round_number=r.round_number,
                             turn_number=r.turn_number,
                             drawer_user_id=r.drawer_user_id,
-                            word=r.word,
+                            prompt=r.prompt,
                             duration_seconds=r.duration_seconds,
                             guesser_count=r.guesser_count,
                             prompt_auto_picked=r.prompt_auto_picked,
@@ -499,7 +499,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         turn_number=r.turn_number,
                         drawer_user_id=r.drawer_user_id,
                         drawer_display_name=r.drawer.display_name if r.drawer else "Unknown",
-                        word=r.word,
+                        prompt=r.prompt,
                         duration_seconds=r.duration_seconds,
                         guesses=guess_details,
                     )
@@ -636,7 +636,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         """Apply a whole game's counters to every named list in one transaction.
 
         Words carrying the same increment are updated together, so the cost is
-        a handful of statements rather than one per word per list. A game ends
+        a handful of statements rather than one per prompt per list. A game ends
         with as many turns as it had players and rounds, and this used to be a
         commit apiece.
         """

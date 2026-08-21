@@ -141,7 +141,7 @@ async def test_game_history_repository():
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=u1.id,
-                word="guitar",
+                prompt="guitar",
                 duration_seconds=30.0,
             )
         ]
@@ -181,7 +181,7 @@ async def test_game_history_repository():
         assert detail is not None
         assert detail.summary.id == game_id
         assert len(detail.turns) == 1
-        assert detail.turns[0].word == "guitar"
+        assert detail.turns[0].prompt == "guitar"
         assert len(detail.turns[0].guesses) == 1
         assert detail.turns[0].guesses[0].user_id == u2.id
         assert detail.turns[0].guesses[0].points_awarded == 200
@@ -215,7 +215,7 @@ async def test_prompt_list_repository():
     try:
         repo = SqlAlchemyPromptListRepository(factory)
 
-        # 1. Upsert bundled word list
+        # 1. Upsert bundled prompt list
         wl = await repo.upsert_bundled(
             slug="standard",
             name="Standard List",
@@ -322,7 +322,7 @@ async def test_save_game_persists_the_analytics_columns():
                     round_number=1,
                     turn_number=1,
                     drawer_user_id=drawer.id,
-                    word="guitar",
+                    prompt="guitar",
                     duration_seconds=30.0,
                     guesser_count=4,
                     prompt_auto_picked=True,
@@ -424,7 +424,7 @@ async def test_prompt_usage_reaches_every_named_list_in_one_call():
         for slug in ("alpha", "beta"):
             stats = await repo.get_word_stats(slug)
             apple = _stat(stats, "apple")
-            # A word offered three times over a game moves by three, not one.
+            # A prompt offered three times over a game moves by three, not one.
             assert apple.offer_count == 3
             assert apple.pick_count == 2
             assert apple.correct_guess_count == 5

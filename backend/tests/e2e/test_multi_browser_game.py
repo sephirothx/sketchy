@@ -11,7 +11,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
     1. Browser 1 (Host in Chromium) creates a room and enters waiting lobby.
     2. Browser 2 (Player in Firefox) joins using room code in a separate browser context.
     3. Host sees 2 players joined in waiting lobby, clicks Start Game.
-    4. Round starts: Drawer receives word choices, picks a word.
+    4. Round starts: Drawer receives prompt choices, picks a prompt.
     5. Drawer draws on canvas.
     6. Guesser submits guess in chat.
     7. Both browsers sync in real time over Socket.IO.
@@ -154,7 +154,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             await page1.wait_for_selector('[data-testid="players-drawer"]', state="detached")
             await page1.set_viewport_size({"width": 1280, "height": 720})
 
-            # Step 5: Identify who is drawer and choose word if prompt choice is present
+            # Step 5: Identify who is drawer and choose prompt if prompt choice is present
             drawer_page = page1 if await page1.query_selector('.prompt-choices') else page2
             guesser_page = page2 if drawer_page == page1 else page1
             drawer_name = "HostAlice" if drawer_page == page1 else "BobGuesser"
@@ -162,7 +162,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             choosing_status = guesser_page.get_by_test_id("choosing-prompt-status")
             await choosing_status.wait_for()
             assert await choosing_status.get_by_text(
-                f"{drawer_name} is choosing a word…",
+                f"{drawer_name} is choosing a prompt…",
                 exact=True,
             ).is_visible()
             assert not await drawer_page.get_by_test_id(
@@ -341,8 +341,8 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             # mobile layout has a reason to dismiss the input.
             await guess_input.focus()
             assert await guess_input.evaluate("input => document.activeElement === input")
-            word = await drawer_page.locator('.prompt-reveal').inner_text()
-            await guess_input.fill(word)
+            prompt = await drawer_page.locator('.prompt-reveal').inner_text()
+            await guess_input.fill(prompt)
             await guess_input.press('Enter')
             await guesser_page.wait_for_selector('[data-testid="turn-results-overlay"]')
             assert await guess_input.evaluate("input => document.activeElement === input")

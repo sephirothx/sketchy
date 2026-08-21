@@ -87,7 +87,7 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.drawerNickname} is choosing a word...`,
+        text: `${payload.drawerNickname} is choosing a prompt...`,
         correct: false,
         system: true,
       });
@@ -97,8 +97,8 @@ export function useGameSocketListeners() {
       store.getState().setMyWordChoices(payload.choices, payload.seconds);
     };
 
-    const onYouAreDrawing = (payload: { word: string; choices?: string[] }) => {
-      store.getState().setMyPrompt(payload.word);
+    const onYouAreDrawing = (payload: { prompt: string; choices?: string[] }) => {
+      store.getState().setMyPrompt(payload.prompt);
     };
 
     const onTurnStarted = (payload: {
@@ -140,14 +140,14 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.nickname} guessed the word!${pointsSuffix}`,
+        text: `${payload.nickname} guessed the prompt!${pointsSuffix}`,
         correct: false,
         system: true,
       });
     };
 
     const onYouGuessedCorrectly = (payload: {
-      word: string;
+      prompt: string;
       points?: number;
       basePoints?: number;
       hintSpend?: number;
@@ -155,7 +155,7 @@ export function useGameSocketListeners() {
       triggerConfettiBurst();
       playMyCorrectGuessSound();
       store.getState().setGuessedPrompt(
-        payload.word,
+        payload.prompt,
         payload.basePoints === undefined
           ? null
           : {
@@ -180,7 +180,7 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `The word was "${payload.word}"`,
+        text: `The prompt was "${payload.prompt}"`,
         correct: false,
         system: true,
       });

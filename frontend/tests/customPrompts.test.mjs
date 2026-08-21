@@ -7,20 +7,20 @@ import {
   createCustomPromptsState,
   customPromptsReducer,
 } from "../src/lib/customPrompts.ts";
-import { createMaximumCustomWordsFixture } from "./helpers/customPromptsFixture.mjs";
+import { createMaximumCustomPromptsFixture } from "./helpers/customPromptsFixture.mjs";
 
-test("maximum custom-word fixture stays valid and within the payload limit", () => {
-  const fixture = createMaximumCustomWordsFixture();
+test("maximum custom-prompt fixture stays valid and within the payload limit", () => {
+  const fixture = createMaximumCustomPromptsFixture();
   const state = createCustomPromptsState(fixture.raw, true);
 
-  assert.equal(fixture.words.length, MAX_CUSTOM_PROMPTS);
+  assert.equal(fixture.prompts.length, MAX_CUSTOM_PROMPTS);
   assert.ok(fixture.raw.length < MAX_RAW_INPUT_LENGTH);
   assert.equal(state.analysis.usableCount, MAX_CUSTOM_PROMPTS);
   assert.equal(state.analysis.hasErrors, false);
   assert.equal(state.only, true);
 });
 
-test("custom-word state retains one analysis across unrelated updates", () => {
+test("custom-prompt state retains one analysis across unrelated updates", () => {
   const initial = createCustomPromptsState("apple\npear", true);
   const unchanged = customPromptsReducer(initial, {
     type: "change",

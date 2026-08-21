@@ -155,7 +155,7 @@ async def test_game_record_cascade_and_relationships():
                     round_number=1,
                     turn_number=1,
                     drawer_user_id=u1_id,
-                    word="banana",
+                    prompt="banana",
                     duration_seconds=45.5,
                 )
                 session.add(r1)
@@ -204,7 +204,7 @@ async def test_word_list_and_word_uniqueness():
             words = (await session.execute(stmt)).scalars().all()
             assert len(words) == 2
 
-        # Attempt duplicate word text in same list
+        # Attempt duplicate prompt text in same list
         with pytest.raises(IntegrityError):
             async with factory() as session:
                 async with session.begin():

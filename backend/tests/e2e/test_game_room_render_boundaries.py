@@ -104,12 +104,12 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             drawing_counts = await assert_regions_unchanged(observer)
             assert drawing_counts.get("players", 0) == 0
 
-            word = (await drawer.locator(".prompt-reveal").inner_text()).strip()
+            prompt = (await drawer.locator(".prompt-reveal").inner_text()).strip()
             scorer = guessers[0]
-            await scorer.fill(".chat-input input", word)
+            await scorer.fill(".chat-input input", prompt)
             await drawer.evaluate(RESET_COUNTS)
             await scorer.keyboard.press("Enter")
-            await drawer.locator(".chat-message.correct", has_text=word).wait_for()
+            await drawer.locator(".chat-message.correct", has_text=prompt).wait_for()
             score_counts = await assert_regions_unchanged(drawer)
             assert score_counts.get("players", 0) > 0
             assert score_counts.get("chat", 0) > 0

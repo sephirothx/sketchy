@@ -90,7 +90,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 "turnNumber": r.turn_number,
                 "drawerUserId": r.drawer_user_id,
                 "drawerDisplayName": r.drawer_display_name,
-                "word": r.word,
+                "prompt": r.prompt,
                 "durationSeconds": r.duration_seconds,
                 "guesses": [
                     {

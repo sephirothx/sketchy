@@ -302,7 +302,7 @@ class GameFlowService:
                         to=sid,
                     )
                 elif sync_canvas:
-                    await self._sio.emit("you_are_drawing", {"word": game.word}, to=sid)
+                    await self._sio.emit("you_are_drawing", {"prompt": game.prompt}, to=sid)
         elif game.phase == Phase.TURN_RESULTS:
             await self._sio.emit("turn_ended", self._turn_ended_payload(room), to=sid)
 
@@ -434,7 +434,7 @@ class GameFlowService:
                 drawer_id=game.current_drawer or "",
                 drawer_nickname=drawer.nickname if drawer else "Unknown player",
                 drawer_name_color=drawer.name_color if drawer else None,
-                word=game.word or "",
+                prompt=game.prompt or "",
                 action_count=len(game.canvas.history),
                 canvas_history=game.canvas.sync_payload(),
             )
@@ -489,7 +489,7 @@ class GameFlowService:
         game: Game,
         prompt_list_slugs: list[str],
     ) -> None:
-        """Fold a finished game's prompts into the word-list metrics.
+        """Fold a finished game's prompts into the prompt-list metrics.
 
         Runs after the room has been told the game ended, and is bounded,
         for the same reasons as `_persist_game_history`: nothing a player
@@ -512,12 +512,12 @@ class GameFlowService:
             )
         except asyncio.TimeoutError:
             logger.error(
-                "Timed out recording word usage for room %s after %ss",
+                "Timed out recording prompt usage for room %s after %ss",
                 room.id,
                 WORD_USAGE_WRITE_TIMEOUT_SECONDS,
             )
         except Exception:
-            logger.exception("Failed to record word usage for room %s", room.id)
+            logger.exception("Failed to record prompt usage for room %s", room.id)
 
     async def _finish_or_next(self, room: Room) -> None:
         game = room.game
@@ -537,7 +537,7 @@ class GameFlowService:
             )
             # Snapshotted for the same reason: the room is an editable
             # waiting room again by the time the metrics are written, so
-            # the host can change its word lists out from under them.
+            # the host can change its prompt lists out from under them.
             prompt_list_slugs = list(room.prompt_list_slugs)
             self._timers.cancel_restart_timer(room.id)
             room.restart_vote = None

@@ -5,9 +5,9 @@ were renamed rather than given a rename migration, because the database held no
 data worth keeping - a database created by any earlier revision has to be
 rebuilt rather than migrated.
 
-Revision ID: a7461f6b0e96
+Revision ID: e7c9d4bc813e
 Revises: 
-Create Date: 2026-08-21 12:16:08.556122
+Create Date: 2026-08-21 13:18:51.141650
 
 """
 from typing import Sequence, Union
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a7461f6b0e96'
+revision: str = 'e7c9d4bc813e'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -121,7 +121,7 @@ def upgrade() -> None:
     sa.Column('round_number', sa.Integer(), nullable=False),
     sa.Column('turn_number', sa.Integer(), nullable=False),
     sa.Column('drawer_user_id', sa.String(length=36), nullable=False),
-    sa.Column('word', sa.String(length=64), nullable=False),
+    sa.Column('prompt', sa.String(length=64), nullable=False),
     sa.Column('duration_seconds', sa.Float(), nullable=False),
     sa.Column('guesser_count', sa.Integer(), server_default=sa.text('0'), nullable=False),
     sa.Column('prompt_auto_picked', sa.Boolean(), server_default=sa.text('0'), nullable=False),

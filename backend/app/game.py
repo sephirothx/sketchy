@@ -1,4 +1,4 @@
-"""Per-room game state machine: turn rotation, word choice, drawing timer, scoring.
+"""Per-room game state machine: turn rotation, prompt choice, drawing timer, scoring.
 
 Pure state/logic only (no socket I/O) so it can be unit tested directly.
 """
@@ -35,7 +35,7 @@ MAX_HINT_SPEND = MAX_GUESS_POINTS
 
 # "pressure" mode: starts from the same MAX_GUESS_POINTS baseline as default
 # scoring, but points bleed away as a percentage of what is still on the table,
-# and the bleed rate doubles once someone gets the word. The per-second rate is
+# and the bleed rate doubles once someone gets the prompt. The per-second rate is
 # derived from the room's own drawing time so the curve has the same shape in a
 # 15s room and a 300s one -- unpressured, a correct guess late in the round is
 # always worth the same share of the maximum, until PRESSURE_MIN_POINTS takes
@@ -56,11 +56,11 @@ PRESSURE_MIN_POINTS = 50
 # - "purchase" lets each guesser spend points to reveal a letter SLOT of their
 #   choice, visible only to them.
 # - "wheel" (wheel-of-fortune style) lets each guesser spend points to buy a
-#   specific LETTER, revealing every occurrence of it (if any) in the word,
+#   specific LETTER, revealing every occurrence of it (if any) in the prompt,
 #   visible only to them. Unlike "purchase", the cost varies per letter
 #   (vowels cost more than consonants, and more common letters across the
-#   room's word pool cost more than rare ones) and is charged whether or not
-#   the letter turns out to be in the word.
+#   room's prompt pool cost more than rare ones) and is charged whether or not
+#   the letter turns out to be in the prompt.
 HINT_MODES = ("none", "checkpoints", "purchase", "wheel")
 # Each hint a player buys in a turn costs more than the last: 12, 24, 36, ...
 HINT_BASE_COST = 12
@@ -68,10 +68,10 @@ MIN_HIDDEN_LETTERS = 2
 
 # Wheel-of-fortune letter pricing: a flat base cost depending on whether the
 # letter is a vowel or consonant (vowels cost more, since there are only 5 of
-# them and they're needed to reveal most of a word), scaled by how common
-# that letter is across the room's own word pool (commoner -> pricier, rarer
+# them and they're needed to reveal most of a prompt), scaled by how common
+# that letter is across the room's own prompt pool (commoner -> pricier, rarer
 # -> cheaper, clamped to a sane range so a letter that never appears in any
-# candidate word is still worth something small rather than free).
+# candidate prompt is still worth something small rather than free).
 VOWELS = frozenset("aeiou")
 WHEEL_VOWEL_BASE_COST = 12
 WHEEL_CONSONANT_BASE_COST = 8
@@ -83,7 +83,7 @@ WHEEL_MAX_FREQUENCY_MULTIPLIER = 3.0
 #   always considered close.
 # - distance >1 and <= CLOSE_GUESS_MAX_DISTANCE is close if the strings are
 #   still similar enough overall (difflib ratio).
-# - for multi-word answers, words are matched position-independently (as a
+# - for multi-word prompts, words are matched position-independently (as a
 #   bag/multiset, so reordered guesses still count) as long as the guess's
 #   word count is within 1 of the target's. One or more correct words whose
 #   combined length is at least CLOSE_GUESS_MIN_CORRECT_LETTERS letters is
@@ -226,10 +226,10 @@ class CompletedTurnStats:
     # as everyone has guessed.
     duration_seconds: float = 0.0
     guesses: tuple[TurnGuessRecord, ...] = ()
-    # The drawer ran out of time and took the first offered word, rather than
+    # The drawer ran out of time and took the first offered prompt, rather than
     # picking one - which is not a preference, and should not read as one.
     prompt_auto_picked: bool = False
-    # Canvas actions committed during the turn. Separates a word nobody could
+    # Canvas actions committed during the turn. Separates a prompt nobody could
     # guess from a drawer who drew nothing.
     stroke_count: int = 0
     # "all_guessed" or "timeout". A turn the drawer abandons never completes,
@@ -250,7 +250,7 @@ class Game:
     turn_index: int = -1
     phase: Phase = Phase.CHOOSING_PROMPT
     current_drawer: str | None = None
-    word: str | None = None
+    prompt: str | None = None
     prompt_choices: list[str] = field(default_factory=list)
     correct_guessers: set[str] = field(default_factory=set)
     guess_points: dict[str, int] = field(default_factory=dict)
@@ -398,7 +398,7 @@ class Game:
         *,
         canvas_generation: int,
     ) -> list[str]:
-        """Advance to the next drawer and offer word choices."""
+        """Advance to the next drawer and offer prompt choices."""
         self.turn_index += 1
         if afk_tokens:
             attempts = 0
@@ -406,7 +406,7 @@ class Game:
                 self.turn_index += 1
                 attempts += 1
         self.current_drawer = self.turn_order[self.turn_index % len(self.turn_order)]
-        self.word = None
+        self.prompt = None
         self.prompt_choices = random_word_choices(3, exclude=self.used_prompts, pool=self.prompt_pool)
         self.correct_guessers = set()
         self.guess_points = {}
@@ -429,23 +429,23 @@ class Game:
         self.phase = Phase.CHOOSING_PROMPT
         return self.prompt_choices
 
-    def choose_word(self, token: str, word: str) -> bool:
+    def choose_prompt(self, token: str, prompt: str) -> bool:
         if self.phase != Phase.CHOOSING_PROMPT or token != self.current_drawer:
             return False
-        if word not in self.prompt_choices:
+        if prompt not in self.prompt_choices:
             return False
-        self._set_word(word)
+        self._set_prompt(prompt)
         return True
 
     def force_word_choice(self) -> None:
         if self.phase == Phase.CHOOSING_PROMPT and self.prompt_choices:
             self.prompt_auto_picked = True
-            self._set_word(self.prompt_choices[0])
+            self._set_prompt(self.prompt_choices[0])
 
-    def _set_word(self, word: str) -> None:
-        self.word = word
-        self.used_prompts.add(word)
-        self.letter_positions = [i for i, ch in enumerate(word) if ch.isalnum()]
+    def _set_prompt(self, prompt: str) -> None:
+        self.prompt = prompt
+        self.used_prompts.add(prompt)
+        self.letter_positions = [i for i, ch in enumerate(prompt) if ch.isalnum()]
         self.phase = Phase.DRAWING
 
     def masked_prompt(
@@ -454,9 +454,9 @@ class Game:
         is_spectator: bool = False,
         spectators_see_solution: bool = False,
     ) -> str:
-        """Blank out each word's letters/digits into underscores while keeping
+        """Blank out each prompt's letters/digits into underscores while keeping
         spaces and other special characters (hyphens, apostrophes, etc.)
-        visible, so multi-word expressions (e.g. "red panda") and punctuated
+        visible, so multi-word entries (e.g. "red panda") and punctuated
         words (e.g. "spider-man") clearly show their structure to guessers.
         Every letter run's count is appended at the end, in order - special
         characters act as boundaries here too, so "spider-man" reports "6 3"
@@ -470,12 +470,12 @@ class Game:
         `masked_prompt` is called with that player's token - every other caller
         (including token=None) never sees them.
         """
-        if not self.word:
+        if not self.prompt:
             return ""
         if (is_spectator and spectators_see_solution) or (
             token and (token == self.current_drawer or token in self.correct_guessers)
         ):
-            return self.word
+            return self.prompt
         if self.hide_masked_prompt:
             return "???"
         revealed_slots = self.revealed_positions | self.purchased_hints.get(token, set())
@@ -484,9 +484,9 @@ class Game:
         }
         bought_letters = self.purchased_letters.get(token, set())
         if bought_letters:
-            revealed_indices |= {i for i in self.letter_positions if self.word[i].lower() in bought_letters}
+            revealed_indices |= {i for i in self.letter_positions if self.prompt[i].lower() in bought_letters}
         masked_words = []
-        for match in re.finditer(r"\S+", self.word):
+        for match in re.finditer(r"\S+", self.prompt):
             start = match.start()
             masked_words.append(
                 "".join(
@@ -496,18 +496,18 @@ class Game:
             )
         letter_counts = [
             str(len(list(run)))
-            for is_alnum, run in groupby(self.word, key=str.isalnum)
+            for is_alnum, run in groupby(self.prompt, key=str.isalnum)
             if is_alnum
         ]
         return "  ".join(masked_words) + "  " + " ".join(letter_counts)
 
     def max_hint_checkpoints(self) -> int:
-        """Calculate the number of timed hint checkpoints for the current word.
+        """Calculate the number of timed hint checkpoints for the current prompt.
 
         Frequency and amount scale with prompt length (approx ~40% of letters) while
         keeping at least MIN_HIDDEN_LETTERS hidden.
         """
-        if not self.word:
+        if not self.prompt:
             return 0
         total_slots = len(self.letter_positions)
         if total_slots <= MIN_HIDDEN_LETTERS:
@@ -519,11 +519,11 @@ class Game:
     def reveal_hint_letter(self) -> bool:
         """Reveal one more random letter to every player (hint_mode="checkpoints").
 
-        Keeps at least MIN_HIDDEN_LETTERS letters hidden so the word never
+        Keeps at least MIN_HIDDEN_LETTERS letters hidden so the prompt never
         becomes trivially guessable. Returns False if there was nothing left
         to safely reveal.
         """
-        if not self.word:
+        if not self.prompt:
             return False
         available = [
             slot for slot in range(len(self.letter_positions)) if slot not in self.revealed_positions
@@ -552,7 +552,7 @@ class Game:
         guesser right now, or the price would take the turn's spend past
         MAX_HINT_SPEND.
         """
-        if self.hint_mode != "purchase" or self.phase != Phase.DRAWING or not self.word:
+        if self.hint_mode != "purchase" or self.phase != Phase.DRAWING or not self.prompt:
             return False
         if token == self.current_drawer or token in self.correct_guessers:
             return False
@@ -573,7 +573,7 @@ class Game:
         return True
 
     def _letter_frequencies(self) -> dict[str, float]:
-        """Relative frequency (0-1) of each a-z letter across this game's word
+        """Relative frequency (0-1) of each a-z letter across this game's prompt
         pool (`prompt_pool`, or the built-in `PROMPTS` list when no custom pool is
         set) - used to price wheel-of-fortune letters by how rare they are
         among the actual possible solutions, rather than English-language
@@ -592,7 +592,7 @@ class Game:
         buying `letter` in hint_mode="wheel": a flat vowel/consonant cost,
         scaled up the more common that letter is across `prompt_pool`/`PROMPTS`
         (rarer letters are cheaper - revealing every instance of a letter
-        that barely appears in the word is worth comparatively little).
+        that barely appears in the prompt is worth comparatively little).
         """
         letter = letter.lower()
         base = WHEEL_VOWEL_BASE_COST if letter in VOWELS else WHEEL_CONSONANT_BASE_COST
@@ -634,14 +634,14 @@ class Game:
     def buy_wheel_letter(self, token: str, letter: str) -> bool:
         """Buy a whole letter for `token` only (hint_mode="wheel").
 
-        Every occurrence of `letter` in the word will be shown to this player
+        Every occurrence of `letter` in the prompt will be shown to this player
         (via `masked_prompt`) regardless of whether it's actually present, and
         the price is charged either way - on credit, like `buy_hint_letter`.
         Returns False if the letter is invalid, already bought by this player
         this turn, the token isn't an eligible guesser right now, or the price
         would take the turn's spend past MAX_HINT_SPEND.
         """
-        if self.hint_mode != "wheel" or self.phase != Phase.DRAWING or not self.word:
+        if self.hint_mode != "wheel" or self.phase != Phase.DRAWING or not self.prompt:
             return False
         if token == self.current_drawer or token in self.correct_guessers:
             return False
@@ -667,14 +667,14 @@ class Game:
         self.hint_purchases[token] = self.hint_purchases.get(token, 0) + 1
 
     def submit_guess(self, token: str, text: str) -> tuple[bool, int]:
-        if self.phase != Phase.DRAWING or not self.word:
+        if self.phase != Phase.DRAWING or not self.prompt:
             return False, 0
         if token == self.current_drawer or token in self.correct_guessers:
             return False, 0
         if len(text) > MAX_PROMPT_LENGTH:
             return False, 0
         normalized_guess = _normalize(text)
-        normalized_word = _normalize(self.word)
+        normalized_word = _normalize(self.prompt)
         if normalized_guess != normalized_word:
             # Counted here rather than at the caller so that only real attempts
             # land: the drawer and players who already have it return above,
@@ -713,30 +713,30 @@ class Game:
         """Whether a (known-incorrect) guess deserves a private hint instead of
         being silently broadcast to the room as-is.
 
-        Returns "close" if the guess is a near-miss for the whole word/phrase
-        (see `_is_close_pair`), "partial" if (for multi-word answers only,
-        matching words position-independently and tolerating a word-count
+        Returns "close" if the guess is a near-miss for the whole prompt/phrase
+        (see `_is_close_pair`), "partial" if (for multi-word prompts only,
+        matching words position-independently and tolerating a prompt-count
         difference of at most 1) one or more correct words together add up to
         at least `CLOSE_GUESS_MIN_CORRECT_LETTERS` letters, or None if
         neither applies.
         """
-        if not self.word:
+        if not self.prompt:
             return None
         if token == self.current_drawer or token in self.correct_guessers:
             return None
         if len(text) > MAX_PROMPT_LENGTH:
             return None
         guess = _normalize(text)
-        word = _normalize(self.word)
-        if guess == word:
+        prompt = _normalize(self.prompt)
+        if guess == prompt:
             return None
-        if _is_close_pair(guess, word):
+        if _is_close_pair(guess, prompt):
             return "close"
-        word_tokens = word.split(" ")
+        word_tokens = prompt.split(" ")
         if len(word_tokens) > 1:
             guess_tokens = guess.split(" ")
             if abs(len(guess_tokens) - len(word_tokens)) <= 1:
-                # Bag-of-words intersection: matches regardless of word order,
+                # Bag-of-words intersection: matches regardless of prompt order,
                 # capping duplicate words at the lower count on either side.
                 overlap = Counter(guess_tokens) & Counter(word_tokens)
                 correct_letter_count = sum(len(w) * count for w, count in overlap.items())
@@ -763,7 +763,7 @@ class Game:
                 round_number=self.round_number,
                 turn_number=len(self.completed_turns) + 1,
                 offered_words=list(self.prompt_choices),
-                chosen_word=self.word or "",
+                chosen_word=self.prompt or "",
                 correct_guess_count=len(self.correct_guessers),
                 total_guesser_count=total_guesser_count,
                 drawer_token=self.current_drawer or "",
