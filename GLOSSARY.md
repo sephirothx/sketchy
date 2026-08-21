@@ -123,7 +123,7 @@ Three different things, never used for one another:
 | **Default** | A correct guess is worth 100–300 points, falling steadily as the timer runs down. | normal, standard, classic |
 | **Pressure** | A correct guess decays from 300 points, and decays faster for everyone once the first player gets the prompt. | hardcore, fast, decay |
 | **No scoring** | Guesses are still detected and turns still end, but everyone stays on zero and no standings are shown. | casual, fun mode, unscored |
-| **Standings** | The ranked list of scores. | leaderboard, ranking, scoreboard |
+| **Standings** | The ranked list of scores. Players level on points share a place, and the places they crowd out are skipped — two tied for first are both first, and the next player is third. Medals follow the place, so a shared first awards two golds and no silver. | leaderboard, ranking, scoreboard |
 
 ## Rooms
 

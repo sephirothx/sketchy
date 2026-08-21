@@ -3,6 +3,7 @@ import { useAuthStore } from "../store/authStore";
 import { AuthDialog, type AuthMode } from "./AccountMenu";
 import type { ScoreEntry, ScoringMode } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { competitionRanks, crownOutcome, placementLabel } from "../lib/standings";
 
 interface GameEndOverlayProps {
   scores: ScoreEntry[];
@@ -15,7 +16,6 @@ interface GameEndOverlayProps {
   onViewHighlights: () => void;
 }
 
-const PODIUM = ["🥇", "🥈", "🥉"];
 const DISPLAY_SECONDS = 10;
 
 export function GameEndOverlay({
@@ -46,12 +46,40 @@ export function GameEndOverlay({
     return () => { clearTimeout(timeout); clearInterval(interval); };
   }, [onContinue, authMode]);
 
-  const placement = scores.findIndex((score) => score.playerId === myPlayerId) + 1;
+  // Places, not row numbers: two players level on points tied for the same one.
+  const ranks = competitionRanks(scores.map((score) => score.score));
+  const myIndex = scores.findIndex((score) => score.playerId === myPlayerId);
+  const placement = myIndex >= 0 ? ranks[myIndex] : 1;
+  // A shared first has no single winner to crown, and saying otherwise would
+  // contradict the two golds in the standings directly below.
+  const winners = scores.filter((_score, index) => ranks[index] === 1);
+  const crown = crownOutcome(winners.length);
   return <main className="game-end-overlay" aria-labelledby="game-end-title" aria-live="polite" data-testid="game-end-overlay">
     <section className="game-end-podium">
       <p className="game-end-kicker">Game over</p>
-      <h1 id="game-end-title">{scoringMode !== "none" ? <><span className={playerNameClass(scores[0]?.isAnonymous)} style={playerNameStyle(scores[0]?.nameColor, scores[0]?.isAnonymous)}>{scores[0]?.nickname ?? "The room"}</span> takes the crown!</> : "A great game of drawing"}</h1>
-      {scoringMode !== "none" ? <><p className="game-end-placement">Your placement: #{Math.max(1, placement)}</p><ol className="game-end-standings">{scores.map((score, index) => <li key={score.playerId} className={score.playerId === myPlayerId ? "is-you" : ""}><span>{PODIUM[index] ?? `#${index + 1}`} <span className={playerNameClass(score.isAnonymous)} style={playerNameStyle(score.nameColor, score.isAnonymous)}>{score.nickname}</span>{score.playerId === myPlayerId ? " (you)" : ""}</span><strong>{score.score}</strong></li>)}</ol></> : <p className="game-end-no-score">No scores this time—just a room full of sketches and guesses.</p>}
+      <h1 id="game-end-title">
+        {scoringMode === "none"
+          ? "A great game of drawing"
+          : crown === "room"
+            ? "The room takes the crown!"
+            : crown === "many"
+              ? `${winners.length} players share the crown!`
+              : <>
+                  {winners.map((winner, index) => (
+                    <span key={winner.playerId}>
+                      {index > 0 ? (index === winners.length - 1 ? " and " : ", ") : ""}
+                      <span
+                        className={playerNameClass(winner.isAnonymous)}
+                        style={playerNameStyle(winner.nameColor, winner.isAnonymous)}
+                      >
+                        {winner.nickname}
+                      </span>
+                    </span>
+                  ))}
+                  {crown === "one" ? " takes the crown!" : " share the crown!"}
+                </>}
+      </h1>
+      {scoringMode !== "none" ? <><p className="game-end-placement">Your placement: #{Math.max(1, placement)}</p><ol className="game-end-standings">{scores.map((score, index) => <li key={score.playerId} className={score.playerId === myPlayerId ? "is-you" : ""}><span>{placementLabel(ranks[index])} <span className={playerNameClass(score.isAnonymous)} style={playerNameStyle(score.nameColor, score.isAnonymous)}>{score.nickname}</span>{score.playerId === myPlayerId ? " (you)" : ""}</span><strong>{score.score}</strong></li>)}</ol></> : <p className="game-end-no-score">No scores this time—just a room full of sketches and guesses.</p>}
       {isUnclaimedGuest && (
         <aside className="game-end-claim">
           <p className="game-end-claim-copy">

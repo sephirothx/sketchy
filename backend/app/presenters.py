@@ -1,7 +1,12 @@
 """Pure construction of Socket.IO response and broadcast payloads."""
 from __future__ import annotations
 
-from app.game import Game, MAX_HINT_SPEND, TURN_RESULTS_SECONDS
+from app.game import (
+    Game,
+    MAX_HINT_SPEND,
+    TURN_RESULTS_SECONDS,
+    competition_ranks,
+)
 from app.rooms import Player, Room
 
 
@@ -94,15 +99,20 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
     previous_scores = {
         player.id: player.score - deltas[player.id] for player in players
     }
+    previously_ranked = sorted(players, key=lambda item: -previous_scores[item.id])
     previous_ranks = {
         player.id: rank
-        for rank, player in enumerate(
-            sorted(players, key=lambda item: -previous_scores[item.id]), start=1
+        for player, rank in zip(
+            previously_ranked,
+            competition_ranks([previous_scores[p.id] for p in previously_ranked]),
         )
     }
     ranked = sorted(players, key=lambda player: -player.score)
     new_ranks = {
-        player.id: rank for rank, player in enumerate(ranked, start=1)
+        player.id: rank
+        for player, rank in zip(
+            ranked, competition_ranks([player.score for player in ranked])
+        )
     }
     return {
         "prompt": game.prompt,

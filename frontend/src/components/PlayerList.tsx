@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ModerationState, PlayerInfo } from "../types";
 import { socket } from "../lib/socket";
+import { competitionRanks, placementLabel } from "../lib/standings";
 import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
@@ -16,7 +17,6 @@ interface PlayerListProps {
   moderation: ModerationState;
 }
 
-const PLACEMENT_MEDALS = ["🥇", "🥈", "🥉"];
 
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -51,6 +51,7 @@ export function PlayerList({
   moderation,
 }: PlayerListProps) {
   const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
+  const ranks = competitionRanks(sorted.map((player) => player.score));
   const currentPlayerCanVote = canCastModerationVote(moderation, myPlayerId);
   const [openMenuToken, setOpenMenuToken] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -113,7 +114,7 @@ export function PlayerList({
             )}
             <PlayerRole
               variant={variant}
-              index={index}
+              rank={ranks[index]}
               isDrawer={isDrawer}
               isHost={p.isHost}
               isAfk={p.isAfk}
@@ -187,13 +188,13 @@ function FittedPlayerName({
 
 function PlayerRole({
   variant,
-  index,
+  rank,
   isDrawer,
   isHost,
   isAfk,
 }: {
   variant: "waiting" | "playing" | "game-end";
-  index: number;
+  rank: number;
   isDrawer: boolean;
   isHost: boolean;
   isAfk: boolean;
@@ -203,7 +204,7 @@ function PlayerRole({
   if (variant === "game-end") {
     return (
       <span className="player-role player-role-placement" aria-hidden="true">
-        {index < 3 ? PLACEMENT_MEDALS[index] : `#${index + 1}`}
+        {placementLabel(rank)}
       </span>
     );
   }
