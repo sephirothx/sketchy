@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import {
   BRUSH_CURSOR_KEY,
+  LEGACY_BRUSH_CURSOR_KEY,
   migrateKeyBindings,
   readStoredBrushCursor,
 } from "./settingsMigrations.ts";
@@ -204,6 +205,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_keybindings", JSON.stringify(keyBindings));
       localStorage.setItem(BRUSH_CURSOR_KEY, brushCursor);
+      localStorage.removeItem(LEGACY_BRUSH_CURSOR_KEY);
       localStorage.setItem("sketchy_theme", theme);
       localStorage.setItem("sketchy_confettieffects", String(confettiEffects));
       localStorage.setItem("sketchy_soundeffects", String(soundEffects));
@@ -229,6 +231,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   setBrushCursor: (brushCursor) =>
     set(() => {
       localStorage.setItem(BRUSH_CURSOR_KEY, brushCursor);
+      localStorage.removeItem(LEGACY_BRUSH_CURSOR_KEY);
       return { brushCursor };
     }),
   setNameColor: (nameColor) =>

@@ -11,6 +11,11 @@ and conversation.
 - **A new concept gets a name here before it ships.** If a change introduces
   something players can see and there is no word for it yet, add the entry in the
   same change.
+- **Renaming a term means renaming it everywhere, in one change.** A half-finished
+  rename is worse than none: `backend/tests/test_wire_contract.py` fails one that
+  stops at the client or the server. Settings already stored in a player's browser
+  are the exception that cannot be renamed at all — migrate them on load, the way
+  `frontend/src/store/settingsMigrations.ts` does.
 - UI copy is American English (*color*, not *colour*) and sentence case
   (*Buy letters*, not *Buy Letters*).
 
@@ -147,22 +152,3 @@ Three different things, never used for one another:
 | **Grace period** | The 30 seconds a disconnected player has to return before they are removed from the game. | timeout, reconnect window |
 | **Reconnect** | Returning within the grace period and resuming with score and turn position intact. | rejoin, resume |
 | **Rejoin** | Entering a room again as a new arrival, after the grace period has passed. | reconnect |
-
----
-
-## Known drift
-
-None. The vocabulary runs from the player's screen to the table names, with nothing
-left carrying a retired word: the phases are `choosing_prompt` and `turn_results`,
-the commands are `select_prompt` and `get_custom_prompts`, the schema holds
-`turn_records`, `turn_guesses`, `prompt_lists`, and `prompts`, and the freehand tool
-is the brush in the toolbar, in the keybindings, and in browser storage.
-
-Two tests keep it that way, and they are the reason this section can be empty rather
-than aspirational. `backend/tests/test_wire_contract.py` holds the client and server
-to the same names and rejects wire names built from retired vocabulary — so renaming
-one is allowed, and half-renaming it is not. `frontend/tests/settingsMigrations.test.mjs`
-covers the one case a rename cannot handle on its own: settings already stored in a
-player's browser, which have to be migrated on load rather than renamed.
-
-Add a bullet here when copy drifts, and delete it when the copy is fixed.

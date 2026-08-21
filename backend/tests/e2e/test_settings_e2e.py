@@ -47,7 +47,8 @@ async def test_settings_dialog_brush_cursor_scenario():
     3. Navigates to 'Game' tab.
     4. Selects 'Outline' brush cursor option.
     5. Clicks Save.
-    6. Verifies localStorage persists 'sketchy_brushcursor' == 'circle'.
+    6. Verifies localStorage persists 'sketchy_brushcursor' == 'circle' and
+       that saving clears the pre-rename 'sketchy_pencursor' key.
     """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=['--mute-audio'])
@@ -56,6 +57,17 @@ async def test_settings_dialog_brush_cursor_scenario():
 
         try:
             await page.goto(BASE_URL)
+            # Stand in for a player who set a cursor before the tool was renamed.
+            # Without this the storage starts clean and the migration assertions
+            # below would hold whether or not the migration exists.
+            await page.evaluate(
+                "() => localStorage.setItem('sketchy_pencursor', 'circle')"
+            )
+            await page.reload()
+            migrated_cursor = await page.evaluate(
+                "() => localStorage.getItem('sketchy_pencursor')"
+            )
+            assert migrated_cursor == "circle", "the legacy value should survive until a save"
             await use_guest_name(page, "SettingsTester")
             await page.click('button:has-text("Create room")')
             await page.click('button:has-text("Create room")')
@@ -94,8 +106,9 @@ async def test_settings_dialog_brush_cursor_scenario():
                 "() => localStorage.getItem('sketchy_brushcursor')"
             )
             assert stored_cursor == "circle"
-            # The pre-rename key is read on load but never written again, so a
-            # fresh choice must not leave a second copy behind to go stale.
+            # The pre-rename key is seeded above, so this is the migration
+            # completing: once a save writes the new key, the old one is gone
+            # and cannot be resurrected if the new one is ever cleared.
             legacy_cursor = await page.evaluate(
                 "() => localStorage.getItem('sketchy_pencursor')"
             )
