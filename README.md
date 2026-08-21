@@ -143,7 +143,7 @@ backend/
   tests/
     handlers/     Focused asyncio integration suites for each Socket.IO handler domain
     e2e/          Multi-browser Playwright scenarios
-    test_*.py     Domain, protocol, payload, timer, DB, repository, and performance unit tests
+    test_*.py     Domain, protocol, payload, wire-contract, timer, DB, repository, and performance unit tests
 frontend/
   src/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat
@@ -272,7 +272,7 @@ drawing rather than a limit, and is the fixture to set a latency budget
 against. `fill-bounded` and `realistic` are replayed whole rather than
 sampled, so neither of their numbers is a projection.
 
-`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
+`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. `tests/test_wire_contract.py` pins the names the two sides share - the events each direction sends, the camelCase keys the server puts in its payloads, and the aliases its command parsers accept - by reading both trees as text. Nothing else checks those: a payload key is a plain string here and a plain property there, so renaming one side alone compiles, lints, and passes every other test while the feature silently stops working. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 
 ### Production build
 

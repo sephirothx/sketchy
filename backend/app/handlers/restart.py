@@ -122,10 +122,11 @@ async def propose_restart_vote(ctx: HandlerContext, sid, data=None):
     now = time.time()
     if room.restart_vote_cooldown_until > now:
         remaining = max(1, round(room.restart_vote_cooldown_until - now))
+        # The remaining seconds are already in the message; nothing reads a
+        # separate timestamp.
         return {
             "ok": False,
             "error": f"Another restart vote can be proposed in {remaining}s",
-            "cooldownUntil": round(room.restart_vote_cooldown_until * 1000),
         }
 
     eligible_players = _eligible_players(room)
