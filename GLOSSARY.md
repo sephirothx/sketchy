@@ -162,6 +162,8 @@ name:
   `word`, `wordChoices`, `customWords`, and `wordListSlugs` payload keys, plus
   `/api/word-lists`. Renaming these is a protocol change on both sides; the store
   fields that mirror a payload key keep the key's name so the mapping stays obvious.
+  `backend/tests/test_wire_contract.py` holds the two sides to the same names, so
+  renaming one of these is allowed but half-renaming it is not.
 - **Stored keys** — the `sketchy_pencursor` preference and the `pen` key binding.
   Renaming either would silently discard a setting a player had already chosen.
 
