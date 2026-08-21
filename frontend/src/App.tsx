@@ -6,6 +6,7 @@ import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
 import { LobbyBrowserPage } from "./pages/LobbyBrowserPage";
 import { CreateRoomPage } from "./pages/CreateRoomPage";
 import { GameRoomPage } from "./pages/GameRoomPage";
+import { PromptStatsPage } from "./pages/PromptStatsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
@@ -42,6 +43,7 @@ function App() {
           <Route path="/" element={<LobbyBrowserPage />} />
           <Route path="/create" element={<CreateRoomPage />} />
           <Route path="/room/:code" element={<GameRoomPage />} />
+          <Route path="/prompt-lists/:slug" element={<PromptStatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/:userId" element={<ProfilePage />} />
         </Routes>

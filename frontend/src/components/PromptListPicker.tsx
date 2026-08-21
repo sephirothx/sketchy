@@ -91,6 +91,24 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
           );
         })}
       </div>
+      <p className="prompt-list-stats-links">
+        {/* A new tab rather than a route change: this picker also lives inside
+            the waiting-room settings dialog, where navigating away would throw
+            out settings the host is part-way through editing. */}
+        See how they play:{" "}
+        {promptLists.map((wl, index) => (
+          <span key={wl.slug}>
+            {index > 0 ? " · " : ""}
+            <a
+              href={`/prompt-lists/${wl.slug}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {wl.name}
+            </a>
+          </span>
+        ))}
+      </p>
     </fieldset>
   );
 }

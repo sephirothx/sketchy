@@ -73,6 +73,7 @@ Three different things, never used for one another:
 | **Masked prompt** | The prompt shown to guessers as underscores, with any revealed letters filled in and the word breaks visible. | masked word, hidden word, blanks |
 | **Prompt list** | A curated set of prompts a room draws from (Standard English, Extended English). | word list, dictionary, prompt pack, category |
 | **Custom prompts** | Prompts the host adds when creating the room, on top of or instead of the prompt lists. | custom words, own words, private words |
+| **Prompt stats** | The per-list page showing how each prompt has actually played: how often it is picked when offered, and what share of guessers name it. A prompt is only ranked once enough guessers have faced it. | word stats, difficulty ratings, prompt leaderboard |
 
 ## Hints
 

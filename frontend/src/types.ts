@@ -44,6 +44,29 @@ export interface PromptListSummary {
   version: number;
 }
 
+/** How one prompt has actually played, as reported by the stats endpoint. */
+export interface PromptStats {
+  text: string;
+  offerCount: number;
+  pickCount: number;
+  correctGuessCount: number;
+  totalGuesserCount: number;
+  pickRate: number;
+  correctGuessRatio: number;
+}
+
+export type PromptStatsSort = "hardest" | "easiest" | "most-picked";
+
+export interface PromptStatsResponse {
+  slug: string;
+  sort: PromptStatsSort;
+  /** Guessers a prompt must have faced before it is ranked at all. */
+  minRatedGuessers: number;
+  ratedCount: number;
+  unratedCount: number;
+  prompts: PromptStats[];
+}
+
 export interface RoomSummary {
   id: string;
   code: string;

@@ -235,3 +235,96 @@
   font-weight: 700;
   color: #0f172a;
 }
+
+/* Prompt stats: how a list's prompts have actually played. */
+.prompt-stats-page {
+  margin: 0 auto;
+  max-width: 900px;
+  padding: 16px;
+}
+
+.prompt-stats-header h1 {
+  color: #1e293b;
+  font-size: 24px;
+  margin: 16px 0 4px;
+}
+
+.prompt-stats-intro {
+  color: #475569;
+  margin: 0 0 16px;
+}
+
+.prompt-stats-controls {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.prompt-stats-controls label {
+  color: #475569;
+  font-weight: 700;
+}
+
+.prompt-stats-note {
+  color: #475569;
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+
+.prompt-stats-note.is-error {
+  color: #b91c1c;
+}
+
+/* The table is the one thing here wide enough to push the page sideways. */
+.prompt-stats-table-scroll {
+  overflow-x: auto;
+}
+
+.prompt-stats-table {
+  border-collapse: collapse;
+  min-width: 480px;
+  width: 100%;
+}
+
+.prompt-stats-table caption {
+  color: #64748b;
+  font-size: 13px;
+  padding-bottom: 8px;
+  text-align: left;
+}
+
+.prompt-stats-table th,
+.prompt-stats-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 9px 10px;
+  text-align: right;
+}
+
+.prompt-stats-table thead th {
+  color: #64748b;
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.prompt-stats-table th:first-child,
+.prompt-stats-table td:first-child,
+.prompt-stats-table tbody th {
+  text-align: left;
+}
+
+.prompt-stats-table tbody th {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.prompt-stats-table tbody td {
+  color: #334155;
+}
+
+.prompt-list-stats-links {
+  color: #64748b;
+  font-size: 13px;
+  margin: 8px 0 0;
+}

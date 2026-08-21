@@ -10,7 +10,7 @@ copy and docs alike. Read it before naming anything a player can see.
 ## Features
 
 - Lobby with a live, polled list of public rooms, or join a private room by code.
-- Curated prompt lists (Standard and Extended English) selectable during room creation, combined with optional custom prompts. Pick rate and guess accuracy stats tracked per prompt.
+- Curated prompt lists (Standard and Extended English) selectable during room creation, combined with optional custom prompts. Pick rate and guess accuracy stats tracked per prompt, and browsable per list on a prompt stats page — ranked only once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
 - Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the prompt, and private spectator chat restricted to the drawer, spectators, and correct guessers.
@@ -123,7 +123,8 @@ backend/
   app/
     db/           SQLAlchemy models, engine setup, seeding, and migration runner
     repositories/ Abstract repository interfaces and SQLAlchemy implementations
-    main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, REST endpoints
+    api/          REST routers: player profiles, prompt lists, and prompt stats
+    main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, health and room endpoints
     handlers/
       __init__.py    Registers all handler domains and returns their lifecycle context
       context.py     Shared HandlerContext for Socket.IO, rooms, timers, and repositories
@@ -152,7 +153,7 @@ backend/
 frontend/
   src/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat
-    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay)
+    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL

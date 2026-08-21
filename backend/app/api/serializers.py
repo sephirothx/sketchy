@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from app.repositories.interfaces import (
     GameDetail,
     GameSummary,
+    PromptListSummary,
+    PromptStatsSummary,
     UserData,
     UserStats,
 )
@@ -104,4 +106,28 @@ def game_detail_payload(detail: GameDetail) -> dict:
             }
             for r in detail.turns
         ],
+    }
+
+
+def prompt_list_payload(prompt_list: PromptListSummary) -> dict:
+    return {
+        "slug": prompt_list.slug,
+        "name": prompt_list.name,
+        "description": prompt_list.description,
+        "language": prompt_list.language,
+        "promptCount": prompt_list.prompt_count,
+        "isBundled": prompt_list.is_bundled,
+        "version": prompt_list.version,
+    }
+
+
+def prompt_stats_payload(stats: PromptStatsSummary) -> dict:
+    return {
+        "text": stats.text,
+        "offerCount": stats.offer_count,
+        "pickCount": stats.pick_count,
+        "correctGuessCount": stats.correct_guess_count,
+        "totalGuesserCount": stats.total_guesser_count,
+        "pickRate": stats.pick_rate,
+        "correctGuessRatio": stats.correct_guess_ratio,
     }
