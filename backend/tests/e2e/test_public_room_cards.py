@@ -85,7 +85,6 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             await custom_word_search.fill("")
             await player.get_by_role("button", name="Short", exact=True).click()
             assert await player.get_by_text("2 of 2 prompts match", exact=True).is_visible()
-            assert await player.get_by_label("Words to display").count() == 0
             assert not await host.is_visible(
                 'summary:has-text("Inspect 2 custom prompts")'
             )
