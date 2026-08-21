@@ -14,7 +14,6 @@ function createEnvironment() {
   const environment = {
     sent: [],
     statuses: [],
-    confirmed: [],
     rejections: [],
     /** Resolvers for the acknowledgement of each sent patch, in order. */
     acks: [],
@@ -27,11 +26,8 @@ function createEnvironment() {
     onStatus(status) {
       environment.statuses.push(status);
     },
-    onConfirmed(patch) {
-      environment.confirmed.push(patch);
-    },
-    onRejected(message, keys) {
-      environment.rejections.push({ message, keys });
+    onRejected(message) {
+      environment.rejections.push(message);
     },
     setTimeout(handler, delayMs) {
       const id = nextId++;
@@ -104,7 +100,7 @@ test("a change made mid-flight is not lost and never overlaps the request", asyn
   assert.deepEqual(environment.sent, [{ rounds: 4 }, { rounds: 6 }]);
 });
 
-test("a refusal names the fields it refused and drops the patch", async () => {
+test("a refusal is reported once and the patch is dropped, not retried", async () => {
   const environment = createEnvironment();
   const saver = createRoomSettingsSaver(environment);
 
@@ -112,11 +108,9 @@ test("a refusal names the fields it refused and drops the patch", async () => {
   environment.elapse();
   await environment.ack({ ok: false, error: "Max players cannot be below the 4 players already in the room" });
 
-  assert.deepEqual(environment.rejections, [{
-    message: "Max players cannot be below the 4 players already in the room",
-    keys: ["maxPlayers"],
-  }]);
-  assert.deepEqual(environment.confirmed, []);
+  assert.deepEqual(environment.rejections, [
+    "Max players cannot be below the 4 players already in the room",
+  ]);
   environment.elapse();
   assert.equal(environment.sent.length, 1, "a refused patch is not retried");
 });

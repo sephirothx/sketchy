@@ -49,13 +49,18 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await guest.click('button:has-text("Join by code")')
             await guest.locator('[data-testid="waiting-room"]').wait_for()
 
-            await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await host.locator(".room-settings-editor details").click()
             await host.locator("#custom-prompts").fill("apple\ntree")
             await host.get_by_label("Only use custom prompts").check()
             # Settings save themselves, so the guest seeing them is the signal
             # that the room has them - there is no Save button to wait on.
             await guest.get_by_text("Custom prompts only (2)").wait_for()
+
+            # The rounds go in last, with nothing between them and Start: a
+            # setting still waiting out its delay has to reach the room before
+            # the game does, or the host plays the value they just replaced.
+            # This whole test is one round long, so it would never end.
+            await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, guest]

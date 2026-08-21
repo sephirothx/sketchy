@@ -25,13 +25,8 @@ export interface RoomSettingsSaverEnvironment {
   /** Send one patch and resolve with the server's acknowledgement. */
   send(patch: RoomSettingsPatch): Promise<AckResponse>;
   onStatus(status: SaveStatus): void;
-  /**
-   * The server refused this patch, and said why. The refused keys come along
-   * so a caller that tracks confirmed values can revert just those.
-   */
-  onRejected(message: string, keys: (keyof EditableRoomSettings)[]): void;
-  /** The server took this patch: these values are now the confirmed ones. */
-  onConfirmed?(patch: RoomSettingsPatch): void;
+  /** The server refused this patch, and said why. */
+  onRejected(message: string): void;
   setTimeout(handler: () => void, delayMs: number): number;
   clearTimeout(timeoutId: number): void;
 }
@@ -68,9 +63,10 @@ function browserEnvironment(
  *
  * A refusal and a dropped connection are handled differently on purpose. A
  * refusal means the value itself is wrong, so the patch is discarded and the
- * caller reverts. A transport failure says nothing about the value, so the
- * patch stays pending and goes out again on the next flush - the host's edit
- * survives a reconnect rather than silently vanishing.
+ * caller told - it has to go and find out what the room actually holds. A
+ * transport failure says nothing about the value, so the patch stays pending
+ * and goes out again on the next flush: the host's edit survives a reconnect
+ * rather than silently vanishing.
  */
 export function createRoomSettingsSaver(
   environment:
@@ -126,13 +122,9 @@ export function createRoomSettingsSaver(
         if (sentAt !== generation) return;
         inFlight = false;
         if (response.ok) {
-          env.onConfirmed?.(patch);
           setStatus(pending ? "pending" : "saved");
         } else {
-          env.onRejected(
-            response.error || "Could not save room settings",
-            Object.keys(patch) as (keyof EditableRoomSettings)[],
-          );
+          env.onRejected(response.error || "Could not save room settings");
           setStatus(pending ? "pending" : "idle");
         }
         send();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { CustomPromptsEditor } from "./CustomPromptsEditor";
 import { PromptListPicker } from "./PromptListPicker";
 import {
@@ -67,12 +67,20 @@ export function RoomSettingsEditor() {
   // Custom prompts do not autosave: a prompt list only means anything once the
   // host has stopped typing it, and a half-written line would be stored as a
   // prompt. The textarea and the "only" switch travel together, because the
-  // server clears "only" whenever the prompt list it is given is empty. This
-  // is what the server last accepted, so the Apply button knows it has work.
+  // server clears "only" whenever the prompt list it is given is empty.
+  //
+  // This is what has been handed over, set the moment a patch is queued rather
+  // than when it comes back. Waiting for the acknowledgement would leave the
+  // block dirty for a whole round-trip, and clicking Apply blurs the textarea
+  // on the way - so the blur and the click would each send the same prompts.
   const [promptsBaseline, setPromptsBaseline] = useState({ value: "", only: false });
   // Re-read the room's settings. Bumped after a refusal, which is the one time
-  // the form and the room can disagree about what a setting is.
+  // the form and the room can disagree about what a setting is. Re-reading
+  // rather than putting back a locally remembered value: the server settles
+  // dependent settings itself - a hint mode the scoring rules out, say - so
+  // what it holds is not always what this form last sent it.
   const [reloadCount, setReloadCount] = useState(0);
+  const rootRef = useRef<HTMLElement>(null);
   const { notify } = useToast();
 
   const promptsDirty =
@@ -82,14 +90,6 @@ export function RoomSettingsEditor() {
   const saver = useMemo(() => createRoomSettingsSaver({
     send: (patch) => emitWithAck<AckResponse>("update_room_settings", patch),
     onStatus: setStatus,
-    onConfirmed: (patch) => setPromptsBaseline((baseline) => (
-      patch.customPrompts === undefined && patch.customPromptsOnly === undefined
-        ? baseline
-        : {
-          value: patch.customPrompts ?? baseline.value,
-          only: patch.customPromptsOnly ?? baseline.only,
-        }
-    )),
     onRejected: (message) => {
       notify(message, "error");
       setReloadCount((count) => count + 1);
@@ -104,15 +104,21 @@ export function RoomSettingsEditor() {
         if (cancelled) return;
         if (response.ok && response.settings) {
           setSettings(response.settings);
-          setPromptsBaseline({
-            value: response.settings.customPrompts,
-            only: response.settings.customPromptsOnly,
-          });
-          dispatchCustomPrompts({
-            type: "reset",
-            value: response.settings.customPrompts,
-            only: response.settings.customPromptsOnly,
-          });
+          // Only the first read fills the prompt block. A re-read follows a
+          // refusal of some other setting, which says nothing about a prompt
+          // list the host is still writing - and overwriting it would throw
+          // away work that was never sent anywhere.
+          if (reloadCount === 0) {
+            setPromptsBaseline({
+              value: response.settings.customPrompts,
+              only: response.settings.customPromptsOnly,
+            });
+            dispatchCustomPrompts({
+              type: "reset",
+              value: response.settings.customPrompts,
+              only: response.settings.customPromptsOnly,
+            });
+          }
           setError(null);
         }
         else setError(response.error || "Could not load room settings");
@@ -130,8 +136,19 @@ export function RoomSettingsEditor() {
     // one again, so the host's last change survives the reconnect.
     const retry = () => saver.flush();
     socket.on("connect", retry);
+    // Reaching for anything outside this panel - Start game, above all - ends
+    // the host's business with it, so whatever is still waiting out its delay
+    // goes now. Watching the press rather than the click is what makes this
+    // work: the settings are on the socket before the start is, and the socket
+    // delivers in order. A press and not only a blur, because a button does
+    // not take focus on every browser.
+    const flushOnPressOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) saver.flush();
+    };
+    document.addEventListener("pointerdown", flushOnPressOutside, true);
     return () => {
       socket.off("connect", retry);
+      document.removeEventListener("pointerdown", flushOnPressOutside, true);
       // A change the host made a moment before leaving the lobby still goes
       // out - forgetting it here is the very thing this editor stopped doing.
       saver.flush();
@@ -150,6 +167,7 @@ export function RoomSettingsEditor() {
 
   const applyPrompts = useCallback(() => {
     if (promptsError || !promptsDirty) return;
+    setPromptsBaseline({ value: customPrompts.value, only: customPrompts.only });
     saver.queue({ customPrompts: customPrompts.value, customPromptsOnly: customPrompts.only });
     saver.flush();
   }, [customPrompts.only, customPrompts.value, promptsDirty, promptsError, saver]);
@@ -160,6 +178,7 @@ export function RoomSettingsEditor() {
   // finished with the textarea.
   function setPromptsOnly(only: boolean) {
     dispatchCustomPrompts({ type: "set-only", only });
+    setPromptsBaseline({ value: customPrompts.value, only });
     saver.queue({ customPrompts: customPrompts.value, customPromptsOnly: only });
     saver.flush();
   }
@@ -169,14 +188,22 @@ export function RoomSettingsEditor() {
     if (isSendableRoomNumber(field, value)) saver.queue({ [field]: value }, STEPPER_SAVE_DELAY_MS);
   }
 
-  return <section className="waiting-card room-settings-editor" aria-labelledby="room-settings-title">
+  return <section
+    ref={rootRef}
+    className="waiting-card room-settings-editor"
+    aria-labelledby="room-settings-title"
+    // Focus leaving a field is the keyboard's version of the press above: it
+    // is how a host tabbing to Start game gets there without outrunning their
+    // own edit.
+    onBlur={() => saver.flush()}
+  >
     <div className="room-settings-editor-heading"><p className="waiting-card-kicker">Host settings</p><h2 id="room-settings-title">Edit room settings</h2></div>
     {loading ? <p>Loading settings…</p> : <div className="room-settings-fields">
       <div className="create-room-name-row">
         <label className="create-room-name-field">
           Room name
           {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
-          <input type="search" inputMode="text" value={settings.name} onChange={(event) => update({ name: event.target.value }, TYPING_SAVE_DELAY_MS)} onBlur={() => saver.flush()} maxLength={40} autoComplete="off" autoCapitalize="sentences" spellCheck={true} enterKeyHint="done" />
+          <input type="search" inputMode="text" value={settings.name} onChange={(event) => update({ name: event.target.value }, TYPING_SAVE_DELAY_MS)} maxLength={40} autoComplete="off" autoCapitalize="sentences" spellCheck={true} enterKeyHint="done" />
         </label>
         <SegmentedControl
           label="Visibility"
