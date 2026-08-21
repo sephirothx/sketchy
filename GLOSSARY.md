@@ -1,0 +1,175 @@
+# Glossary
+
+The vocabulary of Sketchy: one agreed name per concept, for UI copy, docs, issues,
+and conversation.
+
+- **The canonical term is the one to use.** If a concept has a name here, use it
+  everywhere it is visible — button labels, chat announcements, overlays, tooltips,
+  screen-reader labels, README, issues, PR titles.
+- **The listed alternatives are not synonyms, they are drift.** They mean the term
+  next to them and nothing else, and they should not appear in new copy.
+- **A new concept gets a name here before it ships.** If a change introduces
+  something players can see and there is no word for it yet, add the entry in the
+  same change.
+- UI copy is American English (*color*, not *colour*) and sentence case
+  (*Buy letters*, not *Buy Letters*).
+
+---
+
+## Game structure
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Game** | One complete play-through in a room, from **Start game** to final scores. A room outlives the games played in it. | match, session |
+| **Round** | One full rotation: every active player draws exactly once. Rooms are configured in rounds ("3 rounds each"). | — |
+| **Turn** | One drawer's stint: they pick a prompt, draw it, and it is revealed. A round of *n* players contains *n* turns. **This is the unit almost everything is scored, timed, and limited by** — points, hint spend, and the drawing limit are all per turn, never per round. | round (for a single drawer's stint) |
+| **Choosing** | The phase where the drawer picks one of their prompt options. Everyone else waits. | word select, prompt select, picking phase |
+| **Drawing** | The phase where the drawer draws and everyone else guesses. Ends when the timer runs out or everyone has guessed. | play phase |
+| **Turn results** | The short phase after each turn: the prompt is revealed and scores update. | round end, round results, intermission |
+| **Game over** | The final screen: full standings, and the drawing recap. | game end screen, results screen |
+| **Rematch** | Starting a new game with the players already in the room. | replay, new game |
+
+The rule of thumb: **rounds contain turns**. Anything a single drawer does, is
+awarded, or is limited to belongs to a *turn*. Only the room's configured length and
+the rotation itself are counted in *rounds*.
+
+## People
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Player** | Anyone in a room who can draw and guess. Spectators are not players. | user (that is an account), participant |
+| **Active player** | A player who is connected and not AFK — the population that draws, is waited for, and counts toward vote majorities. | live player, ready player |
+| **Drawer** | The player whose turn it is to draw. | artist, painter, sketcher |
+| **Guesser** | Any player in the drawing phase who is not the drawer. Stays a guesser after guessing the prompt. | watcher, viewer |
+| **Spectator** | Someone watching a room without playing. Never draws, never scores, never votes, and is never a moderation target. | observer, viewer, lurker |
+| **Host** | The player who created the room and can start the game and change room settings. | owner, admin, leader |
+| **Guest** | Someone playing under an unclaimed account. Shown in grey italics. | anonymous player, unregistered user |
+| **AFK** | A status a player sets on themselves, or the room votes onto them. AFK players are skipped for turns and not waited for. Always the initialism, uppercase. | away, idle, inactive, afk |
+
+## Names
+
+Three different things, never used for one another:
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Nickname** | The name a player is playing under in a room — what appears in the player list, chat, and scores. | handle, alias, screen name |
+| **Username** | The account login name, chosen when an account is claimed. A registered player's nickname is always their username. | user ID, login |
+| **Display name** | The name saved on an account and used as the default nickname. | profile name, real name |
+| **Name color** | The color a player's name renders in. Guests have no name color. | name colour, player color |
+
+## The prompt
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Prompt** | The word or phrase the drawer has to draw and the guessers have to name. Roughly a third of the shipped entries are more than one word (*bow and arrow*, *roller coaster*), so the term has to hold both. | word, solution, answer, secret word, term |
+| **Word** | Keeps its ordinary English meaning, and only that: the individual words making up a multi-word prompt, and the letters and words hints and close guesses work on. It is never a name for the prompt itself. | — |
+| **Prompt options** | The three prompts offered to the drawer during the choosing phase. | word options, word choices, candidates |
+| **Masked prompt** | The prompt shown to guessers as underscores, with any revealed letters filled in and the word breaks visible. | masked word, hidden word, blanks |
+| **Prompt list** | A curated set of prompts a room draws from (Standard English, Extended English). | word list, dictionary, prompt pack, category |
+| **Custom prompts** | Prompts the host adds when creating the room, on top of or instead of the prompt lists. | custom words, own words, private words |
+
+## Hints
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Hint** | A revealed letter of the prompt. | clue, reveal |
+| **Hint mode** | The room setting choosing how hints work: **No hints**, **Timed hints**, **Buy letters**, or **Wheel of Fortune**. Use those four labels verbatim. | hint type, hint style |
+| **Timed hints** | Letters of the prompt revealed to everyone automatically as the drawing timer runs down. | checkpoint hints, auto hints, free hints |
+| **Buy letters** | Each guesser spends against their turn score to reveal a letter position, visible only to them. | purchase hints, paid hints |
+| **Wheel of Fortune** | Each guesser buys a specific letter, priced by how common it is, visible only to them. | wheel hints, letter wheel |
+| **Hint spend** | What a guesser has committed to hints this turn. Hints are bought on credit: the spend is taken out of that turn's guess points, never out of the running score. | hint cost, hint debt, hint charge |
+
+## Guessing
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Guess** | A chat message from a guesser during the drawing phase, checked against the prompt. | answer, attempt, submission |
+| **Correct guess** | A guess that matches the prompt. Announced to the room without revealing it. | win, hit |
+| **Close guess** | A guess one small edit away from the prompt, or one that gets some words of a multi-word prompt right. Shown only to the guesser who made it. | near miss, almost |
+| **Chat** | The room's message stream. **Spectator chat** is the restricted stream that only the drawer, spectators, and correct guessers can see. | messages, log, feed |
+
+## Drawing
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Canvas** | The shared drawing surface. | board, whiteboard, sketchpad |
+| **Brush** | The freehand drawing tool. Its size control is **Brush size**, and what it lays down is a **brush stroke**. | pen, pencil, marker, draw tool |
+| **Eraser** | The freehand erasing tool. Its size control is **Eraser size**. | rubber, undo tool |
+| **Fill** | The tool that floods an enclosed area with the current color. | bucket, paint bucket, flood |
+| **Shape** | The rectangle, ellipse, and triangle tools, collectively. Name the individual ones **rectangle**, **ellipse**, **triangle**. | box, circle/oval, square |
+| **Stroke** | One continuous mark, from the moment the drawer presses down to the moment they lift. What the brush and eraser produce. | line, scribble, path |
+| **Color** | The current drawing color, chosen from the palette or a custom picker. | colour, ink, shade |
+| **Undo** | Removes the drawer's most recent mark for everyone. | back, revert, erase |
+| **Clear** | Empties the canvas for everyone. | reset, wipe, erase all |
+| **Drawing limit** | The ceiling on how much one turn's drawing may cost the room to load. Tools grey out for the rest of the turn once it is reached, and the reason names the tool, not the mechanism. | budget, quota, cap, replay cost |
+| **Save image** | Downloading the current canvas as a PNG. | export, download drawing, screenshot |
+| **Recap** | The gallery of every drawing from a finished game, shown on the game over screen. Individual entries are **drawings**, labeled by round and turn. | gallery, replay, history, snapshot |
+
+## Scoring
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Points** | What a single guess or turn is worth. | score (for one award) |
+| **Score** | A player's running total across the game. Never goes down. | points (for a total), rating |
+| **Scoring mode** | The room setting chosen at creation: **Default**, **Pressure**, or **No scoring**. Use those three labels verbatim. | points mode, scoring type, "Just for fun", "Points on" |
+| **Default** | A correct guess is worth 100–300 points, falling steadily as the timer runs down. | normal, standard, classic |
+| **Pressure** | A correct guess decays from 300 points, and decays faster for everyone once the first player gets the prompt. | hardcore, fast, decay |
+| **No scoring** | Guesses are still detected and turns still end, but everyone stays on zero and no standings are shown. | casual, fun mode, unscored |
+| **Standings** | The ranked list of scores. | leaderboard, ranking, scoreboard |
+
+## Rooms
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Room** | The place people play in — created by a host, joined by code or from the lobby, and outliving individual games. | game (for the place), channel, table |
+| **Lobby** | The browsable list of public rooms. **The lobby is one place, and it is not inside a room.** | browser, room list, home |
+| **Waiting room** | A room's state before a game starts or between games, where players gather and the host starts the game. | lobby, pre-game, staging |
+| **Public room** | A room listed in the lobby, joinable by anyone. | open room |
+| **Private room** | A room reachable only by its code or invite link. | closed room, locked room |
+| **Room code** | The short code that identifies a room to join. The shareable URL carrying it is the **invite link**. | friend code, game code, PIN, room ID |
+| **Room settings** | The host-controlled configuration: rounds, drawing time, max players, prompt lists, hint mode, scoring mode, spectator rules. | options, config, preferences, rules |
+| **Player settings** | A player's own preferences, which travel with them between rooms. | user settings, profile settings |
+
+## Votes and moderation
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Restart vote** | A proposal to restart the current game, carried by a strict majority of active players. | vote restart, game restart, reset vote |
+| **Kick vote** | A proposal to remove a player from the room. | vote kick, vote-kick, boot |
+| **AFK vote** | A proposal to mark a player AFK. | vote AFK, idle vote |
+| **Majority** | Strictly more than half of the eligible voters. Spectators never vote and are never targets. | quorum, consensus |
+
+## Connection
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Disconnected** | A player whose connection dropped. They keep their score and place in the rotation until the grace period expires. | offline, dropped, gone |
+| **Grace period** | The 30 seconds a disconnected player has to return before they are removed from the game. | timeout, reconnect window |
+| **Reconnect** | Returning within the grace period and resuming with score and turn position intact. | rejoin, resume |
+| **Rejoin** | Entering a room again as a new arrival, after the grace period has passed. | reconnect |
+
+---
+
+## Known drift
+
+Copy that is currently visible to players and disagrees with the above. Fix on
+sight; do not copy the pattern into new screens.
+
+- The overlay between turns is titled **"Round results" / "Round complete"**, and
+  labels the player's per-turn award **"Your round"**. All three describe a *turn*.
+- The profile page's per-game breakdown labels its per-turn rows **"Round"**.
+- The freehand tool is labeled **"Pen"** in the toolbar, while its size control is
+  already labeled **"Brush"**. Both are **Brush**.
+- Most of the UI calls the prompt the **"word"** — the choosing overlay, the turn
+  results reveal, the room setup copy, and the **"Word list"** and **"Custom words"**
+  settings. The invite screen calls it the **"answer"**. It is the **prompt**.
+- The waiting room after a finished game says **"The lobby is ready for a
+  rematch"**. The lobby is the public room list; this is the **waiting room**.
+- Hint modes appear as "Timed letter hints" / "Wheel-style letter hints" alongside
+  the canonical "Timed hints" / "Wheel of Fortune".
+- Scoring modes appear as "Points on", "No scorekeeping", and "Just for fun"
+  alongside the canonical "Default", "Pressure", and "No scoring".
+
+The README was brought in line in the change that added this file. Its project-structure
+listing still says "word list" where it is naming actual files, which is correct — those
+are file names, and this glossary does not govern them.
