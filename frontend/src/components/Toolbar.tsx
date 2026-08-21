@@ -54,15 +54,28 @@ function ColorSwatch({ color, selected, onSelect, variant, label, title }: Color
   );
 }
 
-/** Keys bound to a tool. Every DrawTool names a KeyBindings field. */
+// Which binding each tool reads. The brush's keys are stored under `pen`, so the
+// two names have to be mapped rather than assumed equal - see KeyBindings. Typed
+// as a total Record so a new DrawTool fails to compile until it is bound here,
+// instead of silently reading undefined.
+const TOOL_BINDINGS: Record<DrawTool, keyof KeyBindings> = {
+  brush: "pen",
+  eraser: "eraser",
+  fill: "fill",
+  rectangle: "rectangle",
+  ellipse: "ellipse",
+  triangle: "triangle",
+};
+
+/** Keys bound to a tool. */
 function toolKeys(bindings: KeyBindings, tool: DrawTool): string[] {
-  return bindings[tool as keyof KeyBindings] ?? [];
+  return bindings[TOOL_BINDINGS[tool]] ?? [];
 }
 
 const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
   {
-    value: "pen",
-    name: "Pen",
+    value: "brush",
+    name: "Brush",
     glyph: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
@@ -166,7 +179,7 @@ export function Toolbar({
       return "Fill is unavailable for the rest of this turn";
     }
     // Shapes cost no points, so they outlive the pen.
-    if ((value === "pen" || value === "eraser") && !strokeAvailable) {
+    if ((value === "brush" || value === "eraser") && !strokeAvailable) {
       return "Drawing by hand is unavailable for the rest of this turn";
     }
     return null;
@@ -191,7 +204,7 @@ export function Toolbar({
         setRecentColors((prev) => [newColor, ...prev.filter((c) => c !== newColor)].slice(0, 6));
       }
       onColorChange(newColor);
-      if (tool === "eraser") onToolChange("pen");
+      if (tool === "eraser") onToolChange("brush");
     },
     [color, onColorChange, tool, onToolChange],
   );
@@ -220,7 +233,7 @@ export function Toolbar({
     (newWidth: number) => {
       onBrushWidthChange(newWidth);
       if (tool === "fill") {
-        onToolChange("pen");
+        onToolChange("brush");
       }
     },
     [onBrushWidthChange, tool, onToolChange],
@@ -274,7 +287,7 @@ export function Toolbar({
         const targetColor = prevColorRef.current;
         prevColorRef.current = color;
         onColorChange(targetColor);
-        if (tool === "eraser") onToolChange("pen");
+        if (tool === "eraser") onToolChange("brush");
         return;
       }
 

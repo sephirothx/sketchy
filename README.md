@@ -146,7 +146,7 @@ backend/
     test_*.py     Domain, protocol, payload, timer, DB, repository, and performance unit tests
 frontend/
   src/
-    components/   Canvas, Toolbar, PlayerList, WordDisplay, Timer, GuessChat
+    components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat
     pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
@@ -308,7 +308,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 ### Scoring
 
 - Everyone starts a game on zero points, in every scoring mode.
-- Room creators can choose **Default scoring**, **Pressure scoring**, or **No scoring**.
+- Room creators can choose **Default**, **Pressure**, or **No scoring**.
   No-scoring games still detect correct guesses and end rounds normally, but everyone remains
   on zero points and no leaderboard is shown.
 - **Default**: a correct guess scores between 100 and 300 points, falling linearly with the time

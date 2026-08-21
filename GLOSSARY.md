@@ -152,24 +152,17 @@ Three different things, never used for one another:
 
 ## Known drift
 
-Copy that is currently visible to players and disagrees with the above. Fix on
-sight; do not copy the pattern into new screens.
+Nothing in the UI contradicts this glossary. The copy, component names, CSS classes,
+and test IDs were brought in line in the change that emptied this section.
 
-- The overlay between turns is titled **"Round results" / "Round complete"**, and
-  labels the player's per-turn award **"Your round"**. All three describe a *turn*.
-- The profile page's per-game breakdown labels its per-turn rows **"Round"**.
-- The freehand tool is labeled **"Pen"** in the toolbar, while its size control is
-  already labeled **"Brush"**. Both are **Brush**.
-- Most of the UI calls the prompt the **"word"** — the choosing overlay, the turn
-  results reveal, the room setup copy, and the **"Word list"** and **"Custom words"**
-  settings. The invite screen calls it the **"answer"**. It is the **prompt**.
-- The waiting room after a finished game says **"The lobby is ready for a
-  rematch"**. The lobby is the public room list; this is the **waiting room**.
-- Hint modes appear as "Timed letter hints" / "Wheel-style letter hints" alongside
-  the canonical "Timed hints" / "Wheel of Fortune".
-- Scoring modes appear as "Points on", "No scorekeeping", and "Just for fun"
-  alongside the canonical "Default", "Pressure", and "No scoring".
+Two categories deliberately still use the old words, and neither is a player-facing
+name:
 
-The README was brought in line in the change that added this file. Its project-structure
-listing still says "word list" where it is naming actual files, which is correct — those
-are file names, and this glossary does not govern them.
+- **Wire and REST names** — the `round_end` phase and `round_ended` event, and the
+  `word`, `wordChoices`, `customWords`, and `wordListSlugs` payload keys, plus
+  `/api/word-lists`. Renaming these is a protocol change on both sides; the store
+  fields that mirror a payload key keep the key's name so the mapping stays obvious.
+- **Stored keys** — the `sketchy_pencursor` preference and the `pen` key binding.
+  Renaming either would silently discard a setting a player had already chosen.
+
+Add a bullet here when new copy drifts, and delete it when the copy is fixed.

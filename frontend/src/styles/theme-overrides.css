@@ -64,10 +64,10 @@
   .invite-loading-spinner {
     animation: none;
   }
-  .choosing-word-dots span { animation: none; opacity: .65; }
+  .choosing-prompt-dots span { animation: none; opacity: .65; }
   .room-shell-main-transition { animation: none; }
   .room-spectator-tooltip { transition: none; }
-  .round-score-row { transform: none !important; transition: none !important; }
+  .turn-results-score-row { transform: none !important; transition: none !important; }
 }
 
 [data-theme="dark"] .panel,
@@ -89,7 +89,7 @@
 [data-theme="dark"] .create-room-heading p,
 [data-theme="dark"] .advanced-settings summary span,
 [data-theme="dark"] .setting-dependency,
-[data-theme="dark"] .custom-words-summary { color: #94a3b8; }
+[data-theme="dark"] .custom-prompts-summary { color: #94a3b8; }
 [data-theme="dark"] .create-room-card input[type="text"],
 [data-theme="dark"] .create-room-card input[type="search"],
 [data-theme="dark"] .create-room-card select,
@@ -111,7 +111,7 @@
 [data-theme="dark"] .m3-switch-label input:checked ~ .m3-switch-track { background: #2563eb; border-color: #2563eb; }
 [data-theme="dark"] .m3-switch-label input:checked ~ .m3-switch-track .m3-switch-thumb { background: #fff; }
 [data-theme="dark"] .advanced-settings,
-[data-theme="dark"] .custom-words-editor { border-color: #334155; }
+[data-theme="dark"] .custom-prompts-editor { border-color: #334155; }
 [data-theme="dark"] .room-settings-save { border-color: #334155; }
 
 [data-theme="dark"] .panel input[type="text"],
@@ -218,7 +218,7 @@
   border-color: #334155;
 }
 
-[data-theme="dark"] .word-hidden-prompt {
+[data-theme="dark"] .prompt-hidden {
   color: #94a3b8;
   background: #1e293b;
   border-color: #475569;
@@ -252,7 +252,7 @@
   color: #64748b;
 }
 
-[data-theme="dark"] .word-lengths sup {
+[data-theme="dark"] .prompt-lengths sup {
   color: #94a3b8;
 }
 
@@ -466,57 +466,57 @@
   color: #bfdbfe;
 }
 
-[data-theme="dark"] .waiting-custom-words {
+[data-theme="dark"] .waiting-custom-prompts {
   border-color: #334155;
 }
 
-[data-theme="dark"] .waiting-custom-words > summary {
+[data-theme="dark"] .waiting-custom-prompts > summary {
   color: #93c5fd;
 }
 
-[data-theme="dark"] .waiting-custom-words-content p {
+[data-theme="dark"] .waiting-custom-prompts-content p {
   color: #94a3b8;
 }
 
-[data-theme="dark"] .waiting-custom-words-content,
-[data-theme="dark"] .waiting-custom-words-list,
-[data-theme="dark"] .waiting-custom-words-empty {
+[data-theme="dark"] .waiting-custom-prompts-content,
+[data-theme="dark"] .waiting-custom-prompts-list,
+[data-theme="dark"] .waiting-custom-prompts-empty {
   background: #0f172a;
   border-color: #334155;
 }
 
-[data-theme="dark"] .waiting-custom-words-heading strong {
+[data-theme="dark"] .waiting-custom-prompts-heading strong {
   color: #f8fafc;
 }
 
-[data-theme="dark"] .waiting-custom-words-heading > span {
+[data-theme="dark"] .waiting-custom-prompts-heading > span {
   background: #172554;
   color: #bfdbfe;
 }
 
-[data-theme="dark"] .waiting-custom-words-search {
+[data-theme="dark"] .waiting-custom-prompts-search {
   color: #cbd5e1;
 }
 
-[data-theme="dark"] .waiting-custom-words-search input,
-[data-theme="dark"] .waiting-custom-words-filters button {
+[data-theme="dark"] .waiting-custom-prompts-search input,
+[data-theme="dark"] .waiting-custom-prompts-filters button {
   background: #1e293b;
   border-color: #475569;
   color: #f8fafc;
 }
 
-[data-theme="dark"] .waiting-custom-words-filters button[aria-pressed="true"] {
+[data-theme="dark"] .waiting-custom-prompts-filters button[aria-pressed="true"] {
   background: #2563eb;
   border-color: #60a5fa;
 }
 
-[data-theme="dark"] .waiting-custom-words-list span {
+[data-theme="dark"] .waiting-custom-prompts-list span {
   background: #172554;
   border-color: #1e3a8a;
   color: #bfdbfe;
 }
 
-[data-theme="dark"] .waiting-custom-words-content .waiting-custom-words-error {
+[data-theme="dark"] .waiting-custom-prompts-content .waiting-custom-prompts-error {
   color: #fca5a5;
 }
 
@@ -694,61 +694,61 @@
 }
 
 /* Overlays & Modals in dark mode */
-[data-theme="dark"] .round-end-overlay {
+[data-theme="dark"] .turn-results-overlay {
   background: rgba(0, 0, 0, 0.75);
 }
 
-[data-theme="dark"] .choosing-word-overlay {
+[data-theme="dark"] .choosing-prompt-overlay {
   background: rgba(15, 23, 42, .9);
 }
 
-[data-theme="dark"] .choosing-word-card {
+[data-theme="dark"] .choosing-prompt-card {
   background: rgba(30, 41, 59, .97);
   border-color: #334155;
   box-shadow: 0 14px 34px rgba(0, 0, 0, .32);
 }
 
-[data-theme="dark"] .choosing-word-message { color: #f8fafc; }
-[data-theme="dark"] .choosing-word-message strong { color: #93c5fd; }
-[data-theme="dark"] .choosing-word-hint { color: #94a3b8; }
+[data-theme="dark"] .choosing-prompt-message { color: #f8fafc; }
+[data-theme="dark"] .choosing-prompt-message strong { color: #93c5fd; }
+[data-theme="dark"] .choosing-prompt-hint { color: #94a3b8; }
 
-[data-theme="dark"] .round-end-panel {
+[data-theme="dark"] .turn-results-panel {
   background: #1e293b;
   border: 1px solid #334155;
   color: #f8fafc;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-[data-theme="dark"] .round-end-word {
+[data-theme="dark"] .turn-results-prompt {
   color: #cbd5e1;
 }
 
-[data-theme="dark"] .round-end-word strong {
+[data-theme="dark"] .turn-results-prompt strong {
   color: #ffffff;
 }
 
-[data-theme="dark"] .round-guesses-heading {
+[data-theme="dark"] .turn-results-guesses-heading {
   color: #cbd5e1;
 }
 
-[data-theme="dark"] .round-guesses-list time {
+[data-theme="dark"] .turn-results-guesses-list time {
   color: #cbd5e1;
 }
 
-[data-theme="dark"] .round-guesses-list li::marker {
+[data-theme="dark"] .turn-results-guesses-list li::marker {
   color: #94a3b8;
 }
 
-[data-theme="dark"] .round-no-guesses {
+[data-theme="dark"] .turn-results-no-guesses {
   color: #94a3b8;
 }
 
-[data-theme="dark"] .round-score-rank,
-[data-theme="dark"] .round-score-delta {
+[data-theme="dark"] .turn-results-score-rank,
+[data-theme="dark"] .turn-results-score-delta {
   color: #94a3b8;
 }
 
-[data-theme="dark"] .round-hint-debt,
+[data-theme="dark"] .turn-results-hint-debt,
 [data-theme="dark"] .hint-price-warning {
   color: #fbbf24;
 }
@@ -761,12 +761,12 @@
   color: #94a3b8;
 }
 
-[data-theme="dark"] .round-score-change.rank-up,
-[data-theme="dark"] .round-score-delta.positive {
+[data-theme="dark"] .turn-results-score-change.rank-up,
+[data-theme="dark"] .turn-results-score-delta.positive {
   color: #4ade80;
 }
 
-[data-theme="dark"] .round-score-change.rank-down {
+[data-theme="dark"] .turn-results-score-change.rank-down {
   color: #f87171;
 }
 

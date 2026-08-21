@@ -14,7 +14,7 @@ import {
   randomNameColor,
   type AppTheme,
   type KeyBindings,
-  type PenCursorStyle,
+  type BrushCursorStyle,
   useSettingsStore,
 } from "../store/settingsStore";
 import { socket } from "../lib/socket";
@@ -33,7 +33,7 @@ const THEME_OPTIONS: { value: AppTheme; label: string }[] = [
   { value: "system", label: "System" },
 ];
 
-const BRUSH_CURSOR_OPTIONS: { value: PenCursorStyle; label: string }[] = [
+const BRUSH_CURSOR_OPTIONS: { value: BrushCursorStyle; label: string }[] = [
   { value: "crosshair", label: "Crosshair" },
   { value: "circle", label: "Outline" },
 ];
@@ -45,7 +45,7 @@ function formatKey(key: string): string {
 }
 
 function SettingsModalContent() {
-  const { closeSettings, keyBindings, penCursor, theme, confettiEffects, soundEffects, volume, nameColor, setAllSettings } =
+  const { closeSettings, keyBindings, brushCursor, theme, confettiEffects, soundEffects, volume, nameColor, setAllSettings } =
     useSettingsStore();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -53,7 +53,7 @@ function SettingsModalContent() {
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [draftKeyBindings, setDraftKeyBindings] = useState<KeyBindings>(keyBindings);
-  const [draftPenCursor, setDraftPenCursor] = useState<PenCursorStyle>(penCursor);
+  const [draftBrushCursor, setDraftBrushCursor] = useState<BrushCursorStyle>(brushCursor);
   const [draftTheme, setDraftTheme] = useState<AppTheme>(theme);
   const [draftConfettiEffects, setDraftConfettiEffects] = useState<boolean>(confettiEffects);
   const [draftSoundEffects, setDraftSoundEffects] = useState<boolean>(soundEffects);
@@ -159,7 +159,7 @@ function SettingsModalContent() {
 
     setAllSettings({
       keyBindings: draftKeyBindings,
-      penCursor: draftPenCursor,
+      brushCursor: draftBrushCursor,
       theme: draftTheme,
       confettiEffects: draftConfettiEffects,
       soundEffects: draftSoundEffects,
@@ -400,9 +400,9 @@ function SettingsModalContent() {
                   label="Brush cursor style"
                   showLabel
                   hint="Choose whether the brush shows a crosshair or a circular outline matching brush size."
-                  value={draftPenCursor}
+                  value={draftBrushCursor}
                   options={BRUSH_CURSOR_OPTIONS}
-                  onChange={setDraftPenCursor}
+                  onChange={setDraftBrushCursor}
                 />
 
                 <Switch

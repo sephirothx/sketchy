@@ -37,10 +37,10 @@ async def select_word(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
-        return {"ok": False, "error": "Game is not ready for word selection"}
+        return {"ok": False, "error": "Game is not ready for prompt selection"}
     room, player = current
     if not room.game.choose_word(player.id, payload.word):
-        return {"ok": False, "error": "That word is no longer available"}
+        return {"ok": False, "error": "That prompt is no longer available"}
     ctx.timers.cancel_phase_timer(room.id)
     await ctx.game_flow._begin_drawing(room)
     return {"ok": True}

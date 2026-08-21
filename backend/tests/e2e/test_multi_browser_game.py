@@ -155,21 +155,21 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             await page1.set_viewport_size({"width": 1280, "height": 720})
 
             # Step 5: Identify who is drawer and choose word if prompt choice is present
-            drawer_page = page1 if await page1.query_selector('.word-choices') else page2
+            drawer_page = page1 if await page1.query_selector('.prompt-choices') else page2
             guesser_page = page2 if drawer_page == page1 else page1
             drawer_name = "HostAlice" if drawer_page == page1 else "BobGuesser"
 
-            choosing_status = guesser_page.get_by_test_id("choosing-word-status")
+            choosing_status = guesser_page.get_by_test_id("choosing-prompt-status")
             await choosing_status.wait_for()
             assert await choosing_status.get_by_text(
                 f"{drawer_name} is choosing a word…",
                 exact=True,
             ).is_visible()
             assert not await drawer_page.get_by_test_id(
-                "choosing-word-status"
+                "choosing-prompt-status"
             ).is_visible()
 
-            if await drawer_page.query_selector('.word-choices button'):
+            if await drawer_page.query_selector('.prompt-choices button'):
                 await drawer_page.evaluate(
                     """
                     () => {
@@ -182,7 +182,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                     }
                     """
                 )
-                await drawer_page.click('.word-choices button:first-child')
+                await drawer_page.click('.prompt-choices button:first-child')
 
             # Wait for drawing phase
             await choosing_status.wait_for(state="detached")
@@ -341,32 +341,32 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             # mobile layout has a reason to dismiss the input.
             await guess_input.focus()
             assert await guess_input.evaluate("input => document.activeElement === input")
-            word = await drawer_page.locator('.word-reveal').inner_text()
+            word = await drawer_page.locator('.prompt-reveal').inner_text()
             await guess_input.fill(word)
             await guess_input.press('Enter')
-            await guesser_page.wait_for_selector('[data-testid="round-end-overlay"]')
+            await guesser_page.wait_for_selector('[data-testid="turn-results-overlay"]')
             assert await guess_input.evaluate("input => document.activeElement === input")
             assert not await guesser_page.query_selector('.game-room.guess-focused')
 
             # Step 9: The next turn swaps roles. On mobile the turn boundary must
-            # still dismiss the soft keyboard, so the canvas and the round-end
+            # still dismiss the soft keyboard, so the canvas and the turn-results
             # overlay are not left behind it.
             await guesser_page.wait_for_selector(
-                '[data-testid="round-end-overlay"]', state="detached"
+                '[data-testid="turn-results-overlay"]', state="detached"
             )
-            next_drawer = page1 if await page1.query_selector('.word-choices') else page2
+            next_drawer = page1 if await page1.query_selector('.prompt-choices') else page2
             next_guesser = page2 if next_drawer is page1 else page1
-            if await next_drawer.query_selector('.word-choices button'):
-                await next_drawer.click('.word-choices button:first-child')
-            await next_drawer.wait_for_selector('.word-reveal')
+            if await next_drawer.query_selector('.prompt-choices button'):
+                await next_drawer.click('.prompt-choices button:first-child')
+            await next_drawer.wait_for_selector('.prompt-reveal')
             await next_guesser.set_viewport_size({"width": 390, "height": 844})
             mobile_input = next_guesser.locator('.chat-input input')
             await mobile_input.focus()
             await next_guesser.wait_for_selector('.game-room.guess-focused')
-            next_word = await next_drawer.locator('.word-reveal').inner_text()
+            next_word = await next_drawer.locator('.prompt-reveal').inner_text()
             await mobile_input.fill(next_word)
             await mobile_input.press('Enter')
-            await next_guesser.wait_for_selector('[data-testid="round-end-overlay"]')
+            await next_guesser.wait_for_selector('[data-testid="turn-results-overlay"]')
             assert not await mobile_input.evaluate(
                 "input => document.activeElement === input"
             )

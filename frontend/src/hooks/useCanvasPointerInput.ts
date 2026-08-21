@@ -32,7 +32,7 @@ interface DrawingSettings {
   color: string;
   brushWidth: number;
   tool: DrawTool;
-  penCursor: string;
+  brushCursor: string;
 }
 
 interface CanvasPointerInput {
@@ -57,7 +57,7 @@ export function useCanvasPointerInput(
     color,
     brushWidth,
     tool,
-    penCursor,
+    brushCursor,
   } = settings;
   // Painting locally past the point budget would put pixels on screen that
   // the server never accepted, and they would vanish at the next replay. Read
@@ -73,7 +73,7 @@ export function useCanvasPointerInput(
   const inputActiveRef = useRef(false);
 
   const showCircleCursor = isDrawer
-    && (tool === "eraser" || (tool === "pen" && penCursor === "circle"));
+    && (tool === "eraser" || (tool === "brush" && brushCursor === "circle"));
 
   const clearPreview = useCallback(() => {
     const preview = previewCanvasRef.current;
@@ -154,7 +154,7 @@ export function useCanvasPointerInput(
       lastPointRef.current = null;
       return;
     }
-    if (tool === "pen" || tool === "eraser") {
+    if (tool === "brush" || tool === "eraser") {
       lastPointRef.current = null;
       finishPath();
       return;
@@ -201,13 +201,13 @@ export function useCanvasPointerInput(
       clearPreview();
       drawCircleCursorPreview(point, brushWidth);
     }
-    if ((tool === "pen" || tool === "eraser") && !strokeAvailable) {
+    if ((tool === "brush" || tool === "eraser") && !strokeAvailable) {
       activePointerIdRef.current = null;
       return;
     }
     inputActiveRef.current = true;
     lastPointRef.current = point;
-    if (tool === "pen" || tool === "eraser") {
+    if (tool === "brush" || tool === "eraser") {
       const activeColor = tool === "eraser" ? "#ffffff" : color;
       drawLocalSegment(point, point);
       protocol.beginDrawAction(encodePathStart({
@@ -241,7 +241,7 @@ export function useCanvasPointerInput(
       drawCircleCursorPreview(point, brushWidth);
     }
     if (!inputActiveRef.current || tool === "fill") return;
-    if (tool === "pen" || tool === "eraser") {
+    if (tool === "brush" || tool === "eraser") {
       if (!strokeAvailable) {
         // The budget ran out under the pen. Close the stroke here so the
         // drawing stops in the same place on every screen.
@@ -330,7 +330,7 @@ export function useCanvasPointerInput(
     if (showCircleCursor && pointerPosRef.current) {
       drawCircleCursorPreview(pointerPosRef.current, brushWidth);
     }
-  }, [brushWidth, clearPreview, drawCircleCursorPreview, penCursor, showCircleCursor, tool]);
+  }, [brushWidth, clearPreview, drawCircleCursorPreview, brushCursor, showCircleCursor, tool]);
 
   return {
     onPointerDown: handlePointerDown,

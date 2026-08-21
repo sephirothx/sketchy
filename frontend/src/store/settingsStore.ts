@@ -1,10 +1,12 @@
 import { create } from "zustand";
 
-export type PenCursorStyle = "crosshair" | "circle";
+export type BrushCursorStyle = "crosshair" | "circle";
 export type AppTheme = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
 export interface KeyBindings {
+  // `pen` is the brush tool. The name is a stored key - bindings are persisted
+  // as JSON under it, so renaming it would drop anyone's custom binding.
   pen: string[];
   fill: string[];
   eraser: string[];
@@ -28,7 +30,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   undo: ["z"],
 };
 
-export const DEFAULT_PEN_CURSOR: PenCursorStyle = "crosshair";
+export const DEFAULT_BRUSH_CURSOR: BrushCursorStyle = "crosshair";
 export const DEFAULT_THEME: AppTheme = "system";
 export const NAME_COLOR_PALETTE = [
   "#e11d48",
@@ -48,7 +50,7 @@ export function randomNameColor(exclude?: string): string {
 }
 
 export const ACTION_LABELS: Record<keyof KeyBindings, string> = {
-  pen: "Pen Tool",
+  pen: "Brush Tool",
   fill: "Fill Tool",
   eraser: "Eraser Tool",
   rectangle: "Rectangle Tool",
@@ -88,13 +90,15 @@ function loadStoredKeyBindings(): KeyBindings {
   }
 }
 
-function loadStoredPenCursor(): PenCursorStyle {
+function loadStoredBrushCursor(): BrushCursorStyle {
   try {
+    // Stored key predates the rename to "brush"; changing it would reset the
+    // preference for everyone who already set one.
     const raw = localStorage.getItem("sketchy_pencursor");
     if (raw === "circle" || raw === "crosshair") return raw;
-    return DEFAULT_PEN_CURSOR;
+    return DEFAULT_BRUSH_CURSOR;
   } catch {
-    return DEFAULT_PEN_CURSOR;
+    return DEFAULT_BRUSH_CURSOR;
   }
 }
 
@@ -148,7 +152,7 @@ interface SettingsStore {
   openSettings: () => void;
   closeSettings: () => void;
   keyBindings: KeyBindings;
-  penCursor: PenCursorStyle;
+  brushCursor: BrushCursorStyle;
   theme: AppTheme;
   confettiEffects: boolean;
   soundEffects: boolean;
@@ -156,7 +160,7 @@ interface SettingsStore {
   nameColor: string;
   setAllSettings: (payload: {
     keyBindings: KeyBindings;
-    penCursor: PenCursorStyle;
+    brushCursor: BrushCursorStyle;
     theme?: AppTheme;
     confettiEffects?: boolean;
     soundEffects?: boolean;
@@ -164,7 +168,7 @@ interface SettingsStore {
     nameColor: string;
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
-  setPenCursor: (penCursor: PenCursorStyle) => void;
+  setBrushCursor: (brushCursor: BrushCursorStyle) => void;
   setNameColor: (nameColor: string) => void;
   setTheme: (theme: AppTheme) => void;
   setConfettiEffects: (enabled: boolean) => void;
@@ -181,7 +185,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   openSettings: () => set({ isSettingsOpen: true }),
   closeSettings: () => set({ isSettingsOpen: false }),
   keyBindings: loadStoredKeyBindings(),
-  penCursor: loadStoredPenCursor(),
+  brushCursor: loadStoredBrushCursor(),
   theme: initialTheme,
   confettiEffects: loadStoredFlag("sketchy_confettieffects"),
   soundEffects: loadStoredFlag("sketchy_soundeffects"),
@@ -189,7 +193,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   nameColor: loadStoredNameColor(),
   setAllSettings: ({
     keyBindings,
-    penCursor,
+    brushCursor,
     theme = DEFAULT_THEME,
     confettiEffects = true,
     soundEffects = true,
@@ -198,7 +202,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   }) =>
     set(() => {
       localStorage.setItem("sketchy_keybindings", JSON.stringify(keyBindings));
-      localStorage.setItem("sketchy_pencursor", penCursor);
+      localStorage.setItem("sketchy_pencursor", brushCursor);
       localStorage.setItem("sketchy_theme", theme);
       localStorage.setItem("sketchy_confettieffects", String(confettiEffects));
       localStorage.setItem("sketchy_soundeffects", String(soundEffects));
@@ -207,7 +211,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       applyThemeToDocument(theme);
       return {
         keyBindings,
-        penCursor,
+        brushCursor,
         theme,
         confettiEffects,
         soundEffects,
@@ -221,10 +225,10 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_keybindings", JSON.stringify(updated));
       return { keyBindings: updated };
     }),
-  setPenCursor: (penCursor) =>
+  setBrushCursor: (brushCursor) =>
     set(() => {
-      localStorage.setItem("sketchy_pencursor", penCursor);
-      return { penCursor };
+      localStorage.setItem("sketchy_pencursor", brushCursor);
+      return { brushCursor };
     }),
   setNameColor: (nameColor) =>
     set(() => {

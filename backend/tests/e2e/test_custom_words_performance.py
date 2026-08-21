@@ -32,22 +32,22 @@ async def test_maximum_custom_word_editing_search_and_all_view_remain_bounded():
             await host.get_by_text("Advanced settings", exact=False).click()
 
             started = perf_counter()
-            await set_textarea_value(host, "#custom-words", raw)
-            await host.get_by_text("10000 usable custom words", exact=True).wait_for()
+            await set_textarea_value(host, "#custom-prompts", raw)
+            await host.get_by_text("10000 usable custom prompts", exact=True).wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
 
-            custom_only = host.get_by_label("Only use custom words")
+            custom_only = host.get_by_label("Only use custom prompts")
             await custom_only.check()
             await set_textarea_value(
                 host,
-                "#custom-words",
+                "#custom-prompts",
                 "this entry is deliberately longer than thirty two characters",
             )
             assert await custom_only.is_disabled()
             assert not await custom_only.is_checked()
-            await set_textarea_value(host, "#custom-words", "")
+            await set_textarea_value(host, "#custom-prompts", "")
             assert await custom_only.is_disabled()
-            await set_textarea_value(host, "#custom-words", raw)
+            await set_textarea_value(host, "#custom-prompts", raw)
             assert await custom_only.is_enabled()
             await custom_only.check()
 
@@ -62,8 +62,8 @@ async def test_maximum_custom_word_editing_search_and_all_view_remain_bounded():
             await guest.wait_for_selector('[data-testid="waiting-room"]')
 
             started = perf_counter()
-            await guest.get_by_text("Inspect 10000 custom words", exact=False).click()
-            word_list = guest.locator(".waiting-custom-words-list")
+            await guest.get_by_text("Inspect 10000 custom prompts", exact=False).click()
+            word_list = guest.locator(".waiting-custom-prompts-list")
             await word_list.wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
             items = word_list.locator('[role="listitem"]')
@@ -78,15 +78,15 @@ async def test_maximum_custom_word_editing_search_and_all_view_remain_bounded():
             for label, count in expected_filter_counts.items():
                 await guest.get_by_role("button", name=label, exact=True).click()
                 await guest.get_by_text(
-                    f"{count} of 10000 words match",
+                    f"{count} of 10000 prompts match",
                     exact=True,
                 ).wait_for()
 
             await guest.get_by_role("button", name="All", exact=True).click()
-            search = guest.locator('input[placeholder="Search custom words…"]')
+            search = guest.locator('input[placeholder="Search custom prompts…"]')
             for word in (words[0], words[len(words) // 2], words[-1]):
                 await search.fill(word)
-                await guest.get_by_text("1 of 10000 words match", exact=True).wait_for()
+                await guest.get_by_text("1 of 10000 prompts match", exact=True).wait_for()
                 assert await word_list.get_by_text(word, exact=True).is_visible()
 
             started = perf_counter()
@@ -116,7 +116,7 @@ async def test_maximum_custom_word_editing_search_and_all_view_remain_bounded():
             assert await tooltip.count() == 0
 
             await search.fill("skeleton")
-            await guest.get_by_text("1 of 10000 words match", exact=True).wait_for()
+            await guest.get_by_text("1 of 10000 prompts match", exact=True).wait_for()
             fully_visible_word = word_list.get_by_text(words[2], exact=True)
             await fully_visible_word.hover()
             assert await tooltip.count() == 0
@@ -138,7 +138,7 @@ async def test_maximum_custom_word_editing_search_and_all_view_remain_bounded():
 
             started = perf_counter()
             await search.fill("long-custom-")
-            await guest.get_by_text("3332 of 10000 words match", exact=True).wait_for()
+            await guest.get_by_text("3332 of 10000 prompts match", exact=True).wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
             assert await items.count() < 100
         finally:

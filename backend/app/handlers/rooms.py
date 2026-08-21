@@ -76,11 +76,11 @@ async def get_custom_words(ctx: HandlerContext, sid, data=None):
         return {"ok": False, "error": "Not in this room"}
     room, player = current
     if player.is_spectator:
-        return {"ok": False, "error": "Only players can view custom words"}
+        return {"ok": False, "error": "Only players can view custom prompts"}
     if room.state != "waiting" or room.game:
         return {
             "ok": False,
-            "error": "Custom words can only be viewed in the waiting room",
+            "error": "Custom prompts can only be viewed in the waiting room",
         }
     return {"ok": True, "words": list(room.custom_words)}
 

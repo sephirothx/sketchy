@@ -446,34 +446,34 @@
 .waiting-spectators h3 { color: #475569; font-size: 14px; margin: 0; }
 .waiting-rules-list { color: #475569; line-height: 1.45; margin: 14px 0 0; padding-left: 20px; }
 .waiting-rules-list li + li { margin-top: 9px; }
-.waiting-custom-words { border-top: 1px solid #e2e8f0; margin-top: 16px; padding-top: 14px; }
-.waiting-custom-words > summary { align-items: center; color: #1d4ed8; cursor: pointer; display: flex; font-size: 14px; font-weight: 800; gap: 8px; list-style: none; width: fit-content; }
-.waiting-custom-words > summary::-webkit-details-marker { display: none; }
-.waiting-custom-words > summary::before { border-bottom: 2px solid currentColor; border-right: 2px solid currentColor; content: ""; height: 6px; transform: rotate(-45deg); transition: transform .16s ease; width: 6px; }
-.waiting-custom-words[open] > summary::before { transform: rotate(45deg) translate(-2px, -2px); }
-.waiting-custom-words-content { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin-top: 12px; padding: 14px; }
-.waiting-custom-words-content p { color: #64748b; font-size: 13px; margin: 0; }
-.waiting-custom-words-heading { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
-.waiting-custom-words-heading strong { color: #1e293b; display: block; font-size: 14px; margin-bottom: 3px; }
-.waiting-custom-words-heading > span { background: #dbeafe; border-radius: 999px; color: #1d4ed8; flex: 0 0 auto; font-size: 12px; font-weight: 800; padding: 4px 8px; }
-.waiting-custom-words-search { color: #475569; display: block; font-size: 12px; font-weight: 700; margin-top: 14px; }
-.waiting-custom-words-search span { display: block; margin-bottom: 5px; }
-.waiting-custom-words-search input { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; color: #1e293b; font: inherit; padding: 9px 10px; width: 100%; }
-.waiting-custom-words-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.waiting-custom-words-filters button { background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; color: #475569; font-size: 12px; font-weight: 700; padding: 5px 9px; }
-.waiting-custom-words-filters button[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }
-.waiting-custom-words-result-count { margin-top: 12px !important; }
-.waiting-custom-words-list { align-content: start; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; max-height: 190px; min-height: 48px; overflow-y: auto; padding: 9px; }
-.waiting-custom-words-list span { background: #eff6ff; border: 1px solid #dbeafe; border-radius: 6px; color: #1e40af; font-size: 13px; line-height: 1.3; padding: 5px 7px; }
-.waiting-custom-words-list span:focus-visible { outline: 3px solid #93c5fd; outline-offset: 1px; }
-.waiting-custom-words-list.is-virtualized { display: block; height: 190px; padding: 0; position: relative; }
-.waiting-custom-words-list.is-virtualized:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
-.waiting-custom-words-virtual-space { position: relative; width: 100%; }
-.waiting-custom-words-virtual-row { box-sizing: border-box; display: grid; gap: 6px; left: 0; padding: 3px 9px; position: absolute; top: 0; width: 100%; }
-.waiting-custom-words-virtual-row span { box-sizing: border-box; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.custom-word-full-text-tooltip { background: #0f172a; border: 1px solid #334155; border-radius: 7px; box-shadow: 0 8px 24px rgb(15 23 42 / 28%); box-sizing: border-box; color: #f8fafc; font-size: 13px; font-weight: 600; line-height: 1.35; max-width: calc(100vw - 16px); overflow-wrap: anywhere; padding: 7px 9px; pointer-events: none; position: fixed; width: max-content; z-index: 1000; }
-.waiting-custom-words-empty { background: #fff; border: 1px dashed #cbd5e1; border-radius: 8px; margin-top: 6px !important; padding: 16px; text-align: center; }
-.waiting-custom-words-content .waiting-custom-words-error { color: #b91c1c; }
+.waiting-custom-prompts { border-top: 1px solid #e2e8f0; margin-top: 16px; padding-top: 14px; }
+.waiting-custom-prompts > summary { align-items: center; color: #1d4ed8; cursor: pointer; display: flex; font-size: 14px; font-weight: 800; gap: 8px; list-style: none; width: fit-content; }
+.waiting-custom-prompts > summary::-webkit-details-marker { display: none; }
+.waiting-custom-prompts > summary::before { border-bottom: 2px solid currentColor; border-right: 2px solid currentColor; content: ""; height: 6px; transform: rotate(-45deg); transition: transform .16s ease; width: 6px; }
+.waiting-custom-prompts[open] > summary::before { transform: rotate(45deg) translate(-2px, -2px); }
+.waiting-custom-prompts-content { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin-top: 12px; padding: 14px; }
+.waiting-custom-prompts-content p { color: #64748b; font-size: 13px; margin: 0; }
+.waiting-custom-prompts-heading { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+.waiting-custom-prompts-heading strong { color: #1e293b; display: block; font-size: 14px; margin-bottom: 3px; }
+.waiting-custom-prompts-heading > span { background: #dbeafe; border-radius: 999px; color: #1d4ed8; flex: 0 0 auto; font-size: 12px; font-weight: 800; padding: 4px 8px; }
+.waiting-custom-prompts-search { color: #475569; display: block; font-size: 12px; font-weight: 700; margin-top: 14px; }
+.waiting-custom-prompts-search span { display: block; margin-bottom: 5px; }
+.waiting-custom-prompts-search input { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; color: #1e293b; font: inherit; padding: 9px 10px; width: 100%; }
+.waiting-custom-prompts-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.waiting-custom-prompts-filters button { background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; color: #475569; font-size: 12px; font-weight: 700; padding: 5px 9px; }
+.waiting-custom-prompts-filters button[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }
+.waiting-custom-prompts-result-count { margin-top: 12px !important; }
+.waiting-custom-prompts-list { align-content: start; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; max-height: 190px; min-height: 48px; overflow-y: auto; padding: 9px; }
+.waiting-custom-prompts-list span { background: #eff6ff; border: 1px solid #dbeafe; border-radius: 6px; color: #1e40af; font-size: 13px; line-height: 1.3; padding: 5px 7px; }
+.waiting-custom-prompts-list span:focus-visible { outline: 3px solid #93c5fd; outline-offset: 1px; }
+.waiting-custom-prompts-list.is-virtualized { display: block; height: 190px; padding: 0; position: relative; }
+.waiting-custom-prompts-list.is-virtualized:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.waiting-custom-prompts-virtual-space { position: relative; width: 100%; }
+.waiting-custom-prompts-virtual-row { box-sizing: border-box; display: grid; gap: 6px; left: 0; padding: 3px 9px; position: absolute; top: 0; width: 100%; }
+.waiting-custom-prompts-virtual-row span { box-sizing: border-box; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.custom-prompt-full-text-tooltip { background: #0f172a; border: 1px solid #334155; border-radius: 7px; box-shadow: 0 8px 24px rgb(15 23 42 / 28%); box-sizing: border-box; color: #f8fafc; font-size: 13px; font-weight: 600; line-height: 1.35; max-width: calc(100vw - 16px); overflow-wrap: anywhere; padding: 7px 9px; pointer-events: none; position: fixed; width: max-content; z-index: 1000; }
+.waiting-custom-prompts-empty { background: #fff; border: 1px dashed #cbd5e1; border-radius: 8px; margin-top: 6px !important; padding: 16px; text-align: center; }
+.waiting-custom-prompts-content .waiting-custom-prompts-error { color: #b91c1c; }
 .waiting-start-card { margin-top: 16px; }
 .waiting-host-actions { display: flex; flex: 0 0 auto; gap: 8px; }
 .waiting-settings-button { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; color: #1d4ed8; font-weight: 700; padding: 10px 13px; }
@@ -734,7 +734,7 @@
   }
 
   .game-room.game-room-playing .round-info,
-  .game-room.game-room-playing .word-display {
+  .game-room.game-room-playing .prompt-display {
     flex: 0 0 auto;
   }
 
@@ -1055,7 +1055,7 @@
   color: #e03131;
 }
 
-.word-display {
+.prompt-display {
   min-height: 28px;
   font-size: clamp(13px, 3.8vw, 24px);
   font-weight: 700;
@@ -1064,7 +1064,7 @@
   max-width: 100%;
 }
 
-.word-display:not(.choosing) {
+.prompt-display:not(.choosing) {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1072,7 +1072,7 @@
   gap: 6px;
 }
 
-.word-display.choosing {
+.prompt-display.choosing {
   letter-spacing: normal;
   font-size: 16px;
   white-space: normal;
@@ -1080,12 +1080,12 @@
   display: block;
 }
 
-.word-reveal {
+.prompt-reveal {
   letter-spacing: 1px;
   max-width: 100%;
 }
 
-.word-masked {
+.prompt-masked {
   max-width: 100%;
   display: inline-flex;
   justify-content: center;
@@ -1098,13 +1098,13 @@
   max-width: 100%;
 }
 
-.masked-container .word-blanks-text {
+.masked-container .prompt-blanks-text {
   order: 1;
   white-space: pre;
   letter-spacing: clamp(1px, 0.4vw, 3px);
 }
 
-.masked-container .word-lengths {
+.masked-container .prompt-lengths {
   order: 2;
   display: inline-flex;
   gap: 6px;
@@ -1119,20 +1119,20 @@
   gap: 2px;
 }
 
-.masked-container.is-long .word-lengths {
+.masked-container.is-long .prompt-lengths {
   order: 1;
   margin-left: 0;
   margin-bottom: 2px;
   font-size: 13px;
 }
 
-.masked-container.is-long .word-blanks-text {
+.masked-container.is-long .prompt-blanks-text {
   order: 2;
 }
 
 /* One compact line above the blanks: what the next hint costs (or that the
    turn's budget is gone) and the running total this turn's guess will pay.
-   Sized on its own, since .word-display sets a large display face. */
+   Sized on its own, since .prompt-display sets a large display face. */
 .hint-meta {
   align-items: baseline;
   display: flex;
@@ -1236,13 +1236,13 @@
   opacity: 0.7;
 }
 
-.word-lengths sup {
+.prompt-lengths sup {
   font-size: 13px;
   font-weight: 600;
   color: #868e96;
 }
 
-.word-hidden-prompt {
+.prompt-hidden {
   font-size: 1.5rem;
   letter-spacing: 4px;
   font-weight: 700;
@@ -1253,14 +1253,14 @@
   border: 1px dashed #cbd5e1;
 }
 
-.word-choices {
+.prompt-choices {
   display: flex;
   gap: 10px;
   justify-content: center;
   margin-top: 8px;
 }
 
-.word-choices button {
+.prompt-choices button {
   background: #4c6ef5;
   color: white;
   border: none;
@@ -1288,7 +1288,7 @@
   touch-action: none;
 }
 
-.choosing-word-overlay {
+.choosing-prompt-overlay {
   align-items: center;
   background: rgba(239, 246, 255, .9);
   display: flex;
@@ -1299,7 +1299,7 @@
   z-index: 3;
 }
 
-.choosing-word-card {
+.choosing-prompt-card {
   background: rgba(255, 255, 255, .96);
   border: 1px solid #bfdbfe;
   border-radius: 14px;
@@ -1309,7 +1309,7 @@
   text-align: center;
 }
 
-.choosing-word-dots {
+.choosing-prompt-dots {
   align-items: center;
   display: flex;
   gap: 6px;
@@ -1318,23 +1318,23 @@
   margin-bottom: 10px;
 }
 
-.choosing-word-dots span {
-  animation: choosing-word-pulse 1.2s ease-in-out infinite;
+.choosing-prompt-dots span {
+  animation: choosing-prompt-pulse 1.2s ease-in-out infinite;
   background: #2563eb;
   border-radius: 50%;
   height: 8px;
   width: 8px;
 }
 
-.choosing-word-dots span:nth-child(2) { animation-delay: .15s; }
-.choosing-word-dots span:nth-child(3) { animation-delay: .3s; }
+.choosing-prompt-dots span:nth-child(2) { animation-delay: .15s; }
+.choosing-prompt-dots span:nth-child(3) { animation-delay: .3s; }
 
-@keyframes choosing-word-pulse {
+@keyframes choosing-prompt-pulse {
   0%, 60%, 100% { opacity: .35; transform: translateY(0); }
   30% { opacity: 1; transform: translateY(-4px); }
 }
 
-.choosing-word-kicker {
+.choosing-prompt-kicker {
   color: #2563eb;
   font-size: 11px;
   font-weight: 800;
@@ -1343,16 +1343,16 @@
   text-transform: uppercase;
 }
 
-.choosing-word-message {
+.choosing-prompt-message {
   color: #1e293b;
   font-size: clamp(18px, 3vw, 24px);
   line-height: 1.25;
   margin: 0;
 }
 
-.choosing-word-message strong { color: #1d4ed8; }
+.choosing-prompt-message strong { color: #1d4ed8; }
 
-.choosing-word-hint {
+.choosing-prompt-hint {
   color: #64748b;
   font-size: 13px;
   line-height: 1.45;
@@ -1375,7 +1375,3 @@
   pointer-events: none;
 }
 
-.round-result {
-  font-style: italic;
-  color: #6b6f76;
-}

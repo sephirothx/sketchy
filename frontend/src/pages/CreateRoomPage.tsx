@@ -1,7 +1,7 @@
 import { useReducer, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CustomWordsEditor } from "../components/CustomWordsEditor";
-import { WordListPicker } from "../components/WordListPicker";
+import { CustomPromptsEditor } from "../components/CustomPromptsEditor";
+import { PromptListPicker } from "../components/PromptListPicker";
 import {
   ChoiceChips,
   InputNumber,
@@ -19,7 +19,7 @@ import {
   ROUNDS_MIN,
   SCORING_OPTIONS,
 } from "../lib/roomSetup";
-import { createCustomWordsState, customWordsReducer } from "../lib/customWords";
+import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
@@ -38,10 +38,10 @@ export function CreateRoomPage() {
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
   const [wordListSlugs, setWordListSlugs] = useState<string[]>(["english_standard"]);
-  const [customWords, dispatchCustomWords] = useReducer(
-    customWordsReducer,
+  const [customWords, dispatchCustomPrompts] = useReducer(
+    customPromptsReducer,
     undefined,
-    () => createCustomWordsState(),
+    () => createCustomPromptsState(),
   );
   const [hintMode, setHintMode] = useState<HintMode>(DEFAULT_HINT_MODE);
   const [scoringMode, setScoringMode] = useState<ScoringMode>("default");
@@ -52,7 +52,7 @@ export function CreateRoomPage() {
 
   async function handleCreate() {
     if (customWords.analysis.hasErrors) {
-      setError("Fix the custom-word entries marked above before creating the room.");
+      setError("Fix the custom-prompt entries marked above before creating the room.");
       return;
     }
     setBusy(true);
@@ -80,7 +80,7 @@ export function CreateRoomPage() {
   const hintsDisabled = hideMaskedPrompt || scoringMode === "none";
 
   function handleCustomWordsChange(value: string) {
-    dispatchCustomWords({ type: "change", value });
+    dispatchCustomPrompts({ type: "change", value });
   }
 
   return <main className="create-room-page">
@@ -111,9 +111,9 @@ export function CreateRoomPage() {
         <InputNumber label="Max players" value={maxPlayers} min={MAX_PLAYERS_MIN} max={MAX_PLAYERS_MAX} onChange={setMaxPlayers} />
         <InputNumber label="Rounds" value={rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={setRounds} />
         <InputNumber label="Drawing time (seconds)" value={drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={setDrawingSeconds} />
-        <WordListPicker selectedSlugs={wordListSlugs} onChange={setWordListSlugs} />
+        <PromptListPicker selectedSlugs={wordListSlugs} onChange={setWordListSlugs} />
       </div>
-      <details className="advanced-settings"><summary>Advanced settings <span>Spectators, scoring, hints, and custom words</span></summary>
+      <details className="advanced-settings"><summary>Advanced settings <span>Spectators, scoring, hints, and custom prompts</span></summary>
         <div className="advanced-settings-content">
           <Switch label="Allow spectators to see the prompt" checked={spectatorsSeeSolution} onChange={setSpectatorsSeeSolution} />
           <Switch
@@ -145,13 +145,13 @@ export function CreateRoomPage() {
           />
           {hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
           {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">Point-purchase hint modes require scoring.</p>}
-          <CustomWordsEditor value={customWords.value} analysis={customWords.analysis} onChange={handleCustomWordsChange} />
+          <CustomPromptsEditor value={customWords.value} analysis={customWords.analysis} onChange={handleCustomWordsChange} />
           <Switch
-            label="Only use custom words"
-            hint="Add a usable custom word to enable this option."
+            label="Only use custom prompts"
+            hint="Add a usable custom prompt to enable this option."
             checked={customWords.only}
             disabled={customWords.analysis.usableCount === 0 || customWords.analysis.hasErrors}
-            onChange={(only) => dispatchCustomWords({ type: "set-only", only })}
+            onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
           />
         </div>
       </details>

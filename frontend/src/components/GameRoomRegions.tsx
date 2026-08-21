@@ -1,16 +1,16 @@
 import type { RefObject } from "react";
 import { Canvas, type CanvasRef } from "./Canvas";
-import { ChoosingWordOverlay } from "./ChoosingWordOverlay";
+import { ChoosingPromptOverlay } from "./ChoosingPromptOverlay";
 import { GameAnnouncer } from "./GameAnnouncer";
 import { RoomChatPanel } from "./RoomChatPanel";
 import { RoomPlayersPanel } from "./RoomPlayersPanel";
-import { RoundEndOverlay } from "./RoundEndOverlay";
+import { TurnResultsOverlay } from "./TurnResultsOverlay";
 import { Timer } from "./Timer";
 import { Toolbar } from "./Toolbar";
 import { WaitingRoomPanel } from "./WaitingRoomPanel";
-import { WordDisplay } from "./WordDisplay";
+import { PromptDisplay } from "./PromptDisplay";
 import { useToolbarState } from "../hooks/useToolbarState";
-import { splitMaskedWord } from "../lib/maskedWord";
+import { splitMaskedPrompt } from "../lib/maskedPrompt";
 import { recordRender } from "../lib/renderDiagnostics";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import type { RoomShellMode } from "./RoomShell";
@@ -67,7 +67,7 @@ export function ConnectedRoomChatPanel({
       isDrawer={isDrawer}
       canGuess={canGuess}
       myPlayerId={myPlayerId}
-      targetWordLengths={splitMaskedWord(maskedWord).counts}
+      targetWordLengths={splitMaskedPrompt(maskedWord).counts}
       hideMaskedPrompt={hideMaskedPrompt}
       onFocusChange={onFocusChange}
     />
@@ -168,7 +168,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const drawerWord =
     myWord ||
     (maskedWord && !maskedWord.includes("_")
-      ? splitMaskedWord(maskedWord).blanks.trim()
+      ? splitMaskedPrompt(maskedWord).blanks.trim()
       : null);
   const solutionWord =
     phase === "round_end"
@@ -181,7 +181,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
               spectatorsSeeSolution &&
               maskedWord &&
               !maskedWord.includes("_")
-            ? splitMaskedWord(maskedWord).blanks.trim()
+            ? splitMaskedPrompt(maskedWord).blanks.trim()
             : null;
   const {
     color,
@@ -215,7 +215,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
         )}
       </div>
-      <WordDisplay
+      <PromptDisplay
         isDrawer={amDrawer}
         myWord={myWord}
         maskedWord={maskedWord}
@@ -238,7 +238,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         label={canvasLabel}
         overlay={
           phase === "choosing_word" && !amDrawer ? (
-            <ChoosingWordOverlay
+            <ChoosingPromptOverlay
               drawerNickname={drawerNickname || "The next player"}
               drawerNameColor={drawerNameColor}
             />
@@ -246,7 +246,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         }
       />
       {phase === "round_end" && lastRoundResult && (
-        <RoundEndOverlay
+        <TurnResultsOverlay
           word={lastRoundResult.word}
           drawerId={lastRoundResult.drawerId}
           drawerBonus={lastRoundResult.drawerBonus}

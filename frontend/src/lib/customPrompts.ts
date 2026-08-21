@@ -1,8 +1,8 @@
-export const MAX_CUSTOM_WORDS = 10_000;
-export const MAX_WORD_LENGTH = 32;
+export const MAX_CUSTOM_PROMPTS = 10_000;
+export const MAX_PROMPT_LENGTH = 32;
 export const MAX_RAW_INPUT_LENGTH = 400_000;
 
-export interface CustomWordAnalysis {
+export interface CustomPromptAnalysis {
   usableCount: number;
   duplicateCount: number;
   invalidEntries: string[];
@@ -10,18 +10,18 @@ export interface CustomWordAnalysis {
   hasErrors: boolean;
 }
 
-export interface CustomWordsState {
+export interface CustomPromptsState {
   value: string;
-  analysis: CustomWordAnalysis;
+  analysis: CustomPromptAnalysis;
   only: boolean;
 }
 
-export type CustomWordsAction =
+export type CustomPromptsAction =
   | { type: "change"; value: string }
   | { type: "reset"; value: string; only: boolean }
   | { type: "set-only"; only: boolean };
 
-export function analyzeCustomWords(raw: string): CustomWordAnalysis {
+export function analyzeCustomPrompts(raw: string): CustomPromptAnalysis {
   const seen = new Set<string>();
   const invalidEntries: string[] = [];
   let usableCount = 0;
@@ -31,7 +31,7 @@ export function analyzeCustomWords(raw: string): CustomWordAnalysis {
   for (const part of raw.split(/[\n\r,]+/)) {
     const word = part.trim();
     if (!word) continue;
-    if (word.length > MAX_WORD_LENGTH) {
+    if (word.length > MAX_PROMPT_LENGTH) {
       invalidEntries.push(word);
       continue;
     }
@@ -41,7 +41,7 @@ export function analyzeCustomWords(raw: string): CustomWordAnalysis {
       continue;
     }
     seen.add(key);
-    if (usableCount >= MAX_CUSTOM_WORDS) {
+    if (usableCount >= MAX_CUSTOM_PROMPTS) {
       overLimitCount += 1;
       continue;
     }
@@ -57,15 +57,15 @@ export function analyzeCustomWords(raw: string): CustomWordAnalysis {
   };
 }
 
-function canUseCustomWordsOnly(analysis: CustomWordAnalysis) {
+function canUseCustomWordsOnly(analysis: CustomPromptAnalysis) {
   return analysis.usableCount > 0 && !analysis.hasErrors;
 }
 
-export function createCustomWordsState(
+export function createCustomPromptsState(
   value = "",
   only = false,
-): CustomWordsState {
-  const analysis = analyzeCustomWords(value);
+): CustomPromptsState {
+  const analysis = analyzeCustomPrompts(value);
   return {
     value,
     analysis,
@@ -73,15 +73,15 @@ export function createCustomWordsState(
   };
 }
 
-export function customWordsReducer(
-  state: CustomWordsState,
-  action: CustomWordsAction,
-): CustomWordsState {
+export function customPromptsReducer(
+  state: CustomPromptsState,
+  action: CustomPromptsAction,
+): CustomPromptsState {
   if (action.type === "set-only") {
     const only = canUseCustomWordsOnly(state.analysis) && action.only;
     return only === state.only ? state : { ...state, only };
   }
   if (action.type === "change" && action.value === state.value) return state;
   const only = action.type === "reset" ? action.only : state.only;
-  return createCustomWordsState(action.value, only);
+  return createCustomPromptsState(action.value, only);
 }

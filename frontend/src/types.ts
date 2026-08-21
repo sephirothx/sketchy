@@ -34,7 +34,7 @@ export interface RestartVoteState {
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 export type ScoringMode = "none" | "default" | "pressure";
 
-export interface WordListSummary {
+export interface PromptListSummary {
   slug: string;
   name: string;
   description: string;
@@ -204,7 +204,7 @@ export interface StrokeMovePayload {
 
 export type ShapeType = "rectangle" | "ellipse" | "triangle";
 
-export type DrawTool = "pen" | "eraser" | ShapeType | "fill";
+export type DrawTool = "brush" | "eraser" | ShapeType | "fill";
 
 export interface StrokeShapePayload {
   shape: ShapeType;

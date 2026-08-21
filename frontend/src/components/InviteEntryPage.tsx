@@ -11,9 +11,9 @@ const INVITE_LOADING_DELAY_MS = 250;
 
 function hintModeLabel(room: RoomSummary) {
   if (room.hideMaskedPrompt) return "Prompt details hidden";
-  if (room.hintMode === "checkpoints") return "Timed letter hints";
+  if (room.hintMode === "checkpoints") return "Timed hints";
   if (room.hintMode === "purchase") return "Buyable letter hints";
-  if (room.hintMode === "wheel") return "Wheel-style letter hints";
+  if (room.hintMode === "wheel") return "Wheel of Fortune";
   return "No letter hints";
 }
 
@@ -83,16 +83,16 @@ export function InviteEntryPage({ code }: { code: string }) {
             <div><dt>Players</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? " · Full" : ""}</dd></div>
             <div><dt>Rounds</dt><dd>{room.rounds}</dd></div>
             <div><dt>Draw time</dt><dd>{room.drawingSeconds}s</dd></div>
-            <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "Just for fun" : room.scoringMode === "pressure" ? "Pressure" : "Points on"}</dd></div>
+            <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</dd></div>
           </dl>
 
           <ul className="invite-rule-list" aria-label="Room rules">
             <li>{hintModeLabel(room)}</li>
-            <li>{room.spectatorsSeeSolution ? "Spectators can see the answer" : "Spectators guess along"}</li>
+            <li>{room.spectatorsSeeSolution ? "Spectators can see the prompt" : "Spectators guess along"}</li>
             <li>
               {room.customWordCount > 0
-                ? `${room.customWordCount} custom words${room.customWordsOnly ? " only" : " plus defaults"}`
-                : "Default word list"}
+                ? `${room.customWordCount} custom prompts${room.customWordsOnly ? " only" : " plus defaults"}`
+                : "Default prompt list"}
             </li>
           </ul>
 

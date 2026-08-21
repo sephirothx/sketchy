@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
-import { splitMaskedWord } from "../lib/maskedWord";
+import { splitMaskedPrompt } from "../lib/maskedPrompt";
 import type { AckResponse, HintMode } from "../types";
 
 interface WordDisplayProps {
@@ -23,7 +23,7 @@ interface WordDisplayProps {
 // order) at the very end. Digits only ever appear in that trailing count
 // list, so splitting on the first digit cleanly separates the two parts.
 function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
-  const { blanks, counts } = splitMaskedWord(masked);
+  const { blanks, counts } = splitMaskedPrompt(masked);
   let blanksNode: ReactNode = blanks;
 
   if (buyableProps) {
@@ -63,7 +63,7 @@ function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; c
   }
 
   if (counts.length === 0) {
-    return <span className="word-blanks-text">{blanksNode}</span>;
+    return <span className="prompt-blanks-text">{blanksNode}</span>;
   }
 
   const totalLength = counts.reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
@@ -71,17 +71,17 @@ function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; c
 
   return (
     <span className={`masked-container ${isLong ? "is-long" : ""}`}>
-      <span className="word-lengths">
+      <span className="prompt-lengths">
         {counts.map((count, index) => (
           <sup key={index}>{count}</sup>
         ))}
       </span>
-      <span className="word-blanks-text">{blanksNode}</span>
+      <span className="prompt-blanks-text">{blanksNode}</span>
     </span>
   );
 }
 
-export function WordDisplay({
+export function PromptDisplay({
   isDrawer,
   myWord,
   maskedWord,
@@ -112,11 +112,11 @@ export function WordDisplay({
 
   if (isDrawer && wordChoices.length > 0 && !myWord) {
     return (
-      <div className="word-display choosing">
-        <p>Choose a word to draw:</p>
-        <div className="word-choices">
+      <div className="prompt-display choosing">
+        <p>Choose a prompt to draw:</p>
+        <div className="prompt-choices">
           {wordChoices.map((word) => (
-            <button key={word} disabled={pendingAction !== null} onClick={() => void runAction(`word:${word}`, "select_word", { word }, "select the word")}>
+            <button key={word} disabled={pendingAction !== null} onClick={() => void runAction(`word:${word}`, "select_word", { word }, "select the prompt")}>
               {pendingAction === `word:${word}` ? "Choosing…" : word}
             </button>
           ))}
@@ -136,7 +136,7 @@ export function WordDisplay({
   const remaining = hintBudget - hintSpend;
 
   return (
-    <div className="word-display">
+    <div className="prompt-display">
       {(canBuy || canBuyWheel) && (
         <p className="hint-meta">
           {canBuy && (
@@ -149,7 +149,7 @@ export function WordDisplay({
           {hintSpend > 0 && (
             <span
               className="hint-spend-total"
-              title="Deducted from your score if you guess the word"
+              title="Deducted from your score if you guess the prompt"
             >
               Total: {hintSpend}
             </span>
@@ -157,11 +157,11 @@ export function WordDisplay({
         </p>
       )}
       {revealedWord ? (
-        <span className="word-reveal">{revealedWord}</span>
+        <span className="prompt-reveal">{revealedWord}</span>
       ) : isDrawer && (myWord || !maskedWord.includes("_")) ? (
-        <span className="word-reveal">{myWord || maskedWord}</span>
+        <span className="prompt-reveal">{myWord || maskedWord}</span>
       ) : (
-        <span className="word-masked">
+        <span className="prompt-masked">
           {renderMaskedWord(
             maskedWord,
             canBuy ? {

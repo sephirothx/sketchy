@@ -9,26 +9,26 @@ export const DEFAULT_DRAWING_SECONDS = 90;
 export const DEFAULT_HINT_MODE: HintMode = "checkpoints";
 
 export const SCORING_OPTIONS: { value: ScoringMode; label: string; description: string }[] = [
-  { value: "none", label: "Just for fun", description: "No points are kept." },
+  { value: "none", label: "No scoring", description: "No points are kept." },
   {
     value: "default",
     label: "Default",
-    description: "Points fall steadily from 300 to 100 as the round runs down.",
+    description: "Points fall steadily from 300 to 100 as the turn runs down.",
   },
   {
     value: "pressure",
     label: "Pressure",
     description:
-      "Starts at 300 and drops ~2% a second, then twice as fast once someone gets the word.",
+      "Starts at 300 and drops ~2% a second, then twice as fast once someone gets the prompt.",
   },
 ];
 
 export const HINT_OPTIONS: { value: HintMode; label: string; description: string }[] = [
-  { value: "none", label: "None", description: "No letters are revealed during the round." },
+  { value: "none", label: "No hints", description: "No letters are revealed during the turn." },
   {
     value: "checkpoints",
     label: "Timed hints",
-    description: "Letters are revealed to everyone as the round progresses.",
+    description: "Letters are revealed to everyone as the turn progresses.",
   },
   {
     value: "purchase",

@@ -1,5 +1,5 @@
 import { RoomSettingsEditor } from "./RoomSettingsDialog";
-import { CustomWordsPreview } from "./CustomWordsPreview";
+import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { HintMode, PlayerInfo, ScoreEntry, ScoringMode } from "../types";
 
@@ -29,10 +29,10 @@ interface WaitingRoomPanelProps {
 function hintLabel(mode: HintMode, hidden: boolean) {
   if (hidden) return "Blanks hidden from guessers";
   return ({
-    checkpoints: "Timed letter hints",
+    checkpoints: "Timed hints",
     purchase: "Buy letters against your turn score",
-    wheel: "Wheel of Fortune letter buys",
-    none: "No letter hints",
+    wheel: "Wheel of Fortune",
+    none: "No hints",
   })[mode];
 }
 
@@ -56,7 +56,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           <h1>{props.name}</h1>
           <p className="waiting-room-subtitle">
             {rematch
-              ? "Last game complete. The lobby is ready for a rematch."
+              ? "Last game complete. Ready for a rematch."
               : "Get everyone ready before the first round."}
           </p>
         </div>
@@ -84,7 +84,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             </li>
             <li>
               {props.scoringMode === "none"
-                ? "No scorekeeping"
+                ? "No scoring"
                 : props.scoringMode === "pressure"
                   ? "Points drain faster once someone guesses"
                   : "Points for fast, correct guesses"}
@@ -92,12 +92,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             <li>{hintLabel(props.hintMode, props.hideMaskedPrompt)}</li>
             <li>
               {props.customWordsOnly
-                ? `Custom words only (${props.customWordCount})`
+                ? `Custom prompts only (${props.customWordCount})`
                 : props.customWordCount
-                  ? `${props.customWordCount} custom words + curated lists`
+                  ? `${props.customWordCount} custom prompts + curated lists`
                   : props.wordListSlugs && props.wordListSlugs.length > 1
-                    ? `${props.wordListSlugs.length} curated word lists`
-                    : "Curated word list"}
+                    ? `${props.wordListSlugs.length} curated prompt lists`
+                    : "Curated prompt list"}
             </li>
             <li>
               {props.spectatorsSeeSolution
@@ -106,7 +106,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             </li>
           </ul>
           {props.customWordCount > 0 && !me?.isSpectator && (
-            <CustomWordsPreview count={props.customWordCount} />
+            <CustomPromptsPreview count={props.customWordCount} />
           )}
         </section>
       )}

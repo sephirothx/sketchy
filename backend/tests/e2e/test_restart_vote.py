@@ -88,9 +88,9 @@ async def test_players_approve_restart_without_losing_room_context():
             assert await host_page.is_visible(".player-list >> text=RestartHost")
             assert await host_page.is_visible(".player-list >> text=RestartPlayer")
             assert await host_page.is_visible(".player-list >> text=RestartThird")
-            await host_page.wait_for_selector(".word-choices, [data-testid=choosing-word-status]")
-            await player_page.wait_for_selector(".word-choices, [data-testid=choosing-word-status]")
-            await third_page.wait_for_selector(".word-choices, [data-testid=choosing-word-status]")
+            await host_page.wait_for_selector(".prompt-choices, [data-testid=choosing-prompt-status]")
+            await player_page.wait_for_selector(".prompt-choices, [data-testid=choosing-prompt-status]")
+            await third_page.wait_for_selector(".prompt-choices, [data-testid=choosing-prompt-status]")
         finally:
             await host_context.close()
             await player_context.close()
@@ -147,7 +147,7 @@ async def test_players_see_a_rejected_restart_and_cooldown():
                 await restart_button.get_attribute("aria-label") or ""
             )
             assert await host_page.is_visible(
-                "canvas.drawing-canvas, .word-choices, [data-testid=choosing-word-status]"
+                "canvas.drawing-canvas, .prompt-choices, [data-testid=choosing-prompt-status]"
             )
         finally:
             await host_context.close()

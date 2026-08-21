@@ -222,13 +222,13 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
             for _ in range(6):
                 if await host.query_selector('[data-testid="game-end-overlay"]'):
                     break
-                drawer = host if await host.query_selector(".word-choices button") else guest
+                drawer = host if await host.query_selector(".prompt-choices button") else guest
                 other = guest if drawer is host else host
-                if await drawer.query_selector(".word-choices button"):
+                if await drawer.query_selector(".prompt-choices button"):
                     word = (
-                        await drawer.inner_text(".word-choices button:first-child")
+                        await drawer.inner_text(".prompt-choices button:first-child")
                     ).strip()
-                    await drawer.click(".word-choices button:first-child")
+                    await drawer.click(".prompt-choices button:first-child")
                     await drawer.wait_for_selector("canvas.drawing-canvas")
                     guess_input = other.locator(".chat-input input")
                     await guess_input.fill(word)

@@ -2,7 +2,7 @@
 // tightly spaced blanks per word, followed by each word's letter count (in
 // order) at the very end. Digits only ever appear in that trailing count
 // list, so splitting on the first digit cleanly separates the two parts.
-export function splitMaskedWord(masked: string): { blanks: string; counts: string[] } {
+export function splitMaskedPrompt(masked: string): { blanks: string; counts: string[] } {
   const digitIndex = masked.search(/\d/);
   if (digitIndex === -1) {
     return { blanks: masked, counts: [] };
