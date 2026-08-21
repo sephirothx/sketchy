@@ -81,7 +81,12 @@ MAX_WORD_LISTS = 20
 
 
 def _clean_slugs(slugs: list[str]) -> list[str]:
-    """Trim, lowercase and dedupe word-list slugs, order preserved."""
+    """Trim, lowercase and dedupe word-list slugs, order preserved.
+
+    Returns [] when nothing survives, leaving each caller to decide what an
+    empty selection means: create falls back to the default list, update
+    rejects it.
+    """
     cleaned: list[str] = []
     seen: set[str] = set()
     for slug in slugs:

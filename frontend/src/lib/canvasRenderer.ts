@@ -129,7 +129,9 @@ export function applyFillAtPixel(
   color: string,
 ): boolean {
   if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) return false;
-  const imageData = context.createImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
+  // Reads the canvas: a live fill spreads through the strokes already on it.
+  // Only a full replay, which starts from white, can skip the readback.
+  const imageData = context.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   if (!floodFillPixels(
     imageData.data,
     imageData.width,
@@ -164,7 +166,7 @@ export function renderCanvasActions(
   context: CanvasRenderingContext2D,
   actions: DecodedCanvasAction[],
 ): void {
-  const imageData = context.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const imageData = context.createImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
   const pixels = imageData.data;
   fillWhitePixels(pixels);
   for (const action of actions) {
