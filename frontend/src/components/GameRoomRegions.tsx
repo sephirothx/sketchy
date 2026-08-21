@@ -51,13 +51,13 @@ export function ConnectedRoomChatPanel({
   const players = useGameStore((state) => state.players);
   const phase = useGameStore((state) => state.phase);
   const myPlayerId = useGameStore((state) => state.playerId);
-  const guessedWord = useGameStore((state) => state.guessedWord);
-  const maskedWord = useGameStore((state) => state.maskedWord);
+  const guessedPrompt = useGameStore((state) => state.guessedPrompt);
+  const maskedPrompt = useGameStore((state) => state.maskedPrompt);
   const hideMaskedPrompt = useGameStore((state) => state.hideMaskedPrompt);
   const me = players.find((player) => player.playerId === myPlayerId);
   const isDrawer = useGameStore(selectAmDrawer);
   const canGuess =
-    phase === "drawing" && !isDrawer && !me?.isSpectator && !guessedWord;
+    phase === "drawing" && !isDrawer && !me?.isSpectator && !guessedPrompt;
 
   return (
     <RoomChatPanel
@@ -67,7 +67,7 @@ export function ConnectedRoomChatPanel({
       isDrawer={isDrawer}
       canGuess={canGuess}
       myPlayerId={myPlayerId}
-      targetWordLengths={splitMaskedPrompt(maskedWord).counts}
+      targetPromptLengths={splitMaskedPrompt(maskedPrompt).counts}
       hideMaskedPrompt={hideMaskedPrompt}
       onFocusChange={onFocusChange}
     />
@@ -95,13 +95,13 @@ export function ConnectedWaitingRoomPanel({
   const isPublic = useGameStore((state) => state.isPublic);
   const rounds = useGameStore((state) => state.rounds);
   const drawingSeconds = useGameStore((state) => state.drawingSeconds);
-  const customWordCount = useGameStore((state) => state.customWordCount);
-  const customWordsOnly = useGameStore((state) => state.customWordsOnly);
+  const customPromptCount = useGameStore((state) => state.customPromptCount);
+  const customPromptsOnly = useGameStore((state) => state.customPromptsOnly);
   const hintMode = useGameStore((state) => state.hintMode);
   const scoringMode = useGameStore((state) => state.scoringMode);
   const spectatorsSeeSolution = useGameStore((state) => state.spectatorsSeeSolution);
   const hideMaskedPrompt = useGameStore((state) => state.hideMaskedPrompt);
-  const wordListSlugs = useGameStore((state) => state.wordListSlugs);
+  const promptListSlugs = useGameStore((state) => state.promptListSlugs);
   const players = useGameStore((state) => state.players);
   const myPlayerId = useGameStore((state) => state.playerId);
   const isHost = useGameStore((state) => selectMe(state)?.isHost ?? false);
@@ -112,13 +112,13 @@ export function ConnectedWaitingRoomPanel({
       isPublic={isPublic}
       rounds={rounds}
       drawingSeconds={drawingSeconds}
-      customWordCount={customWordCount}
-      customWordsOnly={customWordsOnly}
+      customPromptCount={customPromptCount}
+      customPromptsOnly={customPromptsOnly}
       hintMode={hintMode}
       scoringMode={scoringMode}
       spectatorsSeeSolution={spectatorsSeeSolution}
       hideMaskedPrompt={hideMaskedPrompt}
-      wordListSlugs={wordListSlugs}
+      promptListSlugs={promptListSlugs}
       players={players}
       myPlayerId={myPlayerId}
       isHost={isHost}
@@ -137,7 +137,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const playerId = useGameStore((state) => state.playerId);
   const phase = useGameStore((state) => state.phase);
   const drawerId = useGameStore((state) => state.drawerId);
-  const maskedWord = useGameStore((state) => state.maskedWord);
+  const maskedPrompt = useGameStore((state) => state.maskedPrompt);
   const hintMode = useGameStore((state) => state.hintMode);
   const scoringMode = useGameStore((state) => state.scoringMode);
   const nextHintCost = useGameStore((state) => state.nextHintCost);
@@ -145,9 +145,9 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const hintSpend = useGameStore((state) => state.hintSpend);
   const hintBudget = useGameStore((state) => state.hintBudget);
   const lastGuessBreakdown = useGameStore((state) => state.lastGuessBreakdown);
-  const myWord = useGameStore((state) => state.myWord);
-  const guessedWord = useGameStore((state) => state.guessedWord);
-  const wordChoices = useGameStore((state) => state.wordChoices);
+  const myPrompt = useGameStore((state) => state.myPrompt);
+  const guessedPrompt = useGameStore((state) => state.guessedPrompt);
+  const promptChoices = useGameStore((state) => state.promptChoices);
   const roundNumber = useGameStore((state) => state.roundNumber);
   const totalRounds = useGameStore((state) => state.totalRounds);
   const phaseSeconds = useGameStore((state) => state.phaseSeconds);
@@ -165,23 +165,23 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const amDrawer = useGameStore(selectAmDrawer);
   const canDrawNow = phase === "drawing" && drawerId === playerId;
   const isDrawerPerson = drawerId === playerId;
-  const drawerWord =
-    myWord ||
-    (maskedWord && !maskedWord.includes("_")
-      ? splitMaskedPrompt(maskedWord).blanks.trim()
+  const drawerPrompt =
+    myPrompt ||
+    (maskedPrompt && !maskedPrompt.includes("_")
+      ? splitMaskedPrompt(maskedPrompt).blanks.trim()
       : null);
-  const solutionWord =
+  const solutionPrompt =
     phase === "turn_results"
-      ? lastTurnResult?.word ?? null
+      ? lastTurnResult?.prompt ?? null
       : isDrawerPerson && phase === "drawing"
-        ? drawerWord
-        : guessedWord
-          ? guessedWord
+        ? drawerPrompt
+        : guessedPrompt
+          ? guessedPrompt
           : me?.isSpectator &&
               spectatorsSeeSolution &&
-              maskedWord &&
-              !maskedWord.includes("_")
-            ? splitMaskedPrompt(maskedWord).blanks.trim()
+              maskedPrompt &&
+              !maskedPrompt.includes("_")
+            ? splitMaskedPrompt(maskedPrompt).blanks.trim()
             : null;
   const {
     color,
@@ -217,12 +217,12 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
       </div>
       <PromptDisplay
         isDrawer={amDrawer}
-        myWord={myWord}
-        maskedWord={maskedWord}
-        wordChoices={wordChoices}
-        revealedWord={phase === "turn_results" ? lastTurnResult?.word ?? null : guessedWord}
+        myPrompt={myPrompt}
+        maskedPrompt={maskedPrompt}
+        promptChoices={promptChoices}
+        revealedPrompt={phase === "turn_results" ? lastTurnResult?.prompt ?? null : guessedPrompt}
         hintMode={hintMode}
-        canBuyHint={phase === "drawing" && !amDrawer && !guessedWord}
+        canBuyHint={phase === "drawing" && !amDrawer && !guessedPrompt}
         nextHintCost={nextHintCost}
         letterPrices={letterPrices}
         hintSpend={hintSpend}
@@ -234,10 +234,10 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         color={color}
         brushWidth={brushWidth}
         tool={tool}
-        solutionWord={solutionWord}
+        solutionPrompt={solutionPrompt}
         label={canvasLabel}
         overlay={
-          phase === "choosing_word" && !amDrawer ? (
+          phase === "choosing_prompt" && !amDrawer ? (
             <ChoosingPromptOverlay
               drawerNickname={drawerNickname || "The next player"}
               drawerNameColor={drawerNameColor}
@@ -247,7 +247,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
       />
       {phase === "turn_results" && lastTurnResult && (
         <TurnResultsOverlay
-          word={lastTurnResult.word}
+          prompt={lastTurnResult.prompt}
           drawerId={lastTurnResult.drawerId}
           drawerBonus={lastTurnResult.drawerBonus}
           guesses={lastTurnResult.guesses}

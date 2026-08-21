@@ -20,7 +20,7 @@ from app.game import (
 )
 from app.rooms import DRAWING_TIME_OPTIONS
 from app.canvas_session import MAX_CANVAS_COMMITS
-from app.words import MAX_WORD_LENGTH
+from app.prompts import MAX_PROMPT_LENGTH
 
 
 def make_game(n_players=3, rounds=2):
@@ -46,7 +46,7 @@ def test_start_next_turn_rotates_drawer():
     game = make_game(n_players=3, rounds=2)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p0"
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     game.end_round()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p1"
@@ -105,64 +105,64 @@ def test_choose_word_rejects_wrong_player():
     game = make_game()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     other_player = "p1"
-    assert game.choose_word(other_player, game.word_choices[0]) is False
-    assert game.phase == Phase.CHOOSING_WORD
+    assert game.choose_prompt(other_player, game.prompt_choices[0]) is False
+    assert game.phase == Phase.CHOOSING_PROMPT
 
 
 def test_choose_word_rejects_invalid_word():
     game = make_game()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    assert game.choose_word(game.current_drawer, "not-a-choice") is False
+    assert game.choose_prompt(game.current_drawer, "not-a-choice") is False
 
 
 def test_force_word_choice_picks_first_option():
     game = make_game()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    first_choice = game.word_choices[0]
-    game.force_word_choice()
-    assert game.word == first_choice
+    first_choice = game.prompt_choices[0]
+    game.force_prompt_choice()
+    assert game.prompt == first_choice
     assert game.phase == Phase.DRAWING
 
 
 def test_masked_word_reveals_length_only():
     game = make_game()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
-    word = game.word
-    expected = "_" * len(word) + f"  {len(word)}"
-    assert game.masked_word() == expected
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
+    prompt = game.prompt
+    expected = "_" * len(prompt) + f"  {len(prompt)}"
+    assert game.masked_prompt() == expected
 
 
 def test_masked_word_shows_spaces_and_special_characters():
     game = make_game(n_players=1, rounds=1)
-    game.word_pool = ["red panda"]
+    game.prompt_pool = ["red panda"]
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.force_word_choice()
-    assert game.masked_word() == "___  _____  3 5"
+    game.force_prompt_choice()
+    assert game.masked_prompt() == "___  _____  3 5"
 
     game2 = make_game(n_players=1, rounds=1)
-    game2.word_pool = ["spider-man"]
+    game2.prompt_pool = ["spider-man"]
     game2.start_next_turn(canvas_generation=game2.canvas.generation + 1)
-    game2.force_word_choice()
-    assert game2.masked_word() == "______-___  6 3"
+    game2.force_prompt_choice()
+    assert game2.masked_prompt() == "______-___  6 3"
 
 
 def test_submit_guess_correct_awards_points_and_ignores_drawer():
     game = make_game(n_players=3)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
 
-    drawer_correct, drawer_points = game.submit_guess(game.current_drawer, game.word)
+    drawer_correct, drawer_points = game.submit_guess(game.current_drawer, game.prompt)
     assert drawer_correct is False
     assert drawer_points == 0
 
     guesser = "p1" if game.current_drawer != "p1" else "p2"
-    correct, points = game.submit_guess(guesser, game.word.upper())
+    correct, points = game.submit_guess(guesser, game.prompt.upper())
     assert correct is True
     assert points > 0
     # Guessing again should not award points twice.
-    correct_again, points_again = game.submit_guess(guesser, game.word)
+    correct_again, points_again = game.submit_guess(guesser, game.prompt)
     assert correct_again is False
     assert points_again == 0
 
@@ -174,9 +174,9 @@ def test_submit_guess_ignores_canonically_decomposable_diacritics():
         ("cafe\u0301", "  CAFE  "),
     )
     for answer, guess in cases:
-        game = Game(turn_order=["drawer", "guesser"], word_pool=[answer])
+        game = Game(turn_order=["drawer", "guesser"], prompt_pool=[answer])
         game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(DRAWING_SECONDS)
 
         correct, points = game.submit_guess("guesser", guess)
@@ -191,9 +191,9 @@ def test_submit_guess_keeps_letters_without_canonical_ascii_decomposition_distin
         ("łódź", "lodz"),
     )
     for answer, guess in cases:
-        game = Game(turn_order=["drawer", "guesser"], word_pool=[answer])
+        game = Game(turn_order=["drawer", "guesser"], prompt_pool=[answer])
         game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-        game.force_word_choice()
+        game.force_prompt_choice()
 
         correct, points = game.submit_guess("guesser", guess)
 
@@ -204,11 +204,11 @@ def test_submit_guess_keeps_letters_without_canonical_ascii_decomposition_distin
 def test_submit_guess_records_elapsed_guess_time():
     game = make_game(n_players=2)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     game.remaining_seconds = lambda: DRAWING_SECONDS - 12.5
     guesser = next(token for token in game.turn_order if token != game.current_drawer)
 
-    correct, _ = game.submit_guess(guesser, game.word)
+    correct, _ = game.submit_guess(guesser, game.prompt)
 
     assert correct is True
     assert game.guess_times[guesser] == 12.5
@@ -217,7 +217,7 @@ def test_submit_guess_records_elapsed_guess_time():
 def test_submit_guess_wrong_word():
     game = make_game()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
     correct, points = game.submit_guess("p1", "definitely-wrong")
     assert correct is False
@@ -227,10 +227,10 @@ def test_submit_guess_wrong_word():
 def test_no_scoring_marks_correct_guesses_without_awarding_points():
     game = Game(turn_order=["drawer", "guesser"], scoring_mode="none")
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
 
-    correct, points = game.submit_guess("guesser", game.word)
+    correct, points = game.submit_guess("guesser", game.prompt)
 
     assert correct is True
     assert points == 0
@@ -241,11 +241,11 @@ def test_no_scoring_marks_correct_guesses_without_awarding_points():
 def test_end_round_awards_drawer_bonus_per_guesser():
     game = make_game(n_players=3)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
     others = [t for t in game.turn_order if t != game.current_drawer]
     for token in others:
-        game.submit_guess(token, game.word)
+        game.submit_guess(token, game.prompt)
     bonus = game.end_round()
     assert bonus == 300 * len(others)
     assert game.phase == Phase.TURN_RESULTS
@@ -254,10 +254,10 @@ def test_end_round_awards_drawer_bonus_per_guesser():
 def test_end_round_is_idempotent():
     game = make_game(n_players=3)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     game.set_phase_deadline(DRAWING_SECONDS)
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
-    game.submit_guess(guesser, game.word)
+    game.submit_guess(guesser, game.prompt)
 
     assert game.end_round() is not None
     assert game.end_round() is None
@@ -265,27 +265,27 @@ def test_end_round_is_idempotent():
 
 def test_end_round_bonus_shrinks_when_drawer_stalls_before_drawing():
     """A drawer who delays drawing (eating into the shared deadline) should earn a
-    smaller bonus, not the same flat amount - otherwise stalling with an easy word
+    smaller bonus, not the same flat amount - otherwise stalling with an easy prompt
     to suppress guessers' scores would be free for the drawer."""
     game = make_game(n_players=3)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     others = [t for t in game.turn_order if t != game.current_drawer]
 
     # Simulate stalling: only 1 second remains by the time guesses come in.
     game.set_phase_deadline(1)
     for token in others:
-        game.submit_guess(token, game.word)
+        game.submit_guess(token, game.prompt)
     stalled_bonus = game.end_round()
 
     # Compare against drawing immediately (full time remaining for guesses).
     game2 = make_game(n_players=3)
     game2.start_next_turn(canvas_generation=game2.canvas.generation + 1)
-    game2.choose_word(game2.current_drawer, game2.word_choices[0])
+    game2.choose_prompt(game2.current_drawer, game2.prompt_choices[0])
     others2 = [t for t in game2.turn_order if t != game2.current_drawer]
     game2.set_phase_deadline(DRAWING_SECONDS)
     for token in others2:
-        game2.submit_guess(token, game2.word)
+        game2.submit_guess(token, game2.prompt)
     prompt_bonus = game2.end_round()
 
     assert stalled_bonus < prompt_bonus
@@ -294,11 +294,11 @@ def test_end_round_bonus_shrinks_when_drawer_stalls_before_drawing():
 def test_all_guessed():
     game = make_game(n_players=3)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     others = [t for t in game.turn_order if t != game.current_drawer]
     assert game.all_guessed(len(others)) is False
     for token in others:
-        game.submit_guess(token, game.word)
+        game.submit_guess(token, game.prompt)
     assert game.all_guessed(len(others)) is True
 
 
@@ -493,19 +493,19 @@ def test_sync_payload_round_trip_preserves_replay_and_undo_actions():
 def test_masked_word_returns_unmasked_for_drawer_and_correct_guesser():
     game = make_game(n_players=3)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game._set_word("cat")
+    game._set_prompt("cat")
     drawer = game.current_drawer
     guesser1, guesser2 = [t for t in game.turn_order if t != drawer]
 
-    # Drawer sees unmasked word
-    assert game.masked_word(drawer) == "cat"
-    # Other guessers see masked word
-    assert game.masked_word(guesser1) != "cat"
+    # Drawer sees unmasked prompt
+    assert game.masked_prompt(drawer) == "cat"
+    # Other guessers see masked prompt
+    assert game.masked_prompt(guesser1) != "cat"
 
-    # Correct guesser sees unmasked word
+    # Correct guesser sees unmasked prompt
     game.submit_guess(guesser1, "cat")
-    assert game.masked_word(guesser1) == "cat"
-    assert game.masked_word(guesser2) != "cat"
+    assert game.masked_prompt(guesser1) == "cat"
+    assert game.masked_prompt(guesser2) != "cat"
 
 
 def test_start_next_turn_skips_afk_drawers():
@@ -520,12 +520,12 @@ def test_start_next_turn_skips_afk_drawers():
     assert game.current_drawer == p3
 
 
-def make_hint_game(word, mode, n_players=3):
+def make_hint_game(prompt, mode, n_players=3):
     game = make_game(n_players=n_players, rounds=1)
     game.hint_mode = mode
-    game.word_pool = [word]
+    game.prompt_pool = [prompt]
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.force_word_choice()
+    game.force_prompt_choice()
     return game
 
 
@@ -564,10 +564,10 @@ def test_max_hint_checkpoints_scales_with_word_length():
 def test_reveal_hint_letter_is_shown_to_everyone():
     game = make_hint_game("testing", "checkpoints")
     assert game.reveal_hint_letter() is True
-    masked_for_no_one = game.masked_word()
-    masked_for_someone = game.masked_word("p1")
+    masked_for_no_one = game.masked_prompt()
+    masked_for_someone = game.masked_prompt("p1")
     assert masked_for_no_one == masked_for_someone
-    assert masked_for_no_one.count("_") == len(game.word) - 1
+    assert masked_for_no_one.count("_") == len(game.prompt) - 1
 
 
 def test_buy_hint_letter_rejects_when_not_in_purchase_mode():
@@ -582,7 +582,7 @@ def test_buy_hint_letter_rejects_drawer_and_correct_guessers():
     assert game.buy_hint_letter(game.current_drawer, 0) is False
 
     game.set_phase_deadline(DRAWING_SECONDS)
-    game.submit_guess(guesser, game.word)
+    game.submit_guess(guesser, game.prompt)
     assert game.buy_hint_letter(guesser, 1) is False
 
 
@@ -602,12 +602,12 @@ def test_buy_hint_letter_is_private_to_the_buyer():
     buyer, other = tokens[0], tokens[1]
     assert game.buy_hint_letter(buyer, 2) is True
 
-    masked_for_buyer = game.masked_word(buyer)
-    masked_for_other = game.masked_word(other)
-    masked_for_no_one = game.masked_word()
-    assert masked_for_buyer.count("_") == len(game.word) - 1
-    assert masked_for_other.count("_") == len(game.word)
-    assert masked_for_no_one.count("_") == len(game.word)
+    masked_for_buyer = game.masked_prompt(buyer)
+    masked_for_other = game.masked_prompt(other)
+    masked_for_no_one = game.masked_prompt()
+    assert masked_for_buyer.count("_") == len(game.prompt) - 1
+    assert masked_for_other.count("_") == len(game.prompt)
+    assert masked_for_no_one.count("_") == len(game.prompt)
 
 
 def test_hint_cost_scales_up_per_hint_bought_this_turn():
@@ -635,7 +635,7 @@ def test_buy_wheel_letter_rejects_drawer_and_correct_guessers():
     assert game.buy_wheel_letter(game.current_drawer, "t") is False
 
     game.set_phase_deadline(DRAWING_SECONDS)
-    game.submit_guess(guesser, game.word)
+    game.submit_guess(guesser, game.prompt)
     assert game.buy_wheel_letter(guesser, "e") is False
 
 
@@ -652,19 +652,19 @@ def test_buy_wheel_letter_reveals_all_occurrences_privately():
     buyer, other = tokens[0], tokens[1]
     assert game.buy_wheel_letter(buyer, "t") is True  # "testing" has 2 t's
 
-    masked_for_buyer = game.masked_word(buyer)
-    masked_for_other = game.masked_word(other)
-    masked_for_no_one = game.masked_word()
-    assert masked_for_buyer.count("_") == len(game.word) - 2
-    assert masked_for_other.count("_") == len(game.word)
-    assert masked_for_no_one.count("_") == len(game.word)
+    masked_for_buyer = game.masked_prompt(buyer)
+    masked_for_other = game.masked_prompt(other)
+    masked_for_no_one = game.masked_prompt()
+    assert masked_for_buyer.count("_") == len(game.prompt) - 2
+    assert masked_for_other.count("_") == len(game.prompt)
+    assert masked_for_no_one.count("_") == len(game.prompt)
 
 
 def test_buy_wheel_letter_still_recorded_when_letter_absent():
     game = make_hint_game("testing", "wheel")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     assert game.buy_wheel_letter(guesser, "z") is True  # not in "testing"
-    assert game.masked_word(guesser).count("_") == len(game.word)
+    assert game.masked_prompt(guesser).count("_") == len(game.prompt)
     # Still counts toward this turn's escalating cost, and can't be re-bought.
     assert game.buy_wheel_letter(guesser, "z") is False
 
@@ -684,7 +684,7 @@ def test_wheel_hint_cost_scales_up_per_letter_bought_this_turn():
 
 
 def test_letter_price_vowel_pricier_than_consonant_baseline():
-    # A word pool with equal frequency for the vowel and consonant compared,
+    # A prompt pool with equal frequency for the vowel and consonant compared,
     # so only the flat vowel/consonant baseline (not frequency) affects price.
     game = make_hint_game("aabb", "wheel")
     assert game.letter_price("a") > game.letter_price("b")
@@ -695,15 +695,15 @@ def test_letter_price_rarer_letter_costs_less():
     # should cost less than "t", both being consonants - use two consonants
     # to isolate the frequency effect from the vowel/consonant baseline.
     game = make_hint_game("test", "wheel")
-    game.word_pool = ["ttttt", "ttttt", "ttttz"]
+    game.prompt_pool = ["ttttt", "ttttt", "ttttz"]
     assert game.letter_price("z") < game.letter_price("t")
 
 
-def make_close_guess_game(word, n_players=3):
+def make_close_guess_game(prompt, n_players=3):
     game = make_game(n_players=n_players, rounds=1)
-    game.word_pool = [word]
+    game.prompt_pool = [prompt]
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.force_word_choice()
+    game.force_prompt_choice()
     return game
 
 
@@ -732,8 +732,8 @@ def test_bounded_edit_distance_returns_sentinel_outside_useful_band():
 def test_largest_guess_uses_bounded_edit_distance_memory():
     import tracemalloc
 
-    guess = "x" * MAX_WORD_LENGTH
-    target = "y" * MAX_WORD_LENGTH
+    guess = "x" * MAX_PROMPT_LENGTH
+    target = "y" * MAX_PROMPT_LENGTH
     tracemalloc.start()
     try:
         _bounded_damerau_levenshtein(
@@ -774,7 +774,7 @@ def test_guess_hint_rejects_drawer_and_correct_guessers():
     assert game.guess_hint(game.current_drawer, "testng") is None
 
     game.set_phase_deadline(DRAWING_SECONDS)
-    game.submit_guess(guesser, game.word)
+    game.submit_guess(guesser, game.prompt)
     assert game.guess_hint(guesser, "testng") is None
 
 
@@ -782,7 +782,7 @@ def test_guess_hint_ignores_very_short_strings():
     game = make_close_guess_game("cat")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     # A single-letter guess is too short to be meaningfully "close", and
-    # there's only one word so no partial-match hint applies either.
+    # there's only one prompt so no partial-match hint applies either.
     assert game.guess_hint(guesser, "c") is None
 
 
@@ -798,7 +798,7 @@ def test_guess_hint_partial_word_match():
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     # "shiny" (5 letters) matches exactly, but the whole phrase is too
     # different overall to be flagged "close" - falls back to the
-    # partial-word-match hint.
+    # partial-prompt-match hint.
     assert game.guess_hint(guesser, "big shiny house") == "partial"
 
 
@@ -813,7 +813,7 @@ def test_guess_hint_partial_multiple_short_words_reach_min_letters():
 def test_guess_hint_partial_requires_min_correct_letters():
     game = make_close_guess_game("tiny red ant")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
-    # Only one short word ("red", 3 letters) matches exactly - below
+    # Only one short prompt ("red", 3 letters) matches exactly - below
     # CLOSE_GUESS_MIN_CORRECT_LETTERS.
     assert game.guess_hint(guesser, "huge red bug") is None
 
@@ -828,7 +828,7 @@ def test_guess_hint_partial_single_word_below_min_letters():
 def test_guess_hint_partial_allows_one_word_count_difference():
     game = make_close_guess_game("big giant purple octopus")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
-    # Missing the last word entirely, but the word-count difference is only
+    # Missing the last prompt entirely, but the prompt-count difference is only
     # 1, which is now tolerated - "big", "giant" and "purple" all match.
     assert game.guess_hint(guesser, "big giant purple") == "partial"
 
@@ -836,8 +836,8 @@ def test_guess_hint_partial_allows_one_word_count_difference():
 def test_guess_hint_partial_rejects_word_count_diff_over_one():
     game = make_close_guess_game("big giant purple octopus")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
-    # Missing 2 of the 4 words: word-count difference is 2, too large to be
-    # tolerated, so the partial-word check is skipped entirely.
+    # Missing 2 of the 4 words: prompt-count difference is 2, too large to be
+    # tolerated, so the partial-prompt check is skipped entirely.
     assert game.guess_hint(guesser, "big giant") is None
 
 
@@ -852,7 +852,7 @@ def test_guess_hint_partial_word_order_independent():
 def test_guess_hint_partial_caps_duplicate_word_matches():
     game = make_close_guess_game("red red panda")
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
-    # Duplicate words are capped at the lower count per word (multiset
+    # Duplicate words are capped at the lower count per prompt (multiset
     # intersection): 1x "red" (guess has 1, target has 2) + 1x "panda"
     # (guess has 2, target has 1) = 3 + 5 = 8 correct letters total.
     assert game.guess_hint(guesser, "red panda panda") == "partial"
@@ -861,19 +861,19 @@ def test_guess_hint_partial_caps_duplicate_word_matches():
 def test_new_scoring_system_guesser_and_drawer_scores():
     game = make_game(n_players=3)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
 
     others = [t for t in game.turn_order if t != game.current_drawer]
     g1, g2 = others[0], others[1]
 
     # Guesser 1 guesses at start (t = 0, remaining = 80s) -> 300 points
     game.remaining_seconds = lambda: DRAWING_SECONDS
-    _, p1 = game.submit_guess(g1, game.word)
+    _, p1 = game.submit_guess(g1, game.prompt)
     assert p1 == 300
 
     # Guesser 2 guesses halfway through (t = 40s, remaining = 40s) -> 200 points
     game.remaining_seconds = lambda: DRAWING_SECONDS / 2
-    _, p2 = game.submit_guess(g2, game.word)
+    _, p2 = game.submit_guess(g2, game.prompt)
     assert p2 == 200
 
     # Drawer score equals sum of guesser scores (300 + 200 = 500)
@@ -884,24 +884,24 @@ def test_new_scoring_system_guesser_and_drawer_scores():
 def test_hide_masked_prompt_returns_question_marks():
     game = Game(turn_order=["p0", "p1"], rounds_total=1, hide_masked_prompt=True)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    word = game.word_choices[0]
-    game.choose_word("p0", word)
+    prompt = game.prompt_choices[0]
+    game.choose_prompt("p0", prompt)
 
-    # Drawer sees full word
-    assert game.masked_word("p0") == word
+    # Drawer sees full prompt
+    assert game.masked_prompt("p0") == prompt
 
     # Guesser sees ???
-    assert game.masked_word("p1") == "???"
+    assert game.masked_prompt("p1") == "???"
 
     # Spectator without solution sees ???
-    assert game.masked_word("spec", is_spectator=True, spectators_see_solution=False) == "???"
+    assert game.masked_prompt("spec", is_spectator=True, spectators_see_solution=False) == "???"
 
-    # Spectator with solution sees full word
-    assert game.masked_word("spec", is_spectator=True, spectators_see_solution=True) == word
+    # Spectator with solution sees full prompt
+    assert game.masked_prompt("spec", is_spectator=True, spectators_see_solution=True) == prompt
 
-    # Guesser who answered correctly sees full word
-    game.submit_guess("p1", word)
-    assert game.masked_word("p1") == word
+    # Guesser who answered correctly sees full prompt
+    game.submit_guess("p1", prompt)
+    assert game.masked_prompt("p1") == prompt
 
 
 # --- per-turn analytics kept for the game record --------------------------
@@ -949,9 +949,9 @@ def test_a_rejected_purchase_costs_nothing():
 # --- hints are bought on credit and settled against the turn's guess ------
 
 def guess_with_remaining(game, token, remaining):
-    """Guess the word with the drawing clock parked at `remaining` seconds."""
+    """Guess the prompt with the drawing clock parked at `remaining` seconds."""
     game.remaining_seconds = lambda: remaining
-    return game.submit_guess(token, game.word)
+    return game.submit_guess(token, game.prompt)
 
 
 def test_hint_spend_is_deducted_from_a_correct_guess():
@@ -1065,7 +1065,7 @@ def test_a_purchase_over_the_turn_budget_is_rejected():
     assert game.buy_hint_letter(guesser, 6) is False
     assert game.hint_spend[guesser] == spend
     assert 6 not in game.purchased_hints[guesser]
-    assert "_" in game.masked_word(guesser)
+    assert "_" in game.masked_prompt(guesser)
 
 
 def test_an_over_budget_wheel_letter_is_rejected():
@@ -1106,15 +1106,15 @@ def test_near_misses_are_counted_separately():
 def test_a_word_the_drawer_chose_is_not_marked_auto_picked():
     game = make_game(n_players=2, rounds=1)
     choices = game.start_next_turn(canvas_generation=1)
-    assert game.choose_word(game.current_drawer, choices[0]) is True
-    assert game.word_auto_picked is False
+    assert game.choose_prompt(game.current_drawer, choices[0]) is True
+    assert game.prompt_auto_picked is False
 
 
 def test_a_word_the_clock_picked_is_marked_auto_picked():
     game = make_game(n_players=2, rounds=1)
     game.start_next_turn(canvas_generation=1)
-    game.force_word_choice()
-    assert game.word_auto_picked is True
+    game.force_prompt_choice()
+    assert game.prompt_auto_picked is True
 
 
 def test_completed_turn_records_how_the_round_ended():
@@ -1161,7 +1161,7 @@ def test_per_turn_analytics_do_not_leak_into_the_next_turn():
     assert game.hint_purchases == {}
     assert game.wrong_guesses == {}
     assert game.near_miss_count == 0
-    assert game.word_auto_picked is False
+    assert game.prompt_auto_picked is False
 
 
 # ---------------------------------------------------------------------------
@@ -1170,7 +1170,7 @@ def test_per_turn_analytics_do_not_leak_into_the_next_turn():
 
 
 def make_pressure_game(n_guessers=1, drawing_seconds=90.0):
-    """A pressure-mode game parked in DRAWING with the word chosen.
+    """A pressure-mode game parked in DRAWING with the prompt chosen.
 
     The clock is driven by assigning to `game.remaining_seconds`, matching
     `test_submit_guess_records_elapsed_guess_time`.
@@ -1180,13 +1180,13 @@ def make_pressure_game(n_guessers=1, drawing_seconds=90.0):
         turn_order=tokens, scoring_mode="pressure", drawing_seconds=drawing_seconds
     )
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.choose_word(game.current_drawer, game.word_choices[0])
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     return game
 
 
 def guess_at(game, token, elapsed):
     game.remaining_seconds = lambda: game.drawing_seconds - elapsed
-    correct, points = game.submit_guess(token, game.word)
+    correct, points = game.submit_guess(token, game.prompt)
     assert correct is True
     return points
 
@@ -1345,5 +1345,5 @@ def test_default_scoring_is_unchanged_by_the_constant_refactor():
     for elapsed, expected in ((0, 300), (40, 200), (80, 100)):
         game = Game(turn_order=["drawer", "guesser"], drawing_seconds=80.0)
         game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-        game.choose_word(game.current_drawer, game.word_choices[0])
+        game.choose_prompt(game.current_drawer, game.prompt_choices[0])
         assert guess_at(game, "guesser", elapsed) == expected

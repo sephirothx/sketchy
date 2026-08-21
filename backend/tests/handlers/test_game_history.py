@@ -29,13 +29,13 @@ def build_room(*, rounds: int = 1, accounts: dict[str, str | None] | None = None
     return room_manager, room, players
 
 
-def build_context(room_manager, history_repo, word_list_repo=None, timeline=None):
+def build_context(room_manager, history_repo, prompt_list_repo=None, timeline=None):
     sio = socketio.AsyncServer(async_mode="asgi")
     ctx = register_handlers(
         sio,
         room_manager,
         game_history_repo=history_repo,
-        word_list_repo=word_list_repo,
+        prompt_list_repo=prompt_list_repo,
     )
     if timeline is None:
         sio.emit = AsyncMock()
@@ -59,14 +59,14 @@ async def play_to_completion(ctx, room, players, *, guessers=None):
     await flow._start_fresh_game(room, [p for p in room.player_list()])
     while room.game is not None:
         game = room.game
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
         for player in room.player_list():
             if player.id == game.current_drawer:
                 continue
             if guessers is not None and player.nickname not in guessers:
                 continue
-            game.submit_guess(player.id, game.word)
+            game.submit_guess(player.id, game.prompt)
         await flow._end_round(room)
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
@@ -85,7 +85,7 @@ async def test_completed_game_records_every_round_with_participants_and_guesses(
     # Two players, two rounds each taking a turn: four turns, all recorded.
     assert len(saved.turns) == 4
     assert [r.turn_number for r in saved.turns] == [1, 2, 3, 4]
-    assert all(r.word for r in saved.turns)
+    assert all(r.prompt for r in saved.turns)
     assert {p.user_id for p in saved.participants} == {"user-ann", "user-bob"}
     assert saved.record.player_count == 2
     assert saved.record.room_name == "Studio"
@@ -123,7 +123,7 @@ async def test_departed_player_still_counts_as_a_participant():
 
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -135,7 +135,7 @@ async def test_departed_player_still_counts_as_a_participant():
     await flow._remove_player_from_game(room, leaver.id)
     while room.game is not None:
         game = room.game
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
         await flow._end_round(room)
         ctx.timers.cancel_phase_timer(room.id)
@@ -156,7 +156,7 @@ async def test_restart_discards_the_turns_played_so_far():
 
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -179,7 +179,7 @@ async def test_abandoned_game_is_never_persisted():
 
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -214,7 +214,7 @@ async def test_an_opponent_leaving_does_not_erase_the_turns_played():
 
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -243,23 +243,23 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
     game.hint_mode = "purchase"
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
 
     price = game.hint_cost(guesser.id)
     assert game.buy_hint_letter(guesser.id, 0) is True
-    game.submit_guess(guesser.id, "definitely-not-the-word")
+    game.submit_guess(guesser.id, "definitely-not-the-prompt")
     gross = game.remaining_seconds() / game.drawing_seconds
     gross = round(MIN_GUESS_POINTS + (MAX_GUESS_POINTS - MIN_GUESS_POINTS) * gross)
-    _, awarded = game.submit_guess(guesser.id, game.word)
+    _, awarded = game.submit_guess(guesser.id, game.prompt)
 
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
     await flow._finish_or_next(room)
     while room.game is not None:
         game = room.game
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
         await flow._end_round(room)
         ctx.timers.cancel_phase_timer(room.id)
@@ -269,7 +269,7 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     saved = history.saved[0]
     first_round = saved.turns[0]
     assert first_round.guesser_count == 1
-    assert first_round.word_auto_picked is True
+    assert first_round.prompt_auto_picked is True
     assert first_round.end_reason == "all_guessed"
     assert first_round.wrong_guess_count == 1
 
@@ -297,7 +297,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     flow = ctx.game_flow
 
     class RestartingWordRepo:
-        """Stands in for the word-stat writes, and restarts the room mid-way.
+        """Stands in for the prompt-stat writes, and restarts the room mid-way.
 
         These run only once the game is finished, which is exactly the window
         where the room is already reporting itself as waiting.
@@ -306,13 +306,13 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
         def __init__(self) -> None:
             self.restarted = False
 
-        async def record_word_usage(self, slugs, usage):
+        async def record_prompt_usage(self, slugs, usage):
             if not self.restarted:
                 self.restarted = True
                 await flow._start_fresh_game(room, room.player_list())
 
-    ctx.word_list_repo = RestartingWordRepo()
-    room.word_list_slugs = ["english_standard"]
+    ctx.prompt_list_repo = RestartingWordRepo()
+    room.prompt_list_slugs = ["english_standard"]
 
     await flow._start_fresh_game(room, room.player_list())
     # Two players over one round is two turns; the interference lands on the
@@ -320,10 +320,10 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     expected_scores: dict[str, int] = {}
     for _ in range(2):
         game = room.game
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
         guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
-        game.submit_guess(guesser.id, game.word)
+        game.submit_guess(guesser.id, game.prompt)
         await flow._end_round(room)
         ctx.timers.cancel_phase_timer(room.id)
         expected_scores = {p.user_id: p.score for p in room.player_list()}
@@ -331,7 +331,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     ctx.timers.cancel_phase_timer(room.id)
     await ctx.timers.close()
 
-    assert ctx.word_list_repo.restarted, "the interleaving under test never happened"
+    assert ctx.prompt_list_repo.restarted, "the interleaving under test never happened"
     assert len(history.saved) == 1
     saved = history.saved[0]
     assert len(saved.turns) == 2
@@ -399,11 +399,11 @@ class FakeWordListRepository:
         self._timeline = timeline if timeline is not None else []
         self._hang = hang
 
-    async def record_word_usage(self, word_list_slugs, usage):
+    async def record_prompt_usage(self, prompt_list_slugs, usage):
         if self._hang:
             await asyncio.sleep(3600)
-        self.calls.append((tuple(word_list_slugs), usage))
-        self._timeline.append(("word", tuple(word_list_slugs)))
+        self.calls.append((tuple(prompt_list_slugs), usage))
+        self._timeline.append(("prompt", tuple(prompt_list_slugs)))
 
 
 def emitted_payload(ctx, event: str):
@@ -417,7 +417,7 @@ async def test_game_ended_is_emitted_before_any_word_usage_is_written():
     """Nothing a player is waiting to see may sit behind the metric writes."""
     timeline: list[tuple] = []
     room_manager, room, players = build_room(rounds=1)
-    room.word_list_slugs = ["english_standard", "english_extended"]
+    room.prompt_list_slugs = ["english_standard", "english_extended"]
     words = FakeWordListRepository(timeline=timeline)
     ctx = build_context(
         room_manager, FakeGameHistoryRepository(), words, timeline=timeline
@@ -427,7 +427,7 @@ async def test_game_ended_is_emitted_before_any_word_usage_is_written():
 
     assert ("emit", "game_ended") in timeline
     assert words.calls, "the metrics still have to be recorded"
-    first_write = next(i for i, entry in enumerate(timeline) if entry[0] == "word")
+    first_write = next(i for i, entry in enumerate(timeline) if entry[0] == "prompt")
     assert timeline.index(("emit", "game_ended")) < first_write
     assert timeline.index(("emit", "room_state")) < first_write
 
@@ -435,11 +435,11 @@ async def test_game_ended_is_emitted_before_any_word_usage_is_written():
 async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
     """A locked database must cost the counters, not the room."""
     room_manager, room, players = build_room(rounds=1)
-    room.word_list_slugs = ["english_standard"]
+    room.prompt_list_slugs = ["english_standard"]
     words = FakeWordListRepository(hang=True)
     ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
 
-    with patch.object(game_flow, "WORD_USAGE_WRITE_TIMEOUT_SECONDS", 0.05):
+    with patch.object(game_flow, "PROMPT_USAGE_WRITE_TIMEOUT_SECONDS", 0.05):
         await play_to_completion(ctx, room, players)
 
     assert words.calls == [], "the hung writes never landed"
@@ -455,7 +455,7 @@ async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
 async def test_every_turn_and_list_is_folded_into_a_single_write():
     """The whole game goes down in one call, not one per turn per list."""
     room_manager, room, players = build_room(rounds=2)
-    room.word_list_slugs = ["english_standard", "english_extended"]
+    room.prompt_list_slugs = ["english_standard", "english_extended"]
     words = FakeWordListRepository()
     ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
 
@@ -468,4 +468,4 @@ async def test_every_turn_and_list_is_folded_into_a_single_write():
     assert slugs == ("english_standard", "english_extended")
     assert sum(usage.offers.values()) == 12
     assert sum(totals.picks for totals in usage.picks.values()) == 4
-    assert all(word == word.strip().lower() for word in usage.offers)
+    assert all(prompt == prompt.strip().lower() for prompt in usage.offers)

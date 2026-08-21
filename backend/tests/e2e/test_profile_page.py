@@ -8,20 +8,20 @@ from tests.e2e.lobby_helpers import use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-async def choose_word(pages: list[Page]) -> tuple[Page, Page, str]:
-    """Wait for whichever page is drawing, pick its first word, and return both."""
+async def choose_prompt(pages: list[Page]) -> tuple[Page, Page, str]:
+    """Wait for whichever page is drawing, pick its first prompt, and return both."""
     for _ in range(120):
         for page in pages:
             if await page.locator(".prompt-choices").count():
                 drawer = page
                 guesser = pages[1] if page is pages[0] else pages[0]
                 choice = drawer.locator(".prompt-choices button").first
-                word = (await choice.inner_text()).strip()
+                prompt = (await choice.inner_text()).strip()
                 await choice.click()
                 await drawer.locator(".prompt-choices").wait_for(state="detached")
-                return drawer, guesser, word
+                return drawer, guesser, prompt
         await asyncio.sleep(0.1)
-    raise AssertionError("No drawer received word choices within 12 seconds")
+    raise AssertionError("No drawer received prompt choices within 12 seconds")
 
 
 @pytest.mark.asyncio
@@ -50,7 +50,7 @@ async def test_finished_game_shows_up_on_the_profile_page():
             await guest.locator('[data-testid="waiting-room"]').wait_for()
 
             # One round of two players is two turns: each drives one, and each
-            # guesses the other's word, so both sides of the stats are covered.
+            # guesses the other's prompt, so both sides of the stats are covered.
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await host.locator(".room-settings-editor details").click()
             await host.locator("#custom-prompts").fill("apple\ntree")
@@ -59,12 +59,12 @@ async def test_finished_game_shows_up_on_the_profile_page():
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, guest]
-            _, first_guesser, first_word = await choose_word(pages)
-            await first_guesser.fill(".chat-input input", first_word)
+            _, first_guesser, first_prompt = await choose_prompt(pages)
+            await first_guesser.fill(".chat-input input", first_prompt)
             await first_guesser.keyboard.press("Enter")
 
-            _, second_guesser, second_word = await choose_word(pages)
-            await second_guesser.fill(".chat-input input", second_word)
+            _, second_guesser, second_prompt = await choose_prompt(pages)
+            await second_guesser.fill(".chat-input input", second_prompt)
             await second_guesser.keyboard.press("Enter")
 
             # The recap button is the signal that the game has ended, and the
@@ -104,8 +104,8 @@ async def test_finished_game_shows_up_on_the_profile_page():
             await game_row.locator(".profile-game-header").click()
             await lobby.locator(".profile-turns").wait_for()
 
-            words = await lobby.locator(".profile-turn-prompt").all_inner_texts()
-            assert sorted(words) == sorted([first_word, second_word])
+            prompts = await lobby.locator(".profile-turn-prompt").all_inner_texts()
+            assert sorted(prompts) == sorted([first_prompt, second_prompt])
             assert await lobby.get_by_text("ProfileGuest").first.is_visible()
 
             # A guest's own profile offers the claim funnel.

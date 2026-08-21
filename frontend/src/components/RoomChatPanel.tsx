@@ -15,7 +15,7 @@ interface RoomChatPanelProps {
   isDrawer: boolean;
   canGuess: boolean;
   myPlayerId?: string | null;
-  targetWordLengths: string[];
+  targetPromptLengths: string[];
   hideMaskedPrompt?: boolean;
   onFocusChange?: (focused: boolean) => void;
 }
@@ -48,7 +48,7 @@ export function RoomChatPanel({
   isDrawer,
   canGuess,
   myPlayerId = null,
-  targetWordLengths,
+  targetPromptLengths,
   hideMaskedPrompt = false,
   onFocusChange,
 }: RoomChatPanelProps) {
@@ -267,16 +267,16 @@ export function RoomChatPanel({
     }
   }
 
-  const typedWordLengths = letterRunLengths(text);
+  const typedPromptLengths = letterRunLengths(text);
   const showLiveLetterCounts = text.trim().length <= MAX_PROMPT_LENGTH;
   const activeIndex =
     text.length > 0 && /[\p{L}\p{N}]/u.test(text[text.length - 1])
-      ? typedWordLengths.length - 1
+      ? typedPromptLengths.length - 1
       : -1;
 
   function hintClass(index: number) {
-    const target = Number(targetWordLengths[index]);
-    const typed = typedWordLengths[index];
+    const target = Number(targetPromptLengths[index]);
+    const typed = typedPromptLengths[index];
     if (index === activeIndex && (!Number.isFinite(target) || typed < target)) {
       return "guess-hint-typing";
     }
@@ -376,7 +376,7 @@ export function RoomChatPanel({
               && canGuess
               && !hideMaskedPrompt
               && showLiveLetterCounts
-              && typedWordLengths.map((count, index) => (
+              && typedPromptLengths.map((count, index) => (
                 <sup key={index} className={hintClass(index)}>
                   {count}
                 </sup>

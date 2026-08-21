@@ -7,7 +7,7 @@ def base36(value: int) -> str:
     return result or "0"
 
 
-def maximum_custom_words() -> list[str]:
+def maximum_custom_prompts() -> list[str]:
     words = []
     for index in range(10_000):
         token = base36(index).rjust(3, "0")

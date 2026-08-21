@@ -171,7 +171,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                 {detail.turns.map((turn) => (
                   <tr key={`${turn.roundNumber}-${turn.turnNumber}`}>
                     <td>{turn.roundNumber}</td>
-                    <td className="profile-turn-prompt">{turn.word}</td>
+                    <td className="profile-turn-prompt">{turn.prompt}</td>
                     <td>{named(turn.drawerUserId, turn.drawerDisplayName)}</td>
                     <td>{formatDuration(turn.durationSeconds)}</td>
                     <td>
@@ -357,7 +357,7 @@ function ProfileView({ userId }: { userId: string }) {
               />
               <StatTile label="Average score" value={String(Math.round(stats.averageScore))} />
               <StatTile label="Turns played" value={String(stats.turnsPlayed)} />
-              <StatTile label="Prompts guessed" value={String(stats.wordsGuessed)} />
+              <StatTile label="Prompts guessed" value={String(stats.promptsGuessed)} />
               <StatTile label="Drawings made" value={String(stats.drawingsMade)} />
               <StatTile label="Total score" value={String(stats.totalScore)} />
             </div>

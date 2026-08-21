@@ -87,23 +87,23 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.drawerNickname} is choosing a word...`,
+        text: `${payload.drawerNickname} is choosing a prompt...`,
         correct: false,
         system: true,
       });
     };
 
-    const onYourWordChoices = (payload: { choices: string[]; seconds: number }) => {
-      store.getState().setMyWordChoices(payload.choices, payload.seconds);
+    const onYourPromptChoices = (payload: { choices: string[]; seconds: number }) => {
+      store.getState().setMyPromptChoices(payload.choices, payload.seconds);
     };
 
-    const onYouAreDrawing = (payload: { word: string; choices?: string[] }) => {
-      store.getState().setMyWord(payload.word);
+    const onYouAreDrawing = (payload: { prompt: string; choices?: string[] }) => {
+      store.getState().setMyPrompt(payload.prompt);
     };
 
     const onTurnStarted = (payload: {
       drawerId: string;
-      maskedWord: string;
+      maskedPrompt: string;
       roundNumber: number;
       totalRounds: number;
       seconds: number;
@@ -140,22 +140,22 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.nickname} guessed the word!${pointsSuffix}`,
+        text: `${payload.nickname} guessed the prompt!${pointsSuffix}`,
         correct: false,
         system: true,
       });
     };
 
     const onYouGuessedCorrectly = (payload: {
-      word: string;
+      prompt: string;
       points?: number;
       basePoints?: number;
       hintSpend?: number;
     }) => {
       triggerConfettiBurst();
       playMyCorrectGuessSound();
-      store.getState().setGuessedWord(
-        payload.word,
+      store.getState().setGuessedPrompt(
+        payload.prompt,
         payload.basePoints === undefined
           ? null
           : {
@@ -167,7 +167,7 @@ export function useGameSocketListeners() {
     };
 
     const onHintRevealed = (payload: {
-      maskedWord: string;
+      maskedPrompt: string;
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
       hintSpend?: number;
@@ -180,7 +180,7 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `The word was "${payload.word}"`,
+        text: `The prompt was "${payload.prompt}"`,
         correct: false,
         system: true,
       });
@@ -194,7 +194,7 @@ export function useGameSocketListeners() {
     const onSyncGame = (payload: {
       phase: string;
       drawerId: string | null;
-      maskedWord: string;
+      maskedPrompt: string;
       roundNumber: number;
       totalRounds: number;
       remainingSeconds: number;
@@ -203,7 +203,7 @@ export function useGameSocketListeners() {
       hintSpend?: number;
       hintBudget?: number;
     }) => {
-      if (payload.phase === "choosing_word") {
+      if (payload.phase === "choosing_prompt") {
         store.getState().startChoosing({
           drawerId: payload.drawerId || "",
           roundNumber: payload.roundNumber,
@@ -213,7 +213,7 @@ export function useGameSocketListeners() {
       } else if (payload.phase === "drawing") {
         store.getState().startDrawing({
           drawerId: payload.drawerId || "",
-          maskedWord: payload.maskedWord,
+          maskedPrompt: payload.maskedPrompt,
           roundNumber: payload.roundNumber,
           totalRounds: payload.totalRounds,
           seconds: payload.remainingSeconds,
@@ -232,7 +232,7 @@ export function useGameSocketListeners() {
     socket.on("player_left", onPlayerLeft);
     socket.on("game_started", onGameStarted);
     socket.on("turn_starting", onTurnStarting);
-    socket.on("your_word_choices", onYourWordChoices);
+    socket.on("your_prompt_choices", onYourPromptChoices);
     socket.on("you_are_drawing", onYouAreDrawing);
     socket.on("turn_started", onTurnStarted);
     socket.on("chat_message", onChatMessage);
@@ -251,7 +251,7 @@ export function useGameSocketListeners() {
       socket.off("player_left", onPlayerLeft);
       socket.off("game_started", onGameStarted);
       socket.off("turn_starting", onTurnStarting);
-      socket.off("your_word_choices", onYourWordChoices);
+      socket.off("your_prompt_choices", onYourPromptChoices);
       socket.off("you_are_drawing", onYouAreDrawing);
       socket.off("turn_started", onTurnStarted);
       socket.off("chat_message", onChatMessage);

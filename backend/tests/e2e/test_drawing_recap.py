@@ -8,20 +8,20 @@ from tests.e2e.lobby_helpers import use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-async def choose_word(pages: list[Page]) -> tuple[Page, Page, str]:
+async def choose_prompt(pages: list[Page]) -> tuple[Page, Page, str]:
     for _ in range(120):
         for page in pages:
             if await page.locator(".prompt-choices").count():
                 drawer = page
                 guesser = pages[1] if page is pages[0] else pages[0]
                 choice = drawer.locator(".prompt-choices button").first
-                word = (await choice.inner_text()).strip()
+                prompt = (await choice.inner_text()).strip()
                 await choice.click()
                 await drawer.locator(".prompt-choices").wait_for(state="detached")
                 await drawer.locator("canvas.drawing-canvas").wait_for()
-                return drawer, guesser, word
+                return drawer, guesser, prompt
         await asyncio.sleep(0.1)
-    raise AssertionError("No drawer received word choices within 12 seconds")
+    raise AssertionError("No drawer received prompt choices within 12 seconds")
 
 
 @pytest.mark.asyncio
@@ -57,7 +57,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, guest]
-            first_drawer, first_guesser, first_word = await choose_word(pages)
+            first_drawer, first_guesser, first_prompt = await choose_prompt(pages)
             canvas = first_drawer.locator("canvas.drawing-canvas")
             box = await canvas.bounding_box()
             assert box is not None
@@ -79,11 +79,11 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
                   return false;
                 }"""
             )
-            await first_guesser.fill(".chat-input input", first_word)
+            await first_guesser.fill(".chat-input input", first_prompt)
             await first_guesser.keyboard.press("Enter")
 
-            second_drawer, second_guesser, second_word = await choose_word(pages)
-            await second_guesser.fill(".chat-input input", second_word)
+            second_drawer, second_guesser, second_prompt = await choose_prompt(pages)
+            await second_guesser.fill(".chat-input input", second_prompt)
             await second_guesser.keyboard.press("Enter")
 
             view_drawings = host.get_by_role("button", name="View drawings", exact=True)
@@ -97,7 +97,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await view_drawings.click()
 
             assert await host.get_by_text("1 of 2", exact=True).is_visible()
-            assert await host.get_by_role("heading", name=first_word).is_visible()
+            assert await host.get_by_role("heading", name=first_prompt).is_visible()
             assert not await host.get_by_text(
                 "No drawing was captured for this turn.",
                 exact=True,
@@ -105,11 +105,11 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             async with host.expect_download() as first_download_info:
                 await host.get_by_role("button", name="Download drawing").click()
             first_download = await first_download_info.value
-            assert first_word in first_download.suggested_filename
+            assert first_prompt in first_download.suggested_filename
 
             await host.get_by_role("button", name="Next").click()
             assert await host.get_by_text("2 of 2", exact=True).is_visible()
-            assert await host.get_by_role("heading", name=second_word).is_visible()
+            assert await host.get_by_role("heading", name=second_prompt).is_visible()
             empty_notice = host.get_by_text(
                 "No drawing was captured for this turn.",
                 exact=True,
@@ -119,7 +119,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             async with host.expect_download() as second_download_info:
                 await host.get_by_role("button", name="Download drawing").click()
             second_download = await second_download_info.value
-            assert second_word in second_download.suggested_filename
+            assert second_prompt in second_download.suggested_filename
 
             await host.get_by_role("button", name="Previous").click()
             assert await host.get_by_text("1 of 2", exact=True).is_visible()
@@ -158,8 +158,8 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             )
 
             for _ in range(2):
-                _, guesser, word = await choose_word(pages)
-                await guesser.fill(".chat-input input", word)
+                _, guesser, prompt = await choose_prompt(pages)
+                await guesser.fill(".chat-input input", prompt)
                 await guesser.keyboard.press("Enter")
 
             await guest.get_by_text("Game complete", exact=True).wait_for(

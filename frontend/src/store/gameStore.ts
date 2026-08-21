@@ -29,14 +29,14 @@ interface GameStore {
   isPublic: boolean;
   maxPlayers: number;
   rounds: number;
-  customWordCount: number;
-  customWordsOnly: boolean;
+  customPromptCount: number;
+  customPromptsOnly: boolean;
   drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
-  wordListSlugs: string[];
+  promptListSlugs: string[];
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
   moderation: ModerationState;
@@ -45,10 +45,10 @@ interface GameStore {
 
   phase: GamePhase;
   drawerId: string | null;
-  maskedWord: string;
-  myWord: string | null;
-  guessedWord: string | null;
-  wordChoices: string[];
+  maskedPrompt: string;
+  myPrompt: string | null;
+  guessedPrompt: string | null;
+  promptChoices: string[];
   roundNumber: number;
   totalRounds: number;
   phaseSeconds: number;
@@ -83,10 +83,10 @@ interface GameStore {
     totalRounds: number;
     seconds: number;
   }) => void;
-  setMyWordChoices: (choices: string[], seconds: number) => void;
+  setMyPromptChoices: (choices: string[], seconds: number) => void;
   startDrawing: (payload: {
     drawerId: string;
-    maskedWord: string;
+    maskedPrompt: string;
     roundNumber: number;
     totalRounds: number;
     seconds: number;
@@ -95,11 +95,11 @@ interface GameStore {
     hintSpend?: number;
     hintBudget?: number;
   }) => void;
-  setMyWord: (word: string | null) => void;
-  setGuessedWord: (word: string | null, breakdown?: GuessBreakdown | null) => void;
-  setMaskedWord: (word: string) => void;
+  setMyPrompt: (prompt: string | null) => void;
+  setGuessedPrompt: (prompt: string | null, breakdown?: GuessBreakdown | null) => void;
+  setMaskedPrompt: (prompt: string) => void;
   setHintRevealed: (payload: {
-    maskedWord: string;
+    maskedPrompt: string;
     hintCost?: number | null;
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
@@ -114,10 +114,10 @@ interface GameStore {
 const initialGameFields = {
   phase: "idle" as GamePhase,
   drawerId: null as string | null,
-  maskedWord: "",
-  myWord: null as string | null,
-  guessedWord: null as string | null,
-  wordChoices: [] as string[],
+  maskedPrompt: "",
+  myPrompt: null as string | null,
+  guessedPrompt: null as string | null,
+  promptChoices: [] as string[],
   roundNumber: 0,
   totalRounds: 0,
   phaseSeconds: 0,
@@ -142,14 +142,14 @@ export const useGameStore = create<GameStore>((set) => ({
   isPublic: true,
   maxPlayers: 8,
   rounds: 3,
-  customWordCount: 0,
-  customWordsOnly: false,
+  customPromptCount: 0,
+  customPromptsOnly: false,
   drawingSeconds: 90,
   hintMode: "checkpoints" as HintMode,
   scoringMode: "default" as ScoringMode,
   spectatorsSeeSolution: false,
   hideMaskedPrompt: false,
-  wordListSlugs: ["english_standard"],
+  promptListSlugs: ["english_standard"],
   roomState: "waiting",
   players: [],
   moderation: { eligibleVoterIds: [], requiredVotes: 1 },
@@ -175,14 +175,14 @@ export const useGameStore = create<GameStore>((set) => ({
       isPublic: payload.isPublic,
       maxPlayers: payload.maxPlayers,
       rounds: payload.rounds,
-      customWordCount: payload.customWordCount,
-      customWordsOnly: payload.customWordsOnly,
+      customPromptCount: payload.customPromptCount,
+      customPromptsOnly: payload.customPromptsOnly,
       drawingSeconds: payload.drawingSeconds,
       hintMode: payload.hintMode,
       scoringMode: payload.scoringMode ?? "default",
       spectatorsSeeSolution: payload.spectatorsSeeSolution ?? false,
       hideMaskedPrompt: payload.hideMaskedPrompt ?? false,
-      wordListSlugs: payload.wordListSlugs?.length ? payload.wordListSlugs : ["english_standard"],
+      promptListSlugs: payload.promptListSlugs?.length ? payload.promptListSlugs : ["english_standard"],
       roomState: payload.state,
       finalScores: payload.lastGameScores?.length
         ? payload.lastGameScores
@@ -200,30 +200,30 @@ export const useGameStore = create<GameStore>((set) => ({
     })),
   startChoosing: ({ drawerId, roundNumber, totalRounds, seconds }) =>
     set({
-      phase: "choosing_word",
+      phase: "choosing_prompt",
       drawerId,
       roundNumber,
       totalRounds,
       phaseSeconds: seconds,
       phaseStartedAt: Date.now(),
-      maskedWord: "",
-      myWord: null,
-      guessedWord: null,
-      wordChoices: [],
+      maskedPrompt: "",
+      myPrompt: null,
+      guessedPrompt: null,
+      promptChoices: [],
       lastTurnResult: null,
     }),
-  setMyWordChoices: (choices, seconds) =>
-    set({ wordChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
-  startDrawing: ({ drawerId, maskedWord, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, hintBudget }) =>
+  setMyPromptChoices: (choices, seconds) =>
+    set({ promptChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
+  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, hintBudget }) =>
     set((s) => ({
       phase: "drawing",
       drawerId,
-      maskedWord,
+      maskedPrompt,
       roundNumber,
       totalRounds,
       phaseSeconds: seconds,
       phaseStartedAt: Date.now(),
-      wordChoices: [],
+      promptChoices: [],
       nextHintCost: hintCost ?? null,
       letterPrices: letterPrices ?? null,
       // Driven by both turn_started and sync_game, so a mid-turn reconnect
@@ -232,16 +232,16 @@ export const useGameStore = create<GameStore>((set) => ({
       hintBudget: hintBudget ?? s.hintBudget,
       lastGuessBreakdown: null,
     })),
-  setMyWord: (word) => set({ myWord: word }),
-  setGuessedWord: (word, breakdown) =>
+  setMyPrompt: (prompt) => set({ myPrompt: prompt }),
+  setGuessedPrompt: (prompt, breakdown) =>
     set((s) => ({
-      guessedWord: word,
+      guessedPrompt: prompt,
       lastGuessBreakdown: breakdown !== undefined ? breakdown : s.lastGuessBreakdown,
     })),
-  setMaskedWord: (word) => set({ maskedWord: word }),
-  setHintRevealed: ({ maskedWord, hintCost, letterPrices, hintSpend }) =>
+  setMaskedPrompt: (prompt) => set({ maskedPrompt: prompt }),
+  setHintRevealed: ({ maskedPrompt, hintCost, letterPrices, hintSpend }) =>
     set((s) => ({
-      maskedWord,
+      maskedPrompt,
       nextHintCost: hintCost ?? s.nextHintCost,
       letterPrices: letterPrices !== undefined ? letterPrices : s.letterPrices,
       hintSpend: hintSpend ?? s.hintSpend,
@@ -285,7 +285,7 @@ export function selectMe(state: GameStore): PlayerInfo | undefined {
 /** Whether the local player currently holds the pen - including while choosing. */
 export function selectAmDrawer(state: GameStore): boolean {
   return (
-    (state.phase === "drawing" || state.phase === "choosing_word")
+    (state.phase === "drawing" || state.phase === "choosing_prompt")
     && state.drawerId === state.playerId
   );
 }

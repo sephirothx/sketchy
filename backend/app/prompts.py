@@ -1,16 +1,16 @@
-"""Static word list used for round word selection."""
+"""Static prompt list used for round prompt selection."""
 import random
 import re
 
-MAX_CUSTOM_WORDS = 10000
-MAX_WORD_LENGTH = 32
+MAX_CUSTOM_PROMPTS = 10000
+MAX_PROMPT_LENGTH = 32
 # python-socketio/engineio defaults to a 1,000,000 byte max message size, so we
-# cap the raw payload well below that (comfortably fits MAX_CUSTOM_WORDS entries
-# at MAX_WORD_LENGTH chars each, plus separators) while still guarding against
+# cap the raw payload well below that (comfortably fits MAX_CUSTOM_PROMPTS entries
+# at MAX_PROMPT_LENGTH chars each, plus separators) while still guarding against
 # pathological inputs (e.g. a string made of huge numbers of commas).
 MAX_RAW_INPUT_LENGTH = 400_000
 
-WORDS: list[str] = [
+PROMPTS: list[str] = [
     "apple", "banana", "airplane", "guitar", "elephant", "bicycle", "castle",
     "dragon", "umbrella", "volcano", "penguin", "rainbow", "sandwich", "robot",
     "spaceship", "octopus", "waterfall", "campfire", "skateboard", "telescope",
@@ -24,43 +24,43 @@ WORDS: list[str] = [
 ]
 
 
-def random_word_choices(
+def random_prompt_choices(
     count: int = 3,
     exclude: set[str] | None = None,
     pool: list[str] | None = None,
 ) -> list[str]:
-    """Return up to `count` unique random words from `pool` (or the default WORDS list).
+    """Return up to `count` unique random prompts from `pool` (or the default PROMPTS list).
 
-    Falls back to the full pool (ignoring `exclude`) once too few unused words
+    Falls back to the full pool (ignoring `exclude`) once too few unused prompts
     remain, and shrinks `count` itself if the pool is smaller than requested
-    (relevant for short custom word lists).
+    (relevant for short custom prompt lists).
     """
-    source = pool or WORDS
+    source = pool or PROMPTS
     available = [w for w in source if not exclude or w not in exclude]
     if len(available) < count:
         available = source
     return random.sample(available, min(count, len(available)))
 
 
-def parse_custom_word_list(raw: str) -> list[str]:
-    """Parse comma- or newline-separated custom words into a clean, deduped list.
+def parse_custom_prompt_list(raw: str) -> list[str]:
+    """Parse comma- or newline-separated custom prompts into a clean, deduped list.
 
-    Entries may be multi-word expressions (e.g. "red panda"), not just single
+    Entries may be several words long (e.g. "red panda"), not just single
     words. Blank entries and duplicates (case-insensitive) are dropped,
-    entries longer than `MAX_WORD_LENGTH` are rejected, and the overall list
+    entries longer than `MAX_PROMPT_LENGTH` are rejected, and the overall list
     is capped to avoid abuse via an excessively large payload.
     """
     seen: set[str] = set()
-    words: list[str] = []
+    prompts: list[str] = []
     for part in re.split(r"[,\r\n]+", raw[:MAX_RAW_INPUT_LENGTH]):
-        word = part.strip()
-        if not word or len(word) > MAX_WORD_LENGTH:
+        prompt = part.strip()
+        if not prompt or len(prompt) > MAX_PROMPT_LENGTH:
             continue
-        key = word.lower()
+        key = prompt.lower()
         if key in seen:
             continue
         seen.add(key)
-        words.append(word)
-        if len(words) >= MAX_CUSTOM_WORDS:
+        prompts.append(prompt)
+        if len(prompts) >= MAX_CUSTOM_PROMPTS:
             break
-    return words
+    return prompts

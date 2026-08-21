@@ -48,7 +48,7 @@ async def test_public_player_ids_are_broadcast_but_account_identity_is_private()
             drawer_id=host.id,
             drawer_nickname=host.nickname,
             drawer_name_color=host.name_color,
-            word="apple",
+            prompt="apple",
             action_count=0,
             canvas_history=encode_canvas_history([]),
         )
@@ -217,7 +217,7 @@ async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase()
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
     assert response["ok"] is True
     assert "sync_game" in emitted_events
-    assert "your_word_choices" in emitted_events
+    assert "your_prompt_choices" in emitted_events
     assert "you_are_drawing" not in emitted_events
 
 @pytest.mark.asyncio
@@ -231,7 +231,7 @@ async def test_already_joined_socket_resyncs_active_drawing_state():
     room.state = "playing"
     room.game = Game(turn_order=list(room.players))
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -270,7 +270,7 @@ async def test_sync_game_carries_the_running_hint_spend():
     room.state = "playing"
     room.game = Game(turn_order=list(room.players), hint_mode="purchase")
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
     assert room.game.current_drawer == drawer.id
     assert room.game.buy_hint_letter(guesser.id, 0) is True
@@ -301,7 +301,7 @@ async def test_already_joined_socket_resyncs_turn_results_overlay():
     room.state = "playing"
     room.game = Game(turn_order=[drawer.id, guesser.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.guess_points[guesser.id] = 200
     room.game.guess_times[guesser.id] = 12.0
     assert room.game.end_round() is not None
@@ -322,7 +322,7 @@ async def test_already_joined_socket_resyncs_turn_results_overlay():
     assert response["ok"] is True
     assert turn_ended_calls
     assert turn_ended_calls[0].kwargs.get("to") == "drawer-sid"
-    assert turn_ended_calls[0].args[1]["word"] == room.game.word
+    assert turn_ended_calls[0].args[1]["prompt"] == room.game.prompt
 
 @pytest.mark.asyncio
 async def test_session_ping_reports_phase_or_needs_rebind():
@@ -334,7 +334,7 @@ async def test_session_ping_reports_phase_or_needs_rebind():
     room.state = "playing"
     room.game = Game(turn_order=list(room.players))
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -364,7 +364,7 @@ async def test_soft_already_joined_skips_canvas_sync():
     room.state = "playing"
     room.game = Game(turn_order=list(room.players))
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")

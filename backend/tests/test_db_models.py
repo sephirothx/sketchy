@@ -15,8 +15,8 @@ from app.db.models import (
     TurnGuess,
     TurnRecord,
     User,
-    Word,
-    WordList,
+    Prompt,
+    PromptList,
     generate_uuid,
 )
 
@@ -155,7 +155,7 @@ async def test_game_record_cascade_and_relationships():
                     round_number=1,
                     turn_number=1,
                     drawer_user_id=u1_id,
-                    word="banana",
+                    prompt="banana",
                     duration_seconds=45.5,
                 )
                 session.add(r1)
@@ -184,31 +184,31 @@ async def test_word_list_and_word_uniqueness():
         wl_id = generate_uuid()
         async with factory() as session:
             async with session.begin():
-                wl = WordList(
+                wl = PromptList(
                     id=wl_id,
                     slug="animals",
                     name="Animals",
                     description="Animal words",
                     language="en",
-                    word_count=2,
+                    prompt_count=2,
                     version=1,
                 )
                 session.add(wl)
 
-                w1 = Word(id=generate_uuid(), word_list_id=wl_id, text="dog")
-                w2 = Word(id=generate_uuid(), word_list_id=wl_id, text="cat")
+                w1 = Prompt(id=generate_uuid(), prompt_list_id=wl_id, text="dog")
+                w2 = Prompt(id=generate_uuid(), prompt_list_id=wl_id, text="cat")
                 session.add_all([w1, w2])
 
         async with factory() as session:
-            stmt = select(Word).where(Word.word_list_id == wl_id)
+            stmt = select(Prompt).where(Prompt.prompt_list_id == wl_id)
             words = (await session.execute(stmt)).scalars().all()
             assert len(words) == 2
 
-        # Attempt duplicate word text in same list
+        # Attempt duplicate prompt text in same list
         with pytest.raises(IntegrityError):
             async with factory() as session:
                 async with session.begin():
-                    dup = Word(id=generate_uuid(), word_list_id=wl_id, text="dog")
+                    dup = Prompt(id=generate_uuid(), prompt_list_id=wl_id, text="dog")
                     session.add(dup)
     finally:
         await engine.dispose()

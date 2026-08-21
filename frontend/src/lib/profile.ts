@@ -8,7 +8,7 @@ export interface ProfileStats {
   totalScore: number;
   averageScore: number;
   turnsPlayed: number;
-  wordsGuessed: number;
+  promptsGuessed: number;
   drawingsMade: number;
 }
 
@@ -46,7 +46,7 @@ export interface GameTurn {
   turnNumber: number;
   drawerUserId: string;
   drawerDisplayName: string;
-  word: string;
+  prompt: string;
   durationSeconds: number;
   guesses: RoundGuess[];
 }

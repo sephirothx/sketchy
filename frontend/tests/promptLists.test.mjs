@@ -9,7 +9,7 @@ function toggleWordListSlug(currentSlugs, slugToToggle) {
   return [...currentSlugs, slugToToggle];
 }
 
-test("word list toggling adds new list and removes existing list", () => {
+test("prompt list toggling adds new list and removes existing list", () => {
   const initial = ["english_standard"];
   const added = toggleWordListSlug(initial, "english_extended");
   assert.deepEqual(added, ["english_standard", "english_extended"]);
@@ -18,7 +18,7 @@ test("word list toggling adds new list and removes existing list", () => {
   assert.deepEqual(removed, ["english_extended"]);
 });
 
-test("word list toggling does not allow deselecting the only selected list", () => {
+test("prompt list toggling does not allow deselecting the only selected list", () => {
   const single = ["english_standard"];
   const attemptedRemoval = toggleWordListSlug(single, "english_standard");
   assert.deepEqual(attemptedRemoval, ["english_standard"]);

@@ -1,12 +1,13 @@
-"""initial schema: config, users, games, turns, guesses, word lists
+"""initial schema: config, users, games, turns, guesses, prompt lists
 
-Squashes the three original migrations into one. The database held no data
-worth keeping, so no upgrade path from them exists - a database created by the
-old chain has to be rebuilt rather than migrated.
+The single migration for the whole schema. It was regenerated when the tables
+were renamed rather than given a rename migration, because the database held no
+data worth keeping - a database created by any earlier revision has to be
+rebuilt rather than migrated.
 
-Revision ID: 38280a3c0e58
+Revision ID: e7c9d4bc813e
 Revises: 
-Create Date: 2026-08-21 11:43:41.651002
+Create Date: 2026-08-21 13:18:51.141650
 
 """
 from typing import Sequence, Union
@@ -16,7 +17,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '38280a3c0e58'
+revision: str = 'e7c9d4bc813e'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -44,6 +45,20 @@ def upgrade() -> None:
     with op.batch_alter_table('game_records', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_game_records_finished_at'), ['finished_at'], unique=False)
 
+    op.create_table('prompt_lists',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('slug', sa.String(length=64), nullable=False),
+    sa.Column('name', sa.String(length=64), nullable=False),
+    sa.Column('description', sa.String(length=255), nullable=False),
+    sa.Column('language', sa.String(length=16), nullable=False),
+    sa.Column('prompt_count', sa.Integer(), nullable=False),
+    sa.Column('is_bundled', sa.Boolean(), nullable=False),
+    sa.Column('version', sa.Integer(), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
+    with op.batch_alter_table('prompt_lists', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_prompt_lists_slug'), ['slug'], unique=True)
+
     op.create_table('users',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('username', sa.String(length=32), nullable=True),
@@ -70,20 +85,6 @@ def upgrade() -> None:
             sqlite_where=sa.text('username IS NOT NULL'),
             postgresql_where=sa.text('username IS NOT NULL'),
         )
-    op.create_table('word_lists',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('slug', sa.String(length=64), nullable=False),
-    sa.Column('name', sa.String(length=64), nullable=False),
-    sa.Column('description', sa.String(length=255), nullable=False),
-    sa.Column('language', sa.String(length=16), nullable=False),
-    sa.Column('word_count', sa.Integer(), nullable=False),
-    sa.Column('is_bundled', sa.Boolean(), nullable=False),
-    sa.Column('version', sa.Integer(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    with op.batch_alter_table('word_lists', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_word_lists_slug'), ['slug'], unique=True)
-
     op.create_table('game_participants',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('game_id', sa.String(length=36), nullable=False),
@@ -99,16 +100,31 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_game_participants_game_id'), ['game_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_game_participants_user_id'), ['user_id'], unique=False)
 
+    op.create_table('prompts',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('prompt_list_id', sa.String(length=36), nullable=False),
+    sa.Column('text', sa.String(length=64), nullable=False),
+    sa.Column('offer_count', sa.Integer(), nullable=False),
+    sa.Column('pick_count', sa.Integer(), nullable=False),
+    sa.Column('correct_guess_count', sa.Integer(), nullable=False),
+    sa.Column('total_guesser_count', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['prompt_list_id'], ['prompt_lists.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('prompt_list_id', 'text', name='uq_prompt_list_text')
+    )
+    with op.batch_alter_table('prompts', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_prompts_prompt_list_id'), ['prompt_list_id'], unique=False)
+
     op.create_table('turn_records',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('game_id', sa.String(length=36), nullable=False),
     sa.Column('round_number', sa.Integer(), nullable=False),
     sa.Column('turn_number', sa.Integer(), nullable=False),
     sa.Column('drawer_user_id', sa.String(length=36), nullable=False),
-    sa.Column('word', sa.String(length=64), nullable=False),
+    sa.Column('prompt', sa.String(length=64), nullable=False),
     sa.Column('duration_seconds', sa.Float(), nullable=False),
     sa.Column('guesser_count', sa.Integer(), server_default=sa.text('0'), nullable=False),
-    sa.Column('word_auto_picked', sa.Boolean(), server_default=sa.text('0'), nullable=False),
+    sa.Column('prompt_auto_picked', sa.Boolean(), server_default=sa.text('0'), nullable=False),
     sa.Column('stroke_count', sa.Integer(), server_default=sa.text('0'), nullable=False),
     sa.Column('end_reason', sa.String(length=16), server_default='timeout', nullable=False),
     sa.Column('wrong_guess_count', sa.Integer(), server_default=sa.text('0'), nullable=False),
@@ -120,21 +136,6 @@ def upgrade() -> None:
     with op.batch_alter_table('turn_records', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_turn_records_drawer_user_id'), ['drawer_user_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_turn_records_game_id'), ['game_id'], unique=False)
-
-    op.create_table('words',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('word_list_id', sa.String(length=36), nullable=False),
-    sa.Column('text', sa.String(length=64), nullable=False),
-    sa.Column('offer_count', sa.Integer(), nullable=False),
-    sa.Column('pick_count', sa.Integer(), nullable=False),
-    sa.Column('correct_guess_count', sa.Integer(), nullable=False),
-    sa.Column('total_guesser_count', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['word_list_id'], ['word_lists.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('word_list_id', 'text', name='uq_word_list_text')
-    )
-    with op.batch_alter_table('words', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_words_word_list_id'), ['word_list_id'], unique=False)
 
     op.create_table('turn_guesses',
     sa.Column('id', sa.String(length=36), nullable=False),
@@ -162,28 +163,28 @@ def downgrade() -> None:
         batch_op.drop_index(batch_op.f('ix_turn_guesses_turn_id'))
 
     op.drop_table('turn_guesses')
-    with op.batch_alter_table('words', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_words_word_list_id'))
-
-    op.drop_table('words')
     with op.batch_alter_table('turn_records', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_turn_records_game_id'))
         batch_op.drop_index(batch_op.f('ix_turn_records_drawer_user_id'))
 
     op.drop_table('turn_records')
+    with op.batch_alter_table('prompts', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_prompts_prompt_list_id'))
+
+    op.drop_table('prompts')
     with op.batch_alter_table('game_participants', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_game_participants_user_id'))
         batch_op.drop_index(batch_op.f('ix_game_participants_game_id'))
 
     op.drop_table('game_participants')
-    with op.batch_alter_table('word_lists', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_word_lists_slug'))
-
-    op.drop_table('word_lists')
     with op.batch_alter_table('users', schema=None) as batch_op:
         batch_op.drop_index('ix_users_username_lower')
 
     op.drop_table('users')
+    with op.batch_alter_table('prompt_lists', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_prompt_lists_slug'))
+
+    op.drop_table('prompt_lists')
     with op.batch_alter_table('game_records', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_game_records_finished_at'))
 

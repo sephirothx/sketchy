@@ -1,4 +1,4 @@
-interface ChoosingWordOverlayProps {
+interface ChoosingPromptOverlayProps {
   drawerNickname: string;
   drawerNameColor?: string;
 }
@@ -6,7 +6,7 @@ interface ChoosingWordOverlayProps {
 export function ChoosingPromptOverlay({
   drawerNickname,
   drawerNameColor,
-}: ChoosingWordOverlayProps) {
+}: ChoosingPromptOverlayProps) {
   return (
     <div
       className="choosing-prompt-overlay"
@@ -28,7 +28,7 @@ export function ChoosingPromptOverlay({
           >
             {drawerNickname}
           </strong>{" "}
-          is choosing a word…
+          is choosing a prompt…
         </p>
         <p className="choosing-prompt-hint">
           Drawing will begin as soon as they choose.

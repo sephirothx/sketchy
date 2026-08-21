@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { chatAnnouncement } from "../src/lib/chatAnnouncements.ts";
 
-test("announces correct guesses without exposing the word", () => {
+test("announces correct guesses without exposing the prompt", () => {
   assert.equal(
     chatAnnouncement({
       id: "1",
@@ -11,7 +11,7 @@ test("announces correct guesses without exposing the word", () => {
       text: "banana",
       correct: true,
     }),
-    "Ada guessed the word.",
+    "Ada guessed the prompt.",
   );
 });
 

@@ -4,12 +4,12 @@ import { useToast } from "../lib/toast";
 import { splitMaskedPrompt } from "../lib/maskedPrompt";
 import type { AckResponse, HintMode } from "../types";
 
-interface WordDisplayProps {
+interface PromptDisplayProps {
   isDrawer: boolean;
-  myWord: string | null;
-  maskedWord: string;
-  wordChoices: string[];
-  revealedWord?: string | null;
+  myPrompt: string | null;
+  maskedPrompt: string;
+  promptChoices: string[];
+  revealedPrompt?: string | null;
   hintMode?: HintMode;
   canBuyHint?: boolean;
   nextHintCost?: number | null;
@@ -20,9 +20,11 @@ interface WordDisplayProps {
 }
 
 // tightly spaced blanks per word, followed by each word's letter count (in
-// order) at the very end. Digits only ever appear in that trailing count
-// list, so splitting on the first digit cleanly separates the two parts.
-function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
+// order) at the very end. A prompt can be several words long, which is why
+// there is a run of blanks and a count per word rather than one of each.
+// Digits only ever appear in that trailing count list, so splitting on the
+// first digit cleanly separates the two parts.
+function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
   const { blanks, counts } = splitMaskedPrompt(masked);
   let blanksNode: ReactNode = blanks;
 
@@ -83,17 +85,17 @@ function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; c
 
 export function PromptDisplay({
   isDrawer,
-  myWord,
-  maskedWord,
-  wordChoices,
-  revealedWord,
+  myPrompt,
+  maskedPrompt,
+  promptChoices,
+  revealedPrompt,
   hintMode = "none",
   canBuyHint = false,
   nextHintCost = null,
   letterPrices = null,
   hintSpend = 0,
   hintBudget = 300,
-}: WordDisplayProps) {
+}: PromptDisplayProps) {
   const { notify } = useToast();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
@@ -110,14 +112,14 @@ export function PromptDisplay({
     }
   }
 
-  if (isDrawer && wordChoices.length > 0 && !myWord) {
+  if (isDrawer && promptChoices.length > 0 && !myPrompt) {
     return (
       <div className="prompt-display choosing">
         <p>Choose a prompt to draw:</p>
         <div className="prompt-choices">
-          {wordChoices.map((word) => (
-            <button key={word} disabled={pendingAction !== null} onClick={() => void runAction(`word:${word}`, "select_word", { word }, "select the prompt")}>
-              {pendingAction === `word:${word}` ? "Choosing…" : word}
+          {promptChoices.map((prompt) => (
+            <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${prompt}`, "select_prompt", { prompt }, "select the prompt")}>
+              {pendingAction === `prompt:${prompt}` ? "Choosing…" : prompt}
             </button>
           ))}
         </div>
@@ -125,12 +127,12 @@ export function PromptDisplay({
     );
   }
 
-  if (maskedWord === "???" && !revealedWord && !isDrawer) {
+  if (maskedPrompt === "???" && !revealedPrompt && !isDrawer) {
     return null;
   }
 
-  const canBuy = hintMode === "purchase" && canBuyHint && !isDrawer && !revealedWord && nextHintCost != null;
-  const canBuyWheel = hintMode === "wheel" && canBuyHint && !isDrawer && !revealedWord && letterPrices != null;
+  const canBuy = hintMode === "purchase" && canBuyHint && !isDrawer && !revealedPrompt && nextHintCost != null;
+  const canBuyWheel = hintMode === "wheel" && canBuyHint && !isDrawer && !revealedPrompt && letterPrices != null;
   // Hints are bought on credit against this turn's guess, so what limits them
   // is the turn's budget, not the running score.
   const remaining = hintBudget - hintSpend;
@@ -156,14 +158,14 @@ export function PromptDisplay({
           )}
         </p>
       )}
-      {revealedWord ? (
-        <span className="prompt-reveal">{revealedWord}</span>
-      ) : isDrawer && (myWord || !maskedWord.includes("_")) ? (
-        <span className="prompt-reveal">{myWord || maskedWord}</span>
+      {revealedPrompt ? (
+        <span className="prompt-reveal">{revealedPrompt}</span>
+      ) : isDrawer && (myPrompt || !maskedPrompt.includes("_")) ? (
+        <span className="prompt-reveal">{myPrompt || maskedPrompt}</span>
       ) : (
         <span className="prompt-masked">
-          {renderMaskedWord(
-            maskedWord,
+          {renderMaskedPrompt(
+            maskedPrompt,
             canBuy ? {
               canAfford: nextHintCost <= remaining,
               cost: nextHintCost,

@@ -4,7 +4,7 @@ Nothing in either language checks that the two sides agree on a name. A rename
 on one side of the boundary type-checks, lints, and passes every unit test,
 because the payload key is a plain string here and a plain property there - the
 mismatch only shows up as a feature that silently stops working. That is exactly
-how ``maskedWord`` briefly became ``maskedPrompt`` on the client alone (#310),
+how ``maskedPrompt`` briefly became ``maskedPrompt`` on the client alone (#310),
 leaving the drawing phase reading ``undefined``.
 
 So this suite pins the four things the two sides have to agree on: the events
@@ -203,4 +203,54 @@ def test_server_events_are_listened_for_by_the_client(trees, frontend):
     unheard = sorted(emitted - listened)
     assert not unheard, (
         f"the server emits events the client never listens for: {unheard}"
+    )
+
+# Names the glossary retired. `word` is never the entity - the thing being drawn
+# is a prompt, and a third of the shipped ones are more than one word - and
+# `round` names a full rotation, so only a genuine round count may carry it.
+RETIRED = ("word",)
+ROUND_EXCEPTIONS = {"roundNumber", "totalRounds", "rounds", "round_number", "total_rounds"}
+
+
+def _uses_retired_vocabulary(name: str) -> bool:
+    lowered = re.sub(r"[^a-z]", " ", re.sub(r"(?<!^)([A-Z])", r" \1", name).lower())
+    tokens = set(lowered.split())
+    if tokens & set(RETIRED):
+        return True
+    return "round" in tokens and name not in ROUND_EXCEPTIONS
+
+
+def test_wire_names_use_the_current_vocabulary(trees, frontend):
+    """No wire name may carry a word the glossary retired.
+
+    The checks above only prove the two sides agree. They stay green when both
+    keep an old name, which is how `select_prompt` shipped carrying a `word`
+    field: consistent, and still the wrong noun. This is the check that says so.
+
+    See GLOSSARY.md. Adding a name here is a decision to make deliberately, not
+    a failure to route around.
+    """
+    names: set[str] = set()
+    for tree in trees:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                names |= {
+                    key.value
+                    for key in node.keys
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                }
+            elif isinstance(node, ast.ClassDef) and node.name.endswith("Payload"):
+                for statement in node.body:
+                    if isinstance(statement, ast.AnnAssign) and isinstance(
+                        statement.target, ast.Name
+                    ):
+                        names.add(_wire_alias(statement) or statement.target.id)
+    for call in _calls_named(trees, "emit") + _calls_named(trees, "on"):
+        if (event := _string_arg(call, 0)) is not None:
+            names.add(event)
+
+    stale = sorted(name for name in names if _uses_retired_vocabulary(name))
+    assert not stale, (
+        f"wire names still using retired vocabulary: {stale}. The thing being "
+        "drawn is a prompt; a round is a full rotation of turns. See GLOSSARY.md."
     )

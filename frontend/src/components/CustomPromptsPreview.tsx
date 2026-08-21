@@ -4,26 +4,26 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import type { AckResponse } from "../types";
 
-interface CustomWordsResponse extends AckResponse {
-  words?: string[];
+interface CustomPromptsResponse extends AckResponse {
+  prompts?: string[];
 }
 
-interface CustomWordsPreviewProps {
+interface CustomPromptsPreviewProps {
   count: number;
 }
 
 type LengthFilter = "all" | "short" | "medium" | "long";
 type LengthBucket = Exclude<LengthFilter, "all">;
 
-interface WordRecord {
-  word: string;
+interface PromptRecord {
+  prompt: string;
   normalized: string;
   lengthBucket: LengthBucket;
 }
 
-interface ActiveWord {
+interface ActivePrompt {
   anchor: HTMLSpanElement;
-  word: string;
+  prompt: string;
 }
 
 const lengthFilters: { value: LengthFilter; label: string; hint: string }[] = [
@@ -33,13 +33,13 @@ const lengthFilters: { value: LengthFilter; label: string; hint: string }[] = [
   { value: "long", label: "Long", hint: "11 characters or more" },
 ];
 
-function createWordRecord(word: string): WordRecord {
-  const lengthBucket = word.length <= 5
+function createPromptRecord(prompt: string): PromptRecord {
+  const lengthBucket = prompt.length <= 5
     ? "short"
-    : word.length <= 10
+    : prompt.length <= 10
       ? "medium"
       : "long";
-  return { word, normalized: word.toLocaleLowerCase(), lengthBucket };
+  return { prompt, normalized: prompt.toLocaleLowerCase(), lengthBucket };
 }
 
 const VIRTUALIZE_ABOVE = 250;
@@ -47,7 +47,7 @@ const VIRTUAL_ROW_HEIGHT = 36;
 const VIRTUAL_ITEM_MIN_WIDTH = 130;
 const VIRTUAL_GAP = 6;
 const VIRTUAL_OVERSCAN_ROWS = 3;
-const FULL_WORD_TOOLTIP_ID = "custom-prompt-full-text-tooltip";
+const FULL_PROMPT_TOOLTIP_ID = "custom-prompt-full-text-tooltip";
 
 function hasTruncatedText(element: HTMLSpanElement) {
   const styles = getComputedStyle(element);
@@ -73,52 +73,52 @@ function hasTruncatedText(element: HTMLSpanElement) {
   return textRange.getBoundingClientRect().width > contentWidth;
 }
 
-interface WordChipProps {
-  activeWord: ActiveWord | null;
+interface PromptChipProps {
+  activePrompt: ActivePrompt | null;
   onDismiss: (anchor?: HTMLSpanElement) => void;
-  onShow: (word: string, anchor: HTMLSpanElement) => void;
+  onShow: (prompt: string, anchor: HTMLSpanElement) => void;
   position?: number;
-  record: WordRecord;
+  record: PromptRecord;
   total?: number;
 }
 
-function WordChip({
-  activeWord,
+function PromptChip({
+  activePrompt,
   onDismiss,
   onShow,
   position,
   record,
   total,
-}: WordChipProps) {
-  const isActive = activeWord?.word === record.word;
+}: PromptChipProps) {
+  const isActive = activePrompt?.prompt === record.prompt;
   return (
     <span
       role="listitem"
       tabIndex={0}
-      aria-describedby={isActive ? FULL_WORD_TOOLTIP_ID : undefined}
+      aria-describedby={isActive ? FULL_PROMPT_TOOLTIP_ID : undefined}
       aria-posinset={position}
       aria-setsize={total}
       onBlur={(event) => onDismiss(event.currentTarget)}
-      onClick={(event) => onShow(record.word, event.currentTarget)}
-      onFocus={(event) => onShow(record.word, event.currentTarget)}
-      onMouseEnter={(event) => onShow(record.word, event.currentTarget)}
+      onClick={(event) => onShow(record.prompt, event.currentTarget)}
+      onFocus={(event) => onShow(record.prompt, event.currentTarget)}
+      onMouseEnter={(event) => onShow(record.prompt, event.currentTarget)}
       onMouseLeave={(event) => {
         if (document.activeElement !== event.currentTarget) {
           onDismiss(event.currentTarget);
         }
       }}
     >
-      {record.word}
+      {record.prompt}
     </span>
   );
 }
 
-function FullWordTooltip({ activeWord }: { activeWord: ActiveWord }) {
+function FullPromptTooltip({ activePrompt }: { activePrompt: ActivePrompt }) {
   const [position, setPosition] = useState({ left: 0, top: 0, above: false });
 
   useLayoutEffect(() => {
     const updatePosition = () => {
-      const rect = activeWord.anchor.getBoundingClientRect();
+      const rect = activePrompt.anchor.getBoundingClientRect();
       const maxWidth = Math.min(360, window.innerWidth - 16);
       const left = Math.min(
         window.innerWidth - 8 - maxWidth / 2,
@@ -138,11 +138,11 @@ function FullWordTooltip({ activeWord }: { activeWord: ActiveWord }) {
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [activeWord]);
+  }, [activePrompt]);
 
   return createPortal(
     <div
-      id={FULL_WORD_TOOLTIP_ID}
+      id={FULL_PROMPT_TOOLTIP_ID}
       className="custom-prompt-full-text-tooltip"
       role="tooltip"
       style={{
@@ -151,20 +151,20 @@ function FullWordTooltip({ activeWord }: { activeWord: ActiveWord }) {
         transform: position.above ? "translate(-50%, -100%)" : "translateX(-50%)",
       }}
     >
-      {activeWord.word}
+      {activePrompt.prompt}
     </div>,
     document.body,
   );
 }
 
-interface VirtualWordListProps {
-  activeWord: ActiveWord | null;
+interface VirtualPromptListProps {
+  activePrompt: ActivePrompt | null;
   onDismiss: (anchor?: HTMLSpanElement) => void;
-  onShow: (word: string, anchor: HTMLSpanElement) => void;
-  records: WordRecord[];
+  onShow: (prompt: string, anchor: HTMLSpanElement) => void;
+  records: PromptRecord[];
 }
 
-function VirtualWordList({ activeWord, onDismiss, onShow, records }: VirtualWordListProps) {
+function VirtualPromptList({ activePrompt, onDismiss, onShow, records }: VirtualPromptListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({
     height: 190,
@@ -243,9 +243,9 @@ function VirtualWordList({ activeWord, onDismiss, onShow, records }: VirtualWord
               }}
             >
               {rowRecords.map((record, column) => (
-                <WordChip
-                  key={record.word}
-                  activeWord={activeWord}
+                <PromptChip
+                  key={record.prompt}
+                  activePrompt={activePrompt}
                   onDismiss={onDismiss}
                   onShow={onShow}
                   position={row * columns + column + 1}
@@ -261,64 +261,64 @@ function VirtualWordList({ activeWord, onDismiss, onShow, records }: VirtualWord
   );
 }
 
-export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
-  const [words, setWords] = useState<WordRecord[]>([]);
+export function CustomPromptsPreview({ count }: CustomPromptsPreviewProps) {
+  const [prompts, setPrompts] = useState<PromptRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [lengthFilter, setLengthFilter] = useState<LengthFilter>("all");
-  const [activeWord, setActiveWord] = useState<ActiveWord | null>(null);
+  const [activePrompt, setActivePrompt] = useState<ActivePrompt | null>(null);
 
-  function showFullWord(word: string, anchor: HTMLSpanElement) {
+  function showFullPrompt(prompt: string, anchor: HTMLSpanElement) {
     if (!hasTruncatedText(anchor)) {
-      setActiveWord((current) => current?.anchor === anchor ? null : current);
+      setActivePrompt((current) => current?.anchor === anchor ? null : current);
       return;
     }
-    setActiveWord({ anchor, word });
+    setActivePrompt({ anchor, prompt });
   }
 
-  function dismissFullWord(anchor?: HTMLSpanElement) {
-    setActiveWord((current) =>
+  function dismissFullPrompt(anchor?: HTMLSpanElement) {
+    setActivePrompt((current) =>
       !anchor || current?.anchor === anchor ? null : current,
     );
   }
 
-  useEscapeLayer(activeWord !== null, () => setActiveWord(null));
+  useEscapeLayer(activePrompt !== null, () => setActivePrompt(null));
 
   useEffect(() => {
-    if (!activeWord) return;
+    if (!activePrompt) return;
     const dismissOnPointerDown = (event: PointerEvent) => {
-      if (!activeWord.anchor.contains(event.target as Node)) setActiveWord(null);
+      if (!activePrompt.anchor.contains(event.target as Node)) setActivePrompt(null);
     };
     document.addEventListener("pointerdown", dismissOnPointerDown, true);
     return () => {
       document.removeEventListener("pointerdown", dismissOnPointerDown, true);
     };
-  }, [activeWord]);
+  }, [activePrompt]);
 
-  const filteredWords = useMemo(() => {
+  const filteredPrompts = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    return words.filter(
+    return prompts.filter(
       (record) =>
         (lengthFilter === "all" || record.lengthBucket === lengthFilter) &&
         (!normalizedQuery || record.normalized.includes(normalizedQuery)),
     );
-  }, [lengthFilter, query, words]);
+  }, [lengthFilter, query, prompts]);
 
   const hasFilters = Boolean(query.trim()) || lengthFilter !== "all";
 
   const resultSummary = hasFilters
-    ? `${filteredWords.length} of ${words.length} prompts match`
-    : `${words.length} word${words.length === 1 ? "" : "s"}`;
+    ? `${filteredPrompts.length} of ${prompts.length} prompts match`
+    : `${prompts.length} prompt${prompts.length === 1 ? "" : "s"}`;
 
-  async function loadWords() {
+  async function loadPrompts() {
     if (loading) return;
     setLoading(true);
     setError(null);
     try {
-      const response = await emitWithAck<CustomWordsResponse>("get_custom_words", {});
-      if (response.ok && response.words) {
-        setWords(response.words.map(createWordRecord));
+      const response = await emitWithAck<CustomPromptsResponse>("get_custom_prompts", {});
+      if (response.ok && response.prompts) {
+        setPrompts(response.prompts.map(createPromptRecord));
       } else {
         setError(response.error || "Could not load the custom prompts");
       }
@@ -333,7 +333,7 @@ export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
     <details
       className="waiting-custom-prompts"
       onToggle={(event) => {
-        if (event.currentTarget.open) void loadWords();
+        if (event.currentTarget.open) void loadPrompts();
       }}
     >
       <summary>
@@ -351,11 +351,11 @@ export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
                 <strong>Room prompt collection</strong>
                 <p>Read-only list supplied by the room host.</p>
               </div>
-              <span>{words.length}</span>
+              <span>{prompts.length}</span>
             </div>
 
             <label className="waiting-custom-prompts-search">
-              <span>Find a word</span>
+              <span>Find a prompt</span>
               <input
                 type="search"
                 value={query}
@@ -387,26 +387,26 @@ export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
               {resultSummary}
             </p>
 
-            {filteredWords.length > VIRTUALIZE_ABOVE ? (
-              <VirtualWordList
+            {filteredPrompts.length > VIRTUALIZE_ABOVE ? (
+              <VirtualPromptList
                 key={`${query}\u0000${lengthFilter}`}
-                activeWord={activeWord}
-                onDismiss={dismissFullWord}
-                onShow={showFullWord}
-                records={filteredWords}
+                activePrompt={activePrompt}
+                onDismiss={dismissFullPrompt}
+                onShow={showFullPrompt}
+                records={filteredPrompts}
               />
-            ) : filteredWords.length ? (
+            ) : filteredPrompts.length ? (
               <div
                 className="waiting-custom-prompts-list"
                 role="list"
-                onScroll={() => dismissFullWord()}
+                onScroll={() => dismissFullPrompt()}
               >
-                {filteredWords.map((record) => (
-                  <WordChip
-                    key={record.word}
-                    activeWord={activeWord}
-                    onDismiss={dismissFullWord}
-                    onShow={showFullWord}
+                {filteredPrompts.map((record) => (
+                  <PromptChip
+                    key={record.prompt}
+                    activePrompt={activePrompt}
+                    onDismiss={dismissFullPrompt}
+                    onShow={showFullPrompt}
                     record={record}
                   />
                 ))}
@@ -416,7 +416,7 @@ export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
                 No custom prompts match these filters.
               </p>
             )}
-            {activeWord && <FullWordTooltip activeWord={activeWord} />}
+            {activePrompt && <FullPromptTooltip activePrompt={activePrompt} />}
           </>
         )}
       </div>

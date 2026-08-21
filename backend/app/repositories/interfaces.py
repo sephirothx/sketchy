@@ -61,7 +61,7 @@ class UserStats:
     total_score: int = 0
     average_score: float = 0.0
     turns_played: int = 0
-    words_guessed: int = 0
+    prompts_guessed: int = 0
     drawings_made: int = 0
 
 
@@ -97,10 +97,10 @@ class TurnRecordInput:
     round_number: int
     turn_number: int
     drawer_user_id: str
-    word: str
+    prompt: str
     duration_seconds: float
     guesser_count: int = 0
-    word_auto_picked: bool = False
+    prompt_auto_picked: bool = False
     stroke_count: int = 0
     end_reason: str = "timeout"
     wrong_guess_count: int = 0
@@ -167,7 +167,7 @@ class TurnDetail:
     turn_number: int
     drawer_user_id: str
     drawer_display_name: str
-    word: str
+    prompt: str
     duration_seconds: float
     guesses: list[TurnGuessDetail] = field(default_factory=list)
 
@@ -181,22 +181,22 @@ class GameDetail:
 
 
 @dataclass(frozen=True)
-class WordListSummary:
-    """Summary metadata for a word list."""
+class PromptListSummary:
+    """Summary metadata for a prompt list."""
 
     id: str
     slug: str
     name: str
     description: str
     language: str
-    word_count: int
+    prompt_count: int
     is_bundled: bool
     version: int
 
 
 @dataclass(frozen=True)
-class WordStatsSummary:
-    """Detailed statistics and derived difficulty metrics for a word."""
+class PromptStatsSummary:
+    """Detailed statistics and derived difficulty metrics for a prompt."""
 
     text: str
     offer_count: int
@@ -208,10 +208,10 @@ class WordStatsSummary:
 
 
 @dataclass(frozen=True, slots=True)
-class WordPickTotals:
-    """What being drawn cost one word over a whole game.
+class PromptPickTotals:
+    """What being drawn cost one prompt over a whole game.
 
-    More than one turn can land on the same word: a pool too small to keep
+    More than one turn can land on the same prompt: a pool too small to keep
     excluding what it has already used starts offering repeats.
     """
 
@@ -221,16 +221,16 @@ class WordPickTotals:
 
 
 @dataclass(frozen=True, slots=True)
-class WordUsage:
-    """One finished game's effect on a word list's counters.
+class PromptUsage:
+    """One finished game's effect on a prompt list's counters.
 
-    Keyed by the word as stored - trimmed and lower-cased - so the repository
+    Keyed by the prompt as stored - trimmed and lower-cased - so the repository
     matches rows without re-deriving it. Aggregated across the game's turns,
     which is what lets the whole game be written in a few statements.
     """
 
     offers: Mapping[str, int]
-    picks: Mapping[str, WordPickTotals]
+    picks: Mapping[str, PromptPickTotals]
 
     def __bool__(self) -> bool:
         return bool(self.offers or self.picks)
@@ -339,27 +339,27 @@ class GameHistoryRepository(ABC):
         ...
 
 
-class WordListRepository(ABC):
-    """Data access boundary for curated word lists and word usage statistics."""
+class PromptListRepository(ABC):
+    """Data access boundary for curated prompt lists and prompt usage statistics."""
 
     @abstractmethod
-    async def list_all(self) -> list[WordListSummary]:
-        """List all available word lists."""
+    async def list_all(self) -> list[PromptListSummary]:
+        """List all available prompt lists."""
         ...
 
     @abstractmethod
-    async def get_by_slug(self, slug: str) -> WordListSummary | None:
-        """Fetch a word list by its slug identifier."""
+    async def get_by_slug(self, slug: str) -> PromptListSummary | None:
+        """Fetch a prompt list by its slug identifier."""
         ...
 
     @abstractmethod
-    async def get_words(self, word_list_id: str) -> list[str]:
-        """Retrieve word strings belonging to a specific list."""
+    async def get_prompts(self, prompt_list_id: str) -> list[str]:
+        """Retrieve prompt strings belonging to a specific list."""
         ...
 
     @abstractmethod
-    async def get_words_by_slugs(self, slugs: list[str]) -> list[str]:
-        """Retrieve deduplicated word strings across multiple word list slugs."""
+    async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:
+        """Retrieve deduplicated prompt strings across multiple prompt list slugs."""
         ...
 
     @abstractmethod
@@ -369,30 +369,30 @@ class WordListRepository(ABC):
         name: str,
         description: str,
         language: str,
-        words: list[str],
+        prompts: list[str],
         version: int,
-    ) -> WordListSummary:
-        """Insert or update a bundled word list, preserving existing usage statistics on matching words."""
+    ) -> PromptListSummary:
+        """Insert or update a bundled prompt list, preserving existing usage statistics on matching prompts."""
         ...
 
     @abstractmethod
-    async def record_word_usage(
+    async def record_prompt_usage(
         self,
-        word_list_slugs: Sequence[str],
-        usage: WordUsage,
+        prompt_list_slugs: Sequence[str],
+        usage: PromptUsage,
     ) -> None:
         """Apply one finished game's offers and picks to every named list.
 
-        One call for the whole game rather than one per word per list: this
+        One call for the whole game rather than one per prompt per list: this
         runs at the moment a game ends, and a transaction per turn is the
         difference between a handful of statements and dozens of commits.
         """
         ...
 
     @abstractmethod
-    async def get_word_stats(
+    async def get_prompt_stats(
         self,
-        word_list_slug: str,
-    ) -> list[WordStatsSummary]:
-        """Retrieve usage statistics and difficulty ratios for words in a list."""
+        prompt_list_slug: str,
+    ) -> list[PromptStatsSummary]:
+        """Retrieve usage statistics and difficulty ratios for prompts in a list."""
         ...

@@ -131,12 +131,12 @@ async def test_only_host_can_update_waiting_room_settings_and_not_during_game():
     assert (await sio.handlers["/"]["send_chat"]("host-sid", {"text": "nope"}))["ok"] is False
 
 @pytest.mark.asyncio
-async def test_room_members_can_inspect_custom_words_only_while_waiting():
+async def test_room_members_can_inspect_custom_prompts_only_while_waiting():
     room_manager = RoomManager()
     room = room_manager.create_room(
         name="Room",
-        custom_words=["red panda", "apple"],
-        custom_words_only=True,
+        custom_prompts=["red panda", "apple"],
+        custom_prompts_only=True,
     )
     room_manager.add_player(room, "Host")
     guest = room_manager.add_player(room, "Guest")
@@ -146,26 +146,26 @@ async def test_room_members_can_inspect_custom_words_only_while_waiting():
     sio.get_session = AsyncMock(
         return_value={"room_id": room.id, "player_id": guest.id}
     )
-    get_custom_words = sio.handlers["/"]["get_custom_words"]
+    get_custom_prompts = sio.handlers["/"]["get_custom_prompts"]
 
-    response = await get_custom_words("guest-sid", {})
-    assert response == {"ok": True, "words": ["red panda", "apple"]}
+    response = await get_custom_prompts("guest-sid", {})
+    assert response == {"ok": True, "prompts": ["red panda", "apple"]}
 
     room.state = "playing"
-    playing_response = await get_custom_words("guest-sid", {})
+    playing_response = await get_custom_prompts("guest-sid", {})
     assert playing_response["ok"] is False
     assert "waiting room" in playing_response["error"]
 
     room.state = "waiting"
     guest.is_spectator = True
-    spectator_response = await get_custom_words("guest-sid", {})
+    spectator_response = await get_custom_prompts("guest-sid", {})
     assert spectator_response == {
         "ok": False,
         "error": "Only players can view custom prompts",
     }
 
     sio.get_session = AsyncMock(return_value=None)
-    assert (await get_custom_words("outsider-sid", {}))["ok"] is False
+    assert (await get_custom_prompts("outsider-sid", {}))["ok"] is False
 
 @pytest.mark.asyncio
 async def test_waiting_spectator_can_become_player_when_space_is_available():

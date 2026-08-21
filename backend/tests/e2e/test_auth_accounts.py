@@ -217,7 +217,7 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
             await host.wait_for_selector(".game-layout")
             await guest.wait_for_selector(".game-layout")
 
-            # Play the turns out: the drawer takes the first word, the other
+            # Play the turns out: the drawer takes the first prompt, the other
             # guesses it, until the game ends.
             for _ in range(6):
                 if await host.query_selector('[data-testid="game-end-overlay"]'):
@@ -225,13 +225,13 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
                 drawer = host if await host.query_selector(".prompt-choices button") else guest
                 other = guest if drawer is host else host
                 if await drawer.query_selector(".prompt-choices button"):
-                    word = (
+                    prompt = (
                         await drawer.inner_text(".prompt-choices button:first-child")
                     ).strip()
                     await drawer.click(".prompt-choices button:first-child")
                     await drawer.wait_for_selector("canvas.drawing-canvas")
                     guess_input = other.locator(".chat-input input")
-                    await guess_input.fill(word)
+                    await guess_input.fill(prompt)
                     await guess_input.press("Enter")
                 await host.wait_for_timeout(3000)
 

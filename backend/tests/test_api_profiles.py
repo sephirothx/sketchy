@@ -78,7 +78,7 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=winner,
-                word="jackpot",
+                prompt="jackpot",
                 duration_seconds=42.5,
             )
         ],
@@ -109,7 +109,7 @@ async def test_stats_carry_the_account_they_describe(env):
     assert body["stats"]["gamesWon"] == 1
     assert body["stats"]["winRate"] == 1.0
     assert body["stats"]["drawingsMade"] == 1
-    assert body["stats"]["wordsGuessed"] == 0
+    assert body["stats"]["promptsGuessed"] == 0
 
 
 async def test_stats_for_an_unknown_player_are_a_404_not_a_row_of_zeroes(env):
@@ -189,7 +189,7 @@ async def test_participants_see_the_turn_by_turn_detail(env):
 
     assert body["roomName"] == "Studio 0"
     assert len(body["turns"]) == 1
-    assert body["turns"][0]["word"] == "jackpot"
+    assert body["turns"][0]["prompt"] == "jackpot"
     assert body["turns"][0]["drawerDisplayName"] == "Ann"
     assert body["turns"][0]["guesses"][0]["displayName"] == "Bob"
     assert body["turns"][0]["guesses"][0]["pointsAwarded"] == 100

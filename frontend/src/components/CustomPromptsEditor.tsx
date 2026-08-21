@@ -1,13 +1,13 @@
 import { MAX_CUSTOM_PROMPTS, MAX_RAW_INPUT_LENGTH, MAX_PROMPT_LENGTH } from "../lib/customPrompts";
 import type { CustomPromptAnalysis } from "../lib/customPrompts";
 
-interface CustomWordsEditorProps {
+interface CustomPromptsEditorProps {
   value: string;
   analysis: CustomPromptAnalysis;
   onChange: (value: string) => void;
 }
 
-export function CustomPromptsEditor({ value, analysis, onChange }: CustomWordsEditorProps) {
+export function CustomPromptsEditor({ value, analysis, onChange }: CustomPromptsEditorProps) {
   return <div className="custom-prompts-editor">
     <label htmlFor="custom-prompts">Custom prompts (optional)</label>
     <textarea id="custom-prompts" value={value} onChange={(event) => onChange(event.target.value)}

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field, replace
 from typing import Literal, Optional
 
 from app.game import Game
-from app.words import WORDS
+from app.prompts import PROMPTS
 
 DEFAULT_ROOM_DRAWING_SECONDS = 90
 DEFAULT_ROOM_HINT_MODE = "checkpoints"
@@ -221,7 +221,7 @@ class DrawingRecapEntry:
     drawer_id: str
     drawer_nickname: str
     drawer_name_color: str | None
-    word: str
+    prompt: str
     action_count: int
     # None once a game's drawings outgrow the room's budget and this one no
     # longer fits. The entry itself stays: a recap that quietly listed fewer
@@ -241,7 +241,7 @@ class DrawingRecapEntry:
             "drawerId": self.drawer_id,
             "drawerNickname": self.drawer_nickname,
             "drawerNameColor": self.drawer_name_color,
-            "word": self.word,
+            "prompt": self.prompt,
             "actionCount": self.action_count,
             "available": self.is_available,
         }
@@ -258,15 +258,15 @@ class Room:
     is_public: bool
     max_players: int
     rounds: int
-    custom_words: list[str] = field(default_factory=list)
-    custom_words_only: bool = False
+    custom_prompts: list[str] = field(default_factory=list)
+    custom_prompts_only: bool = False
     drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS
     hint_mode: str = DEFAULT_ROOM_HINT_MODE
     scoring_mode: str = "default"
     spectators_see_solution: bool = False
     hide_masked_prompt: bool = False
-    word_list_slugs: list[str] = field(default_factory=list)
-    curated_words: list[str] = field(default_factory=list)
+    prompt_list_slugs: list[str] = field(default_factory=list)
+    curated_prompts: list[str] = field(default_factory=list)
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
@@ -328,7 +328,7 @@ class Room:
 
         The drawings a game keeps are the ones it showed first, so a recap
         does not rearrange itself while somebody is reading it. Only the
-        bitmap is given up - the turn stays listed with its word and its
+        bitmap is given up - the turn stays listed with its prompt and its
         drawer, because a recap quietly showing fewer turns than were played
         would be a worse answer than one admitting a drawing is gone.
 
@@ -354,22 +354,22 @@ class Room:
         self.canvas_generation += 1
         return self.canvas_generation
 
-    def effective_word_pool(self) -> list[str] | None:
-        """Return the word pool a Game should draw from, or None for the default list.
+    def effective_prompt_pool(self) -> list[str] | None:
+        """Return the prompt pool a Game should draw from, or None for the default list.
 
-        If custom_words_only is set and custom words exist, returns just the custom words.
-        Otherwise, merges custom words with curated words (or fallback WORDS if none provided),
-        with custom words first, deduplicated case-insensitively.
+        If custom_prompts_only is set and custom prompts exist, returns just those.
+        Otherwise, merges custom prompts with curated prompts (or fallback PROMPTS if none provided),
+        with custom prompts first, deduplicated case-insensitively.
         """
-        base_words = self.curated_words if self.curated_words else WORDS
-        if not self.custom_words and not self.curated_words:
+        base_prompts = self.curated_prompts if self.curated_prompts else PROMPTS
+        if not self.custom_prompts and not self.curated_prompts:
             return None
-        if not self.custom_words:
-            return self.curated_words
-        if self.custom_words_only:
-            return self.custom_words
-        seen = {w.lower() for w in self.custom_words}
-        return self.custom_words + [w for w in base_words if w.lower() not in seen]
+        if not self.custom_prompts:
+            return self.curated_prompts
+        if self.custom_prompts_only:
+            return self.custom_prompts
+        seen = {w.lower() for w in self.custom_prompts}
+        return self.custom_prompts + [w for w in base_prompts if w.lower() not in seen]
 
     def to_public_summary(self) -> dict:
         active_players = self.seated_players()
@@ -384,14 +384,14 @@ class Room:
             "maxPlayers": self.max_players,
             "isFull": len(active_players) >= self.max_players,
             "rounds": self.rounds,
-            "customWordCount": len(self.custom_words),
-            "customWordsOnly": self.custom_words_only,
+            "customPromptCount": len(self.custom_prompts),
+            "customPromptsOnly": self.custom_prompts_only,
             "drawingSeconds": self.drawing_seconds,
             "hintMode": self.hint_mode,
             "scoringMode": self.scoring_mode,
             "spectatorsSeeSolution": self.spectators_see_solution,
             "hideMaskedPrompt": self.hide_masked_prompt,
-            "wordListSlugs": list(self.word_list_slugs),
+            "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
         }
 
@@ -403,14 +403,14 @@ class Room:
             "isPublic": self.is_public,
             "maxPlayers": self.max_players,
             "rounds": self.rounds,
-            "customWordCount": len(self.custom_words),
-            "customWordsOnly": self.custom_words_only,
+            "customPromptCount": len(self.custom_prompts),
+            "customPromptsOnly": self.custom_prompts_only,
             "drawingSeconds": self.drawing_seconds,
             "hintMode": self.hint_mode,
             "scoringMode": self.scoring_mode,
             "spectatorsSeeSolution": self.spectators_see_solution,
             "hideMaskedPrompt": self.hide_masked_prompt,
-            "wordListSlugs": list(self.word_list_slugs),
+            "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
             "lastGameScores": self.last_game_scores,
             "lastGameDrawings": (
@@ -454,15 +454,15 @@ class RoomManager:
         is_public: bool = True,
         max_players: int = 8,
         rounds: int = 3,
-        custom_words: list[str] | None = None,
-        custom_words_only: bool = False,
+        custom_prompts: list[str] | None = None,
+        custom_prompts_only: bool = False,
         drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS,
         hint_mode: str = DEFAULT_ROOM_HINT_MODE,
         scoring_mode: str = "default",
         spectators_see_solution: bool = False,
         hide_masked_prompt: bool = False,
-        word_list_slugs: list[str] | None = None,
-        curated_words: list[str] | None = None,
+        prompt_list_slugs: list[str] | None = None,
+        curated_prompts: list[str] | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
@@ -474,15 +474,15 @@ class RoomManager:
             is_public=is_public,
             max_players=max_players,
             rounds=rounds,
-            custom_words=custom_words or [],
-            custom_words_only=custom_words_only,
+            custom_prompts=custom_prompts or [],
+            custom_prompts_only=custom_prompts_only,
             drawing_seconds=drawing_seconds,
             hint_mode=hint_mode,
             scoring_mode=scoring_mode,
             spectators_see_solution=spectators_see_solution,
             hide_masked_prompt=hide_masked_prompt,
-            word_list_slugs=list(word_list_slugs or []),
-            curated_words=list(curated_words or []),
+            prompt_list_slugs=list(prompt_list_slugs or []),
+            curated_prompts=list(curated_prompts or []),
         )
         self.rooms[room_id] = room
         return room

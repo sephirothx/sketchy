@@ -68,8 +68,8 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             await player.click('button:has-text("Join by code")')
             await player.wait_for_selector('[data-testid="waiting-room"]')
             await player.click('summary:has-text("Inspect 2 custom prompts")')
-            word_list = player.locator('.waiting-custom-prompts-list')
-            await word_list.wait_for()
+            prompt_list = player.locator('.waiting-custom-prompts-list')
+            await prompt_list.wait_for()
             custom_word_search = player.locator(
                 'input[placeholder="Search custom prompts…"]'
             )
@@ -77,15 +77,14 @@ async def test_public_room_cards_explain_status_rules_and_actions(
                 "type": "search",
                 "autoComplete": "off",
             })
-            assert await word_list.get_by_text("apple", exact=True).is_visible()
-            assert await word_list.get_by_text("pear", exact=True).is_visible()
+            assert await prompt_list.get_by_text("apple", exact=True).is_visible()
+            assert await prompt_list.get_by_text("pear", exact=True).is_visible()
             await custom_word_search.fill("app")
-            assert await word_list.get_by_text("apple", exact=True).is_visible()
-            assert not await word_list.get_by_text("pear", exact=True).is_visible()
+            assert await prompt_list.get_by_text("apple", exact=True).is_visible()
+            assert not await prompt_list.get_by_text("pear", exact=True).is_visible()
             await custom_word_search.fill("")
             await player.get_by_role("button", name="Short", exact=True).click()
             assert await player.get_by_text("2 of 2 prompts match", exact=True).is_visible()
-            assert await player.get_by_label("Words to display").count() == 0
             assert not await host.is_visible(
                 'summary:has-text("Inspect 2 custom prompts")'
             )

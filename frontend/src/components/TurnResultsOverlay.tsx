@@ -3,7 +3,7 @@ import type { GuessBreakdown, TurnEndedPayload, RoundScoreEntry } from "../types
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 
 interface TurnResultsOverlayProps {
-  word: string;
+  prompt: string;
   drawerId: string;
   drawerBonus: number;
   myPlayerId: string | null;
@@ -33,7 +33,7 @@ function formatGuessTime(seconds: number) {
 }
 
 export function TurnResultsOverlay({
-  word,
+  prompt,
   drawerId,
   drawerBonus,
   myPlayerId,
@@ -68,7 +68,7 @@ export function TurnResultsOverlay({
       <div className="turn-results-panel">
         <h3 id="turn-results-title">{showScores ? "Turn results" : "Turn complete"}</h3>
         <p className="turn-results-prompt">
-          The word was <strong>{word}</strong>
+          The prompt was <strong>{prompt}</strong>
         </p>
         {showScores && mine && (
           <p className="turn-results-personal">

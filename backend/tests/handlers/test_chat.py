@@ -9,7 +9,7 @@ from app.handlers import register_all_handlers as register_handlers
 from app.game import DRAWING_SECONDS, MAX_GUESS_POINTS, MAX_HINT_SPEND, Game
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import RoomManager
-from app.words import MAX_WORD_LENGTH
+from app.prompts import MAX_PROMPT_LENGTH
 
 
 @pytest.mark.asyncio
@@ -29,13 +29,13 @@ async def test_host_can_update_waiting_room_settings_and_chat():
 
     response = await sio.handlers["/"]["update_room_settings"](
         "host-sid",
-        {"name": "After", "rounds": 5, "customWords": "apple\npear", "customWordsOnly": True},
+        {"name": "After", "rounds": 5, "customPrompts": "apple\npear", "customPromptsOnly": True},
     )
     assert response["ok"] is True
     assert room.name == "After"
     assert room.rounds == 5
-    assert room.custom_words == ["apple", "pear"]
-    assert room.custom_words_only is True
+    assert room.custom_prompts == ["apple", "pear"]
+    assert room.custom_prompts_only is True
 
     response = await sio.handlers["/"]["update_room_settings"](
         "host-sid", {"drawingSeconds": 300, "maxPlayers": 16},
@@ -86,9 +86,9 @@ async def test_active_message_limit_rejects_before_processing_or_broadcast():
     guesser.sid = "guesser-sid"
     guesser.is_afk = True
     room.state = "playing"
-    room.game = Game(turn_order=[drawer.id, guesser.id], word_pool=["panda"])
+    room.game = Game(turn_order=[drawer.id, guesser.id], prompt_pool=["panda"])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.choose_word(drawer.id, "panda")
+    room.game.choose_prompt(drawer.id, "panda")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -142,9 +142,9 @@ async def test_only_messages_within_word_limit_are_processed_as_guesses():
     drawer.sid = "drawer-sid"
     guesser.sid = "guesser-sid"
     room.state = "playing"
-    room.game = Game(turn_order=[drawer.id, guesser.id], word_pool=["panda"])
+    room.game = Game(turn_order=[drawer.id, guesser.id], prompt_pool=["panda"])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.choose_word(drawer.id, "panda")
+    room.game.choose_prompt(drawer.id, "panda")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -158,14 +158,14 @@ async def test_only_messages_within_word_limit_are_processed_as_guesses():
         patch.object(Game, "submit_guess", return_value=(False, 0)) as submit_guess,
         patch.object(Game, "guess_hint", return_value=None) as guess_hint,
     ):
-        await guess("guesser-sid", {"text": "x" * MAX_WORD_LENGTH})
-        await guess("guesser-sid", {"text": "x" * (MAX_WORD_LENGTH + 1)})
+        await guess("guesser-sid", {"text": "x" * MAX_PROMPT_LENGTH})
+        await guess("guesser-sid", {"text": "x" * (MAX_PROMPT_LENGTH + 1)})
 
-    submit_guess.assert_called_once_with(guesser.id, "x" * MAX_WORD_LENGTH)
-    guess_hint.assert_called_once_with(guesser.id, "x" * MAX_WORD_LENGTH)
+    submit_guess.assert_called_once_with(guesser.id, "x" * MAX_PROMPT_LENGTH)
+    guess_hint.assert_called_once_with(guesser.id, "x" * MAX_PROMPT_LENGTH)
     assert any(
         call.args[0] == "chat_message"
-        and call.args[1]["text"] == "x" * (MAX_WORD_LENGTH + 1)
+        and call.args[1]["text"] == "x" * (MAX_PROMPT_LENGTH + 1)
         and call.kwargs.get("room") == room.id
         for call in sio.emit.await_args_list
     )
@@ -179,9 +179,9 @@ async def test_simultaneous_final_guesses_end_round_once():
         player.sid = f"sid-{index}"
     room.game = Game(turn_order=[player.id for player in players], rounds_total=2)
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
-    answer = room.game.word
+    answer = room.game.prompt
 
     sio = socketio.AsyncServer(async_mode="asgi")
     timers = register_handlers(sio, room_manager).timers
@@ -231,10 +231,10 @@ async def test_buy_hint_purchase_mode():
     room.game = Game(
         turn_order=[drawer.id, guesser.id],
         hint_mode="purchase",
-        word_pool=["apple"],
+        prompt_pool=["apple"],
     )
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.choose_word(drawer.id, "apple")
+    room.game.choose_prompt(drawer.id, "apple")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     timers = register_handlers(sio, room_manager).timers
@@ -290,10 +290,10 @@ async def test_a_correct_guess_is_credited_net_of_hints():
     room.game = Game(
         turn_order=[drawer.id, guesser.id],
         hint_mode="purchase",
-        word_pool=["apple"],
+        prompt_pool=["apple"],
     )
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.choose_word(drawer.id, "apple")
+    room.game.choose_prompt(drawer.id, "apple")
     room.game.set_phase_deadline(room.game.drawing_seconds)
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -334,7 +334,7 @@ async def test_a_correct_guess_is_credited_net_of_hints():
         if call.args[0] == "you_guessed_correctly"
     )
     assert private == {
-        "word": "apple",
+        "prompt": "apple",
         "points": net,
         "basePoints": MAX_GUESS_POINTS,
         "hintSpend": spend,
@@ -358,10 +358,10 @@ async def test_buy_wheel_letter():
     room.game = Game(
         turn_order=[drawer.id, guesser.id],
         hint_mode="wheel",
-        word_pool=["banana"],
+        prompt_pool=["banana"],
     )
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.choose_word(drawer.id, "banana")
+    room.game.choose_prompt(drawer.id, "banana")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     timers = register_handlers(sio, room_manager).timers
@@ -411,10 +411,10 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
 
     room.game = Game(
         turn_order=[drawer.id, guesser1.id, guesser2.id],
-        word_pool=["panda"],
+        prompt_pool=["panda"],
     )
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.choose_word(drawer.id, "panda")
+    room.game.choose_prompt(drawer.id, "panda")
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -501,7 +501,7 @@ async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
 
     room.game = Game(turn_order=[drawer.id, guesser.id], rounds_total=1)
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game._set_word("apple")
+    room.game._set_prompt("apple")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     timers = register_handlers(sio, room_manager).timers
@@ -513,12 +513,12 @@ async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
 
-    # Spectator masked word is unmasked because spectators_see_solution=True
-    spec_masked = room.game.masked_word(spectator.id, is_spectator=spectator.is_spectator, spectators_see_solution=room.spectators_see_solution)
+    # Spectator masked prompt is unmasked because spectators_see_solution=True
+    spec_masked = room.game.masked_prompt(spectator.id, is_spectator=spectator.is_spectator, spectators_see_solution=room.spectators_see_solution)
     assert spec_masked == "apple"
 
-    # Active guesser masked word is masked
-    guesser_masked = room.game.masked_word(guesser.id, is_spectator=guesser.is_spectator, spectators_see_solution=room.spectators_see_solution)
+    # Active guesser masked prompt is masked
+    guesser_masked = room.game.masked_prompt(guesser.id, is_spectator=guesser.is_spectator, spectators_see_solution=room.spectators_see_solution)
     assert guesser_masked != "apple"
 
     # Spectator sends chat message
@@ -546,9 +546,9 @@ async def test_empty_privileged_recipient_list_does_not_broadcast_close_guess():
     guesser = room_manager.add_player(room, "Guesser")
     guesser.sid = "guesser-sid"
 
-    room.game = Game(turn_order=[drawer.id, guesser.id], word_pool=["panda"])
+    room.game = Game(turn_order=[drawer.id, guesser.id], prompt_pool=["panda"])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.choose_word(drawer.id, "panda")
+    room.game.choose_prompt(drawer.id, "panda")
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -614,10 +614,10 @@ async def test_pressure_room_credits_the_decayed_points():
         turn_order=[drawer.id, guesser.id],
         scoring_mode="pressure",
         drawing_seconds=90.0,
-        word_pool=["panda"],
+        prompt_pool=["panda"],
     )
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.choose_word(drawer.id, "panda")
+    room.game.choose_prompt(drawer.id, "panda")
     room.game.remaining_seconds = lambda: 90.0 - 12.0
 
     opening_balance = guesser.score

@@ -97,7 +97,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
         <header className="drawing-recap-header">
           <div>
             <p className="drawing-recap-kicker">Drawing recap</p>
-            <h1 id="drawing-recap-title">{entry.word}</h1>
+            <h1 id="drawing-recap-title">{entry.prompt}</h1>
             <p className="drawing-recap-meta">
               Drawn by{" "}
               <strong
@@ -146,8 +146,8 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
             <CanvasSnapshot
               ref={canvasRef}
               actions={actions}
-              solutionWord={entry.word}
-              label={`Drawing of ${entry.word} by ${entry.drawerNickname}`}
+              solutionPrompt={entry.prompt}
+              label={`Drawing of ${entry.prompt} by ${entry.drawerNickname}`}
             />
           )}
         </div>

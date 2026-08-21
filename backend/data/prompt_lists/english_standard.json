@@ -1,10 +1,10 @@
 {
   "slug": "english_standard",
   "name": "English — Standard",
-  "description": "The default word list with common, recognizable, and easy-to-draw words.",
+  "description": "The default list, with common, recognizable, easy-to-draw prompts.",
   "language": "en",
   "version": 1,
-  "words": [
+  "prompts": [
     "airplane", "alarm clock", "alligator", "ambulance", "anchor", "angel", "ant", "apple", "aquarium", "astronaut",
     "avocado", "backpack", "balloon", "banana", "baseball", "basketball", "bat", "battery", "beach", "bear",
     "bed", "bee", "beehive", "bell", "bicycle", "binoculars", "bird", "birthday cake", "boat", "bomb",

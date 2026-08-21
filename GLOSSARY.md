@@ -152,21 +152,19 @@ Three different things, never used for one another:
 
 ## Known drift
 
-Nothing in the UI contradicts this glossary. The copy, component names, CSS classes,
-and test IDs were brought in line in the change that emptied this section.
+Nothing contradicts this glossary — not the copy, and no longer the names underneath
+it either. The vocabulary runs from the player's screen down to the table names: the
+phases are `choosing_prompt` and `turn_results`, the commands are `select_prompt` and
+`get_custom_prompts`, and the schema holds `turn_records`, `turn_guesses`,
+`prompt_lists`, and `prompts`. `backend/tests/test_wire_contract.py` holds the client
+and server to the same names, so renaming one of them is allowed but half-renaming it
+is not.
 
-Two categories deliberately still use the old words, and neither is a player-facing
-name:
+One exception remains, and it is not a name anyone reads:
 
-- **Wire and REST names** — the `word`, `wordChoices`, `customWords`, and
-  `wordListSlugs` payload keys, plus `/api/word-lists`. Renaming these is a
-  protocol change on both sides; the store fields that mirror a payload key keep
-  the key's name so the mapping stays obvious.
-  `backend/tests/test_wire_contract.py` holds the two sides to the same names, so
-  renaming one of these is allowed but half-renaming it is not. The round/turn
-  names have already been carried through — the phase is `turn_results` and the
-  event is `turn_ended`, all the way into the `turn_records` table.
-- **Stored keys** — the `sketchy_pencursor` preference and the `pen` key binding.
-  Renaming either would silently discard a setting a player had already chosen.
+- **Stored keys** — the `sketchy_pencursor` preference and the `pen` key binding,
+  both commented where they are read. These live in players' browsers, so renaming
+  either would silently discard a setting someone had already chosen. Changing them
+  needs a migration on load, not a rename.
 
 Add a bullet here when new copy drifts, and delete it when the copy is fixed.

@@ -169,19 +169,19 @@ class TurnRecord(Base):
         nullable=False,
         index=True,
     )
-    word: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt: Mapped[str] = mapped_column(String(64), nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     # How many players could still have guessed. Correct-guess counts are
     # uninterpretable without it: two of two is not two of eight.
     guesser_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
-    # The drawer let the clock run out and took the first offered word. Not a
+    # The drawer let the clock run out and took the first offered prompt. Not a
     # preference, and it should not be counted as one.
-    word_auto_picked: Mapped[bool] = mapped_column(
+    prompt_auto_picked: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("0"), nullable=False
     )
-    # Canvas actions committed during the turn: separates an impossible word
+    # Canvas actions committed during the turn: separates an impossible prompt
     # from a drawer who drew nothing.
     stroke_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
@@ -244,39 +244,39 @@ class TurnGuess(Base):
     user: Mapped[User] = relationship()
 
 
-class WordList(Base):
-    """Curated or custom word collection."""
+class PromptList(Base):
+    """Curated or custom prompt collection."""
 
-    __tablename__ = "word_lists"
+    __tablename__ = "prompt_lists"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str] = mapped_column(String(255), default="", nullable=False)
     language: Mapped[str] = mapped_column(String(16), default="en", nullable=False)
-    word_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    prompt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_bundled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
-    words: Mapped[list[Word]] = relationship(
-        back_populates="word_list",
+    prompts: Mapped[list[Prompt]] = relationship(
+        back_populates="prompt_list",
         cascade="all, delete-orphan",
     )
 
 
-class Word(Base):
-    """Individual word belonging to a word list with usage statistics."""
+class Prompt(Base):
+    """Individual prompt belonging to a prompt list with usage statistics."""
 
-    __tablename__ = "words"
+    __tablename__ = "prompts"
 
     __table_args__ = (
-        UniqueConstraint("word_list_id", "text", name="uq_word_list_text"),
+        UniqueConstraint("prompt_list_id", "text", name="uq_prompt_list_text"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    word_list_id: Mapped[str] = mapped_column(
+    prompt_list_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("word_lists.id", ondelete="CASCADE"),
+        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -286,4 +286,4 @@ class Word(Base):
     correct_guess_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_guesser_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    word_list: Mapped[WordList] = relationship(back_populates="words")
+    prompt_list: Mapped[PromptList] = relationship(back_populates="prompts")

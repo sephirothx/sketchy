@@ -28,13 +28,13 @@ def editable_room_settings_payload(room: Room) -> dict:
         "maxPlayers": room.max_players,
         "rounds": room.rounds,
         "drawingSeconds": room.drawing_seconds,
-        "customWords": "\n".join(room.custom_words),
-        "customWordsOnly": room.custom_words_only,
+        "customPrompts": "\n".join(room.custom_prompts),
+        "customPromptsOnly": room.custom_prompts_only,
         "hintMode": room.hint_mode,
         "scoringMode": room.scoring_mode,
         "spectatorsSeeSolution": room.spectators_see_solution,
         "hideMaskedPrompt": room.hide_masked_prompt,
-        "wordListSlugs": list(room.word_list_slugs),
+        "promptListSlugs": list(room.prompt_list_slugs),
     }
 
 
@@ -59,7 +59,7 @@ def turn_payload(
     return {
         "phase": game.phase.value,
         "drawerId": game.current_drawer,
-        "maskedWord": game.masked_word(
+        "maskedPrompt": game.masked_prompt(
             player_id,
             is_spectator=player.is_spectator if player else False,
             spectators_see_solution=spectators_see_solution,
@@ -105,7 +105,7 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
         player.id: rank for rank, player in enumerate(ranked, start=1)
     }
     return {
-        "word": game.word,
+        "prompt": game.prompt,
         "drawerId": game.current_drawer,
         "drawerBonus": drawer_bonus,
         "seconds": (

@@ -3,24 +3,24 @@ import json
 import logging
 from pathlib import Path
 
-from app.repositories.interfaces import WordListRepository, WordListSummary
+from app.repositories.interfaces import PromptListRepository, PromptListSummary
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_WORD_LISTS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "word_lists"
+DEFAULT_PROMPT_LISTS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "prompt_lists"
 
 
-async def seed_word_lists(
-    repo: WordListRepository,
+async def seed_prompt_lists(
+    repo: PromptListRepository,
     directory: Path | None = None,
-) -> list[WordListSummary]:
-    """Scan and upsert all bundled word list JSON definitions into the database."""
-    target_dir = directory or DEFAULT_WORD_LISTS_DIR
+) -> list[PromptListSummary]:
+    """Scan and upsert all bundled prompt list JSON definitions into the database."""
+    target_dir = directory or DEFAULT_PROMPT_LISTS_DIR
     if not target_dir.is_dir():
-        logger.warning("Word lists directory not found at %s", target_dir)
+        logger.warning("Prompt lists directory not found at %s", target_dir)
         return []
 
-    seeded: list[WordListSummary] = []
+    seeded: list[PromptListSummary] = []
     for file_path in sorted(target_dir.glob("*.json")):
         try:
             content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
@@ -30,19 +30,19 @@ async def seed_word_lists(
             description = str(data.get("description", "")).strip()
             language = str(data.get("language", "en")).strip()
             version = int(data.get("version", 1))
-            words = [str(w) for w in data.get("words", []) if str(w).strip()]
+            prompts = [str(w) for w in data.get("prompts", []) if str(w).strip()]
 
             summary = await repo.upsert_bundled(
                 slug=slug,
                 name=name,
                 description=description,
                 language=language,
-                words=words,
+                prompts=prompts,
                 version=version,
             )
             seeded.append(summary)
-            logger.info("Seeded bundled word list '%s' (v%d, %d words)", slug, version, len(words))
+            logger.info("Seeded bundled prompt list '%s' (v%d, %d prompts)", slug, version, len(prompts))
         except Exception:
-            logger.exception("Failed to seed word list from %s", file_path)
+            logger.exception("Failed to seed prompt list from %s", file_path)
 
     return seeded

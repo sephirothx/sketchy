@@ -8,13 +8,13 @@ interface WaitingRoomPanelProps {
   isPublic: boolean;
   rounds: number;
   drawingSeconds: number;
-  customWordCount: number;
-  customWordsOnly: boolean;
+  customPromptCount: number;
+  customPromptsOnly: boolean;
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
-  wordListSlugs?: string[];
+  promptListSlugs?: string[];
   players: PlayerInfo[];
   myPlayerId: string | null;
   isHost: boolean;
@@ -91,12 +91,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             </li>
             <li>{hintLabel(props.hintMode, props.hideMaskedPrompt)}</li>
             <li>
-              {props.customWordsOnly
-                ? `Custom prompts only (${props.customWordCount})`
-                : props.customWordCount
-                  ? `${props.customWordCount} custom prompts + curated lists`
-                  : props.wordListSlugs && props.wordListSlugs.length > 1
-                    ? `${props.wordListSlugs.length} curated prompt lists`
+              {props.customPromptsOnly
+                ? `Custom prompts only (${props.customPromptCount})`
+                : props.customPromptCount
+                  ? `${props.customPromptCount} custom prompts + curated lists`
+                  : props.promptListSlugs && props.promptListSlugs.length > 1
+                    ? `${props.promptListSlugs.length} curated prompt lists`
                     : "Curated prompt list"}
             </li>
             <li>
@@ -105,8 +105,8 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 : "Spectators guess along"}
             </li>
           </ul>
-          {props.customWordCount > 0 && !me?.isSpectator && (
-            <CustomPromptsPreview count={props.customWordCount} />
+          {props.customPromptCount > 0 && !me?.isSpectator && (
+            <CustomPromptsPreview count={props.customPromptCount} />
           )}
         </section>
       )}

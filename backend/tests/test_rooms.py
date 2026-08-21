@@ -251,7 +251,7 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
             drawer_id=drawer.id,
             drawer_nickname=drawer.nickname,
             drawer_name_color=drawer.name_color,
-            word="apple",
+            prompt="apple",
             action_count=0,
             canvas_history=encode_canvas_history([]),
         )
@@ -265,7 +265,7 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
         "drawerId": drawer.id,
         "drawerNickname": "Drawer",
         "drawerNameColor": drawer.name_color,
-        "word": "apple",
+        "prompt": "apple",
         "actionCount": 0,
         "available": True,
     }]
@@ -282,7 +282,7 @@ def recap_entry(turn: int, canvas: bytes) -> DrawingRecapEntry:
         drawer_id=f"drawer-{turn}",
         drawer_nickname=f"Drawer {turn}",
         drawer_name_color=None,
-        word=f"word-{turn}",
+        prompt=f"prompt-{turn}",
         action_count=1,
         canvas_history=canvas,
     )
@@ -308,9 +308,9 @@ def test_a_game_that_outgrows_its_budget_keeps_what_it_showed_first():
     for turn in range(6):
         room.record_drawing_recap(recap_entry(turn, huge))
 
-    # Every turn is still listed, with its word and its drawer.
+    # Every turn is still listed, with its prompt and its drawer.
     assert len(room.last_game_drawings) == 6
-    assert [d.word for d in room.last_game_drawings] == [f"word-{t}" for t in range(6)]
+    assert [d.prompt for d in room.last_game_drawings] == [f"prompt-{t}" for t in range(6)]
     # Four of these fill the budget exactly; the turns after it are the ones
     # turned away, and nothing already kept was disturbed.
     kept = [d.turn_number for d in room.last_game_drawings if d.is_available]
