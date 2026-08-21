@@ -70,7 +70,7 @@ async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibilit
 
             await advanced_summary.click()
             final_advanced_setting = host_page.locator(
-                '.room-settings-editor label:has-text("Only use custom words")'
+                '.room-settings-editor label:has-text("Only use custom prompts")'
             )
             expanded_setting_box = await final_advanced_setting.bounding_box()
             expanded_save_box = await save_settings.bounding_box()

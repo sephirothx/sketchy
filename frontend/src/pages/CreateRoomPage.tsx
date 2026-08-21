@@ -52,7 +52,7 @@ export function CreateRoomPage() {
 
   async function handleCreate() {
     if (customWords.analysis.hasErrors) {
-      setError("Fix the custom-word entries marked above before creating the room.");
+      setError("Fix the custom-prompt entries marked above before creating the room.");
       return;
     }
     setBusy(true);
@@ -113,7 +113,7 @@ export function CreateRoomPage() {
         <InputNumber label="Drawing time (seconds)" value={drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={setDrawingSeconds} />
         <WordListPicker selectedSlugs={wordListSlugs} onChange={setWordListSlugs} />
       </div>
-      <details className="advanced-settings"><summary>Advanced settings <span>Spectators, scoring, hints, and custom words</span></summary>
+      <details className="advanced-settings"><summary>Advanced settings <span>Spectators, scoring, hints, and custom prompts</span></summary>
         <div className="advanced-settings-content">
           <Switch label="Allow spectators to see the prompt" checked={spectatorsSeeSolution} onChange={setSpectatorsSeeSolution} />
           <Switch
@@ -147,8 +147,8 @@ export function CreateRoomPage() {
           {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">Point-purchase hint modes require scoring.</p>}
           <CustomWordsEditor value={customWords.value} analysis={customWords.analysis} onChange={handleCustomWordsChange} />
           <Switch
-            label="Only use custom words"
-            hint="Add a usable custom word to enable this option."
+            label="Only use custom prompts"
+            hint="Add a usable custom prompt to enable this option."
             checked={customWords.only}
             disabled={customWords.analysis.usableCount === 0 || customWords.analysis.hasErrors}
             onChange={(only) => dispatchCustomWords({ type: "set-only", only })}

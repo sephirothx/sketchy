@@ -80,8 +80,8 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
     } catch (error) {
       setDetailError(
         error instanceof ApiError && error.status === 404
-          ? "Only the players in this game can see its rounds."
-          : "Could not load the rounds for this game.",
+          ? "Only the players in this game can see its turns."
+          : "Could not load the turns for this game.",
       );
     }
   }
@@ -138,7 +138,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
           </ol>
 
           {detailError && <p className="profile-note">{detailError}</p>}
-          {!detail && !detailError && <p className="profile-note">Loading rounds…</p>}
+          {!detail && !detailError && <p className="profile-note">Loading turns…</p>}
 
           {detail && (() => {
             // The rounds carry ids, the standings carry the colours: joining
@@ -157,11 +157,11 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
             };
             return (
             <table className="profile-rounds">
-              <caption className="visually-hidden">Round by round</caption>
+              <caption className="visually-hidden">Turn by turn</caption>
               <thead>
                 <tr>
                   <th scope="col">Round</th>
-                  <th scope="col">Word</th>
+                  <th scope="col">Prompt</th>
                   <th scope="col">Drawn by</th>
                   <th scope="col">Time</th>
                   <th scope="col">Guessed by</th>
@@ -356,8 +356,8 @@ function ProfileView({ userId }: { userId: string }) {
                 value={`${Math.round(stats.winRate * 100)}%`}
               />
               <StatTile label="Average score" value={String(Math.round(stats.averageScore))} />
-              <StatTile label="Rounds played" value={String(stats.roundsPlayed)} />
-              <StatTile label="Words guessed" value={String(stats.wordsGuessed)} />
+              <StatTile label="Turns played" value={String(stats.roundsPlayed)} />
+              <StatTile label="Prompts guessed" value={String(stats.wordsGuessed)} />
               <StatTile label="Drawings made" value={String(stats.drawingsMade)} />
               <StatTile label="Total score" value={String(stats.totalScore)} />
             </div>

@@ -113,10 +113,10 @@ export function WordDisplay({
   if (isDrawer && wordChoices.length > 0 && !myWord) {
     return (
       <div className="word-display choosing">
-        <p>Choose a word to draw:</p>
+        <p>Choose a prompt to draw:</p>
         <div className="word-choices">
           {wordChoices.map((word) => (
-            <button key={word} disabled={pendingAction !== null} onClick={() => void runAction(`word:${word}`, "select_word", { word }, "select the word")}>
+            <button key={word} disabled={pendingAction !== null} onClick={() => void runAction(`word:${word}`, "select_word", { word }, "select the prompt")}>
               {pendingAction === `word:${word}` ? "Choosing…" : word}
             </button>
           ))}
@@ -149,7 +149,7 @@ export function WordDisplay({
           {hintSpend > 0 && (
             <span
               className="hint-spend-total"
-              title="Deducted from your score if you guess the word"
+              title="Deducted from your score if you guess the prompt"
             >
               Total: {hintSpend}
             </span>

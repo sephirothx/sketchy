@@ -107,7 +107,7 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
 
     select_word = sio.handlers["/"]["select_word"]
     rejected = await select_word("drawer-sid", {"word": "not-a-choice"})
-    assert rejected == {"ok": False, "error": "That word is no longer available"}
+    assert rejected == {"ok": False, "error": "That prompt is no longer available"}
 
     accepted = await select_word("drawer-sid", {"word": "banana"})
     assert accepted == {"ok": True}

@@ -10,10 +10,10 @@ interface PublicRoomCardProps {
 function exceptionalRules(room: RoomSummary) {
   const rules: string[] = [];
   if (room.scoringMode === "none") rules.push("No scoring");
-  if (room.scoringMode === "pressure") rules.push("Pressure scoring");
+  if (room.scoringMode === "pressure") rules.push("Pressure");
   if (room.hideMaskedPrompt) rules.push("Hidden prompt");
   if (room.customWordCount > 0) {
-    rules.push(room.customWordsOnly ? "Custom words only" : `${room.customWordCount} custom words`);
+    rules.push(room.customWordsOnly ? "Custom prompts only" : `${room.customWordCount} custom prompts`);
   }
   if (room.hintMode !== "none") {
     rules.push(room.hintMode === "checkpoints" ? "Timed hints" : room.hintMode === "wheel" ? "Wheel of Fortune" : "Buy letters");
@@ -24,7 +24,7 @@ function exceptionalRules(room: RoomSummary) {
 
 function hintDescription(room: RoomSummary) {
   if (room.hideMaskedPrompt) return "Prompt details are hidden and hints are off";
-  if (room.hintMode === "checkpoints") return "Timed letter hints";
+  if (room.hintMode === "checkpoints") return "Timed hints";
   if (room.hintMode === "purchase") return "Players can buy letter positions";
   if (room.hintMode === "wheel") return "Players can buy letters (Wheel of Fortune)";
   return "No letter hints";
@@ -55,9 +55,9 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
         <details className="public-room-rules">
           <summary>View rules</summary>
           <ul>
-            <li>{room.scoringMode === "none" ? "No scorekeeping" : room.scoringMode === "pressure" ? "Pressure scoring" : "Default scoring"}</li>
+            <li>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</li>
             <li>{hintDescription(room)}</li>
-            <li>{room.customWordCount > 0 ? (room.customWordsOnly ? `${room.customWordCount} custom words only` : `${room.customWordCount} custom words plus the default list`) : "Built-in word list"}</li>
+            <li>{room.customWordCount > 0 ? (room.customWordsOnly ? `${room.customWordCount} custom prompts only` : `${room.customWordCount} custom prompts plus the default list`) : "Built-in prompt list"}</li>
             <li>{room.spectatorsSeeSolution ? "Spectators can see the prompt" : "Spectators see the masked prompt"}</li>
           </ul>
         </details>

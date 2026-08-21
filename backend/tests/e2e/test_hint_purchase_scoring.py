@@ -54,7 +54,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await host.locator(".room-settings-editor details").click()
             await host.locator('[aria-label="Hints"] button:has-text("Buy letters")').click()
             await host.locator("#custom-words").fill("elephant")
-            await host.get_by_label("Only use custom words").check()
+            await host.get_by_label("Only use custom prompts").check()
             await host.get_by_role("button", name="Save settings").click()
             await host.get_by_role("button", name="Start game").click()
 
@@ -80,7 +80,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             breakdown = (await personal.inner_text()).strip()
             assert "-12 hints" in breakdown, breakdown
 
-            # "Your round: +300 -12 hints = 288 points · now #1"
+            # "Your turn: +300 -12 hints = 288 points · now #1"
             gross = int(breakdown.split("+")[1].split()[0])
             net = int(breakdown.split("=")[1].split()[0])
             assert net == gross - 12

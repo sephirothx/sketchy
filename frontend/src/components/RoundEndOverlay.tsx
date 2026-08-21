@@ -66,13 +66,13 @@ export function RoundEndOverlay({
       data-testid="round-end-overlay"
     >
       <div className="round-end-panel">
-        <h3 id="round-end-title">{showScores ? "Round results" : "Round complete"}</h3>
+        <h3 id="round-end-title">{showScores ? "Turn results" : "Turn complete"}</h3>
         <p className="round-end-word">
           The word was <strong>{word}</strong>
         </p>
         {showScores && mine && (
           <p className="round-personal-result">
-            Your round:{" "}
+            Your turn:{" "}
             {myBreakdown && myBreakdown.hintSpend > 0 ? (
               <strong>
                 +{myBreakdown.basePoints}{" "}

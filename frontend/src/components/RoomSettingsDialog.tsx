@@ -74,7 +74,7 @@ export function RoomSettingsEditor() {
 
   function update(patch: Partial<EditableRoomSettings>) { setSettings((current) => ({ ...current, ...patch })); }
   async function save() {
-    if (customWords.analysis.hasErrors) { setError("Fix custom-word errors before saving."); return; }
+    if (customWords.analysis.hasErrors) { setError("Fix custom-prompt errors before saving."); return; }
     setBusy(true); setError(null);
     try {
       const response = await emitWithAck<AckResponse>("update_room_settings", {
@@ -145,8 +145,8 @@ export function RoomSettingsEditor() {
         {settings.hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
         <CustomWordsEditor value={customWords.value} analysis={customWords.analysis} onChange={(value) => dispatchCustomWords({ type: "change", value })} />
         <Switch
-          label="Only use custom words"
-          hint="Add a usable custom word to enable this option."
+          label="Only use custom prompts"
+          hint="Add a usable custom prompt to enable this option."
           checked={customWords.only}
           disabled={customWords.analysis.usableCount === 0 || customWords.analysis.hasErrors}
           onChange={(only) => dispatchCustomWords({ type: "set-only", only })}

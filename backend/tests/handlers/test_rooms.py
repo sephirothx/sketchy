@@ -161,7 +161,7 @@ async def test_room_members_can_inspect_custom_words_only_while_waiting():
     spectator_response = await get_custom_words("guest-sid", {})
     assert spectator_response == {
         "ok": False,
-        "error": "Only players can view custom words",
+        "error": "Only players can view custom prompts",
     }
 
     sio.get_session = AsyncMock(return_value=None)

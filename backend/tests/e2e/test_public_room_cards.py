@@ -30,8 +30,8 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             await host.fill('label:has-text("Drawing time") input', "90")
             await host.click('text=Advanced settings')
             await host.fill('#custom-words', "apple, pear")
-            await host.check('label:has-text("Only use custom words") input')
-            await host.get_by_role("button", name="Just for fun").click()
+            await host.check('label:has-text("Only use custom prompts") input')
+            await host.get_by_role("button", name="No scoring").click()
             await host.click('button:has-text("Create room")')
             await host.wait_for_selector('[data-testid="waiting-room"]')
             code = (await host.inner_text('.room-copy-button')).split("Code:")[1].strip()
@@ -57,21 +57,21 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             assert await card.get_by_text("2 rounds", exact=True).is_visible()
             assert await card.get_by_text("90s draws", exact=True).is_visible()
             assert await card.get_by_text("No scoring", exact=True).is_visible()
-            assert await card.get_by_text("Custom words only", exact=True).is_visible()
+            assert await card.get_by_text("Custom prompts only", exact=True).is_visible()
             assert await card.get_by_role("button", name="Join", exact=True).is_visible()
             await card.get_by_text("View rules", exact=True).click()
-            assert await card.get_by_text("2 custom words only", exact=True).is_visible()
+            assert await card.get_by_text("2 custom prompts only", exact=True).is_visible()
 
             await player.goto(BASE_URL)
             await use_guest_name(player, "CardPlayer")
             await player.fill('input[placeholder="ABC123"]', code)
             await player.click('button:has-text("Join by code")')
             await player.wait_for_selector('[data-testid="waiting-room"]')
-            await player.click('summary:has-text("Inspect 2 custom words")')
+            await player.click('summary:has-text("Inspect 2 custom prompts")')
             word_list = player.locator('.waiting-custom-words-list')
             await word_list.wait_for()
             custom_word_search = player.locator(
-                'input[placeholder="Search custom words…"]'
+                'input[placeholder="Search custom prompts…"]'
             )
             await assert_input_contract(custom_word_search, {
                 "type": "search",
@@ -87,7 +87,7 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             assert await player.get_by_text("2 of 2 words match", exact=True).is_visible()
             assert await player.get_by_label("Words to display").count() == 0
             assert not await host.is_visible(
-                'summary:has-text("Inspect 2 custom words")'
+                'summary:has-text("Inspect 2 custom prompts")'
             )
             await host.wait_for_selector('.waiting-start-button:not([disabled])')
             await host.click('.waiting-start-button')

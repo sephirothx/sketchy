@@ -23,7 +23,7 @@ export function WordListPicker({ selectedSlugs, onChange, disabled = false }: Wo
         }
       } catch (err) {
         if (!cancelled) {
-          setFetchError(err instanceof Error ? err.message : "Failed to load word lists");
+          setFetchError(err instanceof Error ? err.message : "Failed to load prompt lists");
         }
       } finally {
         if (!cancelled) {
@@ -51,7 +51,7 @@ export function WordListPicker({ selectedSlugs, onChange, disabled = false }: Wo
   if (loading) {
     return (
       <div className="word-list-picker-loading">
-        <p>Loading curated word lists…</p>
+        <p>Loading curated prompt lists…</p>
       </div>
     );
   }
@@ -66,8 +66,8 @@ export function WordListPicker({ selectedSlugs, onChange, disabled = false }: Wo
 
   return (
     <fieldset className="room-choice-group word-list-picker-group">
-      <legend>Word lists</legend>
-      <div className="word-list-chips" role="group" aria-label="Word lists">
+      <legend>Prompt lists</legend>
+      <div className="word-list-chips" role="group" aria-label="Prompt lists">
         {wordLists.map((wl) => {
           const isSelected = selectedSlugs.includes(wl.slug);
           const isOnlySelected = isSelected && selectedSlugs.length <= 1;

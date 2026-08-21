@@ -54,7 +54,7 @@ async def test_finished_game_shows_up_on_the_profile_page():
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await host.locator(".room-settings-editor details").click()
             await host.locator("#custom-words").fill("apple\ntree")
-            await host.get_by_label("Only use custom words").check()
+            await host.get_by_label("Only use custom prompts").check()
             await host.get_by_role("button", name="Save settings").click()
             await host.get_by_role("button", name="Start game").click()
 

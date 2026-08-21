@@ -27,7 +27,7 @@ interface ActiveWord {
 }
 
 const lengthFilters: { value: LengthFilter; label: string; hint: string }[] = [
-  { value: "all", label: "All", hint: "All word lengths" },
+  { value: "all", label: "All", hint: "All prompt lengths" },
   { value: "short", label: "Short", hint: "5 characters or fewer" },
   { value: "medium", label: "Medium", hint: "6 to 10 characters" },
   { value: "long", label: "Long", hint: "11 characters or more" },
@@ -214,7 +214,7 @@ function VirtualWordList({ activeWord, onDismiss, onShow, records }: VirtualWord
       className="waiting-custom-words-list is-virtualized"
       role="list"
       tabIndex={0}
-      aria-label={`${records.length} custom words`}
+      aria-label={`${records.length} custom prompts`}
       onScroll={(event) => {
         onDismiss();
         const element = event.currentTarget;
@@ -320,10 +320,10 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
       if (response.ok && response.words) {
         setWords(response.words.map(createWordRecord));
       } else {
-        setError(response.error || "Could not load the custom words");
+        setError(response.error || "Could not load the custom prompts");
       }
     } catch (loadError) {
-      setError(socketRequestErrorMessage(loadError, "load the custom words"));
+      setError(socketRequestErrorMessage(loadError, "load the custom prompts"));
     } finally {
       setLoading(false);
     }
@@ -337,18 +337,18 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
       }}
     >
       <summary>
-        Inspect {count} custom word{count === 1 ? "" : "s"}
+        Inspect {count} custom prompt{count === 1 ? "" : "s"}
       </summary>
       <div className="waiting-custom-words-content">
         {loading ? (
-          <p>Loading custom words…</p>
+          <p>Loading custom prompts…</p>
         ) : error ? (
           <p className="waiting-custom-words-error" role="alert">{error}</p>
         ) : (
           <>
             <div className="waiting-custom-words-heading">
               <div>
-                <strong>Room word collection</strong>
+                <strong>Room prompt collection</strong>
                 <p>Read-only list supplied by the room host.</p>
               </div>
               <span>{words.length}</span>
@@ -360,7 +360,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search custom words…"
+                placeholder="Search custom prompts…"
                 autoComplete="off"
               />
             </label>
@@ -368,7 +368,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
             <div
               className="waiting-custom-words-filters"
               role="group"
-              aria-label="Filter words by length"
+              aria-label="Filter prompts by length"
             >
               {lengthFilters.map((filter) => (
                 <button
@@ -413,7 +413,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
               </div>
             ) : (
               <p className="waiting-custom-words-empty">
-                No custom words match these filters.
+                No custom prompts match these filters.
               </p>
             )}
             {activeWord && <FullWordTooltip activeWord={activeWord} />}
