@@ -1,50 +1,50 @@
 .drawer-bonus { color: #a16207; font-size: 12px; font-weight: 700; white-space: nowrap; }
-.round-score-you { background: #dbeafe; border-radius: 999px; color: #1d4ed8; font-size: 11px; font-weight: 800; padding: 3px 6px; }
+.turn-results-score-you { background: #dbeafe; border-radius: 999px; color: #1d4ed8; font-size: 11px; font-weight: 800; padding: 3px 6px; }
 
-.round-guesses-heading {
+.turn-results-guesses-heading {
   margin: 0 0 6px;
   color: #495057;
 }
 
-.round-guesses-list {
+.turn-results-guesses-list {
   margin: 0 0 14px;
   padding-left: 24px;
 }
 
-.round-guesses-list li {
+.turn-results-guesses-list li {
   padding: 3px 0 3px 4px;
 }
 
-.round-guesses-list li::marker {
+.turn-results-guesses-list li::marker {
   color: #868e96;
   font-weight: 600;
 }
 
-.round-guesses-list span {
+.turn-results-guesses-list span {
   margin-right: 24px;
 }
 
-.round-guesses-list time {
+.turn-results-guesses-list time {
   float: right;
   color: #495057;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
-.round-no-guesses {
+.turn-results-no-guesses {
   margin: 0 0 14px;
   color: #868e96;
   font-style: italic;
 }
 
-.round-score-list {
+.turn-results-score-list {
   list-style: none;
   margin: 0;
   padding: 0;
   overflow: hidden;
 }
 
-.round-score-row {
+.turn-results-score-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -53,13 +53,13 @@
   will-change: transform;
 }
 
-.round-score-rank {
+.turn-results-score-rank {
   width: 24px;
   color: #868e96;
   font-weight: 600;
 }
 
-.round-score-name {
+.turn-results-score-name {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
@@ -67,17 +67,17 @@
   text-overflow: ellipsis;
 }
 
-.round-score-change {
+.turn-results-score-change {
   font-size: 0.85rem;
   font-weight: 600;
   animation: rank-change-pop 300ms ease 2550ms backwards;
 }
 
-.round-score-change.rank-up {
+.turn-results-score-change.rank-up {
   color: #2f9e44;
 }
 
-.round-score-change.rank-down {
+.turn-results-score-change.rank-down {
   color: #e03131;
 }
 
@@ -92,18 +92,18 @@
   }
 }
 
-.round-score-delta {
+.turn-results-score-delta {
   min-width: 36px;
   text-align: right;
   color: #868e96;
   font-weight: 600;
 }
 
-.round-score-delta.positive {
+.turn-results-score-delta.positive {
   color: #2f9e44;
 }
 
-.round-score-total {
+.turn-results-score-total {
   min-width: 40px;
   text-align: right;
   font-weight: 700;

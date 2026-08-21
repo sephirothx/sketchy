@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { GuessBreakdown, RoundEndedPayload, RoundScoreEntry } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 
-interface RoundEndOverlayProps {
+interface TurnResultsOverlayProps {
   word: string;
   drawerId: string;
   drawerBonus: number;
@@ -14,7 +14,7 @@ interface RoundEndOverlayProps {
   myBreakdown?: GuessBreakdown | null;
 }
 
-// Must match the height of .round-score-row in App.css - used to compute how
+// Must match the height of .turn-results-score-row in App.css - used to compute how
 // far (in px) a row needs to slide from its previous rank position to its
 // new one when animating overtakes.
 const ROW_HEIGHT = 44;
@@ -32,7 +32,7 @@ function formatGuessTime(seconds: number) {
   return `${minutes}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
 }
 
-export function RoundEndOverlay({
+export function TurnResultsOverlay({
   word,
   drawerId,
   drawerBonus,
@@ -41,7 +41,7 @@ export function RoundEndOverlay({
   scores,
   showScores = true,
   myBreakdown = null,
-}: RoundEndOverlayProps) {
+}: TurnResultsOverlayProps) {
   // Rows render in their final (new-rank) order the whole time, but start
   // visually offset to where they *used* to rank. After a short pause (so
   // players have a moment to read the initial standings), we flip to
@@ -59,24 +59,24 @@ export function RoundEndOverlay({
 
   return (
     <div
-      className="round-end-overlay"
+      className="turn-results-overlay"
       role="status"
       aria-live="polite"
-      aria-labelledby="round-end-title"
-      data-testid="round-end-overlay"
+      aria-labelledby="turn-results-title"
+      data-testid="turn-results-overlay"
     >
-      <div className="round-end-panel">
-        <h3 id="round-end-title">{showScores ? "Turn results" : "Turn complete"}</h3>
-        <p className="round-end-word">
+      <div className="turn-results-panel">
+        <h3 id="turn-results-title">{showScores ? "Turn results" : "Turn complete"}</h3>
+        <p className="turn-results-prompt">
           The word was <strong>{word}</strong>
         </p>
         {showScores && mine && (
-          <p className="round-personal-result">
+          <p className="turn-results-personal">
             Your turn:{" "}
             {myBreakdown && myBreakdown.hintSpend > 0 ? (
               <strong>
                 +{myBreakdown.basePoints}{" "}
-                <span className="round-hint-debt">-{myBreakdown.hintSpend} hints</span> ={" "}
+                <span className="turn-results-hint-debt">-{myBreakdown.hintSpend} hints</span> ={" "}
                 {myBreakdown.points} points
               </strong>
             ) : (
@@ -87,8 +87,8 @@ export function RoundEndOverlay({
         )}
         {guesses.length > 0 ? (
           <>
-            <h4 className="round-guesses-heading">Correct guesses</h4>
-            <ol className="round-guesses-list">
+            <h4 className="turn-results-guesses-heading">Correct guesses</h4>
+            <ol className="turn-results-guesses-list">
               {guesses.map((guess) => (
                 <li key={guess.playerId}>
                   <span
@@ -103,24 +103,24 @@ export function RoundEndOverlay({
             </ol>
           </>
         ) : (
-          <p className="round-no-guesses">No one guessed correctly.</p>
+          <p className="turn-results-no-guesses">No one guessed correctly.</p>
         )}
         {showScores && (
-          <ul className="round-score-list">
+          <ul className="turn-results-score-list">
             {sorted.map((entry) => {
               const change = rankChange(entry);
               const startOffset = (entry.previousRank - entry.newRank) * ROW_HEIGHT;
               return (
                 <li
                   key={entry.playerId}
-                  className="round-score-row"
+                  className="turn-results-score-row"
                   style={{
                     transform: `translateY(${settled ? 0 : startOffset}px)`,
                     transition: settled ? "transform 600ms ease" : "none",
                   }}
                 >
-                  <span className="round-score-rank">#{entry.newRank}</span>
-                  <span className="round-score-name">
+                  <span className="turn-results-score-rank">#{entry.newRank}</span>
+                  <span className="turn-results-score-name">
                     {entry.playerId === drawerId ? "\u270F\uFE0F " : ""}
                     <span
                       className={playerNameClass(entry.isAnonymous)}
@@ -131,16 +131,16 @@ export function RoundEndOverlay({
                   </span>
                   {entry.playerId === drawerId && drawerBonus > 0 && <span className="drawer-bonus">🎨 +{drawerBonus}</span>}
                   {change && (
-                    <span className={`round-score-change ${change.className}`}>
+                    <span className={`turn-results-score-change ${change.className}`}>
                       {change.symbol}
                       {change.places}
                     </span>
                   )}
-                  <span className={`round-score-delta${entry.delta > 0 ? " positive" : ""}`}>
+                  <span className={`turn-results-score-delta${entry.delta > 0 ? " positive" : ""}`}>
                     {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                   </span>
-                  <span className="round-score-total">{entry.score}</span>
-                  {entry.playerId === myPlayerId && <span className="round-score-you">You</span>}
+                  <span className="turn-results-score-total">{entry.score}</span>
+                  {entry.playerId === myPlayerId && <span className="turn-results-score-you">You</span>}
                 </li>
               );
             })}

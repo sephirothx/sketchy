@@ -52,10 +52,10 @@ async def _start_drawing_round(host_page: Page, guest_page: Page):
     await host_page.click('button:has-text("Start game")')
     await host_page.wait_for_selector(".game-layout")
     await guest_page.wait_for_selector(".game-layout")
-    drawer_page = host_page if await host_page.query_selector(".word-choices") else guest_page
+    drawer_page = host_page if await host_page.query_selector(".prompt-choices") else guest_page
     guesser_page = guest_page if drawer_page is host_page else host_page
-    if await drawer_page.query_selector(".word-choices button"):
-        await drawer_page.click(".word-choices button:first-child")
+    if await drawer_page.query_selector(".prompt-choices button"):
+        await drawer_page.click(".prompt-choices button:first-child")
     await drawer_page.wait_for_selector("canvas.drawing-canvas")
     await guesser_page.wait_for_selector("canvas.drawing-canvas")
     return drawer_page, guesser_page
@@ -196,19 +196,19 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         )
 
         await host_page.set_viewport_size({"width": 1280, "height": 720})
-        word = await drawer_page.locator(".word-reveal").inner_text()
+        word = await drawer_page.locator(".prompt-reveal").inner_text()
         await guesser_page.locator(".chat-input input").fill(word)
         await guesser_page.locator(".chat-input input").press("Enter")
-        await guesser_page.wait_for_selector('[data-testid="round-end-overlay"]')
+        await guesser_page.wait_for_selector('[data-testid="turn-results-overlay"]')
         await assert_no_axe_violations(guesser_page, "round end")
 
-        await guesser_page.wait_for_selector('[data-testid="round-end-overlay"]', state="detached")
-        next_drawer = host_page if await host_page.query_selector(".word-choices") else guest_page
+        await guesser_page.wait_for_selector('[data-testid="turn-results-overlay"]', state="detached")
+        next_drawer = host_page if await host_page.query_selector(".prompt-choices") else guest_page
         next_guesser = guest_page if next_drawer is host_page else host_page
-        if await next_drawer.query_selector(".word-choices button"):
-            await next_drawer.click(".word-choices button:first-child")
-        await next_drawer.wait_for_selector(".word-reveal")
-        next_word = await next_drawer.locator(".word-reveal").inner_text()
+        if await next_drawer.query_selector(".prompt-choices button"):
+            await next_drawer.click(".prompt-choices button:first-child")
+        await next_drawer.wait_for_selector(".prompt-reveal")
+        next_word = await next_drawer.locator(".prompt-reveal").inner_text()
         await next_guesser.locator(".chat-input input").fill(next_word)
         await next_guesser.locator(".chat-input input").press("Enter")
         await next_guesser.wait_for_selector('[data-testid="game-end-overlay"]')

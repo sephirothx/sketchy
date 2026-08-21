@@ -154,7 +154,7 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const previewContextRef = useRef<CanvasRenderingContext2D | null>(null);
-  const penCursor = useSettingsStore((state) => state.penCursor);
+  const brushCursor = useSettingsStore((state) => state.brushCursor);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -183,7 +183,7 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     contextRef,
     previewCanvasRef,
     previewContextRef,
-    { isDrawer, color, brushWidth, tool, penCursor },
+    { isDrawer, color, brushWidth, tool, brushCursor },
   );
 
   useImperativeHandle(ref, () => ({

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { MAX_WORD_LENGTH } from "../lib/customWords";
+import { MAX_PROMPT_LENGTH } from "../lib/customPrompts";
 import { chatAnnouncement } from "../lib/chatAnnouncements";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { recordRender } from "../lib/renderDiagnostics";
@@ -98,7 +98,7 @@ export function RoomChatPanel({
   }, [inputVisible, onFocusChange]);
 
   // Mobile only: dismiss the soft keyboard once guessing stops, so it does not
-  // cover the canvas or the round-end overlay. On desktop there is no keyboard
+  // cover the canvas or the turn-results overlay. On desktop there is no keyboard
   // and guess-focused is already mobile-gated, so blurring would only cost the
   // caret between turns.
   useEffect(() => {
@@ -268,7 +268,7 @@ export function RoomChatPanel({
   }
 
   const typedWordLengths = letterRunLengths(text);
-  const showLiveLetterCounts = text.trim().length <= MAX_WORD_LENGTH;
+  const showLiveLetterCounts = text.trim().length <= MAX_PROMPT_LENGTH;
   const activeIndex =
     text.length > 0 && /[\p{L}\p{N}]/u.test(text[text.length - 1])
       ? typedWordLengths.length - 1

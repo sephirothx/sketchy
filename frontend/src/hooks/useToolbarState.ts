@@ -7,7 +7,7 @@ export function useToolbarState(isDrawer: boolean) {
   const [color, setColor] = useState("#000000");
   const [brushWidth, setBrushWidth] = useState(6);
   const [eraserWidth, setEraserWidth] = useState(24);
-  const [tool, setTool] = useState<DrawTool>("pen");
+  const [tool, setTool] = useState<DrawTool>("brush");
   const [wasDrawer, setWasDrawer] = useState(false);
 
   // This render-time transition is intentional: the first enabled drawing
@@ -16,7 +16,7 @@ export function useToolbarState(isDrawer: boolean) {
     setWasDrawer(isDrawer);
     if (isDrawer) {
       setColor("#000000");
-      setTool("pen");
+      setTool("brush");
       setBrushWidth(6);
       setEraserWidth(24);
     }
@@ -27,7 +27,7 @@ export function useToolbarState(isDrawer: boolean) {
   // pointer doing nothing, so hand the drawer back the pen.
   const fillAvailable = useCanvasBudgetStore((state) => state.fillAvailable);
   const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
-  if (!fillAvailable && tool === "fill" && strokeAvailable) setTool("pen");
+  if (!fillAvailable && tool === "fill" && strokeAvailable) setTool("brush");
 
   // Said once, and to the drawer alone: on a phone there is no tooltip to
   // hover, so a disabled button on its own explains nothing.

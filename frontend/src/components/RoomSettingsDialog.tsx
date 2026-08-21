@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState } from "react";
-import { CustomWordsEditor } from "./CustomWordsEditor";
-import { WordListPicker } from "./WordListPicker";
+import { CustomPromptsEditor } from "./CustomPromptsEditor";
+import { PromptListPicker } from "./PromptListPicker";
 import {
   ChoiceChips,
   InputNumber,
@@ -18,7 +18,7 @@ import {
   ROUNDS_MIN,
   SCORING_OPTIONS,
 } from "../lib/roomSetup";
-import { createCustomWordsState, customWordsReducer } from "../lib/customWords";
+import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, EditableRoomSettings, HintMode, ScoringMode } from "../types";
 
@@ -39,10 +39,10 @@ const emptySettings: EditableRoomSettings = {
 
 export function RoomSettingsEditor() {
   const [settings, setSettings] = useState<EditableRoomSettings>(emptySettings);
-  const [customWords, dispatchCustomWords] = useReducer(
-    customWordsReducer,
+  const [customWords, dispatchCustomPrompts] = useReducer(
+    customPromptsReducer,
     undefined,
-    () => createCustomWordsState(),
+    () => createCustomPromptsState(),
   );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -56,7 +56,7 @@ export function RoomSettingsEditor() {
         if (cancelled) return;
         if (response.ok && response.settings) {
           setSettings(response.settings);
-          dispatchCustomWords({
+          dispatchCustomPrompts({
             type: "reset",
             value: response.settings.customWords,
             only: response.settings.customWordsOnly,
@@ -112,7 +112,7 @@ export function RoomSettingsEditor() {
       <InputNumber label="Max players" value={settings.maxPlayers} min={MAX_PLAYERS_MIN} max={MAX_PLAYERS_MAX} onChange={(maxPlayers) => update({ maxPlayers })} />
       <InputNumber label="Rounds" value={settings.rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={(rounds) => update({ rounds })} />
       <InputNumber label="Drawing time (seconds)" value={settings.drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={(drawingSeconds) => update({ drawingSeconds })} />
-      <WordListPicker
+      <PromptListPicker
         selectedSlugs={settings.wordListSlugs || ["english_standard"]}
         onChange={(wordListSlugs) => update({ wordListSlugs })}
       />
@@ -143,13 +143,13 @@ export function RoomSettingsEditor() {
           }))}
         />
         {settings.hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
-        <CustomWordsEditor value={customWords.value} analysis={customWords.analysis} onChange={(value) => dispatchCustomWords({ type: "change", value })} />
+        <CustomPromptsEditor value={customWords.value} analysis={customWords.analysis} onChange={(value) => dispatchCustomPrompts({ type: "change", value })} />
         <Switch
           label="Only use custom prompts"
           hint="Add a usable custom prompt to enable this option."
           checked={customWords.only}
           disabled={customWords.analysis.usableCount === 0 || customWords.analysis.hasErrors}
-          onChange={(only) => dispatchCustomWords({ type: "set-only", only })}
+          onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
         />
       </div></details>
     </div>}

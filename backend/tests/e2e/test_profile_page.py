@@ -12,13 +12,13 @@ async def choose_word(pages: list[Page]) -> tuple[Page, Page, str]:
     """Wait for whichever page is drawing, pick its first word, and return both."""
     for _ in range(120):
         for page in pages:
-            if await page.locator(".word-choices").count():
+            if await page.locator(".prompt-choices").count():
                 drawer = page
                 guesser = pages[1] if page is pages[0] else pages[0]
-                choice = drawer.locator(".word-choices button").first
+                choice = drawer.locator(".prompt-choices button").first
                 word = (await choice.inner_text()).strip()
                 await choice.click()
-                await drawer.locator(".word-choices").wait_for(state="detached")
+                await drawer.locator(".prompt-choices").wait_for(state="detached")
                 return drawer, guesser, word
         await asyncio.sleep(0.1)
     raise AssertionError("No drawer received word choices within 12 seconds")
@@ -53,7 +53,7 @@ async def test_finished_game_shows_up_on_the_profile_page():
             # guesses the other's word, so both sides of the stats are covered.
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await host.locator(".room-settings-editor details").click()
-            await host.locator("#custom-words").fill("apple\ntree")
+            await host.locator("#custom-prompts").fill("apple\ntree")
             await host.get_by_label("Only use custom prompts").check()
             await host.get_by_role("button", name="Save settings").click()
             await host.get_by_role("button", name="Start game").click()

@@ -63,7 +63,7 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             drawer = None
             for _ in range(50):
                 for page in pages:
-                    if await page.locator(".word-choices").count():
+                    if await page.locator(".prompt-choices").count():
                         drawer = page
                         break
                 if drawer is not None:
@@ -74,7 +74,7 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             observer = guessers[0]
 
             await observer.evaluate(RESET_COUNTS)
-            await drawer.locator(".word-choices button").first.click()
+            await drawer.locator(".prompt-choices button").first.click()
             for page in pages:
                 await page.wait_for_selector("canvas.drawing-canvas")
             phase_counts = await observer.evaluate(READ_COUNTS)
@@ -104,7 +104,7 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             drawing_counts = await assert_regions_unchanged(observer)
             assert drawing_counts.get("players", 0) == 0
 
-            word = (await drawer.locator(".word-reveal").inner_text()).strip()
+            word = (await drawer.locator(".prompt-reveal").inner_text()).strip()
             scorer = guessers[0]
             await scorer.fill(".chat-input input", word)
             await drawer.evaluate(RESET_COUNTS)

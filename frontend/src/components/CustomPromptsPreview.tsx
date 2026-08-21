@@ -47,7 +47,7 @@ const VIRTUAL_ROW_HEIGHT = 36;
 const VIRTUAL_ITEM_MIN_WIDTH = 130;
 const VIRTUAL_GAP = 6;
 const VIRTUAL_OVERSCAN_ROWS = 3;
-const FULL_WORD_TOOLTIP_ID = "custom-word-full-text-tooltip";
+const FULL_WORD_TOOLTIP_ID = "custom-prompt-full-text-tooltip";
 
 function hasTruncatedText(element: HTMLSpanElement) {
   const styles = getComputedStyle(element);
@@ -143,7 +143,7 @@ function FullWordTooltip({ activeWord }: { activeWord: ActiveWord }) {
   return createPortal(
     <div
       id={FULL_WORD_TOOLTIP_ID}
-      className="custom-word-full-text-tooltip"
+      className="custom-prompt-full-text-tooltip"
       role="tooltip"
       style={{
         left: position.left,
@@ -211,7 +211,7 @@ function VirtualWordList({ activeWord, onDismiss, onShow, records }: VirtualWord
   return (
     <div
       ref={listRef}
-      className="waiting-custom-words-list is-virtualized"
+      className="waiting-custom-prompts-list is-virtualized"
       role="list"
       tabIndex={0}
       aria-label={`${records.length} custom prompts`}
@@ -227,7 +227,7 @@ function VirtualWordList({ activeWord, onDismiss, onShow, records }: VirtualWord
       }}
     >
       <div
-        className="waiting-custom-words-virtual-space"
+        className="waiting-custom-prompts-virtual-space"
         style={{ height: rowCount * VIRTUAL_ROW_HEIGHT }}
       >
         {rows.map((row) => {
@@ -235,7 +235,7 @@ function VirtualWordList({ activeWord, onDismiss, onShow, records }: VirtualWord
           return (
             <div
               key={row}
-              className="waiting-custom-words-virtual-row"
+              className="waiting-custom-prompts-virtual-row"
               role="presentation"
               style={{
                 gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
@@ -261,7 +261,7 @@ function VirtualWordList({ activeWord, onDismiss, onShow, records }: VirtualWord
   );
 }
 
-export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
+export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
   const [words, setWords] = useState<WordRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -308,7 +308,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
   const hasFilters = Boolean(query.trim()) || lengthFilter !== "all";
 
   const resultSummary = hasFilters
-    ? `${filteredWords.length} of ${words.length} words match`
+    ? `${filteredWords.length} of ${words.length} prompts match`
     : `${words.length} word${words.length === 1 ? "" : "s"}`;
 
   async function loadWords() {
@@ -331,7 +331,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
 
   return (
     <details
-      className="waiting-custom-words"
+      className="waiting-custom-prompts"
       onToggle={(event) => {
         if (event.currentTarget.open) void loadWords();
       }}
@@ -339,14 +339,14 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
       <summary>
         Inspect {count} custom prompt{count === 1 ? "" : "s"}
       </summary>
-      <div className="waiting-custom-words-content">
+      <div className="waiting-custom-prompts-content">
         {loading ? (
           <p>Loading custom prompts…</p>
         ) : error ? (
-          <p className="waiting-custom-words-error" role="alert">{error}</p>
+          <p className="waiting-custom-prompts-error" role="alert">{error}</p>
         ) : (
           <>
-            <div className="waiting-custom-words-heading">
+            <div className="waiting-custom-prompts-heading">
               <div>
                 <strong>Room prompt collection</strong>
                 <p>Read-only list supplied by the room host.</p>
@@ -354,7 +354,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
               <span>{words.length}</span>
             </div>
 
-            <label className="waiting-custom-words-search">
+            <label className="waiting-custom-prompts-search">
               <span>Find a word</span>
               <input
                 type="search"
@@ -366,7 +366,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
             </label>
 
             <div
-              className="waiting-custom-words-filters"
+              className="waiting-custom-prompts-filters"
               role="group"
               aria-label="Filter prompts by length"
             >
@@ -383,7 +383,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
               ))}
             </div>
 
-            <p className="waiting-custom-words-result-count" aria-live="polite">
+            <p className="waiting-custom-prompts-result-count" aria-live="polite">
               {resultSummary}
             </p>
 
@@ -397,7 +397,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
               />
             ) : filteredWords.length ? (
               <div
-                className="waiting-custom-words-list"
+                className="waiting-custom-prompts-list"
                 role="list"
                 onScroll={() => dismissFullWord()}
               >
@@ -412,7 +412,7 @@ export function CustomWordsPreview({ count }: CustomWordsPreviewProps) {
                 ))}
               </div>
             ) : (
-              <p className="waiting-custom-words-empty">
+              <p className="waiting-custom-prompts-empty">
                 No custom prompts match these filters.
               </p>
             )}

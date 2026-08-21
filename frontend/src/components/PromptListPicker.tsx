@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../lib/api";
-import type { WordListSummary } from "../types";
+import type { PromptListSummary } from "../types";
 
 interface WordListPickerProps {
   selectedSlugs: string[];
@@ -8,8 +8,8 @@ interface WordListPickerProps {
   disabled?: boolean;
 }
 
-export function WordListPicker({ selectedSlugs, onChange, disabled = false }: WordListPickerProps) {
-  const [wordLists, setWordLists] = useState<WordListSummary[]>([]);
+export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: WordListPickerProps) {
+  const [wordLists, setWordLists] = useState<PromptListSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -17,7 +17,7 @@ export function WordListPicker({ selectedSlugs, onChange, disabled = false }: Wo
     let cancelled = false;
     async function loadLists() {
       try {
-        const data = await apiRequest<WordListSummary[]>("/api/word-lists");
+        const data = await apiRequest<PromptListSummary[]>("/api/word-lists");
         if (!cancelled) {
           setWordLists(data);
         }
@@ -50,7 +50,7 @@ export function WordListPicker({ selectedSlugs, onChange, disabled = false }: Wo
 
   if (loading) {
     return (
-      <div className="word-list-picker-loading">
+      <div className="prompt-list-picker-loading">
         <p>Loading curated prompt lists…</p>
       </div>
     );
@@ -58,16 +58,16 @@ export function WordListPicker({ selectedSlugs, onChange, disabled = false }: Wo
 
   if (fetchError && wordLists.length === 0) {
     return (
-      <div className="word-list-picker-fallback">
-        <p className="word-list-fallback-note">Using default word list ({fetchError})</p>
+      <div className="prompt-list-picker-fallback">
+        <p className="prompt-list-fallback-note">Using default word list ({fetchError})</p>
       </div>
     );
   }
 
   return (
-    <fieldset className="room-choice-group word-list-picker-group">
+    <fieldset className="room-choice-group prompt-list-picker-group">
       <legend>Prompt lists</legend>
-      <div className="word-list-chips" role="group" aria-label="Prompt lists">
+      <div className="prompt-list-chips" role="group" aria-label="Prompt lists">
         {wordLists.map((wl) => {
           const isSelected = selectedSlugs.includes(wl.slug);
           const isOnlySelected = isSelected && selectedSlugs.length <= 1;
@@ -76,17 +76,17 @@ export function WordListPicker({ selectedSlugs, onChange, disabled = false }: Wo
             <button
               key={wl.slug}
               type="button"
-              className={`word-list-chip ${isSelected ? "is-selected" : ""}`}
+              className={`prompt-list-chip ${isSelected ? "is-selected" : ""}`}
               aria-pressed={isSelected}
               disabled={disabled || (isSelected && isOnlySelected)}
               title={wl.description || `${wl.name} (${wl.wordCount} words)`}
               onClick={() => handleToggle(wl.slug)}
             >
-              <span className="word-list-chip-status" aria-hidden="true">
+              <span className="prompt-list-chip-status" aria-hidden="true">
                 {isSelected ? "✓" : "+"}
               </span>
-              <span className="word-list-chip-name">{wl.name}</span>
-              <span className="word-list-chip-count">{wl.wordCount}</span>
+              <span className="prompt-list-chip-name">{wl.name}</span>
+              <span className="prompt-list-chip-count">{wl.wordCount}</span>
             </button>
           );
         })}

@@ -29,7 +29,7 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             await host.fill('label:has-text("Rounds") input', "2")
             await host.fill('label:has-text("Drawing time") input', "90")
             await host.click('text=Advanced settings')
-            await host.fill('#custom-words', "apple, pear")
+            await host.fill('#custom-prompts', "apple, pear")
             await host.check('label:has-text("Only use custom prompts") input')
             await host.get_by_role("button", name="No scoring").click()
             await host.click('button:has-text("Create room")')
@@ -68,7 +68,7 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             await player.click('button:has-text("Join by code")')
             await player.wait_for_selector('[data-testid="waiting-room"]')
             await player.click('summary:has-text("Inspect 2 custom prompts")')
-            word_list = player.locator('.waiting-custom-words-list')
+            word_list = player.locator('.waiting-custom-prompts-list')
             await word_list.wait_for()
             custom_word_search = player.locator(
                 'input[placeholder="Search custom prompts…"]'
@@ -84,7 +84,7 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             assert not await word_list.get_by_text("pear", exact=True).is_visible()
             await custom_word_search.fill("")
             await player.get_by_role("button", name="Short", exact=True).click()
-            assert await player.get_by_text("2 of 2 words match", exact=True).is_visible()
+            assert await player.get_by_text("2 of 2 prompts match", exact=True).is_visible()
             assert await player.get_by_label("Words to display").count() == 0
             assert not await host.is_visible(
                 'summary:has-text("Inspect 2 custom prompts")'

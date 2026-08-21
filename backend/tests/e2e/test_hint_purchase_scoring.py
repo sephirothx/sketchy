@@ -12,13 +12,13 @@ BASE_URL = "http://localhost:8000"
 async def choose_word(pages: list[Page]) -> tuple[Page, Page, str]:
     for _ in range(120):
         for page in pages:
-            if await page.locator(".word-choices").count():
+            if await page.locator(".prompt-choices").count():
                 drawer = page
                 guesser = pages[1] if page is pages[0] else pages[0]
-                choice = drawer.locator(".word-choices button").first
+                choice = drawer.locator(".prompt-choices button").first
                 word = (await choice.inner_text()).strip()
                 await choice.click()
-                await drawer.locator(".word-choices").wait_for(state="detached")
+                await drawer.locator(".prompt-choices").wait_for(state="detached")
                 await drawer.locator("canvas.drawing-canvas").wait_for()
                 return drawer, guesser, word
         await asyncio.sleep(0.1)
@@ -53,7 +53,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await host.locator(".room-settings-editor details").click()
             await host.locator('[aria-label="Hints"] button:has-text("Buy letters")').click()
-            await host.locator("#custom-words").fill("elephant")
+            await host.locator("#custom-prompts").fill("elephant")
             await host.get_by_label("Only use custom prompts").check()
             await host.get_by_role("button", name="Save settings").click()
             await host.get_by_role("button", name="Start game").click()

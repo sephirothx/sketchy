@@ -24,10 +24,10 @@ function exceptionalRules(room: RoomSummary) {
 
 function hintDescription(room: RoomSummary) {
   if (room.hideMaskedPrompt) return "Prompt details are hidden and hints are off";
-  if (room.hintMode === "checkpoints") return "Timed hints";
+  if (room.hintMode === "checkpoints") return "Letters are revealed as the turn runs down";
   if (room.hintMode === "purchase") return "Players can buy letter positions";
   if (room.hintMode === "wheel") return "Players can buy letters (Wheel of Fortune)";
-  return "No letter hints";
+  return "No hints";
 }
 
 export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCardProps) {
@@ -55,7 +55,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
         <details className="public-room-rules">
           <summary>View rules</summary>
           <ul>
-            <li>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</li>
+            <li>{room.scoringMode === "none" ? "No points are kept" : room.scoringMode === "pressure" ? "Points drain faster once someone guesses" : "Points for fast, correct guesses"}</li>
             <li>{hintDescription(room)}</li>
             <li>{room.customWordCount > 0 ? (room.customWordsOnly ? `${room.customWordCount} custom prompts only` : `${room.customWordCount} custom prompts plus the default list`) : "Built-in prompt list"}</li>
             <li>{room.spectatorsSeeSolution ? "Spectators can see the prompt" : "Spectators see the masked prompt"}</li>

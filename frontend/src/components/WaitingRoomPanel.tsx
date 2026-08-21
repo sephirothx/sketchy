@@ -1,5 +1,5 @@
 import { RoomSettingsEditor } from "./RoomSettingsDialog";
-import { CustomWordsPreview } from "./CustomWordsPreview";
+import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { HintMode, PlayerInfo, ScoreEntry, ScoringMode } from "../types";
 
@@ -106,7 +106,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             </li>
           </ul>
           {props.customWordCount > 0 && !me?.isSpectator && (
-            <CustomWordsPreview count={props.customWordCount} />
+            <CustomPromptsPreview count={props.customWordCount} />
           )}
         </section>
       )}

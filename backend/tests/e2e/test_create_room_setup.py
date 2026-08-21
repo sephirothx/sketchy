@@ -54,7 +54,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             # create page before asserting lobby controls are gone.
             await page.wait_for_selector(".create-room-page")
             await page.locator(".lobby-page").wait_for(state="detached")
-            assert not await page.is_visible('#custom-words')
+            assert not await page.is_visible('#custom-prompts')
             assert not await page.locator('label:has-text("Nickname")').count()
 
             room_name_input = page.locator(
@@ -72,13 +72,13 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_word
             })
             await room_name_input.fill("Setup room")
             await page.click('text=Advanced settings')
-            await page.fill('#custom-words', "apple\nred panda\nAPPLE\nthis entry is deliberately longer than thirty two characters")
+            await page.fill('#custom-prompts', "apple\nred panda\nAPPLE\nthis entry is deliberately longer than thirty two characters")
             assert await page.is_visible('text=2 usable custom prompts')
             assert await page.is_visible('text=1 duplicate ignored')
             assert await page.is_visible('text=1 entry is over 32 characters')
             assert await page.is_disabled('.create-room-submit')
 
-            await page.fill('#custom-words', "apple\nred panda\nAPPLE")
+            await page.fill('#custom-prompts', "apple\nred panda\nAPPLE")
             assert await page.is_visible('text=2 usable custom prompts')
             await page.check('label:has-text("Only use custom prompts") input')
             await page.get_by_role("button", name="No scoring").click()
