@@ -20,13 +20,15 @@ async def start_game(ctx: HandlerContext, sid, data=None):
     if not current or not current[1].is_host:
         return {"ok": False, "error": "Only the host can start the game"}
     room, _ = current
-    active_players = room.active_players()
-    if len(active_players) < 2:
-        return {"ok": False, "error": "Need at least 2 active non-AFK players to start"}
-    if room.state == "playing":
-        return {"ok": False, "error": "Game already in progress"}
+    # Waits out a settings change that is still being applied - see Room.lock.
+    async with room.lock:
+        active_players = room.active_players()
+        if len(active_players) < 2:
+            return {"ok": False, "error": "Need at least 2 active non-AFK players to start"}
+        if room.state == "playing":
+            return {"ok": False, "error": "Game already in progress"}
 
-    await ctx.game_flow._start_fresh_game(room, active_players)
+        await ctx.game_flow._start_fresh_game(room, active_players)
     return {"ok": True}
 
 

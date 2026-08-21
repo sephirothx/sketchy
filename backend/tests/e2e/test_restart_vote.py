@@ -40,6 +40,19 @@ async def test_players_approve_restart_without_losing_room_context():
             await third_page.click('button:has-text("Join by code")')
             await third_page.wait_for_selector('[data-testid="waiting-room"]')
 
+            # Settings save themselves, so a value the room refuses has to snap
+            # back to what the room holds and say why - three players seated is
+            # exactly what makes a max of two impossible.
+            await host_page.fill(
+                '.room-settings-editor label:has-text("Max players") input', "2"
+            )
+            await host_page.wait_for_selector(
+                '.app-toast:has-text("Max players cannot be below the 3 players")'
+            )
+            assert await host_page.input_value(
+                '.room-settings-editor label:has-text("Max players") input'
+            ) != "2"
+
             await player_page.fill(".waiting-chat-form input", "Keep this message")
             await player_page.click(".waiting-chat-form button")
             await host_page.wait_for_selector("text=Keep this message")

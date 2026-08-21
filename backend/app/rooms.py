@@ -1,6 +1,7 @@
 """In-memory Player/Room domain model and RoomManager."""
 from __future__ import annotations
 
+import asyncio
 import random
 import re
 import string
@@ -276,6 +277,12 @@ class Room:
     departed_seats: dict[str, DepartedSeat] = field(default_factory=dict)
     restart_vote: RestartVote | None = None
     restart_vote_cooldown_until: float = 0
+    # Held by the handlers that must not interleave on this room. Socket.IO
+    # dispatches each event in its own task, so arriving first buys a handler
+    # nothing once it awaits: without this, starting a game can overtake the
+    # settings change that arrived ahead of it and the room plays the values
+    # the host just replaced. See update_room_settings and start_game.
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
 
     def player_list(self) -> list[Player]:
         return list(self.players.values())
