@@ -10,7 +10,7 @@ interface CanvasBudgetStore {
    */
   fillAvailable: boolean;
   /**
-   * Whether the pen and eraser can still be used this turn.
+   * Whether the brush and eraser can still be used this turn.
    *
    * Its own budget: points cost no replay work, so a turn can run out of
    * these while the fill budget is barely touched. Shapes and fill are

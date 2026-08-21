@@ -54,22 +54,15 @@ function ColorSwatch({ color, selected, onSelect, variant, label, title }: Color
   );
 }
 
-// Which binding each tool reads. The brush's keys are stored under `pen`, so the
-// two names have to be mapped rather than assumed equal - see KeyBindings. Typed
-// as a total Record so a new DrawTool fails to compile until it is bound here,
-// instead of silently reading undefined.
-const TOOL_BINDINGS: Record<DrawTool, keyof KeyBindings> = {
-  brush: "pen",
-  eraser: "eraser",
-  fill: "fill",
-  rectangle: "rectangle",
-  ellipse: "ellipse",
-  triangle: "triangle",
-};
-
-/** Keys bound to a tool. */
+/** Keys bound to a tool.
+ *
+ * Every DrawTool names a KeyBindings field, so this indexes directly and a new
+ * tool fails to compile until it is bound. It went through a lookup table while
+ * the brush's binding was still stored under `pen`; nothing casts here now,
+ * which is what keeps a rename from quietly yielding no shortcut.
+ */
 function toolKeys(bindings: KeyBindings, tool: DrawTool): string[] {
-  return bindings[TOOL_BINDINGS[tool]] ?? [];
+  return bindings[tool] ?? [];
 }
 
 const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
@@ -178,7 +171,7 @@ export function Toolbar({
     if (value === "fill" && !fillAvailable) {
       return "Fill is unavailable for the rest of this turn";
     }
-    // Shapes cost no points, so they outlive the pen.
+    // Shapes cost no points, so they outlive the brush.
     if ((value === "brush" || value === "eraser") && !strokeAvailable) {
       return "Drawing by hand is unavailable for the rest of this turn";
     }

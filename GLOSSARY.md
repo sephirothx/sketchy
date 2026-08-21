@@ -11,6 +11,11 @@ and conversation.
 - **A new concept gets a name here before it ships.** If a change introduces
   something players can see and there is no word for it yet, add the entry in the
   same change.
+- **Renaming a term means renaming it everywhere, in one change.** A half-finished
+  rename is worse than none: `backend/tests/test_wire_contract.py` fails one that
+  stops at the client or the server. Settings already stored in a player's browser
+  are the exception that cannot be renamed at all — migrate them on load, the way
+  `frontend/src/store/settingsMigrations.ts` does.
 - UI copy is American English (*color*, not *colour*) and sentence case
   (*Buy letters*, not *Buy Letters*).
 
@@ -147,24 +152,3 @@ Three different things, never used for one another:
 | **Grace period** | The 30 seconds a disconnected player has to return before they are removed from the game. | timeout, reconnect window |
 | **Reconnect** | Returning within the grace period and resuming with score and turn position intact. | rejoin, resume |
 | **Rejoin** | Entering a room again as a new arrival, after the grace period has passed. | reconnect |
-
----
-
-## Known drift
-
-Nothing contradicts this glossary — not the copy, and no longer the names underneath
-it either. The vocabulary runs from the player's screen down to the table names: the
-phases are `choosing_prompt` and `turn_results`, the commands are `select_prompt` and
-`get_custom_prompts`, and the schema holds `turn_records`, `turn_guesses`,
-`prompt_lists`, and `prompts`. `backend/tests/test_wire_contract.py` holds the client
-and server to the same names, so renaming one of them is allowed but half-renaming it
-is not.
-
-One exception remains, and it is not a name anyone reads:
-
-- **Stored keys** — the `sketchy_pencursor` preference and the `pen` key binding,
-  both commented where they are read. These live in players' browsers, so renaming
-  either would silently discard a setting someone had already chosen. Changing them
-  needs a migration on load, not a rename.
-
-Add a bullet here when new copy drifts, and delete it when the copy is fixed.

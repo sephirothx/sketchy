@@ -282,7 +282,7 @@ export function selectMe(state: GameStore): PlayerInfo | undefined {
   return state.players.find((player) => player.playerId === state.playerId);
 }
 
-/** Whether the local player currently holds the pen - including while choosing. */
+/** Whether the local player currently holds the brush - including while choosing. */
 export function selectAmDrawer(state: GameStore): boolean {
   return (
     (state.phase === "drawing" || state.phase === "choosing_prompt")

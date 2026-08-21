@@ -24,7 +24,7 @@ export function useToolbarState(isDrawer: boolean) {
 
   // The fill tool greys out once this turn's replay budget can no longer
   // afford one. Holding a tool that is no longer selectable would leave the
-  // pointer doing nothing, so hand the drawer back the pen.
+  // pointer doing nothing, so hand the drawer back the brush.
   const fillAvailable = useCanvasBudgetStore((state) => state.fillAvailable);
   const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
   if (!fillAvailable && tool === "fill" && strokeAvailable) setTool("brush");
