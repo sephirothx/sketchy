@@ -84,7 +84,7 @@ test("the shortest delay asked for wins, so a toggle is not held back by typing"
   assert.deepEqual(environment.armedDelays(), [0], "a switch goes out on the next tick");
 });
 
-test("a change made mid-flight is not lost and never overlaps the request", async () => {
+test("flush sends what is pending without waiting for the reply it is behind", () => {
   const environment = createEnvironment();
   const saver = createRoomSettingsSaver(environment);
 
@@ -92,12 +92,42 @@ test("a change made mid-flight is not lost and never overlaps the request", asyn
   environment.elapse();
   assert.equal(environment.sent.length, 1);
 
+  // The press that flushes is very often the press that starts the game, so
+  // this patch has to be on the socket now, not after the first reply.
+  saver.queue({ scoringMode: "none" });
+  saver.flush();
+  assert.deepEqual(environment.sent, [{ rounds: 4 }, { scoringMode: "none" }]);
+});
+
+test("a change made while a reply is outstanding still goes out", async () => {
+  const environment = createEnvironment();
+  const saver = createRoomSettingsSaver(environment);
+
+  saver.queue({ rounds: 4 });
+  environment.elapse();
   saver.queue({ rounds: 6 });
   environment.elapse();
-  assert.equal(environment.sent.length, 1, "a second request must wait for the first");
 
   await environment.ack();
+  await environment.ack();
   assert.deepEqual(environment.sent, [{ rounds: 4 }, { rounds: 6 }]);
+});
+
+test("a retry cannot put an old value back over a newer one that got through", async () => {
+  const environment = createEnvironment();
+  const saver = createRoomSettingsSaver(environment);
+
+  saver.queue({ name: "Ab" });
+  environment.elapse();
+  saver.queue({ name: "Abc" });
+  environment.elapse();
+  assert.equal(environment.sent.length, 2);
+
+  await environment.fail();  // the older send is the one the transport lost
+  await environment.ack();   // the newer one landed
+
+  saver.flush();
+  assert.deepEqual(environment.sent.at(-1), { name: "Abc" });
 });
 
 test("a refusal is reported once and the patch is dropped, not retried", async () => {

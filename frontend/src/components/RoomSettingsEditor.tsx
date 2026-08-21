@@ -104,15 +104,19 @@ export function RoomSettingsEditor() {
         if (cancelled) return;
         if (response.ok && response.settings) {
           setSettings(response.settings);
-          // Only the first read fills the prompt block. A re-read follows a
-          // refusal of some other setting, which says nothing about a prompt
-          // list the host is still writing - and overwriting it would throw
-          // away work that was never sent anywhere.
+          // The baseline always takes what the room actually holds, which is
+          // what corrects the guess made when the prompts were handed over: a
+          // patch they were merged into can be refused for something else
+          // entirely, and the block has to go back to offering Apply.
+          setPromptsBaseline({
+            value: response.settings.customPrompts,
+            only: response.settings.customPromptsOnly,
+          });
+          // The text itself is only filled in on the first read. A re-read
+          // follows a refusal, which says nothing about a prompt list the host
+          // is still writing - and that draft has never been anywhere it could
+          // be recovered from.
           if (reloadCount === 0) {
-            setPromptsBaseline({
-              value: response.settings.customPrompts,
-              only: response.settings.customPromptsOnly,
-            });
             dispatchCustomPrompts({
               type: "reset",
               value: response.settings.customPrompts,

@@ -118,20 +118,25 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
     if not current or not current[1].is_host:
         return {"ok": False, "error": "Only the host can change room settings"}
     room, _ = current
-    if room.state != "waiting" or room.game:
-        return {"ok": False, "error": "Settings can only be changed in the waiting room"}
-    settings = await ctx.game_flow.room_settings_from_payload(payload, fallback=room)
-    active_count = len(room.seated_players())
-    if settings["max_players"] < active_count:
-        return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}
-    if not settings["custom_prompts"]:
-        settings["custom_prompts_only"] = False
-    for key, value in settings.items():
-        setattr(room, key, value)
-    # No announcement: settings save as the host touches them, so a line per
-    # change would bury the lobby's conversation. Everyone sees the new values
-    # in the room state this broadcast carries.
-    await ctx.game_flow._emit_room_state(room)
+    # Resolving the prompt lists reads the repository, and the host may press
+    # Start while that is in the air. Under the lock the game cannot begin
+    # half-way through this, so a setting that arrived first is a setting the
+    # game is played with.
+    async with room.lock:
+        if room.state != "waiting" or room.game:
+            return {"ok": False, "error": "Settings can only be changed in the waiting room"}
+        settings = await ctx.game_flow.room_settings_from_payload(payload, fallback=room)
+        active_count = len(room.seated_players())
+        if settings["max_players"] < active_count:
+            return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}
+        if not settings["custom_prompts"]:
+            settings["custom_prompts_only"] = False
+        for key, value in settings.items():
+            setattr(room, key, value)
+        # No announcement: settings save as the host touches them, so a line per
+        # change would bury the lobby's conversation. Everyone sees the new
+        # values in the room state this broadcast carries.
+        await ctx.game_flow._emit_room_state(room)
     return {"ok": True}
 
 

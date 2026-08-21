@@ -53,20 +53,21 @@ function browserEnvironment(
 /**
  * Turn a stream of setting changes into a well-behaved stream of saves.
  *
- * Three things have to hold at once. Changes must coalesce, because a host
- * dragging a stepper produces a dozen of them and each one costs the server a
- * prompt-list read. Only one request may be in flight, because two overlapping
- * `update_room_settings` calls resolve their omitted fields against the room as
- * it was when each started, so the later reply can undo the earlier one. And a
- * change made while a request is outstanding must not be lost - it merges into
- * the next patch instead.
+ * Changes coalesce, because a host working a stepper produces a dozen of them
+ * and each one is a request. What they do not do is queue behind one another:
+ * `flush` has to put everything the host has changed on the socket there and
+ * then, because the press that triggers it is very often the press that starts
+ * the game, and a patch waiting on an earlier reply would arrive after it. The
+ * server applies patches in the order it receives them - the room is locked
+ * across each one - so several in the air at once is safe.
  *
  * A refusal and a dropped connection are handled differently on purpose. A
  * refusal means the value itself is wrong, so the patch is discarded and the
  * caller told - it has to go and find out what the room actually holds. A
- * transport failure says nothing about the value, so the patch stays pending
- * and goes out again on the next flush: the host's edit survives a reconnect
- * rather than silently vanishing.
+ * transport failure says nothing about the value, so the patch is kept and
+ * goes out again on the next flush: the host's edit survives a reconnect
+ * rather than silently vanishing. A kept patch remembers when it was sent, so
+ * that a retry cannot put an old value back over a newer one that got through.
  */
 export function createRoomSettingsSaver(
   environment:
@@ -78,13 +79,21 @@ export function createRoomSettingsSaver(
 
   let pending: RoomSettingsPatch | null = null;
   let pendingDelayMs = IMMEDIATE_SAVE_DELAY_MS;
-  let inFlight = false;
+  let outstanding = 0;
   let timeoutId: number | null = null;
   let savedTimeoutId: number | null = null;
   let status: SaveStatus = "idle";
   // Bumped by reset, so a request that was already in flight cannot report
   // back into a form that has since been torn down or reloaded.
   let generation = 0;
+  let nextSequence = 1;
+  // Patches the transport lost, by the sequence they were sent in.
+  const unsent = new Map<number, RoomSettingsPatch>();
+  // The newest request each field went out in. A lost patch only keeps the
+  // fields nothing newer has been sent for: the rest the host has already
+  // changed their mind about, and retrying those would put an old value back
+  // over a newer one.
+  const latestSend = new Map<string, number>();
 
   function setStatus(next: SaveStatus): void {
     if (savedTimeoutId !== null) {
@@ -109,33 +118,52 @@ export function createRoomSettingsSaver(
     timeoutId = null;
   }
 
-  function send(): void {
-    if (inFlight || !pending) return;
-    const patch = pending;
+  /** Everything owed to the server, oldest value first so the newest wins. */
+  function collect(): RoomSettingsPatch | null {
+    if (unsent.size === 0 && !pending) return null;
+    const patch: RoomSettingsPatch = {};
+    for (const sequence of [...unsent.keys()].sort((a, b) => a - b)) {
+      Object.assign(patch, unsent.get(sequence));
+    }
+    Object.assign(patch, pending || {});
+    unsent.clear();
     pending = null;
+    return patch;
+  }
+
+  function settled(): SaveStatus {
+    if (pending) return "pending";
+    if (unsent.size > 0) return "failed";
+    return outstanding > 0 ? "saving" : "saved";
+  }
+
+  function send(): void {
+    const patch = collect();
+    if (!patch) return;
     disarm();
-    inFlight = true;
+    const sequence = nextSequence++;
+    for (const field of Object.keys(patch)) latestSend.set(field, sequence);
+    outstanding += 1;
     setStatus("saving");
     const sentAt = generation;
     void env.send(patch).then(
       (response) => {
         if (sentAt !== generation) return;
-        inFlight = false;
-        if (response.ok) {
-          setStatus(pending ? "pending" : "saved");
-        } else {
-          env.onRejected(response.error || "Could not save room settings");
-          setStatus(pending ? "pending" : "idle");
-        }
+        outstanding -= 1;
+        if (!response.ok) env.onRejected(response.error || "Could not save room settings");
+        setStatus(response.ok ? settled() : (pending ? "pending" : "idle"));
         send();
       },
       () => {
         if (sentAt !== generation) return;
-        inFlight = false;
-        // The value is fine; the connection was not. Keep it - anything the
-        // host changed meanwhile wins, since it is the more recent intent.
-        pending = { ...patch, ...(pending || {}) };
-        setStatus("failed");
+        outstanding -= 1;
+        // The values are fine; the connection was not. Keep the ones this was
+        // still the newest word on - the others have been said again since.
+        const stillCurrent = Object.fromEntries(
+          Object.entries(patch).filter(([field]) => latestSend.get(field) === sequence),
+        );
+        if (Object.keys(stillCurrent).length > 0) unsent.set(sequence, stillCurrent);
+        setStatus(unsent.size > 0 ? "failed" : settled());
       },
     );
   }
@@ -146,8 +174,7 @@ export function createRoomSettingsSaver(
       // A quick toggle must not be held back by a slower field's window, so
       // the shortest delay asked for while a patch is pending is the one used.
       pendingDelayMs = timeoutId === null ? delayMs : Math.min(pendingDelayMs, delayMs);
-      setStatus(inFlight ? "saving" : "pending");
-      if (inFlight) return;
+      setStatus("pending");
       disarm();
       timeoutId = env.setTimeout(() => {
         timeoutId = null;
@@ -165,8 +192,10 @@ export function createRoomSettingsSaver(
         savedTimeoutId = null;
       }
       pending = null;
+      unsent.clear();
+      latestSend.clear();
       pendingDelayMs = IMMEDIATE_SAVE_DELAY_MS;
-      inFlight = false;
+      outstanding = 0;
       generation += 1;
       status = "idle";
     },

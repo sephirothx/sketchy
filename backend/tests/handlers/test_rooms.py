@@ -166,6 +166,62 @@ async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
 
 
 @pytest.mark.asyncio
+async def test_starting_waits_for_a_settings_change_that_arrived_first():
+    """Settings save themselves now, so the host can change one and press Start
+    a breath later. Socket.IO gives each event its own task, so arriving first
+    means nothing once a handler awaits - here the prompt-list read - and the
+    game would be dealt the values the host had just replaced."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", rounds=2)
+    host = room_manager.add_player(room, "Host")
+    guest = room_manager.add_player(room, "Guest")
+    host.sid, guest.sid = "host-sid", "guest-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": host.id}
+    )
+
+    reading = asyncio.Event()
+    finish_reading = asyncio.Event()
+
+    class BlockingPromptListRepo:
+        async def get_prompts_by_slugs(self, slugs):
+            reading.set()
+            await finish_reading.wait()
+            return ["aardvark", "zeppelin"]
+
+        async def record_prompt_usage(self, slugs, usage):
+            return None
+
+    ctx.prompt_list_repo = BlockingPromptListRepo()
+
+    update = asyncio.create_task(
+        sio.handlers["/"]["update_room_settings"](
+            "host-sid", {"rounds": 7, "promptListSlugs": ["safari"]}
+        )
+    )
+    await reading.wait()
+
+    start = asyncio.create_task(sio.handlers["/"]["start_game"]("host-sid", None))
+    # Several turns of the loop: plenty for an unguarded start to have run the
+    # whole way through while the settings change sits in its await.
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert room.state == "waiting", "the game started before the settings landed"
+
+    finish_reading.set()
+    assert (await update)["ok"] is True
+    assert (await start)["ok"] is True
+
+    assert room.rounds == 7
+    assert room.game is not None
+    assert room.game.rounds_total == 7
+    ctx.timers.cancel_phase_timer(room.id)
+
+
+@pytest.mark.asyncio
 async def test_room_members_can_inspect_custom_prompts_only_while_waiting():
     room_manager = RoomManager()
     room = room_manager.create_room(
