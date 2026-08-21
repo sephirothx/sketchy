@@ -52,7 +52,7 @@ export function ConnectedRoomChatPanel({
   const phase = useGameStore((state) => state.phase);
   const myPlayerId = useGameStore((state) => state.playerId);
   const guessedWord = useGameStore((state) => state.guessedWord);
-  const maskedPrompt = useGameStore((state) => state.maskedPrompt);
+  const maskedWord = useGameStore((state) => state.maskedWord);
   const hideMaskedPrompt = useGameStore((state) => state.hideMaskedPrompt);
   const me = players.find((player) => player.playerId === myPlayerId);
   const isDrawer = useGameStore(selectAmDrawer);
@@ -67,7 +67,7 @@ export function ConnectedRoomChatPanel({
       isDrawer={isDrawer}
       canGuess={canGuess}
       myPlayerId={myPlayerId}
-      targetWordLengths={splitMaskedPrompt(maskedPrompt).counts}
+      targetWordLengths={splitMaskedPrompt(maskedWord).counts}
       hideMaskedPrompt={hideMaskedPrompt}
       onFocusChange={onFocusChange}
     />
@@ -137,7 +137,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const playerId = useGameStore((state) => state.playerId);
   const phase = useGameStore((state) => state.phase);
   const drawerId = useGameStore((state) => state.drawerId);
-  const maskedPrompt = useGameStore((state) => state.maskedPrompt);
+  const maskedWord = useGameStore((state) => state.maskedWord);
   const hintMode = useGameStore((state) => state.hintMode);
   const scoringMode = useGameStore((state) => state.scoringMode);
   const nextHintCost = useGameStore((state) => state.nextHintCost);
@@ -167,8 +167,8 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const isDrawerPerson = drawerId === playerId;
   const drawerWord =
     myWord ||
-    (maskedPrompt && !maskedPrompt.includes("_")
-      ? splitMaskedPrompt(maskedPrompt).blanks.trim()
+    (maskedWord && !maskedWord.includes("_")
+      ? splitMaskedPrompt(maskedWord).blanks.trim()
       : null);
   const solutionWord =
     phase === "round_end"
@@ -179,9 +179,9 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           ? guessedWord
           : me?.isSpectator &&
               spectatorsSeeSolution &&
-              maskedPrompt &&
-              !maskedPrompt.includes("_")
-            ? splitMaskedPrompt(maskedPrompt).blanks.trim()
+              maskedWord &&
+              !maskedWord.includes("_")
+            ? splitMaskedPrompt(maskedWord).blanks.trim()
             : null;
   const {
     color,
@@ -218,7 +218,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
       <PromptDisplay
         isDrawer={amDrawer}
         myWord={myWord}
-        maskedPrompt={maskedPrompt}
+        maskedWord={maskedWord}
         wordChoices={wordChoices}
         revealedWord={phase === "round_end" ? lastRoundResult?.word ?? null : guessedWord}
         hintMode={hintMode}

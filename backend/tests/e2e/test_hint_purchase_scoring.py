@@ -75,7 +75,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await guesser.fill(".chat-input input", word)
             await guesser.keyboard.press("Enter")
 
-            personal = guesser.locator(".round-personal-result")
+            personal = guesser.locator(".turn-results-personal")
             await personal.wait_for(timeout=12_000)
             breakdown = (await personal.inner_text()).strip()
             assert "-12 hints" in breakdown, breakdown

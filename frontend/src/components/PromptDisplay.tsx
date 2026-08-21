@@ -7,7 +7,7 @@ import type { AckResponse, HintMode } from "../types";
 interface WordDisplayProps {
   isDrawer: boolean;
   myWord: string | null;
-  maskedPrompt: string;
+  maskedWord: string;
   wordChoices: string[];
   revealedWord?: string | null;
   hintMode?: HintMode;
@@ -84,7 +84,7 @@ function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; c
 export function PromptDisplay({
   isDrawer,
   myWord,
-  maskedPrompt,
+  maskedWord,
   wordChoices,
   revealedWord,
   hintMode = "none",
@@ -125,7 +125,7 @@ export function PromptDisplay({
     );
   }
 
-  if (maskedPrompt === "???" && !revealedWord && !isDrawer) {
+  if (maskedWord === "???" && !revealedWord && !isDrawer) {
     return null;
   }
 
@@ -158,12 +158,12 @@ export function PromptDisplay({
       )}
       {revealedWord ? (
         <span className="prompt-reveal">{revealedWord}</span>
-      ) : isDrawer && (myWord || !maskedPrompt.includes("_")) ? (
-        <span className="prompt-reveal">{myWord || maskedPrompt}</span>
+      ) : isDrawer && (myWord || !maskedWord.includes("_")) ? (
+        <span className="prompt-reveal">{myWord || maskedWord}</span>
       ) : (
         <span className="prompt-masked">
           {renderMaskedWord(
-            maskedPrompt,
+            maskedWord,
             canBuy ? {
               canAfford: nextHintCost <= remaining,
               cost: nextHintCost,

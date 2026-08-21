@@ -146,7 +146,7 @@ backend/
     test_*.py     Domain, protocol, payload, timer, DB, repository, and performance unit tests
 frontend/
   src/
-    components/   Canvas, Toolbar, PlayerList, WordDisplay, Timer, GuessChat
+    components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat
     pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once

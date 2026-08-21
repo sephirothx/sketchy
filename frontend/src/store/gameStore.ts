@@ -45,7 +45,7 @@ interface GameStore {
 
   phase: GamePhase;
   drawerId: string | null;
-  maskedPrompt: string;
+  maskedWord: string;
   myWord: string | null;
   guessedWord: string | null;
   wordChoices: string[];
@@ -86,7 +86,7 @@ interface GameStore {
   setMyWordChoices: (choices: string[], seconds: number) => void;
   startDrawing: (payload: {
     drawerId: string;
-    maskedPrompt: string;
+    maskedWord: string;
     roundNumber: number;
     totalRounds: number;
     seconds: number;
@@ -99,7 +99,7 @@ interface GameStore {
   setGuessedWord: (word: string | null, breakdown?: GuessBreakdown | null) => void;
   setMaskedWord: (word: string) => void;
   setHintRevealed: (payload: {
-    maskedPrompt: string;
+    maskedWord: string;
     hintCost?: number | null;
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
@@ -114,7 +114,7 @@ interface GameStore {
 const initialGameFields = {
   phase: "idle" as GamePhase,
   drawerId: null as string | null,
-  maskedPrompt: "",
+  maskedWord: "",
   myWord: null as string | null,
   guessedWord: null as string | null,
   wordChoices: [] as string[],
@@ -206,7 +206,7 @@ export const useGameStore = create<GameStore>((set) => ({
       totalRounds,
       phaseSeconds: seconds,
       phaseStartedAt: Date.now(),
-      maskedPrompt: "",
+      maskedWord: "",
       myWord: null,
       guessedWord: null,
       wordChoices: [],
@@ -214,11 +214,11 @@ export const useGameStore = create<GameStore>((set) => ({
     }),
   setMyWordChoices: (choices, seconds) =>
     set({ wordChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
-  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, hintBudget }) =>
+  startDrawing: ({ drawerId, maskedWord, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, hintBudget }) =>
     set((s) => ({
       phase: "drawing",
       drawerId,
-      maskedPrompt,
+      maskedWord,
       roundNumber,
       totalRounds,
       phaseSeconds: seconds,
@@ -238,10 +238,10 @@ export const useGameStore = create<GameStore>((set) => ({
       guessedWord: word,
       lastGuessBreakdown: breakdown !== undefined ? breakdown : s.lastGuessBreakdown,
     })),
-  setMaskedWord: (word) => set({ maskedPrompt: word }),
-  setHintRevealed: ({ maskedPrompt, hintCost, letterPrices, hintSpend }) =>
+  setMaskedWord: (word) => set({ maskedWord: word }),
+  setHintRevealed: ({ maskedWord, hintCost, letterPrices, hintSpend }) =>
     set((s) => ({
-      maskedPrompt,
+      maskedWord,
       nextHintCost: hintCost ?? s.nextHintCost,
       letterPrices: letterPrices !== undefined ? letterPrices : s.letterPrices,
       hintSpend: hintSpend ?? s.hintSpend,

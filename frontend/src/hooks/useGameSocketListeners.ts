@@ -103,7 +103,7 @@ export function useGameSocketListeners() {
 
     const onTurnStarted = (payload: {
       drawerId: string;
-      maskedPrompt: string;
+      maskedWord: string;
       roundNumber: number;
       totalRounds: number;
       seconds: number;
@@ -167,7 +167,7 @@ export function useGameSocketListeners() {
     };
 
     const onHintRevealed = (payload: {
-      maskedPrompt: string;
+      maskedWord: string;
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
       hintSpend?: number;
@@ -194,7 +194,7 @@ export function useGameSocketListeners() {
     const onSyncGame = (payload: {
       phase: string;
       drawerId: string | null;
-      maskedPrompt: string;
+      maskedWord: string;
       roundNumber: number;
       totalRounds: number;
       remainingSeconds: number;
@@ -213,7 +213,7 @@ export function useGameSocketListeners() {
       } else if (payload.phase === "drawing") {
         store.getState().startDrawing({
           drawerId: payload.drawerId || "",
-          maskedPrompt: payload.maskedPrompt,
+          maskedWord: payload.maskedWord,
           roundNumber: payload.roundNumber,
           totalRounds: payload.totalRounds,
           seconds: payload.remainingSeconds,
