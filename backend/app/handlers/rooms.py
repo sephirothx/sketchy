@@ -128,7 +128,9 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
         settings["custom_prompts_only"] = False
     for key, value in settings.items():
         setattr(room, key, value)
-    await ctx.game_flow.announce(room, "The host updated the room settings.")
+    # No announcement: settings save as the host touches them, so a line per
+    # change would bury the lobby's conversation. Everyone sees the new values
+    # in the room state this broadcast carries.
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}
 

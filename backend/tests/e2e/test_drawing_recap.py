@@ -53,7 +53,9 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await host.locator(".room-settings-editor details").click()
             await host.locator("#custom-prompts").fill("apple\ntree")
             await host.get_by_label("Only use custom prompts").check()
-            await host.get_by_role("button", name="Save settings").click()
+            # Settings save themselves, so the guest seeing them is the signal
+            # that the room has them - there is no Save button to wait on.
+            await guest.get_by_text("Custom prompts only (2)").wait_for()
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, guest]

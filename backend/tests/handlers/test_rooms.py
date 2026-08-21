@@ -131,6 +131,41 @@ async def test_only_host_can_update_waiting_room_settings_and_not_during_game():
     assert (await sio.handlers["/"]["send_chat"]("host-sid", {"text": "nope"}))["ok"] is False
 
 @pytest.mark.asyncio
+async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
+    """The lobby autosaves one setting at a time, so a patch has to leave the
+    rest of the room alone - and stay out of the chat, which would otherwise
+    carry a line per keystroke."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(
+        name="Room",
+        rounds=3,
+        hint_mode="wheel",
+        scoring_mode="pressure",
+        custom_prompts=["red panda"],
+    )
+    host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": host.id}
+    )
+
+    assert (await sio.handlers["/"]["update_room_settings"]("host-sid", {"rounds": 4}))["ok"] is True
+
+    assert room.rounds == 4
+    assert room.name == "Room"
+    assert room.hint_mode == "wheel"
+    assert room.scoring_mode == "pressure"
+    assert room.custom_prompts == ["red panda"]
+
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "room_state" in events
+    assert "chat_message" not in events
+
+
+@pytest.mark.asyncio
 async def test_room_members_can_inspect_custom_prompts_only_while_waiting():
     room_manager = RoomManager()
     room = room_manager.create_room(

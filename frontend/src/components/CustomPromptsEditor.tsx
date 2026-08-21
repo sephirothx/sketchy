@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { MAX_CUSTOM_PROMPTS, MAX_RAW_INPUT_LENGTH, MAX_PROMPT_LENGTH } from "../lib/customPrompts";
 import type { CustomPromptAnalysis } from "../lib/customPrompts";
 
@@ -5,12 +6,17 @@ interface CustomPromptsEditorProps {
   value: string;
   analysis: CustomPromptAnalysis;
   onChange: (value: string) => void;
+  /** The host has stopped editing - a good moment to store what they wrote. */
+  onCommit?: () => void;
+  /** Room settings put their explicit Apply control here; room creation does not. */
+  footer?: ReactNode;
 }
 
-export function CustomPromptsEditor({ value, analysis, onChange }: CustomPromptsEditorProps) {
+export function CustomPromptsEditor({ value, analysis, onChange, onCommit, footer }: CustomPromptsEditorProps) {
   return <div className="custom-prompts-editor">
     <label htmlFor="custom-prompts">Custom prompts (optional)</label>
     <textarea id="custom-prompts" value={value} onChange={(event) => onChange(event.target.value)}
+      onBlur={onCommit}
       placeholder={"One prompt per line\nor separate entries with commas"}
       maxLength={MAX_RAW_INPUT_LENGTH} rows={7} aria-describedby="custom-prompts-summary" />
     <div id="custom-prompts-summary" className={analysis.hasErrors ? "custom-prompts-summary has-errors" : "custom-prompts-summary"} aria-live="polite">
@@ -20,5 +26,6 @@ export function CustomPromptsEditor({ value, analysis, onChange }: CustomPrompts
       {analysis.overLimitCount > 0 && <span>Only {MAX_CUSTOM_PROMPTS.toLocaleString()} entries are allowed</span>}
     </div>
     {analysis.invalidEntries.length > 0 && <p className="custom-prompts-error">Shorten or remove overlong entries before creating the room.</p>}
+    {footer}
   </div>;
 }

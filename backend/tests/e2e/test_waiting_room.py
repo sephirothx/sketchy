@@ -55,15 +55,15 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             advanced_summary = host_page.locator(
                 '.room-settings-editor details > summary'
             )
-            save_settings = host_page.locator(
-                '.room-settings-editor .room-settings-save-button'
+            save_status = host_page.locator(
+                '.room-settings-editor .room-settings-status'
             )
             collapsed_summary_box = await advanced_summary.bounding_box()
-            collapsed_save_box = await save_settings.bounding_box()
+            collapsed_status_box = await save_status.bounding_box()
             assert collapsed_summary_box is not None
-            assert collapsed_save_box is not None
+            assert collapsed_status_box is not None
             assert (
-                collapsed_save_box["y"]
+                collapsed_status_box["y"]
                 - collapsed_summary_box["y"]
                 - collapsed_summary_box["height"]
             ) >= 16
@@ -73,11 +73,11 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
                 '.room-settings-editor label:has-text("Only use custom prompts")'
             )
             expanded_setting_box = await final_advanced_setting.bounding_box()
-            expanded_save_box = await save_settings.bounding_box()
+            expanded_status_box = await save_status.bounding_box()
             assert expanded_setting_box is not None
-            assert expanded_save_box is not None
+            assert expanded_status_box is not None
             assert (
-                expanded_save_box["y"]
+                expanded_status_box["y"]
                 - expanded_setting_box["y"]
                 - expanded_setting_box["height"]
             ) >= 16
@@ -113,10 +113,26 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
             assert await host_page.is_visible('text=2 active players are ready to play.')
 
-            # The host can revise settings inline before the game, and everyone sees the update.
+            # The host revises settings inline before the game and everyone sees
+            # the update - with no Save button to forget (#325).
             await host_page.fill('.room-settings-editor label:has-text("Rounds") input', "4")
-            await host_page.click('.room-settings-editor button:has-text("Save settings")')
             await player_page.wait_for_selector('text=4 rounds each · 90s to draw')
+
+            # ...and the lobby chat is not narrating every one of those saves.
+            assert not await player_page.is_visible('text=The host updated the room settings.')
+
+            # Custom prompts are the one thing that still waits to be applied -
+            # a half-typed prompt list must not be stored a keystroke at a time -
+            # so the Apply button says whether there is anything unapplied, and
+            # leaving the textarea applies it whether or not the host presses it.
+            await advanced_summary.click()
+            await host_page.fill('#custom-prompts', "artichoke\nzeppelin")
+            assert await host_page.inner_text('.custom-prompts-apply') == "Apply prompts"
+            await host_page.keyboard.press("Tab")
+            await player_page.wait_for_selector('text=2 custom prompts + curated lists')
+            await host_page.wait_for_selector('.custom-prompts-apply:disabled')
+            assert await host_page.inner_text('.custom-prompts-apply') == "Prompts applied"
+            await advanced_summary.click()
 
             # Waiting-room chat is shared before the game starts.
             waiting_chat_input = player_page.locator('.waiting-chat-form input')

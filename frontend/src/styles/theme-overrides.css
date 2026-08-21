@@ -112,7 +112,8 @@
 [data-theme="dark"] .m3-switch-label input:checked ~ .m3-switch-track .m3-switch-thumb { background: #fff; }
 [data-theme="dark"] .advanced-settings,
 [data-theme="dark"] .custom-prompts-editor { border-color: #334155; }
-[data-theme="dark"] .room-settings-save { border-color: #334155; }
+[data-theme="dark"] .room-settings-status { color: #94a3b8; }
+[data-theme="dark"] .room-settings-status.is-failed { color: #fca5a5; }
 
 [data-theme="dark"] .panel input[type="text"],
 [data-theme="dark"] .panel input[type="search"],
@@ -1026,7 +1027,7 @@
 
   .waiting-invite-button,
   .waiting-start-button,
-  .room-settings-save-button { width: 100%; }
+  .custom-prompts-apply { width: 100%; }
   .waiting-card { padding: 16px; }
   .room-settings-fields { grid-template-columns: 1fr; }
   .waiting-room-actions { justify-content: flex-start; width: 100%; }

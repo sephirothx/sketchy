@@ -43,3 +43,24 @@ export const HINT_OPTIONS: { value: HintMode; label: string; description: string
       "Buy a letter and reveal every match for yourself - the cost comes out of the points that turn's guess earns.",
   },
 ];
+
+/**
+ * Is this number ready to be sent to the server?
+ *
+ * `InputNumber` reports every keystroke and only clamps on blur, so clearing
+ * "8" to type "12" passes through 0 on the way. That is fine to show in the
+ * field and fatal to send: the server refuses it and the host sees a revert
+ * for something they were in the middle of typing. Out-of-range values wait
+ * for the blur that clamps them.
+ */
+export function isSendableRoomNumber(
+  field: "maxPlayers" | "rounds" | "drawingSeconds",
+  value: number,
+): boolean {
+  if (!Number.isInteger(value)) return false;
+  if (field === "drawingSeconds") return (DRAWING_TIME_OPTIONS as readonly number[]).includes(value);
+  const [min, max] = field === "rounds"
+    ? [ROUNDS_MIN, ROUNDS_MAX]
+    : [MAX_PLAYERS_MIN, MAX_PLAYERS_MAX];
+  return value >= min && value <= max;
+}

@@ -55,7 +55,8 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await host.locator('[aria-label="Hints"] button:has-text("Buy letters")').click()
             await host.locator("#custom-prompts").fill("elephant")
             await host.get_by_label("Only use custom prompts").check()
-            await host.get_by_role("button", name="Save settings").click()
+            await guest.get_by_text("Custom prompts only (1)").wait_for()
+            await guest.get_by_text("Buy letters against your turn score").wait_for()
             await host.get_by_role("button", name="Start game").click()
 
             drawer, guesser, prompt = await choose_prompt([host, guest])

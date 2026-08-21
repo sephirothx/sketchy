@@ -1,4 +1,4 @@
-import { RoomSettingsEditor } from "./RoomSettingsDialog";
+import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { HintMode, PlayerInfo, ScoreEntry, ScoringMode } from "../types";
