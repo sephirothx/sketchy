@@ -15,6 +15,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Sequence
 from itertools import groupby
 
 from app.canvas_session import CanvasSession
@@ -30,6 +31,27 @@ TURN_RESULTS_SECONDS = float(os.getenv("TURN_RESULTS_SECONDS") or 5)
 MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
 SCORING_MODES = ("none", "default", "pressure")
+
+
+def competition_ranks(sorted_scores: Sequence[int]) -> list[int]:
+    """Places for scores already ordered best-first, ties sharing a place.
+
+    Standard competition ranking: equal scores take the same place, and the
+    places they crowd out are skipped - 1, 2, 2, 4, never 1, 2, 2, 3. Two
+    players who finish level did not finish first and second, and the one
+    behind them came third by count of people ahead, not by row number.
+
+    Kept here rather than beside either caller because both the live standings
+    and the recorded ones have to agree: a game whose final screen says two
+    players tied for first must not be written down as a first and a second.
+    """
+    ranks: list[int] = []
+    for index, score in enumerate(sorted_scores):
+        if index > 0 and score == sorted_scores[index - 1]:
+            ranks.append(ranks[-1])
+        else:
+            ranks.append(index + 1)
+    return ranks
 
 # A turn's hint spend is settled against that turn's guess, so committing more
 # than the best possible guess is worth would just be an unpayable debt. Cap it

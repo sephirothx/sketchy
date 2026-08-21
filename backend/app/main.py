@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.profiles import create_profile_router
+from app.api.prompt_lists import create_prompt_list_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_session_factory, init_db
@@ -101,6 +102,7 @@ api.add_middleware(
 api.add_middleware(SessionAuthMiddleware, session_factory=async_session_factory)
 api.include_router(create_auth_router(user_repo, async_session_factory))
 api.include_router(create_profile_router(user_repo, game_history_repo))
+api.include_router(create_prompt_list_router(prompt_list_repo))
 
 
 @api.get("/api/health")
@@ -111,23 +113,6 @@ async def health():
 @api.get("/api/rooms")
 async def list_public_rooms():
     return room_manager.list_public_rooms()
-
-
-@api.get("/api/prompt-lists")
-async def list_prompt_lists():
-    lists = await prompt_list_repo.list_all()
-    return [
-        {
-            "slug": wl.slug,
-            "name": wl.name,
-            "description": wl.description,
-            "language": wl.language,
-            "promptCount": wl.prompt_count,
-            "isBundled": wl.is_bundled,
-            "version": wl.version,
-        }
-        for wl in lists
-    ]
 
 
 # In production, serve the built frontend as static files from the same origin

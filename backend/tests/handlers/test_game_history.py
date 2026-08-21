@@ -12,65 +12,13 @@ from app.handlers import register_all_handlers as register_handlers
 from app.rooms import RoomManager
 from app.services import game_flow
 from tests.fake_game_history_repo import FakeGameHistoryRepository
+from tests.handlers.helpers import (
+    build_context,
+    build_room,
+    play_to_completion,
+)
 
 pytestmark = pytest.mark.asyncio
-
-
-def build_room(*, rounds: int = 1, accounts: dict[str, str | None] | None = None):
-    """A room of seats keyed by nickname, each bound to an account (or none)."""
-    accounts = accounts or {"Ann": "user-ann", "Bob": "user-bob"}
-    room_manager = RoomManager()
-    room = room_manager.create_room(name="Studio", is_public=True, rounds=rounds)
-    players = {}
-    for nickname, user_id in accounts.items():
-        player = room_manager.add_player(room, nickname, user_id=user_id)
-        player.sid = f"sid-{nickname.lower()}"
-        players[nickname] = player
-    return room_manager, room, players
-
-
-def build_context(room_manager, history_repo, prompt_list_repo=None, timeline=None):
-    sio = socketio.AsyncServer(async_mode="asgi")
-    ctx = register_handlers(
-        sio,
-        room_manager,
-        game_history_repo=history_repo,
-        prompt_list_repo=prompt_list_repo,
-    )
-    if timeline is None:
-        sio.emit = AsyncMock()
-    else:
-        async def _record(event, *_args, **_kwargs):
-            timeline.append(("emit", event))
-
-        sio.emit = AsyncMock(side_effect=_record)
-    sio.get_session = AsyncMock(return_value=None)
-    sio.save_session = AsyncMock()
-    return ctx
-
-
-async def play_to_completion(ctx, room, players, *, guessers=None):
-    """Drive real turns through the flow service until the game reports finished.
-
-    Uses the same entry points the timers do, so the recorded history is
-    produced by the code path a real game takes rather than by hand-built state.
-    """
-    flow = ctx.game_flow
-    await flow._start_fresh_game(room, [p for p in room.player_list()])
-    while room.game is not None:
-        game = room.game
-        game.force_prompt_choice()
-        game.set_phase_deadline(game.drawing_seconds)
-        for player in room.player_list():
-            if player.id == game.current_drawer:
-                continue
-            if guessers is not None and player.nickname not in guessers:
-                continue
-            game.submit_guess(player.id, game.prompt)
-        await flow._end_turn(room)
-        ctx.timers.cancel_phase_timer(room.id)
-        await flow._finish_or_next(room)
-    await ctx.timers.close()
 
 
 async def test_completed_game_records_every_round_with_participants_and_guesses():

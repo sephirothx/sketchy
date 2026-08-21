@@ -44,6 +44,31 @@ export interface PromptListSummary {
   version: number;
 }
 
+/** How one prompt has actually played, as reported by the stats endpoint. */
+export interface PromptStats {
+  text: string;
+  offerCount: number;
+  pickCount: number;
+  correctGuessCount: number;
+  totalGuesserCount: number;
+  pickRate: number;
+  correctGuessRatio: number;
+  /** False until enough guessers have faced it for the ratios to mean anything. */
+  isRated: boolean;
+}
+
+export type PromptStatsSort = "hardest" | "easiest" | "most-picked";
+
+export interface PromptStatsResponse {
+  slug: string;
+  sort: PromptStatsSort;
+  /** Guessers a prompt must have faced before it is ranked at all. */
+  minRatedGuessers: number;
+  ratedCount: number;
+  unratedCount: number;
+  prompts: PromptStats[];
+}
+
 export interface RoomSummary {
   id: string;
   code: string;
@@ -82,6 +107,7 @@ export interface RoomStatePayload {
   promptListSlugs?: string[];
   state: "waiting" | "playing";
   lastGameScores?: ScoreEntry[];
+  lastGameHighlights?: GameHighlight[];
   lastGameDrawings?: DrawingRecapMetadata[];
   moderation: ModerationState;
   restartVote?: RestartVoteState | null;
@@ -160,8 +186,34 @@ export interface GuessBreakdown {
   hintSpend: number;
 }
 
+/**
+ * One superlative from a finished game. Every kind is derived from guess counts
+ * and timings alone - never from points - so the set means the same thing in a
+ * no-scoring game as in a scored one. The server omits any highlight the game
+ * gave it nothing to say about, so this list is often shorter than the union
+ * of kinds and is sometimes empty.
+ */
+export type GameHighlight =
+  | {
+      kind: "hardest_prompt";
+      prompt: string;
+      correctGuessCount: number;
+      totalGuesserCount: number;
+    }
+  | ({ kind: "fastest_guess"; prompt: string; seconds: number } & HighlightName)
+  | ({ kind: "best_drawer"; guessRatio: number } & HighlightName)
+  | ({ kind: "quickest_average"; seconds: number } & HighlightName);
+
+/** The fields a highlight naming a player renders that name from. */
+export interface HighlightName {
+  nickname: string;
+  nameColor?: string;
+  isAnonymous?: boolean;
+}
+
 export interface GameEndedPayload {
   scores: ScoreEntry[];
+  highlights?: GameHighlight[];
   drawings: DrawingRecapMetadata[];
 }
 

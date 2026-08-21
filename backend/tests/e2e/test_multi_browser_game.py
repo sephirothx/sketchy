@@ -348,6 +348,34 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             assert await guess_input.evaluate("input => document.activeElement === input")
             assert not await guesser_page.query_selector('.game-room.guess-focused')
 
+            # This is the first turn, so every player came into it on zero and
+            # therefore ranked first. The rows are offset to animate overtakes,
+            # and offsetting them by a difference of ranks rather than of row
+            # positions once stacked the whole list onto one line.
+            tops = await guesser_page.evaluate(
+                """() => [...document.querySelectorAll('.turn-results-score-row')]
+                     .map(row => Math.round(row.getBoundingClientRect().top))"""
+            )
+            assert len(tops) >= 2, f"expected a row per player, got {tops}"
+            assert tops == sorted(tops) and len(set(tops)) == len(tops), (
+                f"turn-results rows overlap or are out of order: {tops}"
+            )
+
+            # Two players and one guess ends level by construction: the drawer
+            # is awarded the sum of the guessers' scores, which here is the one
+            # guesser's. Both are therefore first, and neither may be shown as
+            # second - and neither can have lost a place to get there.
+            places = await guesser_page.locator(
+                ".turn-results-score-rank"
+            ).all_inner_texts()
+            assert places == ["#1", "#1"], f"tied players were not both first: {places}"
+            markers = await guesser_page.locator(
+                ".turn-results-score-row .rank-up, .turn-results-score-row .rank-down"
+            ).count()
+            assert markers == 0, (
+                f"{markers} rows report a place change on the first turn"
+            )
+
             # Step 9: The next turn swaps roles. On mobile the turn boundary must
             # still dismiss the soft keyboard, so the canvas and the turn-results
             # overlay are not left behind it.
@@ -367,6 +395,20 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             await mobile_input.fill(next_word)
             await mobile_input.press('Enter')
             await next_guesser.wait_for_selector('[data-testid="turn-results-overlay"]')
+
+            # Second turn: there is a previous order now, so the rows start in
+            # it and slide. Only distinctness is asserted, not order - a row
+            # that is about to be overtaken genuinely starts below its final
+            # seat, and the slide itself never runs here because the suite
+            # gives the whole results phase half a second.
+            tops = await next_guesser.evaluate(
+                """() => [...document.querySelectorAll('.turn-results-score-row')]
+                     .map(row => Math.round(row.getBoundingClientRect().top))"""
+            )
+            assert len(set(tops)) == len(tops), (
+                f"turn-results rows share a line while rearranging: {tops}"
+            )
+
             assert not await mobile_input.evaluate(
                 "input => document.activeElement === input"
             )

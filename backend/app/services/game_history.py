@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.game import Game
+from app.game import Game, competition_ranks
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
@@ -110,12 +110,9 @@ def _participants(seats: dict[str, _Seat]) -> list[GameParticipantInput]:
         )
 
     ordered = sorted(by_account.values(), key=lambda seat: -seat.score)
+    ranks = competition_ranks([seat.score for seat in ordered])
     participants: list[GameParticipantInput] = []
-    for index, seat in enumerate(ordered):
-        if index > 0 and seat.score == ordered[index - 1].score:
-            rank = participants[-1].final_rank
-        else:
-            rank = index + 1
+    for seat, rank in zip(ordered, ranks):
         participants.append(
             GameParticipantInput(
                 user_id=seat.user_id,

@@ -31,7 +31,8 @@ and conversation.
 | **Choosing** | The phase where the drawer picks one of their prompt options. Everyone else waits. | word select, prompt select, picking phase |
 | **Drawing** | The phase where the drawer draws and everyone else guesses. Ends when the timer runs out or everyone has guessed. | play phase |
 | **Turn results** | The short phase after each turn: the prompt is revealed and scores update. | round end, round results, intermission |
-| **Game over** | The final screen: full standings, and the drawing recap. | game end screen, results screen |
+| **Game over** | The final screen: full standings, and the way through to the highlights and the drawing recap. | game end screen, results screen |
+| **Highlights** | The short list of superlatives from the last game — hardest prompt, fastest guess, best drawer, quickest on average. Shown on a screen of their own, reached from the game over screen or the waiting room, rather than crowded onto either. Each is dropped when the game gives it nothing to say, so the list is often shorter than four. Never derived from points, so it reads the same in a no-scoring game. | awards, MVP, trophies, achievements |
 | **Rematch** | Starting a new game with the players already in the room. | replay, new game |
 
 The rule of thumb: **rounds contain turns**. Anything a single drawer does, is
@@ -72,6 +73,7 @@ Three different things, never used for one another:
 | **Masked prompt** | The prompt shown to guessers as underscores, with any revealed letters filled in and the word breaks visible. | masked word, hidden word, blanks |
 | **Prompt list** | A curated set of prompts a room draws from (Standard English, Extended English). | word list, dictionary, prompt pack, category |
 | **Custom prompts** | Prompts the host adds when creating the room, on top of or instead of the prompt lists. | custom words, own words, private words |
+| **Prompt stats** | The page, reached from the lobby, listing every prompt in a list and how it has actually played: how often it is picked when offered, and what share of guessers name it. A prompt is only ranked once enough guessers have faced it; the rest are listed as unranked. | word stats, difficulty ratings, prompt leaderboard |
 
 ## Hints
 
@@ -121,7 +123,7 @@ Three different things, never used for one another:
 | **Default** | A correct guess is worth 100–300 points, falling steadily as the timer runs down. | normal, standard, classic |
 | **Pressure** | A correct guess decays from 300 points, and decays faster for everyone once the first player gets the prompt. | hardcore, fast, decay |
 | **No scoring** | Guesses are still detected and turns still end, but everyone stays on zero and no standings are shown. | casual, fun mode, unscored |
-| **Standings** | The ranked list of scores. | leaderboard, ranking, scoreboard |
+| **Standings** | The ranked list of scores. Players level on points share a place, and the places they crowd out are skipped — two tied for first are both first, and the next player is third. Medals follow the place, so a shared first awards two golds and no silver. | leaderboard, ranking, scoreboard |
 
 ## Rooms
 

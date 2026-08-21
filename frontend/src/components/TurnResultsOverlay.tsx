@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import type { GuessBreakdown, TurnEndedPayload, TurnScoreEntry } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import {
+  entranceDelays,
+  hasPreviousOrder,
+  rowStartOffsets,
+} from "../lib/standings";
 
 interface TurnResultsOverlayProps {
   prompt: string;
@@ -18,6 +23,9 @@ interface TurnResultsOverlayProps {
 // far (in px) a row needs to slide from its previous rank position to its
 // new one when animating overtakes.
 const ROW_HEIGHT = 44;
+
+// How far left a row starts when it is introduced rather than rearranged.
+const ENTRANCE_TRAVEL = 28;
 
 function rankChange(entry: TurnScoreEntry) {
   const change = entry.previousRank - entry.newRank;
@@ -47,15 +55,23 @@ export function TurnResultsOverlay({
   // players have a moment to read the initial standings), we flip to
   // "settled" so the CSS transition slides each row into its real position -
   // players crossing paths as they overtake each other.
+  const sorted = [...scores].sort((a, b) => a.newRank - b.newRank);
+  // Nothing to rearrange on the first turn: everyone came in level, so the
+  // rows are introduced from the left instead, lowest place first.
+  const reordering = hasPreviousOrder(sorted);
+  const startOffsets = rowStartOffsets(sorted);
+  const delays = entranceDelays(sorted.length);
+  const mine = sorted.find((entry) => entry.playerId === myPlayerId);
+
   const [settled, setSettled] = useState(false);
 
   useEffect(() => {
-    const timeout = setTimeout(() => setSettled(true), 2000);
+    // Rearranging waits, so the standings can be read before they move.
+    // An entrance has nothing to read yet and should not keep players waiting.
+    const timeout = setTimeout(() => setSettled(true), reordering ? 2000 : 250);
     return () => clearTimeout(timeout);
-  }, []);
+  }, [reordering]);
 
-  const sorted = [...scores].sort((a, b) => a.newRank - b.newRank);
-  const mine = sorted.find((entry) => entry.playerId === myPlayerId);
 
   return (
     <div
@@ -107,16 +123,30 @@ export function TurnResultsOverlay({
         )}
         {showScores && (
           <ul className="turn-results-score-list">
-            {sorted.map((entry) => {
-              const change = rankChange(entry);
-              const startOffset = (entry.previousRank - entry.newRank) * ROW_HEIGHT;
+            {sorted.map((entry, index) => {
+              // A place lost only means something against a place held before.
+              const change = reordering ? rankChange(entry) : null;
+              const startOffset = startOffsets[index] * ROW_HEIGHT;
+              const resting = {
+                transform: "translate(0, 0)",
+                opacity: 1,
+              };
+              const waiting = reordering
+                ? { transform: `translateY(${startOffset}px)`, opacity: 1 }
+                : { transform: `translateX(${-ENTRANCE_TRAVEL}px)`, opacity: 0 };
               return (
                 <li
                   key={entry.playerId}
                   className="turn-results-score-row"
                   style={{
-                    transform: `translateY(${settled ? 0 : startOffset}px)`,
-                    transition: settled ? "transform 600ms ease" : "none",
+                    ...(settled ? resting : waiting),
+                    transition: settled
+                      ? reordering
+                        ? "transform 600ms ease"
+                        : "transform 420ms ease, opacity 420ms ease"
+                      : "none",
+                    transitionDelay:
+                      settled && !reordering ? `${delays[index]}ms` : "0ms",
                   }}
                 >
                   <span className="turn-results-score-rank">#{entry.newRank}</span>
@@ -128,6 +158,9 @@ export function TurnResultsOverlay({
                     >
                       {entry.nickname}
                     </span>
+                    {entry.playerId === myPlayerId && (
+                      <span className="turn-results-score-you"> (you)</span>
+                    )}
                   </span>
                   {entry.playerId === drawerId && drawerBonus > 0 && <span className="drawer-bonus">🎨 +{drawerBonus}</span>}
                   {change && (
@@ -140,7 +173,6 @@ export function TurnResultsOverlay({
                     {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                   </span>
                   <span className="turn-results-score-total">{entry.score}</span>
-                  {entry.playerId === myPlayerId && <span className="turn-results-score-you">You</span>}
                 </li>
               );
             })}

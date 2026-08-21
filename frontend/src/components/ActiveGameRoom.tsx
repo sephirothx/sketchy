@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { CanvasRef } from "../components/Canvas";
 import { GameEndOverlay } from "../components/GameEndOverlay";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
+import { GameHighlightsPanel } from "../components/GameHighlightsPanel";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { AccountMenu } from "../components/AccountMenu";
 import { RestartVoteBanner } from "../components/RestartVoteBanner";
@@ -46,6 +47,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
   const drawingRecap = useGameStore((s) => s.drawingRecap);
+  const gameHighlights = useGameStore((s) => s.gameHighlights);
   const restartVote = useGameStore((s) => s.restartVote);
   const restartVoteCooldownUntil = useGameStore((s) => s.restartVoteCooldownUntil);
   const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
@@ -60,6 +62,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
+  const [highlightsOpen, setHighlightsOpen] = useState(false);
   const [playersDrawerOpen, setPlayersDrawerOpen] = useState(false);
   const [restartBusy, setRestartBusy] = useState(false);
   const [restartClock, setRestartClock] = useState(() => Date.now());
@@ -206,6 +209,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
   function handleViewDrawingsFromGameEnd() {
     dismissGameEnd();
     setRecapOpen(true);
+  }
+
+  function handleViewHighlightsFromGameEnd() {
+    dismissGameEnd();
+    setHighlightsOpen(true);
   }
 
   const amDrawer = useGameStore(selectAmDrawer);
@@ -413,6 +421,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
               entries={drawingRecap}
               onClose={() => setRecapOpen(false)}
             />
+          ) : highlightsOpen ? (
+            <GameHighlightsPanel
+              highlights={gameHighlights}
+              onClose={() => setHighlightsOpen(false)}
+            />
           ) : roomView === "game-end" && finalScores ? (
             <GameEndOverlay
               scores={finalScores}
@@ -421,6 +434,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
               onContinue={dismissGameEnd}
               drawingCount={drawingRecap.length}
               onViewDrawings={handleViewDrawingsFromGameEnd}
+              highlightCount={gameHighlights.length}
+              onViewHighlights={handleViewHighlightsFromGameEnd}
             />
           ) : roomView === "waiting" ? (
             <ConnectedWaitingRoomPanel
@@ -430,6 +445,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
               onStart={() => void handleStartGame()}
               drawingCount={drawingRecap.length}
               onViewDrawings={() => setRecapOpen(true)}
+              highlightCount={gameHighlights.length}
+              onViewHighlights={() => setHighlightsOpen(true)}
             />
           ) : (
             <GameplayRegion canvasRef={canvasRef} />

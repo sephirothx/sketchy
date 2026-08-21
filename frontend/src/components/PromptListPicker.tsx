@@ -73,21 +73,38 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
           const isOnlySelected = isSelected && selectedSlugs.length <= 1;
 
           return (
-            <button
-              key={wl.slug}
-              type="button"
-              className={`prompt-list-chip ${isSelected ? "is-selected" : ""}`}
-              aria-pressed={isSelected}
-              disabled={disabled || (isSelected && isOnlySelected)}
-              title={wl.description || `${wl.name} (${wl.promptCount} prompts)`}
-              onClick={() => handleToggle(wl.slug)}
-            >
-              <span className="prompt-list-chip-status" aria-hidden="true">
-                {isSelected ? "✓" : "+"}
-              </span>
-              <span className="prompt-list-chip-name">{wl.name}</span>
-              <span className="prompt-list-chip-count">{wl.promptCount}</span>
-            </button>
+            // The toggle and the link are siblings rather than nested: one
+            // button inside another is not valid, and a link that selected the
+            // list on the way out would be worse than no link.
+            <span key={wl.slug} className="prompt-list-chip-group">
+              <button
+                type="button"
+                className={`prompt-list-chip ${isSelected ? "is-selected" : ""}`}
+                aria-pressed={isSelected}
+                disabled={disabled || (isSelected && isOnlySelected)}
+                title={wl.description || `${wl.name} (${wl.promptCount} prompts)`}
+                onClick={() => handleToggle(wl.slug)}
+              >
+                <span className="prompt-list-chip-status" aria-hidden="true">
+                  {isSelected ? "✓" : "+"}
+                </span>
+                <span className="prompt-list-chip-name">{wl.name}</span>
+                <span className="prompt-list-chip-count">{wl.promptCount}</span>
+              </button>
+              {/* A new tab: this picker also lives in the waiting-room settings,
+                  where navigating away would discard settings the host is
+                  part-way through editing. */}
+              <a
+                className="prompt-list-chip-info"
+                href={`/prompt-lists/${wl.slug}`}
+                target="_blank"
+                rel="noreferrer"
+                title={`How ${wl.name} prompts play`}
+                aria-label={`How ${wl.name} prompts play`}
+              >
+                <span aria-hidden="true">i</span>
+              </a>
+            </span>
           );
         })}
       </div>

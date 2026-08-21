@@ -156,10 +156,14 @@ async def test_mid_session_socket_reconnects_to_room():
             # that beats it is a pass, not a miss - what matters is that the
             # session comes back, which the assertions below cover. The banner
             # appearing at all is covered by the offline test above.
+            #
+            # Short timeout for exactly that reason: this is an optional
+            # sighting, and locally the reconnect always wins the race, so a
+            # long one is time the suite spends never seeing anything.
             try:
                 await guest.wait_for_selector(
                     '.connection-status-banner.offline, .connection-status-banner.reconnecting',
-                    timeout=5000,
+                    timeout=1500,
                 )
             except PlaywrightTimeoutError:
                 pass
@@ -213,8 +217,14 @@ async def test_room_refresh_failure_keeps_last_successful_list():
 
         await page.route("**/api/rooms", handle_rooms)
         try:
+            # The lobby re-polls on a four-second interval, and this test needs
+            # the second poll - the one that fails. Fast-forwarding the page's
+            # own clock gets there without spending the four seconds, and keeps
+            # the interval a production constant rather than a test setting.
+            await page.clock.install()
             await page.goto(BASE_URL)
             await page.wait_for_selector('[data-testid="public-room-card"]:has-text("Last known room")')
+            await page.clock.fast_forward(5000)
             await page.wait_for_selector('.room-list-warning:has-text("Could not load public rooms")', timeout=7000)
             assert await page.is_visible('[data-testid="public-room-card"]:has-text("Last known room")')
         finally:

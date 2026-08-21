@@ -67,7 +67,14 @@
   .choosing-prompt-dots span { animation: none; opacity: .65; }
   .room-shell-main-transition { animation: none; }
   .room-spectator-tooltip { transition: none; }
-  .turn-results-score-row { transform: none !important; transition: none !important; }
+  /* Also opacity: rows are introduced from transparent on the first turn,
+     and resetting only the transform would leave them invisible here. */
+  .turn-results-score-row {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    transition-delay: 0ms !important;
+  }
 }
 
 [data-theme="dark"] .panel,
@@ -577,6 +584,38 @@
   color: #cbd5e1;
 }
 
+[data-theme="dark"] .game-highlights-card {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .game-highlights-header h1,
+[data-theme="dark"] .game-highlights-subject {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .game-highlights-item {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .game-highlights-kicker,
+[data-theme="dark"] .game-highlights-label,
+[data-theme="dark"] .game-highlights-close {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .game-highlights-empty {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .game-highlights-value {
+  color: #86efac;
+}
+
+[data-theme="dark"] .turn-results-score-you {
+  color: #94a3b8;
+}
+
 [data-theme="dark"] .room-spectator-indicator {
   background: #0f172a;
   border-color: #475569;
@@ -1040,4 +1079,60 @@
   .waiting-room-layout { grid-template-columns: 1fr; }
   .waiting-room-chat-column { position: static; }
   .waiting-chat { height: 300px; }
+}
+
+[data-theme="dark"] .prompt-stats-header h1 {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .prompt-stats-intro,
+[data-theme="dark"] .prompt-stats-note,
+[data-theme="dark"] .prompt-stats-controls label {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .prompt-stats-note.is-error {
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .prompt-stats-table th,
+[data-theme="dark"] .prompt-stats-table td {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .prompt-stats-table caption,
+[data-theme="dark"] .prompt-stats-table thead th,
+[data-theme="dark"] .prompt-list-stats-links {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .prompt-stats-table tbody th {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .prompt-stats-table tbody td {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .prompt-list-chip-info {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .prompt-list-chip-info > span {
+  border-color: #475569;
+}
+
+[data-theme="dark"] .prompt-list-chip-info:hover,
+[data-theme="dark"] .prompt-list-chip-info:focus-visible {
+  color: #a5b4fc;
+}
+
+[data-theme="dark"] .prompt-list-chip-info:hover > span,
+[data-theme="dark"] .prompt-list-chip-info:focus-visible > span {
+  border-color: #818cf8;
+}
+
+[data-theme="dark"] .prompt-stats-table tbody tr.is-unrated th,
+[data-theme="dark"] .prompt-stats-table tbody tr.is-unrated td {
+  color: #64748b;
 }

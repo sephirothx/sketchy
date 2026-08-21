@@ -10,7 +10,7 @@ copy and docs alike. Read it before naming anything a player can see.
 ## Features
 
 - Lobby with a live, polled list of public rooms, or join a private room by code.
-- Curated prompt lists (Standard and Extended English) selectable during room creation, combined with optional custom prompts. Pick rate and guess accuracy stats tracked per prompt.
+- Curated prompt lists (Standard and Extended English) selectable during room creation, combined with optional custom prompts. Pick rate and guess accuracy stats tracked per prompt, and browsable from the lobby on a prompt stats page listing every prompt in a list, searchable and sortable. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
 - Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the prompt, and private spectator chat restricted to the drawer, spectators, and correct guessers.
@@ -18,6 +18,11 @@ copy and docs alike. Read it before naming anything a player can see.
 - Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
 - Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — save the current canvas directly as a PNG file at any time.
+- Game highlights — the hardest prompt, the fastest guess, the best drawer, and the quickest
+  guesser on average, on a screen of their own reached from the game over screen or from the
+  waiting room afterwards. Derived from guess counts and timings rather than points, so the
+  same four appear in a no-scoring game, and each is dropped when the game gives it nothing
+  to say.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
@@ -119,7 +124,8 @@ backend/
   app/
     db/           SQLAlchemy models, engine setup, seeding, and migration runner
     repositories/ Abstract repository interfaces and SQLAlchemy implementations
-    main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, REST endpoints
+    api/          REST routers: player profiles, prompt lists, and prompt stats
+    main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, health and room endpoints
     handlers/
       __init__.py    Registers all handler domains and returns their lifecycle context
       context.py     Shared HandlerContext for Socket.IO, rooms, timers, and repositories
@@ -134,6 +140,7 @@ backend/
       payloads.py    Typed boundary models and parsers for every client command
     services/
       game_flow.py Shared turn, round, timer, and player-removal workflows
+      game_highlights.py Pure derivation of a finished game's highlights
       timers.py    Application-owned asynchronous timer lifecycle
     presenters.py Pure construction of room, turn, round, and session payloads
     game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable
@@ -147,7 +154,7 @@ backend/
 frontend/
   src/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat
-    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay)
+    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL
@@ -250,6 +257,16 @@ The E2E server also runs with `TURN_RESULTS_SECONDS=0.5`, because the suite
 plays whole games end to end and the production five-second pause after every
 turn otherwise dominates the run. Clients read the phase length off the
 payload, so a shortened pause is still a faithful turn.
+
+Two rules keep the suite fast as it grows. A test waits on the condition it
+actually cares about — the next phase arriving, the element appearing — never on
+a fixed sleep sized to outlast it, because such a sleep costs its full length on
+every run and silently stops covering anything when the thing it waits for gets
+slower. And where a test genuinely has to sit out a production interval, such as
+the lobby's four-second room-list poll, it fast-forwards the page's own clock
+with Playwright's `page.clock` rather than spending the time. That keeps the
+interval a production constant instead of something bent for the tests, and it
+is the tool to reach for before making a timing value configurable.
 
 The canvas benchmark starts the built application on an isolated local port
 (`8765` by default), creates a real two-player game, and reports
