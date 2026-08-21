@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import warnings
+
 import pytest
 from sqlalchemy import select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SAWarning
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.models import (
@@ -267,8 +269,23 @@ async def test_migrations_match_the_models(tmp_path):
     try:
         async with engine.begin() as connection:
             await connection.run_sync(upgrade)
-        async with engine.connect() as connection:
-            differences = await connection.run_sync(diff)
+        # Both SQLAlchemy and Alembic say out loud that they are skipping the
+        # expression index, once each, every run. That is the blind spot the
+        # docstring above names rather than news, so it is filtered by name -
+        # any other reflection warning still gets through.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*ix_users_username_lower.*",
+                category=SAWarning,
+            )
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*ix_users_username_lower.*",
+                category=UserWarning,
+            )
+            async with engine.connect() as connection:
+                differences = await connection.run_sync(diff)
     finally:
         await engine.dispose()
 
