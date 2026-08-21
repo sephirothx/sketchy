@@ -39,6 +39,7 @@ Thumbs.db
 .agents/
 .cursor/
 AGENTS.md
+CLAUDE.md
 
 # --- Local documentation ---
 docs/
