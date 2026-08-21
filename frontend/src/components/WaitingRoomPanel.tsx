@@ -24,6 +24,8 @@ interface WaitingRoomPanelProps {
   onStart: () => void;
   drawingCount: number;
   onViewDrawings: () => void;
+  highlightCount: number;
+  onViewHighlights: () => void;
 }
 
 function hintLabel(mode: HintMode, hidden: boolean) {
@@ -62,6 +64,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         </div>
         {finalScores && (
           <div className="waiting-room-actions">
+            {props.highlightCount > 0 && (
+              <button type="button" onClick={props.onViewHighlights}>
+                View highlights
+              </button>
+            )}
             {props.drawingCount > 0 && (
               <button type="button" onClick={props.onViewDrawings}>
                 View drawings

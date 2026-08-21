@@ -18,10 +18,11 @@ copy and docs alike. Read it before naming anything a player can see.
 - Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
 - Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — save the current canvas directly as a PNG file at any time.
-- Game highlights — the game over screen names the hardest prompt, the fastest guess, the
-  best drawer, and the quickest guesser on average. Derived from guess counts and timings
-  rather than points, so the same four appear in a no-scoring game, and each is dropped
-  when the game gives it nothing to say.
+- Game highlights — the hardest prompt, the fastest guess, the best drawer, and the quickest
+  guesser on average, on a screen of their own reached from the game over screen or from the
+  waiting room afterwards. Derived from guess counts and timings rather than points, so the
+  same four appear in a no-scoring game, and each is dropped when the game gives it nothing
+  to say.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.

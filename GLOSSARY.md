@@ -31,8 +31,8 @@ and conversation.
 | **Choosing** | The phase where the drawer picks one of their prompt options. Everyone else waits. | word select, prompt select, picking phase |
 | **Drawing** | The phase where the drawer draws and everyone else guesses. Ends when the timer runs out or everyone has guessed. | play phase |
 | **Turn results** | The short phase after each turn: the prompt is revealed and scores update. | round end, round results, intermission |
-| **Game over** | The final screen: full standings, the highlights, and the drawing recap. | game end screen, results screen |
-| **Highlights** | The short list of superlatives on the game over screen — hardest prompt, fastest guess, best drawer, quickest on average. Each is dropped when the game gives it nothing to say, so the list is often shorter than four. Never derived from points, so it reads the same in a no-scoring game. | awards, MVP, trophies, achievements |
+| **Game over** | The final screen: full standings, and the way through to the highlights and the drawing recap. | game end screen, results screen |
+| **Highlights** | The short list of superlatives from the last game — hardest prompt, fastest guess, best drawer, quickest on average. Shown on a screen of their own, reached from the game over screen or the waiting room, rather than crowded onto either. Each is dropped when the game gives it nothing to say, so the list is often shorter than four. Never derived from points, so it reads the same in a no-scoring game. | awards, MVP, trophies, achievements |
 | **Rematch** | Starting a new game with the players already in the room. | replay, new game |
 
 The rule of thumb: **rounds contain turns**. Anything a single drawer does, is

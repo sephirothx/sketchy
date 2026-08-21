@@ -577,20 +577,31 @@
   color: #cbd5e1;
 }
 
-[data-theme="dark"] .game-end-highlights {
+[data-theme="dark"] .game-highlights-card {
+  background: #0f172a;
   border-color: #334155;
 }
 
-[data-theme="dark"] .game-end-highlights li {
+[data-theme="dark"] .game-highlights-header h1,
+[data-theme="dark"] .game-highlights-subject {
   color: #e2e8f0;
 }
 
-[data-theme="dark"] .game-end-highlights h2,
-[data-theme="dark"] .game-end-highlight-label {
+[data-theme="dark"] .game-highlights-item {
+  border-color: #334155;
+}
+
+[data-theme="dark"] .game-highlights-kicker,
+[data-theme="dark"] .game-highlights-label,
+[data-theme="dark"] .game-highlights-close {
   color: #94a3b8;
 }
 
-[data-theme="dark"] .game-end-highlight-value {
+[data-theme="dark"] .game-highlights-empty {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .game-highlights-value {
   color: #86efac;
 }
 
