@@ -1,4 +1,4 @@
-interface ChoosingWordOverlayProps {
+interface ChoosingPromptOverlayProps {
   drawerNickname: string;
   drawerNameColor?: string;
 }
@@ -6,7 +6,7 @@ interface ChoosingWordOverlayProps {
 export function ChoosingPromptOverlay({
   drawerNickname,
   drawerNameColor,
-}: ChoosingWordOverlayProps) {
+}: ChoosingPromptOverlayProps) {
   return (
     <div
       className="choosing-prompt-overlay"

@@ -231,7 +231,7 @@ async def test_already_joined_socket_resyncs_active_drawing_state():
     room.state = "playing"
     room.game = Game(turn_order=list(room.players))
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -270,7 +270,7 @@ async def test_sync_game_carries_the_running_hint_spend():
     room.state = "playing"
     room.game = Game(turn_order=list(room.players), hint_mode="purchase")
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
     assert room.game.current_drawer == drawer.id
     assert room.game.buy_hint_letter(guesser.id, 0) is True
@@ -301,7 +301,7 @@ async def test_already_joined_socket_resyncs_turn_results_overlay():
     room.state = "playing"
     room.game = Game(turn_order=[drawer.id, guesser.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.guess_points[guesser.id] = 200
     room.game.guess_times[guesser.id] = 12.0
     assert room.game.end_round() is not None
@@ -334,7 +334,7 @@ async def test_session_ping_reports_phase_or_needs_rebind():
     room.state = "playing"
     room.game = Game(turn_order=list(room.players))
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -364,7 +364,7 @@ async def test_soft_already_joined_skips_canvas_sync():
     room.state = "playing"
     room.game = Game(turn_order=list(room.players))
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     sio = socketio.AsyncServer(async_mode="asgi")

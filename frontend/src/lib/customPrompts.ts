@@ -57,7 +57,7 @@ export function analyzeCustomPrompts(raw: string): CustomPromptAnalysis {
   };
 }
 
-function canUseCustomWordsOnly(analysis: CustomPromptAnalysis) {
+function canUseCustomPromptsOnly(analysis: CustomPromptAnalysis) {
   return analysis.usableCount > 0 && !analysis.hasErrors;
 }
 
@@ -69,7 +69,7 @@ export function createCustomPromptsState(
   return {
     value,
     analysis,
-    only: canUseCustomWordsOnly(analysis) && only,
+    only: canUseCustomPromptsOnly(analysis) && only,
   };
 }
 
@@ -78,7 +78,7 @@ export function customPromptsReducer(
   action: CustomPromptsAction,
 ): CustomPromptsState {
   if (action.type === "set-only") {
-    const only = canUseCustomWordsOnly(state.analysis) && action.only;
+    const only = canUseCustomPromptsOnly(state.analysis) && action.only;
     return only === state.only ? state : { ...state, only };
   }
   if (action.type === "change" && action.value === state.value) return state;

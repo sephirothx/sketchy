@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "../lib/api";
 import type { PromptListSummary } from "../types";
 
-interface WordListPickerProps {
+interface PromptListPickerProps {
   selectedSlugs: string[];
   onChange: (slugs: string[]) => void;
   disabled?: boolean;
 }
 
-export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: WordListPickerProps) {
+export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: PromptListPickerProps) {
   const [promptLists, setPromptLists] = useState<PromptListSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);

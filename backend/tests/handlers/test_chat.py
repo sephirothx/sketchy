@@ -179,7 +179,7 @@ async def test_simultaneous_final_guesses_end_round_once():
         player.sid = f"sid-{index}"
     room.game = Game(turn_order=[player.id for player in players], rounds_total=2)
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
     answer = room.game.prompt
 

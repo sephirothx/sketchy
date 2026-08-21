@@ -36,8 +36,8 @@ def turn(
     return CompletedTurnStats(
         round_number=1,
         turn_number=number,
-        offered_words=["a", "b", "c"],
-        chosen_word="jackpot",
+        offered_prompts=["a", "b", "c"],
+        chosen_prompt="jackpot",
         correct_guess_count=len(guesses),
         total_guesser_count=len(guesses),
         drawer_token=drawer_id,
@@ -149,8 +149,8 @@ def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
         CompletedTurnStats(
             round_number=1,
             turn_number=1,
-            offered_words=["a", "b", "c"],
-            chosen_word="jackpot",
+            offered_prompts=["a", "b", "c"],
+            chosen_prompt="jackpot",
             correct_guess_count=1,
             total_guesser_count=3,
             drawer_token=ann,

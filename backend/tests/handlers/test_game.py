@@ -22,7 +22,7 @@ async def test_explicit_drawer_leave_starts_next_survivor_turn():
     room.state = "playing"
     room.game = Game(turn_order=list(room.players), rounds_total=2)
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     timers = register_handlers(sio, room_manager).timers

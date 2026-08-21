@@ -195,7 +195,7 @@ class PromptListSummary:
 
 
 @dataclass(frozen=True)
-class WordStatsSummary:
+class PromptStatsSummary:
     """Detailed statistics and derived difficulty metrics for a prompt."""
 
     text: str
@@ -208,7 +208,7 @@ class WordStatsSummary:
 
 
 @dataclass(frozen=True, slots=True)
-class WordPickTotals:
+class PromptPickTotals:
     """What being drawn cost one prompt over a whole game.
 
     More than one turn can land on the same prompt: a pool too small to keep
@@ -221,7 +221,7 @@ class WordPickTotals:
 
 
 @dataclass(frozen=True, slots=True)
-class WordUsage:
+class PromptUsage:
     """One finished game's effect on a prompt list's counters.
 
     Keyed by the prompt as stored - trimmed and lower-cased - so the repository
@@ -230,7 +230,7 @@ class WordUsage:
     """
 
     offers: Mapping[str, int]
-    picks: Mapping[str, WordPickTotals]
+    picks: Mapping[str, PromptPickTotals]
 
     def __bool__(self) -> bool:
         return bool(self.offers or self.picks)
@@ -353,7 +353,7 @@ class PromptListRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_words(self, prompt_list_id: str) -> list[str]:
+    async def get_prompts(self, prompt_list_id: str) -> list[str]:
         """Retrieve prompt strings belonging to a specific list."""
         ...
 
@@ -376,10 +376,10 @@ class PromptListRepository(ABC):
         ...
 
     @abstractmethod
-    async def record_word_usage(
+    async def record_prompt_usage(
         self,
         prompt_list_slugs: Sequence[str],
-        usage: WordUsage,
+        usage: PromptUsage,
     ) -> None:
         """Apply one finished game's offers and picks to every named list.
 
@@ -390,9 +390,9 @@ class PromptListRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_word_stats(
+    async def get_prompt_stats(
         self,
-        word_list_slug: str,
-    ) -> list[WordStatsSummary]:
+        prompt_list_slug: str,
+    ) -> list[PromptStatsSummary]:
         """Retrieve usage statistics and difficulty ratios for prompts in a list."""
         ...

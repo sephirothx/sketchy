@@ -40,9 +40,9 @@ from app.repositories.interfaces import (
     UsernameTakenError,
     PromptListRepository,
     PromptListSummary,
-    WordPickTotals,
-    WordStatsSummary,
-    WordUsage,
+    PromptPickTotals,
+    PromptStatsSummary,
+    PromptUsage,
 )
 
 MAX_PAGINATION_LIMIT = 100
@@ -90,7 +90,7 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
     )
 
 
-def _to_word_list_summary(wl: PromptList) -> PromptListSummary:
+def _to_prompt_list_summary(wl: PromptList) -> PromptListSummary:
     return PromptListSummary(
         id=wl.id,
         slug=wl.slug,
@@ -518,16 +518,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         async with self._session_factory() as session:
             stmt = select(PromptList).order_by(PromptList.name)
             result = await session.execute(stmt)
-            return [_to_word_list_summary(wl) for wl in result.scalars().all()]
+            return [_to_prompt_list_summary(wl) for wl in result.scalars().all()]
 
     async def get_by_slug(self, slug: str) -> PromptListSummary | None:
         async with self._session_factory() as session:
             stmt = select(PromptList).where(PromptList.slug == slug)
             result = await session.execute(stmt)
             wl = result.scalar_one_or_none()
-            return _to_word_list_summary(wl) if wl else None
+            return _to_prompt_list_summary(wl) if wl else None
 
-    async def get_words(self, prompt_list_id: str) -> list[str]:
+    async def get_prompts(self, prompt_list_id: str) -> list[str]:
         async with self._session_factory() as session:
             stmt = select(Prompt.text).where(Prompt.prompt_list_id == prompt_list_id).order_by(Prompt.text)
             result = await session.execute(stmt)
@@ -626,16 +626,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                             )
 
             await session.refresh(wl)
-            return _to_word_list_summary(wl)
+            return _to_prompt_list_summary(wl)
 
-    async def record_word_usage(
+    async def record_prompt_usage(
         self,
         prompt_list_slugs: Sequence[str],
-        usage: WordUsage,
+        usage: PromptUsage,
     ) -> None:
         """Apply a whole game's counters to every named list in one transaction.
 
-        Words carrying the same increment are updated together, so the cost is
+        Prompts carrying the same increment are updated together, so the cost is
         a handful of statements rather than one per prompt per list. A game ends
         with as many turns as it had players and rounds, and this used to be a
         commit apiece.
@@ -668,7 +668,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         .values(offer_count=Prompt.offer_count + count)
                     )
 
-                picks_by_totals: dict[WordPickTotals, list[str]] = defaultdict(list)
+                picks_by_totals: dict[PromptPickTotals, list[str]] = defaultdict(list)
                 for text, totals in usage.picks.items():
                     picks_by_totals[totals].append(text)
                 for totals, texts in picks_by_totals.items():
@@ -691,26 +691,26 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         )
                     )
 
-    async def get_word_stats(
+    async def get_prompt_stats(
         self,
-        word_list_slug: str,
-    ) -> list[WordStatsSummary]:
+        prompt_list_slug: str,
+    ) -> list[PromptStatsSummary]:
         async with self._session_factory() as session:
             stmt = (
                 select(Prompt)
                 .join(PromptList, Prompt.prompt_list_id == PromptList.id)
-                .where(PromptList.slug == word_list_slug)
+                .where(PromptList.slug == prompt_list_slug)
                 .order_by(Prompt.text)
             )
             result = await session.execute(stmt)
             prompts = result.scalars().all()
 
-            summaries: list[WordStatsSummary] = []
+            summaries: list[PromptStatsSummary] = []
             for w in prompts:
                 pick_rate = (w.pick_count / w.offer_count) if w.offer_count > 0 else 0.0
                 ratio = (w.correct_guess_count / w.total_guesser_count) if w.total_guesser_count > 0 else 0.0
                 summaries.append(
-                    WordStatsSummary(
+                    PromptStatsSummary(
                         text=w.text,
                         offer_count=w.offer_count,
                         pick_count=w.pick_count,

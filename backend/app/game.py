@@ -17,9 +17,9 @@ from enum import Enum
 from itertools import groupby
 
 from app.canvas_session import CanvasSession
-from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_word_choices
+from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_prompt_choices
 
-CHOOSE_WORD_SECONDS = 15
+CHOOSE_PROMPT_SECONDS = 15
 DRAWING_SECONDS = 80
 TURN_RESULTS_SECONDS = 5
 MIN_GUESS_POINTS = 100
@@ -215,8 +215,8 @@ class CompletedTurnStats:
 
     round_number: int
     turn_number: int
-    offered_words: list[str]
-    chosen_word: str
+    offered_prompts: list[str]
+    chosen_prompt: str
     correct_guess_count: int
     # Who could still have guessed. Without it, "two players guessed" could
     # equally mean two out of two or two out of eight.
@@ -407,7 +407,7 @@ class Game:
                 attempts += 1
         self.current_drawer = self.turn_order[self.turn_index % len(self.turn_order)]
         self.prompt = None
-        self.prompt_choices = random_word_choices(3, exclude=self.used_prompts, pool=self.prompt_pool)
+        self.prompt_choices = random_prompt_choices(3, exclude=self.used_prompts, pool=self.prompt_pool)
         self.correct_guessers = set()
         self.guess_points = {}
         self.guess_times = {}
@@ -437,7 +437,7 @@ class Game:
         self._set_prompt(prompt)
         return True
 
-    def force_word_choice(self) -> None:
+    def force_prompt_choice(self) -> None:
         if self.phase == Phase.CHOOSING_PROMPT and self.prompt_choices:
             self.prompt_auto_picked = True
             self._set_prompt(self.prompt_choices[0])
@@ -674,8 +674,8 @@ class Game:
         if len(text) > MAX_PROMPT_LENGTH:
             return False, 0
         normalized_guess = _normalize(text)
-        normalized_word = _normalize(self.prompt)
-        if normalized_guess != normalized_word:
+        normalized_prompt = _normalize(self.prompt)
+        if normalized_guess != normalized_prompt:
             # Counted here rather than at the caller so that only real attempts
             # land: the drawer and players who already have it return above,
             # and their messages are chat, not guesses.
@@ -715,7 +715,7 @@ class Game:
 
         Returns "close" if the guess is a near-miss for the whole prompt/phrase
         (see `_is_close_pair`), "partial" if (for multi-word prompts only,
-        matching words position-independently and tolerating a prompt-count
+        matching words position-independently and tolerating a word-count
         difference of at most 1) one or more correct words together add up to
         at least `CLOSE_GUESS_MIN_CORRECT_LETTERS` letters, or None if
         neither applies.
@@ -736,7 +736,7 @@ class Game:
         if len(word_tokens) > 1:
             guess_tokens = guess.split(" ")
             if abs(len(guess_tokens) - len(word_tokens)) <= 1:
-                # Bag-of-words intersection: matches regardless of prompt order,
+                # Bag-of-words intersection: matches regardless of word order,
                 # capping duplicate words at the lower count on either side.
                 overlap = Counter(guess_tokens) & Counter(word_tokens)
                 correct_letter_count = sum(len(w) * count for w, count in overlap.items())
@@ -762,8 +762,8 @@ class Game:
             CompletedTurnStats(
                 round_number=self.round_number,
                 turn_number=len(self.completed_turns) + 1,
-                offered_words=list(self.prompt_choices),
-                chosen_word=self.prompt or "",
+                offered_prompts=list(self.prompt_choices),
+                chosen_prompt=self.prompt or "",
                 correct_guess_count=len(self.correct_guessers),
                 total_guesser_count=total_guesser_count,
                 drawer_token=self.current_drawer or "",

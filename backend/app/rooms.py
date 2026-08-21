@@ -354,14 +354,14 @@ class Room:
         self.canvas_generation += 1
         return self.canvas_generation
 
-    def effective_word_pool(self) -> list[str] | None:
+    def effective_prompt_pool(self) -> list[str] | None:
         """Return the prompt pool a Game should draw from, or None for the default list.
 
-        If custom_prompts_only is set and custom words exist, returns just the custom words.
-        Otherwise, merges custom words with curated words (or fallback PROMPTS if none provided),
-        with custom words first, deduplicated case-insensitively.
+        If custom_prompts_only is set and custom prompts exist, returns just those.
+        Otherwise, merges custom prompts with curated prompts (or fallback PROMPTS if none provided),
+        with custom prompts first, deduplicated case-insensitively.
         """
-        base_words = self.curated_prompts if self.curated_prompts else PROMPTS
+        base_prompts = self.curated_prompts if self.curated_prompts else PROMPTS
         if not self.custom_prompts and not self.curated_prompts:
             return None
         if not self.custom_prompts:
@@ -369,7 +369,7 @@ class Room:
         if self.custom_prompts_only:
             return self.custom_prompts
         seen = {w.lower() for w in self.custom_prompts}
-        return self.custom_prompts + [w for w in base_words if w.lower() not in seen]
+        return self.custom_prompts + [w for w in base_prompts if w.lower() not in seen]
 
     def to_public_summary(self) -> dict:
         active_players = self.seated_players()

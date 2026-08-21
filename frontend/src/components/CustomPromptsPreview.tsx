@@ -8,7 +8,7 @@ interface CustomPromptsResponse extends AckResponse {
   prompts?: string[];
 }
 
-interface CustomWordsPreviewProps {
+interface CustomPromptsPreviewProps {
   count: number;
 }
 
@@ -47,7 +47,7 @@ const VIRTUAL_ROW_HEIGHT = 36;
 const VIRTUAL_ITEM_MIN_WIDTH = 130;
 const VIRTUAL_GAP = 6;
 const VIRTUAL_OVERSCAN_ROWS = 3;
-const FULL_WORD_TOOLTIP_ID = "custom-prompt-full-text-tooltip";
+const FULL_PROMPT_TOOLTIP_ID = "custom-prompt-full-text-tooltip";
 
 function hasTruncatedText(element: HTMLSpanElement) {
   const styles = getComputedStyle(element);
@@ -73,7 +73,7 @@ function hasTruncatedText(element: HTMLSpanElement) {
   return textRange.getBoundingClientRect().width > contentWidth;
 }
 
-interface WordChipProps {
+interface PromptChipProps {
   activePrompt: ActivePrompt | null;
   onDismiss: (anchor?: HTMLSpanElement) => void;
   onShow: (prompt: string, anchor: HTMLSpanElement) => void;
@@ -82,20 +82,20 @@ interface WordChipProps {
   total?: number;
 }
 
-function WordChip({
+function PromptChip({
   activePrompt,
   onDismiss,
   onShow,
   position,
   record,
   total,
-}: WordChipProps) {
+}: PromptChipProps) {
   const isActive = activePrompt?.prompt === record.prompt;
   return (
     <span
       role="listitem"
       tabIndex={0}
-      aria-describedby={isActive ? FULL_WORD_TOOLTIP_ID : undefined}
+      aria-describedby={isActive ? FULL_PROMPT_TOOLTIP_ID : undefined}
       aria-posinset={position}
       aria-setsize={total}
       onBlur={(event) => onDismiss(event.currentTarget)}
@@ -113,7 +113,7 @@ function WordChip({
   );
 }
 
-function FullWordTooltip({ activePrompt }: { activePrompt: ActivePrompt }) {
+function FullPromptTooltip({ activePrompt }: { activePrompt: ActivePrompt }) {
   const [position, setPosition] = useState({ left: 0, top: 0, above: false });
 
   useLayoutEffect(() => {
@@ -142,7 +142,7 @@ function FullWordTooltip({ activePrompt }: { activePrompt: ActivePrompt }) {
 
   return createPortal(
     <div
-      id={FULL_WORD_TOOLTIP_ID}
+      id={FULL_PROMPT_TOOLTIP_ID}
       className="custom-prompt-full-text-tooltip"
       role="tooltip"
       style={{
@@ -157,14 +157,14 @@ function FullWordTooltip({ activePrompt }: { activePrompt: ActivePrompt }) {
   );
 }
 
-interface VirtualWordListProps {
+interface VirtualPromptListProps {
   activePrompt: ActivePrompt | null;
   onDismiss: (anchor?: HTMLSpanElement) => void;
   onShow: (prompt: string, anchor: HTMLSpanElement) => void;
   records: PromptRecord[];
 }
 
-function VirtualWordList({ activePrompt, onDismiss, onShow, records }: VirtualWordListProps) {
+function VirtualPromptList({ activePrompt, onDismiss, onShow, records }: VirtualPromptListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({
     height: 190,
@@ -243,7 +243,7 @@ function VirtualWordList({ activePrompt, onDismiss, onShow, records }: VirtualWo
               }}
             >
               {rowRecords.map((record, column) => (
-                <WordChip
+                <PromptChip
                   key={record.prompt}
                   activePrompt={activePrompt}
                   onDismiss={onDismiss}
@@ -261,7 +261,7 @@ function VirtualWordList({ activePrompt, onDismiss, onShow, records }: VirtualWo
   );
 }
 
-export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
+export function CustomPromptsPreview({ count }: CustomPromptsPreviewProps) {
   const [prompts, setPrompts] = useState<PromptRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -277,7 +277,7 @@ export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
     setActivePrompt({ anchor, prompt });
   }
 
-  function dismissFullWord(anchor?: HTMLSpanElement) {
+  function dismissFullPrompt(anchor?: HTMLSpanElement) {
     setActivePrompt((current) =>
       !anchor || current?.anchor === anchor ? null : current,
     );
@@ -388,10 +388,10 @@ export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
             </p>
 
             {filteredPrompts.length > VIRTUALIZE_ABOVE ? (
-              <VirtualWordList
+              <VirtualPromptList
                 key={`${query}\u0000${lengthFilter}`}
                 activePrompt={activePrompt}
-                onDismiss={dismissFullWord}
+                onDismiss={dismissFullPrompt}
                 onShow={showFullPrompt}
                 records={filteredPrompts}
               />
@@ -399,13 +399,13 @@ export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
               <div
                 className="waiting-custom-prompts-list"
                 role="list"
-                onScroll={() => dismissFullWord()}
+                onScroll={() => dismissFullPrompt()}
               >
                 {filteredPrompts.map((record) => (
-                  <WordChip
+                  <PromptChip
                     key={record.prompt}
                     activePrompt={activePrompt}
-                    onDismiss={dismissFullWord}
+                    onDismiss={dismissFullPrompt}
                     onShow={showFullPrompt}
                     record={record}
                   />
@@ -416,7 +416,7 @@ export function CustomPromptsPreview({ count }: CustomWordsPreviewProps) {
                 No custom prompts match these filters.
               </p>
             )}
-            {activePrompt && <FullWordTooltip activePrompt={activePrompt} />}
+            {activePrompt && <FullPromptTooltip activePrompt={activePrompt} />}
           </>
         )}
       </div>

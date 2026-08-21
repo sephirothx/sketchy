@@ -40,7 +40,7 @@ flowchart LR
         REST["FastAPI REST\n/api/health, /api/rooms"]
         IO["python-socketio\nAsyncServer"]
         State["In-memory state\nRoomManager + Game"]
-        Repo["Repository Layer\nUserRepository\nGameHistoryRepository\nWordListRepository"]
+        Repo["Repository Layer\nUserRepository\nGameHistoryRepository\nPromptListRepository"]
     end
     subgraph Database[Storage]
         DB[("SQLite / PostgreSQL\n(SQLAlchemy + Alembic)")]

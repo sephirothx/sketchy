@@ -93,8 +93,8 @@ export function useGameSocketListeners() {
       });
     };
 
-    const onYourWordChoices = (payload: { choices: string[]; seconds: number }) => {
-      store.getState().setMyWordChoices(payload.choices, payload.seconds);
+    const onYourPromptChoices = (payload: { choices: string[]; seconds: number }) => {
+      store.getState().setMyPromptChoices(payload.choices, payload.seconds);
     };
 
     const onYouAreDrawing = (payload: { prompt: string; choices?: string[] }) => {
@@ -232,7 +232,7 @@ export function useGameSocketListeners() {
     socket.on("player_left", onPlayerLeft);
     socket.on("game_started", onGameStarted);
     socket.on("turn_starting", onTurnStarting);
-    socket.on("your_prompt_choices", onYourWordChoices);
+    socket.on("your_prompt_choices", onYourPromptChoices);
     socket.on("you_are_drawing", onYouAreDrawing);
     socket.on("turn_started", onTurnStarted);
     socket.on("chat_message", onChatMessage);
@@ -251,7 +251,7 @@ export function useGameSocketListeners() {
       socket.off("player_left", onPlayerLeft);
       socket.off("game_started", onGameStarted);
       socket.off("turn_starting", onTurnStarting);
-      socket.off("your_prompt_choices", onYourWordChoices);
+      socket.off("your_prompt_choices", onYourPromptChoices);
       socket.off("you_are_drawing", onYouAreDrawing);
       socket.off("turn_started", onTurnStarted);
       socket.off("chat_message", onChatMessage);

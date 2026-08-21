@@ -44,7 +44,7 @@ async def test_draw_handler_rejects_events_outside_drawing_phase():
     )
     assert room.game.canvas.history == []
 
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     await draw(
         "drawer-sid",
         encode_live_drawing("draw_start", payload),
@@ -63,7 +63,7 @@ async def test_draw_handler_records_and_rebroadcasts_every_binary_action():
     room_manager.add_player(room, "Guesser")
     room.game = Game(turn_order=list(room.players))
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -135,7 +135,7 @@ async def test_draw_handler_requests_gaps_and_accepts_retransmission():
     drawer.sid = "drawer-sid"
     room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -182,7 +182,7 @@ async def test_draw_handler_rejects_actions_from_a_previous_canvas_generation():
     room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -216,7 +216,7 @@ async def test_retransmitted_committed_path_is_idempotent():
     drawer.sid = "drawer-sid"
     room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -265,7 +265,7 @@ async def test_retransmission_older_than_commit_window_gets_authoritative_sync(
     drawer.sid = "drawer-sid"
     room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -304,7 +304,7 @@ async def test_draw_retransmission_for_undo_commit_gets_authoritative_sync():
     drawer.sid = "drawer-sid"
     room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -354,7 +354,7 @@ async def test_retransmitted_incomplete_path_restarts_the_semantic_action():
     drawer.sid = "drawer-sid"
     room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -392,7 +392,7 @@ async def test_undo_hash_mismatch_sends_authoritative_sync():
     drawer.sid = "drawer-sid"
     room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)
@@ -548,7 +548,7 @@ async def test_undo_stroke_and_clear_canvas_handlers():
 
     room.game = Game(turn_order=[drawer.id, guesser.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     timers = register_handlers(sio, room_manager).timers
@@ -656,7 +656,7 @@ async def test_draw_fill_handler_validation():
 
     room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     timers = register_handlers(sio, room_manager).timers
@@ -700,7 +700,7 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
 
     room.game = Game(turn_order=[drawer.id], rounds_total=1)
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     room.game.set_phase_deadline(DRAWING_SECONDS)
 
     # Record drawing strokes in progress

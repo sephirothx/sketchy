@@ -23,7 +23,7 @@ def register_all_handlers(
     timers: TimerManager | None = None,
     user_repo: UserRepository | None = None,
     game_history_repo: GameHistoryRepository | None = None,
-    word_list_repo: PromptListRepository | None = None,
+    prompt_list_repo: PromptListRepository | None = None,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> HandlerContext:
     """Create the shared context and register every domain exactly once."""
@@ -33,7 +33,7 @@ def register_all_handlers(
         timers=timers if timers is not None else TimerManager(),
         user_repo=user_repo,
         game_history_repo=game_history_repo,
-        word_list_repo=word_list_repo,
+        prompt_list_repo=prompt_list_repo,
         session_factory=session_factory,
     )
     ctx.game_flow = GameFlowService(ctx)

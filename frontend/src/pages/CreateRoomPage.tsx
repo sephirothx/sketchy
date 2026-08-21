@@ -37,7 +37,7 @@ export function CreateRoomPage() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
-  const [promptListSlugs, setWordListSlugs] = useState<string[]>(["english_standard"]);
+  const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
   const [customPrompts, dispatchCustomPrompts] = useReducer(
     customPromptsReducer,
     undefined,
@@ -79,7 +79,7 @@ export function CreateRoomPage() {
 
   const hintsDisabled = hideMaskedPrompt || scoringMode === "none";
 
-  function handleCustomWordsChange(value: string) {
+  function handleCustomPromptsChange(value: string) {
     dispatchCustomPrompts({ type: "change", value });
   }
 
@@ -111,7 +111,7 @@ export function CreateRoomPage() {
         <InputNumber label="Max players" value={maxPlayers} min={MAX_PLAYERS_MIN} max={MAX_PLAYERS_MAX} onChange={setMaxPlayers} />
         <InputNumber label="Rounds" value={rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={setRounds} />
         <InputNumber label="Drawing time (seconds)" value={drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={setDrawingSeconds} />
-        <PromptListPicker selectedSlugs={promptListSlugs} onChange={setWordListSlugs} />
+        <PromptListPicker selectedSlugs={promptListSlugs} onChange={setPromptListSlugs} />
       </div>
       <details className="advanced-settings"><summary>Advanced settings <span>Spectators, scoring, hints, and custom prompts</span></summary>
         <div className="advanced-settings-content">
@@ -145,7 +145,7 @@ export function CreateRoomPage() {
           />
           {hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
           {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">Point-purchase hint modes require scoring.</p>}
-          <CustomPromptsEditor value={customPrompts.value} analysis={customPrompts.analysis} onChange={handleCustomWordsChange} />
+          <CustomPromptsEditor value={customPrompts.value} analysis={customPrompts.analysis} onChange={handleCustomPromptsChange} />
           <Switch
             label="Only use custom prompts"
             hint="Add a usable custom prompt to enable this option."

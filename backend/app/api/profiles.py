@@ -76,7 +76,7 @@ def create_profile_router(
     async def game_detail(game_id: str, request: Request):
         """Round-by-round detail, visible only to the players who were there.
 
-        The words drawn, who guessed them and how fast are the substance of a
+        The prompts drawn, who guessed them and how fast are the substance of a
         game, and they belong to its participants rather than to anyone holding
         the id.
         """

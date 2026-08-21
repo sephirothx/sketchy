@@ -23,7 +23,7 @@ def active_room(player_count: int = 3):
     room.state = "playing"
     room.game = Game(turn_order=[player.id for player in players], rounds_total=2)
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
     return room_manager, room, players
 
 

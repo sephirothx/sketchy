@@ -4,7 +4,7 @@ import { useToast } from "../lib/toast";
 import { splitMaskedPrompt } from "../lib/maskedPrompt";
 import type { AckResponse, HintMode } from "../types";
 
-interface WordDisplayProps {
+interface PromptDisplayProps {
   isDrawer: boolean;
   myPrompt: string | null;
   maskedPrompt: string;
@@ -19,10 +19,12 @@ interface WordDisplayProps {
   hintBudget?: number;
 }
 
-// tightly spaced blanks per prompt, followed by each prompt's letter count (in
-// order) at the very end. Digits only ever appear in that trailing count
-// list, so splitting on the first digit cleanly separates the two parts.
-function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
+// tightly spaced blanks per word, followed by each word's letter count (in
+// order) at the very end. A prompt can be several words long, which is why
+// there is a run of blanks and a count per word rather than one of each.
+// Digits only ever appear in that trailing count list, so splitting on the
+// first digit cleanly separates the two parts.
+function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
   const { blanks, counts } = splitMaskedPrompt(masked);
   let blanksNode: ReactNode = blanks;
 
@@ -93,7 +95,7 @@ export function PromptDisplay({
   letterPrices = null,
   hintSpend = 0,
   hintBudget = 300,
-}: WordDisplayProps) {
+}: PromptDisplayProps) {
   const { notify } = useToast();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
@@ -162,7 +164,7 @@ export function PromptDisplay({
         <span className="prompt-reveal">{myPrompt || maskedPrompt}</span>
       ) : (
         <span className="prompt-masked">
-          {renderMaskedWord(
+          {renderMaskedPrompt(
             maskedPrompt,
             canBuy ? {
               canAfford: nextHintCost <= remaining,

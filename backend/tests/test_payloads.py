@@ -159,7 +159,7 @@ async def test_malformed_canvas_requests_do_not_partially_mutate_history():
     room.state = "playing"
     room.game = Game(turn_order=[drawer.id])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
-    room.game.force_word_choice()
+    room.game.force_prompt_choice()
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager)

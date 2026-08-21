@@ -29,13 +29,13 @@ def build_room(*, rounds: int = 1, accounts: dict[str, str | None] | None = None
     return room_manager, room, players
 
 
-def build_context(room_manager, history_repo, word_list_repo=None, timeline=None):
+def build_context(room_manager, history_repo, prompt_list_repo=None, timeline=None):
     sio = socketio.AsyncServer(async_mode="asgi")
     ctx = register_handlers(
         sio,
         room_manager,
         game_history_repo=history_repo,
-        word_list_repo=word_list_repo,
+        prompt_list_repo=prompt_list_repo,
     )
     if timeline is None:
         sio.emit = AsyncMock()
@@ -59,7 +59,7 @@ async def play_to_completion(ctx, room, players, *, guessers=None):
     await flow._start_fresh_game(room, [p for p in room.player_list()])
     while room.game is not None:
         game = room.game
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
         for player in room.player_list():
             if player.id == game.current_drawer:
@@ -123,7 +123,7 @@ async def test_departed_player_still_counts_as_a_participant():
 
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -135,7 +135,7 @@ async def test_departed_player_still_counts_as_a_participant():
     await flow._remove_player_from_game(room, leaver.id)
     while room.game is not None:
         game = room.game
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
         await flow._end_round(room)
         ctx.timers.cancel_phase_timer(room.id)
@@ -156,7 +156,7 @@ async def test_restart_discards_the_turns_played_so_far():
 
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -179,7 +179,7 @@ async def test_abandoned_game_is_never_persisted():
 
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -214,7 +214,7 @@ async def test_an_opponent_leaving_does_not_erase_the_turns_played():
 
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     await flow._end_round(room)
     ctx.timers.cancel_phase_timer(room.id)
@@ -243,7 +243,7 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
     game.hint_mode = "purchase"
-    game.force_word_choice()
+    game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
 
@@ -259,7 +259,7 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     await flow._finish_or_next(room)
     while room.game is not None:
         game = room.game
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
         await flow._end_round(room)
         ctx.timers.cancel_phase_timer(room.id)
@@ -306,12 +306,12 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
         def __init__(self) -> None:
             self.restarted = False
 
-        async def record_word_usage(self, slugs, usage):
+        async def record_prompt_usage(self, slugs, usage):
             if not self.restarted:
                 self.restarted = True
                 await flow._start_fresh_game(room, room.player_list())
 
-    ctx.word_list_repo = RestartingWordRepo()
+    ctx.prompt_list_repo = RestartingWordRepo()
     room.prompt_list_slugs = ["english_standard"]
 
     await flow._start_fresh_game(room, room.player_list())
@@ -320,7 +320,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     expected_scores: dict[str, int] = {}
     for _ in range(2):
         game = room.game
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
         guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
         game.submit_guess(guesser.id, game.prompt)
@@ -331,7 +331,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     ctx.timers.cancel_phase_timer(room.id)
     await ctx.timers.close()
 
-    assert ctx.word_list_repo.restarted, "the interleaving under test never happened"
+    assert ctx.prompt_list_repo.restarted, "the interleaving under test never happened"
     assert len(history.saved) == 1
     saved = history.saved[0]
     assert len(saved.turns) == 2
@@ -399,7 +399,7 @@ class FakeWordListRepository:
         self._timeline = timeline if timeline is not None else []
         self._hang = hang
 
-    async def record_word_usage(self, prompt_list_slugs, usage):
+    async def record_prompt_usage(self, prompt_list_slugs, usage):
         if self._hang:
             await asyncio.sleep(3600)
         self.calls.append((tuple(prompt_list_slugs), usage))
@@ -439,7 +439,7 @@ async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
     words = FakeWordListRepository(hang=True)
     ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
 
-    with patch.object(game_flow, "WORD_USAGE_WRITE_TIMEOUT_SECONDS", 0.05):
+    with patch.object(game_flow, "PROMPT_USAGE_WRITE_TIMEOUT_SECONDS", 0.05):
         await play_to_completion(ctx, room, players)
 
     assert words.calls == [], "the hung writes never landed"

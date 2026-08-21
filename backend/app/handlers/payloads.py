@@ -138,7 +138,7 @@ class RoomSettingsFields(RequestModel):
 
     @field_validator("prompt_list_slugs")
     @classmethod
-    def clean_word_list_slugs(cls, slugs: list[str]) -> list[str]:
+    def clean_prompt_list_slugs(cls, slugs: list[str]) -> list[str]:
         return _clean_slugs(slugs) or ["english_standard"]
 
     @field_validator("drawing_seconds")
@@ -187,7 +187,7 @@ class UpdateRoomSettingsPayload(RequestModel):
 
     @field_validator("prompt_list_slugs")
     @classmethod
-    def clean_update_word_list_slugs(cls, slugs: list[str] | None) -> list[str] | None:
+    def clean_update_prompt_list_slugs(cls, slugs: list[str] | None) -> list[str] | None:
         if slugs is None:
             return None
         cleaned = _clean_slugs(slugs)

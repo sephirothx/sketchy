@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.game import (
-    CHOOSE_WORD_SECONDS,
+    CHOOSE_PROMPT_SECONDS,
     MAX_HINT_SPEND,
     TURN_RESULTS_SECONDS,
     Game,
@@ -22,14 +22,14 @@ from app.handlers.payloads import (
 )
 from app.rooms import DrawingRecapEntry, Player, Room, resolve_hint_mode
 from app.services.game_history import build_game_history
-from app.services.prompt_usage import tally_word_usage
+from app.services.prompt_usage import tally_prompt_usage
 from app.presenters import (
     turn_ended_payload,
     room_state_payload,
     system_chat_message,
     turn_payload,
 )
-from app.prompts import parse_custom_word_list
+from app.prompts import parse_custom_prompt_list
 
 logger = logging.getLogger("sketchy.game_flow")
 
@@ -41,7 +41,7 @@ HISTORY_WRITE_TIMEOUT_SECONDS = 10
 # they get their own budget - but the same ceiling, so the two post-game
 # writes together cannot pin the coroutine for longer than a player would
 # wait before reloading anyway.
-WORD_USAGE_WRITE_TIMEOUT_SECONDS = 10
+PROMPT_USAGE_WRITE_TIMEOUT_SECONDS = 10
 
 class GameFlowService:
     """Coordinate workflows that cross handler domains without owning registration."""
@@ -69,7 +69,7 @@ class GameFlowService:
         hide_masked_prompt = value("hide_masked_prompt")
         hint_mode = resolve_hint_mode(hint_mode, scoring_mode, hide_masked_prompt)
         custom_prompts = (
-            parse_custom_word_list(payload.custom_prompts)
+            parse_custom_prompt_list(payload.custom_prompts)
             if payload.custom_prompts is not None
             else list(fallback.custom_prompts if fallback else [])
         )
@@ -82,11 +82,11 @@ class GameFlowService:
             prompt_list_slugs = ["english_standard"]
 
         curated_prompts: list[str] = []
-        if prompt_list_slugs and self._ctx.word_list_repo:
+        if prompt_list_slugs and self._ctx.prompt_list_repo:
             try:
-                curated_prompts = await self._ctx.word_list_repo.get_prompts_by_slugs(prompt_list_slugs)
+                curated_prompts = await self._ctx.prompt_list_repo.get_prompts_by_slugs(prompt_list_slugs)
             except Exception:
-                logger.exception("Failed to load words for slugs: %s", prompt_list_slugs)
+                logger.exception("Failed to load prompts for slugs: %s", prompt_list_slugs)
 
         return {
             "name": value("name"),
@@ -200,7 +200,7 @@ class GameFlowService:
         room.game = Game(
             turn_order=[player.id for player in active_players],
             rounds_total=room.rounds,
-            prompt_pool=room.effective_word_pool(),
+            prompt_pool=room.effective_prompt_pool(),
             drawing_seconds=room.drawing_seconds,
             hint_mode=room.hint_mode,
             scoring_mode=room.scoring_mode,
@@ -353,7 +353,7 @@ class GameFlowService:
             afk_tokens,
             canvas_generation=room.allocate_canvas_generation(),
         )
-        game.set_phase_deadline(CHOOSE_WORD_SECONDS)
+        game.set_phase_deadline(CHOOSE_PROMPT_SECONDS)
         drawer = room.players.get(game.current_drawer)
         await self._sio.emit(
             "canvas_reset",
@@ -373,17 +373,17 @@ class GameFlowService:
                 "drawerNameColor": drawer.name_color if drawer else "",
                 "roundNumber": game.round_number,
                 "totalRounds": game.rounds_total,
-                "seconds": CHOOSE_WORD_SECONDS,
+                "seconds": CHOOSE_PROMPT_SECONDS,
             },
             room=room.id,
         )
         if drawer and drawer.sid:
             await self._sio.emit(
                 "your_prompt_choices",
-                {"choices": choices, "seconds": CHOOSE_WORD_SECONDS},
+                {"choices": choices, "seconds": CHOOSE_PROMPT_SECONDS},
                 to=drawer.sid,
             )
-        self.schedule_phase_timer(room, CHOOSE_WORD_SECONDS)
+        self.schedule_phase_timer(room, CHOOSE_PROMPT_SECONDS)
 
     async def _begin_drawing(self, room: Room) -> None:
         game = room.game
@@ -483,7 +483,7 @@ class GameFlowService:
         except Exception:
             logger.exception("Failed to persist game history for room %s", room.id)
 
-    async def _record_word_usage(
+    async def _record_prompt_usage(
         self,
         room: Room,
         game: Game,
@@ -500,21 +500,21 @@ class GameFlowService:
         one transaction. Failure is logged and swallowed, like the history
         write: there is nothing a player could do about it.
         """
-        if not self._ctx.word_list_repo or not prompt_list_slugs:
+        if not self._ctx.prompt_list_repo or not prompt_list_slugs:
             return
-        usage = tally_word_usage(game.completed_turns)
+        usage = tally_prompt_usage(game.completed_turns)
         if not usage:
             return
         try:
             await asyncio.wait_for(
-                self._ctx.word_list_repo.record_word_usage(prompt_list_slugs, usage),
-                timeout=WORD_USAGE_WRITE_TIMEOUT_SECONDS,
+                self._ctx.prompt_list_repo.record_prompt_usage(prompt_list_slugs, usage),
+                timeout=PROMPT_USAGE_WRITE_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
             logger.error(
                 "Timed out recording prompt usage for room %s after %ss",
                 room.id,
-                WORD_USAGE_WRITE_TIMEOUT_SECONDS,
+                PROMPT_USAGE_WRITE_TIMEOUT_SECONDS,
             )
         except Exception:
             logger.exception("Failed to record prompt usage for room %s", room.id)
@@ -570,7 +570,7 @@ class GameFlowService:
             # Last, so that nothing a player is waiting to see is behind a
             # database round trip.
             await self._persist_game_history(room, history)
-            await self._record_word_usage(room, game, prompt_list_slugs)
+            await self._record_prompt_usage(room, game, prompt_list_slugs)
         else:
             await self._start_turn(room)
 
@@ -646,7 +646,7 @@ class GameFlowService:
         if not game:
             return
         if game.phase == Phase.CHOOSING_PROMPT:
-            game.force_word_choice()
+            game.force_prompt_choice()
             await self._begin_drawing(room)
         elif game.phase == Phase.DRAWING:
             await self._end_round(room)

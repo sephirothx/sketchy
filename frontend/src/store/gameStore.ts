@@ -83,7 +83,7 @@ interface GameStore {
     totalRounds: number;
     seconds: number;
   }) => void;
-  setMyWordChoices: (choices: string[], seconds: number) => void;
+  setMyPromptChoices: (choices: string[], seconds: number) => void;
   startDrawing: (payload: {
     drawerId: string;
     maskedPrompt: string;
@@ -212,7 +212,7 @@ export const useGameStore = create<GameStore>((set) => ({
       promptChoices: [],
       lastTurnResult: null,
     }),
-  setMyWordChoices: (choices, seconds) =>
+  setMyPromptChoices: (choices, seconds) =>
     set({ promptChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
   startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, hintBudget }) =>
     set((s) => ({

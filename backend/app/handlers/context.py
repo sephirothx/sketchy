@@ -28,7 +28,7 @@ class HandlerContext:
     timers: TimerManager = field(default_factory=TimerManager)
     user_repo: UserRepository | None = None
     game_history_repo: GameHistoryRepository | None = None
-    word_list_repo: PromptListRepository | None = None
+    prompt_list_repo: PromptListRepository | None = None
     # Needed to resolve the JWT signing key when a socket handshake presents a
     # session cookie.
     session_factory: async_sessionmaker[AsyncSession] | None = None

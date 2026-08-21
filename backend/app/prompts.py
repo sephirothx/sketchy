@@ -24,7 +24,7 @@ PROMPTS: list[str] = [
 ]
 
 
-def random_word_choices(
+def random_prompt_choices(
     count: int = 3,
     exclude: set[str] | None = None,
     pool: list[str] | None = None,
@@ -42,7 +42,7 @@ def random_word_choices(
     return random.sample(available, min(count, len(available)))
 
 
-def parse_custom_word_list(raw: str) -> list[str]:
+def parse_custom_prompt_list(raw: str) -> list[str]:
     """Parse comma- or newline-separated custom prompts into a clean, deduped list.
 
     Entries may be several words long (e.g. "red panda"), not just single

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.db.models import Base
 from app.db.seed import seed_prompt_lists
-from app.repositories.interfaces import WordPickTotals, WordUsage
+from app.repositories.interfaces import PromptPickTotals, PromptUsage
 from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 from app.rooms import RoomManager
 
@@ -60,19 +60,19 @@ async def test_prompt_usage_tracking_metrics():
 
         # One game: "apple", "banana" and "robot" offered, "robot" drawn and
         # guessed by 2 of 3 possible guessers.
-        await repo.record_word_usage(
+        await repo.record_prompt_usage(
             ["english_standard"],
-            WordUsage(
+            PromptUsage(
                 offers={"apple": 1, "banana": 1, "robot": 1},
                 picks={
-                    "robot": WordPickTotals(
+                    "robot": PromptPickTotals(
                         picks=1, correct_guesses=2, total_guessers=3
                     )
                 },
             ),
         )
 
-        word_stats_list = await repo.get_word_stats("english_standard")
+        word_stats_list = await repo.get_prompt_stats("english_standard")
         stats = next((w for w in word_stats_list if w.text == "robot"), None)
         assert stats is not None
         assert stats.offer_count == 1
@@ -104,7 +104,7 @@ async def test_room_effective_word_pool_with_curated_and_custom_words():
         custom_prompts=["dragon", "APPLE"],
         custom_prompts_only=False,
     )
-    pool = room.effective_word_pool()
+    pool = room.effective_prompt_pool()
     assert pool is not None
     # Custom words take priority, case-insensitively deduplicating
     assert pool[0] == "dragon"
@@ -115,5 +115,5 @@ async def test_room_effective_word_pool_with_curated_and_custom_words():
 
     # Custom words only
     room.custom_prompts_only = True
-    pool_custom = room.effective_word_pool()
+    pool_custom = room.effective_prompt_pool()
     assert pool_custom == ["dragon", "APPLE"]

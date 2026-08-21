@@ -10,7 +10,7 @@ from collections import Counter
 from collections.abc import Iterable
 
 from app.game import CompletedTurnStats
-from app.repositories.interfaces import WordPickTotals, WordUsage
+from app.repositories.interfaces import PromptPickTotals, PromptUsage
 
 
 def _stored_form(prompt: str) -> str:
@@ -18,7 +18,7 @@ def _stored_form(prompt: str) -> str:
     return prompt.strip().lower()
 
 
-def tally_word_usage(turns: Iterable[CompletedTurnStats]) -> WordUsage:
+def tally_prompt_usage(turns: Iterable[CompletedTurnStats]) -> PromptUsage:
     """Aggregate every turn's offers and picks into one set of increments.
 
     Aggregating rather than replaying turn by turn is what lets a whole game
@@ -26,7 +26,7 @@ def tally_word_usage(turns: Iterable[CompletedTurnStats]) -> WordUsage:
     a set: the same prompt can be offered in several turns, and a pool too small
     to keep excluding what it has already used can have it chosen twice too.
 
-    Words that no list contains - a room's custom prompts, which live only in
+    Prompts that no list contains - a room's custom prompts, which live only in
     memory - simply match no row, so they cost nothing to include here.
     """
     offers: Counter[str] = Counter()
@@ -35,21 +35,21 @@ def tally_word_usage(turns: Iterable[CompletedTurnStats]) -> WordUsage:
     total_guessers: Counter[str] = Counter()
 
     for turn in turns:
-        for offered in turn.offered_words:
+        for offered in turn.offered_prompts:
             prompt = _stored_form(offered)
             if prompt:
                 offers[prompt] += 1
-        chosen = _stored_form(turn.chosen_word)
+        chosen = _stored_form(turn.chosen_prompt)
         if not chosen:
             continue
         picks[chosen] += 1
         correct_guesses[chosen] += turn.correct_guess_count
         total_guessers[chosen] += turn.total_guesser_count
 
-    return WordUsage(
+    return PromptUsage(
         offers=dict(offers),
         picks={
-            prompt: WordPickTotals(
+            prompt: PromptPickTotals(
                 picks=count,
                 correct_guesses=correct_guesses[prompt],
                 total_guessers=total_guessers[prompt],

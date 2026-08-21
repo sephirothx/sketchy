@@ -119,7 +119,7 @@ def test_force_word_choice_picks_first_option():
     game = make_game()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     first_choice = game.prompt_choices[0]
-    game.force_word_choice()
+    game.force_prompt_choice()
     assert game.prompt == first_choice
     assert game.phase == Phase.DRAWING
 
@@ -137,13 +137,13 @@ def test_masked_word_shows_spaces_and_special_characters():
     game = make_game(n_players=1, rounds=1)
     game.prompt_pool = ["red panda"]
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.force_word_choice()
+    game.force_prompt_choice()
     assert game.masked_prompt() == "___  _____  3 5"
 
     game2 = make_game(n_players=1, rounds=1)
     game2.prompt_pool = ["spider-man"]
     game2.start_next_turn(canvas_generation=game2.canvas.generation + 1)
-    game2.force_word_choice()
+    game2.force_prompt_choice()
     assert game2.masked_prompt() == "______-___  6 3"
 
 
@@ -176,7 +176,7 @@ def test_submit_guess_ignores_canonically_decomposable_diacritics():
     for answer, guess in cases:
         game = Game(turn_order=["drawer", "guesser"], prompt_pool=[answer])
         game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-        game.force_word_choice()
+        game.force_prompt_choice()
         game.set_phase_deadline(DRAWING_SECONDS)
 
         correct, points = game.submit_guess("guesser", guess)
@@ -193,7 +193,7 @@ def test_submit_guess_keeps_letters_without_canonical_ascii_decomposition_distin
     for answer, guess in cases:
         game = Game(turn_order=["drawer", "guesser"], prompt_pool=[answer])
         game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-        game.force_word_choice()
+        game.force_prompt_choice()
 
         correct, points = game.submit_guess("guesser", guess)
 
@@ -525,7 +525,7 @@ def make_hint_game(prompt, mode, n_players=3):
     game.hint_mode = mode
     game.prompt_pool = [prompt]
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.force_word_choice()
+    game.force_prompt_choice()
     return game
 
 
@@ -703,7 +703,7 @@ def make_close_guess_game(prompt, n_players=3):
     game = make_game(n_players=n_players, rounds=1)
     game.prompt_pool = [prompt]
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
-    game.force_word_choice()
+    game.force_prompt_choice()
     return game
 
 
@@ -1113,7 +1113,7 @@ def test_a_word_the_drawer_chose_is_not_marked_auto_picked():
 def test_a_word_the_clock_picked_is_marked_auto_picked():
     game = make_game(n_players=2, rounds=1)
     game.start_next_turn(canvas_generation=1)
-    game.force_word_choice()
+    game.force_prompt_choice()
     assert game.prompt_auto_picked is True
 
 
