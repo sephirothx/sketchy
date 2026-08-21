@@ -152,19 +152,17 @@ Three different things, never used for one another:
 
 ## Known drift
 
-Nothing contradicts this glossary — not the copy, and no longer the names underneath
-it either. The vocabulary runs from the player's screen down to the table names: the
-phases are `choosing_prompt` and `turn_results`, the commands are `select_prompt` and
-`get_custom_prompts`, and the schema holds `turn_records`, `turn_guesses`,
-`prompt_lists`, and `prompts`. `backend/tests/test_wire_contract.py` holds the client
-and server to the same names, so renaming one of them is allowed but half-renaming it
-is not.
+None. The vocabulary runs from the player's screen to the table names, with nothing
+left carrying a retired word: the phases are `choosing_prompt` and `turn_results`,
+the commands are `select_prompt` and `get_custom_prompts`, the schema holds
+`turn_records`, `turn_guesses`, `prompt_lists`, and `prompts`, and the freehand tool
+is the brush in the toolbar, in the keybindings, and in browser storage.
 
-One exception remains, and it is not a name anyone reads:
+Two tests keep it that way, and they are the reason this section can be empty rather
+than aspirational. `backend/tests/test_wire_contract.py` holds the client and server
+to the same names and rejects wire names built from retired vocabulary — so renaming
+one is allowed, and half-renaming it is not. `frontend/tests/settingsMigrations.test.mjs`
+covers the one case a rename cannot handle on its own: settings already stored in a
+player's browser, which have to be migrated on load rather than renamed.
 
-- **Stored keys** — the `sketchy_pencursor` preference and the `pen` key binding,
-  both commented where they are read. These live in players' browsers, so renaming
-  either would silently discard a setting someone had already chosen. Changing them
-  needs a migration on load, not a rename.
-
-Add a bullet here when new copy drifts, and delete it when the copy is fixed.
+Add a bullet here when copy drifts, and delete it when the copy is fixed.

@@ -243,7 +243,7 @@ export function useCanvasPointerInput(
     if (!inputActiveRef.current || tool === "fill") return;
     if (tool === "brush" || tool === "eraser") {
       if (!strokeAvailable) {
-        // The budget ran out under the pen. Close the stroke here so the
+        // The budget ran out under the brush. Close the stroke here so the
         // drawing stops in the same place on every screen.
         handlePointerUp(event);
         return;

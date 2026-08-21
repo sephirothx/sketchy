@@ -39,7 +39,7 @@ async def test_theme_defaults_to_system_preference_unless_saved(
             await browser.close()
 
 @pytest.mark.asyncio
-async def test_settings_dialog_pen_cursor_scenario():
+async def test_settings_dialog_brush_cursor_scenario():
     """
     Scenario 2: Settings Dialog & In-Game Preferences E2E Test
     1. Opens Lobby page, creates a room.
@@ -47,7 +47,7 @@ async def test_settings_dialog_pen_cursor_scenario():
     3. Navigates to 'Game' tab.
     4. Selects 'Outline' brush cursor option.
     5. Clicks Save.
-    6. Verifies localStorage persists 'sketchy_pencursor' == 'circle'.
+    6. Verifies localStorage persists 'sketchy_brushcursor' == 'circle'.
     """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=['--mute-audio'])
@@ -90,8 +90,16 @@ async def test_settings_dialog_pen_cursor_scenario():
             await page.wait_for_selector('.settings-modal-card', state='hidden')
 
             # Verify localStorage
-            stored_cursor = await page.evaluate("() => localStorage.getItem('sketchy_pencursor')")
+            stored_cursor = await page.evaluate(
+                "() => localStorage.getItem('sketchy_brushcursor')"
+            )
             assert stored_cursor == "circle"
+            # The pre-rename key is read on load but never written again, so a
+            # fresh choice must not leave a second copy behind to go stale.
+            legacy_cursor = await page.evaluate(
+                "() => localStorage.getItem('sketchy_pencursor')"
+            )
+            assert legacy_cursor is None
             stored_name_color = await page.evaluate("() => localStorage.getItem('sketchy_namecolor')")
             assert stored_name_color == "#22aa66"
 

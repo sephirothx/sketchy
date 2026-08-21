@@ -152,7 +152,7 @@ export function canvasReplayWork(actions: DecodedCanvasAction[]): number {
  * Whether another fill still fits in this turn's budget.
  *
  * Strictly greater, not equal: a fill that spent the last of the budget would
- * leave the drawer with nothing at all, and the pen going dead mid-turn is a
+ * leave the drawer with nothing at all, and the brush going dead mid-turn is a
  * far worse surprise than the fill tool greying out one fill early.
  */
 export function canFillWithinBudget(actions: DecodedCanvasAction[]): boolean {
