@@ -242,6 +242,15 @@ backend/.venv/bin/python -m playwright install chromium firefox
 ./scripts/test-e2e.sh
 ```
 
+`test-e2e.sh` builds the frontend, starts a server on its own throwaway
+database, and runs the Playwright suite across as many xdist workers as the
+machine has cores, capped at eight — past that the browsers contend for CPU and
+timing-sensitive tests start to flake. Override with `E2E_WORKERS=<number>`.
+The E2E server also runs with `TURN_RESULTS_SECONDS=0.5`, because the suite
+plays whole games end to end and the production five-second pause after every
+turn otherwise dominates the run. Clients read the phase length off the
+payload, so a shortened pause is still a faithful turn.
+
 The canvas benchmark starts the built application on an isolated local port
 (`8765` by default), creates a real two-player game, and reports
 drawer-to-guesser stroke latency, large-fill latency, Undo/replay latency,
@@ -300,8 +309,8 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 4. **Drawing** (90s by default, configurable): the drawer draws; everyone else sees a masked
    prompt (`_ _ _ _`) and guesses in the chat. The turn ends early once everyone's guessed
    correctly.
-5. **Turn results** (5s): the prompt is revealed and scores update, then the next player's turn
-   begins.
+5. **Turn results** (5s by default): the prompt is revealed and scores update, then the next
+   player's turn begins.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings.
 

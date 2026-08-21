@@ -5,6 +5,7 @@ Pure state/logic only (no socket I/O) so it can be unit tested directly.
 from __future__ import annotations
 
 import difflib
+import os
 import random
 import re
 import string
@@ -21,7 +22,11 @@ from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_prompt_choices
 
 CHOOSE_PROMPT_SECONDS = 15
 DRAWING_SECONDS = 80
-TURN_RESULTS_SECONDS = 5
+# The pause on the turn-results screen. Overridable because E2E runs play
+# whole games end to end, and five real seconds per turn dominated the
+# suite; the clients read the length off the payload, so a short one is
+# still a faithful turn.
+TURN_RESULTS_SECONDS = float(os.getenv("TURN_RESULTS_SECONDS") or 5)
 MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
 SCORING_MODES = ("none", "default", "pressure")
