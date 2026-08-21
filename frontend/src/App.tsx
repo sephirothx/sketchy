@@ -43,6 +43,7 @@ function App() {
           <Route path="/" element={<LobbyBrowserPage />} />
           <Route path="/create" element={<CreateRoomPage />} />
           <Route path="/room/:code" element={<GameRoomPage />} />
+          <Route path="/prompt-lists" element={<PromptStatsPage />} />
           <Route path="/prompt-lists/:slug" element={<PromptStatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/:userId" element={<ProfilePage />} />

@@ -1113,3 +1113,26 @@
 [data-theme="dark"] .prompt-stats-table tbody td {
   color: #cbd5e1;
 }
+
+[data-theme="dark"] .prompt-list-chip-info {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .prompt-list-chip-info > span {
+  border-color: #475569;
+}
+
+[data-theme="dark"] .prompt-list-chip-info:hover,
+[data-theme="dark"] .prompt-list-chip-info:focus-visible {
+  color: #a5b4fc;
+}
+
+[data-theme="dark"] .prompt-list-chip-info:hover > span,
+[data-theme="dark"] .prompt-list-chip-info:focus-visible > span {
+  border-color: #818cf8;
+}
+
+[data-theme="dark"] .prompt-stats-table tbody tr.is-unrated th,
+[data-theme="dark"] .prompt-stats-table tbody tr.is-unrated td {
+  color: #64748b;
+}

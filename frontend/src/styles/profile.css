@@ -257,7 +257,8 @@
 .prompt-stats-controls {
   align-items: center;
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   margin-bottom: 12px;
 }
 
@@ -327,4 +328,71 @@
   color: #64748b;
   font-size: 13px;
   margin: 8px 0 0;
+}
+
+/* The info link riding along with a prompt-list chip. */
+.prompt-list-chip-group {
+  align-items: center;
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* The mark reads small, but the target it sits in is 24px square: below that
+   it fails WCAG 2.2 target-size, which the axe suite enforces. */
+.prompt-list-chip-info {
+  align-items: center;
+  color: #64748b;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  text-decoration: none;
+  width: 24px;
+}
+
+.prompt-list-chip-info > span {
+  align-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  display: inline-flex;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 700;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  width: 18px;
+}
+
+.prompt-list-chip-info:hover,
+.prompt-list-chip-info:focus-visible {
+  color: #4c6ef5;
+}
+
+.prompt-list-chip-info:hover > span,
+.prompt-list-chip-info:focus-visible > span {
+  border-color: #4c6ef5;
+}
+
+/* Matches the header buttons beside it without claiming to be one. */
+.header-action-link {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.prompt-stats-control {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.prompt-stats-search input {
+  min-width: 180px;
+}
+
+.prompt-stats-table tbody tr.is-unrated th,
+.prompt-stats-table tbody tr.is-unrated td {
+  color: #94a3b8;
 }

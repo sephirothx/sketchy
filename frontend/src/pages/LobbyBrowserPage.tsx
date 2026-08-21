@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
@@ -219,6 +219,10 @@ export function LobbyBrowserPage() {
         </div>
         <div className="lobby-header-actions">
           <AccountMenu />
+          <Link className="header-action-link" to="/prompt-lists">
+            <span aria-hidden="true">📊</span>
+            <span className="header-action-label">Prompt stats</span>
+          </Link>
           <button
             type="button"
             className="header-settings-button"

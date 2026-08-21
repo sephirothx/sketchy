@@ -68,7 +68,8 @@ async def test_an_unknown_list_is_not_found(env):
     assert (await http.get("/api/prompt-lists/nope/prompt-stats")).status_code == 404
 
 
-async def test_a_prompt_below_the_sample_floor_is_counted_but_not_ranked(env):
+async def test_a_prompt_below_the_sample_floor_is_listed_but_flagged(env):
+    """It is still a prompt in the list; it just has no measured difficulty."""
     http, prompts = env
     await seed(prompts, "apple", "tree")
     await play(prompts, "apple", correct=0, guessers=MIN_RATED_GUESSERS)
@@ -76,14 +77,16 @@ async def test_a_prompt_below_the_sample_floor_is_counted_but_not_ranked(env):
 
     body = (await http.get("/api/prompt-lists/standard/prompt-stats")).json()
 
-    assert [p["text"] for p in body["prompts"]] == ["apple"]
+    assert {p["text"]: p["isRated"] for p in body["prompts"]} == {
+        "apple": True,
+        "tree": False,
+    }
     assert body["ratedCount"] == 1
-    # "tree" was played but not enough; the never-played prompt is unrated too.
     assert body["unratedCount"] == 1
     assert body["minRatedGuessers"] == MIN_RATED_GUESSERS
 
 
-async def test_a_never_offered_prompt_does_not_rank_as_hardest(env):
+async def test_a_never_offered_prompt_never_outranks_a_measured_one(env):
     """Its ratio is 0.0 for want of data, not because nobody could guess it."""
     http, prompts = env
     await seed(prompts, "apple", "never-played")
@@ -91,8 +94,42 @@ async def test_a_never_offered_prompt_does_not_rank_as_hardest(env):
 
     body = (await http.get("/api/prompt-lists/standard/prompt-stats")).json()
 
-    assert [p["text"] for p in body["prompts"]] == ["apple"]
+    # Sorted hardest first, and "apple" was guessed once in five - yet the
+    # prompt nobody has ever drawn must not be called the harder of the two.
+    assert [p["text"] for p in body["prompts"]] == ["apple", "never-played"]
     assert body["unratedCount"] == 1
+
+
+async def test_unrated_prompts_follow_the_ranked_ones_in_every_sort(env):
+    http, prompts = env
+    await seed(prompts, "zebra", "apple", "unplayed-one", "unplayed-two")
+    await play(prompts, "zebra", correct=1, guessers=MIN_RATED_GUESSERS)
+    await play(prompts, "apple", correct=4, guessers=MIN_RATED_GUESSERS)
+
+    for sort in ("hardest", "easiest", "most-picked"):
+        body = (
+            await http.get(f"/api/prompt-lists/standard/prompt-stats?sort={sort}")
+        ).json()
+        flags = [p["isRated"] for p in body["prompts"]]
+        assert flags == sorted(flags, reverse=True), (
+            f"{sort} interleaved unrated prompts with ranked ones: "
+            f"{[p['text'] for p in body['prompts']]}"
+        )
+        # And the unrated tail is alphabetical, not arbitrary.
+        unrated = [p["text"] for p in body["prompts"] if not p["isRated"]]
+        assert unrated == sorted(unrated)
+
+
+async def test_the_whole_list_comes_back_by_default(env):
+    """The page shows every prompt, so the endpoint must not quietly page it."""
+    http, prompts = env
+    texts = [f"prompt-{index:03d}" for index in range(150)]
+    await seed(prompts, *texts)
+
+    body = (await http.get("/api/prompt-lists/standard/prompt-stats")).json()
+
+    assert len(body["prompts"]) == 150
+    assert body["unratedCount"] == 150
 
 
 async def test_hardest_first_by_default_and_easiest_reverses_it(env):

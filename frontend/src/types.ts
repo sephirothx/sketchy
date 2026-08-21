@@ -53,6 +53,8 @@ export interface PromptStats {
   totalGuesserCount: number;
   pickRate: number;
   correctGuessRatio: number;
+  /** False until enough guessers have faced it for the ratios to mean anything. */
+  isRated: boolean;
 }
 
 export type PromptStatsSort = "hardest" | "easiest" | "most-picked";

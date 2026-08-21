@@ -30,44 +30,57 @@ export function difficultyBand(ratio: number): string {
   return "Rarely guessed";
 }
 
-/**
- * What to say instead of a table.
- *
- * A brand-new server has recorded nothing, which is not the same as a list
- * whose prompts have all been played but none often enough to rank. Saying
- * "no results" to both would hide the difference.
- */
-export function emptyStatsMessage(
+/** What the table is showing, and what it is still waiting on. */
+export function coverageNote(
   ratedCount: number,
   unratedCount: number,
   minRatedGuessers: number,
 ): string | null {
-  if (ratedCount > 0) return null;
-  if (unratedCount === 0) return "This prompt list has no prompts yet.";
-  return (
-    `None of these ${unratedCount} prompts has faced ${minRatedGuessers} guessers yet. `
-    + "Play some games and their difficulty will show up here."
-  );
-}
-
-export function unratedNote(
-  unratedCount: number,
-  minRatedGuessers: number,
-): string | null {
-  if (unratedCount === 0) return null;
+  if (ratedCount === 0 && unratedCount === 0) return null;
+  if (unratedCount === 0) {
+    return `All ${ratedCount} prompts have been played enough to rank.`;
+  }
+  if (ratedCount === 0) {
+    return (
+      `None of these ${unratedCount} prompts has faced ${minRatedGuessers} guessers `
+      + "yet, so none of them is ranked. Play some games and their difficulty will "
+      + "show up here."
+    );
+  }
   const prompts = unratedCount === 1 ? "prompt is" : "prompts are";
   return (
-    `${unratedCount} more ${prompts} not ranked yet: fewer than `
+    `${ratedCount} ranked. ${unratedCount} more ${prompts} unranked: fewer than `
     + `${minRatedGuessers} guessers have seen them.`
   );
 }
 
-/** The rows, already ordered by the server, with their display fields. */
+/** Prompts whose text contains the query, case- and space-insensitively. */
+export function matchingPrompts(
+  prompts: PromptStats[],
+  query: string,
+): PromptStats[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return prompts;
+  return prompts.filter((prompt) => prompt.text.toLowerCase().includes(needle));
+}
+
+export function searchNote(query: string, matches: number): string | null {
+  if (!query.trim()) return null;
+  if (matches === 0) return `No prompt matches “${query.trim()}”.`;
+  return `${matches} prompt${matches === 1 ? "" : "s"} matching “${query.trim()}”.`;
+}
+
+/**
+ * The rows, already ordered by the server, with their display fields.
+ *
+ * An unrated prompt gets no band and no percentages: it has been offered too
+ * little to have a difficulty, and printing "0%" beside it would read as one.
+ */
 export function statsRows(prompts: PromptStats[]) {
   return prompts.map((prompt) => ({
     ...prompt,
-    guessedLabel: ratioLabel(prompt.correctGuessRatio),
-    band: difficultyBand(prompt.correctGuessRatio),
-    pickedLabel: ratioLabel(prompt.pickRate),
+    guessedLabel: prompt.isRated ? ratioLabel(prompt.correctGuessRatio) : "—",
+    band: prompt.isRated ? difficultyBand(prompt.correctGuessRatio) : "Not played enough",
+    pickedLabel: prompt.isRated ? ratioLabel(prompt.pickRate) : "—",
   }));
 }

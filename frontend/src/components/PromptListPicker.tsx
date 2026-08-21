@@ -73,42 +73,41 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
           const isOnlySelected = isSelected && selectedSlugs.length <= 1;
 
           return (
-            <button
-              key={wl.slug}
-              type="button"
-              className={`prompt-list-chip ${isSelected ? "is-selected" : ""}`}
-              aria-pressed={isSelected}
-              disabled={disabled || (isSelected && isOnlySelected)}
-              title={wl.description || `${wl.name} (${wl.promptCount} prompts)`}
-              onClick={() => handleToggle(wl.slug)}
-            >
-              <span className="prompt-list-chip-status" aria-hidden="true">
-                {isSelected ? "✓" : "+"}
-              </span>
-              <span className="prompt-list-chip-name">{wl.name}</span>
-              <span className="prompt-list-chip-count">{wl.promptCount}</span>
-            </button>
+            // The toggle and the link are siblings rather than nested: one
+            // button inside another is not valid, and a link that selected the
+            // list on the way out would be worse than no link.
+            <span key={wl.slug} className="prompt-list-chip-group">
+              <button
+                type="button"
+                className={`prompt-list-chip ${isSelected ? "is-selected" : ""}`}
+                aria-pressed={isSelected}
+                disabled={disabled || (isSelected && isOnlySelected)}
+                title={wl.description || `${wl.name} (${wl.promptCount} prompts)`}
+                onClick={() => handleToggle(wl.slug)}
+              >
+                <span className="prompt-list-chip-status" aria-hidden="true">
+                  {isSelected ? "✓" : "+"}
+                </span>
+                <span className="prompt-list-chip-name">{wl.name}</span>
+                <span className="prompt-list-chip-count">{wl.promptCount}</span>
+              </button>
+              {/* A new tab: this picker also lives in the waiting-room settings,
+                  where navigating away would discard settings the host is
+                  part-way through editing. */}
+              <a
+                className="prompt-list-chip-info"
+                href={`/prompt-lists/${wl.slug}`}
+                target="_blank"
+                rel="noreferrer"
+                title={`How ${wl.name} prompts play`}
+                aria-label={`How ${wl.name} prompts play`}
+              >
+                <span aria-hidden="true">i</span>
+              </a>
+            </span>
           );
         })}
       </div>
-      <p className="prompt-list-stats-links">
-        {/* A new tab rather than a route change: this picker also lives inside
-            the waiting-room settings dialog, where navigating away would throw
-            out settings the host is part-way through editing. */}
-        See how they play:{" "}
-        {promptLists.map((wl, index) => (
-          <span key={wl.slug}>
-            {index > 0 ? " · " : ""}
-            <a
-              href={`/prompt-lists/${wl.slug}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {wl.name}
-            </a>
-          </span>
-        ))}
-      </p>
     </fieldset>
   );
 }

@@ -13,8 +13,11 @@ from app.repositories.interfaces import PromptListRepository, PromptStatsSummary
 # fills the "hardest" list with prompts that have simply never been played.
 MIN_RATED_GUESSERS = 5
 
-MAX_PAGE_SIZE = 100
-DEFAULT_PAGE_SIZE = 25
+# The whole list, because the page shows the whole list. The largest bundled
+# one is under 600 prompts of at most 64 characters, so the response is small
+# even at the ceiling; the cap is here to bound a list someone builds later.
+MAX_PAGE_SIZE = 2000
+DEFAULT_PAGE_SIZE = 2000
 
 SORTS = ("hardest", "easiest", "most-picked")
 
@@ -33,6 +36,19 @@ def _sort_key(sort: str):
     if sort == "easiest":
         return lambda s: (-s.correct_guess_ratio, s.text)
     return lambda s: (s.correct_guess_ratio, s.text)
+
+
+def _ordered(summaries: list[PromptStatsSummary], sort: str) -> list[PromptStatsSummary]:
+    """Rated prompts in the requested order, then the rest alphabetically.
+
+    Unrated prompts are listed rather than dropped - a player looking up a
+    prompt should find it - but they are never ranked among the measured ones.
+    Their ratios are zero for want of data, which would otherwise plant every
+    prompt nobody has drawn yet at the top of "hardest".
+    """
+    rated = sorted((s for s in summaries if _is_rated(s)), key=_sort_key(sort))
+    unrated = sorted((s for s in summaries if not _is_rated(s)), key=lambda s: s.text)
+    return rated + unrated
 
 
 def create_prompt_list_router(prompt_list_repo: PromptListRepository) -> APIRouter:
@@ -55,10 +71,11 @@ def create_prompt_list_router(prompt_list_repo: PromptListRepository) -> APIRout
         largest bundled list is a few hundred rows, which is nothing to sort in
         memory, and `get_prompt_stats` is relied on unchanged by several suites.
 
-        Only prompts with enough guessers behind them are ranked. The rest are
-        reported as a count rather than dropped silently, because "no prompt in
-        this list is rated yet" is the honest answer on a new server and an
-        empty list is not.
+        Every prompt in the list comes back, so a player can look one up. Only
+        those with enough guessers behind them are ranked; the rest follow,
+        alphabetically, flagged as unrated. Their ratios read as zero for want
+        of data, and ranking on that would fill "hardest" with prompts nobody
+        has drawn yet.
         """
         if not stats_limiter.check(client_key(request)):
             raise HTTPException(
@@ -71,15 +88,18 @@ def create_prompt_list_router(prompt_list_repo: PromptListRepository) -> APIRout
         if not summaries:
             raise HTTPException(status_code=404, detail="No such prompt list.")
 
-        rated = [summary for summary in summaries if _is_rated(summary)]
-        rated.sort(key=_sort_key(sort))
+        ordered = _ordered(summaries, sort)
+        rated_count = sum(1 for summary in summaries if _is_rated(summary))
         return {
             "slug": slug,
             "sort": sort,
             "minRatedGuessers": MIN_RATED_GUESSERS,
-            "ratedCount": len(rated),
-            "unratedCount": len(summaries) - len(rated),
-            "prompts": [prompt_stats_payload(summary) for summary in rated[:limit]],
+            "ratedCount": rated_count,
+            "unratedCount": len(summaries) - rated_count,
+            "prompts": [
+                {**prompt_stats_payload(summary), "isRated": _is_rated(summary)}
+                for summary in ordered[:limit]
+            ],
         }
 
     return router
