@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { GuessBreakdown, TurnEndedPayload, TurnScoreEntry } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { rowStartOffsets } from "../lib/standings";
 
 interface TurnResultsOverlayProps {
   prompt: string;
@@ -55,6 +56,7 @@ export function TurnResultsOverlay({
   }, []);
 
   const sorted = [...scores].sort((a, b) => a.newRank - b.newRank);
+  const startOffsets = rowStartOffsets(sorted);
   const mine = sorted.find((entry) => entry.playerId === myPlayerId);
 
   return (
@@ -107,9 +109,9 @@ export function TurnResultsOverlay({
         )}
         {showScores && (
           <ul className="turn-results-score-list">
-            {sorted.map((entry) => {
+            {sorted.map((entry, index) => {
               const change = rankChange(entry);
-              const startOffset = (entry.previousRank - entry.newRank) * ROW_HEIGHT;
+              const startOffset = startOffsets[index] * ROW_HEIGHT;
               return (
                 <li
                   key={entry.playerId}

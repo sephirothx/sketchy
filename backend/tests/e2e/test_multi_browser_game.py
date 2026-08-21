@@ -348,6 +348,19 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             assert await guess_input.evaluate("input => document.activeElement === input")
             assert not await guesser_page.query_selector('.game-room.guess-focused')
 
+            # This is the first turn, so every player came into it on zero and
+            # therefore ranked first. The rows are offset to animate overtakes,
+            # and offsetting them by a difference of ranks rather than of row
+            # positions once stacked the whole list onto one line.
+            tops = await guesser_page.evaluate(
+                """() => [...document.querySelectorAll('.turn-results-score-row')]
+                     .map(row => Math.round(row.getBoundingClientRect().top))"""
+            )
+            assert len(tops) >= 2, f"expected a row per player, got {tops}"
+            assert tops == sorted(tops) and len(set(tops)) == len(tops), (
+                f"turn-results rows overlap or are out of order: {tops}"
+            )
+
             # Step 9: The next turn swaps roles. On mobile the turn boundary must
             # still dismiss the soft keyboard, so the canvas and the turn-results
             # overlay are not left behind it.

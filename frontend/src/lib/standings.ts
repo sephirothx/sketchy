@@ -50,3 +50,30 @@ export function crownOutcome(
   return winnerCount > MAX_NAMED_WINNERS ? "many" : "shared";
 }
 
+/**
+ * How many rows each standings row must start above or below its final seat,
+ * so the slide animation lands it in place.
+ *
+ * Driven by row positions, never by the difference between two ranks. Those
+ * are not the same number once ties exist: on the first turn of a game every
+ * player is on zero and therefore ranked first, so a rank difference would
+ * offset the second and third rows upward by one and two rows and stack the
+ * whole list on top of itself.
+ *
+ * Entries come in already ordered by their new rank; ties are broken by that
+ * same order on both sides, so a tie moves nobody.
+ */
+export function rowStartOffsets(
+  entries: { playerId: string; previousRank: number }[],
+): number[] {
+  const previousOrder = [...entries].sort(
+    (a, b) => a.previousRank - b.previousRank,
+  );
+  const previousRow = new Map(
+    previousOrder.map((entry, index) => [entry.playerId, index]),
+  );
+  return entries.map(
+    (entry, index) => (previousRow.get(entry.playerId) ?? index) - index,
+  );
+}
+
