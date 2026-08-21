@@ -165,6 +165,73 @@ async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
     assert "chat_message" not in events
 
 
+class RecordingPromptListRepo:
+    """Answers with a fixed pool, and counts how often it was asked."""
+
+    def __init__(self, prompts=("aardvark", "zeppelin")):
+        self.prompts = list(prompts)
+        self.reads = 0
+
+    async def get_prompts_by_slugs(self, slugs):
+        self.reads += 1
+        return list(self.prompts)
+
+    async def record_prompt_usage(self, slugs, usage):
+        return None
+
+
+def build_settings_room(room_manager, prompt_list_repo, **room_kwargs):
+    room = room_manager.create_room(name="Room", **room_kwargs)
+    host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    ctx.prompt_list_repo = prompt_list_repo
+    sio.emit = AsyncMock()
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": host.id}
+    )
+    return room, sio
+
+
+@pytest.mark.asyncio
+async def test_a_settings_change_does_not_re_read_prompt_lists_it_left_alone():
+    room_manager = RoomManager()
+    repo = RecordingPromptListRepo()
+    room, sio = build_settings_room(
+        room_manager,
+        repo,
+        prompt_list_slugs=["safari"],
+        curated_prompts=["aardvark", "zeppelin"],
+    )
+
+    assert (await sio.handlers["/"]["update_room_settings"]("host-sid", {"rounds": 4}))["ok"] is True
+
+    assert repo.reads == 0
+    assert room.curated_prompts == ["aardvark", "zeppelin"]
+
+
+@pytest.mark.asyncio
+async def test_a_settings_change_retries_prompt_lists_that_never_loaded():
+    """A read that failed when the room was made leaves the pool empty, and the
+    room would draw from the built-in list for the rest of its life while the
+    host is still shown the lists they picked. An empty pool is the one worth
+    asking about again."""
+    room_manager = RoomManager()
+    repo = RecordingPromptListRepo()
+    room, sio = build_settings_room(
+        room_manager,
+        repo,
+        prompt_list_slugs=["safari"],
+        curated_prompts=[],
+    )
+
+    assert (await sio.handlers["/"]["update_room_settings"]("host-sid", {"rounds": 4}))["ok"] is True
+
+    assert repo.reads == 1
+    assert room.curated_prompts == ["aardvark", "zeppelin"]
+
+
 @pytest.mark.asyncio
 async def test_starting_waits_for_a_settings_change_that_arrived_first():
     """Settings save themselves now, so the host can change one and press Start

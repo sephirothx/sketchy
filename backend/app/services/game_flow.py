@@ -82,7 +82,15 @@ class GameFlowService:
             prompt_list_slugs = ["english_standard"]
 
         curated_prompts: list[str] = []
-        if fallback is not None and prompt_list_slugs == list(fallback.prompt_list_slugs):
+        if (
+            fallback is not None
+            and prompt_list_slugs == list(fallback.prompt_list_slugs)
+            # Nothing to reuse if the read that should have filled these failed:
+            # the room would keep its empty pool for as long as it lives, drawing
+            # from the built-in list while the host is shown the lists they
+            # picked. An empty pool is the one case worth asking again about.
+            and fallback.curated_prompts
+        ):
             # The host edits settings one change at a time, and most of those
             # changes leave the prompt lists alone. Re-reading them would cost
             # a repository round-trip per keystroke for an identical answer.
