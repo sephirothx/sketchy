@@ -118,16 +118,26 @@ export function createRoomSettingsSaver(
     timeoutId = null;
   }
 
-  /** Everything owed to the server, oldest value first so the newest wins. */
-  function collect(): RoomSettingsPatch | null {
-    if (unsent.size === 0 && !pending) return null;
+  /**
+   * Everything owed to the server, oldest value first so the newest wins.
+   *
+   * A change still waiting out its delay is only taken when the caller is the
+   * delay itself, or a flush. A reply arriving for some earlier change is
+   * neither: sweeping the pending patch up with it would put a half-typed room
+   * name on the wire for every acknowledgement that happened to land.
+   */
+  function collect(takePending: boolean): RoomSettingsPatch | null {
+    const owed = takePending && pending;
+    if (unsent.size === 0 && !owed) return null;
     const patch: RoomSettingsPatch = {};
     for (const sequence of [...unsent.keys()].sort((a, b) => a - b)) {
       Object.assign(patch, unsent.get(sequence));
     }
-    Object.assign(patch, pending || {});
     unsent.clear();
-    pending = null;
+    if (owed) {
+      Object.assign(patch, pending);
+      pending = null;
+    }
     return patch;
   }
 
@@ -137,10 +147,10 @@ export function createRoomSettingsSaver(
     return outstanding > 0 ? "saving" : "saved";
   }
 
-  function send(): void {
-    const patch = collect();
+  function send(takePending: boolean): void {
+    const patch = collect(takePending);
     if (!patch) return;
-    disarm();
+    if (takePending) disarm();
     const sequence = nextSequence++;
     for (const field of Object.keys(patch)) latestSend.set(field, sequence);
     outstanding += 1;
@@ -152,7 +162,9 @@ export function createRoomSettingsSaver(
         outstanding -= 1;
         if (!response.ok) env.onRejected(response.error || "Could not save room settings");
         setStatus(response.ok ? settled() : (pending ? "pending" : "idle"));
-        send();
+        // A reply that got through says the connection is working, so anything
+        // the transport lost can go out again now. Nothing else does.
+        send(false);
       },
       () => {
         if (sentAt !== generation) return;
@@ -178,12 +190,12 @@ export function createRoomSettingsSaver(
       disarm();
       timeoutId = env.setTimeout(() => {
         timeoutId = null;
-        send();
+        send(true);
       }, pendingDelayMs);
     },
     flush(): void {
       disarm();
-      send();
+      send(true);
     },
     reset(): void {
       disarm();

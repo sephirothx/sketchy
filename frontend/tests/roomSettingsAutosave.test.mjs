@@ -113,6 +113,41 @@ test("a change made while a reply is outstanding still goes out", async () => {
   assert.deepEqual(environment.sent, [{ rounds: 4 }, { rounds: 6 }]);
 });
 
+test("a reply for one change does not cut short another still waiting its turn", async () => {
+  const environment = createEnvironment();
+  const saver = createRoomSettingsSaver(environment);
+
+  saver.queue({ isPublic: false });
+  environment.elapse();
+  assert.equal(environment.sent.length, 1);
+
+  saver.queue({ name: "S" }, TYPING_SAVE_DELAY_MS);
+  await environment.ack();
+  assert.equal(
+    environment.sent.length,
+    1,
+    "the reply has nothing to do with the name the host is still typing",
+  );
+
+  environment.elapse();
+  assert.deepEqual(environment.sent.at(-1), { name: "S" });
+});
+
+test("a reply that gets through takes the lost patch out with it", async () => {
+  const environment = createEnvironment();
+  const saver = createRoomSettingsSaver(environment);
+
+  saver.queue({ rounds: 4 });
+  environment.elapse();
+  saver.queue({ name: "Studio" });
+  environment.elapse();
+
+  await environment.fail();  // the rounds never made it
+  await environment.ack();   // the name did, so the connection is back
+
+  assert.deepEqual(environment.sent.at(-1), { rounds: 4 });
+});
+
 test("a retry cannot put an old value back over a newer one that got through", async () => {
   const environment = createEnvironment();
   const saver = createRoomSettingsSaver(environment);
