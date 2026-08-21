@@ -94,8 +94,8 @@ def test_guess_indices_follow_the_rounds_actually_written():
 
     history = build_game_history(room, game, finished_at=FINISHED_AT)
 
-    assert [r.turn_number for r in history.rounds] == [1, 3]
-    assert [(g.round_index, g.user_id) for g in history.guesses] == [
+    assert [r.turn_number for r in history.turns] == [1, 3]
+    assert [(g.turn_index, g.user_id) for g in history.guesses] == [
         (0, "user-bob"),
         (1, "user-ann"),
     ]
@@ -120,7 +120,7 @@ def test_a_rejoined_account_is_recorded_once():
     # The seat they still occupy is the one whose score kept moving.
     assert ann[0].final_score == 420
     # Their earlier seat still drew a round, and that round is still theirs.
-    assert history.rounds[0].drawer_user_id == "user-ann"
+    assert history.turns[0].drawer_user_id == "user-ann"
 
 
 def test_record_carries_the_settings_the_game_was_played_under():
@@ -136,7 +136,7 @@ def test_record_carries_the_settings_the_game_was_played_under():
     assert history.record.total_rounds == 2
     assert history.record.started_at == game.started_at
     assert history.record.finished_at == FINISHED_AT
-    assert history.rounds[0].duration_seconds == 42.5
+    assert history.turns[0].duration_seconds == 42.5
 
 
 def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
@@ -176,13 +176,13 @@ def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
 
     history = build_game_history(room, game, finished_at=FINISHED_AT)
 
-    round_record = history.rounds[0]
-    assert round_record.guesser_count == 3
-    assert round_record.word_auto_picked is True
-    assert round_record.stroke_count == 17
-    assert round_record.end_reason == "timeout"
-    assert round_record.wrong_guess_count == 6
-    assert round_record.near_miss_count == 2
+    turn_record = history.turns[0]
+    assert turn_record.guesser_count == 3
+    assert turn_record.word_auto_picked is True
+    assert turn_record.stroke_count == 17
+    assert turn_record.end_reason == "timeout"
+    assert turn_record.wrong_guess_count == 6
+    assert turn_record.near_miss_count == 2
 
     guess = history.guesses[0]
     assert guess.hints_used == 2

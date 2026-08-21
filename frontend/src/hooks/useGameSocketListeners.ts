@@ -14,7 +14,7 @@ import type {
   ChatMessage,
   GameEndedPayload,
   RoomStatePayload,
-  RoundEndedPayload,
+  TurnEndedPayload,
 } from "../types";
 
 let messageSeq = 0;
@@ -175,7 +175,7 @@ export function useGameSocketListeners() {
       store.getState().setHintRevealed(payload);
     };
 
-    const onRoundEnded = (payload: RoundEndedPayload) => {
+    const onTurnEnded = (payload: TurnEndedPayload) => {
       store.getState().endRound(payload);
       store.getState().addMessage({
         id: nextMessageId(),
@@ -239,7 +239,7 @@ export function useGameSocketListeners() {
     socket.on("correct_guess", onCorrectGuess);
     socket.on("you_guessed_correctly", onYouGuessedCorrectly);
     socket.on("hint_revealed", onHintRevealed);
-    socket.on("round_ended", onRoundEnded);
+    socket.on("turn_ended", onTurnEnded);
     socket.on("game_ended", onGameEnded);
     socket.on("sync_game", onSyncGame);
 
@@ -258,7 +258,7 @@ export function useGameSocketListeners() {
       socket.off("correct_guess", onCorrectGuess);
       socket.off("you_guessed_correctly", onYouGuessedCorrectly);
       socket.off("hint_revealed", onHintRevealed);
-      socket.off("round_ended", onRoundEnded);
+      socket.off("turn_ended", onTurnEnded);
       socket.off("game_ended", onGameEnded);
       socket.off("sync_game", onSyncGame);
     };

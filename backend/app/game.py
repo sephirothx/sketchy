@@ -21,7 +21,7 @@ from app.words import MAX_WORD_LENGTH, WORDS, random_word_choices
 
 CHOOSE_WORD_SECONDS = 15
 DRAWING_SECONDS = 80
-ROUND_END_SECONDS = 5
+TURN_RESULTS_SECONDS = 5
 MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
 SCORING_MODES = ("none", "default", "pressure")
@@ -96,7 +96,7 @@ CLOSE_GUESS_MIN_CORRECT_LETTERS = 5
 class Phase(str, Enum):
     CHOOSING_WORD = "choosing_word"
     DRAWING = "drawing"
-    ROUND_END = "round_end"
+    TURN_RESULTS = "turn_results"
     GAME_END = "game_end"
 
 
@@ -748,7 +748,7 @@ class Game:
         return total_guessers > 0 and len(self.correct_guessers) >= total_guessers
 
     def end_round(self, total_guesser_count: int = 0) -> int | None:
-        """Transition to ROUND_END, return drawer bonus points.
+        """Transition to TURN_RESULTS, return drawer bonus points.
 
         The drawer receives the sum of the points earned by all correct guessers in this round.
 
@@ -757,7 +757,7 @@ class Game:
         """
         if self.phase != Phase.DRAWING:
             return None
-        self.phase = Phase.ROUND_END
+        self.phase = Phase.TURN_RESULTS
         self.completed_turns.append(
             CompletedTurnStats(
                 round_number=self.round_number,

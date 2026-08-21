@@ -277,7 +277,7 @@ async def session_ping(ctx: HandlerContext, sid, data=None):
     phase = {
         Phase.CHOOSING_WORD: 1,
         Phase.DRAWING: 2,
-        Phase.ROUND_END: 3,
+        Phase.TURN_RESULTS: 3,
         Phase.GAME_END: 4,
     }.get(game.phase, 0) if game else 0
     return [

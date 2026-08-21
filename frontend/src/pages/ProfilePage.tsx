@@ -156,7 +156,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
               );
             };
             return (
-            <table className="profile-rounds">
+            <table className="profile-turns">
               <caption className="visually-hidden">Turn by turn</caption>
               <thead>
                 <tr>
@@ -168,16 +168,16 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {detail.rounds.map((round) => (
-                  <tr key={`${round.roundNumber}-${round.turnNumber}`}>
-                    <td>{round.roundNumber}</td>
-                    <td className="profile-round-word">{round.word}</td>
-                    <td>{named(round.drawerUserId, round.drawerDisplayName)}</td>
-                    <td>{formatDuration(round.durationSeconds)}</td>
+                {detail.turns.map((turn) => (
+                  <tr key={`${turn.roundNumber}-${turn.turnNumber}`}>
+                    <td>{turn.roundNumber}</td>
+                    <td className="profile-turn-prompt">{turn.word}</td>
+                    <td>{named(turn.drawerUserId, turn.drawerDisplayName)}</td>
+                    <td>{formatDuration(turn.durationSeconds)}</td>
                     <td>
-                      {round.guesses.length === 0
+                      {turn.guesses.length === 0
                         ? "nobody"
-                        : round.guesses.map((g, index) => (
+                        : turn.guesses.map((g, index) => (
                             <span key={g.userId}>
                               {index > 0 && ", "}
                               {named(g.userId, g.displayName)} ({g.pointsAwarded})
@@ -356,7 +356,7 @@ function ProfileView({ userId }: { userId: string }) {
                 value={`${Math.round(stats.winRate * 100)}%`}
               />
               <StatTile label="Average score" value={String(Math.round(stats.averageScore))} />
-              <StatTile label="Turns played" value={String(stats.roundsPlayed)} />
+              <StatTile label="Turns played" value={String(stats.turnsPlayed)} />
               <StatTile label="Prompts guessed" value={String(stats.wordsGuessed)} />
               <StatTile label="Drawings made" value={String(stats.drawingsMade)} />
               <StatTile label="Total score" value={String(stats.totalScore)} />

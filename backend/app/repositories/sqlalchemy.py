@@ -13,8 +13,8 @@ from sqlalchemy.orm import selectinload
 from app.db.models import (
     GameParticipant,
     GameRecord,
-    RoundGuess,
-    RoundRecord,
+    TurnGuess,
+    TurnRecord,
     User,
     Word,
     WordList,
@@ -29,10 +29,10 @@ from app.repositories.interfaces import (
     GameRecordInput,
     GameSummary,
     InvalidProfileDataError,
-    RoundDetail,
-    RoundGuessDetail,
-    RoundGuessInput,
-    RoundRecordInput,
+    TurnDetail,
+    TurnGuessDetail,
+    TurnGuessInput,
+    TurnRecordInput,
     UserCredentials,
     UserData,
     UserRepository,
@@ -302,26 +302,26 @@ class SqlAlchemyUserRepository(UserRepository):
             win_rate = (games_won / games_played) if games_played > 0 else 0.0
             average_score = (total_score / games_played) if games_played > 0 else 0.0
 
-            # 2. Total rounds played across games where user participated
-            rounds_stmt = (
-                select(func.count(RoundRecord.id))
-                .select_from(RoundRecord)
+            # 2. Total turns played across games where user participated
+            turns_stmt = (
+                select(func.count(TurnRecord.id))
+                .select_from(TurnRecord)
                 .join(
                     GameParticipant,
                     and_(
-                        GameParticipant.game_id == RoundRecord.game_id,
+                        GameParticipant.game_id == TurnRecord.game_id,
                         GameParticipant.user_id == user_id,
                     ),
                 )
             )
-            rounds_played = int((await session.execute(rounds_stmt)).scalar() or 0)
+            turns_played = int((await session.execute(turns_stmt)).scalar() or 0)
 
             # 3. Correct guesses made
-            guesses_stmt = select(func.count(RoundGuess.id)).where(RoundGuess.user_id == user_id)
+            guesses_stmt = select(func.count(TurnGuess.id)).where(TurnGuess.user_id == user_id)
             words_guessed = int((await session.execute(guesses_stmt)).scalar() or 0)
 
             # 4. Drawings made
-            drawings_stmt = select(func.count(RoundRecord.id)).where(RoundRecord.drawer_user_id == user_id)
+            drawings_stmt = select(func.count(TurnRecord.id)).where(TurnRecord.drawer_user_id == user_id)
             drawings_made = int((await session.execute(drawings_stmt)).scalar() or 0)
 
             return UserStats(
@@ -331,7 +331,7 @@ class SqlAlchemyUserRepository(UserRepository):
                 win_rate=round(win_rate, 4),
                 total_score=total_score,
                 average_score=round(average_score, 2),
-                rounds_played=rounds_played,
+                turns_played=turns_played,
                 words_guessed=words_guessed,
                 drawings_made=drawings_made,
             )
@@ -347,8 +347,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         self,
         game_record: GameRecordInput,
         participants: list[GameParticipantInput],
-        rounds: list[RoundRecordInput],
-        guesses: list[RoundGuessInput],
+        turns: list[TurnRecordInput],
+        guesses: list[TurnGuessInput],
     ) -> str:
         record_id = game_record.id or generate_uuid()
         async with self._session_factory() as session:
@@ -378,12 +378,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     )
 
-                created_round_ids: list[str] = []
-                for r in rounds:
+                created_turn_ids: list[str] = []
+                for r in turns:
                     rid = r.id or generate_uuid()
-                    created_round_ids.append(rid)
+                    created_turn_ids.append(rid)
                     session.add(
-                        RoundRecord(
+                        TurnRecord(
                             id=rid,
                             game_id=record_id,
                             round_number=r.round_number,
@@ -401,15 +401,15 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
 
                 for g in guesses:
-                    if not (0 <= g.round_index < len(created_round_ids)):
+                    if not (0 <= g.turn_index < len(created_turn_ids)):
                         raise ValueError(
-                            f"Invalid guess round_index {g.round_index}: out of bounds for {len(created_round_ids)} rounds"
+                            f"Invalid guess turn_index {g.turn_index}: out of bounds for {len(created_turn_ids)} turns"
                         )
-                    target_round_id = created_round_ids[g.round_index]
+                    target_turn_id = created_turn_ids[g.turn_index]
                     session.add(
-                        RoundGuess(
+                        TurnGuess(
                             id=generate_uuid(),
-                            round_id=target_round_id,
+                            turn_id=target_turn_id,
                             user_id=g.user_id,
                             points_awarded=g.points_awarded,
                             guess_time_seconds=g.guess_time_seconds,
@@ -465,8 +465,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 .where(GameRecord.id == game_id)
                 .options(
                     selectinload(GameRecord.participants).selectinload(GameParticipant.user),
-                    selectinload(GameRecord.rounds).selectinload(RoundRecord.drawer),
-                    selectinload(GameRecord.rounds).selectinload(RoundRecord.guesses).selectinload(RoundGuess.user),
+                    selectinload(GameRecord.turns).selectinload(TurnRecord.drawer),
+                    selectinload(GameRecord.turns).selectinload(TurnRecord.guesses).selectinload(TurnGuess.user),
                 )
             )
             result = await session.execute(stmt)
@@ -482,10 +482,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
 
             summary = _to_game_summary(g)
 
-            round_details: list[RoundDetail] = []
-            for r in sorted(g.rounds, key=lambda x: (x.round_number, x.turn_number)):
+            turn_details: list[TurnDetail] = []
+            for r in sorted(g.turns, key=lambda x: (x.round_number, x.turn_number)):
                 guess_details = [
-                    RoundGuessDetail(
+                    TurnGuessDetail(
                         user_id=guess.user_id,
                         display_name=guess.user.display_name if guess.user else "Unknown",
                         points_awarded=guess.points_awarded,
@@ -493,8 +493,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
                     for guess in sorted(r.guesses, key=lambda x: x.guess_time_seconds)
                 ]
-                round_details.append(
-                    RoundDetail(
+                turn_details.append(
+                    TurnDetail(
                         round_number=r.round_number,
                         turn_number=r.turn_number,
                         drawer_user_id=r.drawer_user_id,
@@ -505,7 +505,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
                 )
 
-            return GameDetail(summary=summary, rounds=round_details)
+            return GameDetail(summary=summary, turns=turn_details)
 
 
 class SqlAlchemyWordListRepository(WordListRepository):

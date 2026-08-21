@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from app.game import (
     CHOOSE_WORD_SECONDS,
     MAX_HINT_SPEND,
-    ROUND_END_SECONDS,
+    TURN_RESULTS_SECONDS,
     Game,
     Phase,
 )
@@ -24,7 +24,7 @@ from app.rooms import DrawingRecapEntry, Player, Room, resolve_hint_mode
 from app.services.game_history import build_game_history
 from app.services.word_usage import tally_word_usage
 from app.presenters import (
-    round_ended_payload,
+    turn_ended_payload,
     room_state_payload,
     system_chat_message,
     turn_payload,
@@ -116,7 +116,7 @@ class GameFlowService:
             # and without this, that call would cancel *this* still-running
             # task (since we're still registered as the phase owner), which raises
             # CancelledError into us at the next await and prevents the
-            # follow-up timer (e.g. for ROUND_END) from ever being scheduled
+            # follow-up timer (e.g. for TURN_RESULTS) from ever being scheduled
             # - silently stalling the game.
             assert task is not None
             self._timers.remove_phase_timer(room.id, task)
@@ -303,8 +303,8 @@ class GameFlowService:
                     )
                 elif sync_canvas:
                     await self._sio.emit("you_are_drawing", {"word": game.word}, to=sid)
-        elif game.phase == Phase.ROUND_END:
-            await self._sio.emit("round_ended", self._round_ended_payload(room), to=sid)
+        elif game.phase == Phase.TURN_RESULTS:
+            await self._sio.emit("turn_ended", self._turn_ended_payload(room), to=sid)
 
     async def _join_socket_room(self, sid: str, room: Room, player, is_reconnect: bool) -> None:
         superseded_sid = player.sid if player.sid != sid else None
@@ -441,15 +441,15 @@ class GameFlowService:
         )
 
         await self._sio.emit(
-            "round_ended",
-            self._round_ended_payload(room, drawer_bonus=drawer_bonus),
+            "turn_ended",
+            self._turn_ended_payload(room, drawer_bonus=drawer_bonus),
             room=room.id,
         )
-        self.schedule_phase_timer(room, ROUND_END_SECONDS)
+        self.schedule_phase_timer(room, TURN_RESULTS_SECONDS)
         return True
 
-    def _round_ended_payload(self, room: Room, drawer_bonus: int | None = None) -> dict:
-        return round_ended_payload(room, drawer_bonus)
+    def _turn_ended_payload(self, room: Room, drawer_bonus: int | None = None) -> dict:
+        return turn_ended_payload(room, drawer_bonus)
 
     async def _persist_game_history(self, room: Room, history) -> None:
         """Write a finished game's snapshot: the only write this epic makes.
@@ -466,7 +466,7 @@ class GameFlowService:
                 self._ctx.game_history_repo.save_game(
                     history.record,
                     history.participants,
-                    history.rounds,
+                    history.turns,
                     history.guesses,
                 ),
                 timeout=HISTORY_WRITE_TIMEOUT_SECONDS,
@@ -650,7 +650,7 @@ class GameFlowService:
             await self._begin_drawing(room)
         elif game.phase == Phase.DRAWING:
             await self._end_round(room)
-        elif game.phase == Phase.ROUND_END:
+        elif game.phase == Phase.TURN_RESULTS:
             await self._finish_or_next(room)
 
     # ------------------------------------------------------------------

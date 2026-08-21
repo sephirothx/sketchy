@@ -309,7 +309,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 - Everyone starts a game on zero points, in every scoring mode.
 - Room creators can choose **Default**, **Pressure**, or **No scoring**.
-  No-scoring games still detect correct guesses and end rounds normally, but everyone remains
+  No-scoring games still detect correct guesses and end turns normally, but everyone remains
   on zero points and no leaderboard is shown.
 - **Default**: a correct guess scores between 100 and 300 points, falling linearly with the time
   left in the turn: `round(100 + 200 * remaining_seconds / drawing_seconds)`. Guess quickly for

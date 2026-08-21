@@ -104,7 +104,7 @@ export interface EditableRoomSettings {
   wordListSlugs?: string[];
 }
 
-export type GamePhase = "idle" | "choosing_word" | "drawing" | "round_end" | "game_end";
+export type GamePhase = "idle" | "choosing_word" | "drawing" | "turn_results" | "game_end";
 
 export interface ChatMessage {
   id: string;
@@ -134,7 +134,7 @@ export interface RoundScoreEntry extends ScoreEntry {
   newRank: number;
 }
 
-export interface RoundEndedPayload {
+export interface TurnEndedPayload {
   word: string;
   drawerId: string;
   drawerBonus: number;

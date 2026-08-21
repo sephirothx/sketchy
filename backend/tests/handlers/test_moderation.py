@@ -45,7 +45,7 @@ async def test_toggle_afk_socket_handler_and_not_waited_for():
     # P3 goes AFK -> P3 is no longer waited for -> round ends immediately!
     await toggle_afk("p3-sid", {"afk": True})
     assert p3.is_afk is True
-    assert room.game.phase == Phase.ROUND_END
+    assert room.game.phase == Phase.TURN_RESULTS
 
     timer = timers.phase_timers.pop(room.id, None)
     if timer:

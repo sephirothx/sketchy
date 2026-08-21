@@ -102,9 +102,9 @@ async def test_finished_game_shows_up_on_the_profile_page():
             game_row = lobby.locator(".profile-game").first
             await game_row.wait_for()
             await game_row.locator(".profile-game-header").click()
-            await lobby.locator(".profile-rounds").wait_for()
+            await lobby.locator(".profile-turns").wait_for()
 
-            words = await lobby.locator(".profile-round-word").all_inner_texts()
+            words = await lobby.locator(".profile-turn-prompt").all_inner_texts()
             assert sorted(words) == sorted([first_word, second_word])
             assert await lobby.get_by_text("ProfileGuest").first.is_visible()
 

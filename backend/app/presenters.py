@@ -1,7 +1,7 @@
 """Pure construction of Socket.IO response and broadcast payloads."""
 from __future__ import annotations
 
-from app.game import Game, MAX_HINT_SPEND, ROUND_END_SECONDS
+from app.game import Game, MAX_HINT_SPEND, TURN_RESULTS_SECONDS
 from app.rooms import Player, Room
 
 
@@ -80,7 +80,7 @@ def turn_payload(
     }
 
 
-def round_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
+def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
     game = room.game
     assert game is not None
     players = room.player_list()
@@ -111,7 +111,7 @@ def round_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
         "seconds": (
             round(game.remaining_seconds())
             if game.phase_deadline
-            else ROUND_END_SECONDS
+            else TURN_RESULTS_SECONDS
         ),
         "guesses": [
             {

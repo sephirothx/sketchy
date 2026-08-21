@@ -161,7 +161,7 @@
 
 [data-theme="dark"] .profile-stat-value,
 [data-theme="dark"] .profile-game-room,
-[data-theme="dark"] .profile-round-word {
+[data-theme="dark"] .profile-turn-prompt {
   color: #f8fafc;
 }
 
@@ -170,7 +170,7 @@
 [data-theme="dark"] .profile-game-score,
 [data-theme="dark"] .profile-game-chevron,
 [data-theme="dark"] .profile-standing-rank,
-[data-theme="dark"] .profile-rounds th {
+[data-theme="dark"] .profile-turns th {
   color: #94a3b8;
 }
 
@@ -184,8 +184,8 @@
   color: #4ade80;
 }
 
-[data-theme="dark"] .profile-rounds th,
-[data-theme="dark"] .profile-rounds td {
+[data-theme="dark"] .profile-turns th,
+[data-theme="dark"] .profile-turns td {
   border-bottom-color: #334155;
 }
 
