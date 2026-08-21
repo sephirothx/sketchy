@@ -82,9 +82,9 @@ export function ConnectionStatusBanner() {
   return (
     <div className={`connection-status-banner ${status === "failed" ? "reconnecting" : status}`} role="status" aria-live="polite">
       {status === "offline"
-        ? "You’re offline. Check your connection; Sketchy will reconnect automatically."
+        ? "You’re disconnected. Check your connection; Sketchy will reconnect automatically."
         : status === "failed"
-          ? "Couldn’t restore your room session. Reload the page to rejoin."
+          ? "Couldn’t reconnect to your room. Reload the page to try again."
           : "Connection lost — reconnecting…"}
     </div>
   );

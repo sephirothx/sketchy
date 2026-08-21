@@ -7,7 +7,7 @@ BASE_URL = "http://localhost:8000"
 
 
 @pytest.mark.asyncio
-async def test_public_room_cards_explain_status_rules_and_actions(
+async def test_public_room_cards_explain_status_settings_and_actions(
     assert_input_contract,
 ):
     async with async_playwright() as p:
@@ -15,11 +15,11 @@ async def test_public_room_cards_explain_status_rules_and_actions(
         host_context = await browser.new_context()
         player_context = await browser.new_context()
         visitor_context = await browser.new_context(viewport={"width": 390, "height": 844})
-        observer_context = await browser.new_context()
+        spectator_context = await browser.new_context()
         host = await host_context.new_page()
         player = await player_context.new_page()
         visitor = await visitor_context.new_page()
-        observer = await observer_context.new_page()
+        spectator = await spectator_context.new_page()
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "CardHost")
@@ -59,7 +59,7 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             assert await card.get_by_text("No scoring", exact=True).is_visible()
             assert await card.get_by_text("Custom prompts only", exact=True).is_visible()
             assert await card.get_by_role("button", name="Join", exact=True).is_visible()
-            await card.get_by_text("View rules", exact=True).click()
+            await card.get_by_text("View room settings", exact=True).click()
             assert await card.get_by_text("2 custom prompts only", exact=True).is_visible()
 
             await player.goto(BASE_URL)
@@ -70,19 +70,19 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             await player.click('summary:has-text("Inspect 2 custom prompts")')
             prompt_list = player.locator('.waiting-custom-prompts-list')
             await prompt_list.wait_for()
-            custom_word_search = player.locator(
+            custom_prompt_search = player.locator(
                 'input[placeholder="Search custom prompts…"]'
             )
-            await assert_input_contract(custom_word_search, {
+            await assert_input_contract(custom_prompt_search, {
                 "type": "search",
                 "autoComplete": "off",
             })
             assert await prompt_list.get_by_text("apple", exact=True).is_visible()
             assert await prompt_list.get_by_text("pear", exact=True).is_visible()
-            await custom_word_search.fill("app")
+            await custom_prompt_search.fill("app")
             assert await prompt_list.get_by_text("apple", exact=True).is_visible()
             assert not await prompt_list.get_by_text("pear", exact=True).is_visible()
-            await custom_word_search.fill("")
+            await custom_prompt_search.fill("")
             await player.get_by_role("button", name="Short", exact=True).click()
             assert await player.get_by_text("2 of 2 prompts match", exact=True).is_visible()
             assert not await host.is_visible(
@@ -97,18 +97,18 @@ async def test_public_room_cards_explain_status_rules_and_actions(
             await card.get_by_role("button", name="Join in progress", exact=True).click()
             await visitor.wait_for_selector('.game-layout')
 
-            await observer.goto(BASE_URL)
-            await use_guest_name(observer, "CardObserver")
-            observer_card = observer.locator('[data-testid="public-room-card"]', has_text="Room cards")
-            await observer_card.wait_for()
-            await observer_card.get_by_text("Full", exact=True).wait_for()
-            assert await observer_card.get_by_role("button", name="Spectate", exact=True).is_visible()
-            assert await observer_card.get_by_role("button", name="Join", exact=True).count() == 0
-            await observer_card.get_by_role("button", name="Spectate", exact=True).click()
-            await observer.wait_for_selector('.game-layout')
+            await spectator.goto(BASE_URL)
+            await use_guest_name(spectator, "CardSpectator")
+            spectator_card = spectator.locator('[data-testid="public-room-card"]', has_text="Room cards")
+            await spectator_card.wait_for()
+            await spectator_card.get_by_text("Full", exact=True).wait_for()
+            assert await spectator_card.get_by_role("button", name="Spectate", exact=True).is_visible()
+            assert await spectator_card.get_by_role("button", name="Join", exact=True).count() == 0
+            await spectator_card.get_by_role("button", name="Spectate", exact=True).click()
+            await spectator.wait_for_selector('.game-layout')
         finally:
             await host_context.close()
             await player_context.close()
             await visitor_context.close()
-            await observer_context.close()
+            await spectator_context.close()
             await browser.close()

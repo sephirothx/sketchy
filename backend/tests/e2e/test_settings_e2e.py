@@ -116,7 +116,7 @@ async def test_settings_dialog_brush_cursor_scenario():
             stored_name_color = await page.evaluate("() => localStorage.getItem('sketchy_namecolor')")
             assert stored_name_color == "#22aa66"
 
-            # Saving settings updates the shared room state without rejoining.
+            # Saving settings updates the shared room state without reconnecting.
             await page.wait_for_function(
                 """() => {
                     const name = document.querySelector('.player-name .colored-player-name');

@@ -22,7 +22,7 @@ def _timestamp(value: datetime | None) -> str | None:
     written is UTC, but SQLite has nowhere to keep the zone and hands back a
     naive datetime. Serialized bare, an ISO string without an offset is parsed
     by the browser as *local* time, silently shifting every game's time by the
-    viewer's offset.
+    caller's offset.
     """
     if value is None:
         return None

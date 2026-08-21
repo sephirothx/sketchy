@@ -12,10 +12,10 @@ export function avatarInitial(name: string): string {
 }
 
 /**
- * Pick a stable colour for a name.
+ * Pick a stable color for a name.
  *
  * Deterministic so the same account keeps the same avatar across sessions and
- * devices without storing anything. Guests are always grey: the colour is part
+ * devices without storing anything. Guests are always grey: the color is part
  * of what marks a name as unclaimed.
  */
 export function avatarColor(name: string, isAnonymous: boolean): string {
@@ -28,12 +28,12 @@ export function avatarColor(name: string, isAnonymous: boolean): string {
 }
 
 /**
- * The colour that stands for a player, wherever they appear.
+ * The color that stands for a player, wherever they appear.
  *
- * Their chosen colour from Settings when the account carries one; otherwise
+ * Their chosen color from Settings when the account carries one; otherwise
  * the deterministic fallback above, so a name is never left to inherit
  * whatever the surrounding element happens to paint. Guests stay grey - the
- * colour is part of what marks a name as unclaimed, so a guest never has one
+ * color is part of what marks a name as unclaimed, so a guest never has one
  * of their own to apply.
  */
 export function identityColor(

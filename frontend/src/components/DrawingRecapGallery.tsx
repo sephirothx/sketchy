@@ -116,7 +116,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
               disabled={actions === null || unavailable || Boolean(error)}
               onClick={() => canvasRef.current?.saveImage()}
             >
-              Download drawing
+              Save image
             </button>
             <button type="button" className="drawing-recap-close" onClick={onClose}>
               Close
@@ -146,7 +146,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
             <CanvasSnapshot
               ref={canvasRef}
               actions={actions}
-              solutionPrompt={entry.prompt}
+              downloadPrompt={entry.prompt}
               label={`Drawing of ${entry.prompt} by ${entry.drawerNickname}`}
             />
           )}

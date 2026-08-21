@@ -171,7 +171,7 @@ async def test_only_messages_within_word_limit_are_processed_as_guesses():
     )
 
 @pytest.mark.asyncio
-async def test_simultaneous_final_guesses_end_round_once():
+async def test_simultaneous_final_guesses_end_turn_once():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     players = [room_manager.add_player(room, name) for name in ("Drawer", "One", "Two")]
@@ -269,7 +269,7 @@ async def test_buy_hint_purchase_mode():
     # Guesser who has already committed the whole turn budget
     room.game.hint_spend[guesser.id] = MAX_HINT_SPEND
     res_broke = await buy_hint("guesser-sid", {"slot": 1})
-    assert res_broke == {"ok": False, "error": "You've used up this turn's hint budget"}
+    assert res_broke == {"ok": False, "error": "You've reached this turn's hint spend limit"}
     assert 1 not in room.game.purchased_hints[guesser.id]
 
     timer = timers.phase_timers.pop(room.id, None)
@@ -428,10 +428,10 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
     sio.emit = AsyncMock()
     guess = sio.handlers["/"]["guess"]
 
-    # Guesser1 makes a near-miss guess "pandas" (distance 1 from "panda")
+    # Guesser1 makes a close guess "pandas" (distance 1 from "panda")
     await guess("guesser1-sid", {"text": "pandas"})
 
-    # Check emits for near-miss
+    # Check emits for the close guess
     emitted_calls = sio.emit.await_args_list
     # Guesser1 should receive a close hint message to their specific sid
     close_hints = [
@@ -491,7 +491,7 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
 @pytest.mark.asyncio
 async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
     room_manager = RoomManager()
-    room = room_manager.create_room(name="Room", is_public=True, spectators_see_solution=True)
+    room = room_manager.create_room(name="Room", is_public=True, spectators_see_prompt=True)
     drawer = room_manager.add_player(room, "Drawer")
     guesser = room_manager.add_player(room, "Guesser")
     spectator = room_manager.add_player(room, "Spectator", is_spectator=True)
@@ -513,12 +513,12 @@ async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
 
-    # Spectator masked prompt is unmasked because spectators_see_solution=True
-    spec_masked = room.game.masked_prompt(spectator.id, is_spectator=spectator.is_spectator, spectators_see_solution=room.spectators_see_solution)
+    # Spectator masked prompt is unmasked because spectators_see_prompt=True
+    spec_masked = room.game.masked_prompt(spectator.id, is_spectator=spectator.is_spectator, spectators_see_prompt=room.spectators_see_prompt)
     assert spec_masked == "apple"
 
     # Active guesser masked prompt is masked
-    guesser_masked = room.game.masked_prompt(guesser.id, is_spectator=guesser.is_spectator, spectators_see_solution=room.spectators_see_solution)
+    guesser_masked = room.game.masked_prompt(guesser.id, is_spectator=guesser.is_spectator, spectators_see_prompt=room.spectators_see_prompt)
     assert guesser_masked != "apple"
 
     # Spectator sends chat message

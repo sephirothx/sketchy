@@ -47,7 +47,7 @@ def test_start_next_turn_rotates_drawer():
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p0"
     game.choose_prompt(game.current_drawer, game.prompt_choices[0])
-    game.end_round()
+    game.end_turn()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.current_drawer == "p1"
 
@@ -101,7 +101,7 @@ def test_removing_drawer_positions_cursor_before_next_survivor():
     assert game.round_number == 1
 
 
-def test_choose_word_rejects_wrong_player():
+def test_choose_prompt_rejects_wrong_player():
     game = make_game()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     other_player = "p1"
@@ -109,7 +109,7 @@ def test_choose_word_rejects_wrong_player():
     assert game.phase == Phase.CHOOSING_PROMPT
 
 
-def test_choose_word_rejects_invalid_word():
+def test_choose_prompt_rejects_invalid_prompt():
     game = make_game()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     assert game.choose_prompt(game.current_drawer, "not-a-choice") is False
@@ -235,10 +235,10 @@ def test_no_scoring_marks_correct_guesses_without_awarding_points():
     assert correct is True
     assert points == 0
     assert game.guess_points == {"guesser": 0}
-    assert game.end_round() == 0
+    assert game.end_turn() == 0
 
 
-def test_end_round_awards_drawer_bonus_per_guesser():
+def test_end_turn_awards_drawer_bonus_per_guesser():
     game = make_game(n_players=3)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_prompt(game.current_drawer, game.prompt_choices[0])
@@ -246,12 +246,12 @@ def test_end_round_awards_drawer_bonus_per_guesser():
     others = [t for t in game.turn_order if t != game.current_drawer]
     for token in others:
         game.submit_guess(token, game.prompt)
-    bonus = game.end_round()
+    bonus = game.end_turn()
     assert bonus == 300 * len(others)
     assert game.phase == Phase.TURN_RESULTS
 
 
-def test_end_round_is_idempotent():
+def test_end_turn_is_idempotent():
     game = make_game(n_players=3)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
     game.choose_prompt(game.current_drawer, game.prompt_choices[0])
@@ -259,11 +259,11 @@ def test_end_round_is_idempotent():
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     game.submit_guess(guesser, game.prompt)
 
-    assert game.end_round() is not None
-    assert game.end_round() is None
+    assert game.end_turn() is not None
+    assert game.end_turn() is None
 
 
-def test_end_round_bonus_shrinks_when_drawer_stalls_before_drawing():
+def test_end_turn_bonus_shrinks_when_drawer_stalls_before_drawing():
     """A drawer who delays drawing (eating into the shared deadline) should earn a
     smaller bonus, not the same flat amount - otherwise stalling with an easy prompt
     to suppress guessers' scores would be free for the drawer."""
@@ -276,7 +276,7 @@ def test_end_round_bonus_shrinks_when_drawer_stalls_before_drawing():
     game.set_phase_deadline(1)
     for token in others:
         game.submit_guess(token, game.prompt)
-    stalled_bonus = game.end_round()
+    stalled_bonus = game.end_turn()
 
     # Compare against drawing immediately (full time remaining for guesses).
     game2 = make_game(n_players=3)
@@ -286,7 +286,7 @@ def test_end_round_bonus_shrinks_when_drawer_stalls_before_drawing():
     game2.set_phase_deadline(DRAWING_SECONDS)
     for token in others2:
         game2.submit_guess(token, game2.prompt)
-    prompt_bonus = game2.end_round()
+    prompt_bonus = game2.end_turn()
 
     assert stalled_bonus < prompt_bonus
 
@@ -877,7 +877,7 @@ def test_new_scoring_system_guesser_and_drawer_scores():
     assert p2 == 200
 
     # Drawer score equals sum of guesser scores (300 + 200 = 500)
-    drawer_score = game.end_round()
+    drawer_score = game.end_turn()
     assert drawer_score == 500
 
 
@@ -893,11 +893,11 @@ def test_hide_masked_prompt_returns_question_marks():
     # Guesser sees ???
     assert game.masked_prompt("p1") == "???"
 
-    # Spectator without solution sees ???
-    assert game.masked_prompt("spec", is_spectator=True, spectators_see_solution=False) == "???"
+    # Spectator without prompt access sees ???
+    assert game.masked_prompt("spec", is_spectator=True, spectators_see_prompt=False) == "???"
 
-    # Spectator with solution sees full prompt
-    assert game.masked_prompt("spec", is_spectator=True, spectators_see_solution=True) == prompt
+    # Spectator with prompt access sees the full prompt
+    assert game.masked_prompt("spec", is_spectator=True, spectators_see_prompt=True) == prompt
 
     # Guesser who answered correctly sees full prompt
     game.submit_guess("p1", prompt)
@@ -988,7 +988,7 @@ def test_hints_cost_nothing_without_a_correct_guess():
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     assert game.buy_hint_letter(guesser, 0) is True
 
-    drawer_bonus = game.end_round(total_guesser_count=2)
+    drawer_bonus = game.end_turn(total_guesser_count=2)
 
     assert drawer_bonus == 0
     assert game.completed_turns[-1].guesses == ()
@@ -1014,7 +1014,7 @@ def test_drawer_bonus_is_the_sum_of_post_hint_points():
     guess_with_remaining(game, bystander, game.drawing_seconds)
     guess_with_remaining(game, buyer, game.drawing_seconds)
 
-    drawer_bonus = game.end_round(total_guesser_count=2)
+    drawer_bonus = game.end_turn(total_guesser_count=2)
 
     assert drawer_bonus == sum(game.guess_points.values())
     assert drawer_bonus == 2 * MAX_GUESS_POINTS - HINT_BASE_COST
@@ -1025,14 +1025,14 @@ def test_hint_spend_resets_between_turns():
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     assert game.buy_hint_letter(guesser, 0) is True
 
-    game.end_round(total_guesser_count=2)
+    game.end_turn(total_guesser_count=2)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
 
     assert game.hint_spend == {}
     assert game.hint_spend_remaining(guesser) == MAX_HINT_SPEND
 
 
-# --- the per-turn hint budget ---------------------------------------------
+# --- the per-turn hint spend limit ----------------------------------------
 
 def test_hint_spend_cannot_exceed_the_best_possible_guess():
     """The cap is the point past which more hints could never pay for
@@ -1122,7 +1122,7 @@ def test_completed_turn_records_how_the_round_ended():
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     game.submit_guess(guesser, "testing")
 
-    game.end_round(total_guesser_count=1)
+    game.end_turn(total_guesser_count=1)
 
     turn = game.completed_turns[-1]
     assert turn.end_reason == "all_guessed"
@@ -1131,7 +1131,7 @@ def test_completed_turn_records_how_the_round_ended():
 
 def test_a_round_nobody_solved_ends_on_the_clock():
     game = make_hint_game("testing", "none", n_players=2)
-    game.end_round(total_guesser_count=1)
+    game.end_turn(total_guesser_count=1)
     assert game.completed_turns[-1].end_reason == "timeout"
 
 
@@ -1140,7 +1140,7 @@ def test_completed_turn_records_the_roster_and_the_drawing_effort():
     game.canvas.record_stroke("draw_start", pen_start())
     game.canvas.record_stroke("draw_end", {})
 
-    game.end_round(total_guesser_count=2)
+    game.end_turn(total_guesser_count=2)
 
     turn = game.completed_turns[-1]
     assert turn.present_tokens == tuple(game.turn_order)
@@ -1153,7 +1153,7 @@ def test_per_turn_analytics_do_not_leak_into_the_next_turn():
     guesser = next(t for t in game.turn_order if t != game.current_drawer)
     game.buy_hint_letter(guesser, 0)
     game.submit_guess(guesser, "banana")
-    game.end_round(total_guesser_count=1)
+    game.end_turn(total_guesser_count=1)
 
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
 
@@ -1207,7 +1207,7 @@ def test_pressure_points_decrease_monotonically_with_time():
 
 def test_pressure_curve_is_independent_of_round_length():
     """The whole point of deriving the rate from drawing_seconds: a guess at the
-    same *fraction* of the round is worth the same in a 15s room and a 300s one."""
+    same *fraction* of the turn is worth the same in a 15s room and a 300s one."""
     for fraction in (0.0, 0.25, 0.5, 1.0):
         values = set()
         for drawing_seconds in DRAWING_TIME_OPTIONS:
@@ -1309,7 +1309,7 @@ def test_pressure_decay_state_resets_between_turns():
     guess_at(game, "g1", 40.0)
     assert game.decay_time > 0
 
-    game.end_round(total_guesser_count=2)
+    game.end_turn(total_guesser_count=2)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
 
     assert game.decay_time == 0.0
@@ -1322,7 +1322,7 @@ def test_pressure_drawer_bonus_is_the_sum_of_guesser_points():
         guess_at(game, token, elapsed)
         for token, elapsed in (("g0", 12.0), ("g1", 18.0), ("g2", 25.0))
     )
-    assert game.end_round(total_guesser_count=3) == total
+    assert game.end_turn(total_guesser_count=3) == total
 
 
 def test_pressure_worked_example_matches_the_documented_curve():

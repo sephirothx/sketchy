@@ -1,6 +1,6 @@
 /** Tracks whether an in-memory room session has been rebound to the current socket. */
 
-export type RoomBindingStatus = "ready" | "rejoining" | "failed";
+export type RoomBindingStatus = "ready" | "reconnecting" | "failed";
 
 type Listener = (status: RoomBindingStatus) => void;
 

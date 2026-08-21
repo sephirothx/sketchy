@@ -24,7 +24,7 @@ type SettingsTab = "general" | "game" | "shortcuts";
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
   { id: "game", label: "Game" },
-  { id: "shortcuts", label: "Keyboard Shortcuts" },
+  { id: "shortcuts", label: "Keyboard shortcuts" },
 ];
 
 const THEME_OPTIONS: { value: AppTheme; label: string }[] = [
@@ -135,7 +135,7 @@ function SettingsModalContent() {
             { nickname: trimmedName },
           );
           if (!response.ok) {
-            setNameError(response.error || "Could not change your name.");
+            setNameError(response.error || "Could not change your display name.");
             setActiveTab("general");
             return;
           }
@@ -150,7 +150,7 @@ function SettingsModalContent() {
         setNameError(
           error instanceof ApiError
             ? error.message
-            : "Could not change your name. Please try again.",
+            : "Could not change your display name. Please try again.",
         );
         setActiveTab("general");
         return;
@@ -166,13 +166,13 @@ function SettingsModalContent() {
       volume: draftVolume,
       nameColor: draftNameColor,
     });
-    // Guests are pinned to the guest grey server-side, so sending a colour
+    // Guests are pinned to the guest grey server-side, so sending a color
     // would only be rejected.
     if (!isGuest) {
       // The socket recolours the room the player is in right now; the account
       // write is what makes the choice outlast this room and show up on their
       // profile. Neither is a reason to keep the dialog open, and a failed
-      // save is not worth an error over a colour.
+      // save is not worth an error over a color.
       socket.emit("update_player_settings", { nameColor: draftNameColor });
       void setNameColor(draftNameColor).catch(() => {});
     }
@@ -249,8 +249,8 @@ function SettingsModalContent() {
                     className="settings-labeled-field-label"
                     htmlFor="settings-display-name"
                   >
-                    Name
-                    <FieldHint hint="This is how other players see you." />
+                    {isGuest ? "Display name" : "Username"}
+                    <FieldHint hint={isGuest ? "Used as your default nickname." : "Your account login and nickname."} />
                   </label>
                   <input
                     id="settings-display-name"
@@ -283,14 +283,14 @@ function SettingsModalContent() {
                   {isGuest ? (
                     <div className="settings-account-row">
                       <span className="settings-account-status">
-                        Playing as a guest — your name isn’t saved.
+                        Playing as a guest — your display name isn’t saved.
                       </span>
                       <button
                         type="button"
                         className="settings-account-action"
                         onClick={() => setAuthMode("claim")}
                       >
-                        Claim your name
+                        Create account
                       </button>
                       <button
                         type="button"
@@ -318,7 +318,7 @@ function SettingsModalContent() {
 
                 <div className="settings-labeled-field name-color-setting">
                   <span className="settings-labeled-field-label">
-                    Player name color
+                    Name color
                     <FieldHint hint="This color is visible to everyone in rooms you join." />
                   </span>
                   {isGuest ? (
@@ -326,7 +326,7 @@ function SettingsModalContent() {
                        a working picker here would be a control that silently
                        does nothing. */
                     <p className="settings-locked-hint">
-                      Guests play in grey. Claim your name to pick a colour.
+                      Guests play in grey. Create an account to pick a color.
                     </p>
                   ) : (
                     <div className="name-color-controls">
@@ -335,7 +335,7 @@ function SettingsModalContent() {
                         type="color"
                         value={draftNameColor}
                         onChange={(event) => setDraftNameColor(event.target.value)}
-                        aria-label="Player name color"
+                        aria-label="Name color"
                       />
                       <strong style={{ color: draftNameColor }}>Your colored name</strong>
                       <button
@@ -419,7 +419,7 @@ function SettingsModalContent() {
             <div className="settings-section">
               <div className="settings-section-header">
                 <div>
-                  <h4>Keyboard Shortcuts</h4>
+                  <h4>Keyboard shortcuts</h4>
                   <p className="settings-description">
                     Click on a shortcut badge to rebind it. Press <kbd>Esc</kbd> to cancel.
                   </p>
@@ -430,7 +430,7 @@ function SettingsModalContent() {
                   onClick={handleResetDefaults}
                   title="Reset shortcuts to original defaults"
                 >
-                  Reset Defaults
+                  Reset defaults
                 </button>
               </div>
 

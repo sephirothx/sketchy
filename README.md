@@ -9,7 +9,7 @@ copy and docs alike. Read it before naming anything a player can see.
 
 ## Features
 
-- Lobby with a live, polled list of open public rooms, or join a private room by code.
+- Lobby with a live, polled list of public rooms, or join a private room by code.
 - Curated prompt lists (Standard and Extended English) selectable during room creation, combined with optional custom prompts. Pick rate and guess accuracy stats tracked per prompt.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
@@ -17,11 +17,11 @@ copy and docs alike. Read it before naming anything a player can see.
 - AFK mode — toggle AFK status anytime so you are skipped for drawing turns and not waited for during rounds.
 - Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
 - Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
-- Save image — download the current drawn image directly as a PNG file at any time.
+- Save image — save the current canvas directly as a PNG file at any time.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
-- Reconnection grace period (30s) — refreshing mid-game rejoins you with your score intact.
-- Score system designed to resist "sandbagging": drawers can't game an easy prompt by stalling,
+- Grace period (30s) — refreshing mid-game reconnects you with your score intact.
+- Scoring designed to resist "sandbagging": drawers can't game an easy prompt by stalling,
   since their bonus scales with how fast guessers actually answered (see
   [Scoring](#scoring) below).
 
@@ -244,7 +244,7 @@ backend/.venv/bin/python -m playwright install chromium firefox
 
 The canvas benchmark starts the built application on an isolated local port
 (`8765` by default), creates a real two-player game, and reports
-drawer-to-observer stroke latency, large-fill latency, Undo/replay latency,
+drawer-to-guesser stroke latency, large-fill latency, Undo/replay latency,
 and the `sync_strokes` WebSocket payload size. It also instruments local drawer
 interaction-handler time, canvas readback calls/time/pixels, heap deltas, long
 tasks, a nested-boundary fill, and repeated Undo. Optional trace output includes
@@ -272,7 +272,7 @@ drawing rather than a limit, and is the fixture to set a latency budget
 against. `fill-bounded` and `realistic` are replayed whole rather than
 sampled, so neither of their numbers is a projection.
 
-`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. `tests/test_wire_contract.py` pins the names the two sides share - the events each direction sends, the camelCase keys the server puts in its payloads, and the aliases its command parsers accept - by reading both trees as text. It also rejects wire names built from vocabulary the glossary retired, because agreement alone cannot tell a current name from an old one both sides kept. Nothing else checks those: a payload key is a plain string here and a plain property there, so renaming one side alone compiles, lints, and passes every other test while the feature silently stops working. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
+`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. `tests/test_wire_contract.py` pins the names the two sides share - the events each direction sends, the camelCase keys the server puts in its payloads, and the aliases its command parsers accept - by reading both trees as text. It also rejects wire names built from vocabulary the glossary retired, because agreement alone cannot tell a current name from an old one both sides kept, and pins the exact retired phrases that previously drifted back into player-facing copy and this README. Nothing else checks those: a payload key is a plain string here and a plain property there, so renaming one side alone compiles, lints, and passes every other test while the feature silently stops working. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
 
 ### Production build
 
@@ -302,15 +302,15 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    correctly.
 5. **Turn results** (5s): the prompt is revealed and scores update, then the next player's turn
    begins.
-6. Repeat until every player has drawn once per configured round count, then **game over**
-   shows final scores.
+6. Repeat until every player has drawn once per configured round count, then **Game over**
+   shows the final standings.
 
 ### Scoring
 
 - Everyone starts a game on zero points, in every scoring mode.
 - Room creators can choose **Default**, **Pressure**, or **No scoring**.
   No-scoring games still detect correct guesses and end turns normally, but everyone remains
-  on zero points and no leaderboard is shown.
+  on zero points and no standings are shown.
 - **Default**: a correct guess scores between 100 and 300 points, falling linearly with the time
   left in the turn: `round(100 + 200 * remaining_seconds / drawing_seconds)`. Guess quickly for
   up to 300 points, or 100 points minimum at the deadline.
@@ -322,12 +322,12 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
   correct guess rather than applying as a step, a near-simultaneous second guess loses only a
   handful of points.
 - **Hints are bought on credit.** In the **Buy letters** and **Wheel of Fortune** hint modes,
-  nothing is charged when a hint is bought. Instead, the turn's total hint cost is subtracted from
+  nothing is charged when a hint is bought. Instead, the turn's total hint spend is subtracted from
   the points that turn's correct guess earns, floored at zero: `turn_score = max(0, guess_points -
   hint_spend)`. A turn can be wiped out, but a player's running total never goes down, and hints
   cost nothing at all to a player who never guesses the prompt. Spend is capped at 300 per turn — the
   most a single guess can ever be worth. In Pressure mode the 50-point floor guarantees the *gross*
-  award only; the hint debt is settled after it.
+  award only; the hint spend is settled after it.
 - The drawer receives the sum of points earned by all correct guessers in that turn (`drawer_score = sum of guesser scores`, after each guesser's hint spend), balancing drawing and guessing potential across complete rotations.
 
 ### Spectating

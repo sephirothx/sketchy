@@ -68,7 +68,7 @@ async def guess(ctx: HandlerContext, sid, data):
 
     game = room.game
 
-    # Once a player has already found the prompt this round, anything else
+    # Once a player has already found the prompt this turn, anything else
     # they type could spoil it for players who haven't guessed yet (or
     # just be confusing out-of-context chatter). Keep the rest of their
     # messages for the round visible only to the drawer and other
@@ -156,7 +156,7 @@ async def guess(ctx: HandlerContext, sid, data):
             to=recipients,
         )
 
-    await ctx.game_flow._end_round_if_all_guessed(room)
+    await ctx.game_flow._end_turn_if_all_guessed(room)
 
 
 async def buy_hint(ctx: HandlerContext, sid, data):
@@ -176,7 +176,7 @@ async def buy_hint(ctx: HandlerContext, sid, data):
     # the turn's spend against the points a correct guess earns; this check
     # only exists to give the budget case its own message.
     if cost > game.hint_spend_remaining(player.id):
-        return {"ok": False, "error": "You've used up this turn's hint budget"}
+        return {"ok": False, "error": "You've reached this turn's hint spend limit"}
     if not game.buy_hint_letter(player.id, payload.slot):
         return {"ok": False, "error": "Hint unavailable"}
 
@@ -208,7 +208,7 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
     letter = payload.letter
     cost = game.wheel_hint_cost(player.id, letter)
     if cost > game.hint_spend_remaining(player.id):
-        return {"ok": False, "error": "You've used up this turn's hint budget"}
+        return {"ok": False, "error": "You've reached this turn's hint spend limit"}
     if not game.buy_wheel_letter(player.id, letter):
         return {"ok": False, "error": "Letter unavailable"}
 

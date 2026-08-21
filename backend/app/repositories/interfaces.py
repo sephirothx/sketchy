@@ -306,7 +306,7 @@ class UserRepository(ABC):
 
 
 class GameHistoryRepository(ABC):
-    """Data access boundary for finished game history and round logs."""
+    """Data access boundary for finished game history and turn logs."""
 
     @abstractmethod
     async def save_game(

@@ -58,7 +58,7 @@ export function emitWithAck<T = AckResponse>(
   options: { timeoutMs?: number } = {},
 ): Promise<T> {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return Promise.reject(new SocketRequestError("disconnected", "Browser is offline"));
+    return Promise.reject(new SocketRequestError("disconnected", "Browser reports no network connection"));
   }
 
   return new Promise((resolve, reject) => {

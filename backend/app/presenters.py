@@ -32,7 +32,7 @@ def editable_room_settings_payload(room: Room) -> dict:
         "customPromptsOnly": room.custom_prompts_only,
         "hintMode": room.hint_mode,
         "scoringMode": room.scoring_mode,
-        "spectatorsSeeSolution": room.spectators_see_solution,
+        "spectatorsSeePrompt": room.spectators_see_prompt,
         "hideMaskedPrompt": room.hide_masked_prompt,
         "promptListSlugs": list(room.prompt_list_slugs),
     }
@@ -53,7 +53,7 @@ def session_payload(room: Room, player: Player) -> dict:
 def turn_payload(
     game: Game,
     player: Player | None = None,
-    spectators_see_solution: bool = False,
+    spectators_see_prompt: bool = False,
 ) -> dict:
     player_id = player.id if player else None
     return {
@@ -62,7 +62,7 @@ def turn_payload(
         "maskedPrompt": game.masked_prompt(
             player_id,
             is_spectator=player.is_spectator if player else False,
-            spectators_see_solution=spectators_see_solution,
+            spectators_see_prompt=spectators_see_prompt,
         ),
         "roundNumber": game.round_number,
         "totalRounds": game.rounds_total,
@@ -76,7 +76,7 @@ def turn_payload(
         # What this player has committed to hints so far this turn, and the
         # ceiling on it. Private: only ever sent on a per-socket emit.
         "hintSpend": game.hint_spend.get(player_id, 0) if player_id else 0,
-        "hintBudget": MAX_HINT_SPEND,
+        "maxHintSpend": MAX_HINT_SPEND,
     }
 
 

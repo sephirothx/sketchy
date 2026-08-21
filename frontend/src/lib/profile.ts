@@ -34,7 +34,7 @@ export interface GameSummary {
   participants: GameParticipant[];
 }
 
-export interface RoundGuess {
+export interface TurnGuess {
   userId: string;
   displayName: string;
   pointsAwarded: number;
@@ -48,7 +48,7 @@ export interface GameTurn {
   drawerDisplayName: string;
   prompt: string;
   durationSeconds: number;
-  guesses: RoundGuess[];
+  guesses: TurnGuess[];
 }
 
 export type GameDetail = GameSummary & { turns: GameTurn[] };

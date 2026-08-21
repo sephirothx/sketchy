@@ -98,7 +98,7 @@ class GameFlowService:
             "custom_prompts_only": value("custom_prompts_only"),
             "hint_mode": hint_mode,
             "scoring_mode": scoring_mode,
-            "spectators_see_solution": value("spectators_see_solution"),
+            "spectators_see_prompt": value("spectators_see_prompt"),
             "hide_masked_prompt": hide_masked_prompt,
             "prompt_list_slugs": prompt_list_slugs,
             "curated_prompts": curated_prompts,
@@ -112,7 +112,7 @@ class GameFlowService:
             except asyncio.CancelledError:
                 return
             # Deregister ourselves before running the timeout callback. The
-            # callback (e.g. self._end_round) may itself cancel the phase timer,
+            # callback (e.g. self._end_turn) may itself cancel the phase timer,
             # and without this, that call would cancel *this* still-running
             # task (since we're still registered as the phase owner), which raises
             # CancelledError into us at the next await and prevents the
@@ -158,7 +158,7 @@ class GameFlowService:
                         masked = game.masked_prompt(
                             p.id,
                             is_spectator=p.is_spectator,
-                            spectators_see_solution=room.spectators_see_solution,
+                            spectators_see_prompt=room.spectators_see_prompt,
                         )
                         await self._sio.emit(
                             "hint_revealed",
@@ -286,7 +286,7 @@ class GameFlowService:
         if game.phase in (Phase.CHOOSING_PROMPT, Phase.DRAWING):
             await self._sio.emit(
                 "sync_game",
-                self._turn_payload(game, player, room.spectators_see_solution),
+                self._turn_payload(game, player, room.spectators_see_prompt),
                 to=sid,
             )
             if sync_canvas:
@@ -342,8 +342,8 @@ class GameFlowService:
         )
         await self._sync_player_view(sid, room, player)
 
-    def _turn_payload(self, game: Game, player: Player | None = None, spectators_see_solution: bool = False) -> dict:
-        return turn_payload(game, player, spectators_see_solution)
+    def _turn_payload(self, game: Game, player: Player | None = None, spectators_see_prompt: bool = False) -> dict:
+        return turn_payload(game, player, spectators_see_prompt)
 
     async def _start_turn(self, room: Room) -> None:
         game = room.game
@@ -399,7 +399,7 @@ class GameFlowService:
                     "maskedPrompt": game.masked_prompt(
                         p.id,
                         is_spectator=p.is_spectator,
-                        spectators_see_solution=room.spectators_see_solution,
+                        spectators_see_prompt=room.spectators_see_prompt,
                     ),
                     "roundNumber": game.round_number,
                     "totalRounds": game.rounds_total,
@@ -407,21 +407,21 @@ class GameFlowService:
                     "hintCost": game.hint_cost(p.id),
                     "letterPrices": game.wheel_letter_prices(p.id) if game.hint_mode == "wheel" else None,
                     "hintSpend": 0,
-                    "hintBudget": MAX_HINT_SPEND,
+                    "maxHintSpend": MAX_HINT_SPEND,
                 },
                 to=p.sid,
             )
         self.schedule_phase_timer(room, game.drawing_seconds)
         self.schedule_hint_checkpoints(room)
 
-    async def _end_round(self, room: Room) -> bool:
+    async def _end_turn(self, room: Room) -> bool:
         game = room.game
         if not game or game.phase != Phase.DRAWING:
             return False
         self._timers.cancel_phase_timer(room.id)
         self._timers.cancel_hint_timers(room.id)
         guesser_count = len(room.eligible_guessers())
-        drawer_bonus = game.end_round(total_guesser_count=guesser_count)
+        drawer_bonus = game.end_turn(total_guesser_count=guesser_count)
         if drawer_bonus is None:
             return False
         drawer = room.players.get(game.current_drawer)
@@ -600,7 +600,7 @@ class GameFlowService:
         *,
         exclude_sid: str | None = None,
     ) -> list[str]:
-        """Return sids of players who may see restricted in-round chat:
+        """Return sids of players who may see spectator chat during this turn:
         the drawer, all correct guessers, and all spectators.
         """
         return [
@@ -618,8 +618,8 @@ class GameFlowService:
     async def apply_afk_consequences(self, room: Room, player: Player) -> None:
         """Move the turn along after `player`'s AFK flag was just raised.
 
-        An AFK drawer forfeits the turn; an AFK guesser is one fewer answer the
-        round is still waiting on, which may already be all of them.
+        An AFK drawer forfeits the turn; an AFK guesser is one fewer player the
+        turn is still waiting on, which may already be all of them.
         """
         game = room.game
         if not game or room.state != "playing":
@@ -628,18 +628,18 @@ class GameFlowService:
             if game.phase == Phase.CHOOSING_PROMPT:
                 await self._abandon_current_turn(room)
             elif game.phase == Phase.DRAWING:
-                await self._end_round(room)
+                await self._end_turn(room)
         else:
-            await self._end_round_if_all_guessed(room)
+            await self._end_turn_if_all_guessed(room)
 
-    async def _end_round_if_all_guessed(self, room: Room) -> None:
+    async def _end_turn_if_all_guessed(self, room: Room) -> None:
         """End the drawing phase early when every eligible guesser has guessed correctly."""
         game = room.game
         if not game or game.phase != Phase.DRAWING:
             return
         guesser_count = len(room.eligible_guessers())
         if game.all_guessed(guesser_count):
-            await self._end_round(room)
+            await self._end_turn(room)
 
     async def _on_phase_timeout(self, room: Room) -> None:
         game = room.game
@@ -649,7 +649,7 @@ class GameFlowService:
             game.force_prompt_choice()
             await self._begin_drawing(room)
         elif game.phase == Phase.DRAWING:
-            await self._end_round(room)
+            await self._end_turn(room)
         elif game.phase == Phase.TURN_RESULTS:
             await self._finish_or_next(room)
 
@@ -683,4 +683,3 @@ class GameFlowService:
     async def require_current_player(self, sid: str) -> tuple[Room, Player] | None:
         """Resolve an authenticated room member and reject superseded sockets."""
         return await resolve_current_player(self._ctx, sid)
-

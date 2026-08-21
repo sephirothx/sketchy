@@ -18,7 +18,7 @@ function exceptionalRules(room: RoomSummary) {
   if (room.hintMode !== "none") {
     rules.push(room.hintMode === "checkpoints" ? "Timed hints" : room.hintMode === "wheel" ? "Wheel of Fortune" : "Buy letters");
   }
-  if (room.spectatorsSeeSolution) rules.push("Spectators see prompt");
+  if (room.spectatorsSeePrompt) rules.push("Spectators see prompt");
   return rules;
 }
 
@@ -53,12 +53,12 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
         </p>
         {badges.length > 0 && <div className="public-room-badges">{badges.map((badge) => <span key={badge}>{badge}</span>)}</div>}
         <details className="public-room-rules">
-          <summary>View rules</summary>
+          <summary>View room settings</summary>
           <ul>
             <li>{room.scoringMode === "none" ? "No points are kept" : room.scoringMode === "pressure" ? "Points drain faster once someone guesses" : "Points for fast, correct guesses"}</li>
             <li>{hintDescription(room)}</li>
             <li>{room.customPromptCount > 0 ? (room.customPromptsOnly ? `${room.customPromptCount} custom prompts only` : `${room.customPromptCount} custom prompts plus the default list`) : "Built-in prompt list"}</li>
-            <li>{room.spectatorsSeeSolution ? "Spectators can see the prompt" : "Spectators see the masked prompt"}</li>
+            <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators see the masked prompt"}</li>
           </ul>
         </details>
       </div>

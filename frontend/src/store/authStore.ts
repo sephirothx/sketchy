@@ -31,7 +31,7 @@ interface AuthStore {
  * The socket reads the session cookie once, at handshake time, so it cannot
  * notice that the cookie changed underneath it. Bouncing the transport makes
  * it handshake again as the new account; `useRoomSessionReconnect` then
- * rejoins the current room on `connect`, which is what updates the player's
+ * reconnects to the current room on `connect`, which is what updates the player's
  * identity in-game without a page reload.
  */
 function reconnectSocketAsNewIdentity(): void {
@@ -65,14 +65,14 @@ function releaseSeatBeforeIdentityChange(): void {
  * device, where the local copy was empty but the account had a name.
  */
 /**
- * Reconcile the colour in Settings with the one on the account.
+ * Reconcile the color in Settings with the one on the account.
  *
  * The account is the durable copy: it is the only place another player's view
- * of this name can read a colour from, and it is what a second device inherits
- * instead of the colour that device happened to generate. So an account that
- * has a colour wins, and Settings adopts it.
+ * of this name can read a color from, and it is what a second device inherits
+ * instead of the color that device happened to generate. So an account that
+ * has a color wins, and Settings adopts it.
  *
- * An account with no colour is a player who chose one before it was ever
+ * An account with no color is a player who chose one before it was ever
  * stored, or who has never opened Settings; their local choice is pushed up
  * once so their name looks the same on their profile as it does in a room.
  * Guests are skipped - their grey is the cue that the name is unclaimed.
@@ -90,7 +90,7 @@ function reconcileNameColor(user: AuthUser | null): void {
     body: { nameColor: settings.nameColor },
   })
     .then((updated) => useAuthStore.setState({ user: updated }))
-    // Nothing here is worth interrupting the player over: the colour still
+    // Nothing here is worth interrupting the player over: the color still
     // applies locally and the next load tries again.
     .catch(() => {});
 }

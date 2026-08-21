@@ -70,7 +70,7 @@ async def test_lobby_and_settings_axe_and_keyboard(color_scheme, theme):
         await page.wait_for_selector('button:has-text("Create room")')
         await assert_no_axe_violations(page, f"lobby {theme}")
 
-        settings_button = page.get_by_role("button", name="Game Settings")
+        settings_button = page.get_by_role("button", name="Player settings")
         await settings_button.click()
         dialog = page.get_by_role("dialog", name="Settings")
         await dialog.wait_for()
@@ -200,7 +200,7 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         await guesser_page.locator(".chat-input input").fill(prompt)
         await guesser_page.locator(".chat-input input").press("Enter")
         await guesser_page.wait_for_selector('[data-testid="turn-results-overlay"]')
-        await assert_no_axe_violations(guesser_page, "round end")
+        await assert_no_axe_violations(guesser_page, "turn results")
 
         await guesser_page.wait_for_selector('[data-testid="turn-results-overlay"]', state="detached")
         next_drawer = host_page if await host_page.query_selector(".prompt-choices") else guest_page

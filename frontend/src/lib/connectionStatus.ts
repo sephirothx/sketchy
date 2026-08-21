@@ -25,7 +25,7 @@ export function resolveConnectionStatus(input: {
 }): ConnectionStatus {
   if (!input.online) return "offline";
   if (!input.socketConnected) return "reconnecting";
-  if (input.binding === "rejoining") return "reconnecting";
+  if (input.binding === "reconnecting") return "reconnecting";
   if (input.binding === "failed") return "failed";
   return "connected";
 }

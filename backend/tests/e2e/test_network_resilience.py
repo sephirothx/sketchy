@@ -42,7 +42,7 @@ async def test_room_list_failure_retry_and_connection_banner():
             await page.wait_for_selector('text=No public rooms yet. Create one!')
 
             await context.set_offline(True)
-            await page.wait_for_selector('.connection-status-banner.offline:has-text("You’re offline")')
+            await page.wait_for_selector('.connection-status-banner.offline:has-text("You’re disconnected")')
             await page.fill('input[placeholder="ABC123"]', "ABC123")
             await page.click('button:has-text("Join by code")')
             await page.wait_for_selector('.lobby-action-error:has-text("Connection lost")')
@@ -105,7 +105,7 @@ async def test_page_load_and_reload_never_show_the_connection_banner():
 
 
 @pytest.mark.asyncio
-async def test_mid_session_socket_reconnect_rejoins_room():
+async def test_mid_session_socket_reconnects_to_room():
     """Transport reconnect must rebind the active room session without a reload."""
     async with async_playwright() as p:
         browser1 = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -198,7 +198,7 @@ async def test_room_refresh_failure_keeps_last_successful_list():
             "drawingSeconds": 80,
             "hintMode": "none",
             "scoringMode": "default",
-            "spectatorsSeeSolution": False,
+            "spectatorsSeePrompt": False,
             "hideMaskedPrompt": False,
             "state": "waiting",
         }

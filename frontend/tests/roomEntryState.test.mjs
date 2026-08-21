@@ -18,7 +18,7 @@ const room = {
   drawingSeconds: 90,
   hintMode: "checkpoints",
   scoringMode: "default",
-  spectatorsSeeSolution: false,
+  spectatorsSeePrompt: false,
   hideMaskedPrompt: false,
   state: "waiting",
 };
@@ -47,7 +47,7 @@ function dependencies(overrides = {}) {
   };
 }
 
-test("an existing seat is resumed without loading a preview", async () => {
+test("an existing seat is reconnected without loading a preview", async () => {
   const accepted = [];
   let previewCalls = 0;
   const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
@@ -171,7 +171,7 @@ test("a superseded load cannot overwrite the newest preview", async () => {
   await firstLoad;
 
   assert.deepEqual(machine.getSnapshot().state, { status: "preview", room: newestRoom });
-  // The superseded load is abandoned at the resume probe, so it never even
+  // The superseded load is abandoned at the reconnect probe, so it never even
   // asks for a preview it would not be allowed to publish.
   assert.equal(previewCalls, 1);
 });

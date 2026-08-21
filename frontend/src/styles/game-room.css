@@ -334,7 +334,7 @@
 }
 
 .restart-vote-copy > span,
-.restart-vote-observer-note {
+.restart-vote-spectator-note {
   color: #64748b;
   font-size: 12px;
 }

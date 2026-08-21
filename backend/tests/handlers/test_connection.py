@@ -288,7 +288,7 @@ async def test_sync_game_carries_the_running_hint_spend():
         call.args[1] for call in sio.emit.await_args_list if call.args[0] == "sync_game"
     )
     assert sync["hintSpend"] == spend
-    assert sync["hintBudget"] == MAX_HINT_SPEND
+    assert sync["maxHintSpend"] == MAX_HINT_SPEND
 
 @pytest.mark.asyncio
 async def test_already_joined_socket_resyncs_turn_results_overlay():
@@ -304,7 +304,7 @@ async def test_already_joined_socket_resyncs_turn_results_overlay():
     room.game.force_prompt_choice()
     room.game.guess_points[guesser.id] = 200
     room.game.guess_times[guesser.id] = 12.0
-    assert room.game.end_round() is not None
+    assert room.game.end_turn() is not None
     room.game.set_phase_deadline(5)
 
     sio = socketio.AsyncServer(async_mode="asgi")

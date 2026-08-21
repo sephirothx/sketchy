@@ -349,8 +349,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
             type="button"
             className="header-settings-button"
             onClick={openSettings}
-            title="Game Settings"
-            aria-label="Game Settings"
+            title="Player settings"
+            aria-label="Player settings"
           >
             <SettingsIcon size={16} />
             <span className="header-action-label">Settings</span>

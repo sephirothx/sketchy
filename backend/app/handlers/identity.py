@@ -14,8 +14,8 @@ class PlayerIdentity:
     user_id: str | None
     nickname: str
     is_anonymous: bool
-    # The colour stored on the account, when it has one. None means the client
-    # may supply its own: either the player has never chosen a colour, or they
+    # The color stored on the account, when it has one. None means the client
+    # may supply its own: either the player has never chosen a color, or they
     # are a guest, who is pinned to the guest grey regardless.
     name_color: str | None = None
 
@@ -34,9 +34,9 @@ async def resolve_identity(
     or an unclaimed guest, never one impersonating the other. A guest may pick
     any name that is not already a registered username.
 
-    Their colour comes from the account for the same reason. It is chosen in
+    Their color comes from the account for the same reason. It is chosen in
     Settings and kept there per browser, so trusting the payload let the same
-    player appear in one colour on the device they last picked it on and
+    player appear in one color on the device they last picked it on and
     another everywhere else - including on a profile, which can only read the
     account.
     """
@@ -62,7 +62,7 @@ async def resolve_identity(
             # Still on their first run. The client asks for a name before it
             # offers to create or join, so reaching here means something went
             # around the UI - never seat a nameless player.
-            raise IdentityError("Choose a name before joining a room.")
+            raise IdentityError("Choose a display name before joining a room.")
         return PlayerIdentity(
             user_id=user.id, nickname=user.display_name, is_anonymous=True
         )
@@ -77,6 +77,6 @@ async def resolve_identity(
     if ctx.user_repo is not None:
         owner = await ctx.user_repo.get_by_username(nickname)
         if owner is not None and not owner.is_anonymous:
-            raise IdentityError("That name belongs to a registered player.")
+            raise IdentityError("That username belongs to a registered player.")
 
     return PlayerIdentity(user_id=user_id, nickname=nickname, is_anonymous=True)

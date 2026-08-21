@@ -97,7 +97,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         }
         aria-label={
           isGuest
-            ? `${shownName}. Your name is not saved.`
+            ? `${shownName}. Your display name is not saved.`
             : `Signed in as ${shownName}`
         }
       >
@@ -142,7 +142,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   setMode("claim");
                 }}
               >
-                Claim your name
+                Create account
               </button>
               <button
                 type="button"
@@ -253,17 +253,13 @@ export function AuthDialog({
         tabIndex={-1}
       >
         <h3 id={titleId} className="modal-title">
-          {isClaim
-            ? suggestedUsername
-              ? `Claim ${suggestedUsername}`
-              : "Create your account"
-            : "Log in"}
+          {isClaim ? "Create your account" : "Log in"}
         </h3>
         {isClaim && (
           <p className="modal-body">
             {suggestedUsername
-              ? "Your name isn’t saved yet. Claim it so nobody else can take it, and keep it on every device."
-              : "Keep your name and your stats on every device."}
+              ? `Create an account to keep ${suggestedUsername} as your username and save your stats on every device.`
+              : "Keep your username and your stats on every device."}
           </p>
         )}
 
@@ -305,15 +301,7 @@ export function AuthDialog({
           {error && <p className="auth-error" role="alert">{error}</p>}
 
           <button type="submit" className="modal-button" disabled={busy}>
-            {busy
-              ? "Please wait…"
-              : isClaim
-                ? // Mirrors the title: there is a name to claim only when one
-                  // was carried in, and otherwise this is a plain sign-up.
-                  suggestedUsername
-                  ? "Claim my name"
-                  : "Create"
-                : "Log in"}
+            {busy ? "Please wait…" : isClaim ? "Create account" : "Log in"}
           </button>
         </form>
 

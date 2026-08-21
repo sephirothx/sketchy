@@ -207,7 +207,7 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     room.custom_prompts_only = True
     room.hint_mode = "wheel"
     room.hide_masked_prompt = True
-    room.spectators_see_solution = True
+    room.spectators_see_prompt = True
     old_game = room.game
     assert old_game is not None
     old_generation = old_game.canvas.generation
@@ -253,7 +253,7 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     assert room.game.prompt_pool == ["reviewword", "secondword", "thirdword"]
     assert room.game.hint_mode == "wheel"
     assert room.game.hide_masked_prompt is True
-    assert room.spectators_see_solution is True
+    assert room.spectators_see_prompt is True
     assert room.game.canvas.generation > old_generation
     assert room.last_game_drawings == []
     assert room.last_game_scores == []

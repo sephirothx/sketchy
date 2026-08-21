@@ -55,15 +55,15 @@ export function randomNameColor(exclude?: string): string {
 }
 
 export const ACTION_LABELS: Record<keyof KeyBindings, string> = {
-  brush: "Brush Tool",
-  fill: "Fill Tool",
-  eraser: "Eraser Tool",
-  rectangle: "Rectangle Tool",
-  triangle: "Triangle Tool",
-  ellipse: "Ellipse Tool",
-  brushDecrease: "Decrease Brush Size",
-  brushIncrease: "Increase Brush Size",
-  undo: "Undo Stroke",
+  brush: "Brush tool",
+  fill: "Fill tool",
+  eraser: "Eraser tool",
+  rectangle: "Rectangle tool",
+  triangle: "Triangle tool",
+  ellipse: "Ellipse tool",
+  brushDecrease: "Decrease brush size",
+  brushIncrease: "Increase brush size",
+  undo: "Undo stroke",
 };
 
 export function getSystemTheme(): ResolvedTheme {

@@ -392,7 +392,7 @@ async def test_a_new_guest_starts_with_no_name(client):
     assert body["isAnonymous"] is True
 
 
-# --- name colour ----------------------------------------------------------
+# --- name color -----------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_registered_player_colour_is_stored_on_the_account(client):

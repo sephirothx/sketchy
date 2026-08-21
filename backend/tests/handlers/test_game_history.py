@@ -67,7 +67,7 @@ async def play_to_completion(ctx, room, players, *, guessers=None):
             if guessers is not None and player.nickname not in guessers:
                 continue
             game.submit_guess(player.id, game.prompt)
-        await flow._end_round(room)
+        await flow._end_turn(room)
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
     await ctx.timers.close()
@@ -125,7 +125,7 @@ async def test_departed_player_still_counts_as_a_participant():
     game = room.game
     game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
-    await flow._end_round(room)
+    await flow._end_turn(room)
     ctx.timers.cancel_phase_timer(room.id)
     await flow._finish_or_next(room)
 
@@ -137,7 +137,7 @@ async def test_departed_player_still_counts_as_a_participant():
         game = room.game
         game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
-        await flow._end_round(room)
+        await flow._end_turn(room)
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
     await ctx.timers.close()
@@ -158,7 +158,7 @@ async def test_restart_discards_the_turns_played_so_far():
     game = room.game
     game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
-    await flow._end_round(room)
+    await flow._end_turn(room)
     ctx.timers.cancel_phase_timer(room.id)
 
     await flow._start_fresh_game(room, room.player_list(), restarted=True)
@@ -181,7 +181,7 @@ async def test_abandoned_game_is_never_persisted():
     game = room.game
     game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
-    await flow._end_round(room)
+    await flow._end_turn(room)
     ctx.timers.cancel_phase_timer(room.id)
 
     for player in list(room.player_list()):
@@ -216,7 +216,7 @@ async def test_an_opponent_leaving_does_not_erase_the_turns_played():
     game = room.game
     game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
-    await flow._end_round(room)
+    await flow._end_turn(room)
     ctx.timers.cancel_phase_timer(room.id)
 
     # One seat left: `total_turns` collapses and the game reports finished.
@@ -254,14 +254,14 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     gross = round(MIN_GUESS_POINTS + (MAX_GUESS_POINTS - MIN_GUESS_POINTS) * gross)
     _, awarded = game.submit_guess(guesser.id, game.prompt)
 
-    await flow._end_round(room)
+    await flow._end_turn(room)
     ctx.timers.cancel_phase_timer(room.id)
     await flow._finish_or_next(room)
     while room.game is not None:
         game = room.game
         game.force_prompt_choice()
         game.set_phase_deadline(game.drawing_seconds)
-        await flow._end_round(room)
+        await flow._end_turn(room)
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
     await ctx.timers.close()
@@ -324,7 +324,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
         game.set_phase_deadline(game.drawing_seconds)
         guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
         game.submit_guess(guesser.id, game.prompt)
-        await flow._end_round(room)
+        await flow._end_turn(room)
         ctx.timers.cancel_phase_timer(room.id)
         expected_scores = {p.user_id: p.score for p in room.player_list()}
         await flow._finish_or_next(room)

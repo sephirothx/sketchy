@@ -459,7 +459,7 @@
   gap: 16px;
 }
 
-/* Curated Word List Picker */
+/* Curated prompt list picker */
 .prompt-list-picker-group {
   grid-column: 1 / -1;
   margin-top: 6px;
@@ -559,4 +559,3 @@
   grid-column: 1 / -1;
   margin-top: 4px;
 }
-

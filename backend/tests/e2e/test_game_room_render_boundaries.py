@@ -71,13 +71,13 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
                 await host.wait_for_timeout(100)
             assert drawer is not None
             guessers = [page for page in pages if page is not drawer]
-            observer = guessers[0]
+            guesser = guessers[0]
 
-            await observer.evaluate(RESET_COUNTS)
+            await guesser.evaluate(RESET_COUNTS)
             await drawer.locator(".prompt-choices button").first.click()
             for page in pages:
                 await page.wait_for_selector("canvas.drawing-canvas")
-            phase_counts = await observer.evaluate(READ_COUNTS)
+            phase_counts = await guesser.evaluate(READ_COUNTS)
             assert phase_counts.get("gameplay", 0) > 0
             assert phase_counts.get("canvas", 0) > 0
 
@@ -92,7 +92,7 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             assert chat_counts.get("chat", 0) > 0
             assert chat_counts.get("players", 0) == 0
 
-            await observer.evaluate(RESET_COUNTS)
+            await guesser.evaluate(RESET_COUNTS)
             canvas = drawer.locator("canvas.drawing-canvas")
             box = await canvas.bounding_box()
             assert box is not None
@@ -100,8 +100,8 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             await drawer.mouse.down()
             await drawer.mouse.move(box["x"] + 160, box["y"] + 160)
             await drawer.mouse.up()
-            await observer.wait_for_timeout(200)
-            drawing_counts = await assert_regions_unchanged(observer)
+            await guesser.wait_for_timeout(200)
+            drawing_counts = await assert_regions_unchanged(guesser)
             assert drawing_counts.get("players", 0) == 0
 
             prompt = (await drawer.locator(".prompt-reveal").inner_text()).strip()

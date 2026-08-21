@@ -30,7 +30,7 @@ test("a missing socket reads as reconnecting", () => {
 });
 
 test("room binding state surfaces while the socket is up", () => {
-  assert.equal(resolveConnectionStatus({ ...connected, binding: "rejoining" }), "reconnecting");
+  assert.equal(resolveConnectionStatus({ ...connected, binding: "reconnecting" }), "reconnecting");
   assert.equal(resolveConnectionStatus({ ...connected, binding: "failed" }), "failed");
 });
 

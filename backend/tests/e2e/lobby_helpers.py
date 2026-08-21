@@ -46,7 +46,7 @@ async def register_account(page, username: str, password: str = "a-good-password
     # inside a room still goes straight to the dialog.
     if await page.locator(".identity-chip").count():
         await page.click(".identity-chip")
-        claim = page.get_by_role("menuitem", name="Claim your name")
+        claim = page.get_by_role("menuitem", name="Create account")
         if await claim.count():
             await claim.click()
     else:

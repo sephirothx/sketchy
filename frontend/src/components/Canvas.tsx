@@ -38,7 +38,7 @@ interface CanvasProps {
   color: string;
   brushWidth: number;
   tool: DrawTool;
-  solutionPrompt?: string | null;
+  downloadPrompt?: string | null;
   overlay?: ReactNode;
   label: string;
 }
@@ -143,7 +143,7 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
     color,
     brushWidth,
     tool,
-    solutionPrompt = null,
+    downloadPrompt = null,
     overlay = null,
     label,
   },
@@ -187,8 +187,8 @@ const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
   );
 
   useImperativeHandle(ref, () => ({
-    saveImage: () => saveCanvasImage(canvasRef.current, solutionPrompt),
-  }), [solutionPrompt]);
+    saveImage: () => saveCanvasImage(canvasRef.current, downloadPrompt),
+  }), [downloadPrompt]);
 
   return (
     <div className="canvas-wrapper">

@@ -95,7 +95,7 @@ async def test_prompt_usage_tracking_metrics():
         await engine.dispose()
 
 
-async def test_room_effective_word_pool_with_curated_and_custom_words():
+async def test_room_effective_prompt_pool_with_curated_and_custom_prompts():
     rm = RoomManager()
     room = rm.create_room(
         name="Test Room",
@@ -106,14 +106,14 @@ async def test_room_effective_word_pool_with_curated_and_custom_words():
     )
     pool = room.effective_prompt_pool()
     assert pool is not None
-    # Custom words take priority, case-insensitively deduplicating
+    # Custom prompts take priority, case-insensitively deduplicating
     assert pool[0] == "dragon"
     assert pool[1] == "APPLE"
     assert "banana" in pool
     assert "cherry" in pool
     assert pool.count("apple") + pool.count("APPLE") == 1
 
-    # Custom words only
+    # Custom prompts only
     room.custom_prompts_only = True
     pool_custom = room.effective_prompt_pool()
     assert pool_custom == ["dragon", "APPLE"]

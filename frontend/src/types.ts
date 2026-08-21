@@ -59,7 +59,7 @@ export interface RoomSummary {
   drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
-  spectatorsSeeSolution: boolean;
+  spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
   promptListSlugs?: string[];
   state: "waiting" | "playing";
@@ -77,7 +77,7 @@ export interface RoomStatePayload {
   drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
-  spectatorsSeeSolution: boolean;
+  spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
   promptListSlugs?: string[];
   state: "waiting" | "playing";
@@ -99,7 +99,7 @@ export interface EditableRoomSettings {
   customPromptsOnly: boolean;
   hintMode: HintMode;
   scoringMode: ScoringMode;
-  spectatorsSeeSolution: boolean;
+  spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
   promptListSlugs?: string[];
 }
@@ -128,7 +128,7 @@ export interface ScoreEntry {
   score: number;
 }
 
-export interface RoundScoreEntry extends ScoreEntry {
+export interface TurnScoreEntry extends ScoreEntry {
   delta: number;
   previousRank: number;
   newRank: number;
@@ -146,7 +146,7 @@ export interface TurnEndedPayload {
     isAnonymous?: boolean;
     seconds: number;
   }[];
-  scores: RoundScoreEntry[];
+  scores: TurnScoreEntry[];
 }
 
 /**

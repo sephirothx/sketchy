@@ -208,14 +208,26 @@ def test_server_events_are_listened_for_by_the_client(trees, frontend):
 # Names the glossary retired. `word` is never the entity - the thing being drawn
 # is a prompt, and a third of the shipped ones are more than one word - and
 # `round` names a full rotation, so only a genuine round count may carry it.
-RETIRED = ("word",)
+RETIRED = {
+    "answer",
+    "artist",
+    "budget",
+    "colour",
+    "leaderboard",
+    "observer",
+    "resume",
+    "scoreboard",
+    "solution",
+    "viewer",
+    "word",
+}
 ROUND_EXCEPTIONS = {"roundNumber", "totalRounds", "rounds", "round_number", "total_rounds"}
 
 
 def _uses_retired_vocabulary(name: str) -> bool:
     lowered = re.sub(r"[^a-z]", " ", re.sub(r"(?<!^)([A-Z])", r" \1", name).lower())
     tokens = set(lowered.split())
-    if tokens & set(RETIRED):
+    if tokens & RETIRED:
         return True
     return "round" in tokens and name not in ROUND_EXCEPTIONS
 
@@ -254,3 +266,30 @@ def test_wire_names_use_the_current_vocabulary(trees, frontend):
         f"wire names still using retired vocabulary: {stale}. The thing being "
         "drawn is a prompt; a round is a full rotation of turns. See GLOSSARY.md."
     )
+
+
+def test_player_facing_copy_uses_current_vocabulary():
+    """Keep the exact retired phrases that previously drifted out of UI and docs."""
+    sources = [REPO_ROOT / "README.md", *sorted(FRONTEND_SRC.rglob("*.ts*"))]
+    text = "\n".join(path.read_text(encoding="utf-8") for path in sources)
+    retired_phrases = {
+        "Brush Tool",
+        "Claim my name",
+        "Claim your name",
+        "Download drawing",
+        "Game Settings",
+        "Game complete",
+        "Keyboard Shortcuts",
+        "Play again",
+        "Reset Defaults",
+        "Room rules",
+        "View rules",
+        "You’re offline",
+        'placeholder="Your name"',
+        "hint budget",
+        "hint debt",
+        "leaderboard",
+        "name colour",
+    }
+    stale = sorted(phrase for phrase in retired_phrases if phrase in text)
+    assert not stale, f"player-facing copy still uses retired vocabulary: {stale}"

@@ -90,8 +90,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await view_drawings.wait_for(timeout=12_000)
             continue_to_waiting = host.get_by_role(
                 "button",
-                name="Continue to waiting room · 10s",
-                exact=True,
+                name="Continue to waiting room",
             )
             await continue_to_waiting.wait_for()
             await view_drawings.click()
@@ -103,7 +102,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
                 exact=True,
             ).is_visible()
             async with host.expect_download() as first_download_info:
-                await host.get_by_role("button", name="Download drawing").click()
+                await host.get_by_role("button", name="Save image").click()
             first_download = await first_download_info.value
             assert first_prompt in first_download.suggested_filename
 
@@ -117,7 +116,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await empty_notice.wait_for()
             assert await empty_notice.is_visible()
             async with host.expect_download() as second_download_info:
-                await host.get_by_role("button", name="Download drawing").click()
+                await host.get_by_role("button", name="Save image").click()
             second_download = await second_download_info.value
             assert second_prompt in second_download.suggested_filename
 
@@ -152,7 +151,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             ).click()
             await guest.get_by_text("Drawing recap", exact=True).wait_for()
 
-            await host.get_by_role("button", name="Play again").click()
+            await host.get_by_role("button", name="Rematch").click()
             await guest.get_by_text("Drawing recap", exact=True).wait_for(
                 state="detached",
             )
@@ -162,7 +161,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
                 await guesser.fill(".chat-input input", prompt)
                 await guesser.keyboard.press("Enter")
 
-            await guest.get_by_text("Game complete", exact=True).wait_for(
+            await guest.get_by_text("Game over", exact=True).wait_for(
                 timeout=12_000,
             )
             assert not await guest.get_by_text(

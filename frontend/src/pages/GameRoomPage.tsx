@@ -18,7 +18,7 @@ export function GameRoomPage() {
 
   // On the way out the session is already cleared but the route has not
   // changed yet. Rendering the invite screen for that one frame would ask the
-  // server to resume a seat we just gave up.
+  // server to reconnect a seat we just gave up.
   if (isExitingRoom) return null;
 
   if (!hasActiveSession) {

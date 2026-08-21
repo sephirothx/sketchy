@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { GuessBreakdown, TurnEndedPayload, RoundScoreEntry } from "../types";
+import type { GuessBreakdown, TurnEndedPayload, TurnScoreEntry } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 
 interface TurnResultsOverlayProps {
@@ -8,7 +8,7 @@ interface TurnResultsOverlayProps {
   drawerBonus: number;
   myPlayerId: string | null;
   guesses?: TurnEndedPayload["guesses"];
-  scores: RoundScoreEntry[];
+  scores: TurnScoreEntry[];
   showScores?: boolean;
   /** How my own turn score was arrived at, when I bought hints this turn. */
   myBreakdown?: GuessBreakdown | null;
@@ -19,7 +19,7 @@ interface TurnResultsOverlayProps {
 // new one when animating overtakes.
 const ROW_HEIGHT = 44;
 
-function rankChange(entry: RoundScoreEntry) {
+function rankChange(entry: TurnScoreEntry) {
   const change = entry.previousRank - entry.newRank;
   if (change > 0) return { symbol: "\u25B2", places: change, className: "rank-up" };
   if (change < 0) return { symbol: "\u25BC", places: -change, className: "rank-down" };

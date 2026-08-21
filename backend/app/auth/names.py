@@ -1,7 +1,7 @@
 """The single naming rule shared by guest nicknames and account usernames.
 
 A registered player always plays under their username, so it appears in the
-player list, chat, and both leaderboards - all laid out for the existing 16
+player list, chat, and both standings views - all laid out for the existing 16
 character nickname budget. Keeping one rule for both also means the "is this
 name already taken" check is a straight comparison rather than a mapping
 between two different character sets.
