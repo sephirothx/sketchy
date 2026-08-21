@@ -45,7 +45,7 @@ export function CreateRoomPage() {
   );
   const [hintMode, setHintMode] = useState<HintMode>(DEFAULT_HINT_MODE);
   const [scoringMode, setScoringMode] = useState<ScoringMode>("default");
-  const [spectatorsSeeSolution, setSpectatorsSeeSolution] = useState(false);
+  const [spectatorsSeePrompt, setSpectatorsSeePrompt] = useState(false);
   const [hideMaskedPrompt, setHideMaskedPrompt] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +61,7 @@ export function CreateRoomPage() {
       const response = await emitWithAck<AckResponse>("create_room", {
         nickname: currentPlayerName(), nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
-        spectatorsSeeSolution, hideMaskedPrompt, promptListSlugs,
+        spectatorsSeePrompt, hideMaskedPrompt, promptListSlugs,
       });
       const session = sessionFrom(response);
       if (session) {
@@ -115,7 +115,7 @@ export function CreateRoomPage() {
       </div>
       <details className="advanced-settings"><summary>Advanced settings <span>Spectators, scoring, hints, and custom prompts</span></summary>
         <div className="advanced-settings-content">
-          <Switch label="Allow spectators to see the prompt" checked={spectatorsSeeSolution} onChange={setSpectatorsSeeSolution} />
+          <Switch label="Allow spectators to see the prompt" checked={spectatorsSeePrompt} onChange={setSpectatorsSeePrompt} />
           <Switch
             label="Hide blanks"
             checked={hideMaskedPrompt}

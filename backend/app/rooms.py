@@ -66,7 +66,7 @@ NAME_COLORS: tuple[str, ...] = (
 )
 NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
-# Guests render in grey italics everywhere, so a colour would be meaningless
+# Guests render in grey italics everywhere, so a color would be meaningless
 # and would also make an unclaimed name look like a registered one.
 ANONYMOUS_NAME_COLOR = "#888888"
 
@@ -263,7 +263,7 @@ class Room:
     drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS
     hint_mode: str = DEFAULT_ROOM_HINT_MODE
     scoring_mode: str = "default"
-    spectators_see_solution: bool = False
+    spectators_see_prompt: bool = False
     hide_masked_prompt: bool = False
     prompt_list_slugs: list[str] = field(default_factory=list)
     curated_prompts: list[str] = field(default_factory=list)
@@ -389,7 +389,7 @@ class Room:
             "drawingSeconds": self.drawing_seconds,
             "hintMode": self.hint_mode,
             "scoringMode": self.scoring_mode,
-            "spectatorsSeeSolution": self.spectators_see_solution,
+            "spectatorsSeePrompt": self.spectators_see_prompt,
             "hideMaskedPrompt": self.hide_masked_prompt,
             "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
@@ -408,7 +408,7 @@ class Room:
             "drawingSeconds": self.drawing_seconds,
             "hintMode": self.hint_mode,
             "scoringMode": self.scoring_mode,
-            "spectatorsSeeSolution": self.spectators_see_solution,
+            "spectatorsSeePrompt": self.spectators_see_prompt,
             "hideMaskedPrompt": self.hide_masked_prompt,
             "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
@@ -459,7 +459,7 @@ class RoomManager:
         drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS,
         hint_mode: str = DEFAULT_ROOM_HINT_MODE,
         scoring_mode: str = "default",
-        spectators_see_solution: bool = False,
+        spectators_see_prompt: bool = False,
         hide_masked_prompt: bool = False,
         prompt_list_slugs: list[str] | None = None,
         curated_prompts: list[str] | None = None,
@@ -479,7 +479,7 @@ class RoomManager:
             drawing_seconds=drawing_seconds,
             hint_mode=hint_mode,
             scoring_mode=scoring_mode,
-            spectators_see_solution=spectators_see_solution,
+            spectators_see_prompt=spectators_see_prompt,
             hide_masked_prompt=hide_masked_prompt,
             prompt_list_slugs=list(prompt_list_slugs or []),
             curated_prompts=list(curated_prompts or []),

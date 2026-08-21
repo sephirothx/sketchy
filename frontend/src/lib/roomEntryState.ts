@@ -39,7 +39,7 @@ export interface RoomEntrySnapshot {
 }
 
 export interface RoomEntryDependencies {
-  /** Rejoin an existing seat; the session cookie identifies the player. */
+  /** Reconnect to an existing seat; the session cookie identifies the player. */
   reconnect: (args: { code: string; nickname: string }) => Promise<AckResponse>;
   preview: (code: string) => Promise<RoomPreviewResponse>;
   join: (args: {
@@ -105,15 +105,15 @@ export class RoomEntryMachine {
     this.publish({ ...this.snapshot, state: { status: "loading" } });
 
     try {
-      // Always attempt a rejoin: the session cookie is sent automatically, so
+      // Always attempt a reconnect: the session cookie is sent automatically, so
       // the server can tell whether this account already holds a seat here.
       // Anyone without one simply falls through to the invite preview.
-      const rejoin = await this.dependencies.reconnect({
+      const reconnectResponse = await this.dependencies.reconnect({
         code: this.code,
         nickname: this.snapshot.nicknameInput,
       });
       if (!this.isCurrent(version)) return;
-      const existing = sessionFrom(rejoin);
+      const existing = sessionFrom(reconnectResponse);
       if (existing) {
         this.dependencies.acceptSession(existing);
         return;

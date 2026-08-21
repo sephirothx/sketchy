@@ -383,7 +383,7 @@
 
 [data-theme="dark"] .restart-vote-copy strong { color: #f8fafc; }
 [data-theme="dark"] .restart-vote-copy > span,
-[data-theme="dark"] .restart-vote-observer-note { color: #94a3b8; }
+[data-theme="dark"] .restart-vote-spectator-note { color: #94a3b8; }
 [data-theme="dark"] .restart-vote-meter .pending { background: #475569; }
 [data-theme="dark"] .restart-vote-actions button {
   background: #0f172a;
@@ -562,12 +562,12 @@
 [data-theme="dark"] .drawing-recap-empty { color: #94a3b8; }
 [data-theme="dark"] .drawing-recap-navigation strong { color: #e2e8f0; }
 
-[data-theme="dark"] .game-end-scoreboard li {
+[data-theme="dark"] .game-end-standings li {
   border-color: #334155;
   color: #e2e8f0;
 }
 
-[data-theme="dark"] .game-end-scoreboard li.is-you {
+[data-theme="dark"] .game-end-standings li.is-you {
   background: #172554;
   color: #bfdbfe;
 }

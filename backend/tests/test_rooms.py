@@ -171,7 +171,7 @@ def test_create_room_assigns_funny_random_name_when_unspecified():
 
 def test_spectator_can_join_full_room_and_option_in_payload():
     rm = RoomManager()
-    room = rm.create_room(name="Room", is_public=True, max_players=1, spectators_see_solution=True)
+    room = rm.create_room(name="Room", is_public=True, max_players=1, spectators_see_prompt=True)
     p1 = rm.add_player(room, "Alice")
     assert p1.is_spectator is False
 
@@ -186,11 +186,11 @@ def test_spectator_can_join_full_room_and_option_in_payload():
     spec = rm.add_player(room, "Charlie", is_spectator=True)
     assert spec.is_spectator is True
     summary = room.to_public_summary()
-    assert summary["spectatorsSeeSolution"] is True
+    assert summary["spectatorsSeePrompt"] is True
     assert summary["playerCount"] == 1
     assert summary["spectatorCount"] == 1
     assert summary["isFull"] is True
-    assert room.to_state_payload()["spectatorsSeeSolution"] is True
+    assert room.to_state_payload()["spectatorsSeePrompt"] is True
     players_payload = room.to_state_payload()["players"]
     assert any(p["nickname"] == "Charlie" and p["isSpectator"] is True for p in players_payload)
 

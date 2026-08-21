@@ -1,4 +1,4 @@
-"""Static prompt list used for round prompt selection."""
+"""Static prompt list used for turn prompt selection."""
 import random
 import re
 

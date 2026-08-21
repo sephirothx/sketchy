@@ -256,7 +256,7 @@ async def test_room_preview_returns_private_room_metadata_without_joining():
 
 
 @pytest.mark.asyncio
-async def test_resume_only_join_never_seats_a_new_player():
+async def test_reconnect_only_join_never_seats_a_new_player():
     """The invite screen probes for an existing seat; it must not create one."""
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room")
@@ -271,17 +271,17 @@ async def test_resume_only_join_never_seats_a_new_player():
 
     sio.get_session = AsyncMock(return_value={"user_id": "brand-new-user"})
     probe = await join_room(
-        "visitor-sid", {"code": room.code, "nickname": "Visitor", "resumeOnly": True}
+        "visitor-sid", {"code": room.code, "nickname": "Visitor", "reconnectOnly": True}
     )
     assert probe["ok"] is False
     assert [p.nickname for p in room.player_list()] == ["Seated"]
 
     sio.get_session = AsyncMock(return_value={"user_id": "returning-user"})
-    resumed = await join_room(
-        "returning-sid", {"code": room.code, "nickname": "Seated", "resumeOnly": True}
+    reconnected = await join_room(
+        "returning-sid", {"code": room.code, "nickname": "Seated", "reconnectOnly": True}
     )
-    assert resumed["ok"] is True
-    assert resumed["playerId"] == seated.id
+    assert reconnected["ok"] is True
+    assert reconnected["playerId"] == seated.id
     assert len(room.player_list()) == 1
 
 
@@ -403,8 +403,8 @@ async def test_registered_players_cannot_rename_away_from_their_username():
 
 
 @pytest.mark.asyncio
-async def test_resume_probe_works_with_no_local_nickname():
-    """A returning player with cleared local state must still resume.
+async def test_reconnect_probe_works_with_no_local_nickname():
+    """A returning player with cleared local state must still reconnect.
 
     Identity comes from the cookie, so an empty or stale nickname in the
     payload must not stop the lookup from happening.
@@ -422,11 +422,11 @@ async def test_resume_probe_works_with_no_local_nickname():
     sio.enter_room = AsyncMock()
     sio.emit = AsyncMock()
 
-    resumed = await sio.handlers["/"]["join_room"](
-        "new-sid", {"code": room.code, "nickname": "", "resumeOnly": True}
+    reconnected = await sio.handlers["/"]["join_room"](
+        "new-sid", {"code": room.code, "nickname": "", "reconnectOnly": True}
     )
-    assert resumed["ok"] is True
-    assert resumed["playerId"] == seat.id
+    assert reconnected["ok"] is True
+    assert reconnected["playerId"] == seat.id
 
 
 @pytest.mark.asyncio

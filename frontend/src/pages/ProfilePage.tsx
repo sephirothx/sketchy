@@ -27,10 +27,10 @@ function StatTile({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * A player's name in the colour they chose under Settings.
+ * A player's name in the color they chose under Settings.
  *
- * Inside a link, a name with no colour of its own would inherit the browser's
- * link colour, which looks like a chosen colour and never is - so
+ * Inside a link, a name with no color of its own would inherit the browser's
+ * link color, which looks like a chosen color and never is - so
  * `identityColor` always resolves to something, and to the same value the
  * avatar beside it uses.
  */
@@ -141,8 +141,8 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
           {!detail && !detailError && <p className="profile-note">Loading turns…</p>}
 
           {detail && (() => {
-            // The rounds carry ids, the standings carry the colours: joining
-            // them here keeps every name in a recap the same colour, without
+            // The rounds carry ids, the standings carry the colors: joining
+            // them here keeps every name in a recap the same color, without
             // the detail endpoint repeating what the summary already sent.
             const byUser = new Map(detail.participants.map((p) => [p.userId, p]));
             const named = (userId: string, fallbackName: string) => {
@@ -199,12 +199,12 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
 export function ProfilePage() {
   const params = useParams<{ userId?: string }>();
   const navigate = useNavigate();
-  const viewer = useAuthStore((s) => s.user);
+  const currentUser = useAuthStore((s) => s.user);
   const hasResolved = useAuthStore((s) => s.hasResolved);
 
   // No id in the path means "me", which is only knowable once the account has
   // resolved - so the view waits rather than fetching at an empty id.
-  const userId = params.userId ?? viewer?.id ?? null;
+  const userId = params.userId ?? currentUser?.id ?? null;
 
   if (!userId) {
     return (
@@ -236,8 +236,8 @@ function ProfileTopBar({ onBack }: { onBack: () => void }) {
 
 function ProfileView({ userId }: { userId: string }) {
   const navigate = useNavigate();
-  const viewer = useAuthStore((s) => s.user);
-  const isOwnProfile = userId === viewer?.id;
+  const currentUser = useAuthStore((s) => s.user);
+  const isOwnProfile = userId === currentUser?.id;
 
   const [subject, setSubject] = useState<AuthUser | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
@@ -304,7 +304,7 @@ function ProfileView({ userId }: { userId: string }) {
       {subject && stats && (
         <>
           <header className="profile-identity">
-            {/* The avatar wears the same colour as the name it belongs to. */}
+            {/* The avatar wears the same color as the name it belongs to. */}
             <span
               className="profile-avatar"
               aria-hidden="true"
@@ -327,7 +327,7 @@ function ProfileView({ userId }: { userId: string }) {
                 />
               </h1>
               <p className="profile-subtitle">
-                {subject.isAnonymous ? "Guest — name not saved" : "Registered player"}
+                {subject.isAnonymous ? "Guest — display name not saved" : "Registered player"}
                 {subject.createdAt && ` · joined ${formatTimestamp(subject.createdAt)}`}
               </p>
             </div>
@@ -337,11 +337,11 @@ function ProfileView({ userId }: { userId: string }) {
             <section className="panel profile-claim">
               <h2>Claim your account</h2>
               <p>
-                Your games are already being recorded against this name. Claim it
-                to keep them — and your name — on every device.
+                Your games are already being recorded under this display name.
+                Create an account to keep them and use it as your username on every device.
               </p>
               <button type="button" onClick={() => setAuthMode("claim")}>
-                Claim my name
+                Create account
               </button>
             </section>
           )}

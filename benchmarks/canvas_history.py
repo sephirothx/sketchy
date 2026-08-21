@@ -282,7 +282,7 @@ def _append_grid(history: PackedCanvasHistory, cell_pixels: int) -> None:
     """Rule the canvas into cells, so a fill inside one stops at its walls.
 
     Six pixels wide because the flood fill is eight-connected: a hairline
-    would let colour leak diagonally through the corners and the cells would
+    would let color leak diagonally through the corners and the cells would
     not actually bound anything.
     """
     for x in range(cell_pixels, CANVAS_WIDTH, cell_pixels):
@@ -306,10 +306,10 @@ def bounded_fill_history(
     """Fills that land inside something, which is what real fills do.
 
     `fill_heavy_history` is the same workload with the walls taken away: it
-    fills an empty canvas, never repeating a colour, so every one of its fills
+    fills an empty canvas, never repeating a color, so every one of its fills
     repaints all 480,000 pixels. That is the ceiling, not the common case -
     once anything has been drawn, a fill covers a region. Same fill count and
-    the same never-repeating colours as the fill-heavy fixture, so the only
+    the same never-repeating colors as the fill-heavy fixture, so the only
     variable is whether the fills are bounded.
     """
     history = PackedCanvasHistory()

@@ -223,8 +223,8 @@ export function LobbyBrowserPage() {
             type="button"
             className="header-settings-button"
             onClick={openSettings}
-            title="Game Settings"
-            aria-label="Game Settings"
+            title="Player settings"
+            aria-label="Player settings"
           >
             <SettingsIcon size={16} />
             <span className="header-action-label">Settings</span>
@@ -248,7 +248,7 @@ export function LobbyBrowserPage() {
       <div className="lobby-columns">
         <section className="panel">
           <h2>Create a room</h2>
-          <p className="create-room-lobby-copy">Choose the basics first, then add optional rules only when you need them.</p>
+          <p className="create-room-lobby-copy">Choose the basics first, then add optional room settings only when you need them.</p>
           <button type="button" onClick={handleOpenCreateRoom}>Create room</button>
         </section>
 

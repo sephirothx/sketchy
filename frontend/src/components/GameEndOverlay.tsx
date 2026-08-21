@@ -45,21 +45,21 @@ export function GameEndOverlay({
   const placement = scores.findIndex((score) => score.playerId === myPlayerId) + 1;
   return <main className="game-end-overlay" aria-labelledby="game-end-title" aria-live="polite" data-testid="game-end-overlay">
     <section className="game-end-podium">
-      <p className="game-end-kicker">Game complete</p>
-      <h1 id="game-end-title">{scoringMode !== "none" ? <><span className={playerNameClass(scores[0]?.isAnonymous)} style={playerNameStyle(scores[0]?.nameColor, scores[0]?.isAnonymous)}>{scores[0]?.nickname ?? "The room"}</span> takes the crown!</> : "A great round of drawing"}</h1>
-      {scoringMode !== "none" ? <><p className="game-end-placement">Your placement: #{Math.max(1, placement)}</p><ol className="game-end-scoreboard">{scores.map((score, index) => <li key={score.playerId} className={score.playerId === myPlayerId ? "is-you" : ""}><span>{PODIUM[index] ?? `#${index + 1}`} <span className={playerNameClass(score.isAnonymous)} style={playerNameStyle(score.nameColor, score.isAnonymous)}>{score.nickname}</span>{score.playerId === myPlayerId ? " (you)" : ""}</span><strong>{score.score}</strong></li>)}</ol></> : <p className="game-end-no-score">No scores this time—just a room full of sketches and guesses.</p>}
+      <p className="game-end-kicker">Game over</p>
+      <h1 id="game-end-title">{scoringMode !== "none" ? <><span className={playerNameClass(scores[0]?.isAnonymous)} style={playerNameStyle(scores[0]?.nameColor, scores[0]?.isAnonymous)}>{scores[0]?.nickname ?? "The room"}</span> takes the crown!</> : "A great game of drawing"}</h1>
+      {scoringMode !== "none" ? <><p className="game-end-placement">Your placement: #{Math.max(1, placement)}</p><ol className="game-end-standings">{scores.map((score, index) => <li key={score.playerId} className={score.playerId === myPlayerId ? "is-you" : ""}><span>{PODIUM[index] ?? `#${index + 1}`} <span className={playerNameClass(score.isAnonymous)} style={playerNameStyle(score.nameColor, score.isAnonymous)}>{score.nickname}</span>{score.playerId === myPlayerId ? " (you)" : ""}</span><strong>{score.score}</strong></li>)}</ol></> : <p className="game-end-no-score">No scores this time—just a room full of sketches and guesses.</p>}
       {isUnclaimedGuest && (
         <aside className="game-end-claim">
           <p className="game-end-claim-copy">
-            <strong>{user!.displayName}</strong> isn’t saved. Claim it so nobody
-            else can take it.
+            <strong>{user!.displayName}</strong> isn’t saved. Create an account
+            to keep it as your username.
           </p>
           <button
             type="button"
             className="game-end-claim-action"
             onClick={() => setAuthMode("claim")}
           >
-            Claim my name
+            Create account
           </button>
         </aside>
       )}

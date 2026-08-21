@@ -2,7 +2,7 @@
 """Backend micro-benchmark suite for Sketchy.
 
 Measures execution time and ops/sec for key backend operations:
-- Wheel letter pricing and word pool letter frequency calculations
+- Wheel letter pricing and prompt-pool letter frequency calculations
 - Room lookup by code
 - Guess matching and edit-distance calculations
 - Room state payload serialization
@@ -26,8 +26,8 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from app.game import Game, Phase
+from app.prompts import PROMPTS
 from app.rooms import RoomManager
-from app.words import WORDS
 
 
 def benchmark(name: str, fn: Callable[[], Any], iterations: int = 1_000) -> float:
@@ -62,26 +62,26 @@ def run_all_benchmarks() -> None:
     # -------------------------------------------------------------------------
     # 1. Wheel Letter Prices (Issue #143 candidate)
     # -------------------------------------------------------------------------
-    game_default = Game(turn_order=["p1", "p2", "p3"], word_pool=WORDS)
+    game_default = Game(turn_order=["p1", "p2", "p3"], prompt_pool=PROMPTS)
     default_choices = game_default.start_next_turn(canvas_generation=1)
-    assert game_default.choose_word("p1", default_choices[0])
+    assert game_default.choose_prompt("p1", default_choices[0])
     assert game_default.phase == Phase.DRAWING
 
     benchmark(
-        "1a. wheel_letter_prices (default 64 words pool)",
+        "1a. wheel_letter_prices (default 64-prompt pool)",
         lambda: game_default.wheel_letter_prices("p2"),
         iterations=500,
     )
 
-    # Large custom word pool (5,000 words)
-    custom_pool = [f"word_{i}_{w}" for i, w in enumerate(WORDS * 80)]
-    game_large = Game(turn_order=["p1", "p2", "p3"], word_pool=custom_pool)
+    # Large custom prompt pool (5,000 prompts)
+    custom_pool = [f"prompt_{i}_{prompt}" for i, prompt in enumerate(PROMPTS * 80)]
+    game_large = Game(turn_order=["p1", "p2", "p3"], prompt_pool=custom_pool)
     large_choices = game_large.start_next_turn(canvas_generation=1)
-    assert game_large.choose_word("p1", large_choices[0])
+    assert game_large.choose_prompt("p1", large_choices[0])
     assert game_large.phase == Phase.DRAWING
 
     benchmark(
-        "1b. wheel_letter_prices (large 5,000 words pool)",
+        "1b. wheel_letter_prices (large 5,000-prompt pool)",
         lambda: game_large.wheel_letter_prices("p2"),
         iterations=500,
     )
@@ -114,10 +114,10 @@ def run_all_benchmarks() -> None:
     # -------------------------------------------------------------------------
     # 3. Guess Evaluation & Edit-Distance Hint Calculation
     # -------------------------------------------------------------------------
-    game_guess = Game(turn_order=["p1", "p2"], word_pool=["watermelon"])
+    game_guess = Game(turn_order=["p1", "p2"], prompt_pool=["watermelon"])
     guess_choices = game_guess.start_next_turn(canvas_generation=1)
-    assert game_guess.choose_word("p1", guess_choices[0])
-    assert game_guess.word == "watermelon"
+    assert game_guess.choose_prompt("p1", guess_choices[0])
+    assert game_guess.prompt == "watermelon"
     assert game_guess.phase == Phase.DRAWING
 
     benchmark(

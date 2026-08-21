@@ -188,8 +188,8 @@
   gap: 8px;
 }
 
-/* The name inside carries its own colour; the link must not repaint it, and
-   the browser's visited-link purple must never read as a player's colour. */
+/* The name inside carries its own color; the link must not repaint it, and
+   the browser's visited-link purple must never read as a player's color. */
 .profile-standings a {
   color: inherit;
 }

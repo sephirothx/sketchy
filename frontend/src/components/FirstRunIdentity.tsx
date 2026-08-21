@@ -71,7 +71,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
           Play as yourself
         </h2>
         <p className="first-run-copy">
-          Keep your name and your stats, on every device.
+          Keep your username and your stats on every device.
         </p>
         <div className="first-run-actions">
           <button
@@ -97,7 +97,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
 
       <form className="first-run-guest" onSubmit={playAsGuest}>
         <label htmlFor={`${fieldId}-name`} className="first-run-guest-label">
-          Just playing once? Pick a name
+          Just playing once? Pick a display name
         </label>
         <div className="first-run-guest-row">
           {/* Search type suppresses Android Chrome's unrelated autofill toolbar,
@@ -112,7 +112,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
               setError(null);
             }}
             maxLength={MAX_NICKNAME_LENGTH}
-            placeholder="Your name"
+            placeholder="Display name"
             autoComplete="nickname"
             autoCapitalize="off"
             autoCorrect="off"

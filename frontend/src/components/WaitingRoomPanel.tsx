@@ -12,7 +12,7 @@ interface WaitingRoomPanelProps {
   customPromptsOnly: boolean;
   hintMode: HintMode;
   scoringMode: ScoringMode;
-  spectatorsSeeSolution: boolean;
+  spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
   promptListSlugs?: string[];
   players: PlayerInfo[];
@@ -56,7 +56,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           <h1>{props.name}</h1>
           <p className="waiting-room-subtitle">
             {rematch
-              ? "Last game complete. Ready for a rematch."
+              ? "Game over. Ready for a rematch."
               : "Get everyone ready before the first round."}
           </p>
         </div>
@@ -75,7 +75,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         <RoomSettingsEditor />
       ) : (
         <section className="waiting-card waiting-rules-card" aria-labelledby="waiting-rules-title">
-          <p className="waiting-card-kicker">Room rules</p>
+          <p className="waiting-card-kicker">Room settings</p>
           <h2 id="waiting-rules-title">How this game will play</h2>
           <ul className="waiting-rules-list">
             <li>
@@ -100,7 +100,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                     : "Curated prompt list"}
             </li>
             <li>
-              {props.spectatorsSeeSolution
+              {props.spectatorsSeePrompt
                 ? "Spectators can see the prompt"
                 : "Spectators guess along"}
             </li>
@@ -116,7 +116,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           <>
             <div>
               <p className="waiting-card-kicker">Host controls</p>
-              <h2>{rematch ? "Ready for another game?" : "Start when everyone is ready"}</h2>
+              <h2>{rematch ? "Ready for a rematch?" : "Start when everyone is ready"}</h2>
               <p className="waiting-start-hint">
                 {canStart
                   ? `${eligiblePlayers.length} active players are ready to play.`
@@ -131,7 +131,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 disabled={!canStart || props.startBusy}
                 onClick={props.onStart}
               >
-                {props.startBusy ? "Starting…" : rematch ? "Play again" : "Start game"}
+                {props.startBusy ? "Starting…" : rematch ? "Rematch" : "Start game"}
               </button>
             </div>
           </>

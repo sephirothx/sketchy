@@ -232,7 +232,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             await drawer_page.mouse.move(box["x"] + 200, box["y"] + 200)
             await drawer_page.mouse.up()
 
-            # Both the drawer and observer cache the semantic stroke. Undo is
+            # Both the drawer and guesser cache the semantic stroke. Undo is
             # then applied incrementally and both canvases replay their local
             # cache without a full history broadcast.
             await guesser_page.wait_for_function(

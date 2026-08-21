@@ -50,7 +50,7 @@ export function InviteEntryPage({ code }: { code: string }) {
         <button type="button" className="invite-brand" onClick={() => navigate("/")}>Sketchy</button>
         <div className="lobby-header-actions">
           <AccountMenu />
-          <button type="button" className="header-settings-button" onClick={openSettings} title="Game Settings">
+          <button type="button" className="header-settings-button" onClick={openSettings} title="Player settings">
             <SettingsIcon size={16} />
             <span>Settings</span>
           </button>
@@ -86,9 +86,9 @@ export function InviteEntryPage({ code }: { code: string }) {
             <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</dd></div>
           </dl>
 
-          <ul className="invite-rule-list" aria-label="Room rules">
+          <ul className="invite-rule-list" aria-label="Room settings">
             <li>{hintModeLabel(room)}</li>
-            <li>{room.spectatorsSeeSolution ? "Spectators can see the prompt" : "Spectators guess along"}</li>
+            <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators guess along"}</li>
             <li>
               {room.customPromptCount > 0
                 ? `${room.customPromptCount} custom prompts${room.customPromptsOnly ? " only" : " plus defaults"}`

@@ -182,10 +182,10 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
 
     @router.post("/name-color")
     async def set_name_color(body: NameColorBody, request: Request):
-        """Remember the colour a registered player chose for their name.
+        """Remember the color a registered player chose for their name.
 
         Settings keeps it in localStorage and sends it when joining a room,
-        which is enough to colour a name in play but leaves it invisible
+        which is enough to color a name in play but leaves it invisible
         everywhere else - a profile, or anyone else's view of this player, has
         no room to read it from. Storing it on the account is what lets a name
         look the same wherever it appears.
@@ -193,7 +193,7 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         throttle(lookup_limiter, request)
         color = normalize_name_color(body.name_color)
         if color is None:
-            raise HTTPException(status_code=400, detail="Invalid colour.")
+            raise HTTPException(status_code=400, detail="Invalid color.")
 
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
@@ -201,9 +201,9 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
             raise HTTPException(status_code=401, detail="Sign in first.")
         if user.is_anonymous:
             # Grey italics is the only cue that separates an unclaimed name
-            # from a registered one, so a guest colour would erase it.
+            # from a registered one, so a guest color would erase it.
             raise HTTPException(
-                status_code=403, detail="Create an account to choose a name colour."
+                status_code=403, detail="Create an account to choose a name color."
             )
 
         updated = await user_repo.update_profile(user.id, name_color=color)

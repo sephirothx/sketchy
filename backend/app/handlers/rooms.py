@@ -199,7 +199,7 @@ async def join_room(ctx: HandlerContext, sid, data):
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         return session_payload(room, player)
 
-    if payload.resume_only:
+    if payload.reconnect_only:
         return {"ok": False, "error": "No existing session in this room"}
 
     try:
@@ -233,7 +233,7 @@ async def join_room(ctx: HandlerContext, sid, data):
 
 
 async def _account_name_color(ctx: HandlerContext, user_id: str | None) -> str | None:
-    """The colour stored on an account, if it has one."""
+    """The color stored on an account, if it has one."""
     if ctx.user_repo is None or not user_id:
         return None
     account = await ctx.user_repo.get_by_id(user_id)
@@ -304,11 +304,11 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
         # would erase the only cue distinguishing them from registered players.
         player.name_color = ANONYMOUS_NAME_COLOR
         await ctx.game_flow._emit_room_state(room)
-        return {"ok": False, "error": "Create an account to choose a name colour"}
+        return {"ok": False, "error": "Create an account to choose a name color"}
     player.name_color = normalize_name_color(payload.name_color) or player.name_color
-    # Keep the account in step with the seat, so the colour this player is
+    # Keep the account in step with the seat, so the color this player is
     # using right now is the one their profile shows. A failure here must not
-    # cost the room its update: the seat has already changed colour, and
+    # cost the room its update: the seat has already changed color, and
     # skipping the broadcast would leave everyone else looking at the old one.
     if ctx.user_repo is not None and player.user_id:
         try:
@@ -317,7 +317,7 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
             )
         except Exception:
             logger.exception(
-                "Failed to store name colour for user %s", player.user_id
+                "Failed to store name color for user %s", player.user_id
             )
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}

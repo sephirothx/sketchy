@@ -7,7 +7,7 @@ BASE_URL = "http://localhost:8000"
 
 
 @pytest.mark.asyncio
-async def test_waiting_room_shows_host_settings_guest_rules_and_start_eligibility(
+async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
     assert_input_contract,
 ):
     async with async_playwright() as p:

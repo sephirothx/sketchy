@@ -83,6 +83,7 @@ Three different things, never used for one another:
 | **Buy letters** | Each guesser spends against their turn score to reveal a letter position, visible only to them. | purchase hints, paid hints |
 | **Wheel of Fortune** | Each guesser buys a specific letter, priced by how common it is, visible only to them. | wheel hints, letter wheel |
 | **Hint spend** | What a guesser has committed to hints this turn. Hints are bought on credit: the spend is taken out of that turn's guess points, never out of the running score. | hint cost, hint debt, hint charge |
+| **Hint spend limit** | The maximum hint spend a guesser may commit in one turn. | hint budget, hint cap |
 
 ## Guessing
 

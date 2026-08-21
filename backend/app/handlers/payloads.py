@@ -127,7 +127,7 @@ class RoomSettingsFields(RequestModel):
     custom_prompts_only: bool = Field(default=False, alias="customPromptsOnly")
     hint_mode: str = Field(default=DEFAULT_ROOM_HINT_MODE, alias="hintMode")
     scoring_mode: str = Field(default="default", alias="scoringMode")
-    spectators_see_solution: bool = Field(default=False, alias="spectatorsSeeSolution")
+    spectators_see_prompt: bool = Field(default=False, alias="spectatorsSeePrompt")
     hide_masked_prompt: bool = Field(default=False, alias="hideMaskedPrompt")
     prompt_list_slugs: list[str] = Field(default_factory=lambda: ["english_standard"], alias="promptListSlugs")
 
@@ -181,7 +181,7 @@ class UpdateRoomSettingsPayload(RequestModel):
     custom_prompts_only: bool | None = Field(default=None, alias="customPromptsOnly")
     hint_mode: str | None = Field(default=None, alias="hintMode")
     scoring_mode: str | None = Field(default=None, alias="scoringMode")
-    spectators_see_solution: bool | None = Field(default=None, alias="spectatorsSeeSolution")
+    spectators_see_prompt: bool | None = Field(default=None, alias="spectatorsSeePrompt")
     hide_masked_prompt: bool | None = Field(default=None, alias="hideMaskedPrompt")
     prompt_list_slugs: list[str] | None = Field(default=None, alias="promptListSlugs")
 
@@ -225,7 +225,7 @@ class JoinRoomPayload(RequestModel):
     soft: bool = False
     # "Do I already hold a seat here?" - used by the invite screen, which must
     # not seat a visitor who is still deciding whether to play or spectate.
-    resume_only: bool = Field(default=False, alias="resumeOnly")
+    reconnect_only: bool = Field(default=False, alias="reconnectOnly")
 
     @field_validator("nickname")
     @classmethod

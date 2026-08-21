@@ -110,7 +110,7 @@ export function useGameSocketListeners() {
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
       hintSpend?: number;
-      hintBudget?: number;
+      maxHintSpend?: number;
     }) => {
       playRoundStartSound();
       store.getState().startDrawing(payload);
@@ -176,7 +176,7 @@ export function useGameSocketListeners() {
     };
 
     const onTurnEnded = (payload: TurnEndedPayload) => {
-      store.getState().endRound(payload);
+      store.getState().endTurn(payload);
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
@@ -201,7 +201,7 @@ export function useGameSocketListeners() {
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
       hintSpend?: number;
-      hintBudget?: number;
+      maxHintSpend?: number;
     }) => {
       if (payload.phase === "choosing_prompt") {
         store.getState().startChoosing({
@@ -220,7 +220,7 @@ export function useGameSocketListeners() {
           hintCost: payload.hintCost,
           letterPrices: payload.letterPrices,
           hintSpend: payload.hintSpend,
-          hintBudget: payload.hintBudget,
+          maxHintSpend: payload.maxHintSpend,
         });
       }
     };

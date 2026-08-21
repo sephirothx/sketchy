@@ -151,7 +151,7 @@ async def test_history_pages_report_whether_more_remain(env):
 
 async def test_timestamps_are_serialized_with_an_offset(env):
     """SQLite hands back naive datetimes, and an ISO string with no offset is
-    read by the browser as local time - shifting every game by the viewer's."""
+    read by the browser as local time - shifting every game by the caller's."""
     http, users, history, _ = env
     ann = await users.create_anonymous(display_name="Ann")
     bob = await users.create_anonymous(display_name="Bob")

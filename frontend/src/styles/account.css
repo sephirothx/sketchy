@@ -2,7 +2,7 @@
 
 /*
  * Italics mark a name as unclaimed, and are the cue that survives a
- * colour-vision deficiency or a greyscale display. The grey is set here rather
+ * color-vision deficiency or a greyscale display. The grey is set here rather
  * than by the server because it has to clear 4.5:1 on both a white panel and a
  * dark one, and no single hex does that: #888888 is only 3.54:1 on white.
  *
@@ -80,7 +80,7 @@
   padding: 10px 12px;
   font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour. */
   background: #fff;
-  /* Explicit, not `inherit`: the dialog sets a light text colour for its own
+  /* Explicit, not `inherit`: the dialog sets a light text color for its own
      dark surface, which on a white field would be unreadable. */
   color: #0f172a;
 }
@@ -194,7 +194,7 @@
 }
 
 /* With no name to sit beside, the dot rides the avatar's top-right corner.
-   The ring keeps it legible against whichever colour the avatar has. */
+   The ring keeps it legible against whichever color the avatar has. */
 .identity-chip.is-compact .identity-unclaimed {
   position: absolute;
   top: 2px;

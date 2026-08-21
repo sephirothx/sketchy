@@ -49,7 +49,7 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
         </strong>
         <span>
           {vote.status === "approved"
-            ? "The current game is ending. A fresh game is starting now."
+            ? "The current game is restarting now."
             : `${counts.yes} yes · ${counts.no} no · ${counts.pending} pending · ${vote.requiredVotes} needed`}
         </span>
       </div>
@@ -104,7 +104,7 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
         </div>
       )}
       {vote.status === "voting" && !eligible && (
-        <span className="restart-vote-observer-note">
+        <span className="restart-vote-spectator-note">
           Only eligible players present when the vote started can vote.
         </span>
       )}

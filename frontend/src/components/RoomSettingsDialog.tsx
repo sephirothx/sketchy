@@ -32,7 +32,7 @@ const emptySettings: EditableRoomSettings = {
   customPromptsOnly: false,
   hintMode: DEFAULT_HINT_MODE,
   scoringMode: "default",
-  spectatorsSeeSolution: false,
+  spectatorsSeePrompt: false,
   hideMaskedPrompt: false,
   promptListSlugs: ["english_standard"],
 };
@@ -117,7 +117,7 @@ export function RoomSettingsEditor() {
         onChange={(promptListSlugs) => update({ promptListSlugs })}
       />
       <details><summary>Advanced settings</summary><div className="room-settings-advanced">
-        <Switch label="Allow spectators to see the prompt" checked={settings.spectatorsSeeSolution} onChange={(spectatorsSeeSolution) => update({ spectatorsSeeSolution })} />
+        <Switch label="Allow spectators to see the prompt" checked={settings.spectatorsSeePrompt} onChange={(spectatorsSeePrompt) => update({ spectatorsSeePrompt })} />
         <Switch
           label="Hide blanks"
           checked={settings.hideMaskedPrompt}

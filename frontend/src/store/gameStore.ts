@@ -20,7 +20,7 @@ interface GameStore {
    * Set while deliberately leaving a room (leave, kick, or a seat taken over
    * elsewhere). Clearing the session makes the room route briefly look like an
    * un-joined visitor, which would otherwise flash the invite screen and fire
-   * a pointless rejoin probe on the way out.
+   * a pointless reconnect probe on the way out.
    */
   isExitingRoom: boolean;
   roomId: string | null;
@@ -34,7 +34,7 @@ interface GameStore {
   drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
-  spectatorsSeeSolution: boolean;
+  spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
   promptListSlugs: string[];
   roomState: "waiting" | "playing";
@@ -57,7 +57,7 @@ interface GameStore {
   letterPrices: Record<string, number> | null;
   /** Points committed to hints so far this turn, and the ceiling on them. */
   hintSpend: number;
-  hintBudget: number;
+  maxHintSpend: number;
   /** Set when I guess correctly; cleared when the next turn starts. */
   lastGuessBreakdown: GuessBreakdown | null;
 
@@ -93,7 +93,7 @@ interface GameStore {
     hintCost?: number | null;
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
-    hintBudget?: number;
+    maxHintSpend?: number;
   }) => void;
   setMyPrompt: (prompt: string | null) => void;
   setGuessedPrompt: (prompt: string | null, breakdown?: GuessBreakdown | null) => void;
@@ -104,7 +104,7 @@ interface GameStore {
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
   }) => void;
-  endRound: (payload: TurnEndedPayload) => void;
+  endTurn: (payload: TurnEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
   dismissGameEnd: () => void;
   setError: (error: string | null) => void;
@@ -125,7 +125,7 @@ const initialGameFields = {
   nextHintCost: null as number | null,
   letterPrices: null as Record<string, number> | null,
   hintSpend: 0,
-  hintBudget: 300,
+  maxHintSpend: 300,
   lastGuessBreakdown: null as GuessBreakdown | null,
   messages: [] as ChatMessage[],
   lastTurnResult: null as TurnEndedPayload | null,
@@ -147,7 +147,7 @@ export const useGameStore = create<GameStore>((set) => ({
   drawingSeconds: 90,
   hintMode: "checkpoints" as HintMode,
   scoringMode: "default" as ScoringMode,
-  spectatorsSeeSolution: false,
+  spectatorsSeePrompt: false,
   hideMaskedPrompt: false,
   promptListSlugs: ["english_standard"],
   roomState: "waiting",
@@ -180,7 +180,7 @@ export const useGameStore = create<GameStore>((set) => ({
       drawingSeconds: payload.drawingSeconds,
       hintMode: payload.hintMode,
       scoringMode: payload.scoringMode ?? "default",
-      spectatorsSeeSolution: payload.spectatorsSeeSolution ?? false,
+      spectatorsSeePrompt: payload.spectatorsSeePrompt ?? false,
       hideMaskedPrompt: payload.hideMaskedPrompt ?? false,
       promptListSlugs: payload.promptListSlugs?.length ? payload.promptListSlugs : ["english_standard"],
       roomState: payload.state,
@@ -214,7 +214,7 @@ export const useGameStore = create<GameStore>((set) => ({
     }),
   setMyPromptChoices: (choices, seconds) =>
     set({ promptChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
-  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, hintBudget }) =>
+  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend }) =>
     set((s) => ({
       phase: "drawing",
       drawerId,
@@ -229,7 +229,7 @@ export const useGameStore = create<GameStore>((set) => ({
       // Driven by both turn_started and sync_game, so a mid-turn reconnect
       // restores the real spend instead of zeroing it.
       hintSpend: hintSpend ?? 0,
-      hintBudget: hintBudget ?? s.hintBudget,
+      maxHintSpend: maxHintSpend ?? s.maxHintSpend,
       lastGuessBreakdown: null,
     })),
   setMyPrompt: (prompt) => set({ myPrompt: prompt }),
@@ -246,7 +246,7 @@ export const useGameStore = create<GameStore>((set) => ({
       letterPrices: letterPrices !== undefined ? letterPrices : s.letterPrices,
       hintSpend: hintSpend ?? s.hintSpend,
     })),
-  endRound: (payload) =>
+  endTurn: (payload) =>
     set((s) => ({
       phase: "turn_results",
       lastTurnResult: payload,

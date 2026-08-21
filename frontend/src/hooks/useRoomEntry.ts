@@ -26,7 +26,7 @@ export function useRoomEntry(code: string) {
           // Ask only whether this account already holds a seat. Without this
           // the server would seat the visitor before they had chosen between
           // playing and spectating.
-          resumeOnly: true,
+          reconnectOnly: true,
         }),
       preview: (roomCode) =>
         emitWithAck<RoomPreviewResponse>("get_room_preview", { code: roomCode }),

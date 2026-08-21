@@ -99,7 +99,7 @@ export function ConnectedWaitingRoomPanel({
   const customPromptsOnly = useGameStore((state) => state.customPromptsOnly);
   const hintMode = useGameStore((state) => state.hintMode);
   const scoringMode = useGameStore((state) => state.scoringMode);
-  const spectatorsSeeSolution = useGameStore((state) => state.spectatorsSeeSolution);
+  const spectatorsSeePrompt = useGameStore((state) => state.spectatorsSeePrompt);
   const hideMaskedPrompt = useGameStore((state) => state.hideMaskedPrompt);
   const promptListSlugs = useGameStore((state) => state.promptListSlugs);
   const players = useGameStore((state) => state.players);
@@ -116,7 +116,7 @@ export function ConnectedWaitingRoomPanel({
       customPromptsOnly={customPromptsOnly}
       hintMode={hintMode}
       scoringMode={scoringMode}
-      spectatorsSeeSolution={spectatorsSeeSolution}
+      spectatorsSeePrompt={spectatorsSeePrompt}
       hideMaskedPrompt={hideMaskedPrompt}
       promptListSlugs={promptListSlugs}
       players={players}
@@ -143,7 +143,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const nextHintCost = useGameStore((state) => state.nextHintCost);
   const letterPrices = useGameStore((state) => state.letterPrices);
   const hintSpend = useGameStore((state) => state.hintSpend);
-  const hintBudget = useGameStore((state) => state.hintBudget);
+  const maxHintSpend = useGameStore((state) => state.maxHintSpend);
   const lastGuessBreakdown = useGameStore((state) => state.lastGuessBreakdown);
   const myPrompt = useGameStore((state) => state.myPrompt);
   const guessedPrompt = useGameStore((state) => state.guessedPrompt);
@@ -153,7 +153,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const phaseSeconds = useGameStore((state) => state.phaseSeconds);
   const phaseStartedAt = useGameStore((state) => state.phaseStartedAt);
   const lastTurnResult = useGameStore((state) => state.lastTurnResult);
-  const spectatorsSeeSolution = useGameStore((state) => state.spectatorsSeeSolution);
+  const spectatorsSeePrompt = useGameStore((state) => state.spectatorsSeePrompt);
   const me = useGameStore(selectMe);
   const drawerNickname = useGameStore((state) =>
     state.players.find((player) => player.playerId === state.drawerId)?.nickname,
@@ -170,7 +170,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
     (maskedPrompt && !maskedPrompt.includes("_")
       ? splitMaskedPrompt(maskedPrompt).blanks.trim()
       : null);
-  const solutionPrompt =
+  const downloadPrompt =
     phase === "turn_results"
       ? lastTurnResult?.prompt ?? null
       : isDrawerPerson && phase === "drawing"
@@ -178,7 +178,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         : guessedPrompt
           ? guessedPrompt
           : me?.isSpectator &&
-              spectatorsSeeSolution &&
+              spectatorsSeePrompt &&
               maskedPrompt &&
               !maskedPrompt.includes("_")
             ? splitMaskedPrompt(maskedPrompt).blanks.trim()
@@ -226,7 +226,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         nextHintCost={nextHintCost}
         letterPrices={letterPrices}
         hintSpend={hintSpend}
-        hintBudget={hintBudget}
+        maxHintSpend={maxHintSpend}
       />
       <Canvas
         ref={canvasRef}
@@ -234,7 +234,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         color={color}
         brushWidth={brushWidth}
         tool={tool}
-        solutionPrompt={solutionPrompt}
+        downloadPrompt={downloadPrompt}
         label={canvasLabel}
         overlay={
           phase === "choosing_prompt" && !amDrawer ? (

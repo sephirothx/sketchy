@@ -10,12 +10,12 @@ import { renderCanvasActions } from "../lib/canvasRenderer";
 
 interface CanvasSnapshotProps {
   actions: DecodedCanvasAction[];
-  solutionPrompt?: string | null;
+  downloadPrompt?: string | null;
   label?: string;
 }
 
 export const CanvasSnapshot = forwardRef<CanvasRef, CanvasSnapshotProps>(
-  function CanvasSnapshot({ actions, solutionPrompt = null, label }, ref) {
+  function CanvasSnapshot({ actions, downloadPrompt = null, label }, ref) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     useEffect(() => {
@@ -26,8 +26,8 @@ export const CanvasSnapshot = forwardRef<CanvasRef, CanvasSnapshotProps>(
     }, [actions]);
 
     useImperativeHandle(ref, () => ({
-      saveImage: () => saveCanvasImage(canvasRef.current, solutionPrompt),
-    }), [solutionPrompt]);
+      saveImage: () => saveCanvasImage(canvasRef.current, downloadPrompt),
+    }), [downloadPrompt]);
 
     return (
       <div className="canvas-wrapper">
@@ -38,7 +38,7 @@ export const CanvasSnapshot = forwardRef<CanvasRef, CanvasSnapshotProps>(
             height={CANVAS_HEIGHT}
             className="drawing-canvas"
             role="img"
-            aria-label={label ?? (solutionPrompt ? `Drawing of ${solutionPrompt}` : "Saved drawing")}
+            aria-label={label ?? (downloadPrompt ? `Drawing of ${downloadPrompt}` : "Saved drawing")}
           />
         </div>
       </div>

@@ -77,7 +77,7 @@ export function useRoomSessionReconnect() {
         return;
       }
 
-      setRoomBindingStatus("rejoining");
+      setRoomBindingStatus("reconnecting");
 
       try {
         if (forceTransportRestart || !socket.connected) {
@@ -119,7 +119,7 @@ export function useRoomSessionReconnect() {
 
     function onDisconnect() {
       const { code } = useGameStore.getState();
-      if (code) setRoomBindingStatus("rejoining");
+      if (code) setRoomBindingStatus("reconnecting");
     }
 
     function onVisibility() {

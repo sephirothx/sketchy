@@ -459,17 +459,17 @@ async def create_game(
         "has_touch": profile.has_touch,
     }
     drawer_context = await browser.new_context(**context_options)
-    observer_context = await browser.new_context(**context_options)
+    guesser_context = await browser.new_context(**context_options)
     await drawer_context.add_init_script(CANVAS_METRICS_INIT_SCRIPT)
     drawer = await drawer_context.new_page()
-    observer = await observer_context.new_page()
+    guesser = await guesser_context.new_page()
     websocket_frames: list[WebSocketFrame] = []
 
     await set_cpu_throttle(drawer_context, drawer, profile.cpu_throttle_rate)
-    await set_cpu_throttle(observer_context, observer, profile.cpu_throttle_rate)
-    observer_cdp = await observer_context.new_cdp_session(observer)
-    await observer_cdp.send("Network.enable")
-    observer_cdp.on(
+    await set_cpu_throttle(guesser_context, guesser, profile.cpu_throttle_rate)
+    guesser_cdp = await guesser_context.new_cdp_session(guesser)
+    await guesser_cdp.send("Network.enable")
+    guesser_cdp.on(
         "Network.webSocketFrameReceived",
         lambda event: websocket_frames.append(
             (
@@ -480,7 +480,7 @@ async def create_game(
     )
 
     await drawer.goto(base_url)
-    await drawer.fill('input[placeholder="Your name"]', f"{profile.name}-drawer")
+    await drawer.fill('input[placeholder="Display name"]', f"{profile.name}-drawer")
     await drawer.get_by_role("button", name="Create room", exact=True).click()
     await drawer.wait_for_url("**/create")
     await drawer.get_by_role("button", name="Create room", exact=True).click()
@@ -488,21 +488,21 @@ async def create_game(
     await drawer.wait_for_selector('[data-testid="waiting-room"]')
     code = (await drawer.inner_text(".room-copy-button")).split("Code:")[1].strip()
 
-    await observer.goto(base_url)
-    await observer.fill('input[placeholder="Your name"]', f"{profile.name}-observer")
-    await observer.fill('input[placeholder="ABC123"]', code)
-    await observer.click('button:has-text("Join by code")')
-    await observer.wait_for_selector('[data-testid="waiting-room"]')
+    await guesser.goto(base_url)
+    await guesser.fill('input[placeholder="Display name"]', f"{profile.name}-guesser")
+    await guesser.fill('input[placeholder="ABC123"]', code)
+    await guesser.click('button:has-text("Join by code")')
+    await guesser.wait_for_selector('[data-testid="waiting-room"]')
 
     await drawer.wait_for_selector(".waiting-start-button:not([disabled])")
     await drawer.click(".waiting-start-button")
-    await drawer.wait_for_selector(".word-choices button")
-    await observer.wait_for_selector('[data-testid="choosing-word-status"]')
-    await drawer.click(".word-choices button:first-child")
+    await drawer.wait_for_selector(".prompt-choices button")
+    await guesser.wait_for_selector('[data-testid="choosing-prompt-status"]')
+    await drawer.click(".prompt-choices button:first-child")
     await drawer.wait_for_selector(".toolbar")
-    await observer.wait_for_selector("canvas.drawing-canvas")
+    await guesser.wait_for_selector("canvas.drawing-canvas")
 
-    return drawer_context, observer_context, drawer, observer, websocket_frames
+    return drawer_context, guesser_context, drawer, guesser, websocket_frames
 
 
 async def benchmark_profile(
@@ -516,9 +516,9 @@ async def benchmark_profile(
 ) -> BenchmarkResult:
     (
         drawer_context,
-        observer_context,
+        guesser_context,
         drawer,
-        observer,
+        guesser,
         websocket_frames,
     ) = await create_game(
         browser,
@@ -541,7 +541,7 @@ async def benchmark_profile(
         await drawer.mouse.click(fill_x, fill_y)
         fill_metrics = await read_canvas_metrics(drawer, fill_local_started)
         await wait_for_canvas_pixel(
-            observer,
+            guesser,
             CANVAS_WIDTH // 2,
             CANVAS_HEIGHT // 2,
             (0, 0, 0),
@@ -552,7 +552,7 @@ async def benchmark_profile(
         # different neighbour/stack pattern than an untouched full-canvas fill.
         await click_canvas_action(drawer, "Clear")
         await wait_for_canvas_pixel(
-            observer,
+            guesser,
             CANVAS_WIDTH // 2,
             CANVAS_HEIGHT // 2,
             (255, 255, 255),
@@ -562,7 +562,7 @@ async def benchmark_profile(
         outer_end = await canvas_point(drawer, 0.88, 0.88)
         await draw_stroke(drawer, outer_start, outer_end, steps=2)
         await wait_for_canvas_pixel(
-            observer,
+            guesser,
             round(CANVAS_WIDTH * 0.12),
             CANVAS_HEIGHT // 2,
             (0, 0, 0),
@@ -571,7 +571,7 @@ async def benchmark_profile(
         inner_end = await canvas_point(drawer, 0.68, 0.68)
         await draw_stroke(drawer, inner_start, inner_end, steps=2)
         await wait_for_canvas_pixel(
-            observer,
+            guesser,
             round(CANVAS_WIDTH * 0.32),
             CANVAS_HEIGHT // 2,
             (0, 0, 0),
@@ -586,7 +586,7 @@ async def benchmark_profile(
             complex_fill_local_started,
         )
         await wait_for_canvas_pixel(
-            observer,
+            guesser,
             round(CANVAS_WIDTH * 0.20),
             CANVAS_HEIGHT // 2,
             (0, 0, 0),
@@ -595,16 +595,16 @@ async def benchmark_profile(
             time.perf_counter() - complex_fill_started
         ) * 1000
 
-        # Clear the bounded fill and start a new pen stroke. record_stroke
+        # Clear the bounded fill and start a new brush stroke. record_stroke
         # deliberately discards pre-clear history when that next stroke begins.
         await click_canvas_action(drawer, "Clear")
         await wait_for_canvas_pixel(
-            observer,
+            guesser,
             round(CANVAS_WIDTH * 0.20),
             CANVAS_HEIGHT // 2,
             (255, 255, 255),
         )
-        await select_drawing_tool(drawer, "Pen")
+        await select_drawing_tool(drawer, "Brush")
 
         stroke_latencies: list[float] = []
         local_stroke_handler_ms: list[float] = []
@@ -625,7 +625,7 @@ async def benchmark_profile(
             started = time.perf_counter()
             await draw_stroke(drawer, start, end)
             local_metrics = await read_canvas_metrics(drawer, local_started)
-            await wait_for_canvas_pixel(observer, pixel_x, pixel_y, (0, 0, 0))
+            await wait_for_canvas_pixel(guesser, pixel_x, pixel_y, (0, 0, 0))
             stroke_latencies.append((time.perf_counter() - started) * 1000)
             local_stroke_handler_ms.append(local_metrics["interactionEventMs"])
             local_stroke_readback_ms.append(
@@ -661,20 +661,20 @@ async def benchmark_profile(
             ))
             await draw_stroke(drawer, start, end, steps=2)
         last_pixel = replay_pixels[-1]
-        await wait_for_canvas_pixel(observer, *last_pixel, (0, 0, 0))
+        await wait_for_canvas_pixel(guesser, *last_pixel, (0, 0, 0))
 
-        # Reloading the observer triggers the same authoritative full-history
+        # Reloading the guesser triggers the same authoritative full-history
         # synchronization used after reconnects. Keep this measurement separate
         # from Undo, which now uses the incremental canvas_undo protocol event.
         websocket_frames.clear()
-        await observer.reload()
-        await observer.wait_for_selector("canvas.drawing-canvas")
-        await wait_for_canvas_pixel(observer, *last_pixel, (0, 0, 0))
+        await guesser.reload()
+        await guesser.wait_for_selector("canvas.drawing-canvas")
+        await wait_for_canvas_pixel(guesser, *last_pixel, (0, 0, 0))
         sync_frame_bytes = socketio_event_frame_bytes(websocket_frames, "sync_strokes")
         if sync_frame_bytes == 0:
             observed = ", ".join(captured_socketio_events(websocket_frames)) or "none"
             raise RuntimeError(
-                "Did not capture a sync_strokes WebSocket frame after observer reload; "
+                "Did not capture a sync_strokes WebSocket frame after guesser reload; "
                 f"observed Socket.IO events: {observed}"
             )
 
@@ -696,7 +696,7 @@ async def benchmark_profile(
             undo_started = time.perf_counter()
             await click_canvas_action(drawer, "Undo")
             undo_metrics = await read_canvas_metrics(drawer, undo_local_started)
-            await wait_for_canvas_pixel(observer, *pixel, (255, 255, 255))
+            await wait_for_canvas_pixel(guesser, *pixel, (255, 255, 255))
             undo_latencies.append((time.perf_counter() - undo_started) * 1000)
             undo_durations.append(undo_metrics["actionDurationMs"])
             undo_handler_ms.append(undo_metrics["interactionEventMs"])
@@ -815,7 +815,7 @@ async def benchmark_profile(
         return result
     finally:
         await drawer_context.close()
-        await observer_context.close()
+        await guesser_context.close()
 
 
 def print_results(results: list[BenchmarkResult]) -> None:
@@ -841,7 +841,7 @@ def print_results(results: list[BenchmarkResult]) -> None:
         )
     print()
     print(
-        "Remote stroke measurements are drawer-to-observer end-to-end latency; "
+        "Remote stroke measurements are drawer-to-guesser end-to-end latency; "
         "local stroke measurements sum synchronous pointer-handler time, including "
         "drawer rendering. Undo includes the server round trip and browser replay."
     )

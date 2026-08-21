@@ -119,7 +119,7 @@ def test_a_rejoined_account_is_recorded_once():
     assert len(ann) == 1
     # The seat they still occupy is the one whose score kept moving.
     assert ann[0].final_score == 420
-    # Their earlier seat still drew a round, and that round is still theirs.
+    # Their earlier seat still drew a turn, and that turn is still theirs.
     assert history.turns[0].drawer_user_id == "user-ann"
 
 

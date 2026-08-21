@@ -16,7 +16,7 @@ interface PromptDisplayProps {
   letterPrices?: Record<string, number> | null;
   /** Points already committed to hints this turn, and the ceiling on them. */
   hintSpend?: number;
-  hintBudget?: number;
+  maxHintSpend?: number;
 }
 
 // tightly spaced blanks per word, followed by each word's letter count (in
@@ -94,7 +94,7 @@ export function PromptDisplay({
   nextHintCost = null,
   letterPrices = null,
   hintSpend = 0,
-  hintBudget = 300,
+  maxHintSpend = 300,
 }: PromptDisplayProps) {
   const { notify } = useToast();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -133,9 +133,9 @@ export function PromptDisplay({
 
   const canBuy = hintMode === "purchase" && canBuyHint && !isDrawer && !revealedPrompt && nextHintCost != null;
   const canBuyWheel = hintMode === "wheel" && canBuyHint && !isDrawer && !revealedPrompt && letterPrices != null;
-  // Hints are bought on credit against this turn's guess, so what limits them
-  // is the turn's budget, not the running score.
-  const remaining = hintBudget - hintSpend;
+  // Hints are bought on credit against this turn's guess, so the maximum spend
+  // is independent of the running score.
+  const remaining = maxHintSpend - hintSpend;
 
   return (
     <div className="prompt-display">
@@ -143,7 +143,7 @@ export function PromptDisplay({
         <p className="hint-meta">
           {canBuy && (
             nextHintCost > remaining ? (
-              <span className="hint-price-warning">Budget spent</span>
+              <span className="hint-price-warning">Hint spend limit reached</span>
             ) : (
               <span className="hint-price">Next hint: {nextHintCost}</span>
             )

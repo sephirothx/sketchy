@@ -37,7 +37,7 @@ MAX_HINT_SPEND = MAX_GUESS_POINTS
 # scoring, but points bleed away as a percentage of what is still on the table,
 # and the bleed rate doubles once someone gets the prompt. The per-second rate is
 # derived from the room's own drawing time so the curve has the same shape in a
-# 15s room and a 300s one -- unpressured, a correct guess late in the round is
+# 15s room and a 300s one -- unpressured, a correct guess late in the turn is
 # always worth the same share of the maximum, until PRESSURE_MIN_POINTS takes
 # over in the last moments.
 PRESSURE_MAX_POINTS = MAX_GUESS_POINTS
@@ -47,7 +47,7 @@ PRESSURE_MULTIPLIER = 2.0  # applies once anyone has guessed correctly
 # Under the multiplier the accumulated decay time overshoots the reference
 # length, so the raw curve bottoms out near zero. Floor it: being last should
 # sting, not make a correct guess worthless. The floor guarantees the gross
-# award only - this turn's hint debt is settled after it, so a heavily hinted
+# award only - this turn's hint spend is settled after it, so a heavily hinted
 # last-place guess can still come out at zero.
 PRESSURE_MIN_POINTS = 50
 
@@ -165,7 +165,7 @@ def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
 
 
 def _is_close_pair(guess: str, target: str) -> bool:
-    """Whether `guess` is a near-miss for `target` (already known to differ).
+    """Whether `guess` is close to `target` (already known to differ).
 
     Very short strings are skipped to avoid trivial/noisy matches (e.g. a
     guess of "a" being "close" to a 3-letter word just by sharing a letter).
@@ -207,7 +207,7 @@ class TurnGuessRecord:
 class CompletedTurnStats:
     """Everything a finished turn is worth remembering.
 
-    Snapshotted in `end_round` because `start_next_turn` clears the drawer,
+    Snapshotted in `end_turn` because `start_next_turn` clears the drawer,
     `guess_points`, and `guess_times` on the way to the next turn - by game end
     only the final turn would still be readable off the live `Game`, which is
     not enough to record a game's history.
@@ -363,7 +363,7 @@ class Game:
         return max(0.0, self.phase_deadline - time.monotonic())
 
     def elapsed_drawing_seconds(self) -> float:
-        """How far into the drawing phase we are, clamped to the round."""
+        """How far into the drawing phase we are, clamped to the turn."""
         return max(
             0.0,
             min(self.drawing_seconds, self.drawing_seconds - self.remaining_seconds()),
@@ -372,7 +372,7 @@ class Game:
     def _pressure_rate(self) -> float:
         """Per-second decay factor, scaled so the curve keeps its shape in any
         room length: PRESSURE_DECAY_PER_SECOND is the rate at a
-        PRESSURE_REFERENCE_SECONDS round, and shorter rounds burn faster."""
+        PRESSURE_REFERENCE_SECONDS turn, and shorter turns burn faster."""
         return PRESSURE_DECAY_PER_SECOND ** (
             PRESSURE_REFERENCE_SECONDS / self.drawing_seconds
         )
@@ -452,7 +452,7 @@ class Game:
         self,
         token: str | None = None,
         is_spectator: bool = False,
-        spectators_see_solution: bool = False,
+        spectators_see_prompt: bool = False,
     ) -> str:
         """Blank out each prompt's letters/digits into underscores while keeping
         spaces and other special characters (hyphens, apostrophes, etc.)
@@ -472,7 +472,7 @@ class Game:
         """
         if not self.prompt:
             return ""
-        if (is_spectator and spectators_see_solution) or (
+        if (is_spectator and spectators_see_prompt) or (
             token and (token == self.current_drawer or token in self.correct_guessers)
         ):
             return self.prompt
@@ -713,7 +713,7 @@ class Game:
         """Whether a (known-incorrect) guess deserves a private hint instead of
         being silently broadcast to the room as-is.
 
-        Returns "close" if the guess is a near-miss for the whole prompt/phrase
+        Returns "close" if the guess is a close guess for the whole prompt/phrase
         (see `_is_close_pair`), "partial" if (for multi-word prompts only,
         matching words position-independently and tolerating a word-count
         difference of at most 1) one or more correct words together add up to
@@ -747,10 +747,10 @@ class Game:
     def all_guessed(self, total_guessers: int) -> bool:
         return total_guessers > 0 and len(self.correct_guessers) >= total_guessers
 
-    def end_round(self, total_guesser_count: int = 0) -> int | None:
+    def end_turn(self, total_guesser_count: int = 0) -> int | None:
         """Transition to TURN_RESULTS, return drawer bonus points.
 
-        The drawer receives the sum of the points earned by all correct guessers in this round.
+        The drawer receives the sum of the points earned by all correct guessers in this turn.
 
         Returns None if the game is no longer drawing, making the transition
         safe when a timeout races the final correct guess.
@@ -796,6 +796,6 @@ class Game:
         )
         return sum(self.guess_points.values())
 
-    def advance_phase_after_round(self) -> Phase:
+    def advance_phase_after_turn(self) -> Phase:
         self.phase = Phase.GAME_END if self.is_finished() else Phase.CHOOSING_PROMPT
         return self.phase
