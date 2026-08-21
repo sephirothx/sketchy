@@ -1,31 +1,34 @@
 # Sketchy
 
-An online multiplayer drawing & guessing game, iSketch/Pictionary-style: one player draws a
-secret word while everyone else races to guess it in the chat. Join a public lobby or create a
-private room with a friend code — no mandatory accounts required to play.
+An online multiplayer drawing & guessing game, iSketch/Pictionary-style: one player is given a
+prompt to draw while everyone else races to guess it in the chat. Join a public room from the
+lobby, or create a private room and share its code — no mandatory accounts required to play.
+
+Terminology is fixed in [GLOSSARY.md](GLOSSARY.md): one agreed name per concept, for UI
+copy and docs alike. Read it before naming anything a player can see.
 
 ## Features
 
-- Public lobby with a live, polled list of open rooms, or join a private room by code.
-- Curated word lists (Standard and Extended English) selectable during room creation, combined with optional custom words. Word pick rate and guess accuracy stats tracked per prompt.
-- Turn-based rounds: each player draws once per round, choosing from 3 word options.
-- Real-time synced canvas (freehand pen + rectangle/ellipse/triangle shape tools).
-- Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the secret word solution, and private spectator chat restricted to the drawer, spectators, and correct guessers.
+- Lobby with a live, polled list of open public rooms, or join a private room by code.
+- Curated prompt lists (Standard and Extended English) selectable during room creation, combined with optional custom prompts. Pick rate and guess accuracy stats tracked per prompt.
+- Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
+- Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
+- Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the prompt, and private spectator chat restricted to the drawer, spectators, and correct guessers.
 - AFK mode — toggle AFK status anytime so you are skipped for drawing turns and not waited for during rounds.
-- Vote restart — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
-- Vote kick and vote AFK — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
+- Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
+- Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — download the current drawn image directly as a PNG file at any time.
-- Customization option to always hide masked prompt word length and composition from guessers (forces hints off).
+- Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Reconnection grace period (30s) — refreshing mid-game rejoins you with your score intact.
-- Score system designed to resist "sandbagging": drawers can't game an easy word by stalling,
+- Score system designed to resist "sandbagging": drawers can't game an easy prompt by stalling,
   since their bonus scales with how fast guessers actually answered (see
   [Scoring](#scoring) below).
 
 ## Architecture
 
 Single-process backend holding all live game and room state in memory, with durable storage
-for accounts, game history, and word lists backed by async SQLAlchemy (embedded SQLite by default,
+for accounts, game history, and prompt lists backed by async SQLAlchemy (embedded SQLite by default,
 or PostgreSQL). Built for self-hosting at "friends playing together" scale.
 
 ```mermaid
@@ -54,7 +57,7 @@ flowchart LR
 - **REST** is used for health checks, room discovery, and data queries.
 - **WebSocket (Socket.IO)** powers all real-time gameplay interactions, drawing replication, and room events.
 - **In-Memory Engine**: Active rooms, canvas sessions, timers, and game progression run entirely in memory.
-- **Durable Persistence**: Accounts, game history records, and curated word lists are stored via abstract repository interfaces backed by SQLAlchemy.
+- **Durable Persistence**: Accounts, game history records, and curated prompt lists are stored via abstract repository interfaces backed by SQLAlchemy.
 
 ## Tech stack
 
@@ -260,7 +263,7 @@ fill/mixed histories are evenly sampled and clearly reported as diagnostic
 projections rather than full-run timings.
 
 Read the fill fixtures as a pair. `fill-heavy` is a ceiling, not a workload: it
-fills an empty canvas and never repeats a colour, so every fill repaints all
+fills an empty canvas and never repeats a color, so every fill repaints all
 480,000 pixels, which is the most a client could ever ask of a replay rather
 than what one costs. `fill-bounded` is the same fill count with the canvas
 ruled into cells first, and runs an order of magnitude cheaper, because a real
@@ -293,12 +296,13 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 1. **Lobby**: pick a nickname, then create a room (public or private, with a max player count
    and number of rounds), pick a scoring mode, or join one by code.
 2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**.
-3. **Choosing word** (15s): the current drawer picks one of 3 word options.
-4. **Drawing** (90s by default, configurable): the drawer draws; everyone else sees a masked word (`_ _ _ _`) and
-   guesses in the chat. The round ends early once everyone's guessed correctly.
-5. **Round end** (5s): the word is revealed and scores update, then the next player's turn
+3. **Choosing** (15s): the current drawer picks one of 3 prompt options.
+4. **Drawing** (90s by default, configurable): the drawer draws; everyone else sees a masked
+   prompt (`_ _ _ _`) and guesses in the chat. The turn ends early once everyone's guessed
+   correctly.
+5. **Turn results** (5s): the prompt is revealed and scores update, then the next player's turn
    begins.
-6. Repeat until every player has drawn once per configured round count, then **game end**
+6. Repeat until every player has drawn once per configured round count, then **game over**
    shows final scores.
 
 ### Scoring
@@ -308,11 +312,11 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
   No-scoring games still detect correct guesses and end rounds normally, but everyone remains
   on zero points and no leaderboard is shown.
 - **Default**: a correct guess scores between 100 and 300 points, falling linearly with the time
-  left in the round: `round(100 + 200 * remaining_seconds / drawing_seconds)`. Guess quickly for
+  left in the turn: `round(100 + 200 * remaining_seconds / drawing_seconds)`. Guess quickly for
   up to 300 points, or 100 points minimum at the deadline.
 - **Pressure**: a correct guess starts at 300 points, the same as default scoring, and decays
   exponentially — roughly 2% per second — and the decay rate **doubles for everyone still
-  guessing once the first player gets the word**. Points are floored at 50, so a late correct guess is always worth something. The
+  guessing once the first player gets the prompt**. Points are floored at 50, so a late correct guess is always worth something. The
   per-second rate is derived from the room's own drawing time, so the curve has the same shape in
   a 15-second room and a 300-second one. Because the penalty scales with the *gap* after the first
   correct guess rather than applying as a step, a near-simultaneous second guess loses only a
@@ -321,15 +325,15 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
   nothing is charged when a hint is bought. Instead, the turn's total hint cost is subtracted from
   the points that turn's correct guess earns, floored at zero: `turn_score = max(0, guess_points -
   hint_spend)`. A turn can be wiped out, but a player's running total never goes down, and hints
-  cost nothing at all to a player who never guesses the word. Spend is capped at 300 per turn — the
+  cost nothing at all to a player who never guesses the prompt. Spend is capped at 300 per turn — the
   most a single guess can ever be worth. In Pressure mode the 50-point floor guarantees the *gross*
   award only; the hint debt is settled after it.
-- The drawer receives the sum of points earned by all correct guessers in that round (`drawer_score = sum of guesser scores`, after each guesser's hint spend), balancing drawing and guessing potential across complete rotations.
+- The drawer receives the sum of points earned by all correct guessers in that turn (`drawer_score = sum of guesser scores`, after each guesser's hint spend), balancing drawing and guessing potential across complete rotations.
 
 ### Spectating
 
 - Players can join any room (including full rooms) as a spectator. Spectators do not draw or earn scores.
-- By default, spectators see the masked word like active guessers, but room creators can enable **Allow spectators to see the word**.
+- By default, spectators see the masked prompt like active guessers, but room creators can enable **Allow spectators to see the prompt**.
 - Spectator chat messages are restricted to the drawer, spectators, and players who have already guessed, keeping active guessers spoiler-free.
 
 ### Reconnection & disconnection
@@ -343,7 +347,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ## Key design decisions & limitations
 
-- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, word lists) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers) remains purely in memory for minimal latency.
+- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, prompt lists) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers) remains purely in memory for minimal latency.
 - **Single process**: no horizontal scaling story; one uvicorn worker holds all rooms. Fine for
   small deployments, not for internet-scale traffic.
 - **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO
