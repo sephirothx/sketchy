@@ -1,5 +1,8 @@
 .drawer-bonus { color: #a16207; font-size: 12px; font-weight: 700; white-space: nowrap; }
-.turn-results-score-you { background: #dbeafe; border-radius: 999px; color: #1d4ed8; font-size: 11px; font-weight: 800; padding: 3px 6px; }
+/* Sits with the nickname, not at the end of the row: it says which name is
+   yours, so it belongs to the name. Quiet enough not to compete with the
+   score, matching how the game over standings mark the same thing. */
+.turn-results-score-you { color: #64748b; font-size: 12px; font-weight: 600; }
 
 .turn-results-guesses-heading {
   margin: 0 0 6px;

@@ -158,6 +158,9 @@ export function TurnResultsOverlay({
                     >
                       {entry.nickname}
                     </span>
+                    {entry.playerId === myPlayerId && (
+                      <span className="turn-results-score-you"> (you)</span>
+                    )}
                   </span>
                   {entry.playerId === drawerId && drawerBonus > 0 && <span className="drawer-bonus">🎨 +{drawerBonus}</span>}
                   {change && (
@@ -170,7 +173,6 @@ export function TurnResultsOverlay({
                     {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                   </span>
                   <span className="turn-results-score-total">{entry.score}</span>
-                  {entry.playerId === myPlayerId && <span className="turn-results-score-you">You</span>}
                 </li>
               );
             })}
