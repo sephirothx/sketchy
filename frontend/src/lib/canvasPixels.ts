@@ -35,6 +35,22 @@ export function colorsMatchForFill(
     && Math.abs(data[index + 3] - target[3]) <= FLOOD_FILL_CHANNEL_TOLERANCE;
 }
 
+let statusScratch = new Uint8Array(0);
+
+/** A zeroed status buffer of at least `size` bytes, reused between fills. */
+function scratchStatus(size: number): Uint8Array {
+  if (statusScratch.length < size) {
+    statusScratch = new Uint8Array(size);
+  } else {
+    statusScratch.fill(0, 0, size);
+  }
+  return statusScratch;
+}
+
+export function fillWhitePixels(data: Uint8ClampedArray): void {
+  data.fill(255);
+}
+
 export function rasterizePath(
   data: Uint8ClampedArray,
   width: number,
@@ -96,7 +112,10 @@ export function floodFillPixels(
   // 800×600 this fixed scratch buffer is 480 KB. Each pixel can be queued at
   // most once, and the stack stores one numeric seed per adjacent horizontal
   // run instead of eight coordinate pairs per visited pixel.
-  const status = new Uint8Array(width * height);
+  //
+  // Reused across calls: replaying a fill-heavy turn would otherwise allocate
+  // and discard one of these per fill action.
+  const status = scratchStatus(width * height);
   const stack: number[] = [startY * width + startX];
   status[startY * width + startX] = 1;
 

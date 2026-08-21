@@ -276,3 +276,16 @@ export const useGameStore = create<GameStore>((set) => ({
     ...initialGameFields,
   }),
 }));
+
+/** The local player's own row, or undefined before the roster arrives. */
+export function selectMe(state: GameStore): PlayerInfo | undefined {
+  return state.players.find((player) => player.playerId === state.playerId);
+}
+
+/** Whether the local player currently holds the pen - including while choosing. */
+export function selectAmDrawer(state: GameStore): boolean {
+  return (
+    (state.phase === "drawing" || state.phase === "choosing_word")
+    && state.drawerId === state.playerId
+  );
+}

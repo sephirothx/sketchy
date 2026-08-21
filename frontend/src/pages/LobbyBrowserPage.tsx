@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { sessionFrom } from "../lib/roomEntryState";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { AccountMenu } from "../components/AccountMenu";
@@ -196,9 +197,10 @@ export function LobbyBrowserPage() {
         asSpectator,
         ...target,
       });
-      if (res.ok && res.roomId && res.code && res.playerId) {
-        setSession({ roomId: res.roomId, code: res.code, playerId: res.playerId });
-        navigate(`/room/${res.code}`);
+      const session = sessionFrom(res);
+      if (session) {
+        setSession(session);
+        navigate(`/room/${session.code}`);
       } else {
         setError(res.error || "Failed to join room");
       }

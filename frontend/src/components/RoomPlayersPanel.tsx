@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { recordRender } from "../lib/renderDiagnostics";
+import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../types";
 import { PlayerList } from "./PlayerList";
 
@@ -104,8 +105,8 @@ export function RoomPlayersPanel({
                   {spectators.map((spectator) => (
                     <li key={spectator.playerId}>
                       <span
-                        className="colored-player-name"
-                        style={{ color: spectator.nameColor }}
+                        className={playerNameClass(spectator.isAnonymous)}
+                        style={playerNameStyle(spectator.nameColor, spectator.isAnonymous)}
                       >
                         {spectator.nickname}
                       </span>

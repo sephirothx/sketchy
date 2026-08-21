@@ -64,6 +64,32 @@ def _to_user_data(user: User) -> UserData:
     )
 
 
+def _to_game_summary(game: GameRecord) -> GameSummary:
+    """Convert a stored game and its participants to the DTO both read paths return."""
+    return GameSummary(
+        id=game.id,
+        room_name=game.room_name,
+        scoring_mode=game.scoring_mode,
+        hint_mode=game.hint_mode,
+        drawing_seconds=game.drawing_seconds,
+        total_rounds=game.total_rounds,
+        player_count=game.player_count,
+        started_at=game.started_at,
+        finished_at=game.finished_at,
+        participants=[
+            GameParticipantSummary(
+                user_id=p.user_id,
+                display_name=p.user.display_name if p.user else "Unknown",
+                name_color=p.user.name_color if p.user else None,
+                is_anonymous=p.user.is_anonymous if p.user else True,
+                final_score=p.final_score,
+                final_rank=p.final_rank,
+            )
+            for p in sorted(game.participants, key=lambda x: x.final_rank)
+        ],
+    )
+
+
 def _to_word_list_summary(wl: WordList) -> WordListSummary:
     return WordListSummary(
         id=wl.id,
@@ -426,34 +452,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             result = await session.execute(stmt)
             games = result.scalars().all()
 
-            summaries: list[GameSummary] = []
-            for g in games:
-                part_summaries = [
-                    GameParticipantSummary(
-                        user_id=p.user_id,
-                        display_name=p.user.display_name if p.user else "Unknown",
-                        name_color=p.user.name_color if p.user else None,
-                        is_anonymous=p.user.is_anonymous if p.user else True,
-                        final_score=p.final_score,
-                        final_rank=p.final_rank,
-                    )
-                    for p in sorted(g.participants, key=lambda x: x.final_rank)
-                ]
-                summaries.append(
-                    GameSummary(
-                        id=g.id,
-                        room_name=g.room_name,
-                        scoring_mode=g.scoring_mode,
-                        hint_mode=g.hint_mode,
-                        drawing_seconds=g.drawing_seconds,
-                        total_rounds=g.total_rounds,
-                        player_count=g.player_count,
-                        started_at=g.started_at,
-                        finished_at=g.finished_at,
-                        participants=part_summaries,
-                    )
-                )
-            return summaries
+            return [_to_game_summary(g) for g in games]
 
     async def get_game_detail(
         self,
@@ -481,29 +480,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 if not is_participant:
                     return None
 
-            part_summaries = [
-                GameParticipantSummary(
-                    user_id=p.user_id,
-                    display_name=p.user.display_name if p.user else "Unknown",
-                    name_color=p.user.name_color if p.user else None,
-                    is_anonymous=p.user.is_anonymous if p.user else True,
-                    final_score=p.final_score,
-                    final_rank=p.final_rank,
-                )
-                for p in sorted(g.participants, key=lambda x: x.final_rank)
-            ]
-            summary = GameSummary(
-                id=g.id,
-                room_name=g.room_name,
-                scoring_mode=g.scoring_mode,
-                hint_mode=g.hint_mode,
-                drawing_seconds=g.drawing_seconds,
-                total_rounds=g.total_rounds,
-                player_count=g.player_count,
-                started_at=g.started_at,
-                finished_at=g.finished_at,
-                participants=part_summaries,
-            )
+            summary = _to_game_summary(g)
 
             round_details: list[RoundDetail] = []
             for r in sorted(g.rounds, key=lambda x: (x.round_number, x.turn_number)):

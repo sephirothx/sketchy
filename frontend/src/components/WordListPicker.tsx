@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiRequest } from "../lib/api";
 import type { WordListSummary } from "../types";
 
 interface WordListPickerProps {
@@ -16,11 +17,7 @@ export function WordListPicker({ selectedSlugs, onChange, disabled = false }: Wo
     let cancelled = false;
     async function loadLists() {
       try {
-        const res = await fetch("/api/word-lists");
-        if (!res.ok) {
-          throw new Error(`Failed to load word lists (${res.status})`);
-        }
-        const data: WordListSummary[] = await res.json();
+        const data = await apiRequest<WordListSummary[]>("/api/word-lists");
         if (!cancelled) {
           setWordLists(data);
         }

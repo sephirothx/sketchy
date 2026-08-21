@@ -520,8 +520,6 @@ def test_start_next_turn_skips_afk_drawers():
     assert game.current_drawer == p3
 
 
-
-
 def make_hint_game(word, mode, n_players=3):
     game = make_game(n_players=n_players, rounds=1)
     game.hint_mode = mode
@@ -1128,7 +1126,7 @@ def test_completed_turn_records_how_the_round_ended():
 
     turn = game.completed_turns[-1]
     assert turn.end_reason == "all_guessed"
-    assert turn.guesser_count == 1
+    assert turn.total_guesser_count == 1
 
 
 def test_a_round_nobody_solved_ends_on_the_clock():

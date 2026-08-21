@@ -53,7 +53,8 @@ export interface RoomEntryDependencies {
 
 type Listener = (snapshot: RoomEntrySnapshot) => void;
 
-function sessionFrom(response: AckResponse): RoomSession | null {
+/** The four fields that together make an ack a usable seat, checked once. */
+export function sessionFrom(response: AckResponse): RoomSession | null {
   if (!response.ok || !response.roomId || !response.code || !response.playerId) {
     return null;
   }
@@ -166,10 +167,9 @@ export class RoomEntryMachine {
         return;
       }
 
-      const room = mode === "player" && response.error === "Room is full"
-        ? { ...current.room, isFull: true }
-        : current.room;
-      const error = mode === "player" && response.error === "Room is full"
+      const justFilled = mode === "player" && response.roomFull === true;
+      const room = justFilled ? { ...current.room, isFull: true } : current.room;
+      const error = justFilled
         ? "The player slots just filled up, but you can still spectate."
         : response.error || "Could not join this room";
       this.publish({

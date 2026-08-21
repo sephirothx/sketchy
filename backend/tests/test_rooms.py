@@ -2,12 +2,14 @@ import pytest
 
 from app.canvas_history import encode_canvas_history
 from app.game import Game
+from app.game import HINT_MODES, SCORING_MODES
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     DrawingRecapEntry,
     NAME_COLOR_PATTERN,
     RoomFullError,
     RoomManager,
+    resolve_hint_mode,
     MAX_RECAP_CANVAS_BYTES,
 )
 
@@ -344,3 +346,138 @@ def test_starting_a_game_gives_the_whole_budget_back():
     room.last_game_drawings = []
     room.record_drawing_recap(recap_entry(0, b"x" * (MAX_RECAP_CANVAS_BYTES // 3)))
     assert room.last_game_drawings[0].is_available
+
+
+def _seat(rm, room, nickname, **flags):
+    """Add a player, then apply the connected/AFK/spectator flags under test."""
+    player = rm.add_player(room, nickname, is_spectator=flags.pop("is_spectator", False))
+    for name, value in flags.items():
+        setattr(player, name, value)
+    return player
+
+
+def test_seated_players_keeps_absent_players_and_drops_spectators():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+    here = _seat(rm, room, "Here")
+    away = _seat(rm, room, "Away", connected=False)
+    resting = _seat(rm, room, "Resting", is_afk=True)
+    _seat(rm, room, "Watcher", is_spectator=True)
+
+    # A seat is held by whoever took it, whether or not they are at it: the
+    # count decides whether the room is full.
+    assert [p.id for p in room.seated_players()] == [here.id, away.id, resting.id]
+
+
+def test_active_players_are_the_ones_the_game_waits_on():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+    here = _seat(rm, room, "Here")
+    _seat(rm, room, "Away", connected=False)
+    _seat(rm, room, "Resting", is_afk=True)
+    _seat(rm, room, "Watcher", is_spectator=True)
+    _seat(rm, room, "AwayWatcher", is_spectator=True, connected=False)
+
+    assert [p.id for p in room.active_players()] == [here.id]
+
+
+def test_eligible_guessers_is_the_active_players_minus_the_drawer():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+    drawer = _seat(rm, room, "Drawer")
+    guesser = _seat(rm, room, "Guesser")
+    _seat(rm, room, "Away", connected=False)
+    _seat(rm, room, "Resting", is_afk=True)
+    _seat(rm, room, "Watcher", is_spectator=True)
+
+    room.game = Game(turn_order=[drawer.id, guesser.id])
+    room.game.current_drawer = drawer.id
+
+    assert [p.id for p in room.eligible_guessers()] == [guesser.id]
+
+
+def test_eligible_guessers_outside_a_turn_excludes_nobody():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+    first = _seat(rm, room, "First")
+    second = _seat(rm, room, "Second")
+
+    # No game, and a game between turns, both leave every active player owing
+    # a guess - there is no drawer to subtract.
+    assert [p.id for p in room.eligible_guessers()] == [first.id, second.id]
+    room.game = Game(turn_order=[first.id, second.id])
+    assert room.game.current_drawer is None
+    assert [p.id for p in room.eligible_guessers()] == [first.id, second.id]
+
+
+def test_eligible_guessers_drops_a_drawer_who_went_afk_only_once():
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+    drawer = _seat(rm, room, "Drawer")
+    guesser = _seat(rm, room, "Guesser")
+    room.game = Game(turn_order=[drawer.id, guesser.id])
+    room.game.current_drawer = drawer.id
+
+    drawer.is_afk = True
+
+    # The drawer is excluded by both rules at once; the count must not go
+    # negative or double-subtract.
+    assert [p.id for p in room.eligible_guessers()] == [guesser.id]
+
+
+def test_majority_of_needs_more_than_half():
+    from app.rooms import majority_of
+
+    assert [majority_of(n) for n in range(0, 9)] == [1, 1, 2, 2, 3, 3, 4, 4, 5]
+    for population in range(1, 50):
+        assert majority_of(population) * 2 > population
+
+
+@pytest.mark.parametrize("hint_mode", HINT_MODES)
+@pytest.mark.parametrize("scoring_mode", SCORING_MODES)
+def test_a_hidden_prompt_leaves_nothing_to_hint_at(hint_mode, scoring_mode):
+    assert resolve_hint_mode(hint_mode, scoring_mode, True) == "none"
+
+
+@pytest.mark.parametrize("hint_mode", ("purchase", "wheel"))
+def test_a_room_that_does_not_score_cannot_charge_for_hints(hint_mode):
+    assert resolve_hint_mode(hint_mode, "none", False) == "none"
+
+
+@pytest.mark.parametrize("scoring_mode", SCORING_MODES)
+def test_free_hints_survive_every_scoring_mode(scoring_mode):
+    # Checkpoint hints cost nothing, so an unscored room can still show them.
+    assert resolve_hint_mode("checkpoints", scoring_mode, False) == "checkpoints"
+
+
+@pytest.mark.parametrize("hint_mode", HINT_MODES)
+@pytest.mark.parametrize("scoring_mode", ("default", "pressure"))
+def test_a_scoring_room_keeps_the_hint_mode_it_asked_for(hint_mode, scoring_mode):
+    assert resolve_hint_mode(hint_mode, scoring_mode, False) == hint_mode
+
+
+@pytest.mark.parametrize("hint_mode", HINT_MODES)
+@pytest.mark.parametrize("scoring_mode", SCORING_MODES)
+@pytest.mark.parametrize("hide_masked_prompt", (True, False))
+def test_resolving_a_hint_mode_settles_in_one_pass(
+    hint_mode, scoring_mode, hide_masked_prompt
+):
+    once = resolve_hint_mode(hint_mode, scoring_mode, hide_masked_prompt)
+    assert once in HINT_MODES
+    assert resolve_hint_mode(once, scoring_mode, hide_masked_prompt) == once
+
+
+@pytest.mark.parametrize(
+    "settings",
+    (
+        {"hide_masked_prompt": True, "hint_mode": "checkpoints"},
+        {"hide_masked_prompt": True, "hint_mode": "wheel"},
+        {"scoring_mode": "none", "hint_mode": "purchase"},
+        {"scoring_mode": "none", "hint_mode": "wheel"},
+    ),
+)
+def test_create_room_applies_the_whole_hint_rule(settings):
+    # create_room is reachable without a payload, so the rule has to hold here
+    # and not only at the boundary model.
+    room = RoomManager().create_room(name="Room", **settings)
+    assert room.hint_mode == "none"

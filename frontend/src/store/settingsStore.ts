@@ -109,21 +109,10 @@ function loadStoredTheme(): AppTheme {
   return DEFAULT_THEME;
 }
 
-function loadStoredConfetti(): boolean {
+/** An opt-out flag: anything but a stored "false" — including no storage — is on. */
+function loadStoredFlag(key: string): boolean {
   try {
-    const raw = localStorage.getItem("sketchy_confettieffects");
-    if (raw === "false") return false;
-    return true;
-  } catch {
-    return true;
-  }
-}
-
-function loadStoredSoundEffects(): boolean {
-  try {
-    const raw = localStorage.getItem("sketchy_soundeffects");
-    if (raw === "false") return false;
-    return true;
+    return localStorage.getItem(key) !== "false";
   } catch {
     return true;
   }
@@ -194,8 +183,8 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   keyBindings: loadStoredKeyBindings(),
   penCursor: loadStoredPenCursor(),
   theme: initialTheme,
-  confettiEffects: loadStoredConfetti(),
-  soundEffects: loadStoredSoundEffects(),
+  confettiEffects: loadStoredFlag("sketchy_confettieffects"),
+  soundEffects: loadStoredFlag("sketchy_soundeffects"),
   volume: loadStoredVolume(),
   nameColor: loadStoredNameColor(),
   setAllSettings: ({

@@ -77,6 +77,46 @@ class EmptyPayload(RequestModel):
     pass
 
 
+MAX_WORD_LISTS = 20
+
+
+def _clean_slugs(slugs: list[str]) -> list[str]:
+    """Trim, lowercase and dedupe word-list slugs, order preserved.
+
+    Returns [] when nothing survives, leaving each caller to decide what an
+    empty selection means: create falls back to the default list, update
+    rejects it.
+    """
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for slug in slugs:
+        trimmed = slug.strip().lower()
+        if trimmed and trimmed not in seen:
+            seen.add(trimmed)
+            cleaned.append(trimmed)
+    if len(cleaned) > MAX_WORD_LISTS:
+        raise ValueError(f"too many word lists selected (max {MAX_WORD_LISTS})")
+    return cleaned
+
+
+def _check_drawing_seconds(value: int) -> int:
+    if value not in DRAWING_TIME_OPTIONS:
+        raise ValueError("must be a supported drawing duration")
+    return value
+
+
+def _check_hint_mode(value: str) -> str:
+    if value not in HINT_MODES:
+        raise ValueError(f"must be one of {', '.join(sorted(HINT_MODES))}")
+    return value
+
+
+def _check_scoring_mode(value: str) -> str:
+    if value not in SCORING_MODES:
+        raise ValueError(f"must be one of {', '.join(sorted(SCORING_MODES))}")
+    return value
+
+
 class RoomSettingsFields(RequestModel):
     name: str = Field(default="", max_length=MAX_ROOM_NAME_LENGTH)
     is_public: bool = Field(default=True, alias="isPublic")
@@ -99,45 +139,22 @@ class RoomSettingsFields(RequestModel):
     @field_validator("word_list_slugs")
     @classmethod
     def clean_word_list_slugs(cls, slugs: list[str]) -> list[str]:
-        cleaned: list[str] = []
-        seen: set[str] = set()
-        for s in slugs:
-            trimmed = s.strip().lower()
-            if trimmed and trimmed not in seen:
-                seen.add(trimmed)
-                cleaned.append(trimmed)
-        if len(cleaned) > 20:
-            raise ValueError("too many word lists selected (max 20)")
-        return cleaned if cleaned else ["english_standard"]
+        return _clean_slugs(slugs) or ["english_standard"]
 
     @field_validator("drawing_seconds")
     @classmethod
     def valid_drawing_seconds(cls, value: int) -> int:
-        if value not in DRAWING_TIME_OPTIONS:
-            raise ValueError("must be a supported drawing duration")
-        return value
+        return _check_drawing_seconds(value)
 
     @field_validator("hint_mode")
     @classmethod
     def valid_hint_mode(cls, value: str) -> str:
-        if value not in HINT_MODES:
-            raise ValueError(f"must be one of {', '.join(sorted(HINT_MODES))}")
-        return value
+        return _check_hint_mode(value)
 
     @field_validator("scoring_mode")
     @classmethod
     def valid_scoring_mode(cls, value: str) -> str:
-        if value not in SCORING_MODES:
-            raise ValueError(f"must be one of {', '.join(sorted(SCORING_MODES))}")
-        return value
-
-    @model_validator(mode="after")
-    def disable_incompatible_hints(self) -> "RoomSettingsFields":
-        if self.hide_masked_prompt or (
-            self.scoring_mode == "none" and self.hint_mode in {"purchase", "wheel"}
-        ):
-            self.hint_mode = "none"
-        return self
+        return _check_scoring_mode(value)
 
 
 class CreateRoomPayload(RoomSettingsFields):
@@ -173,15 +190,7 @@ class UpdateRoomSettingsPayload(RequestModel):
     def clean_update_word_list_slugs(cls, slugs: list[str] | None) -> list[str] | None:
         if slugs is None:
             return None
-        cleaned: list[str] = []
-        seen: set[str] = set()
-        for s in slugs:
-            trimmed = s.strip().lower()
-            if trimmed and trimmed not in seen:
-                seen.add(trimmed)
-                cleaned.append(trimmed)
-        if len(cleaned) > 20:
-            raise ValueError("too many word lists selected (max 20)")
+        cleaned = _clean_slugs(slugs)
         if not cleaned:
             raise ValueError("at least one word list must be selected")
         return cleaned
@@ -194,23 +203,17 @@ class UpdateRoomSettingsPayload(RequestModel):
     @field_validator("drawing_seconds")
     @classmethod
     def valid_drawing_seconds(cls, value: int | None) -> int | None:
-        if value is not None and value not in DRAWING_TIME_OPTIONS:
-            raise ValueError("must be a supported drawing duration")
-        return value
+        return _check_drawing_seconds(value) if value is not None else None
 
     @field_validator("hint_mode")
     @classmethod
     def valid_hint_mode(cls, value: str | None) -> str | None:
-        if value is not None and value not in HINT_MODES:
-            raise ValueError("must be a supported hint mode")
-        return value
+        return _check_hint_mode(value) if value is not None else None
 
     @field_validator("scoring_mode")
     @classmethod
     def valid_scoring_mode(cls, value: str | None) -> str | None:
-        if value is not None and value not in SCORING_MODES:
-            raise ValueError("must be a supported scoring mode")
-        return value
+        return _check_scoring_mode(value) if value is not None else None
 
 
 class JoinRoomPayload(RequestModel):

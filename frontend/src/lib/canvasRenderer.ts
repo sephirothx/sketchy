@@ -2,7 +2,12 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
 import type { DecodedCanvasAction } from "./canvasHistory.ts";
 import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
-import { floodFillPixels, hexToRgba, rasterizePath as rasterizePixelPath } from "./canvasPixels.ts";
+import {
+  fillWhitePixels,
+  floodFillPixels,
+  hexToRgba,
+  rasterizePath as rasterizePixelPath,
+} from "./canvasPixels.ts";
 import type {
   ShapeType,
   StrokeFillPayload,
@@ -124,6 +129,8 @@ export function applyFillAtPixel(
   color: string,
 ): boolean {
   if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) return false;
+  // Reads the canvas: a live fill spreads through the strokes already on it.
+  // Only a full replay, which starts from white, can skip the readback.
   const imageData = context.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   if (!floodFillPixels(
     imageData.data,
@@ -149,15 +156,25 @@ export function applyFillAction(
   );
 }
 
+/** Replay a whole history onto a blank canvas.
+ *
+ * Every action is applied to one scratch buffer, written back once at the end.
+ * A fill-heavy turn used to round-trip the full 800x600 buffer through the GPU
+ * once per fill; a replay starts from white, so it need not read back at all.
+ */
 export function renderCanvasActions(
   context: CanvasRenderingContext2D,
   actions: DecodedCanvasAction[],
 ): void {
-  fillWhite(context, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const imageData = context.createImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
+  const pixels = imageData.data;
+  fillWhitePixels(pixels);
   for (const action of actions) {
     if (action.kind === "path" && action.points.length > 0) {
-      rasterizePath(
-        context,
+      rasterizePixelPath(
+        pixels,
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT,
         action.points.length === 1
           ? [action.points[0], action.points[0]]
           : action.points,
@@ -166,18 +183,32 @@ export function renderCanvasActions(
         false,
       );
     } else if (action.kind === "shape") {
-      drawShapeOutlinePixels(
-        context,
-        action.payload.from,
-        action.payload.to,
-        action.payload.shape,
-        action.payload.color,
-        action.payload.width,
+      rasterizePixelPath(
+        pixels,
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT,
+        shapeOutlinePoints(action.payload.from, action.payload.to, action.payload.shape),
+        action.payload.width / 2,
+        hexToRgba(action.payload.color),
+        true,
       );
     } else if (action.kind === "fill") {
-      applyFillAtPixel(context, action.x, action.y, action.color);
+      if (
+        action.x >= 0 && action.x < CANVAS_WIDTH
+        && action.y >= 0 && action.y < CANVAS_HEIGHT
+      ) {
+        floodFillPixels(
+          pixels,
+          CANVAS_WIDTH,
+          CANVAS_HEIGHT,
+          action.x,
+          action.y,
+          hexToRgba(action.color),
+        );
+      }
     } else if (action.kind === "clear") {
-      fillWhite(context, CANVAS_WIDTH, CANVAS_HEIGHT);
+      fillWhitePixels(pixels);
     }
   }
+  context.putImageData(imageData, 0, 0);
 }

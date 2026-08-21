@@ -218,15 +218,14 @@ class CompletedTurnStats:
     offered_words: list[str]
     chosen_word: str
     correct_guess_count: int
+    # Who could still have guessed. Without it, "two players guessed" could
+    # equally mean two out of two or two out of eight.
     total_guesser_count: int
     drawer_token: str = ""
     # Real elapsed drawing time, not the configured limit: a turn ends as soon
     # as everyone has guessed.
     duration_seconds: float = 0.0
     guesses: tuple[TurnGuessRecord, ...] = ()
-    # Who could still have guessed. Without it, "two players guessed" could
-    # equally mean two out of two or two out of eight.
-    guesser_count: int = 0
     # The drawer ran out of time and took the first offered word, rather than
     # picking one - which is not a preference, and should not read as one.
     word_auto_picked: bool = False
@@ -783,7 +782,6 @@ class Game:
                         key=lambda t: self.guess_times.get(t, 0.0),
                     )
                 ),
-                guesser_count=total_guesser_count,
                 word_auto_picked=self.word_auto_picked,
                 stroke_count=len(self.canvas.history),
                 end_reason=(

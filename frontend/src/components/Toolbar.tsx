@@ -31,6 +31,34 @@ const PRESET_WIDTHS = [2, 4, 6, 8, 12, 16, 24, 32];
 
 type MobilePanel = "tool" | "color" | "size" | null;
 
+interface ColorSwatchProps {
+  color: string;
+  selected: boolean;
+  onSelect: () => void;
+  variant?: string;
+  label: string;
+  title?: string;
+}
+
+/** One palette button. Four toolbars render these; the selected rule lives here. */
+function ColorSwatch({ color, selected, onSelect, variant, label, title }: ColorSwatchProps) {
+  return (
+    <button
+      type="button"
+      className={`color-swatch${variant ? ` ${variant}` : ""}${selected ? " selected" : ""}`}
+      style={{ backgroundColor: color }}
+      onClick={onSelect}
+      aria-label={label}
+      title={title}
+    />
+  );
+}
+
+/** Keys bound to a tool. Every DrawTool names a KeyBindings field. */
+function toolKeys(bindings: KeyBindings, tool: DrawTool): string[] {
+  return bindings[tool as keyof KeyBindings] ?? [];
+}
+
 const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
   {
     value: "pen",
@@ -144,6 +172,8 @@ export function Toolbar({
     return null;
   };
   const isCustomColor = !COLORS.includes(color);
+  // The eraser paints white regardless of the palette, so nothing reads as chosen.
+  const isSelectedColor = (candidate: string) => candidate === color && tool !== "eraser";
   const activeColor = tool === "eraser" ? "#6c757d" : color;
   const [sizePickerOpen, setSizePickerOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
@@ -167,13 +197,12 @@ export function Toolbar({
   );
 
   function getToolBadge(toolValue: DrawTool): string {
-    const keys = keyBindings[toolValue as keyof KeyBindings];
-    return keys && keys.length > 0 ? keys[0].toUpperCase() : "";
+    const keys = toolKeys(keyBindings, toolValue);
+    return keys.length > 0 ? keys[0].toUpperCase() : "";
   }
 
   function getToolLabel(toolValue: DrawTool, name: string): string {
-    const keys = keyBindings[toolValue as keyof KeyBindings];
-    const keyStr = keys && keys.length > 0 ? keys.map((k) => k.toUpperCase()).join(" / ") : "";
+    const keyStr = toolKeys(keyBindings, toolValue).map((k) => k.toUpperCase()).join(" / ");
     return keyStr ? `${name} (${keyStr})` : name;
   }
 
@@ -249,18 +278,9 @@ export function Toolbar({
         return;
       }
 
-      if (kb.pen.includes(key)) {
-        onToolChange("pen");
-      } else if (kb.eraser.includes(key)) {
-        onToolChange("eraser");
-      } else if (kb.fill.includes(key)) {
-        onToolChange("fill");
-      } else if (kb.rectangle.includes(key)) {
-        onToolChange("rectangle");
-      } else if (kb.ellipse.includes(key)) {
-        onToolChange("ellipse");
-      } else if (kb.triangle.includes(key)) {
-        onToolChange("triangle");
+      const boundTool = TOOLS.find((entry) => toolKeys(kb, entry.value).includes(key));
+      if (boundTool) {
+        onToolChange(boundTool.value);
       } else if (kb.brushDecrease.includes(key)) {
         const idx = PRESET_WIDTHS.indexOf(brushWidth);
         if (idx > 0) {
@@ -413,13 +433,13 @@ export function Toolbar({
             <div id={mobileColorPanelId} className="toolbar-mobile-popover" role="group" aria-label="Choose color">
               <div className="toolbar-mobile-colors">
                 {COLORS.map((c) => (
-                  <button
+                  <ColorSwatch
                     key={c}
-                    type="button"
-                    className={`color-swatch toolbar-mobile-swatch-btn${c === color && tool !== "eraser" ? " selected" : ""}`}
-                    style={{ backgroundColor: c }}
-                    aria-label={`color ${c}`}
-                    onClick={() => {
+                    color={c}
+                    selected={isSelectedColor(c)}
+                    variant="toolbar-mobile-swatch-btn"
+                    label={`color ${c}`}
+                    onSelect={() => {
                       handleSelectColor(c);
                       setMobilePanel(null);
                     }}
@@ -444,13 +464,13 @@ export function Toolbar({
               {recentColors.length > 0 && (
                 <div className="toolbar-mobile-recent" aria-label="Recent colors">
                   {recentColors.map((c) => (
-                    <button
+                    <ColorSwatch
                       key={c}
-                      type="button"
-                      className={`color-swatch toolbar-mobile-swatch-btn${c === color && tool !== "eraser" ? " selected" : ""}`}
-                      style={{ backgroundColor: c }}
-                      aria-label={`Recent color ${c}`}
-                      onClick={() => {
+                      color={c}
+                      selected={isSelectedColor(c)}
+                      variant="toolbar-mobile-swatch-btn"
+                      label={`Recent color ${c}`}
+                      onSelect={() => {
                         handleSelectColor(c);
                         setMobilePanel(null);
                       }}
@@ -517,13 +537,13 @@ export function Toolbar({
 
           <div className="toolbar-group toolbar-colors" aria-label="Color palette">
             {COLORS.map((c) => (
-              <button
+              <ColorSwatch
                 key={c}
-                className={`color-swatch${c === color && tool !== "eraser" ? " selected" : ""}`}
-                style={{ backgroundColor: c }}
-                onClick={() => handleSelectColor(c)}
-                aria-label={`color ${c}`}
+                color={c}
+                selected={isSelectedColor(c)}
+                label={`color ${c}`}
                 title={`Color ${c}`}
+                onSelect={() => handleSelectColor(c)}
               />
             ))}
             <label
@@ -546,14 +566,14 @@ export function Toolbar({
               <div className="toolbar-group recent-colors-group" aria-label="Recent colors" title="Recent colors (Press X to swap color)">
                 <span className="recent-colors-label">Recent:</span>
                 {recentColors.map((c) => (
-                  <button
+                  <ColorSwatch
                     key={c}
-                    type="button"
-                    className={`color-swatch recent-swatch${c === color && tool !== "eraser" ? " selected" : ""}`}
-                    style={{ backgroundColor: c }}
-                    onClick={() => handleSelectColor(c)}
-                    aria-label={`Recent color ${c}`}
+                    color={c}
+                    selected={isSelectedColor(c)}
+                    variant="recent-swatch"
+                    label={`Recent color ${c}`}
                     title={`Recent color ${c} (Press X to swap)`}
+                    onSelect={() => handleSelectColor(c)}
                   />
                 ))}
               </div>

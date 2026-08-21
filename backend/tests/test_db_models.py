@@ -231,7 +231,6 @@ async def test_init_db_runs_alembic_migrations(tmp_path):
         await engine.dispose()
 
 
-
 async def test_analytics_migration_applies_to_a_database_that_already_has_games(
     tmp_path,
 ):
