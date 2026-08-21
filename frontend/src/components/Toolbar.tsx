@@ -54,9 +54,22 @@ function ColorSwatch({ color, selected, onSelect, variant, label, title }: Color
   );
 }
 
-/** Keys bound to a tool. Every DrawTool names a KeyBindings field. */
+// Which binding each tool reads. The brush's keys are stored under `pen`, so the
+// two names have to be mapped rather than assumed equal - see KeyBindings. Typed
+// as a total Record so a new DrawTool fails to compile until it is bound here,
+// instead of silently reading undefined.
+const TOOL_BINDINGS: Record<DrawTool, keyof KeyBindings> = {
+  brush: "pen",
+  eraser: "eraser",
+  fill: "fill",
+  rectangle: "rectangle",
+  ellipse: "ellipse",
+  triangle: "triangle",
+};
+
+/** Keys bound to a tool. */
 function toolKeys(bindings: KeyBindings, tool: DrawTool): string[] {
-  return bindings[tool as keyof KeyBindings] ?? [];
+  return bindings[TOOL_BINDINGS[tool]] ?? [];
 }
 
 const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
