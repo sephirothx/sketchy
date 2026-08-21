@@ -442,7 +442,7 @@ async def test_finished_drawing_turn_is_captured_for_recap():
     room.game = Game(
         turn_order=[drawer.id, guesser.id],
         rounds_total=1,
-        word_pool=["apple"],
+        prompt_pool=["apple"],
     )
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
     room.game.choose_word(drawer.id, "apple")

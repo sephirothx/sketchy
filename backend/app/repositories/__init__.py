@@ -20,8 +20,8 @@ from app.repositories.interfaces import (
     UserRepository,
     UserStats,
     UsernameTakenError,
-    WordListRepository,
-    WordListSummary,
+    PromptListRepository,
+    PromptListSummary,
     WordPickTotals,
     WordStatsSummary,
     WordUsage,
@@ -29,7 +29,7 @@ from app.repositories.interfaces import (
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
-    SqlAlchemyWordListRepository,
+    SqlAlchemyPromptListRepository,
 )
 
 __all__ = [
@@ -48,14 +48,14 @@ __all__ = [
     "TurnRecordInput",
     "SqlAlchemyGameHistoryRepository",
     "SqlAlchemyUserRepository",
-    "SqlAlchemyWordListRepository",
+    "SqlAlchemyPromptListRepository",
     "UserCredentials",
     "UserData",
     "UserRepository",
     "UserStats",
     "UsernameTakenError",
-    "WordListRepository",
-    "WordListSummary",
+    "PromptListRepository",
+    "PromptListSummary",
     "WordPickTotals",
     "WordStatsSummary",
     "WordUsage",

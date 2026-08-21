@@ -6,10 +6,10 @@ import type { AckResponse, HintMode } from "../types";
 
 interface WordDisplayProps {
   isDrawer: boolean;
-  myWord: string | null;
-  maskedWord: string;
-  wordChoices: string[];
-  revealedWord?: string | null;
+  myPrompt: string | null;
+  maskedPrompt: string;
+  promptChoices: string[];
+  revealedPrompt?: string | null;
   hintMode?: HintMode;
   canBuyHint?: boolean;
   nextHintCost?: number | null;
@@ -83,10 +83,10 @@ function renderMaskedWord(masked: string, buyableProps?: { canAfford: boolean; c
 
 export function PromptDisplay({
   isDrawer,
-  myWord,
-  maskedWord,
-  wordChoices,
-  revealedWord,
+  myPrompt,
+  maskedPrompt,
+  promptChoices,
+  revealedPrompt,
   hintMode = "none",
   canBuyHint = false,
   nextHintCost = null,
@@ -110,13 +110,13 @@ export function PromptDisplay({
     }
   }
 
-  if (isDrawer && wordChoices.length > 0 && !myWord) {
+  if (isDrawer && promptChoices.length > 0 && !myPrompt) {
     return (
       <div className="prompt-display choosing">
         <p>Choose a prompt to draw:</p>
         <div className="prompt-choices">
-          {wordChoices.map((word) => (
-            <button key={word} disabled={pendingAction !== null} onClick={() => void runAction(`word:${word}`, "select_word", { word }, "select the prompt")}>
+          {promptChoices.map((word) => (
+            <button key={word} disabled={pendingAction !== null} onClick={() => void runAction(`word:${word}`, "select_prompt", { word }, "select the prompt")}>
               {pendingAction === `word:${word}` ? "Choosing…" : word}
             </button>
           ))}
@@ -125,12 +125,12 @@ export function PromptDisplay({
     );
   }
 
-  if (maskedWord === "???" && !revealedWord && !isDrawer) {
+  if (maskedPrompt === "???" && !revealedPrompt && !isDrawer) {
     return null;
   }
 
-  const canBuy = hintMode === "purchase" && canBuyHint && !isDrawer && !revealedWord && nextHintCost != null;
-  const canBuyWheel = hintMode === "wheel" && canBuyHint && !isDrawer && !revealedWord && letterPrices != null;
+  const canBuy = hintMode === "purchase" && canBuyHint && !isDrawer && !revealedPrompt && nextHintCost != null;
+  const canBuyWheel = hintMode === "wheel" && canBuyHint && !isDrawer && !revealedPrompt && letterPrices != null;
   // Hints are bought on credit against this turn's guess, so what limits them
   // is the turn's budget, not the running score.
   const remaining = hintBudget - hintSpend;
@@ -156,14 +156,14 @@ export function PromptDisplay({
           )}
         </p>
       )}
-      {revealedWord ? (
-        <span className="prompt-reveal">{revealedWord}</span>
-      ) : isDrawer && (myWord || !maskedWord.includes("_")) ? (
-        <span className="prompt-reveal">{myWord || maskedWord}</span>
+      {revealedPrompt ? (
+        <span className="prompt-reveal">{revealedPrompt}</span>
+      ) : isDrawer && (myPrompt || !maskedPrompt.includes("_")) ? (
+        <span className="prompt-reveal">{myPrompt || maskedPrompt}</span>
       ) : (
         <span className="prompt-masked">
           {renderMaskedWord(
-            maskedWord,
+            maskedPrompt,
             canBuy ? {
               canAfford: nextHintCost <= remaining,
               cost: nextHintCost,

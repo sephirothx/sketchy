@@ -66,7 +66,7 @@ async def get_room_settings(ctx: HandlerContext, sid, data=None):
     return {"ok": True, "settings": editable_room_settings_payload(room)}
 
 
-async def get_custom_words(ctx: HandlerContext, sid, data=None):
+async def get_custom_prompts(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
     except PayloadError as error:
@@ -82,7 +82,7 @@ async def get_custom_words(ctx: HandlerContext, sid, data=None):
             "ok": False,
             "error": "Custom prompts can only be viewed in the waiting room",
         }
-    return {"ok": True, "words": list(room.custom_words)}
+    return {"ok": True, "prompts": list(room.custom_prompts)}
 
 
 async def get_recap_drawing(ctx: HandlerContext, sid, data):
@@ -124,8 +124,8 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
     active_count = len(room.seated_players())
     if settings["max_players"] < active_count:
         return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}
-    if not settings["custom_words"]:
-        settings["custom_words_only"] = False
+    if not settings["custom_prompts"]:
+        settings["custom_prompts_only"] = False
     for key, value in settings.items():
         setattr(room, key, value)
     await ctx.game_flow.announce(room, "The host updated the room settings.")
@@ -275,7 +275,7 @@ async def session_ping(ctx: HandlerContext, sid, data=None):
     room, _ = current
     game = room.game
     phase = {
-        Phase.CHOOSING_WORD: 1,
+        Phase.CHOOSING_PROMPT: 1,
         Phase.DRAWING: 2,
         Phase.TURN_RESULTS: 3,
         Phase.GAME_END: 4,
@@ -425,7 +425,7 @@ async def leave_room(ctx: HandlerContext, sid, data=None):
 def register(ctx: HandlerContext) -> None:
     ctx.sio.on("create_room", handler=partial(create_room, ctx))
     ctx.sio.on("get_room_settings", handler=partial(get_room_settings, ctx))
-    ctx.sio.on("get_custom_words", handler=partial(get_custom_words, ctx))
+    ctx.sio.on("get_custom_prompts", handler=partial(get_custom_prompts, ctx))
     ctx.sio.on("get_recap_drawing", handler=partial(get_recap_drawing, ctx))
     ctx.sio.on("update_room_settings", handler=partial(update_room_settings, ctx))
     ctx.sio.on("get_room_preview", handler=partial(get_room_preview, ctx))

@@ -19,7 +19,7 @@ Command inventory (client request shape)
 UpdateRoomSettingsPayload; ``update_player_settings`` PlayerSettingsPayload;
 ``rename_player`` RenamePlayerPayload; ``get_recap_drawing`` RecapDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
 ``vote_player`` VotePayload; ``cast_restart_vote`` RestartVotePayload;
-``select_word`` SelectWordPayload; ``send_chat`` and
+``select_prompt`` SelectWordPayload; ``send_chat`` and
 ``guess`` TextPayload; ``buy_hint`` HintPayload; ``buy_wheel_letter``
 WheelLetterPayload; ``draw`` DrawPayload; ``undo_stroke`` UndoPayload. The
 remaining commands (room/custom-word reads, promotion, leave, game start,
@@ -44,7 +44,7 @@ from app.rooms import (
     MAX_PLAYERS_MAX,
     MAX_PLAYERS_MIN,
 )
-from app.words import MAX_RAW_INPUT_LENGTH, MAX_WORD_LENGTH
+from app.prompts import MAX_RAW_INPUT_LENGTH, MAX_PROMPT_LENGTH
 
 MAX_CANVAS_SEQUENCE = 2**31 - 1
 MAX_ROOM_NAME_LENGTH = 40
@@ -123,20 +123,20 @@ class RoomSettingsFields(RequestModel):
     max_players: int = Field(default=8, alias="maxPlayers", ge=MAX_PLAYERS_MIN, le=MAX_PLAYERS_MAX)
     rounds: int = Field(default=3, ge=1, le=10)
     drawing_seconds: int = Field(default=DEFAULT_ROOM_DRAWING_SECONDS, alias="drawingSeconds")
-    custom_words: str = Field(default="", alias="customWords", max_length=MAX_RAW_INPUT_LENGTH)
-    custom_words_only: bool = Field(default=False, alias="customWordsOnly")
+    custom_prompts: str = Field(default="", alias="customPrompts", max_length=MAX_RAW_INPUT_LENGTH)
+    custom_prompts_only: bool = Field(default=False, alias="customPromptsOnly")
     hint_mode: str = Field(default=DEFAULT_ROOM_HINT_MODE, alias="hintMode")
     scoring_mode: str = Field(default="default", alias="scoringMode")
     spectators_see_solution: bool = Field(default=False, alias="spectatorsSeeSolution")
     hide_masked_prompt: bool = Field(default=False, alias="hideMaskedPrompt")
-    word_list_slugs: list[str] = Field(default_factory=lambda: ["english_standard"], alias="wordListSlugs")
+    prompt_list_slugs: list[str] = Field(default_factory=lambda: ["english_standard"], alias="promptListSlugs")
 
-    @field_validator("name", "custom_words")
+    @field_validator("name", "custom_prompts")
     @classmethod
     def strip_text(cls, value: str) -> str:
         return value.strip()
 
-    @field_validator("word_list_slugs")
+    @field_validator("prompt_list_slugs")
     @classmethod
     def clean_word_list_slugs(cls, slugs: list[str]) -> list[str]:
         return _clean_slugs(slugs) or ["english_standard"]
@@ -177,15 +177,15 @@ class UpdateRoomSettingsPayload(RequestModel):
     max_players: int | None = Field(default=None, alias="maxPlayers", ge=MAX_PLAYERS_MIN, le=MAX_PLAYERS_MAX)
     rounds: int | None = Field(default=None, ge=1, le=10)
     drawing_seconds: int | None = Field(default=None, alias="drawingSeconds")
-    custom_words: str | None = Field(default=None, alias="customWords", max_length=MAX_RAW_INPUT_LENGTH)
-    custom_words_only: bool | None = Field(default=None, alias="customWordsOnly")
+    custom_prompts: str | None = Field(default=None, alias="customPrompts", max_length=MAX_RAW_INPUT_LENGTH)
+    custom_prompts_only: bool | None = Field(default=None, alias="customPromptsOnly")
     hint_mode: str | None = Field(default=None, alias="hintMode")
     scoring_mode: str | None = Field(default=None, alias="scoringMode")
     spectators_see_solution: bool | None = Field(default=None, alias="spectatorsSeeSolution")
     hide_masked_prompt: bool | None = Field(default=None, alias="hideMaskedPrompt")
-    word_list_slugs: list[str] | None = Field(default=None, alias="wordListSlugs")
+    prompt_list_slugs: list[str] | None = Field(default=None, alias="promptListSlugs")
 
-    @field_validator("word_list_slugs")
+    @field_validator("prompt_list_slugs")
     @classmethod
     def clean_update_word_list_slugs(cls, slugs: list[str] | None) -> list[str] | None:
         if slugs is None:
@@ -195,7 +195,7 @@ class UpdateRoomSettingsPayload(RequestModel):
             raise ValueError("at least one word list must be selected")
         return cleaned
 
-    @field_validator("name", "custom_words")
+    @field_validator("name", "custom_prompts")
     @classmethod
     def strip_optional_text(cls, value: str | None) -> str | None:
         return value.strip() if value is not None else None
@@ -292,7 +292,7 @@ class RestartVotePayload(RequestModel):
 
 
 class SelectWordPayload(RequestModel):
-    word: str = Field(min_length=1, max_length=MAX_WORD_LENGTH)
+    word: str = Field(min_length=1, max_length=MAX_PROMPT_LENGTH)
 
 
 class TextPayload(RequestModel):
@@ -300,7 +300,7 @@ class TextPayload(RequestModel):
 
 
 class HintPayload(RequestModel):
-    slot: int = Field(ge=0, le=MAX_WORD_LENGTH - 1)
+    slot: int = Field(ge=0, le=MAX_PROMPT_LENGTH - 1)
 
 
 class WheelLetterPayload(RequestModel):

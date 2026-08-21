@@ -165,7 +165,7 @@ def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
                     wrong_guesses_before=4,
                 ),
             ),
-            word_auto_picked=True,
+            prompt_auto_picked=True,
             stroke_count=17,
             end_reason="timeout",
             wrong_guess_count=6,
@@ -178,7 +178,7 @@ def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
 
     turn_record = history.turns[0]
     assert turn_record.guesser_count == 3
-    assert turn_record.word_auto_picked is True
+    assert turn_record.prompt_auto_picked is True
     assert turn_record.stroke_count == 17
     assert turn_record.end_reason == "timeout"
     assert turn_record.wrong_guess_count == 6

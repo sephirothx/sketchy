@@ -22,14 +22,14 @@ from app.handlers.payloads import (
 )
 from app.rooms import DrawingRecapEntry, Player, Room, resolve_hint_mode
 from app.services.game_history import build_game_history
-from app.services.word_usage import tally_word_usage
+from app.services.prompt_usage import tally_word_usage
 from app.presenters import (
     turn_ended_payload,
     room_state_payload,
     system_chat_message,
     turn_payload,
 )
-from app.words import parse_custom_word_list
+from app.prompts import parse_custom_word_list
 
 logger = logging.getLogger("sketchy.game_flow")
 
@@ -37,7 +37,7 @@ RECONNECT_GRACE_SECONDS = 30
 # Long enough for a healthy write on a loaded server, short enough that a hung
 # database cannot pin the coroutine that ends a game.
 HISTORY_WRITE_TIMEOUT_SECONDS = 10
-# Word-usage metrics are a separate transaction from the history write, so
+# Prompt-usage metrics are a separate transaction from the history write, so
 # they get their own budget - but the same ceiling, so the two post-game
 # writes together cannot pin the coroutine for longer than a player would
 # wait before reloading anyway.
@@ -68,25 +68,25 @@ class GameFlowService:
         hint_mode = value("hint_mode")
         hide_masked_prompt = value("hide_masked_prompt")
         hint_mode = resolve_hint_mode(hint_mode, scoring_mode, hide_masked_prompt)
-        custom_words = (
-            parse_custom_word_list(payload.custom_words)
-            if payload.custom_words is not None
-            else list(fallback.custom_words if fallback else [])
+        custom_prompts = (
+            parse_custom_word_list(payload.custom_prompts)
+            if payload.custom_prompts is not None
+            else list(fallback.custom_prompts if fallback else [])
         )
-        raw_slugs = getattr(payload, "word_list_slugs", None)
+        raw_slugs = getattr(payload, "prompt_list_slugs", None)
         if raw_slugs is not None and len(raw_slugs) > 0:
-            word_list_slugs = list(raw_slugs)
+            prompt_list_slugs = list(raw_slugs)
         elif fallback is not None:
-            word_list_slugs = list(fallback.word_list_slugs)
+            prompt_list_slugs = list(fallback.prompt_list_slugs)
         else:
-            word_list_slugs = ["english_standard"]
+            prompt_list_slugs = ["english_standard"]
 
-        curated_words: list[str] = []
-        if word_list_slugs and self._ctx.word_list_repo:
+        curated_prompts: list[str] = []
+        if prompt_list_slugs and self._ctx.word_list_repo:
             try:
-                curated_words = await self._ctx.word_list_repo.get_words_by_slugs(word_list_slugs)
+                curated_prompts = await self._ctx.word_list_repo.get_prompts_by_slugs(prompt_list_slugs)
             except Exception:
-                logger.exception("Failed to load words for slugs: %s", word_list_slugs)
+                logger.exception("Failed to load words for slugs: %s", prompt_list_slugs)
 
         return {
             "name": value("name"),
@@ -94,14 +94,14 @@ class GameFlowService:
             "max_players": value("max_players"),
             "rounds": value("rounds"),
             "drawing_seconds": value("drawing_seconds"),
-            "custom_words": custom_words,
-            "custom_words_only": value("custom_words_only"),
+            "custom_prompts": custom_prompts,
+            "custom_prompts_only": value("custom_prompts_only"),
             "hint_mode": hint_mode,
             "scoring_mode": scoring_mode,
             "spectators_see_solution": value("spectators_see_solution"),
             "hide_masked_prompt": hide_masked_prompt,
-            "word_list_slugs": word_list_slugs,
-            "curated_words": curated_words,
+            "prompt_list_slugs": prompt_list_slugs,
+            "curated_prompts": curated_prompts,
         }
 
     def schedule_phase_timer(self, room: Room, seconds: float) -> None:
@@ -155,14 +155,14 @@ class GameFlowService:
                     for p in room.player_list():
                         if not p.sid:
                             continue
-                        masked = game.masked_word(
+                        masked = game.masked_prompt(
                             p.id,
                             is_spectator=p.is_spectator,
                             spectators_see_solution=room.spectators_see_solution,
                         )
                         await self._sio.emit(
                             "hint_revealed",
-                            {"maskedWord": masked},
+                            {"maskedPrompt": masked},
                             to=p.sid,
                         )
 
@@ -200,7 +200,7 @@ class GameFlowService:
         room.game = Game(
             turn_order=[player.id for player in active_players],
             rounds_total=room.rounds,
-            word_pool=room.effective_word_pool(),
+            prompt_pool=room.effective_word_pool(),
             drawing_seconds=room.drawing_seconds,
             hint_mode=room.hint_mode,
             scoring_mode=room.scoring_mode,
@@ -283,7 +283,7 @@ class GameFlowService:
         game = room.game
         if not game:
             return
-        if game.phase in (Phase.CHOOSING_WORD, Phase.DRAWING):
+        if game.phase in (Phase.CHOOSING_PROMPT, Phase.DRAWING):
             await self._sio.emit(
                 "sync_game",
                 self._turn_payload(game, player, room.spectators_see_solution),
@@ -292,11 +292,11 @@ class GameFlowService:
             if sync_canvas:
                 await self._emit_canvas_sync(room, sid)
             if player.id == game.current_drawer:
-                if game.phase == Phase.CHOOSING_WORD:
+                if game.phase == Phase.CHOOSING_PROMPT:
                     await self._sio.emit(
-                        "your_word_choices",
+                        "your_prompt_choices",
                         {
-                            "choices": game.word_choices,
+                            "choices": game.prompt_choices,
                             "seconds": round(game.remaining_seconds()),
                         },
                         to=sid,
@@ -379,7 +379,7 @@ class GameFlowService:
         )
         if drawer and drawer.sid:
             await self._sio.emit(
-                "your_word_choices",
+                "your_prompt_choices",
                 {"choices": choices, "seconds": CHOOSE_WORD_SECONDS},
                 to=drawer.sid,
             )
@@ -396,7 +396,7 @@ class GameFlowService:
                 "turn_started",
                 {
                     "drawerId": game.current_drawer,
-                    "maskedWord": game.masked_word(
+                    "maskedPrompt": game.masked_prompt(
                         p.id,
                         is_spectator=p.is_spectator,
                         spectators_see_solution=room.spectators_see_solution,
@@ -487,7 +487,7 @@ class GameFlowService:
         self,
         room: Room,
         game: Game,
-        word_list_slugs: list[str],
+        prompt_list_slugs: list[str],
     ) -> None:
         """Fold a finished game's prompts into the word-list metrics.
 
@@ -500,14 +500,14 @@ class GameFlowService:
         one transaction. Failure is logged and swallowed, like the history
         write: there is nothing a player could do about it.
         """
-        if not self._ctx.word_list_repo or not word_list_slugs:
+        if not self._ctx.word_list_repo or not prompt_list_slugs:
             return
         usage = tally_word_usage(game.completed_turns)
         if not usage:
             return
         try:
             await asyncio.wait_for(
-                self._ctx.word_list_repo.record_word_usage(word_list_slugs, usage),
+                self._ctx.word_list_repo.record_word_usage(prompt_list_slugs, usage),
                 timeout=WORD_USAGE_WRITE_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
@@ -538,7 +538,7 @@ class GameFlowService:
             # Snapshotted for the same reason: the room is an editable
             # waiting room again by the time the metrics are written, so
             # the host can change its word lists out from under them.
-            word_list_slugs = list(room.word_list_slugs)
+            prompt_list_slugs = list(room.prompt_list_slugs)
             self._timers.cancel_restart_timer(room.id)
             room.restart_vote = None
             room.restart_vote_cooldown_until = 0
@@ -570,7 +570,7 @@ class GameFlowService:
             # Last, so that nothing a player is waiting to see is behind a
             # database round trip.
             await self._persist_game_history(room, history)
-            await self._record_word_usage(room, game, word_list_slugs)
+            await self._record_word_usage(room, game, prompt_list_slugs)
         else:
             await self._start_turn(room)
 
@@ -625,7 +625,7 @@ class GameFlowService:
         if not game or room.state != "playing":
             return
         if player.is_afk and player.id == game.current_drawer:
-            if game.phase == Phase.CHOOSING_WORD:
+            if game.phase == Phase.CHOOSING_PROMPT:
                 await self._abandon_current_turn(room)
             elif game.phase == Phase.DRAWING:
                 await self._end_round(room)
@@ -645,7 +645,7 @@ class GameFlowService:
         game = room.game
         if not game:
             return
-        if game.phase == Phase.CHOOSING_WORD:
+        if game.phase == Phase.CHOOSING_PROMPT:
             game.force_word_choice()
             await self._begin_drawing(room)
         elif game.phase == Phase.DRAWING:

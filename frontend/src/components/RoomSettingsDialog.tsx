@@ -28,18 +28,18 @@ const emptySettings: EditableRoomSettings = {
   maxPlayers: 8,
   rounds: 3,
   drawingSeconds: DEFAULT_DRAWING_SECONDS,
-  customWords: "",
-  customWordsOnly: false,
+  customPrompts: "",
+  customPromptsOnly: false,
   hintMode: DEFAULT_HINT_MODE,
   scoringMode: "default",
   spectatorsSeeSolution: false,
   hideMaskedPrompt: false,
-  wordListSlugs: ["english_standard"],
+  promptListSlugs: ["english_standard"],
 };
 
 export function RoomSettingsEditor() {
   const [settings, setSettings] = useState<EditableRoomSettings>(emptySettings);
-  const [customWords, dispatchCustomPrompts] = useReducer(
+  const [customPrompts, dispatchCustomPrompts] = useReducer(
     customPromptsReducer,
     undefined,
     () => createCustomPromptsState(),
@@ -58,8 +58,8 @@ export function RoomSettingsEditor() {
           setSettings(response.settings);
           dispatchCustomPrompts({
             type: "reset",
-            value: response.settings.customWords,
-            only: response.settings.customWordsOnly,
+            value: response.settings.customPrompts,
+            only: response.settings.customPromptsOnly,
           });
         }
         else setError(response.error || "Could not load room settings");
@@ -74,13 +74,13 @@ export function RoomSettingsEditor() {
 
   function update(patch: Partial<EditableRoomSettings>) { setSettings((current) => ({ ...current, ...patch })); }
   async function save() {
-    if (customWords.analysis.hasErrors) { setError("Fix custom-prompt errors before saving."); return; }
+    if (customPrompts.analysis.hasErrors) { setError("Fix custom-prompt errors before saving."); return; }
     setBusy(true); setError(null);
     try {
       const response = await emitWithAck<AckResponse>("update_room_settings", {
         ...settings,
-        customWords: customWords.value,
-        customWordsOnly: customWords.only,
+        customPrompts: customPrompts.value,
+        customPromptsOnly: customPrompts.only,
       });
       if (response.ok) setError(null); else setError(response.error || "Could not save room settings");
     } catch (saveError) {
@@ -113,8 +113,8 @@ export function RoomSettingsEditor() {
       <InputNumber label="Rounds" value={settings.rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={(rounds) => update({ rounds })} />
       <InputNumber label="Drawing time (seconds)" value={settings.drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={(drawingSeconds) => update({ drawingSeconds })} />
       <PromptListPicker
-        selectedSlugs={settings.wordListSlugs || ["english_standard"]}
-        onChange={(wordListSlugs) => update({ wordListSlugs })}
+        selectedSlugs={settings.promptListSlugs || ["english_standard"]}
+        onChange={(promptListSlugs) => update({ promptListSlugs })}
       />
       <details><summary>Advanced settings</summary><div className="room-settings-advanced">
         <Switch label="Allow spectators to see the prompt" checked={settings.spectatorsSeeSolution} onChange={(spectatorsSeeSolution) => update({ spectatorsSeeSolution })} />
@@ -143,17 +143,17 @@ export function RoomSettingsEditor() {
           }))}
         />
         {settings.hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
-        <CustomPromptsEditor value={customWords.value} analysis={customWords.analysis} onChange={(value) => dispatchCustomPrompts({ type: "change", value })} />
+        <CustomPromptsEditor value={customPrompts.value} analysis={customPrompts.analysis} onChange={(value) => dispatchCustomPrompts({ type: "change", value })} />
         <Switch
           label="Only use custom prompts"
           hint="Add a usable custom prompt to enable this option."
-          checked={customWords.only}
-          disabled={customWords.analysis.usableCount === 0 || customWords.analysis.hasErrors}
+          checked={customPrompts.only}
+          disabled={customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
           onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
         />
       </div></details>
     </div>}
     {error && <p className="create-room-error" role="alert">{error}</p>}
-    <div className="room-settings-save"><button type="button" className="room-settings-save-button" disabled={loading || busy || customWords.analysis.hasErrors} onClick={() => void save()}>{busy ? "Saving…" : "Save settings"}</button></div>
+    <div className="room-settings-save"><button type="button" className="room-settings-save-button" disabled={loading || busy || customPrompts.analysis.hasErrors} onClick={() => void save()}>{busy ? "Saving…" : "Save settings"}</button></div>
   </section>;
 }

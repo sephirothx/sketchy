@@ -11,8 +11,8 @@ const STALL_GRACE_MS = 2500;
 const STALL_CHECK_MS = 1000;
 const HEARTBEAT_MS = 5000;
 const HEARTBEAT_TIMEOUT_MS = 5000;
-const ACTIVE_PHASES = new Set(["choosing_word", "drawing", "turn_results"]);
-const PHASE_BY_CODE = ["idle", "choosing_word", "drawing", "turn_results", "game_end"] as const;
+const ACTIVE_PHASES = new Set(["choosing_prompt", "drawing", "turn_results"]);
+const PHASE_BY_CODE = ["idle", "choosing_prompt", "drawing", "turn_results", "game_end"] as const;
 
 function waitForConnect(timeoutMs = 8000): Promise<void> {
   if (socket.connected) return Promise.resolve();

@@ -212,7 +212,7 @@ def _afk_room_on_its_final_turn():
         )
     assert room.game.is_finished()
     assert room.game.current_drawer == p3.id
-    assert room.game.phase == Phase.CHOOSING_WORD
+    assert room.game.phase == Phase.CHOOSING_PROMPT
 
     sio = socketio.AsyncServer(async_mode="asgi")
     ctx = register_handlers(sio, room_manager)
@@ -297,7 +297,7 @@ async def test_afk_toggle_mid_game_still_advances_to_the_next_turn():
     assert room.state == "playing"
     assert room.game.turn_index == 1
     assert room.game.current_drawer == p2.id
-    assert room.game.phase == Phase.CHOOSING_WORD
+    assert room.game.phase == Phase.CHOOSING_PROMPT
     assert _emitted(sio, "turn_starting")
     assert not _emitted(sio, "game_ended")
 

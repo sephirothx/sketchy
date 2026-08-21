@@ -1,4 +1,4 @@
-export function getCanvasDownloadName(solutionWord: string | null): string {
+export function getCanvasDownloadName(solutionPrompt: string | null): string {
   const date = new Date();
   const datePart = [
     String(date.getFullYear()).slice(-2),
@@ -7,19 +7,19 @@ export function getCanvasDownloadName(solutionWord: string | null): string {
     String(date.getHours()).padStart(2, "0"),
     String(date.getMinutes()).padStart(2, "0"),
   ].join("");
-  const prompt = solutionWord
-    ? solutionWord.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]/g, "")
+  const prompt = solutionPrompt
+    ? solutionPrompt.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]/g, "")
     : "";
   return `sketchy-${datePart}${prompt ? `-${prompt}` : ""}.png`;
 }
 
 export function saveCanvasImage(
   canvas: HTMLCanvasElement | null,
-  solutionWord: string | null,
+  solutionPrompt: string | null,
 ): void {
   if (!canvas) return;
   const link = document.createElement("a");
-  link.download = getCanvasDownloadName(solutionWord);
+  link.download = getCanvasDownloadName(solutionPrompt);
   link.href = canvas.toDataURL("image/png");
   document.body.appendChild(link);
   link.click();

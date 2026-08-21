@@ -269,7 +269,7 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     saved = history.saved[0]
     first_round = saved.turns[0]
     assert first_round.guesser_count == 1
-    assert first_round.word_auto_picked is True
+    assert first_round.prompt_auto_picked is True
     assert first_round.end_reason == "all_guessed"
     assert first_round.wrong_guess_count == 1
 
@@ -312,7 +312,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
                 await flow._start_fresh_game(room, room.player_list())
 
     ctx.word_list_repo = RestartingWordRepo()
-    room.word_list_slugs = ["english_standard"]
+    room.prompt_list_slugs = ["english_standard"]
 
     await flow._start_fresh_game(room, room.player_list())
     # Two players over one round is two turns; the interference lands on the
@@ -399,11 +399,11 @@ class FakeWordListRepository:
         self._timeline = timeline if timeline is not None else []
         self._hang = hang
 
-    async def record_word_usage(self, word_list_slugs, usage):
+    async def record_word_usage(self, prompt_list_slugs, usage):
         if self._hang:
             await asyncio.sleep(3600)
-        self.calls.append((tuple(word_list_slugs), usage))
-        self._timeline.append(("word", tuple(word_list_slugs)))
+        self.calls.append((tuple(prompt_list_slugs), usage))
+        self._timeline.append(("word", tuple(prompt_list_slugs)))
 
 
 def emitted_payload(ctx, event: str):
@@ -417,7 +417,7 @@ async def test_game_ended_is_emitted_before_any_word_usage_is_written():
     """Nothing a player is waiting to see may sit behind the metric writes."""
     timeline: list[tuple] = []
     room_manager, room, players = build_room(rounds=1)
-    room.word_list_slugs = ["english_standard", "english_extended"]
+    room.prompt_list_slugs = ["english_standard", "english_extended"]
     words = FakeWordListRepository(timeline=timeline)
     ctx = build_context(
         room_manager, FakeGameHistoryRepository(), words, timeline=timeline
@@ -435,7 +435,7 @@ async def test_game_ended_is_emitted_before_any_word_usage_is_written():
 async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
     """A locked database must cost the counters, not the room."""
     room_manager, room, players = build_room(rounds=1)
-    room.word_list_slugs = ["english_standard"]
+    room.prompt_list_slugs = ["english_standard"]
     words = FakeWordListRepository(hang=True)
     ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
 
@@ -455,7 +455,7 @@ async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
 async def test_every_turn_and_list_is_folded_into_a_single_write():
     """The whole game goes down in one call, not one per turn per list."""
     room_manager, room, players = build_room(rounds=2)
-    room.word_list_slugs = ["english_standard", "english_extended"]
+    room.prompt_list_slugs = ["english_standard", "english_extended"]
     words = FakeWordListRepository()
     ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
 

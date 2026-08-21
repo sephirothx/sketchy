@@ -11,7 +11,7 @@ from app.handlers.payloads import (
     WheelLetterPayload,
     parse_payload,
 )
-from app.words import MAX_WORD_LENGTH
+from app.prompts import MAX_PROMPT_LENGTH
 
 def _chat_line(player, text: str, **extra) -> dict:
     """A chat line attributed to `player`, plus any per-case flags."""
@@ -88,7 +88,7 @@ async def guess(ctx: HandlerContext, sid, data):
             )
         return
 
-    if len(text) > MAX_WORD_LENGTH:
+    if len(text) > MAX_PROMPT_LENGTH:
         await ctx.sio.emit(
             "chat_message",
             _chat_line(player, text),
@@ -184,7 +184,7 @@ async def buy_hint(ctx: HandlerContext, sid, data):
     await ctx.sio.emit(
         "hint_revealed",
         {
-            "maskedWord": game.masked_word(player.id),
+            "maskedPrompt": game.masked_prompt(player.id),
             "hintCost": game.hint_cost(player.id),
             "hintSpend": hint_spend,
         },
@@ -217,7 +217,7 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
     await ctx.sio.emit(
         "hint_revealed",
         {
-            "maskedWord": game.masked_word(player.id),
+            "maskedPrompt": game.masked_prompt(player.id),
             "letterPrices": game.wheel_letter_prices(player.id),
             "hintSpend": hint_spend,
         },

@@ -84,7 +84,7 @@ async def test_every_json_command_rejects_non_object_payloads_consistently():
     json_commands = (
         "create_room",
         "get_room_settings",
-        "get_custom_words",
+        "get_custom_prompts",
         "get_recap_drawing",
         "update_room_settings",
         "get_room_preview",
@@ -98,7 +98,7 @@ async def test_every_json_command_rejects_non_object_payloads_consistently():
         "propose_restart_vote",
         "cast_restart_vote",
         "start_game",
-        "select_word",
+        "select_prompt",
         "send_chat",
         "guess",
         "buy_hint",

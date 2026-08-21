@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from app.game import CompletedTurnStats
-from app.services.word_usage import tally_word_usage
+from app.services.prompt_usage import tally_word_usage
 
 
 def turn(

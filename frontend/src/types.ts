@@ -39,7 +39,7 @@ export interface PromptListSummary {
   name: string;
   description: string;
   language: string;
-  wordCount: number;
+  promptCount: number;
   isBundled: boolean;
   version: number;
 }
@@ -54,14 +54,14 @@ export interface RoomSummary {
   maxPlayers: number;
   isFull: boolean;
   rounds: number;
-  customWordCount: number;
-  customWordsOnly: boolean;
+  customPromptCount: number;
+  customPromptsOnly: boolean;
   drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
-  wordListSlugs?: string[];
+  promptListSlugs?: string[];
   state: "waiting" | "playing";
 }
 
@@ -72,14 +72,14 @@ export interface RoomStatePayload {
   isPublic: boolean;
   maxPlayers: number;
   rounds: number;
-  customWordCount: number;
-  customWordsOnly: boolean;
+  customPromptCount: number;
+  customPromptsOnly: boolean;
   drawingSeconds: number;
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
-  wordListSlugs?: string[];
+  promptListSlugs?: string[];
   state: "waiting" | "playing";
   lastGameScores?: ScoreEntry[];
   lastGameDrawings?: DrawingRecapMetadata[];
@@ -95,16 +95,16 @@ export interface EditableRoomSettings {
   maxPlayers: number;
   rounds: number;
   drawingSeconds: number;
-  customWords: string;
-  customWordsOnly: boolean;
+  customPrompts: string;
+  customPromptsOnly: boolean;
   hintMode: HintMode;
   scoringMode: ScoringMode;
   spectatorsSeeSolution: boolean;
   hideMaskedPrompt: boolean;
-  wordListSlugs?: string[];
+  promptListSlugs?: string[];
 }
 
-export type GamePhase = "idle" | "choosing_word" | "drawing" | "turn_results" | "game_end";
+export type GamePhase = "idle" | "choosing_prompt" | "drawing" | "turn_results" | "game_end";
 
 export interface ChatMessage {
   id: string;

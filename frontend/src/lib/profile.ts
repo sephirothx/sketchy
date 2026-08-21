@@ -8,7 +8,7 @@ export interface ProfileStats {
   totalScore: number;
   averageScore: number;
   turnsPlayed: number;
-  wordsGuessed: number;
+  promptsGuessed: number;
   drawingsMade: number;
 }
 

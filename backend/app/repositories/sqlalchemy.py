@@ -16,8 +16,8 @@ from app.db.models import (
     TurnGuess,
     TurnRecord,
     User,
-    Word,
-    WordList,
+    Prompt,
+    PromptList,
     generate_uuid,
 )
 from app.repositories.interfaces import (
@@ -38,8 +38,8 @@ from app.repositories.interfaces import (
     UserRepository,
     UserStats,
     UsernameTakenError,
-    WordListRepository,
-    WordListSummary,
+    PromptListRepository,
+    PromptListSummary,
     WordPickTotals,
     WordStatsSummary,
     WordUsage,
@@ -90,14 +90,14 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
     )
 
 
-def _to_word_list_summary(wl: WordList) -> WordListSummary:
-    return WordListSummary(
+def _to_word_list_summary(wl: PromptList) -> PromptListSummary:
+    return PromptListSummary(
         id=wl.id,
         slug=wl.slug,
         name=wl.name,
         description=wl.description,
         language=wl.language,
-        word_count=wl.word_count,
+        prompt_count=wl.prompt_count,
         is_bundled=wl.is_bundled,
         version=wl.version,
     )
@@ -318,7 +318,7 @@ class SqlAlchemyUserRepository(UserRepository):
 
             # 3. Correct guesses made
             guesses_stmt = select(func.count(TurnGuess.id)).where(TurnGuess.user_id == user_id)
-            words_guessed = int((await session.execute(guesses_stmt)).scalar() or 0)
+            prompts_guessed = int((await session.execute(guesses_stmt)).scalar() or 0)
 
             # 4. Drawings made
             drawings_stmt = select(func.count(TurnRecord.id)).where(TurnRecord.drawer_user_id == user_id)
@@ -332,7 +332,7 @@ class SqlAlchemyUserRepository(UserRepository):
                 total_score=total_score,
                 average_score=round(average_score, 2),
                 turns_played=turns_played,
-                words_guessed=words_guessed,
+                prompts_guessed=prompts_guessed,
                 drawings_made=drawings_made,
             )
 
@@ -392,7 +392,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             word=r.word,
                             duration_seconds=r.duration_seconds,
                             guesser_count=r.guesser_count,
-                            word_auto_picked=r.word_auto_picked,
+                            prompt_auto_picked=r.prompt_auto_picked,
                             stroke_count=r.stroke_count,
                             end_reason=r.end_reason,
                             wrong_guess_count=r.wrong_guess_count,
@@ -508,40 +508,40 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             return GameDetail(summary=summary, turns=turn_details)
 
 
-class SqlAlchemyWordListRepository(WordListRepository):
-    """SQLAlchemy-backed implementation of WordListRepository."""
+class SqlAlchemyPromptListRepository(PromptListRepository):
+    """SQLAlchemy-backed implementation of PromptListRepository."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    async def list_all(self) -> list[WordListSummary]:
+    async def list_all(self) -> list[PromptListSummary]:
         async with self._session_factory() as session:
-            stmt = select(WordList).order_by(WordList.name)
+            stmt = select(PromptList).order_by(PromptList.name)
             result = await session.execute(stmt)
             return [_to_word_list_summary(wl) for wl in result.scalars().all()]
 
-    async def get_by_slug(self, slug: str) -> WordListSummary | None:
+    async def get_by_slug(self, slug: str) -> PromptListSummary | None:
         async with self._session_factory() as session:
-            stmt = select(WordList).where(WordList.slug == slug)
+            stmt = select(PromptList).where(PromptList.slug == slug)
             result = await session.execute(stmt)
             wl = result.scalar_one_or_none()
             return _to_word_list_summary(wl) if wl else None
 
-    async def get_words(self, word_list_id: str) -> list[str]:
+    async def get_words(self, prompt_list_id: str) -> list[str]:
         async with self._session_factory() as session:
-            stmt = select(Word.text).where(Word.word_list_id == word_list_id).order_by(Word.text)
+            stmt = select(Prompt.text).where(Prompt.prompt_list_id == prompt_list_id).order_by(Prompt.text)
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
-    async def get_words_by_slugs(self, slugs: list[str]) -> list[str]:
+    async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:
         if not slugs:
             return []
         async with self._session_factory() as session:
             stmt = (
-                select(distinct(Word.text))
-                .join(WordList, Word.word_list_id == WordList.id)
-                .where(WordList.slug.in_(slugs))
-                .order_by(Word.text)
+                select(distinct(Prompt.text))
+                .join(PromptList, Prompt.prompt_list_id == PromptList.id)
+                .where(PromptList.slug.in_(slugs))
+                .order_by(Prompt.text)
             )
             result = await session.execute(stmt)
             return list(result.scalars().all())
@@ -552,42 +552,42 @@ class SqlAlchemyWordListRepository(WordListRepository):
         name: str,
         description: str,
         language: str,
-        words: list[str],
+        prompts: list[str],
         version: int,
-    ) -> WordListSummary:
-        # Deduplicate incoming words case-insensitively
-        seen_words: set[str] = set()
-        clean_words: list[str] = []
-        for w in words:
+    ) -> PromptListSummary:
+        # Deduplicate incoming prompts case-insensitively
+        seen_prompts: set[str] = set()
+        clean_prompts: list[str] = []
+        for w in prompts:
             trimmed = w.strip()
             lower = trimmed.lower()
-            if trimmed and lower not in seen_words:
-                seen_words.add(lower)
-                clean_words.append(lower)
+            if trimmed and lower not in seen_prompts:
+                seen_prompts.add(lower)
+                clean_prompts.append(lower)
 
         async with self._session_factory() as session:
             async with session.begin():
-                stmt = select(WordList).where(WordList.slug == slug).options(selectinload(WordList.words))
+                stmt = select(PromptList).where(PromptList.slug == slug).options(selectinload(PromptList.prompts))
                 result = await session.execute(stmt)
                 wl = result.scalar_one_or_none()
 
                 if wl is None:
-                    wl = WordList(
+                    wl = PromptList(
                         id=generate_uuid(),
                         slug=slug,
                         name=name,
                         description=description,
                         language=language,
-                        word_count=len(clean_words),
+                        prompt_count=len(clean_prompts),
                         is_bundled=True,
                         version=version,
                     )
                     session.add(wl)
-                    for text in clean_words:
+                    for text in clean_prompts:
                         session.add(
-                            Word(
+                            Prompt(
                                 id=generate_uuid(),
-                                word_list_id=wl.id,
+                                prompt_list_id=wl.id,
                                 text=text,
                                 offer_count=0,
                                 pick_count=0,
@@ -600,23 +600,23 @@ class SqlAlchemyWordListRepository(WordListRepository):
                     wl.description = description
                     wl.language = language
                     wl.version = version
-                    wl.word_count = len(clean_words)
+                    wl.prompt_count = len(clean_prompts)
 
-                    existing_words_map = {w.text.lower(): w for w in wl.words}
-                    target_set = set(clean_words)
+                    existing_prompts_map = {w.text.lower(): w for w in wl.prompts}
+                    target_set = set(clean_prompts)
 
-                    # Remove deleted words
-                    for old_text, word_obj in list(existing_words_map.items()):
+                    # Remove deleted prompts
+                    for old_text, prompt_obj in list(existing_prompts_map.items()):
                         if old_text not in target_set:
-                            await session.delete(word_obj)
+                            await session.delete(prompt_obj)
 
-                    # Add new words
-                    for text in clean_words:
-                        if text not in existing_words_map:
+                    # Add new prompts
+                    for text in clean_prompts:
+                        if text not in existing_prompts_map:
                             session.add(
-                                Word(
+                                Prompt(
                                     id=generate_uuid(),
-                                    word_list_id=wl.id,
+                                    prompt_list_id=wl.id,
                                     text=text,
                                     offer_count=0,
                                     pick_count=0,
@@ -630,7 +630,7 @@ class SqlAlchemyWordListRepository(WordListRepository):
 
     async def record_word_usage(
         self,
-        word_list_slugs: Sequence[str],
+        prompt_list_slugs: Sequence[str],
         usage: WordUsage,
     ) -> None:
         """Apply a whole game's counters to every named list in one transaction.
@@ -640,14 +640,14 @@ class SqlAlchemyWordListRepository(WordListRepository):
         with as many turns as it had players and rounds, and this used to be a
         commit apiece.
         """
-        slugs = list(word_list_slugs)
+        slugs = list(prompt_list_slugs)
         if not slugs or not usage:
             return
         async with self._session_factory() as session:
             async with session.begin():
                 list_ids = (
                     await session.execute(
-                        select(WordList.id).where(WordList.slug.in_(slugs))
+                        select(PromptList.id).where(PromptList.slug.in_(slugs))
                     )
                 ).scalars().all()
                 if not list_ids:
@@ -658,14 +658,14 @@ class SqlAlchemyWordListRepository(WordListRepository):
                     offers_by_count[count].append(text)
                 for count, texts in offers_by_count.items():
                     await session.execute(
-                        update(Word)
+                        update(Prompt)
                         .where(
                             and_(
-                                Word.word_list_id.in_(list_ids),
-                                Word.text.in_(texts),
+                                Prompt.prompt_list_id.in_(list_ids),
+                                Prompt.text.in_(texts),
                             )
                         )
-                        .values(offer_count=Word.offer_count + count)
+                        .values(offer_count=Prompt.offer_count + count)
                     )
 
                 picks_by_totals: dict[WordPickTotals, list[str]] = defaultdict(list)
@@ -673,20 +673,20 @@ class SqlAlchemyWordListRepository(WordListRepository):
                     picks_by_totals[totals].append(text)
                 for totals, texts in picks_by_totals.items():
                     await session.execute(
-                        update(Word)
+                        update(Prompt)
                         .where(
                             and_(
-                                Word.word_list_id.in_(list_ids),
-                                Word.text.in_(texts),
+                                Prompt.prompt_list_id.in_(list_ids),
+                                Prompt.text.in_(texts),
                             )
                         )
                         .values(
-                            pick_count=Word.pick_count + totals.picks,
+                            pick_count=Prompt.pick_count + totals.picks,
                             correct_guess_count=(
-                                Word.correct_guess_count + totals.correct_guesses
+                                Prompt.correct_guess_count + totals.correct_guesses
                             ),
                             total_guesser_count=(
-                                Word.total_guesser_count + totals.total_guessers
+                                Prompt.total_guesser_count + totals.total_guessers
                             ),
                         )
                     )
@@ -697,16 +697,16 @@ class SqlAlchemyWordListRepository(WordListRepository):
     ) -> list[WordStatsSummary]:
         async with self._session_factory() as session:
             stmt = (
-                select(Word)
-                .join(WordList, Word.word_list_id == WordList.id)
-                .where(WordList.slug == word_list_slug)
-                .order_by(Word.text)
+                select(Prompt)
+                .join(PromptList, Prompt.prompt_list_id == PromptList.id)
+                .where(PromptList.slug == word_list_slug)
+                .order_by(Prompt.text)
             )
             result = await session.execute(stmt)
-            words = result.scalars().all()
+            prompts = result.scalars().all()
 
             summaries: list[WordStatsSummary] = []
-            for w in words:
+            for w in prompts:
                 pick_rate = (w.pick_count / w.offer_count) if w.offer_count > 0 else 0.0
                 ratio = (w.correct_guess_count / w.total_guesser_count) if w.total_guesser_count > 0 else 0.0
                 summaries.append(

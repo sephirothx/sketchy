@@ -9,7 +9,7 @@ interface WordListPickerProps {
 }
 
 export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: WordListPickerProps) {
-  const [wordLists, setWordLists] = useState<PromptListSummary[]>([]);
+  const [promptLists, setPromptLists] = useState<PromptListSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -17,9 +17,9 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
     let cancelled = false;
     async function loadLists() {
       try {
-        const data = await apiRequest<PromptListSummary[]>("/api/word-lists");
+        const data = await apiRequest<PromptListSummary[]>("/api/prompt-lists");
         if (!cancelled) {
-          setWordLists(data);
+          setPromptLists(data);
         }
       } catch (err) {
         if (!cancelled) {
@@ -56,7 +56,7 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
     );
   }
 
-  if (fetchError && wordLists.length === 0) {
+  if (fetchError && promptLists.length === 0) {
     return (
       <div className="prompt-list-picker-fallback">
         <p className="prompt-list-fallback-note">Using default word list ({fetchError})</p>
@@ -68,7 +68,7 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
     <fieldset className="room-choice-group prompt-list-picker-group">
       <legend>Prompt lists</legend>
       <div className="prompt-list-chips" role="group" aria-label="Prompt lists">
-        {wordLists.map((wl) => {
+        {promptLists.map((wl) => {
           const isSelected = selectedSlugs.includes(wl.slug);
           const isOnlySelected = isSelected && selectedSlugs.length <= 1;
 
@@ -79,14 +79,14 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
               className={`prompt-list-chip ${isSelected ? "is-selected" : ""}`}
               aria-pressed={isSelected}
               disabled={disabled || (isSelected && isOnlySelected)}
-              title={wl.description || `${wl.name} (${wl.wordCount} words)`}
+              title={wl.description || `${wl.name} (${wl.promptCount} words)`}
               onClick={() => handleToggle(wl.slug)}
             >
               <span className="prompt-list-chip-status" aria-hidden="true">
                 {isSelected ? "✓" : "+"}
               </span>
               <span className="prompt-list-chip-name">{wl.name}</span>
-              <span className="prompt-list-chip-count">{wl.wordCount}</span>
+              <span className="prompt-list-chip-count">{wl.promptCount}</span>
             </button>
           );
         })}

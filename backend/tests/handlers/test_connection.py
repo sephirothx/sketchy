@@ -217,7 +217,7 @@ async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase()
     emitted_events = [call.args[0] for call in sio.emit.await_args_list]
     assert response["ok"] is True
     assert "sync_game" in emitted_events
-    assert "your_word_choices" in emitted_events
+    assert "your_prompt_choices" in emitted_events
     assert "you_are_drawing" not in emitted_events
 
 @pytest.mark.asyncio

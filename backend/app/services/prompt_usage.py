@@ -1,8 +1,8 @@
-"""Turn a finished game's turns into the counters its word lists record.
+"""Turn a finished game's turns into the counters its prompt lists record.
 
 Kept apart from `GameFlowService` for the same reason as `game_history`: it is
 pure. No sockets, no database, no timers - just the mapping from what the game
-remembers to the increments a `WordListRepository` applies.
+remembers to the increments a `PromptListRepository` applies.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def tally_word_usage(turns: Iterable[CompletedTurnStats]) -> WordUsage:
     a set: the same word can be offered in several turns, and a pool too small
     to keep excluding what it has already used can have it chosen twice too.
 
-    Words that no list contains - a room's custom words, which live only in
+    Words that no list contains - a room's custom prompts, which live only in
     memory - simply match no row, so they cost nothing to include here.
     """
     offers: Counter[str] = Counter()

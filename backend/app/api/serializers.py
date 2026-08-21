@@ -1,7 +1,7 @@
 """Shared JSON shapes for the REST surface.
 
 camelCase throughout, matching what the frontend already consumes from
-``/api/auth/me`` and ``/api/word-lists``.
+``/api/auth/me`` and ``/api/prompt-lists``.
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def stats_payload(stats: UserStats) -> dict:
         "totalScore": stats.total_score,
         "averageScore": stats.average_score,
         "turnsPlayed": stats.turns_played,
-        "wordsGuessed": stats.words_guessed,
+        "promptsGuessed": stats.prompts_guessed,
         "drawingsMade": stats.drawings_made,
     }
 

@@ -37,8 +37,8 @@ export function CreateRoomPage() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
-  const [wordListSlugs, setWordListSlugs] = useState<string[]>(["english_standard"]);
-  const [customWords, dispatchCustomPrompts] = useReducer(
+  const [promptListSlugs, setWordListSlugs] = useState<string[]>(["english_standard"]);
+  const [customPrompts, dispatchCustomPrompts] = useReducer(
     customPromptsReducer,
     undefined,
     () => createCustomPromptsState(),
@@ -51,7 +51,7 @@ export function CreateRoomPage() {
   const [busy, setBusy] = useState(false);
 
   async function handleCreate() {
-    if (customWords.analysis.hasErrors) {
+    if (customPrompts.analysis.hasErrors) {
       setError("Fix the custom-prompt entries marked above before creating the room.");
       return;
     }
@@ -60,8 +60,8 @@ export function CreateRoomPage() {
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
         nickname: currentPlayerName(), nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
-        customWords: customWords.value.trim(), customWordsOnly: customWords.only, hintMode, scoringMode,
-        spectatorsSeeSolution, hideMaskedPrompt, wordListSlugs,
+        customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
+        spectatorsSeeSolution, hideMaskedPrompt, promptListSlugs,
       });
       const session = sessionFrom(response);
       if (session) {
@@ -111,7 +111,7 @@ export function CreateRoomPage() {
         <InputNumber label="Max players" value={maxPlayers} min={MAX_PLAYERS_MIN} max={MAX_PLAYERS_MAX} onChange={setMaxPlayers} />
         <InputNumber label="Rounds" value={rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={setRounds} />
         <InputNumber label="Drawing time (seconds)" value={drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={setDrawingSeconds} />
-        <PromptListPicker selectedSlugs={wordListSlugs} onChange={setWordListSlugs} />
+        <PromptListPicker selectedSlugs={promptListSlugs} onChange={setWordListSlugs} />
       </div>
       <details className="advanced-settings"><summary>Advanced settings <span>Spectators, scoring, hints, and custom prompts</span></summary>
         <div className="advanced-settings-content">
@@ -145,17 +145,17 @@ export function CreateRoomPage() {
           />
           {hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
           {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">Point-purchase hint modes require scoring.</p>}
-          <CustomPromptsEditor value={customWords.value} analysis={customWords.analysis} onChange={handleCustomWordsChange} />
+          <CustomPromptsEditor value={customPrompts.value} analysis={customPrompts.analysis} onChange={handleCustomWordsChange} />
           <Switch
             label="Only use custom prompts"
             hint="Add a usable custom prompt to enable this option."
-            checked={customWords.only}
-            disabled={customWords.analysis.usableCount === 0 || customWords.analysis.hasErrors}
+            checked={customPrompts.only}
+            disabled={customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
             onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
           />
         </div>
       </details>
-      <button type="button" className="create-room-submit" disabled={busy || customWords.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
+      <button type="button" className="create-room-submit" disabled={busy || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
     </section>
   </main>;
 }

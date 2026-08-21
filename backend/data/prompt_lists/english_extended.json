@@ -1,10 +1,10 @@
 {
   "slug": "english_extended",
   "name": "English — Extended",
-  "description": "Expanded word list featuring a wider variety of objects, professions, animals, and challenging prompts.",
+  "description": "An expanded list, with a wider variety of objects, professions, animals, and harder prompts.",
   "language": "en",
   "version": 1,
-  "words": [
+  "prompts": [
     "acorn", "accordion", "albatross", "alien", "anchor", "anvil", "archery", "armchair", "armor", "art gallery",
     "asparagus", "asteroid", "attic", "avalanche", "badger", "bagpipes", "baguette", "bamboo", "band-aid", "bank vault",
     "barbecue", "barn", "barrel", "barricade", "baseball bat", "batman", "battleship", "beaver", "bellows", "beret",

@@ -17,7 +17,7 @@ from enum import Enum
 from itertools import groupby
 
 from app.canvas_session import CanvasSession
-from app.words import MAX_WORD_LENGTH, WORDS, random_word_choices
+from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_word_choices
 
 CHOOSE_WORD_SECONDS = 15
 DRAWING_SECONDS = 80
@@ -94,7 +94,7 @@ CLOSE_GUESS_MIN_CORRECT_LETTERS = 5
 
 
 class Phase(str, Enum):
-    CHOOSING_WORD = "choosing_word"
+    CHOOSING_PROMPT = "choosing_prompt"
     DRAWING = "drawing"
     TURN_RESULTS = "turn_results"
     GAME_END = "game_end"
@@ -228,7 +228,7 @@ class CompletedTurnStats:
     guesses: tuple[TurnGuessRecord, ...] = ()
     # The drawer ran out of time and took the first offered word, rather than
     # picking one - which is not a preference, and should not read as one.
-    word_auto_picked: bool = False
+    prompt_auto_picked: bool = False
     # Canvas actions committed during the turn. Separates a word nobody could
     # guess from a drawer who drew nothing.
     stroke_count: int = 0
@@ -248,10 +248,10 @@ class Game:
     rounds_total: int = 3
     scoring_mode: str = "default"
     turn_index: int = -1
-    phase: Phase = Phase.CHOOSING_WORD
+    phase: Phase = Phase.CHOOSING_PROMPT
     current_drawer: str | None = None
     word: str | None = None
-    word_choices: list[str] = field(default_factory=list)
+    prompt_choices: list[str] = field(default_factory=list)
     correct_guessers: set[str] = field(default_factory=set)
     guess_points: dict[str, int] = field(default_factory=dict)
     guess_times: dict[str, float] = field(default_factory=dict)
@@ -262,8 +262,8 @@ class Game:
     decay_marker_elapsed: float = 0.0
     canvas: CanvasSession = field(default_factory=CanvasSession)
     phase_deadline: float | None = None
-    used_words: set[str] = field(default_factory=set)
-    word_pool: list[str] | None = None
+    used_prompts: set[str] = field(default_factory=set)
+    prompt_pool: list[str] | None = None
     drawing_seconds: float = DRAWING_SECONDS
     hint_mode: str = "none"
     hide_masked_prompt: bool = False
@@ -278,7 +278,7 @@ class Game:
     hint_purchases: dict[str, int] = field(default_factory=dict)
     wrong_guesses: dict[str, int] = field(default_factory=dict)
     near_miss_count: int = 0
-    word_auto_picked: bool = False
+    prompt_auto_picked: bool = False
     completed_turns: list[CompletedTurnStats] = field(default_factory=list)
     # Wall clock, unlike the monotonic `phase_deadline`: persisted game records
     # need a real timestamp, and a monotonic reading means nothing outside this
@@ -407,7 +407,7 @@ class Game:
                 attempts += 1
         self.current_drawer = self.turn_order[self.turn_index % len(self.turn_order)]
         self.word = None
-        self.word_choices = random_word_choices(3, exclude=self.used_words, pool=self.word_pool)
+        self.prompt_choices = random_word_choices(3, exclude=self.used_prompts, pool=self.prompt_pool)
         self.correct_guessers = set()
         self.guess_points = {}
         self.guess_times = {}
@@ -425,30 +425,30 @@ class Game:
         self.hint_purchases = {}
         self.wrong_guesses = {}
         self.near_miss_count = 0
-        self.word_auto_picked = False
-        self.phase = Phase.CHOOSING_WORD
-        return self.word_choices
+        self.prompt_auto_picked = False
+        self.phase = Phase.CHOOSING_PROMPT
+        return self.prompt_choices
 
     def choose_word(self, token: str, word: str) -> bool:
-        if self.phase != Phase.CHOOSING_WORD or token != self.current_drawer:
+        if self.phase != Phase.CHOOSING_PROMPT or token != self.current_drawer:
             return False
-        if word not in self.word_choices:
+        if word not in self.prompt_choices:
             return False
         self._set_word(word)
         return True
 
     def force_word_choice(self) -> None:
-        if self.phase == Phase.CHOOSING_WORD and self.word_choices:
-            self.word_auto_picked = True
-            self._set_word(self.word_choices[0])
+        if self.phase == Phase.CHOOSING_PROMPT and self.prompt_choices:
+            self.prompt_auto_picked = True
+            self._set_word(self.prompt_choices[0])
 
     def _set_word(self, word: str) -> None:
         self.word = word
-        self.used_words.add(word)
+        self.used_prompts.add(word)
         self.letter_positions = [i for i, ch in enumerate(word) if ch.isalnum()]
         self.phase = Phase.DRAWING
 
-    def masked_word(
+    def masked_prompt(
         self,
         token: str | None = None,
         is_spectator: bool = False,
@@ -467,7 +467,7 @@ class Game:
         to everyone. Letters a specific player bought - either a slot
         (`purchased_hints`, hint_mode="purchase") or a whole letter
         (`purchased_letters`, hint_mode="wheel") - are only shown when
-        `masked_word` is called with that player's token - every other caller
+        `masked_prompt` is called with that player's token - every other caller
         (including token=None) never sees them.
         """
         if not self.word:
@@ -574,14 +574,14 @@ class Game:
 
     def _letter_frequencies(self) -> dict[str, float]:
         """Relative frequency (0-1) of each a-z letter across this game's word
-        pool (`word_pool`, or the built-in `WORDS` list when no custom pool is
+        pool (`prompt_pool`, or the built-in `PROMPTS` list when no custom pool is
         set) - used to price wheel-of-fortune letters by how rare they are
         among the actual possible solutions, rather than English-language
         letter frequency.
         """
         if self._cached_letter_frequencies is not None:
             return self._cached_letter_frequencies
-        pool = self.word_pool or WORDS
+        pool = self.prompt_pool or PROMPTS
         counts = Counter(ch for w in pool for ch in w.lower() if ch.isalpha())
         total = sum(counts.values()) or 1
         self._cached_letter_frequencies = {letter: counts.get(letter, 0) / total for letter in string.ascii_lowercase}
@@ -590,7 +590,7 @@ class Game:
     def letter_price(self, letter: str) -> int:
         """Base cost (before the per-turn escalation in `wheel_hint_cost`) of
         buying `letter` in hint_mode="wheel": a flat vowel/consonant cost,
-        scaled up the more common that letter is across `word_pool`/`WORDS`
+        scaled up the more common that letter is across `prompt_pool`/`PROMPTS`
         (rarer letters are cheaper - revealing every instance of a letter
         that barely appears in the word is worth comparatively little).
         """
@@ -635,7 +635,7 @@ class Game:
         """Buy a whole letter for `token` only (hint_mode="wheel").
 
         Every occurrence of `letter` in the word will be shown to this player
-        (via `masked_word`) regardless of whether it's actually present, and
+        (via `masked_prompt`) regardless of whether it's actually present, and
         the price is charged either way - on credit, like `buy_hint_letter`.
         Returns False if the letter is invalid, already bought by this player
         this turn, the token isn't an eligible guesser right now, or the price
@@ -671,7 +671,7 @@ class Game:
             return False, 0
         if token == self.current_drawer or token in self.correct_guessers:
             return False, 0
-        if len(text) > MAX_WORD_LENGTH:
+        if len(text) > MAX_PROMPT_LENGTH:
             return False, 0
         normalized_guess = _normalize(text)
         normalized_word = _normalize(self.word)
@@ -724,7 +724,7 @@ class Game:
             return None
         if token == self.current_drawer or token in self.correct_guessers:
             return None
-        if len(text) > MAX_WORD_LENGTH:
+        if len(text) > MAX_PROMPT_LENGTH:
             return None
         guess = _normalize(text)
         word = _normalize(self.word)
@@ -762,7 +762,7 @@ class Game:
             CompletedTurnStats(
                 round_number=self.round_number,
                 turn_number=len(self.completed_turns) + 1,
-                offered_words=list(self.word_choices),
+                offered_words=list(self.prompt_choices),
                 chosen_word=self.word or "",
                 correct_guess_count=len(self.correct_guessers),
                 total_guesser_count=total_guesser_count,
@@ -782,7 +782,7 @@ class Game:
                         key=lambda t: self.guess_times.get(t, 0.0),
                     )
                 ),
-                word_auto_picked=self.word_auto_picked,
+                prompt_auto_picked=self.prompt_auto_picked,
                 stroke_count=len(self.canvas.history),
                 end_reason=(
                     "all_guessed"
@@ -797,5 +797,5 @@ class Game:
         return sum(self.guess_points.values())
 
     def advance_phase_after_round(self) -> Phase:
-        self.phase = Phase.GAME_END if self.is_finished() else Phase.CHOOSING_WORD
+        self.phase = Phase.GAME_END if self.is_finished() else Phase.CHOOSING_PROMPT
         return self.phase

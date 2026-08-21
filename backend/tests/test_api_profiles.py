@@ -109,7 +109,7 @@ async def test_stats_carry_the_account_they_describe(env):
     assert body["stats"]["gamesWon"] == 1
     assert body["stats"]["winRate"] == 1.0
     assert body["stats"]["drawingsMade"] == 1
-    assert body["stats"]["wordsGuessed"] == 0
+    assert body["stats"]["promptsGuessed"] == 0
 
 
 async def test_stats_for_an_unknown_player_are_a_404_not_a_row_of_zeroes(env):

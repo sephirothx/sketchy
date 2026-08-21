@@ -27,7 +27,7 @@ from app.repositories.interfaces import (
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
-    SqlAlchemyWordListRepository,
+    SqlAlchemyPromptListRepository,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -197,23 +197,23 @@ async def test_game_history_repository():
         assert u1_stats.win_rate == 1.0
         assert u1_stats.total_score == 350
         assert u1_stats.drawings_made == 1
-        assert u1_stats.words_guessed == 0
+        assert u1_stats.prompts_guessed == 0
 
         u2_stats = await user_repo.get_stats(u2.id)
         assert u2_stats.games_played == 1
         assert u2_stats.games_won == 0
         assert u2_stats.win_rate == 0.0
         assert u2_stats.total_score == 200
-        assert u2_stats.words_guessed == 1
+        assert u2_stats.prompts_guessed == 1
         assert u2_stats.drawings_made == 0
     finally:
         await engine.dispose()
 
 
-async def test_word_list_repository():
+async def test_prompt_list_repository():
     factory, engine = await create_test_db()
     try:
-        repo = SqlAlchemyWordListRepository(factory)
+        repo = SqlAlchemyPromptListRepository(factory)
 
         # 1. Upsert bundled word list
         wl = await repo.upsert_bundled(
@@ -221,11 +221,11 @@ async def test_word_list_repository():
             name="Standard List",
             description="Standard curated words",
             language="en",
-            words=["apple", "banana", "cherry", "apple"],  # includes duplicate
+            prompts=["apple", "banana", "cherry", "apple"],  # includes duplicate
             version=1,
         )
         assert wl.slug == "standard"
-        assert wl.word_count == 3
+        assert wl.prompt_count == 3
 
         # 2. List all
         all_lists = await repo.list_all()
@@ -237,7 +237,7 @@ async def test_word_list_repository():
         assert words == ["apple", "banana", "cherry"]
 
         # 4. Get by slugs
-        slug_words = await repo.get_words_by_slugs(["standard"])
+        slug_words = await repo.get_prompts_by_slugs(["standard"])
         assert slug_words == ["apple", "banana", "cherry"]
 
         # 5. Record one finished game's offers and picks
@@ -273,11 +273,11 @@ async def test_word_list_repository():
             name="Standard List v2",
             description="Updated words",
             language="en",
-            words=["apple", "date"],  # banana removed, date added
+            prompts=["apple", "date"],  # banana removed, date added
             version=2,
         )
         assert upgraded.version == 2
-        assert upgraded.word_count == 2
+        assert upgraded.prompt_count == 2
 
         new_stats = await repo.get_word_stats("standard")
         assert len(new_stats) == 2
@@ -325,7 +325,7 @@ async def test_save_game_persists_the_analytics_columns():
                     word="guitar",
                     duration_seconds=30.0,
                     guesser_count=4,
-                    word_auto_picked=True,
+                    prompt_auto_picked=True,
                     stroke_count=23,
                     end_reason="all_guessed",
                     wrong_guess_count=7,
@@ -352,7 +352,7 @@ async def test_save_game_persists_the_analytics_columns():
                 )
             ).scalar_one()
             assert round_row.guesser_count == 4
-            assert round_row.word_auto_picked is True
+            assert round_row.prompt_auto_picked is True
             assert round_row.stroke_count == 23
             assert round_row.end_reason == "all_guessed"
             assert round_row.wrong_guess_count == 7
@@ -386,7 +386,7 @@ async def _seed_two_lists(repo):
         name="Alpha",
         description="",
         language="en",
-        words=["apple", "banana"],
+        prompts=["apple", "banana"],
         version=1,
     )
     await repo.upsert_bundled(
@@ -394,7 +394,7 @@ async def _seed_two_lists(repo):
         name="Beta",
         description="",
         language="en",
-        words=["apple", "castle"],
+        prompts=["apple", "castle"],
         version=1,
     )
 
@@ -403,10 +403,10 @@ def _stat(stats, text):
     return next(entry for entry in stats if entry.text == text)
 
 
-async def test_word_usage_reaches_every_named_list_in_one_call():
+async def test_prompt_usage_reaches_every_named_list_in_one_call():
     factory, engine = await create_test_db()
     try:
-        repo = SqlAlchemyWordListRepository(factory)
+        repo = SqlAlchemyPromptListRepository(factory)
         await _seed_two_lists(repo)
 
         await repo.record_word_usage(
@@ -441,7 +441,7 @@ async def test_a_slug_that_no_longer_exists_does_not_cost_the_others():
     """A room outlives the lists it was created with; a deleted one is not fatal."""
     factory, engine = await create_test_db()
     try:
-        repo = SqlAlchemyWordListRepository(factory)
+        repo = SqlAlchemyPromptListRepository(factory)
         await _seed_two_lists(repo)
 
         await repo.record_word_usage(
@@ -467,7 +467,7 @@ async def test_a_slug_that_no_longer_exists_does_not_cost_the_others():
 async def test_recording_nothing_touches_no_counters():
     factory, engine = await create_test_db()
     try:
-        repo = SqlAlchemyWordListRepository(factory)
+        repo = SqlAlchemyPromptListRepository(factory)
         await _seed_two_lists(repo)
 
         await repo.record_word_usage([], WordUsage(offers={"apple": 1}, picks={}))

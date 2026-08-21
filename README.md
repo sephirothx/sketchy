@@ -115,7 +115,7 @@ password-guesser sidestep the limit by varying it on every attempt.
 backend/
   alembic/        Alembic migration environment and versioned migration scripts
   data/
-    word_lists/   Bundled curated word list JSON definitions
+    prompt_lists/ Bundled curated prompt list JSON definitions
   app/
     db/           SQLAlchemy models, engine setup, seeding, and migration runner
     repositories/ Abstract repository interfaces and SQLAlchemy implementations
@@ -125,7 +125,7 @@ backend/
       context.py     Shared HandlerContext for Socket.IO, rooms, timers, and repositories
       auth.py        Current-player authentication and stale-socket rejection
       rooms.py       Room creation, joining, settings, previews, and player lifecycle
-      game.py        Game start and word-selection transport handlers
+      game.py        Game start and prompt-selection transport handlers
       drawing.py     Drawing, undo, and canvas synchronization handlers
       chat.py        Guessing, chat, and purchasable hint handlers
       moderation.py Vote-kick and AFK handlers
@@ -136,10 +136,10 @@ backend/
       game_flow.py Shared turn, round, timer, and player-removal workflows
       timers.py    Application-owned asynchronous timer lifecycle
     presenters.py Pure construction of room, turn, round, and session payloads
-    game.py       Pure game state machine (turns, word choice, scoring) - no I/O, unit-testable
+    game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable
     rooms.py      In-memory Room/Player/RoomManager domain model
     state.py      Shared RoomManager singleton
-    words.py      Word list + random choice helper
+    prompts.py    Prompt list + random choice helper
   tests/
     handlers/     Focused asyncio integration suites for each Socket.IO handler domain
     e2e/          Multi-browser Playwright scenarios

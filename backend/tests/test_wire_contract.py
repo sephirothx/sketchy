@@ -4,7 +4,7 @@ Nothing in either language checks that the two sides agree on a name. A rename
 on one side of the boundary type-checks, lints, and passes every unit test,
 because the payload key is a plain string here and a plain property there - the
 mismatch only shows up as a feature that silently stops working. That is exactly
-how ``maskedWord`` briefly became ``maskedPrompt`` on the client alone (#310),
+how ``maskedPrompt`` briefly became ``maskedPrompt`` on the client alone (#310),
 leaving the drawing phase reading ``undefined``.
 
 So this suite pins the four things the two sides have to agree on: the events

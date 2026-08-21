@@ -9,7 +9,7 @@ from app.handlers.context import HandlerContext
 from app.repositories.interfaces import (
     GameHistoryRepository,
     UserRepository,
-    WordListRepository,
+    PromptListRepository,
 )
 from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
@@ -23,7 +23,7 @@ def register_all_handlers(
     timers: TimerManager | None = None,
     user_repo: UserRepository | None = None,
     game_history_repo: GameHistoryRepository | None = None,
-    word_list_repo: WordListRepository | None = None,
+    word_list_repo: PromptListRepository | None = None,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> HandlerContext:
     """Create the shared context and register every domain exactly once."""

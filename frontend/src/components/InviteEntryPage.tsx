@@ -90,8 +90,8 @@ export function InviteEntryPage({ code }: { code: string }) {
             <li>{hintModeLabel(room)}</li>
             <li>{room.spectatorsSeeSolution ? "Spectators can see the prompt" : "Spectators guess along"}</li>
             <li>
-              {room.customWordCount > 0
-                ? `${room.customWordCount} custom prompts${room.customWordsOnly ? " only" : " plus defaults"}`
+              {room.customPromptCount > 0
+                ? `${room.customPromptCount} custom prompts${room.customPromptsOnly ? " only" : " plus defaults"}`
                 : "Default prompt list"}
             </li>
           </ul>

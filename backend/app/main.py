@@ -13,12 +13,12 @@ from app.api.profiles import create_profile_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_session_factory, init_db
-from app.db.seed import seed_word_lists
+from app.db.seed import seed_prompt_lists
 from app.handlers import register_all_handlers
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
-    SqlAlchemyWordListRepository,
+    SqlAlchemyPromptListRepository,
 )
 from app.state import room_manager
 
@@ -64,7 +64,7 @@ def configure_frontend(app: FastAPI, directory: Path) -> None:
 
 user_repo = SqlAlchemyUserRepository(async_session_factory)
 game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
-word_list_repo = SqlAlchemyWordListRepository(async_session_factory)
+word_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 handler_context = register_all_handlers(
@@ -80,7 +80,7 @@ handler_context = register_all_handlers(
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await init_db()
-    await seed_word_lists(word_list_repo)
+    await seed_prompt_lists(word_list_repo)
     try:
         yield
     finally:
@@ -113,8 +113,8 @@ async def list_public_rooms():
     return room_manager.list_public_rooms()
 
 
-@api.get("/api/word-lists")
-async def list_word_lists():
+@api.get("/api/prompt-lists")
+async def list_prompt_lists():
     lists = await word_list_repo.list_all()
     return [
         {
@@ -122,7 +122,7 @@ async def list_word_lists():
             "name": wl.name,
             "description": wl.description,
             "language": wl.language,
-            "wordCount": wl.word_count,
+            "promptCount": wl.prompt_count,
             "isBundled": wl.is_bundled,
             "version": wl.version,
         }

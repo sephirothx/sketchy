@@ -30,7 +30,7 @@ async def start_game(ctx: HandlerContext, sid, data=None):
     return {"ok": True}
 
 
-async def select_word(ctx: HandlerContext, sid, data):
+async def select_prompt(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(SelectWordPayload, data)
     except PayloadError as error:
@@ -48,4 +48,4 @@ async def select_word(ctx: HandlerContext, sid, data):
 
 def register(ctx: HandlerContext) -> None:
     ctx.sio.on("start_game", handler=partial(start_game, ctx))
-    ctx.sio.on("select_word", handler=partial(select_word, ctx))
+    ctx.sio.on("select_prompt", handler=partial(select_prompt, ctx))

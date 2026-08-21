@@ -357,7 +357,7 @@ function ProfileView({ userId }: { userId: string }) {
               />
               <StatTile label="Average score" value={String(Math.round(stats.averageScore))} />
               <StatTile label="Turns played" value={String(stats.turnsPlayed)} />
-              <StatTile label="Prompts guessed" value={String(stats.wordsGuessed)} />
+              <StatTile label="Prompts guessed" value={String(stats.promptsGuessed)} />
               <StatTile label="Drawings made" value={String(stats.drawingsMade)} />
               <StatTile label="Total score" value={String(stats.totalScore)} />
             </div>

@@ -35,7 +35,7 @@ async def test_explicit_drawer_leave_starts_next_survivor_turn():
     await leave_room(drawer.sid)
 
     assert room.game.current_drawer == next_player.id
-    assert room.game.phase.value == "choosing_word"
+    assert room.game.phase.value == "choosing_prompt"
     assert room.game.round_number == 1
 
     timer = timers.phase_timers.pop(room.id)
@@ -93,7 +93,7 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     guesser = room_manager.add_player(room, "Guesser")
     drawer.sid, guesser.sid = "drawer-sid", "guesser-sid"
 
-    room.game = Game(turn_order=[drawer.id, guesser.id], word_pool=["banana"], rounds_total=1, hint_mode="checkpoints", drawing_seconds=0.05)
+    room.game = Game(turn_order=[drawer.id, guesser.id], prompt_pool=["banana"], rounds_total=1, hint_mode="checkpoints", drawing_seconds=0.05)
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
 
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -105,11 +105,11 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
     sio.emit = AsyncMock()
 
-    select_word = sio.handlers["/"]["select_word"]
-    rejected = await select_word("drawer-sid", {"word": "not-a-choice"})
+    select_prompt = sio.handlers["/"]["select_prompt"]
+    rejected = await select_prompt("drawer-sid", {"word": "not-a-choice"})
     assert rejected == {"ok": False, "error": "That prompt is no longer available"}
 
-    accepted = await select_word("drawer-sid", {"word": "banana"})
+    accepted = await select_prompt("drawer-sid", {"word": "banana"})
     assert accepted == {"ok": True}
     await asyncio.sleep(0.1)
 
@@ -117,10 +117,10 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     guesser_hints = [call for call in sio.emit.await_args_list if call.args[0] == "hint_revealed" and call.kwargs.get("to") == "guesser-sid"]
 
     assert len(drawer_hints) >= 1
-    assert drawer_hints[0].args[1]["maskedWord"] == "banana"
+    assert drawer_hints[0].args[1]["maskedPrompt"] == "banana"
 
     assert len(guesser_hints) >= 1
-    assert guesser_hints[0].args[1]["maskedWord"] != "banana"
+    assert guesser_hints[0].args[1]["maskedPrompt"] != "banana"
 
     timer = timers.phase_timers.pop(room.id, None)
     if timer:

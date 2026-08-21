@@ -203,8 +203,8 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     proposer, voter = players
     room.rounds = 4
     room.drawing_seconds = 30
-    room.custom_words = ["reviewword", "secondword", "thirdword"]
-    room.custom_words_only = True
+    room.custom_prompts = ["reviewword", "secondword", "thirdword"]
+    room.custom_prompts_only = True
     room.hint_mode = "wheel"
     room.hide_masked_prompt = True
     room.spectators_see_solution = True
@@ -246,11 +246,11 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     assert old_phase_timer.cancelled()
     assert old_hint_timer.cancelled()
     assert room.game is not None and room.game is not old_game
-    assert room.game.phase == Phase.CHOOSING_WORD
+    assert room.game.phase == Phase.CHOOSING_PROMPT
     assert room.game.round_number == 1
     assert room.game.rounds_total == 4
     assert room.game.drawing_seconds == 30
-    assert room.game.word_pool == ["reviewword", "secondword", "thirdword"]
+    assert room.game.prompt_pool == ["reviewword", "secondword", "thirdword"]
     assert room.game.hint_mode == "wheel"
     assert room.game.hide_masked_prompt is True
     assert room.spectators_see_solution is True
@@ -262,8 +262,8 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     assert room.restart_vote is None
     assert room.restart_vote_cooldown_until == 0
 
-    word = room.game.word_choices[0]
-    selected = await sio.handlers["/"]["select_word"](
+    word = room.game.prompt_choices[0]
+    selected = await sio.handlers["/"]["select_prompt"](
         proposer.sid, {"word": word}
     )
     assert selected == {"ok": True}
