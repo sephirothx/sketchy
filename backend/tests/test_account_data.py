@@ -27,9 +27,11 @@ from app.db.models import (
     DataExport,
     GameParticipant,
     GameRecord,
+    PlayerReport,
     TurnGuess,
     TurnRecord,
     User,
+    UserBan,
     UserSettings,
     generate_uuid,
 )
@@ -179,6 +181,25 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             assert owner_row is not None and other_row is not None
             owner_row.email = "owner@example.test"
             other_row.email = "private-bob@example.test"
+            session.add(
+                PlayerReport(
+                    id=generate_uuid(),
+                    reporter_user_id=owner_row.id,
+                    reported_user_id=other_row.id,
+                    reason="harassment",
+                    details="Requester-authored report details",
+                    context_snapshot={"schemaVersion": 1, "submitted": {}},
+                )
+            )
+            session.add(
+                UserBan(
+                    id=generate_uuid(),
+                    user_id=UUID(linked_guest.id),
+                    banned_by_user_id=other_row.id,
+                    reason="Historic suspension",
+                    is_active=False,
+                )
+            )
     game_id = await record_private_game(
         history, owner_id=owner["id"], other_id=other.id
     )
@@ -191,6 +212,12 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["drawnTurns"][0]["prompt"] == "owner prompt"
     assert artifact["correctGuesses"][0]["prompt"] == "requester guessed this"
     assert artifact["sessions"] and "tokenHash" not in artifact["sessions"][0]
+    assert artifact["reportsSubmitted"][0]["details"] == (
+        "Requester-authored report details"
+    )
+    assert "reportedUserId" not in artifact["reportsSubmitted"][0]
+    assert artifact["suspensions"][0]["reason"] == "Historic suspension"
+    assert "bannedByUserId" not in artifact["suspensions"][0]
 
     encoded = json.dumps(artifact)
     assert "Private Bob" not in encoded

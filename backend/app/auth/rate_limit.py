@@ -23,6 +23,46 @@ IP_HASH_CONFIG_KEY = "ip_hash_secret"
 PERSISTENT_CLEANUP_INTERVAL = 1000
 
 
+async def get_ip_hash_secret(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    cached: str | None = None,
+) -> str:
+    """Return the deployment-wide HMAC key without ever exposing it to clients."""
+    configured = os.environ.get("IP_HASH_SECRET", "").strip()
+    if configured:
+        return configured
+    if cached:
+        return cached
+
+    for _ in range(5):
+        candidate = secrets.token_urlsafe(32)
+        try:
+            async with session_factory() as session:
+                async with session.begin():
+                    config = await session.get(AppConfig, IP_HASH_CONFIG_KEY)
+                    if config is not None:
+                        return config.value
+                    session.add(AppConfig(key=IP_HASH_CONFIG_KEY, value=candidate))
+                    await session.flush()
+                    return candidate
+        except IntegrityError:
+            await asyncio.sleep(0)
+    raise RuntimeError("Could not establish the IP hashing secret")
+
+
+async def keyed_client_hash(
+    session_factory: async_sessionmaker[AsyncSession], key: str
+) -> str:
+    """Hash a client address for audit correlation without storing the address."""
+    secret = await get_ip_hash_secret(session_factory)
+    return hmac.new(
+        secret.encode("utf-8"),
+        key.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 class RateLimiter:
     """Fixed-capacity sliding window, keyed by client.
 
@@ -158,31 +198,10 @@ class PersistentRateLimiter:
         self._checks = 0
 
     async def _hash_secret(self) -> str:
-        configured = os.environ.get("IP_HASH_SECRET", "").strip()
-        if configured:
-            return configured
-        if self._secret:
-            return self._secret
-
-        for _ in range(5):
-            candidate = secrets.token_urlsafe(32)
-            try:
-                async with self._session_factory() as session:
-                    async with session.begin():
-                        config = await session.get(AppConfig, IP_HASH_CONFIG_KEY)
-                        if config is not None:
-                            secret = config.value
-                        else:
-                            session.add(
-                                AppConfig(key=IP_HASH_CONFIG_KEY, value=candidate)
-                            )
-                            await session.flush()
-                            secret = candidate
-                self._secret = secret
-                return secret
-            except IntegrityError:
-                await asyncio.sleep(0)
-        raise RuntimeError("Could not establish the IP hashing secret")
+        self._secret = await get_ip_hash_secret(
+            self._session_factory, cached=self._secret
+        )
+        return self._secret
 
     async def check(self, key: str) -> bool:
         """Record one attempt without ever storing the raw client address."""

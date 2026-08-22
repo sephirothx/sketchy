@@ -20,10 +20,12 @@ from app.db.models import (
     GameParticipant,
     GameRecord,
     IdentityAlias,
+    PlayerReport,
     TurnGuess,
     TurnRecord,
     UploadedAvatarAsset,
     User,
+    UserBan,
     UserSettings,
     generate_uuid,
 )
@@ -190,6 +192,24 @@ async def _build_export_artifact(
             )
         ).all()
     )
+    submitted_reports = list(
+        (
+            await session.scalars(
+                select(PlayerReport)
+                .where(PlayerReport.reporter_user_id.in_(identity_ids))
+                .order_by(PlayerReport.created_at, PlayerReport.id)
+            )
+        ).all()
+    )
+    suspensions = list(
+        (
+            await session.scalars(
+                select(UserBan)
+                .where(UserBan.user_id.in_(identity_ids))
+                .order_by(UserBan.created_at, UserBan.id)
+            )
+        ).all()
+    )
     export_jobs = list(
         (
             await session.scalars(
@@ -322,6 +342,39 @@ async def _build_export_artifact(
                 "wrongGuessesBefore": guess.wrong_guesses_before,
             }
             for guess, turn in guesses
+        ],
+        # A reporter's own text and submitted evidence belongs in their export.
+        # The reported account id, reviewer id, and internal resolution note do
+        # not: those are other people's or moderation-workflow data.
+        "reportsSubmitted": [
+            {
+                "id": str(report.id),
+                "gameId": str(report.game_id) if report.game_id else None,
+                "turnId": str(report.turn_id) if report.turn_id else None,
+                "reason": report.reason,
+                "details": report.details,
+                "contextSnapshot": report.context_snapshot,
+                "status": report.status,
+                "createdAt": _timestamp(report.created_at),
+                "updatedAt": _timestamp(report.updated_at),
+                "reviewedAt": _timestamp(report.reviewed_at),
+            }
+            for report in submitted_reports
+        ],
+        # Suspension history is requester data, but moderator identities and
+        # internal revocation notes remain private.
+        "suspensions": [
+            {
+                "id": str(ban.id),
+                "reason": ban.reason,
+                "expiresAt": _timestamp(ban.expires_at),
+                "isActive": ban.is_active and (
+                    ban.expires_at is None or ban.expires_at > generated_at
+                ),
+                "createdAt": _timestamp(ban.created_at),
+                "revokedAt": _timestamp(ban.revoked_at),
+            }
+            for ban in suspensions
         ],
         # Audit details and other actor identifiers are deliberately omitted:
         # they can contain moderator or third-party data. This still exposes

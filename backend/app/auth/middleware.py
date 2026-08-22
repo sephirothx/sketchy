@@ -4,9 +4,9 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
-from app.auth.sessions import COOKIE_NAME, SESSION_TTL, resolve_session
+from app.auth.sessions import COOKIE_NAME, SESSION_TTL, resolve_session_status
 
 COOKIE_MAX_AGE = int(SESSION_TTL.total_seconds())
 
@@ -67,8 +67,24 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         raw_token = request.cookies.get(COOKIE_NAME, "")
         request.state.session_token = raw_token
-        auth_session = await resolve_session(self._session_factory, raw_token)
+        resolution = await resolve_session_status(self._session_factory, raw_token)
+        privacy_escape_hatch = (
+            request.url.path.startswith("/api/auth/data-exports")
+            or request.url.path == "/api/auth/account"
+            or request.url.path == "/api/auth/logout"
+        )
+        if (
+            resolution.banned_user_id is not None
+            and request.url.path.startswith("/api/")
+            and request.url.path != "/api/health"
+            and not privacy_escape_hatch
+        ):
+            return JSONResponse(
+                {"detail": "This account is suspended."}, status_code=403
+            )
+        auth_session = resolution.session
         request.state.auth_session = auth_session
         request.state.session_id = auth_session.id if auth_session else None
         request.state.user_id = auth_session.user_id if auth_session else None
+        request.state.banned_user_id = resolution.banned_user_id
         return await call_next(request)

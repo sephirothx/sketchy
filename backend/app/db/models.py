@@ -34,6 +34,8 @@ from app.domain_values import (
     DEFAULT_USER_KEY_BINDINGS,
     HINT_MODES,
     PROMPT_LANGUAGES,
+    REPORT_REASONS,
+    REPORT_STATUSES,
     SCORING_MODES,
     TURN_END_REASONS,
     USER_ROLES,
@@ -42,6 +44,8 @@ from app.domain_values import (
     BrushCursorStyle,
     DataExportStatus,
     PromptLanguage,
+    ReportReason,
+    ReportStatus,
     TurnEndReason,
     UserRole,
     UserTheme,
@@ -292,6 +296,123 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
+
+
+class PlayerReport(Base):
+    """Actionable player report with a bounded evidence snapshot."""
+
+    __tablename__ = "player_reports"
+    __table_args__ = (
+        _values_check("reason", REPORT_REASONS, "ck_player_reports_reason"),
+        _values_check("status", REPORT_STATUSES, "ck_player_reports_status"),
+        Index("ix_player_reports_status_created_at", "status", "created_at"),
+        CheckConstraint(
+            "reporter_user_id IS NULL OR reported_user_id IS NULL "
+            "OR reporter_user_id != reported_user_id",
+            name="ck_player_reports_not_self",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    # Reports are retained moderation evidence. Account anonymization therefore
+    # detaches references rather than cascading away the report.
+    reporter_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reported_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    game_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("game_records.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reason: Mapped[str] = mapped_column(
+        String(32), default=ReportReason.HARASSMENT.value, nullable=False
+    )
+    details: Mapped[str] = mapped_column(Text, nullable=False)
+    context_snapshot: Mapped[dict] = mapped_column(
+        JSON, default=dict, server_default=text("'{}'"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        default=ReportStatus.PENDING.value,
+        server_default=ReportStatus.PENDING.value,
+        nullable=False,
+    )
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class UserBan(Base):
+    """Audited temporary or permanent suspension of an account."""
+
+    __tablename__ = "user_bans"
+    __table_args__ = (
+        Index("ix_user_bans_user_active_expires", "user_id", "is_active", "expires_at"),
+        CheckConstraint(
+            "expires_at IS NULL OR expires_at > created_at",
+            name="ck_user_bans_expiry_after_creation",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    banned_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    revoked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    revoke_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class IdentityAlias(Base):

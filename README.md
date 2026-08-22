@@ -318,6 +318,41 @@ recovered from `X-Forwarded-For`. Without that flag the header is ignored on
 purpose: it is attacker-controlled, and trusting it blindly would let a
 password-guesser sidestep the limit by varying it on every attempt.
 
+### Reports and suspensions
+
+Any signed-in player, including a guest account, can submit a private **Report**
+with `POST /api/reports`. Reports use one of five bounded reasons—harassment,
+offensive drawing, inappropriate name, cheating, or spam—plus up to 2,000
+characters of detail and an optional 32 KiB JSON context snapshot. Game and
+turn references are validated when supplied. Submitted context is preserved as
+versioned, reporter-supplied evidence; it is not treated as a server-verified
+fact merely because it was stored.
+
+Only moderators and administrators can list and resolve or dismiss reports via
+`/api/moderation/reports`. Review is one-way: a pending report receives one
+resolution and cannot later be silently rewritten. Protected report evidence
+survives account anonymization. A player's data export includes their own
+report text and submitted evidence, but excludes the reported account ID,
+reviewer identity, and internal resolution note.
+
+Moderators and administrators can create temporary or permanent account
+**Suspensions** through `/api/moderation/bans`; moderators cannot suspend peers,
+and administrators cannot be targeted. Creating a suspension revokes every
+signed-in device and removes any live room seat immediately. Correct-password
+login, authenticated HTTP requests, and Socket.IO handshakes all reject an
+active suspension. A token revoked when the suspension was created remains
+recognizable until expiry, so its next request cannot be mistaken for a new
+cookieless guest. Data export, account deletion, and logout remain available
+through that ban-time credential so moderation cannot erase privacy rights.
+Expired suspensions stop applying automatically; revocation preserves the
+historic record and its reason.
+
+Report submission, review, suspension, and revocation each append an audit
+event. Audit rows store a canonical request UUID and an HMAC-SHA-256 client IP
+hash under the deployment's `IP_HASH_SECRET`; raw addresses, report text, and
+context evidence are never copied into ordinary request logs or public player,
+room, preview, or lobby payloads.
+
 ## Project structure
 
 ```

@@ -493,7 +493,7 @@ ADRs once they exist.
 | --- | --- | --- | --- |
 | #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | Complete | #344-#351 integrated; 564 backend, 156 frontend, and 41 E2E tests pass locally; PostgreSQL CI gate configured; README updated and glossary reviewed (no new game terms) |
 | #339 database invariants | `epic/339-database-invariants` | Complete | #352-#356 integrated; 567 backend, 156 frontend, and 41 E2E tests pass locally; dual-dialect migration gate configured; README updated and glossary reviewed |
-| #340 accounts and privacy | `epic/340-accounts-identity-privacy` | In progress | #357-#366 and #394 complete; registered Player settings sync across devices, seed once at registration, remain browser-local for guests, honor validated API/DB boundaries, and participate in export/deletion; 613 backend, 156 frontend, and 43 E2E tests pass; frontend lint/build pass; README and glossary updated |
+| #340 accounts and privacy | `epic/340-accounts-identity-privacy` | In progress | #357-#366 and #394-#395 complete; bounded private reports/evidence, role-gated one-way review, temporary/permanent suspensions, append-only audit correlation, export/deletion safeguards, session revocation, live-seat eviction, and HTTP/login/socket enforcement are integrated; 618 backend, 156 frontend, and 43 E2E tests pass; frontend lint/build pass; README and glossary updated |
 | #342 prompt content | `epic/342-prompt-content-usage` | Not started | - |
 | #341 game history | `epic/341-game-history-statistics` | Not started | - |
 | #343 live rooms and formats | `epic/343-live-rooms-deployment-formats` | Not started | - |

@@ -5,7 +5,12 @@ import asyncio
 import logging
 from functools import partial
 
-from app.auth.sessions import resolve_session, session_token_from_cookie_header
+from socketio.exceptions import ConnectionRefusedError
+
+from app.auth.sessions import (
+    resolve_session_status,
+    session_token_from_cookie_header,
+)
 from app.handlers.context import HandlerContext
 
 logger = logging.getLogger("sketchy.handlers.connection")
@@ -22,7 +27,10 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     user_id = None
     if ctx.session_factory is not None:
         token = session_token_from_cookie_header(environ.get("HTTP_COOKIE"))
-        auth_session = await resolve_session(ctx.session_factory, token)
+        resolution = await resolve_session_status(ctx.session_factory, token)
+        if resolution.banned_user_id is not None:
+            raise ConnectionRefusedError("This account is suspended.")
+        auth_session = resolution.session
         user_id = auth_session.user_id if auth_session else None
     await ctx.sio.save_session(sid, {"user_id": user_id})
     logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")

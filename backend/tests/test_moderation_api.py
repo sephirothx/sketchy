@@ -1,0 +1,371 @@
+"""Reports, moderator actions, bans, and authentication enforcement."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from uuid import UUID
+
+import pytest
+import pytest_asyncio
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from socketio.exceptions import ConnectionRefusedError
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.api.moderation import create_moderation_router
+from app.auth.middleware import SessionAuthMiddleware
+from app.auth.routes import create_auth_router
+from app.db.models import (
+    AuditEvent,
+    AuthSession,
+    Base,
+    PlayerReport,
+    User,
+    UserBan,
+    generate_uuid,
+)
+from app.domain_values import ReportReason, ReportStatus, UserRole
+from app.handlers.connection import connect as socket_connect
+from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+
+
+pytestmark = pytest.mark.asyncio
+PASSWORD = "a-good-password"
+
+
+@pytest_asyncio.fixture
+async def env(monkeypatch):
+    monkeypatch.setenv("IP_HASH_SECRET", "moderation-test-secret")
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    users = SqlAlchemyUserRepository(factory)
+    banned_callback = AsyncMock()
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(users, factory))
+    app.include_router(
+        create_moderation_router(factory, on_user_banned=banned_callback)
+    )
+
+    @app.get("/api/health")
+    async def health():
+        return {"status": "ok"}
+
+    clients: list[AsyncClient] = []
+
+    def new_client() -> AsyncClient:
+        client = AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        )
+        clients.append(client)
+        return client
+
+    try:
+        yield new_client, factory, banned_callback
+    finally:
+        for client in clients:
+            await client.aclose()
+        await engine.dispose()
+
+
+async def register(client: AsyncClient, username: str) -> dict:
+    assert (await client.get("/api/auth/me")).status_code == 200
+    response = await client.post(
+        "/api/auth/register",
+        json={"username": username, "password": PASSWORD},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+async def set_role(factory, user_id: str, role: UserRole) -> None:
+    async with factory() as session:
+        async with session.begin():
+            user = await session.get(User, UUID(user_id))
+            assert user is not None
+            user.role = role.value
+
+
+async def test_report_submission_is_bounded_private_and_audited(env):
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    reporter = await register(reporter_http, "Reporter")
+    target = await register(target_http, "ReportedPlayer")
+    request_id = "019c1000-0000-7000-8000-000000000001"
+
+    response = await reporter_http.post(
+        "/api/reports",
+        headers={"x-request-id": request_id},
+        json={
+            "reportedUserId": target["id"],
+            "reason": "offensive_drawing",
+            "details": "The drawing contained targeted abuse.",
+            "contextSnapshot": {"strokeCount": 42, "canvasBytes": 1800},
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["status"] == "pending"
+
+    assert (
+        await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": reporter["id"],
+                "reason": "spam",
+                "details": "self",
+            },
+        )
+    ).status_code == 422
+    assert (await reporter_http.get("/api/moderation/reports")).status_code == 403
+
+    async with factory() as session:
+        report = await session.scalar(select(PlayerReport))
+        audit = await session.scalar(
+            select(AuditEvent).where(AuditEvent.event_type == "report.submitted")
+        )
+        assert report is not None
+        assert report.reporter_user_id == UUID(reporter["id"])
+        assert report.reported_user_id == UUID(target["id"])
+        assert report.context_snapshot == {
+            "schemaVersion": 1,
+            "submitted": {"strokeCount": 42, "canvasBytes": 1800},
+        }
+        assert audit is not None
+        assert audit.request_id == request_id
+        assert len(audit.ip_hash or "") == 64
+        assert "127.0.0.1" not in (audit.ip_hash or "")
+        assert audit.details == {
+            "report_id": str(report.id),
+            "reason": "offensive_drawing",
+        }
+
+
+async def test_moderator_can_review_once_and_every_action_is_audited(env):
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "ReviewReporter")
+    target = await register(target_http, "ReviewTarget")
+    moderator = await register(moderator_http, "Reviewer")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Repeated harassment in chat.",
+        },
+    )
+    report_id = submitted.json()["id"]
+    listing = await moderator_http.get(
+        "/api/moderation/reports", params={"status": "pending"}
+    )
+    assert listing.status_code == 200
+    assert listing.json()["reports"][0]["details"] == "Repeated harassment in chat."
+
+    reviewed = await moderator_http.patch(
+        f"/api/moderation/reports/{report_id}",
+        json={"status": "resolved", "note": "Evidence confirmed."},
+    )
+    assert reviewed.status_code == 200
+    assert reviewed.json()["status"] == "resolved"
+    assert reviewed.json()["reviewedByUserId"] == moderator["id"]
+    assert reviewed.json()["reviewedAt"] is not None
+    assert (
+        await moderator_http.patch(
+            f"/api/moderation/reports/{report_id}",
+            json={"status": "dismissed", "note": "Try to overwrite."},
+        )
+    ).status_code == 409
+
+    async with factory() as session:
+        events = (
+            await session.scalars(
+                select(AuditEvent.event_type).order_by(AuditEvent.created_at)
+            )
+        ).all()
+        assert events == ["report.submitted", "report.resolved"]
+
+
+async def test_ban_revokes_sessions_and_rejects_http_login_and_socket(env):
+    new_client, factory, banned_callback = env
+    target_http = new_client()
+    admin_http = new_client()
+    target = await register(target_http, "SuspendedPlayer")
+    admin = await register(admin_http, "BanAdmin")
+    await set_role(factory, admin["id"], UserRole.ADMIN)
+    raw_cookie = target_http.cookies.get("sketchy_session")
+    assert raw_cookie
+
+    banned = await admin_http.post(
+        "/api/moderation/bans",
+        headers={"x-request-id": "019c1000-0000-7000-8000-000000000002"},
+        json={
+            "userId": target["id"],
+            "reason": "Confirmed repeated harassment",
+        },
+    )
+    assert banned.status_code == 201
+    assert banned.json()["isActive"] is True
+    assert banned.json()["expiresAt"] is None
+    banned_callback.assert_awaited_once_with(target["id"])
+
+    async with factory() as session:
+        sessions = (
+            await session.scalars(
+                select(AuthSession).where(AuthSession.user_id == UUID(target["id"]))
+            )
+        ).all()
+        assert sessions and all(item.revoked_at is not None for item in sessions)
+
+    # The revoked token remains attributable to the active ban, rather than
+    # looking cookieless and provisioning a replacement guest.
+    assert (await target_http.get("/api/auth/me")).status_code == 403
+    assert (await target_http.get("/api/health")).status_code == 200
+    # Suspension cannot erase the player's privacy rights. The same ban-time
+    # credential remains valid only for export/delete/logout endpoints.
+    assert (await target_http.post("/api/auth/data-exports")).status_code == 202
+
+    fresh_login = new_client()
+    assert (await fresh_login.get("/api/auth/me")).status_code == 200
+    refused = await fresh_login.post(
+        "/api/auth/login",
+        json={"username": "SuspendedPlayer", "password": PASSWORD},
+    )
+    assert refused.status_code == 403
+    assert refused.json()["detail"] == "This account is suspended."
+
+    context = SimpleNamespace(
+        sio=SimpleNamespace(save_session=AsyncMock()), session_factory=factory
+    )
+    with pytest.raises(ConnectionRefusedError, match="suspended"):
+        await socket_connect(
+            context,
+            "banned-sid",
+            {"HTTP_COOKIE": f"sketchy_session={raw_cookie}"},
+            None,
+        )
+
+    async with factory() as session:
+        event = await session.scalar(
+            select(AuditEvent).where(AuditEvent.event_type == "ban.created")
+        )
+        assert event is not None
+        assert event.request_id == "019c1000-0000-7000-8000-000000000002"
+        assert len(event.ip_hash or "") == 64
+
+
+async def test_revoke_and_expiry_restore_login_without_erasing_history(env):
+    new_client, factory, _ = env
+    target_http = new_client()
+    admin_http = new_client()
+    target = await register(target_http, "TemporaryTarget")
+    admin = await register(admin_http, "RevokeAdmin")
+    await set_role(factory, admin["id"], UserRole.ADMIN)
+    expires = datetime.now(timezone.utc) + timedelta(hours=2)
+    created = await admin_http.post(
+        "/api/moderation/bans",
+        json={
+            "userId": target["id"],
+            "reason": "Temporary suspension",
+            "expiresAt": expires.isoformat(),
+        },
+    )
+    ban_id = created.json()["id"]
+    duplicate = await admin_http.post(
+        "/api/moderation/bans",
+        json={"userId": target["id"], "reason": "Duplicate"},
+    )
+    assert duplicate.status_code == 409
+
+    revoked = await admin_http.post(
+        f"/api/moderation/bans/{ban_id}/revoke",
+        json={"reason": "Appeal accepted"},
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["isActive"] is False
+    assert revoked.json()["revokeReason"] == "Appeal accepted"
+
+    login_http = new_client()
+    await login_http.get("/api/auth/me")
+    assert (
+        await login_http.post(
+            "/api/auth/login",
+            json={"username": "TemporaryTarget", "password": PASSWORD},
+        )
+    ).status_code == 200
+
+    now = datetime.now(timezone.utc)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                UserBan(
+                    id=generate_uuid(),
+                    user_id=UUID(target["id"]),
+                    banned_by_user_id=UUID(admin["id"]),
+                    reason="Already elapsed",
+                    created_at=now - timedelta(days=2),
+                    expires_at=now - timedelta(days=1),
+                )
+            )
+    assert (await login_http.get("/api/auth/me")).status_code == 200
+
+    active = await admin_http.get("/api/moderation/bans", params={"active": True})
+    inactive = await admin_http.get(
+        "/api/moderation/bans", params={"active": False}
+    )
+    assert active.json()["bans"] == []
+    assert {item["reason"] for item in inactive.json()["bans"]} == {
+        "Temporary suspension",
+        "Already elapsed",
+    }
+    assert all(item["isActive"] is False for item in inactive.json()["bans"])
+    async with factory() as session:
+        assert await session.scalar(select(func.count(UserBan.id))) == 2
+        event_types = set(await session.scalars(select(AuditEvent.event_type)))
+        assert {"ban.created", "ban.revoked"}.issubset(event_types)
+
+
+async def test_role_boundaries_and_database_checks(env):
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    peer_http = new_client()
+    moderator = await register(moderator_http, "BoundModerator")
+    peer = await register(peer_http, "BoundaryPeer")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await set_role(factory, peer["id"], UserRole.MODERATOR)
+
+    assert (
+        await moderator_http.post(
+            "/api/moderation/bans",
+            json={"userId": moderator["id"], "reason": "Self"},
+        )
+    ).status_code == 422
+    assert (
+        await moderator_http.post(
+            "/api/moderation/bans",
+            json={"userId": peer["id"], "reason": "Peer"},
+        )
+    ).status_code == 403
+
+    with pytest.raises(IntegrityError):
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    PlayerReport(
+                        id=generate_uuid(),
+                        reporter_user_id=UUID(moderator["id"]),
+                        reported_user_id=UUID(moderator["id"]),
+                        reason=ReportReason.SPAM.value,
+                        status=ReportStatus.PENDING.value,
+                        details="self",
+                    )
+                )

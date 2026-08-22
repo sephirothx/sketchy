@@ -63,6 +63,20 @@ class BrushCursorStyle(StrEnum):
     CIRCLE = "circle"
 
 
+class ReportReason(StrEnum):
+    HARASSMENT = "harassment"
+    OFFENSIVE_DRAWING = "offensive_drawing"
+    INAPPROPRIATE_NAME = "inappropriate_name"
+    CHEATING = "cheating"
+    SPAM = "spam"
+
+
+class ReportStatus(StrEnum):
+    PENDING = "pending"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
+
+
 SCORING_MODES = tuple(mode.value for mode in ScoringMode)
 HINT_MODES = tuple(mode.value for mode in HintMode)
 TURN_END_REASONS = tuple(reason.value for reason in TurnEndReason)
@@ -72,6 +86,8 @@ USER_ROLES = tuple(role.value for role in UserRole)
 DATA_EXPORT_STATUSES = tuple(status.value for status in DataExportStatus)
 USER_THEMES = tuple(theme.value for theme in UserTheme)
 BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)
+REPORT_REASONS = tuple(reason.value for reason in ReportReason)
+REPORT_STATUSES = tuple(status.value for status in ReportStatus)
 
 # Keep the backend's registration/API/database fallback aligned with the
 # frontend's checked-in default shortcuts. A fresh row must be usable even when

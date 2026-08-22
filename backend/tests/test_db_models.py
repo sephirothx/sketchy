@@ -19,10 +19,12 @@ from app.db.models import (
     DataExport,
     GameParticipant,
     GameRecord,
+    PlayerReport,
     TurnGuess,
     TurnRecord,
     User,
     UserSettings,
+    UserBan,
     Prompt,
     PromptList,
     generate_uuid,
@@ -32,6 +34,8 @@ from app.domain_values import (
     DATA_EXPORT_STATUSES,
     HINT_MODES,
     PROMPT_LANGUAGES,
+    REPORT_REASONS,
+    REPORT_STATUSES,
     SCORING_MODES,
     TURN_END_REASONS,
     USER_ROLES,
@@ -138,6 +142,14 @@ async def test_account_state_and_role_constants_cover_database_values():
     assert DATA_EXPORT_STATUSES == ("pending", "processing", "ready", "failed")
     assert USER_THEMES == ("light", "dark", "system")
     assert BRUSH_CURSOR_STYLES == ("crosshair", "circle")
+    assert REPORT_REASONS == (
+        "harassment",
+        "offensive_drawing",
+        "inappropriate_name",
+        "cheating",
+        "spam",
+    )
+    assert REPORT_STATUSES == ("pending", "resolved", "dismissed")
 
 
 async def test_get_database_url_normalization(monkeypatch):
@@ -177,6 +189,16 @@ async def test_entity_ids_are_time_ordered_uuidv7_with_native_postgresql_type():
         DataExport.id,
         DataExport.user_id,
         UserSettings.user_id,
+        PlayerReport.id,
+        PlayerReport.reporter_user_id,
+        PlayerReport.reported_user_id,
+        PlayerReport.game_id,
+        PlayerReport.turn_id,
+        PlayerReport.reviewed_by_user_id,
+        UserBan.id,
+        UserBan.user_id,
+        UserBan.banned_by_user_id,
+        UserBan.revoked_by_user_id,
         GameRecord.id,
         GameParticipant.id,
         GameParticipant.game_id,

@@ -11,6 +11,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.profiles import create_profile_router
 from app.api.prompt_lists import create_prompt_list_router
+from app.api.moderation import create_moderation_router
 from app.api.user_settings import create_user_settings_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
@@ -79,8 +80,8 @@ handler_context = register_all_handlers(
 )
 
 
-async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
-    """End already-authenticated socket seats after an account is deleted."""
+async def _remove_account_from_live_rooms(user_id: str, *, reason: str) -> None:
+    """End live seats immediately after an account loses access."""
     for room in list(room_manager.rooms.values()):
         player = room_manager.get_player_by_user_id(room, user_id)
         if player is None:
@@ -94,7 +95,7 @@ async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
         if player_sid:
             await sio.emit(
                 "session_superseded",
-                {"reason": "Your account was deleted."},
+                {"reason": reason},
                 to=player_sid,
             )
             await sio.leave_room(player_sid, room.id)
@@ -106,6 +107,18 @@ async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
             handler_context.timers.cancel_hint_timers(room.id)
             handler_context.timers.cancel_restart_timer(room.id)
             room_manager.remove_room_if_empty(room.id)
+
+
+async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
+    await _remove_account_from_live_rooms(
+        user_id, reason="Your account was deleted."
+    )
+
+
+async def remove_banned_account_from_live_rooms(user_id: str) -> None:
+    await _remove_account_from_live_rooms(
+        user_id, reason="Your account was suspended."
+    )
 
 
 @asynccontextmanager
@@ -141,6 +154,12 @@ api.include_router(
 api.include_router(create_profile_router(user_repo, game_history_repo))
 api.include_router(create_prompt_list_router(prompt_list_repo))
 api.include_router(create_user_settings_router(async_session_factory))
+api.include_router(
+    create_moderation_router(
+        async_session_factory,
+        on_user_banned=remove_banned_account_from_live_rooms,
+    )
+)
 
 
 @api.get("/api/health")

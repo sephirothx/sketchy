@@ -8,10 +8,10 @@ from http.cookies import SimpleCookie
 import secrets
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import AuthSession, generate_uuid
+from app.db.models import AuthSession, UserBan, generate_uuid
 
 
 COOKIE_NAME = "sketchy_session"
@@ -35,6 +35,12 @@ class SessionData:
 class IssuedSession:
     token: str
     session: SessionData
+
+
+@dataclass(frozen=True)
+class SessionResolution:
+    session: SessionData | None
+    banned_user_id: str | None = None
 
 
 def hash_session_token(token: str) -> str:
@@ -127,24 +133,79 @@ async def resolve_session(
     *,
     now: datetime | None = None,
 ) -> SessionData | None:
+    return (
+        await resolve_session_status(session_factory, token, now=now)
+    ).session
+
+
+async def resolve_session_status(
+    session_factory: async_sessionmaker[AsyncSession],
+    token: str | None,
+    *,
+    now: datetime | None = None,
+) -> SessionResolution:
+    """Resolve a token and retain the reason an active ban rejected it.
+
+    Revoked ban-time tokens must remain recognizable until the ban expires;
+    otherwise the next request would look like a cookieless visitor and could
+    provision a replacement guest account. The raw token still never leaves
+    this boundary or enters storage.
+    """
     if not token:
-        return None
+        return SessionResolution(session=None)
     checked_at = now or datetime.now(timezone.utc)
     digest = hash_session_token(token)
     async with session_factory() as database:
         async with database.begin():
-            record = await database.scalar(
-                select(AuthSession).where(AuthSession.token_hash == digest)
+            active_ban_created_at = (
+                select(UserBan.created_at)
+                .where(
+                    UserBan.user_id == AuthSession.user_id,
+                    UserBan.is_active.is_(True),
+                    or_(
+                        UserBan.expires_at.is_(None),
+                        UserBan.expires_at > checked_at,
+                    ),
+                )
+                .order_by(UserBan.created_at.desc())
+                .limit(1)
+                .correlate(AuthSession)
+                .scalar_subquery()
             )
-            if (
-                record is None
-                or record.revoked_at is not None
-                or record.expires_at <= checked_at
-            ):
-                return None
+            result = (
+                await database.execute(
+                    select(
+                        AuthSession,
+                        active_ban_created_at.label("banned_at"),
+                    ).where(AuthSession.token_hash == digest)
+                )
+            ).one_or_none()
+            if result is None:
+                return SessionResolution(session=None)
+            record, banned_at = result
+            if banned_at is not None:
+                # A token that was valid when the ban landed remains usable
+                # only for the narrow export/delete escape hatch selected by
+                # HTTP middleware. A token revoked before the ban cannot be
+                # resurrected as a privacy credential.
+                was_active_when_banned = (
+                    record.expires_at > banned_at
+                    and (
+                        record.revoked_at is None
+                        or record.revoked_at >= banned_at
+                    )
+                )
+                return SessionResolution(
+                    session=(
+                        _session_data(record) if was_active_when_banned else None
+                    ),
+                    banned_user_id=str(record.user_id),
+                )
+            if record.revoked_at is not None or record.expires_at <= checked_at:
+                return SessionResolution(session=None)
             if checked_at - record.last_used_at >= LAST_USED_WRITE_INTERVAL:
                 record.last_used_at = checked_at
-        return _session_data(record)
+        return SessionResolution(session=_session_data(record))
 
 
 def should_rotate(session: SessionData, *, now: datetime | None = None) -> bool:

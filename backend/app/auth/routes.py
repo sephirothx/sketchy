@@ -49,6 +49,7 @@ from app.auth.password import (
     validate_password,
     verify_password,
 )
+from app.auth.bans import is_user_banned
 from app.api.serializers import user_payload
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
@@ -369,6 +370,8 @@ def create_auth_router(
         matched = await verify_password(password_hash, body.password)
         if credentials is None or not matched:
             raise HTTPException(status_code=401, detail="Incorrect username or password.")
+        if await is_user_banned(session_factory, credentials.user.id):
+            raise HTTPException(status_code=403, detail="This account is suspended.")
 
         if await password_needs_rehash(credentials.password_hash):
             replacement_hash = await hash_password(body.password)
