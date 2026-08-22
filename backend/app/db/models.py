@@ -96,6 +96,7 @@ class User(Base):
         _values_check(
             "avatar_key", BUILT_IN_AVATAR_KEYS, "ck_users_avatar_key"
         ),
+        Index("ix_users_state_last_active_at", "state", "last_active_at"),
         CheckConstraint(
             "email IS NULL OR email = lower(trim(email))",
             name="ck_users_email_normalized",
@@ -149,6 +150,11 @@ class User(Base):
         UTCDateTime(),
         server_default=func.now(),
         nullable=False,
+    )
+    # Meaningful participation, unlike last_login_at (page/auth activity) and
+    # updated_at (any profile write). Drives anonymous-account retention.
+    last_active_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
 
     @property

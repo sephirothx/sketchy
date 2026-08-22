@@ -38,6 +38,7 @@ class FakeUserRepository(UserRepository):
             created_at=_now(),
             updated_at=_now(),
             last_login_at=_now(),
+            last_active_at=_now(),
             state="anonymous",
             role="user",
         )
@@ -57,6 +58,7 @@ class FakeUserRepository(UserRepository):
             created_at=_now(),
             updated_at=_now(),
             last_login_at=_now(),
+            last_active_at=_now(),
             state="registered",
             role="user",
         )
@@ -110,6 +112,7 @@ class FakeUserRepository(UserRepository):
             created_at=user.created_at,
             updated_at=_now(),
             last_login_at=_now(),
+            last_active_at=user.last_active_at,
             state="registered",
             role=user.role,
         )
@@ -137,6 +140,7 @@ class FakeUserRepository(UserRepository):
             created_at=source.created_at,
             updated_at=_now(),
             last_login_at=source.last_login_at,
+            last_active_at=source.last_active_at,
             state="merged",
             role=source.role,
         )
@@ -163,6 +167,7 @@ class FakeUserRepository(UserRepository):
             created_at=user.created_at,
             updated_at=_now(),
             last_login_at=user.last_login_at,
+            last_active_at=user.last_active_at,
             state=user.state,
             role=user.role,
         )
@@ -193,10 +198,32 @@ class FakeUserRepository(UserRepository):
             created_at=user.created_at,
             updated_at=user.updated_at,
             last_login_at=_now(),
+            last_active_at=user.last_active_at,
             state=user.state,
             role=user.role,
         )
         self.users[user_id] = refreshed
+        return refreshed
+
+    async def touch_last_active(self, user_id: str) -> UserData | None:
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return None
+        refreshed = UserData(
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            name_color=user.name_color,
+            avatar_key=user.avatar_key,
+            is_anonymous=user.is_anonymous,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            last_login_at=user.last_login_at,
+            last_active_at=_now(),
+            state=user.state,
+            role=user.role,
+        )
+        self.users[user.id] = refreshed
         return refreshed
 
     async def get_stats(self, user_id: str) -> UserStats:

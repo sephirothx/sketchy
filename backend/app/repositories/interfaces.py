@@ -47,6 +47,7 @@ class UserData:
     created_at: datetime
     updated_at: datetime
     last_login_at: datetime
+    last_active_at: datetime | None = None
     state: str = "anonymous"
     role: str = "user"
 
@@ -321,6 +322,11 @@ class UserRepository(ABC):
         want a coarse "last seen" pass a non-zero interval; login and register
         pass 0 to always record the event.
         """
+        ...
+
+    @abstractmethod
+    async def touch_last_active(self, user_id: str) -> UserData | None:
+        """Record meaningful gameplay activity for retention decisions."""
         ...
 
     @abstractmethod

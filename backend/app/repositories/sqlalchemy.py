@@ -85,6 +85,7 @@ def _to_user_data(user: User) -> UserData:
         created_at=user.created_at,
         updated_at=user.updated_at,
         last_login_at=user.last_login_at,
+        last_active_at=user.last_active_at,
     )
 
 
@@ -395,6 +396,19 @@ class SqlAlchemyUserRepository(UserRepository):
             await session.refresh(user)
             return _to_user_data(user)
 
+    async def touch_last_active(self, user_id: str) -> UserData | None:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return None
+        async with self._session_factory() as session:
+            async with session.begin():
+                user = await session.get(User, db_user_id)
+                if user is None:
+                    return None
+                user.last_active_at = datetime.now(timezone.utc)
+            await session.refresh(user)
+            return _to_user_data(user)
+
     async def get_stats(self, user_id: str) -> UserStats:
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
@@ -588,6 +602,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             wrong_guesses_before=g.wrong_guesses_before,
                         )
                     )
+
+                await session.execute(
+                    update(User)
+                    .where(User.id.in_(referenced_user_ids))
+                    .values(last_active_at=datetime.now(timezone.utc))
+                )
 
         return _public_id(record_id)
 

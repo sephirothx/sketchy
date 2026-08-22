@@ -29,6 +29,20 @@ from app.rooms import (
 
 logger = logging.getLogger("sketchy.handlers.rooms")
 
+
+async def _record_player_activity(ctx: HandlerContext, player) -> None:
+    """Best-effort retention signal for a successfully seated player."""
+    if (
+        ctx.user_repo is None
+        or not player.user_id
+        or player.is_spectator
+    ):
+        return
+    try:
+        await ctx.user_repo.touch_last_active(player.user_id)
+    except Exception:
+        logger.exception("Failed to record activity for user %s", player.user_id)
+
 async def create_room(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(CreateRoomPayload, data)
@@ -51,6 +65,7 @@ async def create_room(ctx: HandlerContext, sid, data):
         is_anonymous=identity.is_anonymous,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
+    await _record_player_activity(ctx, player)
     return session_payload(room, player)
 
 
@@ -183,6 +198,7 @@ async def join_room(ctx: HandlerContext, sid, data):
             already_joined,
             sync_canvas=not payload.soft,
         )
+        await _record_player_activity(ctx, already_joined)
         return session_payload(room, already_joined)
 
     session = await ctx.sio.get_session(sid) if sid else None
@@ -204,6 +220,7 @@ async def join_room(ctx: HandlerContext, sid, data):
         # _join_socket_room notifies and disconnects any socket that was
         # holding this seat before handing it to the new one.
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        await _record_player_activity(ctx, player)
         return session_payload(room, player)
 
     if payload.reconnect_only:
@@ -236,6 +253,7 @@ async def join_room(ctx: HandlerContext, sid, data):
         room.game.add_player_to_rotation(player.id)
 
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
+    await _record_player_activity(ctx, player)
     return session_payload(room, player)
 
 

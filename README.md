@@ -173,6 +173,25 @@ it is remembered by an HttpOnly `sketchy_session` cookie. Guests play under a
 name of their choosing; setting a username and password later claims that same
 account, so stats collected as a guest carry over.
 
+Anonymous retention is based on `last_active_at`, which changes when a player
+successfully takes or reconnects to a non-spectator room seat and when a game
+is persisted. It is deliberately separate from page-load/login time and
+ordinary profile writes. The default policy removes guests with no completed
+game after 30 inactive days and guests with history after 365 inactive days;
+history rows survive through frozen presentation snapshots. Cleanup is bounded
+to 500 accounts per run, previews by default, and records aggregate audit
+evidence when applied:
+
+```bash
+cd backend
+.venv/bin/python -m app.auth.retention
+.venv/bin/python -m app.auth.retention --apply
+```
+
+Use `--unused-days`, `--player-days`, and `--batch-size` to set an explicit
+deployment policy. A stale guest's session is removed with the account, so an
+old cookie provisions a new guest rather than resurrecting retained data.
+
 Accounts have an explicit lifecycle state (`anonymous`, `registered`, `merged`,
 or `deleted`) and an authorization role (`user`, `moderator`, or `admin`). The
 legacy guest boolean is derived from the lifecycle state and is no longer a

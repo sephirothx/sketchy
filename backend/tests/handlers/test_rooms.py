@@ -43,7 +43,7 @@ async def test_create_room_accepts_no_scoring_and_disables_point_purchase_hints(
 async def test_registered_player_name_color_is_created_and_can_be_updated_live():
     room_manager = RoomManager()
     user_repo = FakeUserRepository()
-    user_repo.add_registered("user-1", "HostPlayer")
+    account = user_repo.add_registered("user-1", "HostPlayer")
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager, user_repo=user_repo)
     sio.get_session = AsyncMock(return_value={"user_id": "user-1"})
@@ -59,6 +59,7 @@ async def test_registered_player_name_color_is_created_and_can_be_updated_live()
             "nameColor": "#AABBCC",
         },
     )
+    assert user_repo.users["user-1"].last_active_at >= account.last_active_at
     room = room_manager.get_room(response["roomId"])
     assert room is not None
     player = room.players[response["playerId"]]
