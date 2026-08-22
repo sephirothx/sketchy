@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
     text,
 )
@@ -179,7 +180,7 @@ class TurnRecord(Base):
     # The drawer let the clock run out and took the first offered prompt. Not a
     # preference, and it should not be counted as one.
     prompt_auto_picked: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default=text("0"), nullable=False
+        Boolean, default=False, server_default=false(), nullable=False
     )
     # Canvas actions committed during the turn: separates an impossible prompt
     # from a drawer who drew nothing.

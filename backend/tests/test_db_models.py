@@ -6,6 +6,7 @@ import warnings
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError, SAWarning
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -106,6 +107,15 @@ async def test_get_database_url_normalization(monkeypatch):
 
     monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
     assert get_database_url() == "postgresql+asyncpg://user:pass@localhost:5432/db"
+
+
+async def test_boolean_server_default_is_valid_postgresql():
+    """Boolean defaults must compile as Boolean literals, not integers."""
+    default = TurnRecord.__table__.c.prompt_auto_picked.server_default
+
+    assert default is not None
+    rendered = str(default.arg.compile(dialect=postgresql.dialect()))
+    assert rendered == "false"
 
 
 async def test_game_record_cascade_and_relationships():

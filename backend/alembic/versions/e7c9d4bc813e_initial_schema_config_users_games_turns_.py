@@ -124,7 +124,7 @@ def upgrade() -> None:
     sa.Column('prompt', sa.String(length=64), nullable=False),
     sa.Column('duration_seconds', sa.Float(), nullable=False),
     sa.Column('guesser_count', sa.Integer(), server_default=sa.text('0'), nullable=False),
-    sa.Column('prompt_auto_picked', sa.Boolean(), server_default=sa.text('0'), nullable=False),
+    sa.Column('prompt_auto_picked', sa.Boolean(), server_default=sa.false(), nullable=False),
     sa.Column('stroke_count', sa.Integer(), server_default=sa.text('0'), nullable=False),
     sa.Column('end_reason', sa.String(length=16), server_default='timeout', nullable=False),
     sa.Column('wrong_guess_count', sa.Integer(), server_default=sa.text('0'), nullable=False),
