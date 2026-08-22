@@ -65,6 +65,21 @@ class AppConfig(Base):
     value: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class AuthRateLimitBucket(Base):
+    """Shared fixed-window bucket for security-sensitive authentication limits."""
+
+    __tablename__ = "auth_rate_limit_buckets"
+
+    scope: Mapped[str] = mapped_column(String(32), primary_key=True)
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    window_expires_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
 class User(Base):
     """Persistent player identity (both anonymous guests and registered users)."""
 

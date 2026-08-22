@@ -246,14 +246,24 @@ raising the configured Argon2 cost therefore upgrades active accounts without
 a bulk plaintext migration. The encoded hash carries its algorithm and cost
 parameters, so a redundant schema version column is not used.
 
-The authentication endpoints are rate limited per client address. The defaults
-suit a normal deployment; raise them if many of your players share one address:
+The authentication endpoints are rate limited per client address in shared
+database buckets. Login, registration, and account/name lookup limits survive
+restarts and apply once across every replica. Bucket keys are HMAC-SHA-256
+digests under `IP_HASH_SECRET` (or an automatically generated database secret),
+so raw IP addresses are never stored. Expired buckets are cleaned in bounded
+batches. Lower-risk profile and prompt-statistics throttles remain
+process-local. The defaults suit a normal deployment; raise them if many of
+your players share one address:
 
 | Variable | Default | Applies to |
 | --- | --- | --- |
 | `AUTH_LOGIN_LIMIT` | 10 per 5 minutes | `POST /api/auth/login` |
 | `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
+
+Set the same high-entropy `IP_HASH_SECRET` on every deployment that shares the
+database if you manage secrets externally. Rotating it starts fresh buckets
+without exposing or re-identifying old keys.
 
 Limits are keyed on the connecting address. Behind a reverse proxy or tunnel
 every request arrives from the proxy, so run uvicorn with `--proxy-headers` and

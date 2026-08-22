@@ -1,20 +1,33 @@
-"""In-memory per-client rate limiting for the authentication endpoints."""
+"""Local low-risk and persistent security-sensitive request rate limits."""
 from __future__ import annotations
 
 import time
+import asyncio
+from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
+import os
+import secrets
 from collections import defaultdict, deque
 from collections.abc import Callable
 
 from starlette.requests import Request
+from sqlalchemy import delete, select, tuple_
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.db.models import AppConfig, AuthRateLimitBucket
+
+
+IP_HASH_CONFIG_KEY = "ip_hash_secret"
+PERSISTENT_CLEANUP_INTERVAL = 1000
 
 
 class RateLimiter:
     """Fixed-capacity sliding window, keyed by client.
 
-    Deliberately process-local and non-persistent: the server is a single
-    process today, and the point is to blunt online password guessing and
-    username enumeration, not to survive restarts. A shared store only becomes
-    necessary alongside multi-replica deployment.
+    Deliberately process-local for low-risk profile/statistics endpoints. Auth
+    attempts use ``PersistentRateLimiter`` below.
     """
 
     def __init__(
@@ -84,6 +97,151 @@ class RateLimiter:
             self._hits.clear()
         else:
             self._hits.pop(key, None)
+
+
+async def cleanup_expired_rate_limit_buckets(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    before: datetime | None = None,
+    limit: int = 1000,
+) -> int:
+    """Remove one bounded batch so distinct historic addresses cannot accumulate."""
+    if limit < 1:
+        return 0
+    cutoff = before or datetime.now(timezone.utc)
+    async with session_factory() as session:
+        async with session.begin():
+            keys = (
+                await session.execute(
+                    select(
+                        AuthRateLimitBucket.scope,
+                        AuthRateLimitBucket.key_hash,
+                    )
+                    .where(AuthRateLimitBucket.window_expires_at <= cutoff)
+                    .order_by(AuthRateLimitBucket.window_expires_at)
+                    .limit(limit)
+                )
+            ).all()
+            if not keys:
+                return 0
+            await session.execute(
+                delete(AuthRateLimitBucket).where(
+                    tuple_(
+                        AuthRateLimitBucket.scope,
+                        AuthRateLimitBucket.key_hash,
+                    ).in_(keys)
+                )
+            )
+            return len(keys)
+
+
+class PersistentRateLimiter:
+    """Database-backed fixed window shared by restarts and server replicas."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        scope: str,
+        limit: int,
+        window_seconds: float,
+        clock=lambda: datetime.now(timezone.utc),
+    ) -> None:
+        if not scope or len(scope) > 32:
+            raise ValueError("rate-limit scope must be 1-32 characters")
+        self._session_factory = session_factory
+        self._scope = scope
+        self._limit = limit
+        self._window = timedelta(seconds=window_seconds)
+        self._clock = clock
+        self._secret: str | None = None
+        self._checks = 0
+
+    async def _hash_secret(self) -> str:
+        configured = os.environ.get("IP_HASH_SECRET", "").strip()
+        if configured:
+            return configured
+        if self._secret:
+            return self._secret
+
+        for _ in range(5):
+            candidate = secrets.token_urlsafe(32)
+            try:
+                async with self._session_factory() as session:
+                    async with session.begin():
+                        config = await session.get(AppConfig, IP_HASH_CONFIG_KEY)
+                        if config is not None:
+                            secret = config.value
+                        else:
+                            session.add(
+                                AppConfig(key=IP_HASH_CONFIG_KEY, value=candidate)
+                            )
+                            await session.flush()
+                            secret = candidate
+                self._secret = secret
+                return secret
+            except IntegrityError:
+                await asyncio.sleep(0)
+        raise RuntimeError("Could not establish the IP hashing secret")
+
+    async def check(self, key: str) -> bool:
+        """Record one attempt without ever storing the raw client address."""
+        secret = await self._hash_secret()
+        key_hash = hmac.new(
+            secret.encode("utf-8"),
+            key.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        for _ in range(3):
+            checked_at = self._clock()
+            try:
+                async with self._session_factory() as session:
+                    async with session.begin():
+                        bucket = await session.scalar(
+                            select(AuthRateLimitBucket)
+                            .where(
+                                AuthRateLimitBucket.scope == self._scope,
+                                AuthRateLimitBucket.key_hash == key_hash,
+                            )
+                            .with_for_update()
+                        )
+                        if bucket is None:
+                            session.add(
+                                AuthRateLimitBucket(
+                                    scope=self._scope,
+                                    key_hash=key_hash,
+                                    attempt_count=1,
+                                    window_started_at=checked_at,
+                                    window_expires_at=checked_at + self._window,
+                                    updated_at=checked_at,
+                                )
+                            )
+                            await session.flush()
+                            allowed = True
+                        elif bucket.window_expires_at <= checked_at:
+                            bucket.attempt_count = 1
+                            bucket.window_started_at = checked_at
+                            bucket.window_expires_at = checked_at + self._window
+                            bucket.updated_at = checked_at
+                            allowed = True
+                        elif bucket.attempt_count >= self._limit:
+                            allowed = False
+                        else:
+                            bucket.attempt_count += 1
+                            bucket.updated_at = checked_at
+                            allowed = True
+                break
+            except IntegrityError:
+                await asyncio.sleep(0)
+        else:
+            # If replicas cannot agree on the bucket, fail closed.
+            return False
+
+        self._checks += 1
+        if self._checks % PERSISTENT_CLEANUP_INTERVAL == 0:
+            await cleanup_expired_rate_limit_buckets(self._session_factory)
+        return allowed
 
 
 def client_key(request: Request) -> str:

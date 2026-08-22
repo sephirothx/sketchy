@@ -19,17 +19,16 @@ from app.auth.password import (
     verify_password,
 )
 from app.auth.rate_limit import RateLimiter
+from app.auth.rate_limit import (
+    PersistentRateLimiter,
+    cleanup_expired_rate_limit_buckets,
+)
 from app.auth.sessions import (
     COOKIE_NAME,
     hash_session_token,
     session_token_from_cookie_header,
 )
-from app.auth.routes import (
-    create_auth_router,
-    login_limiter,
-    lookup_limiter,
-    register_limiter,
-)
+from app.auth.routes import create_auth_router
 from app.db.models import Base
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 
@@ -40,9 +39,6 @@ async def client():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    for limiter in (login_limiter, register_limiter, lookup_limiter):
-        limiter.reset()
-
     repo = SqlAlchemyUserRepository(session_factory)
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=session_factory)
@@ -206,6 +202,49 @@ def test_flooding_the_limiter_cannot_evict_a_saturated_bucket():
         limiter.check(f"flood-{index}")
 
     assert limiter.check("attacker") is False
+
+
+@pytest.mark.asyncio
+async def test_auth_limit_persists_across_limiter_instances_and_hashes_keys(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select
+    from app.db.models import AuthRateLimitBucket
+
+    monkeypatch.setenv("IP_HASH_SECRET", "test-only-rate-limit-secret")
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    clock = FakeClock()
+    # Persistent limiters use aware wall-clock values, unlike the local
+    # limiter's monotonic float clock.
+    wall_time = datetime(2026, 8, 22, tzinfo=timezone.utc)
+    now = lambda: wall_time + timedelta(seconds=clock.now - 1000)
+    try:
+        first_process = PersistentRateLimiter(
+            factory, scope="login", limit=2, window_seconds=60, clock=now
+        )
+        assert await first_process.check("203.0.113.42") is True
+        assert await first_process.check("203.0.113.42") is True
+
+        after_restart = PersistentRateLimiter(
+            factory, scope="login", limit=2, window_seconds=60, clock=now
+        )
+        assert await after_restart.check("203.0.113.42") is False
+        async with factory() as session:
+            bucket = await session.scalar(select(AuthRateLimitBucket))
+            assert bucket is not None
+            assert bucket.key_hash != "203.0.113.42"
+            assert "203.0.113.42" not in bucket.key_hash
+
+        clock.advance(61)
+        assert await after_restart.check("203.0.113.42") is True
+        clock.advance(61)
+        assert await cleanup_expired_rate_limit_buckets(
+            factory, before=now()
+        ) == 1
+    finally:
+        await engine.dispose()
 
 
 # --- REST -----------------------------------------------------------------

@@ -37,7 +37,7 @@ from app.auth.password import (
     verify_password,
 )
 from app.api.serializers import user_payload
-from app.auth.rate_limit import RateLimiter, client_key
+from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.rooms import normalize_name_color
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
@@ -61,14 +61,6 @@ def _limit(name: str, default: int) -> int:
         return default
     return value if value > 0 else default
 
-
-# Generous enough that a person fumbling their password is never locked out,
-# tight enough that online guessing and username scraping are impractical.
-login_limiter = RateLimiter(limit=_limit("AUTH_LOGIN_LIMIT", 10), window_seconds=300)
-register_limiter = RateLimiter(
-    limit=_limit("AUTH_REGISTER_LIMIT", 10), window_seconds=3600
-)
-lookup_limiter = RateLimiter(limit=_limit("AUTH_LOOKUP_LIMIT", 60), window_seconds=60)
 
 # GET /api/auth/me runs on every page load, so recording a login timestamp on
 # each one would mean a write per visitor per load.
@@ -97,6 +89,26 @@ class NameColorBody(BaseModel):
 
 def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
+    # Shared database buckets keep the configured protection honest across
+    # deploys, crashes, and multiple application replicas.
+    login_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="login",
+        limit=_limit("AUTH_LOGIN_LIMIT", 10),
+        window_seconds=300,
+    )
+    register_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="register",
+        limit=_limit("AUTH_REGISTER_LIMIT", 10),
+        window_seconds=3600,
+    )
+    lookup_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="account_lookup",
+        limit=_limit("AUTH_LOOKUP_LIMIT", 60),
+        window_seconds=60,
+    )
 
     def device_label(request: Request) -> str:
         return device_label_from_user_agent(request.headers.get("user-agent"))
@@ -119,8 +131,8 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
                 session_factory, session_id=session_id, user_id=user_id
             )
 
-    def throttle(limiter: RateLimiter, request: Request) -> None:
-        if not limiter.check(client_key(request)):
+    async def throttle(limiter: PersistentRateLimiter, request: Request) -> None:
+        if not await limiter.check(client_key(request)):
             raise HTTPException(
                 status_code=429, detail="Too many attempts. Please wait and try again."
             )
@@ -165,7 +177,7 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
     @router.get("/nickname-available")
     async def nickname_available(request: Request, name: str = ""):
         """Whether a guest may play under this name."""
-        throttle(lookup_limiter, request)
+        await throttle(lookup_limiter, request)
         try:
             candidate = validate_name(name)
         except NameError_:
@@ -187,7 +199,7 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         Kept server-side so the choice survives a cleared localStorage or a
         different device, and so the claim funnel can pre-fill it later.
         """
-        throttle(lookup_limiter, request)
+        await throttle(lookup_limiter, request)
         try:
             name = validate_name(body.display_name)
         except NameError_ as error:
@@ -225,7 +237,7 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         no room to read it from. Storing it on the account is what lets a name
         look the same wherever it appears.
         """
-        throttle(lookup_limiter, request)
+        await throttle(lookup_limiter, request)
         color = normalize_name_color(body.name_color)
         if color is None:
             raise HTTPException(status_code=400, detail="Invalid color.")
@@ -251,7 +263,7 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         Claiming keeps the same user id, which is what preserves everything the
         player accumulated before signing up.
         """
-        throttle(register_limiter, request)
+        await throttle(register_limiter, request)
         try:
             username = validate_name(body.username)
         except NameError_ as error:
@@ -303,7 +315,7 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         rows keep their original user ids and presentation, while account
         history and statistics resolve across both identities.
         """
-        throttle(login_limiter, request)
+        await throttle(login_limiter, request)
         credentials = await user_repo.get_credentials_by_username(body.username)
         # Hash even when the username does not exist. Skipping it would return
         # noticeably faster and turn response time into a username oracle,
