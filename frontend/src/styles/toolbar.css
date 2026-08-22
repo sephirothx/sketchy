@@ -237,6 +237,12 @@
   gap: 2px;
 }
 
+/* A palette that is not built from light/dark pairs has nothing to stack, and
+   the second row would leave a swatch dangling on its own. */
+.toolbar-colors.is-flat {
+  grid-template-rows: 1fr;
+}
+
 .color-swatch {
   width: 24px;
   height: 24px;

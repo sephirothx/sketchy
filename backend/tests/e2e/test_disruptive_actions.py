@@ -57,6 +57,12 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             await host_page.wait_for_selector('.game-layout')
             await player_page.wait_for_selector('.game-layout')
 
+            # The prompt choices arrive a beat after the layout does, so asking
+            # which page has them straight away can find them on neither and
+            # name the wrong player the drawer.
+            await host_page.wait_for_selector(
+                '.prompt-choices, [data-testid="choosing-prompt-status"]'
+            )
             drawer_page = host_page if await host_page.query_selector('.prompt-choices') else player_page
             guesser_page = player_page if drawer_page == host_page else host_page
 

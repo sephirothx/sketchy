@@ -214,6 +214,64 @@ export function ChoiceChips<T extends string>({
   );
 }
 
+interface ToggleChipsProps<T extends string> {
+  label: string;
+  values: readonly T[];
+  options: { value: T; label: string; description?: string; disabled?: boolean }[];
+  disabled?: boolean;
+  onChange: (values: T[]) => void;
+}
+
+/**
+ * A set of independent on/off choices, as against `ChoiceChips`, which picks
+ * one of several alternatives.
+ *
+ * Keeping a required option selected is the caller's business: it marks that
+ * option `disabled`, the way the prompt list picker refuses to let go of the
+ * last list. This control only reports the set that results from a press.
+ */
+export function ToggleChips<T extends string>({
+  label,
+  values,
+  options,
+  disabled = false,
+  onChange,
+}: ToggleChipsProps<T>) {
+  const toggle = (value: T) => {
+    const next = values.includes(value)
+      ? values.filter((entry) => entry !== value)
+      : [...values, value];
+    onChange(options.map((option) => option.value).filter((entry) => next.includes(entry)));
+  };
+
+  return (
+    <fieldset className="room-choice-group" disabled={disabled}>
+      <legend>{label}</legend>
+      <div className="toggle-chips" role="group" aria-label={label}>
+        {options.map((option) => {
+          const selected = values.includes(option.value);
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={`toggle-chip ${selected ? "is-selected" : ""}`}
+              aria-pressed={selected}
+              disabled={disabled || option.disabled}
+              title={option.description}
+              onClick={() => toggle(option.value)}
+            >
+              <span className="toggle-chip-status" aria-hidden="true">
+                {selected ? "\u2713" : "+"}
+              </span>
+              <span className="toggle-chip-name">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 interface SwitchProps {
   label: string;
   hint?: string;

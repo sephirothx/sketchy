@@ -5,6 +5,7 @@ import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
+from app.presenters import editable_room_settings_payload
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     RoomManager,
@@ -758,3 +759,71 @@ async def test_a_guest_is_still_pinned_to_the_guest_grey():
 
     room = room_manager.get_room(response["roomId"])
     assert room.players[response["playerId"]].name_color == ANONYMOUS_NAME_COLOR
+
+
+@pytest.mark.asyncio
+async def test_the_host_edits_the_drawing_rules_and_the_room_carries_them_everywhere():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": host.id})
+
+    # The defaults take nothing away.
+    assert room.allowed_tools == ["brush", "fill", "shapes"]
+    assert room.color_mode == "all"
+
+    result = await sio.handlers["/"]["update_room_settings"](
+        "host-sid", {"allowedTools": ["shapes", "brush"], "colorMode": "colorblind_safe"}
+    )
+
+    assert result["ok"] is True
+    assert room.allowed_tools == ["brush", "shapes"]
+    assert room.color_mode == "colorblind_safe"
+    # Every player, the room list, the invite preview, and the host's own form.
+    for payload in (
+        room.to_state_payload(),
+        room.to_public_summary(),
+        editable_room_settings_payload(room),
+    ):
+        assert payload["allowedTools"] == ["brush", "shapes"]
+        assert payload["colorMode"] == "colorblind_safe"
+
+
+@pytest.mark.asyncio
+async def test_a_tool_set_with_nothing_to_draw_with_is_refused():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": host.id})
+
+    for tools in ([], ["fill"]):
+        result = await sio.handlers["/"]["update_room_settings"]("host-sid", {"allowedTools": tools})
+        assert result["ok"] is False
+    assert room.allowed_tools == ["brush", "fill", "shapes"]
+
+
+@pytest.mark.asyncio
+async def test_editing_one_drawing_rule_leaves_the_other_alone():
+    room_manager = RoomManager()
+    room = room_manager.create_room(
+        name="Room", allowed_tools=["brush"], color_mode="black_and_white"
+    )
+    host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": host.id})
+
+    assert (await sio.handlers["/"]["update_room_settings"]("host-sid", {"rounds": 5}))["ok"] is True
+
+    assert room.allowed_tools == ["brush"]
+    assert room.color_mode == "black_and_white"

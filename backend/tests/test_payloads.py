@@ -220,3 +220,43 @@ async def test_updating_settings_reapplies_the_hint_rule(update, expected):
 
     assert response["ok"] is True
     assert room.hint_mode == expected
+
+
+@pytest.mark.parametrize(
+    "tools,expected",
+    [
+        (["shapes", "brush"], ["brush", "shapes"]),
+        (["brush", "fill", "shapes"], ["brush", "fill", "shapes"]),
+        (["fill", "shapes"], ["fill", "shapes"]),
+    ],
+)
+def test_a_create_payload_normalizes_the_tool_set(tools, expected):
+    payload = parse_payload(CreateRoomPayload, {"nickname": "Ann", "allowedTools": tools})
+    assert payload.allowed_tools == expected
+
+
+def test_the_drawing_rules_default_to_taking_nothing_away():
+    payload = parse_payload(CreateRoomPayload, {"nickname": "Ann"})
+    assert payload.allowed_tools == ["brush", "fill", "shapes"]
+    assert payload.color_mode == "all"
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"allowedTools": []},
+        {"allowedTools": ["fill"]},
+        {"allowedTools": ["airbrush"]},
+        {"allowedTools": "brush"},
+        {"colorMode": "greyscale"},
+    ],
+)
+def test_a_drawing_rule_the_server_cannot_honor_is_refused(patch):
+    with pytest.raises(PayloadError):
+        parse_payload(UpdateRoomSettingsPayload, patch)
+
+
+def test_an_update_carrying_neither_rule_leaves_both_unset():
+    payload = parse_payload(UpdateRoomSettingsPayload, {"rounds": 4})
+    assert payload.allowed_tools is None
+    assert payload.color_mode is None
