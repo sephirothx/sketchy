@@ -383,6 +383,32 @@ async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room
 
 
 @pytest.mark.asyncio
+async def test_start_revalidates_a_waiting_room_after_content_is_hidden():
+    class HiddenSelectionRepo:
+        async def resolve_selection(self, slugs):
+            raise PromptListSelectionError("A selected prompt list is unavailable")
+
+    room_manager = RoomManager()
+    room, sio = build_settings_room(
+        room_manager,
+        HiddenSelectionRepo(),
+        prompt_list_slugs=["reported-list"],
+        curated_prompts=["cached prompt"],
+    )
+    room_manager.add_player(room, "Guest")
+
+    result = await sio.handlers["/"]["start_game"]("host-sid", None)
+
+    assert result == {
+        "ok": False,
+        "error": "A selected prompt list is unavailable",
+        "field": "promptListSlugs",
+    }
+    assert room.state == "waiting"
+    assert room.game is None
+
+
+@pytest.mark.asyncio
 async def test_starting_waits_for_a_settings_change_that_arrived_first():
     """Settings save themselves now, so the host can change one and press Start
     a breath later. Socket.IO gives each event its own task, so arriving first

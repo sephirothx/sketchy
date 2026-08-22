@@ -222,6 +222,7 @@ class PromptListEntry:
     prompt_version_id: str
     answer: str
     aliases: tuple[str, ...] = ()
+    moderation_state: str = "active"
 
 
 @dataclass(frozen=True)
@@ -240,6 +241,21 @@ class OwnedPromptList:
     prompt_count: int
     created_at: datetime
     updated_at: datetime
+    prompts: tuple[PromptListEntry, ...] = ()
+
+
+@dataclass(frozen=True)
+class SharedPromptList:
+    """Capability-resolved list content safe to show to a signed-in player."""
+
+    id: str
+    slug: str
+    name: str
+    description: str
+    language: str
+    prompt_count: int
+    is_bundled: bool
+    version: int
     prompts: tuple[PromptListEntry, ...] = ()
 
 
@@ -503,8 +519,8 @@ class PromptListRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_shared(self, share_code: str) -> PromptListSummary | None:
-        """Resolve active unlisted-list metadata by its explicit bearer code."""
+    async def get_shared(self, share_code: str) -> SharedPromptList | None:
+        """Resolve active unlisted-list content by its explicit bearer code."""
         ...
 
     @abstractmethod

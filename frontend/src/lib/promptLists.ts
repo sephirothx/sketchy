@@ -1,5 +1,5 @@
 import { apiRequest } from "./api";
-import type { OwnedPromptList, PromptLanguage, PromptListSummary } from "../types";
+import type { OwnedPromptList, PromptLanguage, SharedPromptList } from "../types";
 
 export interface PromptListDraftEntry {
   conceptId?: string;
@@ -44,9 +44,31 @@ export function deleteOwnedPromptList(id: string): Promise<void> {
   });
 }
 
-export function resolveSharedPromptList(code: string): Promise<PromptListSummary> {
+export function resolveSharedPromptList(code: string): Promise<SharedPromptList> {
   return apiRequest("/api/prompt-lists/shared", {
     method: "POST",
     body: { code: code.trim() },
+  });
+}
+
+
+export type PromptContentReportReason =
+  | "inappropriate"
+  | "hateful_or_abusive"
+  | "sexual_content"
+  | "violence"
+  | "spam"
+  | "other";
+
+export function submitPromptContentReport(input: {
+  promptListId: string;
+  promptVersionId?: string;
+  shareCode: string;
+  reason: PromptContentReportReason;
+  details: string;
+}): Promise<{ id: string; status: "pending"; createdAt: string }> {
+  return apiRequest("/api/prompt-content-reports", {
+    method: "POST",
+    body: input,
   });
 }

@@ -57,6 +57,15 @@ class PromptContentModerationState(StrEnum):
     HIDDEN = "hidden"
 
 
+class PromptContentReportReason(StrEnum):
+    INAPPROPRIATE = "inappropriate"
+    HATEFUL_OR_ABUSIVE = "hateful_or_abusive"
+    SEXUAL_CONTENT = "sexual_content"
+    VIOLENCE = "violence"
+    SPAM = "spam"
+    OTHER = "other"
+
+
 class AccountState(StrEnum):
     """Lifecycle state for a persisted player identity."""
 
@@ -121,6 +130,9 @@ PROMPT_LIST_VISIBILITIES = tuple(
 )
 PROMPT_CONTENT_MODERATION_STATES = tuple(
     state.value for state in PromptContentModerationState
+)
+PROMPT_CONTENT_REPORT_REASONS = tuple(
+    reason.value for reason in PromptContentReportReason
 )
 ACCOUNT_STATES = tuple(state.value for state in AccountState)
 USER_ROLES = tuple(role.value for role in UserRole)

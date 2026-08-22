@@ -10,6 +10,7 @@ from app.handlers.payloads import (
     parse_empty_payload,
     parse_payload,
 )
+from app.services.game_flow import RoomPromptResolutionError
 
 async def start_game(ctx: HandlerContext, sid, data=None):
     try:
@@ -19,7 +20,7 @@ async def start_game(ctx: HandlerContext, sid, data=None):
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
         return {"ok": False, "error": "Only the host can start the game"}
-    room, _ = current
+    room, player = current
     # Waits out a settings change that is still being applied - see Room.lock.
     async with room.lock:
         active_players = room.active_players()
@@ -27,6 +28,17 @@ async def start_game(ctx: HandlerContext, sid, data=None):
             return {"ok": False, "error": "Need at least 2 active non-AFK players to start"}
         if room.state == "playing":
             return {"ok": False, "error": "Game already in progress"}
+
+        try:
+            await ctx.game_flow.refresh_room_prompt_selection(
+                room, requesting_user_id=player.user_id
+            )
+        except RoomPromptResolutionError as error:
+            return {
+                "ok": False,
+                "error": str(error),
+                "field": "promptListSlugs",
+            }
 
         await ctx.game_flow._start_fresh_game(room, active_players)
     return {"ok": True}

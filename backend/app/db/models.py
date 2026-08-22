@@ -34,6 +34,7 @@ from app.domain_values import (
     DEFAULT_USER_KEY_BINDINGS,
     HINT_MODES,
     PROMPT_CONTENT_MODERATION_STATES,
+    PROMPT_CONTENT_REPORT_REASONS,
     PROMPT_CONTENT_RATINGS,
     PROMPT_EDITORIAL_DIFFICULTIES,
     PROMPT_LANGUAGES,
@@ -49,6 +50,7 @@ from app.domain_values import (
     DataExportStatus,
     PromptContentRating,
     PromptContentModerationState,
+    PromptContentReportReason,
     PromptEditorialDifficulty,
     PromptLanguage,
     PromptListVisibility,
@@ -370,6 +372,104 @@ class PlayerReport(Base):
         index=True,
     )
     resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class PromptContentReport(Base):
+    """Durable evidence and review state for one player-authored list or prompt."""
+
+    __tablename__ = "prompt_content_reports"
+    __table_args__ = (
+        _values_check(
+            "reason",
+            PROMPT_CONTENT_REPORT_REASONS,
+            "ck_prompt_content_reports_reason",
+        ),
+        _values_check(
+            "status", REPORT_STATUSES, "ck_prompt_content_reports_status"
+        ),
+        _values_check(
+            "resolution_moderation_state",
+            PROMPT_CONTENT_MODERATION_STATES,
+            "ck_prompt_content_reports_resolution_state",
+        ),
+        CheckConstraint(
+            "target_type IN ('list', 'prompt')",
+            name="ck_prompt_content_reports_target_type",
+        ),
+        CheckConstraint(
+            "(target_type = 'list' AND prompt_snapshot IS NULL) OR "
+            "(target_type = 'prompt' AND prompt_snapshot IS NOT NULL)",
+            name="ck_prompt_content_reports_target_snapshot",
+        ),
+        CheckConstraint(
+            "reporter_user_id IS NULL OR reported_owner_user_id IS NULL "
+            "OR reporter_user_id != reported_owner_user_id",
+            name="ck_prompt_content_reports_not_self",
+        ),
+        Index(
+            "ix_prompt_content_reports_status_created_at", "status", "created_at"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    reporter_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reported_owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    prompt_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_lists.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    prompt_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    target_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    list_name_snapshot: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reason: Mapped[str] = mapped_column(
+        String(32),
+        default=PromptContentReportReason.INAPPROPRIATE.value,
+        nullable=False,
+    )
+    details: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        default=ReportStatus.PENDING.value,
+        server_default=ReportStatus.PENDING.value,
+        nullable=False,
+    )
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_moderation_state: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
@@ -864,6 +964,11 @@ class PromptVersion(Base):
             PROMPT_CONTENT_RATINGS,
             "ck_prompt_versions_content_rating",
         ),
+        _values_check(
+            "moderation_state",
+            PROMPT_CONTENT_MODERATION_STATES,
+            "ck_prompt_versions_moderation_state",
+        ),
         CheckConstraint("version >= 1", name="ck_prompt_versions_version_positive"),
     )
 
@@ -894,6 +999,19 @@ class PromptVersion(Base):
         server_default=PromptContentRating.EVERYONE.value,
         nullable=False,
     )
+    moderation_state: Mapped[str] = mapped_column(
+        String(16),
+        default=PromptContentModerationState.ACTIVE.value,
+        server_default=PromptContentModerationState.ACTIVE.value,
+        nullable=False,
+        index=True,
+    )
+    moderated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    moderated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )

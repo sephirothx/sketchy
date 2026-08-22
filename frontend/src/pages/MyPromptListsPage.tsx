@@ -48,6 +48,8 @@ export function MyPromptListsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [version, setVersion] = useState<number | null>(null);
   const [shareCode, setShareCode] = useState<string | null>(null);
+  const [moderationState, setModerationState] = useState<OwnedPromptList["moderationState"]>("active");
+  const [promptModeration, setPromptModeration] = useState<Record<string, OwnedPromptList["moderationState"]>>({});
   const [draft, setDraft] = useState<PromptListDraft>(() => ({
     ...EMPTY_DRAFT,
     prompts: promptEntriesFromQuickInput(initialQuickPrompts),
@@ -77,6 +79,8 @@ export function MyPromptListsPage() {
     setSelectedId(null);
     setVersion(null);
     setShareCode(null);
+    setModerationState("active");
+    setPromptModeration({});
     setDraft({ ...EMPTY_DRAFT, prompts: [{ prompt: "", aliases: [] }] });
     setError(null);
     setNotice(null);
@@ -90,6 +94,10 @@ export function MyPromptListsPage() {
       setSelectedId(loaded.id);
       setVersion(loaded.version);
       setShareCode(loaded.shareCode);
+      setModerationState(loaded.moderationState);
+      setPromptModeration(Object.fromEntries(
+        loaded.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
+      ));
       setDraft(draftFromList(loaded));
     } catch {
       setError("Could not open that prompt list.");
@@ -133,6 +141,10 @@ export function MyPromptListsPage() {
       setSelectedId(saved.id);
       setVersion(saved.version);
       setShareCode(saved.shareCode);
+      setModerationState(saved.moderationState);
+      setPromptModeration(Object.fromEntries(
+        saved.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
+      ));
       setDraft(draftFromList(saved));
       setLists((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
       setNotice("Prompt list saved.");
@@ -190,10 +202,13 @@ export function MyPromptListsPage() {
               onClick={() => void openList(item.id)}
             >
               <strong>{item.name}</strong>
-              <span>{item.promptCount} prompts · {item.visibility}</span>
+              <span>{item.promptCount} prompts · {item.visibility}{item.moderationState !== "active" ? ` · ${item.moderationState.replace("_", " ")}` : ""}</span>
             </button>)}
           </aside>
           <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
+            {moderationState !== "active" && <p className="prompt-list-moderation-warning" role="status">
+              This list is {moderationState.replace("_", " ")} and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.
+            </p>}
             <label>Name<input value={draft.name} maxLength={64} required onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
             <label>Description<input value={draft.description} maxLength={255} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
             <div className="prompt-list-manager-meta">
@@ -213,6 +228,7 @@ export function MyPromptListsPage() {
             <div className="prompt-list-entry-editor">
               {draft.prompts.map((prompt, index) => <div key={prompt.conceptId ?? `new-${index}`}>
                 <label><span className="sr-only">Prompt {index + 1}</span><input value={prompt.prompt} maxLength={32} required onChange={(event) => updatePrompt(index, event.target.value)} /></label>
+                {prompt.conceptId && promptModeration[prompt.conceptId] !== "active" && <span className="prompt-list-entry-moderation">{promptModeration[prompt.conceptId]?.replace("_", " ")}</span>}
                 <button type="button" aria-label={`Remove prompt ${index + 1}`} disabled={draft.prompts.length === 1} onClick={() => setDraft({ ...draft, prompts: draft.prompts.filter((_, position) => position !== index) })}>Remove</button>
               </div>)}
             </div>

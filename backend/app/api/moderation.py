@@ -23,12 +23,25 @@ from app.db.models import (
     AuditEvent,
     GameRecord,
     PlayerReport,
+    PromptContentReport,
+    PromptList,
+    PromptListRevision,
+    PromptListRevisionItem,
+    PromptVersion,
     TurnRecord,
     User,
     UserBan,
     generate_uuid,
 )
-from app.domain_values import AccountState, ReportReason, ReportStatus, UserRole
+from app.domain_values import (
+    AccountState,
+    PromptContentModerationState,
+    PromptContentReportReason,
+    PromptListVisibility,
+    ReportReason,
+    ReportStatus,
+    UserRole,
+)
 
 
 MAX_REPORT_CONTEXT_BYTES = 32_768
@@ -69,6 +82,44 @@ class ReportReviewBody(BaseModel):
 
     status: Literal["resolved", "dismissed"]
     note: str = Field(min_length=1, max_length=MAX_RESOLUTION_NOTE)
+
+    @field_validator("note")
+    @classmethod
+    def clean_note(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("note cannot be blank")
+        return cleaned
+
+
+class PromptContentReportBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    prompt_list_id: UUID = Field(alias="promptListId")
+    prompt_version_id: UUID | None = Field(default=None, alias="promptVersionId")
+    share_code: str | None = Field(
+        default=None, alias="shareCode", min_length=8, max_length=24
+    )
+    reason: PromptContentReportReason
+    details: str = Field(min_length=1, max_length=MAX_REPORT_DETAILS)
+
+    @field_validator("details")
+    @classmethod
+    def clean_details(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("details cannot be blank")
+        return cleaned
+
+
+class PromptContentReviewBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    status: Literal["resolved", "dismissed"]
+    note: str = Field(min_length=1, max_length=MAX_RESOLUTION_NOTE)
+    moderation_state: Literal["active", "hidden"] | None = Field(
+        default=None, alias="moderationState"
+    )
 
     @field_validator("note")
     @classmethod
@@ -141,6 +192,38 @@ def _report_payload(report: PlayerReport) -> dict:
     }
 
 
+def _prompt_content_report_payload(report: PromptContentReport) -> dict:
+    return {
+        "id": str(report.id),
+        "reporterUserId": (
+            str(report.reporter_user_id) if report.reporter_user_id else None
+        ),
+        "reportedOwnerUserId": (
+            str(report.reported_owner_user_id)
+            if report.reported_owner_user_id
+            else None
+        ),
+        "promptListId": str(report.prompt_list_id) if report.prompt_list_id else None,
+        "promptVersionId": (
+            str(report.prompt_version_id) if report.prompt_version_id else None
+        ),
+        "targetType": report.target_type,
+        "listName": report.list_name_snapshot,
+        "prompt": report.prompt_snapshot,
+        "reason": report.reason,
+        "details": report.details,
+        "status": report.status,
+        "reviewedByUserId": (
+            str(report.reviewed_by_user_id) if report.reviewed_by_user_id else None
+        ),
+        "resolutionNote": report.resolution_note,
+        "moderationState": report.resolution_moderation_state,
+        "createdAt": report.created_at.isoformat(),
+        "updatedAt": report.updated_at.isoformat(),
+        "reviewedAt": report.reviewed_at.isoformat() if report.reviewed_at else None,
+    }
+
+
 def _ban_payload(ban: UserBan) -> dict:
     now = datetime.now(timezone.utc)
     effectively_active = ban.is_active and (
@@ -186,6 +269,118 @@ def create_moderation_router(
     report_limiter = PersistentRateLimiter(
         session_factory, scope="report-submit", limit=10, window_seconds=3600
     )
+    content_report_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="prompt-content-report-submit",
+        limit=10,
+        window_seconds=3600,
+    )
+
+    @router.post("/prompt-content-reports", status_code=201)
+    async def submit_prompt_content_report(
+        body: PromptContentReportBody, request: Request
+    ):
+        reporter_id = getattr(request.state, "user_id", None)
+        if not reporter_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        if not await content_report_limiter.check(client_key(request)):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many reports. Please wait before sending another.",
+            )
+        db_reporter_id = UUID(reporter_id)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        async with session_factory() as session:
+            async with session.begin():
+                prompt_list = await session.get(PromptList, body.prompt_list_id)
+                if (
+                    prompt_list is None
+                    or prompt_list.is_bundled
+                    or prompt_list.owner_user_id is None
+                    or (
+                        prompt_list.visibility
+                        != PromptListVisibility.PUBLIC.value
+                        and not (
+                            prompt_list.visibility
+                            == PromptListVisibility.UNLISTED.value
+                            and body.share_code == prompt_list.share_code
+                        )
+                    )
+                ):
+                    raise HTTPException(
+                        status_code=404, detail="No reportable prompt list found."
+                    )
+                if prompt_list.owner_user_id == db_reporter_id:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="You cannot report your own prompt list.",
+                    )
+
+                prompt_version = None
+                if body.prompt_version_id is not None:
+                    prompt_version = await session.scalar(
+                        select(PromptVersion)
+                        .join(
+                            PromptListRevisionItem,
+                            PromptListRevisionItem.prompt_version_id
+                            == PromptVersion.id,
+                        )
+                        .join(
+                            PromptListRevision,
+                            PromptListRevision.id
+                            == PromptListRevisionItem.revision_id,
+                        )
+                        .where(
+                            PromptVersion.id == body.prompt_version_id,
+                            PromptListRevision.prompt_list_id == prompt_list.id,
+                        )
+                    )
+                    if prompt_version is None:
+                        raise HTTPException(
+                            status_code=422,
+                            detail="That prompt does not belong to this list.",
+                        )
+
+                report = PromptContentReport(
+                    id=generate_uuid(),
+                    reporter_user_id=db_reporter_id,
+                    reported_owner_user_id=prompt_list.owner_user_id,
+                    prompt_list_id=prompt_list.id,
+                    prompt_version_id=(prompt_version.id if prompt_version else None),
+                    target_type="prompt" if prompt_version else "list",
+                    list_name_snapshot=prompt_list.name,
+                    prompt_snapshot=(
+                        prompt_version.canonical_answer if prompt_version else None
+                    ),
+                    reason=body.reason.value,
+                    details=body.details,
+                )
+                session.add(report)
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type="prompt_content_report.submitted",
+                        actor_user_id=db_reporter_id,
+                        target_user_id=prompt_list.owner_user_id,
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                        details={
+                            "report_id": str(report.id),
+                            "target_type": report.target_type,
+                            "prompt_list_id": str(prompt_list.id),
+                            "prompt_version_id": (
+                                str(prompt_version.id) if prompt_version else None
+                            ),
+                            "reason": body.reason.value,
+                        },
+                    )
+                )
+                await session.flush()
+            return {
+                "id": str(report.id),
+                "status": report.status,
+                "createdAt": report.created_at.isoformat(),
+            }
 
     @router.post("/reports", status_code=201)
     async def submit_report(body: ReportBody, request: Request):
@@ -279,6 +474,31 @@ def create_moderation_router(
             ).all()
             return {"reports": [_report_payload(report) for report in reports]}
 
+    @router.get("/moderation/prompt-content-reports")
+    async def list_prompt_content_reports(
+        request: Request,
+        status: ReportStatus | None = Query(default=None),
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+    ):
+        async with session_factory() as session:
+            await _reviewer(session, request)
+            statement = select(PromptContentReport)
+            if status is not None:
+                statement = statement.where(PromptContentReport.status == status.value)
+            reports = (
+                await session.scalars(
+                    statement.order_by(PromptContentReport.created_at.asc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            ).all()
+            return {
+                "reports": [
+                    _prompt_content_report_payload(report) for report in reports
+                ]
+            }
+
     @router.patch("/moderation/reports/{report_id}")
     async def review_report(report_id: UUID, body: ReportReviewBody, request: Request):
         request_id, ip_hash = await audit_coordinates(request, session_factory)
@@ -315,6 +535,99 @@ def create_moderation_router(
                 await session.flush()
                 await session.refresh(report)
             return _report_payload(report)
+
+    @router.patch("/moderation/prompt-content-reports/{report_id}")
+    async def review_prompt_content_report(
+        report_id: UUID,
+        body: PromptContentReviewBody,
+        request: Request,
+    ):
+        if body.status == ReportStatus.RESOLVED.value and body.moderation_state is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Resolved content reports require a moderation state.",
+            )
+        if body.status == ReportStatus.DISMISSED.value and body.moderation_state:
+            raise HTTPException(
+                status_code=422,
+                detail="Dismissed reports cannot change content moderation state.",
+            )
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        now = datetime.now(timezone.utc)
+        async with session_factory() as session:
+            async with session.begin():
+                reviewer = await _reviewer(session, request)
+                report = await session.scalar(
+                    select(PromptContentReport)
+                    .where(PromptContentReport.id == report_id)
+                    .with_for_update()
+                )
+                if report is None:
+                    raise HTTPException(status_code=404, detail="No such report.")
+                if report.status != ReportStatus.PENDING.value:
+                    raise HTTPException(
+                        status_code=409, detail="This report was already reviewed."
+                    )
+
+                if body.status == ReportStatus.RESOLVED.value:
+                    if report.target_type == "prompt":
+                        target = (
+                            await session.get(PromptVersion, report.prompt_version_id)
+                            if report.prompt_version_id
+                            else None
+                        )
+                    else:
+                        target = (
+                            await session.get(PromptList, report.prompt_list_id)
+                            if report.prompt_list_id
+                            else None
+                        )
+                    if target is None:
+                        raise HTTPException(
+                            status_code=409,
+                            detail="The reported content has already been deleted.",
+                        )
+                    target.moderation_state = body.moderation_state
+                    target.moderated_by_user_id = reviewer.id
+                    target.moderated_at = now
+
+                report.status = body.status
+                report.reviewed_by_user_id = reviewer.id
+                report.resolution_note = body.note
+                report.resolution_moderation_state = (
+                    body.moderation_state
+                    if body.status == ReportStatus.RESOLVED.value
+                    else None
+                )
+                report.reviewed_at = now
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type=f"prompt_content_report.{body.status}",
+                        actor_user_id=reviewer.id,
+                        target_user_id=report.reported_owner_user_id,
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                        details={
+                            "report_id": str(report.id),
+                            "target_type": report.target_type,
+                            "prompt_list_id": (
+                                str(report.prompt_list_id)
+                                if report.prompt_list_id
+                                else None
+                            ),
+                            "prompt_version_id": (
+                                str(report.prompt_version_id)
+                                if report.prompt_version_id
+                                else None
+                            ),
+                            "moderation_state": report.resolution_moderation_state,
+                        },
+                    )
+                )
+                await session.flush()
+                await session.refresh(report)
+            return _prompt_content_report_payload(report)
 
     @router.post("/moderation/bans", status_code=201)
     async def create_ban(body: BanBody, request: Request):

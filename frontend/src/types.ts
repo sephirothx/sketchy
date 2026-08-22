@@ -43,6 +43,7 @@ export type ColorMode = "all" | "palette" | "colorblind_safe" | "black_and_white
 export type PromptLanguage = "de" | "en" | "es" | "fr" | "it" | "nl" | "pt";
 
 export interface PromptListSummary {
+  id: string;
   slug: string;
   name: string;
   description: string;
@@ -59,6 +60,7 @@ export interface OwnedPromptEntry {
   promptVersionId: string;
   prompt: string;
   aliases: string[];
+  moderationState: "active" | "under_review" | "hidden";
 }
 
 export interface OwnedPromptList extends PromptListSummary {
@@ -69,6 +71,36 @@ export interface OwnedPromptList extends PromptListSummary {
   createdAt: string;
   updatedAt: string;
   prompts: OwnedPromptEntry[];
+}
+
+export interface SharedPromptEntry {
+  promptVersionId: string;
+  prompt: string;
+}
+
+export interface SharedPromptList extends PromptListSummary {
+  prompts: SharedPromptEntry[];
+}
+
+/** Role-gated queue item returned to a moderator; never part of room state. */
+export interface PromptContentModerationReport {
+  id: string;
+  reporterUserId: string | null;
+  reportedOwnerUserId: string | null;
+  promptListId: string | null;
+  promptVersionId: string | null;
+  targetType: "list" | "prompt";
+  listName: string;
+  prompt: string | null;
+  reason: string;
+  details: string;
+  status: "pending" | "resolved" | "dismissed";
+  reviewedByUserId: string | null;
+  resolutionNote: string | null;
+  moderationState: "active" | "under_review" | "hidden" | null;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
 }
 
 /** How one prompt has actually played, as reported by the stats endpoint. */

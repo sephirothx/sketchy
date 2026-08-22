@@ -10,6 +10,7 @@ from app.api.serializers import (
     owned_prompt_list_payload,
     prompt_list_payload,
     prompt_stats_payload,
+    shared_prompt_list_payload,
 )
 from app.auth.rate_limit import RateLimiter, client_key
 from app.prompt_content import best_supported_prompt_locale, validate_prompt_language
@@ -244,7 +245,7 @@ def create_prompt_list_router(
         prompt_list = await prompt_list_repo.get_shared(body.code)
         if prompt_list is None:
             raise HTTPException(status_code=404, detail="No shared prompt list found.")
-        return prompt_list_payload(prompt_list)
+        return shared_prompt_list_payload(prompt_list)
 
     @router.get("/prompt-lists/{slug}/prompt-stats")
     async def prompt_stats(

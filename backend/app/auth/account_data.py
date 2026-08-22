@@ -23,6 +23,7 @@ from app.db.models import (
     IdentityAlias,
     PlayerReport,
     PromptConcept,
+    PromptContentReport,
     PromptList,
     PromptListRevision,
     PromptListRevisionItem,
@@ -206,6 +207,15 @@ async def _build_export_artifact(
                 select(PlayerReport)
                 .where(PlayerReport.reporter_user_id.in_(identity_ids))
                 .order_by(PlayerReport.created_at, PlayerReport.id)
+            )
+        ).all()
+    )
+    submitted_prompt_content_reports = list(
+        (
+            await session.scalars(
+                select(PromptContentReport)
+                .where(PromptContentReport.reporter_user_id.in_(identity_ids))
+                .order_by(PromptContentReport.created_at, PromptContentReport.id)
             )
         ).all()
     )
@@ -435,6 +445,32 @@ async def _build_export_artifact(
                 "reviewedAt": _timestamp(report.reviewed_at),
             }
             for report in submitted_reports
+        ],
+        # The requester gets their own report text and immutable evidence
+        # snapshots. Owner/reviewer identities and internal notes stay private.
+        "promptContentReportsSubmitted": [
+            {
+                "id": str(report.id),
+                "promptListId": (
+                    str(report.prompt_list_id) if report.prompt_list_id else None
+                ),
+                "promptVersionId": (
+                    str(report.prompt_version_id)
+                    if report.prompt_version_id
+                    else None
+                ),
+                "targetType": report.target_type,
+                "listName": report.list_name_snapshot,
+                "prompt": report.prompt_snapshot,
+                "reason": report.reason,
+                "details": report.details,
+                "status": report.status,
+                "moderationState": report.resolution_moderation_state,
+                "createdAt": _timestamp(report.created_at),
+                "updatedAt": _timestamp(report.updated_at),
+                "reviewedAt": _timestamp(report.reviewed_at),
+            }
+            for report in submitted_prompt_content_reports
         ],
         # Suspension history is requester data, but moderator identities and
         # internal revocation notes remain private.

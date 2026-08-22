@@ -177,6 +177,41 @@ class GameFlowService:
             "curated_prompts": curated_prompts,
         }
 
+    async def refresh_room_prompt_selection(
+        self, room: Room, *, requesting_user_id: str | None
+    ) -> None:
+        """Re-authorize mutable moderation state immediately before a game.
+
+        List revisions remain immutable, but a moderator takedown is an
+        operational override. Re-reading here prevents a waiting room from
+        starting with content that was hidden after its settings were loaded.
+        """
+        if room.custom_prompts_only or not self._ctx.prompt_list_repo:
+            return
+        try:
+            if requesting_user_id is not None or room.prompt_list_share_codes:
+                selection = await self._ctx.prompt_list_repo.resolve_selection(
+                    list(room.prompt_list_slugs),
+                    requesting_user_id=requesting_user_id,
+                    share_codes=room.prompt_list_share_codes,
+                )
+            else:
+                selection = await self._ctx.prompt_list_repo.resolve_selection(
+                    list(room.prompt_list_slugs)
+                )
+        except PromptListSelectionError as error:
+            raise RoomPromptResolutionError(str(error)) from error
+        except Exception as error:
+            logger.exception("Failed to revalidate room prompt content")
+            raise RoomPromptResolutionError(
+                "Prompt lists could not be loaded. Please try again."
+            ) from error
+        room.curated_prompts = list(selection.prompts)
+        room.prompt_language = selection.language
+        room.prompt_list_revision_ids = list(selection.revision_ids)
+        room.prompt_aliases = dict(selection.aliases)
+        room.prompt_version_ids = dict(selection.prompt_version_ids)
+
     def schedule_phase_timer(self, room: Room, seconds: float) -> None:
         async def _runner() -> None:
             task = asyncio.current_task()

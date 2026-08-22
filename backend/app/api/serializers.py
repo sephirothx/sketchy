@@ -12,6 +12,7 @@ from app.repositories.interfaces import (
     GameSummary,
     OwnedPromptList,
     PromptListSummary,
+    SharedPromptList,
     PromptStatsSummary,
     UserData,
     UserStats,
@@ -104,6 +105,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
 
 def prompt_list_payload(prompt_list: PromptListSummary) -> dict:
     return {
+        "id": prompt_list.id,
         "slug": prompt_list.slug,
         "name": prompt_list.name,
         "description": prompt_list.description,
@@ -135,6 +137,21 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
                 "promptVersionId": entry.prompt_version_id,
                 "prompt": entry.answer,
                 "aliases": list(entry.aliases),
+                "moderationState": entry.moderation_state,
+            }
+            for entry in prompt_list.prompts
+        ],
+    }
+
+
+def shared_prompt_list_payload(prompt_list: SharedPromptList) -> dict:
+    """Expose report targets without returning the bearer share code or owner."""
+    return {
+        **prompt_list_payload(prompt_list),
+        "prompts": [
+            {
+                "promptVersionId": entry.prompt_version_id,
+                "prompt": entry.answer,
             }
             for entry in prompt_list.prompts
         ],

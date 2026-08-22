@@ -129,4 +129,10 @@ async def test_owner_can_create_revise_reuse_and_share_a_list(env):
     )
     assert shared.status_code == 200
     assert shared.json()["slug"] == created["slug"]
+    assert [prompt["prompt"] for prompt in shared.json()["prompts"]] == [
+        "giant panda",
+        "capybara",
+    ]
+    assert all("promptVersionId" in prompt for prompt in shared.json()["prompts"])
+    assert "shareCode" not in shared.json()
     assert (await http.get("/api/prompt-lists")).json() == []

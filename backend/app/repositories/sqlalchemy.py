@@ -70,6 +70,7 @@ from app.repositories.interfaces import (
     PromptListSelectionError,
     PromptSeedConflictError,
     PromptListSummary,
+    SharedPromptList,
     OwnedPromptList,
     PromptPickTotals,
     PromptStatsSummary,
@@ -1054,6 +1055,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 aliases=tuple(
                     sorted(link.alias.answer for link in item.prompt_version.version_aliases)
                 ),
+                moderation_state=item.prompt_version.moderation_state,
             )
             for item in (revision.items if revision else ())
         )
@@ -1069,20 +1071,52 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         async with self._session_factory() as session:
             return await self._owned_with_entries(session, owner_id, list_id)
 
-    async def get_shared(self, share_code: str) -> PromptListSummary | None:
+    async def get_shared(self, share_code: str) -> SharedPromptList | None:
         async with self._session_factory() as session:
-            row = (
-                await session.execute(
-                    select(PromptList, self._prompt_count()).where(
-                        PromptList.share_code == share_code,
-                        PromptList.visibility == PromptListVisibility.UNLISTED.value,
-                        PromptList.moderation_state
-                        == PromptContentModerationState.ACTIVE.value,
-                        PromptList.is_bundled.is_(False),
+            prompt_list = await session.scalar(
+                select(PromptList).where(
+                    PromptList.share_code == share_code,
+                    PromptList.visibility == PromptListVisibility.UNLISTED.value,
+                    PromptList.moderation_state
+                    == PromptContentModerationState.ACTIVE.value,
+                    PromptList.is_bundled.is_(False),
+                )
+            )
+            if prompt_list is None:
+                return None
+            revision = await session.scalar(
+                select(PromptListRevision)
+                .where(
+                    PromptListRevision.prompt_list_id == prompt_list.id,
+                    PromptListRevision.version == prompt_list.version,
+                )
+                .options(
+                    selectinload(PromptListRevision.items).selectinload(
+                        PromptListRevisionItem.prompt_version
                     )
                 )
-            ).one_or_none()
-            return _to_prompt_list_summary(row[0], int(row[1])) if row else None
+            )
+            entries = tuple(
+                PromptListEntry(
+                    concept_id=_public_id(item.prompt_version.concept_id),
+                    prompt_version_id=_public_id(item.prompt_version.id),
+                    answer=item.prompt_version.canonical_answer,
+                )
+                for item in (revision.items if revision else ())
+                if item.prompt_version.moderation_state
+                == PromptContentModerationState.ACTIVE.value
+            )
+            return SharedPromptList(
+                id=_public_id(prompt_list.id),
+                slug=prompt_list.slug,
+                name=prompt_list.name,
+                description=prompt_list.description,
+                language=prompt_list.language,
+                prompt_count=len(entries),
+                is_bundled=False,
+                version=prompt_list.version,
+                prompts=entries,
+            )
 
     async def create_owned(
         self,
@@ -1494,6 +1528,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             for revision in revisions:
                 for item in revision.items:
                     prompt_version = item.prompt_version
+                    if (
+                        prompt_version.moderation_state
+                        != PromptContentModerationState.ACTIVE.value
+                    ):
+                        continue
                     if prompt_version.id in seen_versions:
                         continue
                     accepted_keys = {

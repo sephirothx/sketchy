@@ -55,6 +55,19 @@ async def test_registered_owner_can_manage_and_share_a_prompt_list():
             )
             await shared_chip.wait_for()
             assert await shared_chip.get_attribute("aria-pressed") == "true"
+
+            # Shared player-authored content can be reported as a whole list or
+            # as one exact immutable prompt version. Submission is post-
+            # moderation, so it does not interrupt this waiting-room flow.
+            await recipient.get_by_role("button", name="Report Party animals").click()
+            await recipient.get_by_label("Content", exact=True).select_option(label="giant panda")
+            await recipient.get_by_label("Reason").select_option("inappropriate")
+            await recipient.get_by_label("What should the moderator know?").fill(
+                "This exact prompt needs review."
+            )
+            await recipient.get_by_role("button", name="Send report").click()
+            await recipient.get_by_text("Report sent for moderator review.").wait_for()
+
             await recipient.locator(".toggle-chip").filter(
                 has_text="English — Standard"
             ).click()

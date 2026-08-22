@@ -184,10 +184,23 @@ in the prompt picker before the server will resolve the list. These codes are
 bearer capabilities, not UUIDs: they are retained only in private in-memory
 room state and never appear in shared room, history, or log payloads.
 User-owned lists and their prompt stats never enter the public official
-catalogue. Hiding or deleting a list makes future resolution fail visibly.
-Account data exports include the owner's complete revision history; account
-deletion removes the lists and their owned prompt concepts rather than leaving
-ownerless content.
+catalogue. A player who resolves an Unlisted list can privately report the
+whole list or one exact immutable prompt version from the picker. Reports use
+post-moderation: submission preserves a bounded evidence snapshot but does not
+hide content automatically; one moderator review may dismiss the report or set
+the exact target Active or Hidden, with actor/time provenance and an append-only
+audit event. Hidden prompts are filtered from future selection, and a list with
+no usable prompts fails visibly. Waiting rooms re-authorize the list and every
+prompt immediately before Start, closing stale-picker bypasses. A game already
+in progress keeps its pinned prompt snapshot and is not rewritten mid-turn.
+Owners see list/prompt moderation state in **My prompt lists**, but editing does
+not silently override a moderator decision.
+
+Report snapshots survive list and account deletion even after target foreign
+keys are cleared. Account data exports include the owner's complete revision
+history and a reporter's own prompt-content report text/status, while excluding
+owner, reviewer, and internal-note identities. Account deletion removes the
+lists and their owned prompt concepts rather than leaving ownerless content.
 
 Runtime attribution observes the ephemeral/persistent boundary: completed
 turns snapshot nullable prompt-version source IDs, and usage writes intersect
@@ -421,6 +434,17 @@ survives account anonymization. A player's data export includes their own
 report text and submitted evidence, but excludes the reported account ID,
 reviewer identity, and internal resolution note.
 
+Player-authored prompt content has a separate, target-specific report flow.
+After resolving an Unlisted list by its bearer code, a signed-in player may use
+`POST /api/prompt-content-reports` to report the list or an exact
+`promptVersionId`; official bundled content, inaccessible content, and
+self-reports are rejected. Reasons are inappropriate, hateful or abusive,
+sexual content, violence, spam, or other, with up to 2,000 characters of
+detail. Moderators and administrators list and one-time review the queue at
+`/api/moderation/prompt-content-reports`. A resolved review explicitly chooses
+Active or Hidden; a dismissal cannot mutate content. The workflow is
+post-moderation, so a report alone never changes availability.
+
 Moderators and administrators can create temporary or permanent account
 **Suspensions** through `/api/moderation/bans`; moderators cannot suspend peers,
 and administrators cannot be targeted. Creating a suspension revokes every
@@ -433,7 +457,8 @@ through that ban-time credential so moderation cannot erase privacy rights.
 Expired suspensions stop applying automatically; revocation preserves the
 historic record and its reason.
 
-Report submission, review, suspension, and revocation each append an audit
+Player-report and prompt-content-report submission/review, suspension, and
+revocation each append an audit
 event. Audit rows store a canonical request UUID and an HMAC-SHA-256 client IP
 hash under the deployment's `IP_HASH_SECRET`; raw addresses, report text, and
 context evidence are never copied into ordinary request logs or public player,

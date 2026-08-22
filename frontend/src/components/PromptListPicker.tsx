@@ -4,7 +4,8 @@ import { promptLanguageLabel } from "../lib/promptLanguages";
 import { listOwnedPromptLists, resolveSharedPromptList } from "../lib/promptLists";
 import { addSharedPromptSelection } from "../lib/promptListDrafts";
 import { useAuthStore } from "../store/authStore";
-import type { PromptLanguage, PromptListSummary } from "../types";
+import type { PromptLanguage, PromptListSummary, SharedPromptList } from "../types";
+import { PromptContentReportDialog } from "./PromptContentReportDialog";
 
 interface PromptListPickerProps {
   selectedSlugs: string[];
@@ -30,6 +31,9 @@ export function PromptListPicker({
   const [shareCode, setShareCode] = useState("");
   const [shareError, setShareError] = useState<string | null>(null);
   const [resolvingShare, setResolvingShare] = useState(false);
+  const [sharedAccess, setSharedAccess] = useState<Record<string, { code: string; list: SharedPromptList }>>({});
+  const [reportingSlug, setReportingSlug] = useState<string | null>(null);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,12 +68,22 @@ export function PromptListPicker({
     setResolvingShare(true);
     setShareError(null);
     try {
-      const shared = await resolveSharedPromptList(shareCode);
+      const submittedCode = shareCode.trim();
+      const shared = await resolveSharedPromptList(submittedCode);
+      const alreadyOwned = promptLists.some((item) =>
+        item.slug === shared.slug && !item.isBundled && item.shareCode !== undefined
+      );
       setPromptLists((current) => current.some((item) => item.slug === shared.slug)
         ? current
         : [...current, shared]);
+      if (!alreadyOwned) {
+        setSharedAccess((current) => ({
+          ...current,
+          [shared.slug]: { code: submittedCode, list: shared },
+        }));
+      }
       const selection = addSharedPromptSelection(
-        selectedSlugs, shareCodes, shared, shareCode, activeLanguage
+        selectedSlugs, shareCodes, shared, submittedCode, activeLanguage
       );
       onShareCodesChange?.(selection.shareCodes);
       onChange(selection.slugs);
@@ -184,6 +198,14 @@ export function PromptListPicker({
               >
                 <span aria-hidden="true">i</span>
               </a>}
+              {sharedAccess[wl.slug] && <button
+                type="button"
+                className="prompt-list-chip-report"
+                disabled={disabled}
+                aria-label={`Report ${wl.name}`}
+                title={`Report ${wl.name}`}
+                onClick={() => setReportingSlug(wl.slug)}
+              >!</button>}
             </span>
           );
         })}
@@ -193,6 +215,16 @@ export function PromptListPicker({
         <div><input id="prompt-list-share-code" value={shareCode} disabled={disabled || resolvingShare} maxLength={24} autoComplete="off" onChange={(event) => setShareCode(event.target.value)} /><button type="submit" disabled={disabled || resolvingShare || !shareCode.trim()}>{resolvingShare ? "Adding…" : "Add"}</button></div>
         {shareError && <p className="prompt-list-fallback-note" role="alert">{shareError}</p>}
       </form>
+      {reportNotice && <p className="prompt-list-manager-notice" role="status">{reportNotice}</p>}
+      {reportingSlug && sharedAccess[reportingSlug] && <PromptContentReportDialog
+        promptList={sharedAccess[reportingSlug].list}
+        shareCode={sharedAccess[reportingSlug].code}
+        onClose={() => setReportingSlug(null)}
+        onSubmitted={() => {
+          setReportingSlug(null);
+          setReportNotice("Report sent for moderator review.");
+        }}
+      />}
     </fieldset>
   );
 }

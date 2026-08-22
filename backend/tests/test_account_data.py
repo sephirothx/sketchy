@@ -28,6 +28,7 @@ from app.db.models import (
     GameParticipant,
     GameRecord,
     PlayerReport,
+    PromptContentReport,
     TurnGuess,
     TurnRecord,
     User,
@@ -215,7 +216,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     game_id = await record_private_game(
         history, owner_id=owner["id"], other_id=other.id
     )
-    await SqlAlchemyPromptListRepository(factory).create_owned(
+    exported_list = await SqlAlchemyPromptListRepository(factory).create_owned(
         owner["id"],
         name="Exported prompts",
         description="Requester-authored content",
@@ -223,6 +224,24 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         visibility="unlisted",
         prompts=(PromptListEntryInput(answer="red panda"),),
     )
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                PromptContentReport(
+                    id=generate_uuid(),
+                    reporter_user_id=UUID(owner["id"]),
+                    reported_owner_user_id=UUID(other.id),
+                    prompt_list_id=UUID(exported_list.id),
+                    prompt_version_id=UUID(
+                        exported_list.prompts[0].prompt_version_id
+                    ),
+                    target_type="prompt",
+                    list_name_snapshot="Exported prompts",
+                    prompt_snapshot="red panda",
+                    reason="inappropriate",
+                    details="Requester-authored prompt report",
+                )
+            )
 
     status, artifact = await request_ready_export(http)
     assert status["schemaVersion"] == 1
@@ -241,6 +260,10 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["blocks"][0]["blockedUserId"] == other.id
     assert artifact["promptLists"][0]["name"] == "Exported prompts"
     assert artifact["promptLists"][0]["revisions"][0]["prompts"][0]["prompt"] == "red panda"
+    assert artifact["promptContentReportsSubmitted"][0]["details"] == (
+        "Requester-authored prompt report"
+    )
+    assert "reportedOwnerUserId" not in artifact["promptContentReportsSubmitted"][0]
 
     encoded = json.dumps(artifact)
     assert "Private Bob" not in encoded
