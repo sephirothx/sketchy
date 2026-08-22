@@ -106,6 +106,8 @@ lists.
 Finished games also enforce one participant per account, one turn per
 game/round/turn number, and one correct guess per player and turn at the
 database layer.
+Prompt-list counts are derived from prompt membership on read, so adding or
+removing a prompt cannot leave a cached total out of sync.
 
 The UUID change rewrites the pre-v1 initial migration rather than converting
 old text keys. Databases created before this baseline must be rebuilt; preserve

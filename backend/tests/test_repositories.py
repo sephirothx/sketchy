@@ -8,11 +8,12 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.db.models import (
     Base,
     GameParticipant,
+    Prompt,
     TurnGuess,
     TurnRecord,
     generate_uuid,
@@ -253,6 +254,31 @@ async def test_prompt_list_repository():
         all_lists = await repo.list_all()
         assert len(all_lists) == 1
         assert all_lists[0].slug == "standard"
+
+        # A write outside the bundled-list helper cannot make the count stale.
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    Prompt(
+                        id=generate_uuid(),
+                        prompt_list_id=UUID(wl.id),
+                        text="dragonfruit",
+                        offer_count=0,
+                        pick_count=0,
+                        correct_guess_count=0,
+                        total_guesser_count=0,
+                    )
+                )
+        assert (await repo.get_by_slug("standard")).prompt_count == 4
+        assert (await repo.list_all())[0].prompt_count == 4
+        async with factory() as session:
+            async with session.begin():
+                await session.execute(
+                    delete(Prompt).where(
+                        Prompt.prompt_list_id == UUID(wl.id),
+                        Prompt.text == "dragonfruit",
+                    )
+                )
 
         # 3. Get words
         words = await repo.get_prompts(wl.id)

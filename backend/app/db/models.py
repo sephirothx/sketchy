@@ -286,7 +286,6 @@ class PromptList(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str] = mapped_column(String(255), default="", nullable=False)
     language: Mapped[str] = mapped_column(String(16), default="en", nullable=False)
-    prompt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_bundled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 

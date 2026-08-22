@@ -107,14 +107,16 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
     )
 
 
-def _to_prompt_list_summary(wl: PromptList) -> PromptListSummary:
+def _to_prompt_list_summary(
+    wl: PromptList, prompt_count: int
+) -> PromptListSummary:
     return PromptListSummary(
         id=_public_id(wl.id),
         slug=wl.slug,
         name=wl.name,
         description=wl.description,
         language=wl.language,
-        prompt_count=wl.prompt_count,
+        prompt_count=prompt_count,
         is_bundled=wl.is_bundled,
         version=wl.version,
     )
@@ -570,18 +572,34 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
+    @staticmethod
+    def _prompt_count():
+        return (
+            select(func.count(Prompt.id))
+            .where(Prompt.prompt_list_id == PromptList.id)
+            .correlate(PromptList)
+            .scalar_subquery()
+        )
+
     async def list_all(self) -> list[PromptListSummary]:
         async with self._session_factory() as session:
-            stmt = select(PromptList).order_by(PromptList.name)
+            stmt = select(PromptList, self._prompt_count()).order_by(PromptList.name)
             result = await session.execute(stmt)
-            return [_to_prompt_list_summary(wl) for wl in result.scalars().all()]
+            return [
+                _to_prompt_list_summary(prompt_list, int(prompt_count))
+                for prompt_list, prompt_count in result.all()
+            ]
 
     async def get_by_slug(self, slug: str) -> PromptListSummary | None:
         async with self._session_factory() as session:
-            stmt = select(PromptList).where(PromptList.slug == slug)
+            stmt = select(PromptList, self._prompt_count()).where(
+                PromptList.slug == slug
+            )
             result = await session.execute(stmt)
-            wl = result.scalar_one_or_none()
-            return _to_prompt_list_summary(wl) if wl else None
+            row = result.one_or_none()
+            return (
+                _to_prompt_list_summary(row[0], int(row[1])) if row else None
+            )
 
     async def get_prompts(self, prompt_list_id: str) -> list[str]:
         db_prompt_list_id = _optional_entity_id(prompt_list_id)
@@ -641,7 +659,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         name=name,
                         description=description,
                         language=language,
-                        prompt_count=len(clean_prompts),
                         is_bundled=True,
                         version=version,
                     )
@@ -663,7 +680,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     wl.description = description
                     wl.language = language
                     wl.version = version
-                    wl.prompt_count = len(clean_prompts)
 
                     existing_prompts_map = {w.text.lower(): w for w in wl.prompts}
                     target_set = set(clean_prompts)
@@ -689,7 +705,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                             )
 
             await session.refresh(wl)
-            return _to_prompt_list_summary(wl)
+            prompt_count = await session.scalar(
+                select(func.count(Prompt.id)).where(Prompt.prompt_list_id == wl.id)
+            )
+            return _to_prompt_list_summary(wl, int(prompt_count or 0))
 
     async def record_prompt_usage(
         self,

@@ -471,7 +471,6 @@ async def test_word_list_and_word_uniqueness():
                     name="Animals",
                     description="Animal words",
                     language="en",
-                    prompt_count=2,
                     version=1,
                 )
                 session.add(wl)
