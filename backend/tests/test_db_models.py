@@ -494,6 +494,54 @@ async def test_word_list_and_word_uniqueness():
         await engine.dispose()
 
 
+async def test_prompt_server_defaults_apply_to_raw_inserts():
+    factory, engine = await create_test_db()
+    prompt_list_id = generate_uuid()
+    prompt_id = generate_uuid()
+
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_lists (id, slug, name) "
+                    "VALUES (:id, :slug, :name)"
+                ),
+                {
+                    "id": prompt_list_id.hex,
+                    "slug": "raw-list",
+                    "name": "Raw list",
+                },
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompts (id, prompt_list_id, text) "
+                    "VALUES (:id, :prompt_list_id, :text)"
+                ),
+                {
+                    "id": prompt_id.hex,
+                    "prompt_list_id": prompt_list_id.hex,
+                    "text": "anchor",
+                },
+            )
+
+        async with factory() as session:
+            prompt_list = await session.get(PromptList, prompt_list_id)
+            prompt = await session.get(Prompt, prompt_id)
+
+        assert prompt_list is not None
+        assert prompt_list.description == ""
+        assert prompt_list.language == "en"
+        assert prompt_list.is_bundled is True
+        assert prompt_list.version == 1
+        assert prompt is not None
+        assert prompt.offer_count == 0
+        assert prompt.pick_count == 0
+        assert prompt.correct_guess_count == 0
+        assert prompt.total_guesser_count == 0
+    finally:
+        await engine.dispose()
+
+
 async def test_init_db_runs_alembic_migrations(tmp_path):
     from app.db import init_db
     db_file = tmp_path / "test_migration.db"

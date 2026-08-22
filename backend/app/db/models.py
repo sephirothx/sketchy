@@ -17,8 +17,10 @@ from sqlalchemy import (
     false,
     func,
     text,
+    true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import text as sql_text
 from uuid6 import uuid7
 
 from app.db.types import UTCDateTime
@@ -284,10 +286,18 @@ class PromptList(Base):
     )
     slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
-    description: Mapped[str] = mapped_column(String(255), default="", nullable=False)
-    language: Mapped[str] = mapped_column(String(16), default="en", nullable=False)
-    is_bundled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    description: Mapped[str] = mapped_column(
+        String(255), default="", server_default="", nullable=False
+    )
+    language: Mapped[str] = mapped_column(
+        String(16), default="en", server_default="en", nullable=False
+    )
+    is_bundled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=text("1"), nullable=False
+    )
 
     prompts: Mapped[list[Prompt]] = relationship(
         back_populates="prompt_list",
@@ -314,9 +324,17 @@ class Prompt(Base):
         index=True,
     )
     text: Mapped[str] = mapped_column(String(64), nullable=False)
-    offer_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    pick_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    correct_guess_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    total_guesser_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    offer_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    pick_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    correct_guess_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    total_guesser_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
 
     prompt_list: Mapped[PromptList] = relationship(back_populates="prompts")
