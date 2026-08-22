@@ -199,6 +199,14 @@ function SettingsModalContent() {
       ...persistedSettings,
       nameColor: draftNameColor,
     });
+    if (activePlayerId) {
+      // The preference stays private: the server retains it on the live seat
+      // only long enough to compute an unattributed signal for the host.
+      socket.emit("update_player_settings", {
+        colorblindSafeColors: draftColorblindSafeColors,
+        ...(!isGuest ? { nameColor: draftNameColor } : {}),
+      });
+    }
     // Guests are pinned to the guest grey server-side, so sending a color
     // would only be rejected.
     if (!isGuest) {
@@ -206,7 +214,6 @@ function SettingsModalContent() {
       // write is what makes the choice outlast this room and show up on their
       // profile. Neither is a reason to keep the dialog open, and a failed
       // save is not worth an error over a color.
-      socket.emit("update_player_settings", { nameColor: draftNameColor });
       void setNameColor(draftNameColor).catch(() => {});
     }
     setSaving(false);

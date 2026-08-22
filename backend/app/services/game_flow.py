@@ -185,7 +185,44 @@ class GameFlowService:
             self._timers.add_hint_timer(room.id, asyncio.create_task(_runner()))
 
     async def _emit_room_state(self, room: Room) -> None:
+        await self._emit_colorblind_suggestion(room)
         await self._sio.emit("room_state", room_state_payload(room), room=room.id)
+
+    async def _emit_colorblind_suggestion(self, room: Room) -> None:
+        """Send only the host an unattributed accessibility suggestion.
+
+        The room broadcast above intentionally carries none of this state.
+        Sending an explicit inactive value lets the host remove a suggestion
+        when the final opted-in player leaves or becomes a spectator.
+        """
+        host = next(
+            (
+                player
+                for player in room.players.values()
+                if player.is_host and player.connected and player.sid
+            ),
+            None,
+        )
+        if host is None:
+            return
+        active = bool(
+            not room.colorblind_suggestion_dismissed
+            and room.color_mode != "colorblind_safe"
+            and any(
+                player.colorblind_safe_colors and not player.is_spectator
+                for player in room.players.values()
+            )
+        )
+        await self._sio.emit(
+            "colorblind_safe_suggestion",
+            {
+                "active": active,
+                "canApply": bool(
+                    active and room.state == "waiting" and not room.game
+                ),
+            },
+            to=host.sid,
+        )
 
     async def announce(self, room: Room, text: str, *, to: str | None = None) -> None:
         """Say something in the room's voice - to everyone, or to one socket."""

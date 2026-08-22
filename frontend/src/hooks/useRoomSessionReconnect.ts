@@ -50,11 +50,13 @@ export function useRoomSessionReconnect() {
         return;
       }
       const nameColor = useSettingsStore.getState().nameColor;
+      const colorblindSafeColors = useSettingsStore.getState().colorblindSafeColors;
       const response = await emitWithAck<AckResponse>("join_room", {
         code,
         roomId,
         nickname: currentPlayerName(),
         nameColor,
+        colorblindSafeColors,
         soft,
       });
       if (cancelled) return;

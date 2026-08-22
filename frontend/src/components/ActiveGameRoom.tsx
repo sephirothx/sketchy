@@ -7,6 +7,7 @@ import { GameHighlightsPanel } from "../components/GameHighlightsPanel";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { AccountMenu } from "../components/AccountMenu";
 import { RestartVoteBanner } from "../components/RestartVoteBanner";
+import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import {
   ConnectedRoomChatPanel,
@@ -50,11 +51,13 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const gameHighlights = useGameStore((s) => s.gameHighlights);
   const restartVote = useGameStore((s) => s.restartVote);
   const restartVoteCooldownUntil = useGameStore((s) => s.restartVoteCooldownUntil);
+  const colorblindSafeSuggestion = useGameStore((s) => s.colorblindSafeSuggestion);
   const dismissGameEnd = useGameStore((s) => s.dismissGameEnd);
   // One roster scan, not one per field.
   const isConnected = useGameStore((s) => selectMe(s)?.connected ?? false);
   const isAfk = useGameStore((s) => selectMe(s)?.isAfk ?? false);
   const isSpectator = useGameStore((s) => selectMe(s)?.isSpectator ?? false);
+  const isHost = useGameStore((s) => selectMe(s)?.isHost ?? false);
 
   const normalizedCode = code.trim().toUpperCase();
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -65,6 +68,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const [highlightsOpen, setHighlightsOpen] = useState(false);
   const [playersDrawerOpen, setPlayersDrawerOpen] = useState(false);
   const [restartBusy, setRestartBusy] = useState(false);
+  const [colorSuggestionBusy, setColorSuggestionBusy] = useState(false);
   const [restartClock, setRestartClock] = useState(() => Date.now());
   const isMobile = useMediaQuery("(max-width: 900px)");
 
@@ -203,6 +207,32 @@ export function ActiveGameRoom({ code }: { code: string }) {
       notify(socketRequestErrorMessage(restartError, "record your restart vote"), "error");
     } finally {
       setRestartBusy(false);
+    }
+  }
+
+  async function handleColorSuggestion(action: "accept" | "dismiss") {
+    if (colorSuggestionBusy) return;
+    setColorSuggestionBusy(true);
+    try {
+      const response = await emitWithAck<AckResponse>(
+        action === "accept"
+          ? "accept_colorblind_suggestion"
+          : "dismiss_colorblind_suggestion",
+        {},
+      );
+      if (!response.ok) {
+        notify(
+          response.error || `Could not ${action} the color suggestion.`,
+          "error",
+        );
+      }
+    } catch (suggestionError) {
+      notify(
+        socketRequestErrorMessage(suggestionError, `${action} the color suggestion`),
+        "error",
+      );
+    } finally {
+      setColorSuggestionBusy(false);
     }
   }
 
@@ -372,6 +402,15 @@ export function ActiveGameRoom({ code }: { code: string }) {
           player={me}
           busy={restartBusy}
           onVote={(vote) => void handleRestartVote(vote)}
+        />
+      )}
+
+      {isHost && colorblindSafeSuggestion && (
+        <ColorblindSafeSuggestionBanner
+          suggestion={colorblindSafeSuggestion}
+          busy={colorSuggestionBusy}
+          onAccept={() => void handleColorSuggestion("accept")}
+          onDismiss={() => void handleColorSuggestion("dismiss")}
         />
       )}
 

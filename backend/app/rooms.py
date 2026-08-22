@@ -159,6 +159,9 @@ class Player:
     is_host: bool = False
     is_spectator: bool = False
     is_afk: bool = False
+    # Private accessibility input used only to compute an unattributed,
+    # host-only room suggestion. Deliberately absent from every presenter.
+    colorblind_safe_colors: bool = False
     kick_votes: set[str] = field(default_factory=set)
     afk_votes: set[str] = field(default_factory=set)
 
@@ -289,6 +292,9 @@ class Room:
     departed_seats: dict[str, DepartedSeat] = field(default_factory=dict)
     restart_vote: RestartVote | None = None
     restart_vote_cooldown_until: float = 0
+    # A dismissal belongs to this in-memory room instance. It is neither an
+    # account setting nor public room configuration and is never serialized.
+    colorblind_suggestion_dismissed: bool = False
     # Held by the handlers that must not interleave on this room. Socket.IO
     # dispatches each event in its own task, so arriving first buys a handler
     # nothing once it awaits: without this, starting a game can overtake the
@@ -550,6 +556,7 @@ class RoomManager:
         name_color: str | None = None,
         user_id: str | None = None,
         is_anonymous: bool = True,
+        colorblind_safe_colors: bool = False,
     ) -> Player:
         active_players = room.seated_players()
         if not is_spectator and len(active_players) >= room.max_players:
@@ -568,6 +575,7 @@ class RoomManager:
             score=0,
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,
+            colorblind_safe_colors=colorblind_safe_colors,
         )
         room.players[player_id] = player
         return player

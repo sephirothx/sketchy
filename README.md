@@ -251,9 +251,15 @@ custom brush presets are limited to 20 entries and 16 KiB of JSON.
 Guests keep Player settings in browser local storage only. Creating an account
 copies that browser's current settings to the account exactly once; logging in
 later makes the account copy authoritative on the new device. The
-colorblind-safe preference is private account data. A later room feature may
-turn it into a host-only aggregate suggestion, but no player identity or
-requester list is exposed.
+colorblind-safe preference remains private account/browser data. While an
+opted-in player (not a spectator) is seated in a room that uses another color
+mode, only the host receives an unattributed **Colorblind-safe suggestion**.
+The host can switch the room to the colorblind-safe palette or dismiss the
+suggestion for that live room. It disappears when the last opted-in player
+leaves, never changes room settings automatically, and the preference and
+dismissal never appear in player, room-state, room-list, invite-preview, or
+session payloads. Registered preferences are read from server-side settings;
+guest preferences stay local and are supplied only to the live seat.
 
 Every guest or registered player can open **Your data** from the account menu.
 An export request creates a durable asynchronous job and produces a private,

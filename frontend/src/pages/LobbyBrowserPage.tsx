@@ -73,6 +73,7 @@ export function LobbyBrowserPage() {
   const location = useLocation();
   const openSettings = useSettingsStore((s) => s.openSettings);
   const nameColor = useSettingsStore((s) => s.nameColor);
+  const colorblindSafeColors = useSettingsStore((s) => s.colorblindSafeColors);
   const setSession = useGameStore((s) => s.setSession);
   const setExitingRoom = useGameStore((s) => s.setExitingRoom);
 
@@ -194,6 +195,7 @@ export function LobbyBrowserPage() {
       const res = await emitWithAck<AckResponse>("join_room", {
         nickname: currentPlayerName(),
         nameColor,
+        colorblindSafeColors,
         asSpectator,
         ...target,
       });

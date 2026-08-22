@@ -40,6 +40,7 @@ export function CreateRoomPage() {
   const navigate = useNavigate();
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
+  const colorblindSafeColors = useSettingsStore((state) => state.colorblindSafeColors);
   const [roomName, setRoomName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
@@ -69,7 +70,7 @@ export function CreateRoomPage() {
     setError(null);
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
-        nickname: currentPlayerName(), nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
+        nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
         spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptListSlugs,
       });

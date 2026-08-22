@@ -10,6 +10,7 @@ export function useRoomEntry(code: string) {
   const nickname = useAuthStore((state) => state.user?.displayName ?? "");
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
+  const colorblindSafeColors = useSettingsStore((state) => state.colorblindSafeColors);
   const machineRef = useRef<RoomEntryMachine | null>(null);
   const [snapshot, setSnapshot] = useState<RoomEntrySnapshot>({
     state: { status: "loading" },
@@ -23,6 +24,7 @@ export function useRoomEntry(code: string) {
           code: roomCode,
           nickname: playerNickname,
           nameColor,
+          colorblindSafeColors,
           // Ask only whether this account already holds a seat. Without this
           // the server would seat the visitor before they had chosen between
           // playing and spectating.
@@ -35,6 +37,7 @@ export function useRoomEntry(code: string) {
           code: roomCode,
           nickname: playerNickname,
           nameColor,
+          colorblindSafeColors,
           asSpectator: mode === "spectator",
         }),
       acceptSession: setSession,
@@ -48,7 +51,7 @@ export function useRoomEntry(code: string) {
       machine.dispose();
       if (machineRef.current === machine) machineRef.current = null;
     };
-  }, [code, nameColor, nickname, setSession]);
+  }, [code, colorblindSafeColors, nameColor, nickname, setSession]);
 
   function setNicknameInput(value: string) {
     machineRef.current?.setNicknameInput(value);

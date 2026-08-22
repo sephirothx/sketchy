@@ -180,6 +180,9 @@ class RoomSettingsFields(RequestModel):
 class CreateRoomPayload(RoomSettingsFields):
     nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
     name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
+    colorblind_safe_colors: bool = Field(
+        default=False, alias="colorblindSafeColors"
+    )
 
     @field_validator("nickname")
     @classmethod
@@ -253,6 +256,9 @@ class JoinRoomPayload(RequestModel):
     code: str | None = Field(default=None, max_length=16)
     nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
     name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
+    colorblind_safe_colors: bool = Field(
+        default=False, alias="colorblindSafeColors"
+    )
     as_spectator: bool = Field(default=False, alias="asSpectator")
     soft: bool = False
     # "Do I already hold a seat here?" - used by the invite screen, which must
@@ -291,7 +297,18 @@ class RoomPreviewPayload(RequestModel):
 
 
 class PlayerSettingsPayload(RequestModel):
-    name_color: str = Field(alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
+    name_color: str | None = Field(
+        default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$"
+    )
+    colorblind_safe_colors: bool | None = Field(
+        default=None, alias="colorblindSafeColors"
+    )
+
+    @model_validator(mode="after")
+    def requires_a_setting(self) -> "PlayerSettingsPayload":
+        if self.name_color is None and self.colorblind_safe_colors is None:
+            raise ValueError("at least one player setting is required")
+        return self
 
 
 class RenamePlayerPayload(RequestModel):

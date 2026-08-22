@@ -147,6 +147,7 @@ Three different things, never used for one another:
 | **Room settings** | The host-controlled configuration: rounds, drawing time, max players, prompt lists, hint mode, scoring mode, spectator rules. | options, config, preferences, rules |
 | **Player settings** | A player's own preferences, which travel with them between rooms. | user settings, profile settings |
 | **Colorblind-safe preference** | A private **Player setting** asking hosts to prefer **Colorblind-safe** room colors. Only an anonymous aggregate suggestion may reach a host; never expose who enabled it. | disability flag, accessibility request |
+| **Colorblind-safe suggestion** | The unattributed, host-only notice that at least one seated player enabled the **Colorblind-safe preference**. It never names or counts players, never changes the room automatically, ignores spectators, and may be dismissed for the live room. | accessibility alert, player flag |
 | **Clear guesses after sending** | The **Player setting** choosing whether a sent guess empties the guess field or remains available to edit and resend. | clear chat, keep guesses |
 
 ## Votes and moderation

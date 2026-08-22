@@ -18,7 +18,11 @@ from app.handlers.payloads import (
     parse_empty_payload,
     parse_payload,
 )
-from app.handlers.identity import IdentityError, resolve_identity
+from app.handlers.identity import (
+    IdentityError,
+    resolve_colorblind_safe_preference,
+    resolve_identity,
+)
 from app.presenters import editable_room_settings_payload, session_payload
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
@@ -49,7 +53,12 @@ async def create_room(ctx: HandlerContext, sid, data):
     except PayloadError as error:
         return error.acknowledgement()
     try:
-        identity = await resolve_identity(ctx, sid, payload.nickname)
+        identity = await resolve_identity(
+            ctx,
+            sid,
+            payload.nickname,
+            payload.colorblind_safe_colors,
+        )
     except IdentityError as error:
         return {"ok": False, "error": str(error), "field": "nickname"}
     settings = await ctx.game_flow.room_settings_from_payload(payload)
@@ -63,6 +72,7 @@ async def create_room(ctx: HandlerContext, sid, data):
         name_color=identity.name_color or normalize_name_color(payload.name_color),
         user_id=identity.user_id,
         is_anonymous=identity.is_anonymous,
+        colorblind_safe_colors=identity.colorblind_safe_colors,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     await _record_player_activity(ctx, player)
@@ -188,6 +198,14 @@ async def join_room(ctx: HandlerContext, sid, data):
     # in this room, just confirm it rather than reprocessing the join.
     already_joined = await ctx.game_flow._existing_player_for_sid(sid, room.id)
     if already_joined:
+        already_joined.colorblind_safe_colors = (
+            await resolve_colorblind_safe_preference(
+                ctx,
+                user_id=already_joined.user_id,
+                is_anonymous=already_joined.is_anonymous,
+                requested=payload.colorblind_safe_colors,
+            )
+        )
         already_joined.sid = sid
         already_joined.connected = True
         ctx.timers.cancel_disconnect_timer(already_joined.id)
@@ -213,6 +231,12 @@ async def join_room(ctx: HandlerContext, sid, data):
         # the path a guest returns through after registering or logging in
         # mid-game, so the seat has to pick up the new name and status.
         await _refresh_seat_identity(ctx, player, name_color)
+        player.colorblind_safe_colors = await resolve_colorblind_safe_preference(
+            ctx,
+            user_id=player.user_id,
+            is_anonymous=player.is_anonymous,
+            requested=payload.colorblind_safe_colors,
+        )
         if not player.is_anonymous:
             stored = await _account_name_color(ctx, player.user_id)
             if stored or name_color:
@@ -227,7 +251,12 @@ async def join_room(ctx: HandlerContext, sid, data):
         return {"ok": False, "error": "No existing session in this room"}
 
     try:
-        identity = await resolve_identity(ctx, sid, payload.nickname)
+        identity = await resolve_identity(
+            ctx,
+            sid,
+            payload.nickname,
+            payload.colorblind_safe_colors,
+        )
     except IdentityError as error:
         return {"ok": False, "error": str(error), "field": "nickname"}
 
@@ -239,6 +268,7 @@ async def join_room(ctx: HandlerContext, sid, data):
             name_color=identity.name_color or name_color,
             user_id=identity.user_id,
             is_anonymous=identity.is_anonymous,
+            colorblind_safe_colors=identity.colorblind_safe_colors,
         )
     except RoomFullError:
         # Flagged rather than left for the client to recognise by its prose:
@@ -318,24 +348,37 @@ async def session_ping(ctx: HandlerContext, sid, data=None):
 async def update_player_settings(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(PlayerSettingsPayload, data)
-    except PayloadError:
-        return {"ok": False, "error": "Invalid player name color"}
+    except PayloadError as error:
+        if error.field == "nameColor":
+            return {"ok": False, "error": "Invalid player name color"}
+        return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in this room"}
     room, player = current
+    if payload.colorblind_safe_colors is not None:
+        player.colorblind_safe_colors = await resolve_colorblind_safe_preference(
+            ctx,
+            user_id=player.user_id,
+            is_anonymous=player.is_anonymous,
+            requested=payload.colorblind_safe_colors,
+        )
     if player.is_anonymous:
         # Grey italics is what marks a name as unclaimed; letting guests recolour
         # would erase the only cue distinguishing them from registered players.
-        player.name_color = ANONYMOUS_NAME_COLOR
-        await ctx.game_flow._emit_room_state(room)
-        return {"ok": False, "error": "Create an account to choose a name color"}
-    player.name_color = normalize_name_color(payload.name_color) or player.name_color
+        if payload.name_color is not None:
+            player.name_color = ANONYMOUS_NAME_COLOR
+            await ctx.game_flow._emit_room_state(room)
+            return {"ok": False, "error": "Create an account to choose a name color"}
+        await ctx.game_flow._emit_colorblind_suggestion(room)
+        return {"ok": True}
+    if payload.name_color is not None:
+        player.name_color = normalize_name_color(payload.name_color) or player.name_color
     # Keep the account in step with the seat, so the color this player is
     # using right now is the one their profile shows. A failure here must not
     # cost the room its update: the seat has already changed color, and
     # skipping the broadcast would leave everyone else looking at the old one.
-    if ctx.user_repo is not None and player.user_id:
+    if payload.name_color is not None and ctx.user_repo is not None and player.user_id:
         try:
             await ctx.user_repo.update_profile(
                 player.user_id, name_color=player.name_color
@@ -344,7 +387,54 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
             logger.exception(
                 "Failed to store name color for user %s", player.user_id
             )
-    await ctx.game_flow._emit_room_state(room)
+    if payload.name_color is not None:
+        await ctx.game_flow._emit_room_state(room)
+    else:
+        await ctx.game_flow._emit_colorblind_suggestion(room)
+    return {"ok": True}
+
+
+async def dismiss_colorblind_suggestion(ctx: HandlerContext, sid, data=None):
+    try:
+        parse_empty_payload(data)
+    except PayloadError as error:
+        return error.acknowledgement()
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current or not current[1].is_host:
+        return {"ok": False, "error": "Only the host can dismiss this suggestion"}
+    room, _ = current
+    room.colorblind_suggestion_dismissed = True
+    await ctx.game_flow._emit_colorblind_suggestion(room)
+    return {"ok": True}
+
+
+async def accept_colorblind_suggestion(ctx: HandlerContext, sid, data=None):
+    try:
+        parse_empty_payload(data)
+    except PayloadError as error:
+        return error.acknowledgement()
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current or not current[1].is_host:
+        return {"ok": False, "error": "Only the host can change room colors"}
+    room, _ = current
+    async with room.lock:
+        if room.state != "waiting" or room.game:
+            return {
+                "ok": False,
+                "error": "Room colors can only be changed in the waiting room",
+            }
+        if (
+            room.colorblind_suggestion_dismissed
+            or room.color_mode == "colorblind_safe"
+            or not any(
+                player.colorblind_safe_colors and not player.is_spectator
+                for player in room.players.values()
+            )
+        ):
+            return {"ok": False, "error": "This suggestion is no longer active"}
+        room.color_mode = "colorblind_safe"
+        room.colorblind_suggestion_dismissed = True
+        await ctx.game_flow._emit_room_state(room)
     return {"ok": True}
 
 
@@ -457,6 +547,14 @@ def register(ctx: HandlerContext) -> None:
     ctx.sio.on("join_room", handler=partial(join_room, ctx))
     ctx.sio.on("session_ping", handler=partial(session_ping, ctx))
     ctx.sio.on("update_player_settings", handler=partial(update_player_settings, ctx))
+    ctx.sio.on(
+        "dismiss_colorblind_suggestion",
+        handler=partial(dismiss_colorblind_suggestion, ctx),
+    )
+    ctx.sio.on(
+        "accept_colorblind_suggestion",
+        handler=partial(accept_colorblind_suggestion, ctx),
+    )
     ctx.sio.on("rename_player", handler=partial(rename_player, ctx))
     ctx.sio.on("become_player", handler=partial(become_player, ctx))
     ctx.sio.on("leave_room", handler=partial(leave_room, ctx))

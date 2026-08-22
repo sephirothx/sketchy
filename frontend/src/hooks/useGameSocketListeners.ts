@@ -12,6 +12,7 @@ import {
 } from "../lib/sound";
 import type {
   ChatMessage,
+  ColorblindSafeSuggestion,
   GameEndedPayload,
   RoomStatePayload,
   TurnEndedPayload,
@@ -26,6 +27,10 @@ export function useGameSocketListeners() {
     const store = useGameStore;
 
     const onRoomState = (payload: RoomStatePayload) => store.getState().setRoomState(payload);
+
+    const onColorblindSafeSuggestion = (payload: ColorblindSafeSuggestion) => {
+      store.getState().setColorblindSafeSuggestion(payload);
+    };
 
     const onPlayerJoined = (payload: { playerId: string; nickname: string }) => {
       playPlayerJoinSound();
@@ -226,6 +231,7 @@ export function useGameSocketListeners() {
     };
 
     socket.on("room_state", onRoomState);
+    socket.on("colorblind_safe_suggestion", onColorblindSafeSuggestion);
     socket.on("player_joined", onPlayerJoined);
     socket.on("player_reconnected", onPlayerReconnected);
     socket.on("player_disconnected", onPlayerDisconnected);
@@ -245,6 +251,7 @@ export function useGameSocketListeners() {
 
     return () => {
       socket.off("room_state", onRoomState);
+      socket.off("colorblind_safe_suggestion", onColorblindSafeSuggestion);
       socket.off("player_joined", onPlayerJoined);
       socket.off("player_reconnected", onPlayerReconnected);
       socket.off("player_disconnected", onPlayerDisconnected);

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import type {
   ChatMessage,
+  ColorblindSafeSuggestion,
   ColorMode,
   DrawingToolGroup,
   DrawingRecapMetadata,
@@ -48,6 +49,7 @@ interface GameStore {
   moderation: ModerationState;
   restartVote: RestartVoteState | null;
   restartVoteCooldownUntil: number;
+  colorblindSafeSuggestion: ColorblindSafeSuggestion | null;
 
   phase: GamePhase;
   drawerId: string | null;
@@ -82,6 +84,7 @@ interface GameStore {
   clearSession: () => void;
   setExitingRoom: (isExiting: boolean) => void;
   setRoomState: (payload: RoomStatePayload) => void;
+  setColorblindSafeSuggestion: (suggestion: ColorblindSafeSuggestion) => void;
   addMessage: (message: ChatMessage) => void;
   applyGuessPoints: (playerId: string, points: number) => void;
   startChoosing: (payload: {
@@ -165,6 +168,7 @@ export const useGameStore = create<GameStore>((set) => ({
   moderation: { eligibleVoterIds: [], requiredVotes: 1 },
   restartVote: null,
   restartVoteCooldownUntil: 0,
+  colorblindSafeSuggestion: null,
   error: null,
   ...initialGameFields,
 
@@ -206,6 +210,8 @@ export const useGameStore = create<GameStore>((set) => ({
       restartVoteCooldownUntil: payload.restartVoteCooldownUntil ?? 0,
       players: payload.players,
     })),
+  setColorblindSafeSuggestion: (suggestion) =>
+    set({ colorblindSafeSuggestion: suggestion.active ? suggestion : null }),
   addMessage: (message) => set((s) => ({ messages: [...s.messages.slice(-99), message] })),
   applyGuessPoints: (playerId, points) =>
     set((s) => ({
@@ -287,6 +293,7 @@ export const useGameStore = create<GameStore>((set) => ({
     moderation: { eligibleVoterIds: [], requiredVotes: 1 },
     restartVote: null,
     restartVoteCooldownUntil: 0,
+    colorblindSafeSuggestion: null,
     ...initialGameFields,
   }),
 }));

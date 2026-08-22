@@ -31,6 +31,12 @@ export interface RestartVoteState {
   restartAt: number | null;
 }
 
+/** Unattributed room-level signal delivered only to the current host. */
+export interface ColorblindSafeSuggestion {
+  active: boolean;
+  canApply: boolean;
+}
+
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 export type ScoringMode = "none" | "default" | "pressure";
 export type ColorMode = "all" | "palette" | "colorblind_safe" | "black_and_white";
