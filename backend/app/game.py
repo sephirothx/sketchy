@@ -270,6 +270,7 @@ class CompletedTurnStats:
 @dataclass
 class Game:
     turn_order: list[str]
+    id: str = field(default_factory=lambda: str(uuid7()))
     rounds_total: int = 3
     scoring_mode: str = "default"
     turn_index: int = -1
@@ -312,9 +313,6 @@ class Game:
     near_miss_count: int = 0
     prompt_auto_picked: bool = False
     completed_turns: list[CompletedTurnStats] = field(default_factory=list)
-    # Stable across a timeout/retry of the prompt-fact write. The finished-game
-    # epic can later use the game ID itself as this idempotency key.
-    prompt_usage_batch_id: str = field(default_factory=lambda: str(uuid7()))
     # Wall clock, unlike the monotonic `phase_deadline`: persisted game records
     # need a real timestamp, and a monotonic reading means nothing outside this
     # process.

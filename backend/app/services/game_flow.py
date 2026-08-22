@@ -660,7 +660,7 @@ class GameFlowService:
             return
         usage = tally_prompt_usage(
             game.completed_turns,
-            batch_id=game.prompt_usage_batch_id,
+            batch_id=game.id,
             occurred_at=occurred_at,
             scoring_mode=game.scoring_mode,
             hint_mode=game.hint_mode,

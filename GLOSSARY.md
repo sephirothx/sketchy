@@ -26,6 +26,7 @@ and conversation.
 | Term | Meaning | Avoid |
 | --- | --- | --- |
 | **Game** | One complete play-through in a room, from **Start game** to final scores. A room outlives the games played in it. | match, session |
+| **Game persistence identity** | The stable UUIDv7 assigned when a **Game** starts and reused by every durable write for that game. Retrying identical content is safe; different content under the same identity is a conflict. | save ID, history ID, match ID |
 | **Round** | One full rotation: every active player draws exactly once. Rooms are configured in rounds ("3 rounds each"). | — |
 | **Turn** | One drawer's stint: they pick a prompt, draw it, and it is revealed. A round of *n* players contains *n* turns. **This is the unit almost everything is scored, timed, and limited by** — points, hint spend, and the drawing limit are all per turn, never per round. | round (for a single drawer's stint) |
 | **Choosing** | The phase where the drawer picks one of their prompt options. Everyone else waits. | word select, prompt select, picking phase |

@@ -46,6 +46,7 @@ from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     BundledPromptDefinition,
     GameDetail,
+    GameHistoryConflictError,
     GameHistoryRepository,
     GameParticipantInput,
     GameParticipantSummary,
@@ -614,6 +615,77 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
+    @staticmethod
+    def _payload_hash(
+        game_record: GameRecordInput,
+        participants: list[GameParticipantInput],
+        turns: list[TurnRecordInput],
+        guesses: list[TurnGuessInput],
+    ) -> str:
+        """Canonical digest used only to distinguish retries from conflicts."""
+        payload = {
+            "record": {
+                "room_name": game_record.room_name,
+                "scoring_mode": game_record.scoring_mode,
+                "hint_mode": game_record.hint_mode,
+                "drawing_seconds": game_record.drawing_seconds,
+                "total_rounds": game_record.total_rounds,
+                "player_count": game_record.player_count,
+                "started_at": game_record.started_at.isoformat(),
+                "finished_at": game_record.finished_at.isoformat(),
+            },
+            "participants": sorted(
+                (
+                    {
+                        "user_id": item.user_id,
+                        "final_score": item.final_score,
+                        "final_rank": item.final_rank,
+                        "turns_played": item.turns_played,
+                    }
+                    for item in participants
+                ),
+                key=lambda item: item["user_id"],
+            ),
+            "turns": sorted(
+                (
+                    {
+                        "id": item.id,
+                        "round_number": item.round_number,
+                        "turn_number": item.turn_number,
+                        "drawer_user_id": item.drawer_user_id,
+                        "prompt": item.prompt,
+                        "duration_seconds": item.duration_seconds,
+                        "guesser_count": item.guesser_count,
+                        "prompt_auto_picked": item.prompt_auto_picked,
+                        "stroke_count": item.stroke_count,
+                        "end_reason": item.end_reason,
+                        "wrong_guess_count": item.wrong_guess_count,
+                        "near_miss_count": item.near_miss_count,
+                    }
+                    for item in turns
+                ),
+                key=lambda item: item["id"],
+            ),
+            "guesses": sorted(
+                (
+                    {
+                        "turn_id": item.turn_id,
+                        "user_id": item.user_id,
+                        "points_awarded": item.points_awarded,
+                        "guess_time_seconds": item.guess_time_seconds,
+                        "hints_used": item.hints_used,
+                        "points_spent_on_hints": item.points_spent_on_hints,
+                        "wrong_guesses_before": item.wrong_guesses_before,
+                    }
+                    for item in guesses
+                ),
+                key=lambda item: (item["turn_id"], item["user_id"]),
+            ),
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
     async def save_game(
         self,
         game_record: GameRecordInput,
@@ -624,8 +696,16 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         record_id = (
             _entity_id(game_record.id) if game_record.id else generate_uuid()
         )
-        async with self._session_factory() as session:
-            async with session.begin():
+        payload_hash = self._payload_hash(game_record, participants, turns, guesses)
+        try:
+            async with self._session_factory() as session:
+                existing = await session.get(GameRecord, record_id)
+                if existing is not None:
+                    if existing.payload_hash == payload_hash:
+                        return _public_id(record_id)
+                    raise GameHistoryConflictError(
+                        f"Game '{record_id}' already exists with different content."
+                    )
                 referenced_user_ids = {
                     _entity_id(participant.user_id) for participant in participants
                 }
@@ -650,6 +730,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
 
                 game_db = GameRecord(
                     id=record_id,
+                    payload_hash=payload_hash,
                     room_name=game_record.room_name,
                     scoring_mode=game_record.scoring_mode,
                     hint_mode=game_record.hint_mode,
@@ -741,7 +822,21 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     .where(User.id.in_(referenced_user_ids))
                     .values(last_active_at=datetime.now(timezone.utc))
                 )
-
+                await session.commit()
+        except IntegrityError as error:
+            # A concurrent writer may have committed the same stable ID after
+            # our preflight read. Re-read outside the rolled-back transaction.
+            async with self._session_factory() as session:
+                existing = await session.get(GameRecord, record_id)
+                if existing is None:
+                    # Preserve unrelated natural-key/check failures; they are
+                    # not evidence that the stable game ID was reused.
+                    raise
+                if existing.payload_hash == payload_hash:
+                    return _public_id(record_id)
+                raise GameHistoryConflictError(
+                    f"Game '{record_id}' conflicted with a concurrent write."
+                ) from error
         return _public_id(record_id)
 
     async def get_user_games(

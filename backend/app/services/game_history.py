@@ -181,6 +181,7 @@ def build_game_history(
 
     return GameHistoryWrite(
         record=GameRecordInput(
+            id=game.id,
             room_name=room.name,
             scoring_mode=game.scoring_mode,
             hint_mode=game.hint_mode,

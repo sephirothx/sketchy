@@ -721,6 +721,9 @@ class GameRecord(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
     )
+    payload_hash: Mapped[str] = mapped_column(
+        String(64), default="", server_default="", nullable=False
+    )
     room_name: Mapped[str] = mapped_column(String(64), nullable=False)
     scoring_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     hint_mode: Mapped[str] = mapped_column(String(16), nullable=False)

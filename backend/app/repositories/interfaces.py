@@ -16,6 +16,12 @@ class RepositoryError(Exception):
     pass
 
 
+class GameHistoryConflictError(RepositoryError):
+    """A stable game ID was reused with a different persistence payload."""
+
+    pass
+
+
 class AccountAlreadyClaimedError(RepositoryError):
     """Raised when attempting to claim an account that is already registered."""
     pass

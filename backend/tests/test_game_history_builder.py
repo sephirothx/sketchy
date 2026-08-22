@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 from app.game import CompletedTurnStats, Game, TurnGuessRecord
 from app.rooms import RoomManager
@@ -62,6 +63,8 @@ def test_tied_scores_share_a_rank_so_both_count_as_wins():
 
     ranks = {p.user_id: p.final_rank for p in history.participants}
     assert ranks == {"user-ann": 1, "user-bob": 1, "user-cid": 3}
+    assert history.record.id == game.id
+    assert UUID(history.record.id).version == 7
 
 
 def test_spectators_are_left_out_of_the_standings():

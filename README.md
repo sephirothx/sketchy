@@ -103,6 +103,13 @@ naive database value.
 Finished-game guesses reference the UUID of their turn explicitly. Persistence
 never infers that relationship from the positions of two independently ordered
 lists.
+Each live game receives its stable UUIDv7 when it starts. The finished-game
+writer reuses that ID for the history row and prompt-usage batch, and stores a
+canonical SHA-256 payload digest with the history row. Retrying the same ID and
+content is idempotent—even if collection order changes—while reusing an ID for
+different content raises an operator-visible conflict instead of duplicating or
+silently replacing history. The digest is an integrity/idempotency aid, not a
+credential or an event timestamp.
 Finished games also enforce one participant per account, one turn per
 game/round/turn number, and one correct guess per player and turn at the
 database layer.

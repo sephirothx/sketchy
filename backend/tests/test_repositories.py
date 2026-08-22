@@ -8,11 +8,12 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from app.db.models import (
     Base,
     GameParticipant,
+    GameRecord,
     Prompt,
     PromptList,
     TurnGuess,
@@ -26,6 +27,7 @@ from app.db.models import (
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     BundledPromptDefinition,
+    GameHistoryConflictError,
     GameParticipantInput,
     GameRecordInput,
     InvalidProfileDataError,
@@ -255,6 +257,58 @@ async def test_game_history_repository():
         assert u2_stats.total_score == 200
         assert u2_stats.prompts_guessed == 1
         assert u2_stats.drawings_made == 0
+    finally:
+        await engine.dispose()
+
+
+async def test_game_history_stable_id_is_idempotent_and_rejects_conflicts():
+    factory, engine = await create_test_db()
+    try:
+        users = SqlAlchemyUserRepository(factory)
+        history = SqlAlchemyGameHistoryRepository(factory)
+        first = await users.create_anonymous("Stable one")
+        second = await users.create_anonymous("Stable two")
+        now = datetime.now(timezone.utc)
+        game_id = str(generate_uuid())
+        record = GameRecordInput(
+            id=game_id,
+            room_name="Stable room",
+            scoring_mode="default",
+            hint_mode="none",
+            drawing_seconds=90,
+            total_rounds=1,
+            player_count=2,
+            started_at=now,
+            finished_at=now,
+        )
+        participants = [
+            GameParticipantInput(first.id, 100, 1),
+            GameParticipantInput(second.id, 50, 2),
+        ]
+
+        assert await history.save_game(record, participants, [], []) == game_id
+        assert (
+            await history.save_game(record, list(reversed(participants)), [], [])
+            == game_id
+        )
+        async with factory() as session:
+            assert await session.scalar(select(func.count(GameRecord.id))) == 1
+            stored = await session.get(GameRecord, UUID(game_id))
+            assert stored is not None and len(stored.payload_hash) == 64
+
+        changed = GameRecordInput(
+            id=game_id,
+            room_name="Conflicting room",
+            scoring_mode=record.scoring_mode,
+            hint_mode=record.hint_mode,
+            drawing_seconds=record.drawing_seconds,
+            total_rounds=record.total_rounds,
+            player_count=record.player_count,
+            started_at=record.started_at,
+            finished_at=record.finished_at,
+        )
+        with pytest.raises(GameHistoryConflictError, match="different content"):
+            await history.save_game(changed, participants, [], [])
     finally:
         await engine.dispose()
 
