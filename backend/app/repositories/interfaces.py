@@ -29,6 +29,11 @@ class InvalidProfileDataError(RepositoryError):
     pass
 
 
+class IdentityMergeError(RepositoryError):
+    """Raised when a guest cannot be merged into a registered account."""
+    pass
+
+
 @dataclass(frozen=True)
 class UserData:
     """Read-only public/domain user entity (without sensitive credential hashes)."""
@@ -283,6 +288,13 @@ class UserRepository(ABC):
         self, user_id: str, expected_hash: str, new_hash: str
     ) -> bool:
         """Atomically replace a credential hash if it has not changed."""
+        ...
+
+    @abstractmethod
+    async def merge_guest_into_account(
+        self, source_user_id: str, target_user_id: str
+    ) -> UserData:
+        """Alias a guest to an account without rewriting historical seats."""
         ...
 
     @abstractmethod

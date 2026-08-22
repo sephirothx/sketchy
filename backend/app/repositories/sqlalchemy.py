@@ -14,9 +14,11 @@ from sqlalchemy.orm import selectinload
 from app.db.models import (
     GameParticipant,
     GameRecord,
+    IdentityAlias,
     TurnGuess,
     TurnRecord,
     User,
+    AuditEvent,
     Prompt,
     PromptList,
     generate_uuid,
@@ -32,6 +34,7 @@ from app.repositories.interfaces import (
     GameRecordInput,
     GameSummary,
     InvalidProfileDataError,
+    IdentityMergeError,
     TurnDetail,
     TurnGuessDetail,
     TurnGuessInput,
@@ -83,6 +86,27 @@ def _to_user_data(user: User) -> UserData:
         updated_at=user.updated_at,
         last_login_at=user.last_login_at,
     )
+
+
+async def _canonical_user_id(session: AsyncSession, user_id: UUID) -> UUID:
+    target = await session.scalar(
+        select(IdentityAlias.target_user_id).where(
+            IdentityAlias.source_user_id == user_id
+        )
+    )
+    return target or user_id
+
+
+async def _identity_ids(session: AsyncSession, user_id: UUID) -> tuple[UUID, ...]:
+    canonical = await _canonical_user_id(session, user_id)
+    aliases = (
+        await session.scalars(
+            select(IdentityAlias.source_user_id).where(
+                IdentityAlias.target_user_id == canonical
+            )
+        )
+    ).all()
+    return (canonical, *aliases)
 
 
 def _to_game_summary(game: GameRecord) -> GameSummary:
@@ -161,7 +185,8 @@ class SqlAlchemyUserRepository(UserRepository):
         if db_user_id is None:
             return None
         async with self._session_factory() as session:
-            stmt = select(User).where(User.id == db_user_id)
+            canonical = await _canonical_user_id(session, db_user_id)
+            stmt = select(User).where(User.id == canonical)
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()
             return _to_user_data(user) if user else None
@@ -294,6 +319,57 @@ class SqlAlchemyUserRepository(UserRepository):
                 )
                 return bool(result.rowcount)
 
+    async def merge_guest_into_account(
+        self, source_user_id: str, target_user_id: str
+    ) -> UserData:
+        source_id = _optional_entity_id(source_user_id)
+        target_id = _optional_entity_id(target_user_id)
+        if source_id is None or target_id is None or source_id == target_id:
+            raise IdentityMergeError("Guest and account identities must be distinct.")
+
+        async with self._session_factory() as session:
+            async with session.begin():
+                source = await session.get(User, source_id)
+                target = await session.get(User, target_id)
+                existing_target = await session.scalar(
+                    select(IdentityAlias.target_user_id).where(
+                        IdentityAlias.source_user_id == source_id
+                    )
+                )
+                if existing_target is not None:
+                    if existing_target != target_id or target is None:
+                        raise IdentityMergeError(
+                            "Guest identity is already merged into another account."
+                        )
+                    return _to_user_data(target)
+                if source is None or source.state != AccountState.ANONYMOUS.value:
+                    raise IdentityMergeError("Only an anonymous guest can be merged.")
+                if target is None or target.state != AccountState.REGISTERED.value:
+                    raise IdentityMergeError(
+                        "The merge target must be a registered account."
+                    )
+
+                source.state = AccountState.MERGED.value
+                session.add(
+                    IdentityAlias(
+                        id=generate_uuid(),
+                        source_user_id=source.id,
+                        target_user_id=target.id,
+                    )
+                )
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type="identity.guest_merged",
+                        actor_user_id=target.id,
+                        target_user_id=target.id,
+                        details={"source_user_id": str(source.id)},
+                    )
+                )
+                await session.flush()
+            await session.refresh(target)
+            return _to_user_data(target)
+
     async def touch_last_login(
         self, user_id: str, min_interval_seconds: float = 0.0
     ) -> UserData | None:
@@ -323,20 +399,21 @@ class SqlAlchemyUserRepository(UserRepository):
         if db_user_id is None:
             return UserStats(user_id=user_id)
         async with self._session_factory() as session:
+            identity_ids = await _identity_ids(session, db_user_id)
+            canonical_id = identity_ids[0]
             # 1. Games count, wins, and score
             part_stmt = select(
-                func.count(GameParticipant.id).label("games_played"),
-                func.coalesce(
-                    func.sum(
+                func.count(distinct(GameParticipant.game_id)).label("games_played"),
+                func.count(
+                    distinct(
                         case(
-                            (GameParticipant.final_rank == 1, 1),
-                            else_=0,
+                            (GameParticipant.final_rank == 1, GameParticipant.game_id),
+                            else_=None,
                         )
-                    ),
-                    0,
+                    )
                 ).label("games_won"),
                 func.coalesce(func.sum(GameParticipant.final_score), 0).label("total_score"),
-            ).where(GameParticipant.user_id == db_user_id)
+            ).where(GameParticipant.user_id.in_(identity_ids))
             part_res = (await session.execute(part_stmt)).one()
             games_played = int(part_res.games_played or 0)
             games_won = int(part_res.games_won or 0)
@@ -346,13 +423,13 @@ class SqlAlchemyUserRepository(UserRepository):
 
             # 2. Total turns played across games where user participated
             turns_stmt = (
-                select(func.count(TurnRecord.id))
+                select(func.count(distinct(TurnRecord.id)))
                 .select_from(TurnRecord)
                 .join(
                     GameParticipant,
                     and_(
                         GameParticipant.game_id == TurnRecord.game_id,
-                        GameParticipant.user_id == db_user_id,
+                        GameParticipant.user_id.in_(identity_ids),
                     ),
                 )
             )
@@ -360,18 +437,18 @@ class SqlAlchemyUserRepository(UserRepository):
 
             # 3. Correct guesses made
             guesses_stmt = select(func.count(TurnGuess.id)).where(
-                TurnGuess.user_id == db_user_id
+                TurnGuess.user_id.in_(identity_ids)
             )
             prompts_guessed = int((await session.execute(guesses_stmt)).scalar() or 0)
 
             # 4. Drawings made
             drawings_stmt = select(func.count(TurnRecord.id)).where(
-                TurnRecord.drawer_user_id == db_user_id
+                TurnRecord.drawer_user_id.in_(identity_ids)
             )
             drawings_made = int((await session.execute(drawings_stmt)).scalar() or 0)
 
             return UserStats(
-                user_id=user_id,
+                user_id=_public_id(canonical_id),
                 games_played=games_played,
                 games_won=games_won,
                 win_rate=round(win_rate, 4),
@@ -489,10 +566,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         clamped_offset = max(0, offset)
 
         async with self._session_factory() as session:
+            identity_ids = await _identity_ids(session, db_user_id)
             # Find game IDs the user was a participant in
             user_games_subq = (
                 select(GameParticipant.game_id)
-                .where(GameParticipant.user_id == db_user_id)
+                .where(GameParticipant.user_id.in_(identity_ids))
                 .scalar_subquery()
             )
 
@@ -528,6 +606,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         if requesting_user_id is not None and db_requesting_user_id is None:
             return None
         async with self._session_factory() as session:
+            requesting_identity_ids = (
+                await _identity_ids(session, db_requesting_user_id)
+                if db_requesting_user_id is not None
+                else ()
+            )
             stmt = (
                 select(GameRecord)
                 .where(GameRecord.id == db_game_id)
@@ -545,7 +628,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             # Authorization scoping: If a requesting user is specified, ensure they participated in this game
             if db_requesting_user_id is not None:
                 is_participant = any(
-                    p.user_id == db_requesting_user_id for p in g.participants
+                    p.user_id in requesting_identity_ids for p in g.participants
                 )
                 if not is_participant:
                     return None

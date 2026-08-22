@@ -493,7 +493,7 @@ ADRs once they exist.
 | --- | --- | --- | --- |
 | #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | Complete | #344-#351 integrated; 564 backend, 156 frontend, and 41 E2E tests pass locally; PostgreSQL CI gate configured; README updated and glossary reviewed (no new game terms) |
 | #339 database invariants | `epic/339-database-invariants` | Complete | #352-#356 integrated; 567 backend, 156 frontend, and 41 E2E tests pass locally; dual-dialect migration gate configured; README updated and glossary reviewed |
-| #340 accounts and privacy | `epic/340-accounts-identity-privacy` | In progress | #360, #361, #363, #365 complete; #359 opaque hashed sessions, rotation, per-device list/revocation, logout-all, and shared HTTP/socket enforcement implemented; README and glossary current |
+| #340 accounts and privacy | `epic/340-accounts-identity-privacy` | In progress | #359-#361, #363, #365 complete; #362 immutable guest aliases merge login history/stats without rewriting or collapsing historical seats; README and glossary updated |
 | #342 prompt content | `epic/342-prompt-content-usage` | Not started | - |
 | #341 game history | `epic/341-game-history-statistics` | Not started | - |
 | #343 live rooms and formats | `epic/343-live-rooms-deployment-formats` | Not started | - |

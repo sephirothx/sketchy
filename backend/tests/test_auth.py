@@ -301,6 +301,39 @@ async def test_login_logout_round_trip(client):
 
 
 @pytest.mark.asyncio
+async def test_login_links_the_current_guest_identity(client):
+    from uuid import UUID
+    from sqlalchemy import select
+    from app.db.models import IdentityAlias, User
+    from app.domain_values import AccountState
+
+    registered = await client.post(
+        "/api/auth/register",
+        json={"username": "Returning", "password": "a-good-password"},
+    )
+    account_id = registered.json()["id"]
+    await client.post("/api/auth/logout")
+    guest = (await client.get("/api/auth/me")).json()
+
+    logged_in = await client.post(
+        "/api/auth/login",
+        json={"username": "Returning", "password": "a-good-password"},
+    )
+    assert logged_in.status_code == 200
+    assert logged_in.json()["id"] == account_id
+
+    async with client._test_session_factory() as session:
+        source = await session.get(User, UUID(guest["id"]))
+        alias = await session.scalar(
+            select(IdentityAlias).where(
+                IdentityAlias.source_user_id == UUID(guest["id"])
+            )
+        )
+        assert source is not None and source.state == AccountState.MERGED.value
+        assert alias is not None and str(alias.target_user_id) == account_id
+
+
+@pytest.mark.asyncio
 async def test_active_sessions_can_be_listed_and_revoked_individually(client):
     await client.post(
         "/api/auth/register",

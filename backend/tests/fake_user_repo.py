@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
+    IdentityMergeError,
     UserCredentials,
     UserData,
     UsernameTakenError,
@@ -23,6 +24,7 @@ class FakeUserRepository(UserRepository):
     def __init__(self) -> None:
         self.users: dict[str, UserData] = {}
         self.password_hashes: dict[str, str] = {}
+        self.aliases: dict[str, str] = {}
         self._counter = 0
 
     def add_guest(self, user_id: str, display_name: str = "Guest") -> UserData:
@@ -36,6 +38,8 @@ class FakeUserRepository(UserRepository):
             created_at=_now(),
             updated_at=_now(),
             last_login_at=_now(),
+            state="anonymous",
+            role="user",
         )
         self.users[user_id] = user
         return user
@@ -53,6 +57,8 @@ class FakeUserRepository(UserRepository):
             created_at=_now(),
             updated_at=_now(),
             last_login_at=_now(),
+            state="registered",
+            role="user",
         )
         self.users[user_id] = user
         self.password_hashes[user_id] = password_hash
@@ -68,7 +74,7 @@ class FakeUserRepository(UserRepository):
         return self.add_guest(user_id or f"guest-{self._counter}", display_name or "Guest")
 
     async def get_by_id(self, user_id: str) -> UserData | None:
-        return self.users.get(user_id)
+        return self.users.get(self.aliases.get(user_id, user_id))
 
     async def get_by_username(self, username: str) -> UserData | None:
         target = username.strip().lower()
@@ -104,10 +110,37 @@ class FakeUserRepository(UserRepository):
             created_at=user.created_at,
             updated_at=_now(),
             last_login_at=_now(),
+            state="registered",
+            role=user.role,
         )
         self.users[user_id] = claimed
         self.password_hashes[user_id] = password_hash
         return claimed
+
+    async def merge_guest_into_account(
+        self, source_user_id: str, target_user_id: str
+    ) -> UserData:
+        source = self.users.get(source_user_id)
+        target = self.users.get(target_user_id)
+        if source is None or not source.is_anonymous:
+            raise IdentityMergeError("Only an anonymous guest can be merged.")
+        if target is None or target.is_anonymous:
+            raise IdentityMergeError("Merge target must be registered.")
+        self.aliases[source_user_id] = target_user_id
+        self.users[source_user_id] = UserData(
+            id=source.id,
+            username=None,
+            display_name=source.display_name,
+            name_color=source.name_color,
+            avatar_key=source.avatar_key,
+            is_anonymous=False,
+            created_at=source.created_at,
+            updated_at=_now(),
+            last_login_at=source.last_login_at,
+            state="merged",
+            role=source.role,
+        )
+        return target
 
     async def update_profile(
         self,
@@ -130,6 +163,8 @@ class FakeUserRepository(UserRepository):
             created_at=user.created_at,
             updated_at=_now(),
             last_login_at=user.last_login_at,
+            state=user.state,
+            role=user.role,
         )
         self.users[user_id] = updated
         return updated
@@ -158,6 +193,8 @@ class FakeUserRepository(UserRepository):
             created_at=user.created_at,
             updated_at=user.updated_at,
             last_login_at=_now(),
+            state=user.state,
+            role=user.role,
         )
         self.users[user_id] = refreshed
         return refreshed

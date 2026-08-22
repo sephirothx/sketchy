@@ -194,6 +194,36 @@ class AuditEvent(Base):
     )
 
 
+class IdentityAlias(Base):
+    """Immutable mapping from a merged guest identity to its account."""
+
+    __tablename__ = "identity_aliases"
+    __table_args__ = (
+        CheckConstraint(
+            "source_user_id != target_user_id", name="ck_identity_alias_distinct"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    source_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    target_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+
 class UploadedAvatarAsset(Base):
     """Reserved ownership/metadata row for a future moderated upload flow."""
 

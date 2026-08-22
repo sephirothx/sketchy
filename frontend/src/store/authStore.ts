@@ -40,14 +40,14 @@ function reconnectSocketAsNewIdentity(): void {
 }
 
 /**
- * Give up the current seat before switching to a different account.
+ * Give up the current live seat before switching to a different account.
  *
  * Registering keeps the same user id, so that seat is simply upgraded in
  * place. Logging in does not: it moves to another account entirely, and the
  * server would find no seat for the new identity, seat the player a second
  * time, and leave the old one occupying a slot until it timed out. Leaving
- * first makes the handover explicit - and the abandoned guest's score goes
- * with the guest, which is what logging in means.
+ * first makes the handover explicit. Persisted guest history is linked to the
+ * account by the server; the in-memory seat still has to leave cleanly.
  */
 function releaseSeatBeforeIdentityChange(): void {
   if (useGameStore.getState().playerId && socket.connected) {

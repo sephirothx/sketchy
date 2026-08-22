@@ -41,6 +41,7 @@ from app.auth.rate_limit import RateLimiter, client_key
 from app.rooms import normalize_name_color
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
+    IdentityMergeError,
     UsernameTakenError,
     UserRepository,
 )
@@ -298,9 +299,9 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
     async def login(body: CredentialsBody, request: Request, response: Response):
         """Sign in to an existing account.
 
-        Any guest identity the caller was carrying is left behind: its stats
-        stay with that abandoned row. Registering rather than logging in is the
-        path that carries guest progress forward.
+        A guest identity becomes an immutable alias of the account. Historical
+        rows keep their original user ids and presentation, while account
+        history and statistics resolve across both identities.
         """
         throttle(login_limiter, request)
         credentials = await user_repo.get_credentials_by_username(body.username)
@@ -319,6 +320,24 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
                 credentials.password_hash,
                 replacement_hash,
             )
+
+        current_user_id = getattr(request.state, "user_id", None)
+        current = await user_repo.get_by_id(current_user_id) if current_user_id else None
+        if (
+            current is not None
+            and current.is_anonymous
+            and current.id != credentials.user.id
+        ):
+            try:
+                await user_repo.merge_guest_into_account(
+                    current.id, credentials.user.id
+                )
+            except IdentityMergeError as error:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Guest progress could not be linked to this account.",
+                ) from error
+            await revoke_all_sessions(session_factory, user_id=current.id)
 
         refreshed = await user_repo.touch_last_login(credentials.user.id)
         await revoke_current(request)

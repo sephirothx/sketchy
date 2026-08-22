@@ -208,6 +208,13 @@ the account menu. Socket.IO handshakes resolve the same revocable record as
 HTTP requests, so revocation applies on the next connection across all server
 processes without a shared signing secret.
 
+Logging in while carrying a guest identity links that guest to the registered
+account through an immutable alias. Historical participant, drawer, and guess
+rows keep their original IDs and presentation, so a game that contains both
+identities keeps two factual seats rather than violating a uniqueness rule or
+losing a player. Account history and statistics resolve the account plus all
+of its guest aliases; the guest's sessions are revoked during the merge.
+
 Passwords use Argon2id. On every successful login, Sketchy compares the encoded
 hash with the current cost parameters and replaces stale hashes atomically;
 raising the configured Argon2 cost therefore upgrades active accounts without
