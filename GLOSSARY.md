@@ -52,6 +52,7 @@ the rotation itself are counted in *rounds*.
 | **Guest** | Someone playing under an unclaimed account. Shown in grey italics. | anonymous player, unregistered user |
 | **Administrator** | A trusted service-wide operator. This is an account role, never the **host** of a room. | admin (for a room host), owner |
 | **Avatar** | The deployment-hosted visual representing an account. The generated initial is the default. | profile picture, external avatar URL |
+| **Signed-in device** | One revocable account login, labeled coarsely by browser and platform. | JWT, login token, active session |
 | **AFK** | A status a player sets on themselves, or the room votes onto them. AFK players are skipped for turns and not waited for. Always the initialism, uppercase. | away, idle, inactive, afk |
 
 ## Names

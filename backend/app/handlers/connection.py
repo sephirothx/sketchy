@@ -5,8 +5,7 @@ import asyncio
 import logging
 from functools import partial
 
-from app.auth.jwt import get_or_create_secret
-from app.auth.middleware import user_id_from_cookie_header
+from app.auth.sessions import resolve_session, session_token_from_cookie_header
 from app.handlers.context import HandlerContext
 
 logger = logging.getLogger("sketchy.handlers.connection")
@@ -22,8 +21,9 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     """
     user_id = None
     if ctx.session_factory is not None:
-        secret = await get_or_create_secret(ctx.session_factory)
-        user_id = user_id_from_cookie_header(environ.get("HTTP_COOKIE"), secret)
+        token = session_token_from_cookie_header(environ.get("HTTP_COOKIE"))
+        auth_session = await resolve_session(ctx.session_factory, token)
+        user_id = auth_session.user_id if auth_session else None
     await ctx.sio.save_session(sid, {"user_id": user_id})
     logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
 

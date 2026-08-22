@@ -9,6 +9,7 @@ import {
   useEscapeLayer,
   useFocusTrap,
 } from "../hooks/useFocusTrap";
+import { SessionManagerDialog } from "./SessionManagerDialog";
 
 export type AuthMode = "claim" | "login";
 
@@ -34,6 +35,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
 
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -156,16 +158,28 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={async () => {
-                setMenuOpen(false);
-                await logout();
-              }}
-            >
-              Log out
-            </button>
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setSessionsOpen(true);
+                }}
+              >
+                Signed-in devices
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={async () => {
+                  setMenuOpen(false);
+                  await logout();
+                }}
+              >
+                Log out
+              </button>
+            </>
           )}
         </div>
       )}
@@ -178,6 +192,9 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           onSwitchMode={setMode}
           onSubmit={mode === "login" ? login : register}
         />
+      )}
+      {sessionsOpen && (
+        <SessionManagerDialog onClose={() => setSessionsOpen(false)} />
       )}
     </div>
   );

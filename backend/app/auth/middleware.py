@@ -1,16 +1,14 @@
 """Session cookie plumbing for HTTP requests and Socket.IO handshakes."""
 from __future__ import annotations
 
-from http.cookies import SimpleCookie
-
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.auth.jwt import COOKIE_NAME, TOKEN_TTL, decode_token, get_or_create_secret
+from app.auth.sessions import COOKIE_NAME, SESSION_TTL, resolve_session
 
-COOKIE_MAX_AGE = int(TOKEN_TTL.total_seconds())
+COOKIE_MAX_AGE = int(SESSION_TTL.total_seconds())
 
 
 def is_secure_request(request: Request) -> bool:
@@ -54,25 +52,6 @@ def clear_session_cookie(response: Response, *, secure: bool) -> None:
     )
 
 
-def user_id_from_cookie_header(cookie_header: str | None, secret: str) -> str | None:
-    """Resolve a user id from a raw ``Cookie:`` header value.
-
-    Socket.IO handshakes arrive as a WSGI-style environ rather than a Starlette
-    request, so the cookie has to be parsed straight from the header.
-    """
-    if not cookie_header:
-        return None
-    jar = SimpleCookie()
-    try:
-        jar.load(cookie_header)
-    except Exception:
-        return None
-    morsel = jar.get(COOKIE_NAME)
-    if morsel is None:
-        return None
-    return decode_token(morsel.value, secret)
-
-
 class SessionAuthMiddleware(BaseHTTPMiddleware):
     """Resolve the caller's user id from the session cookie.
 
@@ -86,9 +65,10 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         self._session_factory = session_factory
 
     async def dispatch(self, request: Request, call_next):
-        secret = await get_or_create_secret(self._session_factory)
         raw_token = request.cookies.get(COOKIE_NAME, "")
-        request.state.jwt_secret = secret
         request.state.session_token = raw_token
-        request.state.user_id = decode_token(raw_token, secret) if raw_token else None
+        auth_session = await resolve_session(self._session_factory, raw_token)
+        request.state.auth_session = auth_session
+        request.state.session_id = auth_session.id if auth_session else None
+        request.state.user_id = auth_session.user_id if auth_session else None
         return await call_next(request)

@@ -6,11 +6,19 @@ import os
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.auth.jwt import create_token, get_or_create_secret, should_refresh
 from app.auth.middleware import (
     clear_session_cookie,
     is_secure_request,
     set_session_cookie,
+)
+from app.auth.sessions import (
+    create_session,
+    device_label_from_user_agent,
+    list_active_sessions,
+    revoke_all_sessions,
+    revoke_session,
+    rotate_session,
+    should_rotate,
 )
 from app.auth.names import (
     MAX_NAME_LENGTH,
@@ -89,11 +97,26 @@ class NameColorBody(BaseModel):
 def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
 
+    def device_label(request: Request) -> str:
+        return device_label_from_user_agent(request.headers.get("user-agent"))
+
     async def issue_cookie(response: Response, request: Request, user_id: str) -> None:
-        secret = await get_or_create_secret(session_factory)
-        set_session_cookie(
-            response, create_token(user_id, secret), secure=is_secure_request(request)
+        issued = await create_session(
+            session_factory,
+            user_id=user_id,
+            device_label=device_label(request),
         )
+        set_session_cookie(
+            response, issued.token, secure=is_secure_request(request)
+        )
+
+    async def revoke_current(request: Request) -> None:
+        session_id = getattr(request.state, "session_id", None)
+        user_id = getattr(request.state, "user_id", None)
+        if session_id and user_id:
+            await revoke_session(
+                session_factory, session_id=session_id, user_id=user_id
+            )
 
     def throttle(limiter: RateLimiter, request: Request) -> None:
         if not limiter.check(client_key(request)):
@@ -120,12 +143,22 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         refreshed = await user_repo.touch_last_login(
             user.id, min_interval_seconds=LAST_LOGIN_THROTTLE_SECONDS
         )
-        token = getattr(request.state, "session_token", "")
-        secret = getattr(request.state, "jwt_secret", None)
-        # Slide the expiry forward for anyone still playing, so an active
-        # guest never loses their identity to a lapsed token.
-        if token and secret and should_refresh(token, secret):
-            await issue_cookie(response, request, user.id)
+        auth_session = getattr(request.state, "auth_session", None)
+        # Rotate rather than merely extending the same credential, limiting
+        # how long a copied token remains useful while preserving active guests.
+        if auth_session and should_rotate(auth_session):
+            rotated = await rotate_session(
+                session_factory,
+                session_id=auth_session.id,
+                user_id=user.id,
+                device_label=device_label(request),
+            )
+            if rotated is not None:
+                set_session_cookie(
+                    response,
+                    rotated.token,
+                    secure=is_secure_request(request),
+                )
         return user_payload(refreshed or user)
 
     @router.get("/nickname-available")
@@ -257,6 +290,7 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
             ) from error
 
         refreshed = await user_repo.touch_last_login(claimed.id)
+        await revoke_current(request)
         await issue_cookie(response, request, claimed.id)
         return user_payload(refreshed or claimed)
 
@@ -287,12 +321,61 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
             )
 
         refreshed = await user_repo.touch_last_login(credentials.user.id)
+        await revoke_current(request)
         await issue_cookie(response, request, credentials.user.id)
         return user_payload(refreshed or credentials.user)
 
+    @router.get("/sessions")
+    async def sessions(request: Request):
+        """List the caller's active devices without exposing token hashes."""
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        current_id = getattr(request.state, "session_id", None)
+        records = await list_active_sessions(session_factory, user_id=user_id)
+        return {
+            "sessions": [
+                {
+                    "id": record.id,
+                    "deviceLabel": record.device_label,
+                    "createdAt": record.created_at.isoformat(),
+                    "lastUsedAt": record.last_used_at.isoformat(),
+                    "expiresAt": record.expires_at.isoformat(),
+                    "current": record.id == current_id,
+                }
+                for record in records
+            ]
+        }
+
+    @router.delete("/sessions/{session_id}")
+    async def revoke_device(session_id: str, request: Request, response: Response):
+        """Revoke one device owned by the caller."""
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        revoked = await revoke_session(
+            session_factory, session_id=session_id, user_id=user_id
+        )
+        if not revoked:
+            raise HTTPException(status_code=404, detail="Active session not found.")
+        if session_id == getattr(request.state, "session_id", None):
+            clear_session_cookie(response, secure=is_secure_request(request))
+        return {"ok": True}
+
+    @router.post("/logout-all")
+    async def logout_all(request: Request, response: Response):
+        """Revoke every session for the caller, including this device."""
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        revoked = await revoke_all_sessions(session_factory, user_id=user_id)
+        clear_session_cookie(response, secure=is_secure_request(request))
+        return {"ok": True, "revoked": revoked}
+
     @router.post("/logout")
     async def logout(request: Request, response: Response):
-        """Drop the session. The next /me call provisions a fresh guest."""
+        """Revoke this session. The next /me call provisions a fresh guest."""
+        await revoke_current(request)
         clear_session_cookie(response, secure=is_secure_request(request))
         return {"ok": True}
 

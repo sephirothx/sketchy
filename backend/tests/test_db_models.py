@@ -56,15 +56,15 @@ async def test_app_config_crud():
     try:
         async with factory() as session:
             async with session.begin():
-                config = AppConfig(key="jwt_secret", value="super-secret-key-1234")
+                config = AppConfig(key="feature_mode", value="safe")
                 session.add(config)
 
         async with factory() as session:
-            stmt = select(AppConfig).where(AppConfig.key == "jwt_secret")
+            stmt = select(AppConfig).where(AppConfig.key == "feature_mode")
             result = await session.execute(stmt)
             loaded = result.scalar_one()
-            assert loaded.key == "jwt_secret"
-            assert loaded.value == "super-secret-key-1234"
+            assert loaded.key == "feature_mode"
+            assert loaded.value == "safe"
     finally:
         await engine.dispose()
 

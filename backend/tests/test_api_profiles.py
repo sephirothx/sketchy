@@ -10,9 +10,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.profiles import create_profile_router, profile_limiter
-from app.auth import jwt as jwt_module
-from app.auth.jwt import COOKIE_NAME, create_token, get_or_create_secret
 from app.auth.middleware import SessionAuthMiddleware
+from app.auth.sessions import COOKIE_NAME, create_session
 from app.db.models import Base, generate_uuid
 from app.repositories.interfaces import (
     GameParticipantInput,
@@ -36,7 +35,6 @@ async def env():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    jwt_module.reset_secret_cache()
     profile_limiter.reset()
 
     users = SqlAlchemyUserRepository(session_factory)
@@ -49,12 +47,13 @@ async def env():
     async with AsyncClient(transport=transport, base_url="http://test") as http:
         yield http, users, history, session_factory
     await engine.dispose()
-    jwt_module.reset_secret_cache()
 
 
 async def sign_in_as(http, session_factory, user_id: str) -> None:
-    secret = await get_or_create_secret(session_factory)
-    http.cookies.set(COOKIE_NAME, create_token(user_id, secret))
+    issued = await create_session(
+        session_factory, user_id=user_id, device_label="Test browser"
+    )
+    http.cookies.set(COOKIE_NAME, issued.token)
 
 
 async def record_game(history, users, *, winner, loser, index: int = 0) -> str:

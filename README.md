@@ -198,14 +198,15 @@ future uploaded assets and external identity providers is reserved, but no
 upload or provider-login API is enabled until storage validation, moderation,
 and identity-linking flows ship.
 
-Sessions are signed with a key that is generated once and stored in the
-database. Set `JWT_SECRET` to supply your own — required if you run more than
-one server process, since they must all sign with the same key, and it also
-keeps existing sessions valid if the database is ever rebuilt:
-
-```bash
-JWT_SECRET=$(openssl rand -base64 48) ./scripts/serve.sh
-```
+Session cookies contain opaque 256-bit random tokens. Only SHA-256 token hashes
+are stored; the database never contains a credential that can be replayed.
+Each server-side session records a coarse device label, creation, last use,
+expiry, rotation, and revocation. Tokens rotate halfway through their one-year
+maximum lifetime, logout revokes the current token immediately, and registered
+players can inspect and revoke individual devices or log out everywhere from
+the account menu. Socket.IO handshakes resolve the same revocable record as
+HTTP requests, so revocation applies on the next connection across all server
+processes without a shared signing secret.
 
 Passwords use Argon2id. On every successful login, Sketchy compares the encoded
 hash with the current cost parameters and replaces stale hashes atomically;

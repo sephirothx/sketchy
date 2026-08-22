@@ -1,1 +1,1 @@
-"""JWT session identity, password hashing, and request authentication."""
+"""Opaque session identity, password hashing, and request authentication."""

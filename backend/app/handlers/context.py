@@ -29,7 +29,6 @@ class HandlerContext:
     user_repo: UserRepository | None = None
     game_history_repo: GameHistoryRepository | None = None
     prompt_list_repo: PromptListRepository | None = None
-    # Needed to resolve the JWT signing key when a socket handshake presents a
-    # session cookie.
+    # Needed to resolve a hashed opaque session when a socket presents a cookie.
     session_factory: async_sessionmaker[AsyncSession] | None = None
     game_flow: GameFlowService = field(init=False)

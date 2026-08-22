@@ -1,4 +1,4 @@
-"""JWT, password, and REST authentication behaviour."""
+"""Opaque sessions, password, and REST authentication behavior."""
 from __future__ import annotations
 
 import pytest
@@ -8,9 +8,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.auth import jwt as jwt_module
-from app.auth.jwt import COOKIE_NAME, create_token, decode_token
-from app.auth.middleware import SessionAuthMiddleware, user_id_from_cookie_header
+from app.auth.middleware import SessionAuthMiddleware
 from app.auth.names import validate_name, NameError_
 from app.auth.password import (
     DUMMY_HASH,
@@ -21,6 +19,11 @@ from app.auth.password import (
     verify_password,
 )
 from app.auth.rate_limit import RateLimiter
+from app.auth.sessions import (
+    COOKIE_NAME,
+    hash_session_token,
+    session_token_from_cookie_header,
+)
 from app.auth.routes import (
     create_auth_router,
     login_limiter,
@@ -37,7 +40,6 @@ async def client():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    jwt_module.reset_secret_cache()
     for limiter in (login_limiter, register_limiter, lookup_limiter):
         limiter.reset()
 
@@ -49,35 +51,37 @@ async def client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http:
         http._test_user_repo = repo
+        http._test_session_factory = session_factory
         yield http
     await engine.dispose()
-    jwt_module.reset_secret_cache()
 
 
 # --- tokens ---------------------------------------------------------------
 
-def test_token_round_trip_and_rejection():
-    token = create_token("user-1", "secret")
-    assert decode_token(token, "secret") == "user-1"
-    assert decode_token(token, "other-secret") is None
-    assert decode_token("not-a-token", "secret") is None
-    assert decode_token("", "secret") is None
+def test_token_hash_is_one_way_and_fixed_length():
+    token = "opaque-token-with-no-account-data"
+    digest = hash_session_token(token)
+    assert len(digest) == 64
+    assert token not in digest
+    assert hash_session_token(token) == digest
 
 
 def test_cookie_header_parsing():
-    token = create_token("user-1", "secret")
-    assert user_id_from_cookie_header(f"{COOKIE_NAME}={token}", "secret") == "user-1"
-    assert user_id_from_cookie_header(f"{COOKIE_NAME}=tampered", "secret") is None
-    assert user_id_from_cookie_header("unrelated=1", "secret") is None
-    assert user_id_from_cookie_header(None, "secret") is None
+    token = "raw-opaque-token"
+    assert session_token_from_cookie_header(f"{COOKIE_NAME}={token}") == token
+    assert session_token_from_cookie_header("unrelated=1") is None
+    assert session_token_from_cookie_header(None) is None
 
 
 def test_token_carries_no_account_details():
-    """Only the subject travels, so a claim or login takes effect at once."""
-    import jwt as pyjwt
+    """Opaque credentials contain no decodable user id or account fields."""
+    import base64
+    import secrets
 
-    payload = pyjwt.decode(create_token("user-1", "secret"), "secret", algorithms=["HS256"])
-    assert set(payload) == {"sub", "iat", "exp"}
+    token = secrets.token_urlsafe(32)
+    decoded = base64.urlsafe_b64decode(token + "=")
+    assert len(decoded) == 32
+    assert b"user" not in decoded
 
 
 # --- passwords ------------------------------------------------------------
@@ -294,6 +298,56 @@ async def test_login_logout_round_trip(client):
     )
     assert signed_in.status_code == 200
     assert signed_in.json()["username"] == "Stefano"
+
+
+@pytest.mark.asyncio
+async def test_active_sessions_can_be_listed_and_revoked_individually(client):
+    await client.post(
+        "/api/auth/register",
+        json={"username": "Devices", "password": "a-good-password"},
+        headers={"user-agent": "Firefox/120 (Linux)"},
+    )
+    other = AsyncClient(transport=client._transport, base_url="http://test")
+    async with other:
+        signed_in = await other.post(
+            "/api/auth/login",
+            json={"username": "Devices", "password": "a-good-password"},
+            headers={"user-agent": "Chrome/140 (Windows)"},
+        )
+        assert signed_in.status_code == 200
+
+        listed = await client.get("/api/auth/sessions")
+        assert listed.status_code == 200
+        sessions = listed.json()["sessions"]
+        assert len(sessions) == 2
+        assert sum(item["current"] for item in sessions) == 1
+        other_session = next(item for item in sessions if not item["current"])
+        assert "Chrome" in other_session["deviceLabel"]
+        assert "token" not in other_session
+
+        revoked = await client.delete(
+            f"/api/auth/sessions/{other_session['id']}"
+        )
+        assert revoked.status_code == 200
+        assert (await other.get("/api/auth/sessions")).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_logout_all_revokes_every_device(client):
+    await client.post(
+        "/api/auth/register",
+        json={"username": "Everywhere", "password": "a-good-password"},
+    )
+    other = AsyncClient(transport=client._transport, base_url="http://test")
+    async with other:
+        await other.post(
+            "/api/auth/login",
+            json={"username": "Everywhere", "password": "a-good-password"},
+        )
+        response = await client.post("/api/auth/logout-all")
+        assert response.status_code == 200
+        assert response.json()["revoked"] == 2
+        assert (await other.get("/api/auth/sessions")).status_code == 401
 
 
 @pytest.mark.asyncio

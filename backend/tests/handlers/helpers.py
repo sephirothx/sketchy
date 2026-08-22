@@ -28,7 +28,7 @@ def canvas_action(game: Game, sequence: int) -> list[int]:
 def contains_secret(value, secret: str) -> bool:
     """Whether a payload leaks a credential, by value or by telltale key.
 
-    The credential is now the JWT in the session cookie rather than a per-room
+    The credential is now the opaque token in the session cookie rather than a per-room
     secret, but the property being guarded is unchanged: nothing that
     identifies a player to the server may appear in anything broadcast to
     other players.
