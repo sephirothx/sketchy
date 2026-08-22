@@ -167,6 +167,24 @@ it is remembered by an HttpOnly `sketchy_session` cookie. Guests play under a
 name of their choosing; setting a username and password later claims that same
 account, so stats collected as a guest carry over.
 
+Accounts have an explicit lifecycle state (`anonymous`, `registered`, `merged`,
+or `deleted`) and an authorization role (`user`, `moderator`, or `admin`). The
+legacy guest boolean is derived from the lifecycle state and is no longer a
+separate database value that can drift. Create the first administrator only
+after its registered account exists; the guarded command refuses to run once
+an administrator exists and records the promotion and required reason in the
+append-only audit log:
+
+```bash
+cd backend
+.venv/bin/python -m app.auth.admin \
+  --username Operator --reason "Initial production administrator"
+```
+
+Roles are service-wide privileges. A room **host** remains an ordinary
+gameplay role and is never an administrator merely because they created a
+room.
+
 Sessions are signed with a key that is generated once and stored in the
 database. Set `JWT_SECRET` to supply your own — required if you run more than
 one server process, since they must all sign with the same key, and it also

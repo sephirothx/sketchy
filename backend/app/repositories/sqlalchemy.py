@@ -21,6 +21,7 @@ from app.db.models import (
     PromptList,
     generate_uuid,
 )
+from app.domain_values import AccountState
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     GameDetail,
@@ -75,6 +76,8 @@ def _to_user_data(user: User) -> UserData:
         name_color=user.name_color,
         avatar_url=user.avatar_url,
         is_anonymous=user.is_anonymous,
+        state=user.state,
+        role=user.role,
         created_at=user.created_at,
         updated_at=user.updated_at,
         last_login_at=user.last_login_at,
@@ -161,7 +164,7 @@ class SqlAlchemyUserRepository(UserRepository):
                     display_name=display_name.strip(),
                     name_color=name_color,
                     avatar_url=None,
-                    is_anonymous=True,
+                    state=AccountState.ANONYMOUS.value,
                 )
                 session.add(user)
             await session.refresh(user)
@@ -238,7 +241,7 @@ class SqlAlchemyUserRepository(UserRepository):
 
                 user.username = clean_username
                 user.password_hash = password_hash
-                user.is_anonymous = False
+                user.state = AccountState.REGISTERED.value
                 # Registered players play as their username, so the display
                 # name follows it rather than keeping the old guest nickname.
                 user.display_name = clean_username

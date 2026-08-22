@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -26,12 +27,16 @@ from uuid6 import uuid7
 
 from app.db.types import UTCDateTime
 from app.domain_values import (
+    ACCOUNT_STATES,
     HINT_MODES,
     PROMPT_LANGUAGES,
     SCORING_MODES,
     TURN_END_REASONS,
+    USER_ROLES,
+    AccountState,
     PromptLanguage,
     TurnEndReason,
+    UserRole,
 )
 
 
@@ -78,6 +83,8 @@ class User(Base):
             postgresql_where=text("username IS NOT NULL"),
             sqlite_where=text("username IS NOT NULL"),
         ),
+        _values_check("state", ACCOUNT_STATES, "ck_users_state"),
+        _values_check("role", USER_ROLES, "ck_users_role"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -88,7 +95,18 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(32), nullable=False)
     name_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    is_anonymous: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(16),
+        default=AccountState.ANONYMOUS.value,
+        server_default=AccountState.ANONYMOUS.value,
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(
+        String(16),
+        default=UserRole.USER.value,
+        server_default=UserRole.USER.value,
+        nullable=False,
+    )
     # Reserved for password recovery; no reset flow ships yet, but the column
     # exists so recovery can be added without migrating live accounts.
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -109,6 +127,48 @@ class User(Base):
         UTCDateTime(),
         server_default=func.now(),
         nullable=False,
+    )
+
+    @property
+    def is_anonymous(self) -> bool:
+        """Compatibility view while callers migrate to the lifecycle state."""
+        return self.state == AccountState.ANONYMOUS.value
+
+    @is_anonymous.setter
+    def is_anonymous(self, value: bool) -> None:
+        self.state = (
+            AccountState.ANONYMOUS.value
+            if value
+            else AccountState.REGISTERED.value
+        )
+
+
+class AuditEvent(Base):
+    """Append-only record of security- and moderation-sensitive actions."""
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    target_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
 
 

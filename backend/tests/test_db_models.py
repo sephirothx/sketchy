@@ -26,10 +26,14 @@ from app.db.models import (
     generate_uuid,
 )
 from app.domain_values import (
+    ACCOUNT_STATES,
     HINT_MODES,
     PROMPT_LANGUAGES,
     SCORING_MODES,
     TURN_END_REASONS,
+    USER_ROLES,
+    AccountState,
+    UserRole,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -86,6 +90,8 @@ async def test_user_creation_and_unique_username():
             loaded = result.scalar_one()
             assert loaded.display_name == "Alice"
             assert loaded.is_anonymous is False
+            assert loaded.state == AccountState.REGISTERED.value
+            assert loaded.role == UserRole.USER.value
 
         # Attempt duplicate username with different casing in new session (DB level case-insensitive uniqueness)
         with pytest.raises(IntegrityError):
@@ -100,6 +106,30 @@ async def test_user_creation_and_unique_username():
                     session.add(user2)
     finally:
         await engine.dispose()
+
+
+@pytest.mark.parametrize("column,invalid", [("state", "lost"), ("role", "owner")])
+async def test_user_state_and_role_are_database_constrained(column, invalid):
+    factory, engine = await create_test_db()
+    try:
+        values = {
+            "id": generate_uuid(),
+            "display_name": "Guest",
+            "state": AccountState.ANONYMOUS.value,
+            "role": UserRole.USER.value,
+        }
+        values[column] = invalid
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    session.add(User(**values))
+    finally:
+        await engine.dispose()
+
+
+async def test_account_state_and_role_constants_cover_database_values():
+    assert ACCOUNT_STATES == ("anonymous", "registered", "merged", "deleted")
+    assert USER_ROLES == ("user", "moderator", "admin")
 
 
 async def test_get_database_url_normalization(monkeypatch):

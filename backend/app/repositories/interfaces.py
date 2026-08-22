@@ -42,6 +42,8 @@ class UserData:
     created_at: datetime
     updated_at: datetime
     last_login_at: datetime
+    state: str = "anonymous"
+    role: str = "user"
 
 
 @dataclass(frozen=True)
