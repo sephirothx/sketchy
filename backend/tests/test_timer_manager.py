@@ -1,4 +1,6 @@
 import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -125,7 +127,11 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     from app import main
 
     timers = TimerManager()
+    dispose = AsyncMock()
     monkeypatch.setattr(main.handler_context, "timers", timers)
+    monkeypatch.setattr(main, "async_engine", SimpleNamespace(dispose=dispose))
+    monkeypatch.setattr(main, "init_db", AsyncMock())
+    monkeypatch.setattr(main, "seed_prompt_lists", AsyncMock())
     task = asyncio.create_task(asyncio.sleep(60))
     timers.replace_disconnect_timer("player", task)
     messages = iter(
@@ -147,6 +153,7 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     assert task.cancelled()
     assert timers.disconnect_timers == {}
     assert timers.restart_timers == {}
+    dispose.assert_awaited_once_with()
     assert sent == [
         {"type": "lifespan.startup.complete"},
         {"type": "lifespan.shutdown.complete"},

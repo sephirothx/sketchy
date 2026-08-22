@@ -17,6 +17,10 @@ from sqlalchemy.ext.asyncio import (
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./sketchy.db"
 SQLITE_BUSY_TIMEOUT_MS = 5_000
+POSTGRES_POOL_SIZE = 5
+POSTGRES_MAX_OVERFLOW = 5
+POSTGRES_POOL_TIMEOUT_SECONDS = 10
+POSTGRES_POOL_RECYCLE_SECONDS = 1_800
 
 
 def _configure_sqlite_connection(dbapi_connection: Any, _: Any) -> None:
@@ -54,6 +58,40 @@ def get_engine_connect_args(url: str) -> dict[str, Any]:
     return {}
 
 
+def _integer_setting(name: str, default: int, *, minimum: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError(f"{name} must be an integer") from error
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return value
+
+
+def get_engine_pool_options(url: str) -> dict[str, Any]:
+    """Return deliberate production pool limits for PostgreSQL engines."""
+    if not url.startswith("postgresql"):
+        return {}
+    return {
+        "pool_pre_ping": True,
+        "pool_size": _integer_setting(
+            "DB_POOL_SIZE", POSTGRES_POOL_SIZE, minimum=1
+        ),
+        "max_overflow": _integer_setting(
+            "DB_MAX_OVERFLOW", POSTGRES_MAX_OVERFLOW, minimum=0
+        ),
+        "pool_timeout": _integer_setting(
+            "DB_POOL_TIMEOUT_SECONDS", POSTGRES_POOL_TIMEOUT_SECONDS, minimum=1
+        ),
+        "pool_recycle": _integer_setting(
+            "DB_POOL_RECYCLE_SECONDS", POSTGRES_POOL_RECYCLE_SECONDS, minimum=1
+        ),
+    }
+
+
 def create_db_engine(url: str | None = None) -> AsyncEngine:
     """Create an async SQLAlchemy engine instance."""
     resolved_url = url or get_database_url()
@@ -62,6 +100,7 @@ def create_db_engine(url: str | None = None) -> AsyncEngine:
         echo=False,
         connect_args=get_engine_connect_args(resolved_url),
         future=True,
+        **get_engine_pool_options(resolved_url),
     )
     if resolved_url.startswith("sqlite"):
         event.listen(engine.sync_engine, "connect", _configure_sqlite_connection)

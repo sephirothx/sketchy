@@ -491,7 +491,7 @@ ADRs once they exist.
 
 | Workstream | Branch | Status | Evidence |
 | --- | --- | --- | --- |
-| #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | In progress | #345 portable Boolean default and #344 PostgreSQL CI complete; #346 SQLite integrity/concurrency pragmas implemented |
+| #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | In progress | #344-#346 complete; #347 bounded PostgreSQL pooling and graceful disposal implemented |
 | #339 database invariants | `epic/339-database-invariants` | Not started | - |
 | #340 accounts and privacy | `epic/340-accounts-identity-privacy` | Not started | - |
 | #342 prompt content | `epic/342-prompt-content-usage` | Not started | - |

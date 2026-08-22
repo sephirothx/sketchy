@@ -92,6 +92,17 @@ To use an external PostgreSQL database instead, set the `DATABASE_URL` environme
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy ./scripts/serve.sh
 ```
 
+PostgreSQL connections are checked before checkout, recycled after 30 minutes,
+and bounded to five persistent plus five overflow connections per server
+process. These deployment settings can be tuned without code changes:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DB_POOL_SIZE` | `5` | Persistent connections per process |
+| `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
+| `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
+| `DB_POOL_RECYCLE_SECONDS` | `1800` | Maximum age before a connection is replaced |
+
 CI upgrades a fresh PostgreSQL 17 database with Alembic and runs the repository
 suite against the migrated schema. To reproduce that check locally, point both
 variables at a disposable test database:

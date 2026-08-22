@@ -118,6 +118,40 @@ async def test_boolean_server_default_is_valid_postgresql():
     assert rendered == "false"
 
 
+async def test_postgresql_pool_configuration_is_bounded_and_overridable(monkeypatch):
+    from app.db import get_engine_pool_options
+
+    for name in (
+        "DB_POOL_SIZE",
+        "DB_MAX_OVERFLOW",
+        "DB_POOL_TIMEOUT_SECONDS",
+        "DB_POOL_RECYCLE_SECONDS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    assert get_engine_pool_options("postgresql+asyncpg://db/sketchy") == {
+        "pool_pre_ping": True,
+        "pool_size": 5,
+        "max_overflow": 5,
+        "pool_timeout": 10,
+        "pool_recycle": 1_800,
+    }
+    assert get_engine_pool_options("sqlite+aiosqlite:///sketchy.db") == {}
+
+    monkeypatch.setenv("DB_POOL_SIZE", "8")
+    monkeypatch.setenv("DB_MAX_OVERFLOW", "3")
+    monkeypatch.setenv("DB_POOL_TIMEOUT_SECONDS", "7")
+    monkeypatch.setenv("DB_POOL_RECYCLE_SECONDS", "900")
+    configured = get_engine_pool_options("postgresql+asyncpg://db/sketchy")
+    assert configured == {
+        "pool_pre_ping": True,
+        "pool_size": 8,
+        "max_overflow": 3,
+        "pool_timeout": 7,
+        "pool_recycle": 900,
+    }
+
+
 async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
     """Raw SQL must see the same cascades that PostgreSQL enforces."""
     from app.db import SQLITE_BUSY_TIMEOUT_MS, create_db_engine

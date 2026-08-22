@@ -13,7 +13,7 @@ from app.api.profiles import create_profile_router
 from app.api.prompt_lists import create_prompt_list_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db import async_session_factory, init_db
+from app.db import async_engine, async_session_factory, init_db
 from app.db.seed import seed_prompt_lists
 from app.handlers import register_all_handlers
 from app.repositories.sqlalchemy import (
@@ -80,12 +80,13 @@ handler_context = register_all_handlers(
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    await init_db()
-    await seed_prompt_lists(prompt_list_repo)
     try:
+        await init_db()
+        await seed_prompt_lists(prompt_list_repo)
         yield
     finally:
         await handler_context.timers.close()
+        await async_engine.dispose()
 
 
 api = FastAPI(title="Sketchy", lifespan=lifespan)
