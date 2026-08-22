@@ -7,6 +7,7 @@ from typing import Any
 
 from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -15,6 +16,18 @@ from sqlalchemy.ext.asyncio import (
 )
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./sketchy.db"
+SQLITE_BUSY_TIMEOUT_MS = 5_000
+
+
+def _configure_sqlite_connection(dbapi_connection: Any, _: Any) -> None:
+    """Apply SQLite integrity and concurrency settings to every connection."""
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+    finally:
+        cursor.close()
 
 
 def get_database_url() -> str:
@@ -44,12 +57,15 @@ def get_engine_connect_args(url: str) -> dict[str, Any]:
 def create_db_engine(url: str | None = None) -> AsyncEngine:
     """Create an async SQLAlchemy engine instance."""
     resolved_url = url or get_database_url()
-    return create_async_engine(
+    engine = create_async_engine(
         resolved_url,
         echo=False,
         connect_args=get_engine_connect_args(resolved_url),
         future=True,
     )
+    if resolved_url.startswith("sqlite"):
+        event.listen(engine.sync_engine, "connect", _configure_sqlite_connection)
+    return engine
 
 
 # Default process-wide engine and session factory

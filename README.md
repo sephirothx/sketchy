@@ -83,6 +83,8 @@ flowchart LR
 ## Database & Configuration
 
 Sketchy requires zero configuration by default, using an embedded SQLite database stored locally at `./sketchy.db`. Database migrations run automatically on server startup via Alembic.
+SQLite connections enforce foreign keys, use WAL mode for concurrent readers,
+and wait up to five seconds for a busy database before failing a write.
 
 To use an external PostgreSQL database instead, set the `DATABASE_URL` environment variable:
 

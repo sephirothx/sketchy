@@ -118,6 +118,67 @@ async def test_boolean_server_default_is_valid_postgresql():
     assert rendered == "false"
 
 
+async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
+    """Raw SQL must see the same cascades that PostgreSQL enforces."""
+    from app.db import SQLITE_BUSY_TIMEOUT_MS, create_db_engine
+
+    db_file = tmp_path / "configured.db"
+    engine = create_db_engine(f"sqlite+aiosqlite:///{db_file}")
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    user_id = generate_uuid()
+    game_id = generate_uuid()
+
+    try:
+        async with engine.begin() as conn:
+            foreign_keys = (await conn.execute(text("PRAGMA foreign_keys"))).scalar_one()
+            journal_mode = (await conn.execute(text("PRAGMA journal_mode"))).scalar_one()
+            busy_timeout = (await conn.execute(text("PRAGMA busy_timeout"))).scalar_one()
+            await conn.run_sync(Base.metadata.create_all)
+
+        assert foreign_keys == 1
+        assert journal_mode == "wal"
+        assert busy_timeout == SQLITE_BUSY_TIMEOUT_MS
+
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=user_id, display_name="Cascade test"))
+                session.add(
+                    GameRecord(
+                        id=game_id,
+                        room_name="Cascade room",
+                        scoring_mode="default",
+                        hint_mode="timed",
+                        drawing_seconds=90,
+                        total_rounds=1,
+                        player_count=1,
+                        started_at=datetime.now(timezone.utc),
+                        finished_at=datetime.now(timezone.utc),
+                    )
+                )
+                session.add(
+                    GameParticipant(
+                        id=generate_uuid(),
+                        game_id=game_id,
+                        user_id=user_id,
+                        final_score=0,
+                        final_rank=1,
+                    )
+                )
+
+        # Bypass ORM cascades: this succeeds only if SQLite itself applies the
+        # on-delete rule declared by the schema.
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM users WHERE id = :user_id"), {"user_id": user_id}
+            )
+            participant_count = (
+                await conn.execute(text("SELECT count(*) FROM game_participants"))
+            ).scalar_one()
+        assert participant_count == 0
+    finally:
+        await engine.dispose()
+
+
 async def test_game_record_cascade_and_relationships():
     factory, engine = await create_test_db()
     try:
