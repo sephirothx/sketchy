@@ -67,7 +67,7 @@ rm -f "$E2E_DB"
 log "Starting background server on http://127.0.0.1:$PORT"
 (cd "$BACKEND_DIR" && DATABASE_URL="sqlite+aiosqlite:///$E2E_DB" \
   AUTH_LOGIN_LIMIT=1000 AUTH_REGISTER_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 \
-  TURN_RESULTS_SECONDS=0.5 \
+  TURN_RESULTS_SECONDS=0.5 RESTART_DELAY_SECONDS=0.25 \
   "$BACKEND_DIR/.venv/bin/uvicorn" app.main:app --host 127.0.0.1 --port "$PORT" --log-level warning) >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 

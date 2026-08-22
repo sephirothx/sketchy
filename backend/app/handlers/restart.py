@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from functools import partial
 
@@ -17,7 +18,9 @@ from app.rooms import RestartVote, Room
 
 RESTART_VOTE_SECONDS = 20
 RESTART_VOTE_COOLDOWN_SECONDS = 60
-RESTART_DELAY_SECONDS = 3
+# The approved-vote pause is part of the player-facing flow, but E2E only
+# needs enough time to observe the approved state before the fresh game starts.
+RESTART_DELAY_SECONDS = float(os.getenv("RESTART_DELAY_SECONDS") or 3)
 
 
 def _eligible_players(room: Room):
@@ -215,7 +218,8 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
     vote.status = "approved"
     vote.restart_at = time.time() + RESTART_DELAY_SECONDS
     await ctx.game_flow.announce(
-        room, f"The restart vote passed. Restarting in {RESTART_DELAY_SECONDS} seconds."
+        room,
+        f"The restart vote passed. Restarting in {RESTART_DELAY_SECONDS:g} seconds.",
     )
     await ctx.game_flow._emit_room_state(room)
     _schedule_restart(ctx, room, vote)
