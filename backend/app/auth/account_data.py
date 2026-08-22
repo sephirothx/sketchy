@@ -30,6 +30,7 @@ from app.db.models import (
     PromptVersion,
     PromptVersionAlias,
     TurnGuess,
+    TurnPromptOffer,
     TurnRecord,
     UploadedAvatarAsset,
     User,
@@ -173,6 +174,11 @@ async def _build_export_artifact(
             await session.scalars(
                 select(TurnRecord)
                 .where(TurnRecord.drawer_user_id.in_(identity_ids))
+                .options(
+                    selectinload(TurnRecord.prompt_offers).selectinload(
+                        TurnPromptOffer.sources
+                    )
+                )
                 .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number)
             )
         ).all()
@@ -376,6 +382,7 @@ async def _build_export_artifact(
                     "scoringVersion": game.scoring_version,
                     "ruleSnapshotVersion": game.rule_snapshot_version,
                     "ruleSnapshot": game.rule_snapshot,
+                    "promptSourceMode": game.prompt_source_mode,
                     "hintMode": game.hint_mode,
                     "drawingSeconds": game.drawing_seconds,
                     "totalRounds": game.total_rounds,
@@ -411,6 +418,24 @@ async def _build_export_artifact(
                 "endReason": turn.end_reason,
                 "wrongGuessCount": turn.wrong_guess_count,
                 "nearMissCount": turn.near_miss_count,
+                "promptOffers": [
+                    {
+                        "position": offer.position,
+                        "prompt": offer.prompt_snapshot,
+                        "selected": offer.selected,
+                        "sourceKind": offer.source_kind,
+                        "promptVersionId": (
+                            str(offer.prompt_version_id)
+                            if offer.prompt_version_id
+                            else None
+                        ),
+                        "sourceRevisionIds": [
+                            str(source.prompt_list_revision_id)
+                            for source in offer.sources
+                        ],
+                    }
+                    for offer in turn.prompt_offers
+                ],
             }
             for turn in drawings
         ],

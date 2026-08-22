@@ -58,6 +58,7 @@ def game_summary_payload(summary: GameSummary) -> dict:
         "scoringMode": summary.scoring_mode,
         "scoringVersion": summary.scoring_version,
         "ruleSnapshotVersion": summary.rule_snapshot_version,
+        "promptSourceMode": summary.prompt_source_mode,
         "hintMode": summary.hint_mode,
         "drawingSeconds": summary.drawing_seconds,
         "totalRounds": summary.total_rounds,
@@ -91,6 +92,17 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 "drawerDisplayName": r.drawer_display_name,
                 "prompt": r.prompt,
                 "durationSeconds": r.duration_seconds,
+                "promptOffers": [
+                    {
+                        "position": offer.position,
+                        "prompt": offer.prompt,
+                        "selected": offer.selected,
+                        "sourceKind": offer.source_kind,
+                        "promptVersionId": offer.prompt_version_id,
+                        "sourceRevisionIds": list(offer.source_revision_ids),
+                    }
+                    for offer in r.prompt_offers
+                ],
                 "guesses": [
                     {
                         "userId": g.user_id,

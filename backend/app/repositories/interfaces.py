@@ -99,6 +99,8 @@ class GameRecordInput:
     scoring_version: int = 0
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
+    prompt_source_mode: str = "builtin_fallback"
+    prompt_source_revision_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -127,6 +129,19 @@ class TurnRecordInput:
     end_reason: str = TurnEndReason.TIMEOUT.value
     wrong_guess_count: int = 0
     near_miss_count: int = 0
+    prompt_offers: tuple[PromptOfferInput, ...] = ()
+
+
+@dataclass(frozen=True)
+class PromptOfferInput:
+    """One exact option offered to a drawer during a recorded turn."""
+
+    position: int
+    prompt: str
+    selected: bool
+    source_kind: str
+    prompt_version_id: str | None = None
+    source_revision_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -172,6 +187,7 @@ class GameSummary:
     scoring_version: int = 0
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
+    prompt_source_mode: str = "builtin_fallback"
 
 
 @dataclass(frozen=True)
@@ -195,6 +211,17 @@ class TurnDetail:
     prompt: str
     duration_seconds: float
     guesses: list[TurnGuessDetail] = field(default_factory=list)
+    prompt_offers: list[PromptOfferDetail] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class PromptOfferDetail:
+    position: int
+    prompt: str
+    selected: bool
+    source_kind: str
+    prompt_version_id: str | None
+    source_revision_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -283,6 +310,9 @@ class ResolvedPromptSelection:
     revision_ids: tuple[str, ...] = ()
     aliases: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     prompt_version_ids: Mapping[str, str] = field(default_factory=dict)
+    prompt_source_revision_ids: Mapping[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )
 
 
 class PromptListSelectionError(ValueError):

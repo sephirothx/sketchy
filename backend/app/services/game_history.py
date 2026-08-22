@@ -14,6 +14,7 @@ from app.game import Game, competition_ranks
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
+    PromptOfferInput,
     TurnGuessInput,
     TurnRecordInput,
 )
@@ -147,6 +148,34 @@ def build_game_history(
             # NOT NULL foreign key. The rest of the game still persists.
             continue
         turn_id = str(uuid7())
+        selected_position = (
+            turn.offered_prompts.index(turn.chosen_prompt)
+            if turn.chosen_prompt in turn.offered_prompts
+            else 0
+        )
+        prompt_offers = tuple(
+            PromptOfferInput(
+                position=position,
+                prompt=prompt,
+                selected=position == selected_position,
+                source_kind=(
+                    turn.offered_prompt_source_kinds[position]
+                    if position < len(turn.offered_prompt_source_kinds)
+                    else game.prompt_source_kind(prompt)
+                ),
+                prompt_version_id=(
+                    turn.offered_prompt_version_ids[position]
+                    if position < len(turn.offered_prompt_version_ids)
+                    else game.prompt_version_ids.get(prompt)
+                ),
+                source_revision_ids=(
+                    turn.offered_prompt_source_revision_ids[position]
+                    if position < len(turn.offered_prompt_source_revision_ids)
+                    else game.prompt_source_revision_ids_by_answer.get(prompt, ())
+                ),
+            )
+            for position, prompt in enumerate(turn.offered_prompts)
+        )
         turns.append(
             TurnRecordInput(
                 id=turn_id,
@@ -161,6 +190,7 @@ def build_game_history(
                 end_reason=turn.end_reason,
                 wrong_guess_count=turn.wrong_guess_count,
                 near_miss_count=turn.near_miss_count,
+                prompt_offers=prompt_offers,
             )
         )
         for guess in turn.guesses:
@@ -194,6 +224,8 @@ def build_game_history(
             scoring_version=game.scoring_version,
             rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
             rule_snapshot=rule_snapshot,
+            prompt_source_mode=game.prompt_source_mode(),
+            prompt_source_revision_ids=game.prompt_source_revision_ids,
         ),
         participants=participants,
         turns=turns,

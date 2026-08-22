@@ -289,6 +289,9 @@ class Room:
     prompt_list_revision_ids: list[str] = field(default_factory=list)
     prompt_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     prompt_version_ids: dict[str, str] = field(default_factory=dict)
+    prompt_source_revision_ids: dict[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )
     curated_prompts: list[str] = field(default_factory=list)
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
@@ -435,6 +438,20 @@ class Room:
             if prompt_match_key(answer, self.prompt_language) not in custom_keys
         }
 
+    def effective_prompt_source_revision_ids(self) -> dict[str, tuple[str, ...]]:
+        """Exact curated sources after custom prompts shadow matching answers."""
+        if self.custom_prompts_only:
+            return {}
+        custom_keys = {
+            prompt_match_key(prompt, self.prompt_language)
+            for prompt in self.custom_prompts
+        }
+        return {
+            answer: revision_ids
+            for answer, revision_ids in self.prompt_source_revision_ids.items()
+            if prompt_match_key(answer, self.prompt_language) not in custom_keys
+        }
+
     def to_public_summary(self) -> dict:
         active_players = self.seated_players()
         spectators = [p for p in self.players.values() if p.is_spectator]
@@ -542,6 +559,7 @@ class RoomManager:
         prompt_list_revision_ids: list[str] | None = None,
         prompt_aliases: dict[str, tuple[str, ...]] | None = None,
         prompt_version_ids: dict[str, str] | None = None,
+        prompt_source_revision_ids: dict[str, tuple[str, ...]] | None = None,
         curated_prompts: list[str] | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
@@ -569,6 +587,7 @@ class RoomManager:
             prompt_list_revision_ids=list(prompt_list_revision_ids or []),
             prompt_aliases=dict(prompt_aliases or {}),
             prompt_version_ids=dict(prompt_version_ids or {}),
+            prompt_source_revision_ids=dict(prompt_source_revision_ids or {}),
             curated_prompts=list(curated_prompts or []),
         )
         self.rooms[room_id] = room

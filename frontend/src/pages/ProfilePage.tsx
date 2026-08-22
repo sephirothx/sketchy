@@ -125,6 +125,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
             Rules: {game.scoringMode} scoring
             {game.scoringVersion > 0 ? ` v${game.scoringVersion}` : " (legacy version unknown)"}
             {` · ${game.hintMode} hints · ${game.drawingSeconds} seconds`}
+            {` · ${game.promptSourceMode.replaceAll("_", " ")} prompts`}
           </p>
           <ol className="profile-standings">
             {game.participants.map((p) => (

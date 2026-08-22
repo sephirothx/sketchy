@@ -43,6 +43,7 @@ from app.domain_values import AccountState, DataExportStatus
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
+    PromptOfferInput,
     TurnGuessInput,
     TurnRecordInput,
     PromptListEntryInput,
@@ -105,6 +106,7 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
             player_count=2,
             started_at=STARTED,
             finished_at=STARTED + timedelta(minutes=5),
+            prompt_source_mode="custom",
         ),
         [
             GameParticipantInput(
@@ -122,6 +124,10 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                 drawer_user_id=owner_id,
                 prompt="owner prompt",
                 duration_seconds=25,
+                prompt_offers=(
+                    PromptOfferInput(0, "owner prompt", True, "custom"),
+                    PromptOfferInput(1, "other option", False, "custom"),
+                ),
             ),
             TurnRecordInput(
                 id=other_turn,
@@ -250,6 +256,15 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 0
     assert artifact["gameParticipations"][0]["game"]["ruleSnapshot"] == {}
+    assert artifact["gameParticipations"][0]["game"]["promptSourceMode"] == "custom"
+    assert artifact["drawnTurns"][0]["promptOffers"][0] == {
+        "position": 0,
+        "prompt": "owner prompt",
+        "selected": True,
+        "sourceKind": "custom",
+        "promptVersionId": None,
+        "sourceRevisionIds": [],
+    }
     assert artifact["drawnTurns"][0]["prompt"] == "owner prompt"
     assert artifact["correctGuesses"][0]["prompt"] == "requester guessed this"
     assert artifact["sessions"] and "tokenHash" not in artifact["sessions"][0]

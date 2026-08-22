@@ -13,10 +13,13 @@ from sqlalchemy import delete, func, select
 from app.db.models import (
     Base,
     GameParticipant,
+    GamePromptSource,
     GameRecord,
     Prompt,
     PromptList,
     TurnGuess,
+    TurnPromptOffer,
+    TurnPromptOfferSource,
     TurnRecord,
     PromptListLocalization,
     PromptListRevision,
@@ -36,6 +39,7 @@ from app.repositories.interfaces import (
     UsernameTakenError,
     PromptPickTotals,
     PromptListSelectionError,
+    PromptOfferInput,
     PromptSeedConflictError,
     PromptUsage,
 )
@@ -331,6 +335,105 @@ async def test_game_history_stable_id_is_idempotent_and_rejects_conflicts():
         await engine.dispose()
 
 
+async def test_game_history_records_the_actual_prompt_pool_and_every_offer():
+    factory, engine = await create_test_db()
+    try:
+        users = SqlAlchemyUserRepository(factory)
+        history = SqlAlchemyGameHistoryRepository(factory)
+        prompts = SqlAlchemyPromptListRepository(factory)
+        drawer = await users.create_anonymous("Source drawer")
+        guesser = await users.create_anonymous("Source guesser")
+        await prompts.upsert_bundled(
+            slug="source-list",
+            name="Source list",
+            description="",
+            language="en",
+            prompts=[
+                BundledPromptDefinition(str(generate_uuid()), answer)
+                for answer in ("apple", "banana", "castle")
+            ],
+            version=1,
+        )
+        selection = await prompts.resolve_selection(["source-list"])
+        revision_id = selection.revision_ids[0]
+        turn_id = str(generate_uuid())
+        now = datetime.now(timezone.utc)
+        game_id = await history.save_game(
+            GameRecordInput(
+                room_name="Exact source room",
+                scoring_mode="default",
+                hint_mode="none",
+                drawing_seconds=90,
+                total_rounds=1,
+                player_count=2,
+                started_at=now,
+                finished_at=now,
+                prompt_source_mode="curated",
+                prompt_source_revision_ids=(revision_id,),
+            ),
+            [
+                GameParticipantInput(drawer.id, 300, 1),
+                GameParticipantInput(guesser.id, 100, 2),
+            ],
+            [
+                TurnRecordInput(
+                    id=turn_id,
+                    round_number=1,
+                    turn_number=1,
+                    drawer_user_id=drawer.id,
+                    prompt="banana",
+                    duration_seconds=20,
+                    prompt_offers=tuple(
+                        PromptOfferInput(
+                            position=position,
+                            prompt=answer,
+                            selected=answer == "banana",
+                            source_kind="curated",
+                            prompt_version_id=selection.prompt_version_ids[answer],
+                            source_revision_ids=selection.prompt_source_revision_ids[
+                                answer
+                            ],
+                        )
+                        for position, answer in enumerate(selection.prompts)
+                    ),
+                )
+            ],
+            [],
+        )
+
+        async with factory() as session:
+            assert (
+                await session.scalar(select(func.count(GamePromptSource.game_id)))
+                == 1
+            )
+            assert (
+                await session.scalar(select(func.count(TurnPromptOffer.id))) == 3
+            )
+            assert (
+                await session.scalar(
+                    select(func.count(TurnPromptOfferSource.offer_id))
+                )
+                == 3
+            )
+        detail = await history.get_game_detail(game_id, drawer.id)
+        assert detail is not None
+        assert detail.summary.prompt_source_mode == "curated"
+        assert [offer.prompt for offer in detail.turns[0].prompt_offers] == [
+            "apple",
+            "banana",
+            "castle",
+        ]
+        assert [
+            offer.prompt for offer in detail.turns[0].prompt_offers if offer.selected
+        ] == ["banana"]
+        assert all(
+            offer.source_revision_ids == (revision_id,)
+            for offer in detail.turns[0].prompt_offers
+        )
+    finally:
+        await engine.dispose()
+
+
 async def test_prompt_list_repository():
     factory, engine = await create_test_db()
     try:
@@ -405,6 +508,7 @@ async def test_prompt_list_repository():
         assert resolved.aliases["apple"] == ("malus",)
         assert len(resolved.revision_ids) == 1
         assert resolved.prompt_version_ids["apple"]
+        assert resolved.prompt_source_revision_ids["apple"] == resolved.revision_ids
 
         french = await repo.upsert_bundled(
             slug="francais",

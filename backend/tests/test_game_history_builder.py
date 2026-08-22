@@ -37,7 +37,7 @@ def turn(
     return CompletedTurnStats(
         round_number=1,
         turn_number=number,
-        offered_prompts=["a", "b", "c"],
+        offered_prompts=["jackpot", "b", "c"],
         chosen_prompt="jackpot",
         correct_guess_count=len(guesses),
         total_guesser_count=len(guesses),
@@ -139,6 +139,17 @@ def test_record_carries_the_settings_the_game_was_played_under():
     game.prompt_language = "de"
     game.hide_masked_prompt = True
     game.prompt_source_revision_ids = ("revision-one", "revision-two")
+    game.prompt_pool = ["jackpot", "b", "c"]
+    game.prompt_version_ids = {
+        "jackpot": "version-jackpot",
+        "b": "version-b",
+        "c": "version-c",
+    }
+    game.prompt_source_revision_ids_by_answer = {
+        "jackpot": ("revision-one",),
+        "b": ("revision-one", "revision-two"),
+        "c": ("revision-two",),
+    }
     game.completed_turns = [turn(players["Ann"].id)]
 
     history = build_game_history(room, game, finished_at=FINISHED_AT)
@@ -168,7 +179,53 @@ def test_record_carries_the_settings_the_game_was_played_under():
         "hideMaskedPrompt": True,
         "sourceRevisionIds": ["revision-one", "revision-two"],
     }
+    assert history.record.prompt_source_mode == "curated"
+    assert history.record.prompt_source_revision_ids == (
+        "revision-one",
+        "revision-two",
+    )
+    assert [offer.prompt for offer in history.turns[0].prompt_offers] == [
+        "jackpot",
+        "b",
+        "c",
+    ]
+    assert [offer.selected for offer in history.turns[0].prompt_offers] == [
+        True,
+        False,
+        False,
+    ]
+    assert history.turns[0].prompt_offers[1].source_revision_ids == (
+        "revision-one",
+        "revision-two",
+    )
     assert history.turns[0].duration_seconds == 42.5
+
+
+def test_actual_pool_distinguishes_custom_curated_and_fallback_offers():
+    _, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+    )
+    game.prompt_pool = ["jackpot", "b", "c"]
+    game.custom_prompt_keys = frozenset({"jackpot"})
+    game.prompt_version_ids = {"b": "version-b"}
+    game.prompt_source_revision_ids = ("revision-curated",)
+    game.prompt_source_revision_ids_by_answer = {
+        "b": ("revision-curated",)
+    }
+    game.completed_turns = [turn(players["Ann"].id)]
+
+    history = build_game_history(room, game, finished_at=FINISHED_AT)
+
+    assert history.record.prompt_source_mode == "mixed"
+    assert [offer.source_kind for offer in history.turns[0].prompt_offers] == [
+        "custom",
+        "curated",
+        "builtin_fallback",
+    ]
+    assert history.turns[0].prompt_offers[0].prompt_version_id is None
+    assert history.turns[0].prompt_offers[1].prompt_version_id == "version-b"
+    assert history.turns[0].prompt_offers[2].source_revision_ids == ()
 
 
 def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():

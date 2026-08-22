@@ -24,7 +24,13 @@ from app.drawing_rules import (
     DEFAULT_COLOR_MODE,
     allowed_colors,
 )
-from app.domain_values import HINT_MODES, SCORING_MODES, TurnEndReason
+from app.domain_values import (
+    HINT_MODES,
+    SCORING_MODES,
+    GamePromptSourceMode,
+    PromptSourceKind,
+    TurnEndReason,
+)
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_prompt_choices
 from app.prompt_content import prompt_match_key
 
@@ -254,6 +260,8 @@ class CompletedTurnStats:
     # Source identity is recorded alongside display snapshots. ``None`` means
     # an ephemeral room custom prompt and must never enter curated projections.
     offered_prompt_version_ids: tuple[str | None, ...] = ()
+    offered_prompt_source_kinds: tuple[str, ...] = ()
+    offered_prompt_source_revision_ids: tuple[tuple[str, ...], ...] = ()
     chosen_prompt_version_id: str | None = None
     drawer_token: str = ""
     # Real elapsed drawing time, not the configured limit: a turn ends as soon
@@ -307,6 +315,10 @@ class Game:
     prompt_language: str = "en"
     prompt_source_revision_ids: tuple[str, ...] = ()
     prompt_version_ids: dict[str, str] = field(default_factory=dict)
+    prompt_source_revision_ids_by_answer: dict[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )
+    custom_prompt_keys: frozenset[str] = frozenset()
     drawing_seconds: float = DRAWING_SECONDS
     hint_mode: str = "none"
     hide_masked_prompt: bool = False
@@ -380,6 +392,24 @@ class Game:
                 "sourceRevisionIds": list(self.prompt_source_revision_ids),
             },
         }
+
+    def prompt_source_kind(self, answer: str) -> str:
+        if self.prompt_version_ids.get(answer) is not None:
+            return PromptSourceKind.CURATED.value
+        if _normalize(answer, self.prompt_language) in self.custom_prompt_keys:
+            return PromptSourceKind.CUSTOM.value
+        return PromptSourceKind.BUILTIN_FALLBACK.value
+
+    def prompt_source_mode(self) -> str:
+        pool = self.prompt_pool if self.prompt_pool is not None else PROMPTS
+        kinds = {self.prompt_source_kind(answer) for answer in pool}
+        if kinds == {PromptSourceKind.CURATED.value}:
+            return GamePromptSourceMode.CURATED.value
+        if kinds == {PromptSourceKind.CUSTOM.value}:
+            return GamePromptSourceMode.CUSTOM.value
+        if len(kinds) > 1:
+            return GamePromptSourceMode.MIXED.value
+        return GamePromptSourceMode.BUILTIN_FALLBACK.value
     # Every token that was ever in the rotation, including players who have
     # since left. `turn_order` shrinks on departure, so it cannot answer "who
     # played this game?" once the game is over.
@@ -879,6 +909,13 @@ class Game:
                 total_guesser_count=total_guesser_count,
                 offered_prompt_version_ids=tuple(
                     self.prompt_version_ids.get(prompt)
+                    for prompt in self.prompt_choices
+                ),
+                offered_prompt_source_kinds=tuple(
+                    self.prompt_source_kind(prompt) for prompt in self.prompt_choices
+                ),
+                offered_prompt_source_revision_ids=tuple(
+                    self.prompt_source_revision_ids_by_answer.get(prompt, ())
                     for prompt in self.prompt_choices
                 ),
                 chosen_prompt_version_id=self.prompt_version_ids.get(

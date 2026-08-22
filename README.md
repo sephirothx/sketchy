@@ -125,6 +125,16 @@ algorithms change. Legacy rows use version `0` and an empty snapshot rather
 than claiming parameters that cannot be reconstructed. Participant-only game
 detail and private account export include the exact snapshot; public history
 summaries expose only its versions and typed mode/time fields.
+Prompt provenance is normalized as well as snapshotted. Each game records the
+immutable list revisions that were actually present after custom-prompt
+shadowing—not merely configured slugs—and classifies its real pool as curated,
+custom, mixed, or built-in fallback. Every prompt option offered in a completed
+turn gets an ordered immutable row with its text snapshot, selected flag,
+curated prompt-version ID when applicable, and every list revision containing
+that version. Custom and fallback options have explicit source kinds and null
+curated identities, so collisions cannot inflate curated statistics or make a
+bad prompt untraceable. Exact offers are participant-only history and private
+export data; share codes are never stored with them.
 Finished games also enforce one participant per account, one turn per
 game/round/turn number, and one correct guess per player and turn at the
 database layer.

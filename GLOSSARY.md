@@ -149,6 +149,8 @@ Three different things, never used for one another:
 | **Scoring mode** | The room setting chosen at creation: **Default**, **Pressure**, or **No scoring**. Use those three labels verbatim. | points mode, scoring type, "Just for fun", "Points on" |
 | **Scoring version** | The integer identifying the exact score-producing algorithm family used by a **Game**. It changes whenever a scoring parameter or algorithm changes; zero means legacy rules are unknown. | game version, rules name |
 | **Rule snapshot** | The versioned, immutable parameters frozen for a **Game**: scoring and hint algorithms, drawing time/tools/colors, prompt visibility/language, and exact prompt-source revisions. | current settings, room defaults, config dump |
+| **Prompt source mode** | The actual origin mix in a **Game** after deduplication and custom-prompt shadowing: Curated, Custom, Mixed, or Built-in fallback. It describes the pool used, not merely the lists configured. | list setting, prompt type |
+| **Prompt offer** | One ordered prompt option shown to a drawer, frozen with its text, whether it was selected, exact prompt version, and every source revision containing it. | choice counter, prompt stat |
 | **Default** | A correct guess is worth 100–300 points, falling steadily as the timer runs down. | normal, standard, classic |
 | **Pressure** | A correct guess decays from 300 points, and decays faster for everyone once the first player gets the prompt. | hardcore, fast, decay |
 | **No scoring** | Guesses are still detected and turns still end, but everyone stays on zero and no standings are shown. | casual, fun mode, unscored |

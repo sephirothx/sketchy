@@ -16,9 +16,12 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models import (
     GameParticipant,
+    GamePromptSource,
     GameRecord,
     IdentityAlias,
     TurnGuess,
+    TurnPromptOffer,
+    TurnPromptOfferSource,
     TurnRecord,
     User,
     UserBlock,
@@ -69,6 +72,7 @@ from app.repositories.interfaces import (
     PromptListEntryInput,
     PromptListMutationError,
     PromptListNotFoundError,
+    PromptOfferDetail,
     PromptListSelectionError,
     PromptSeedConflictError,
     PromptListSummary,
@@ -155,6 +159,7 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
         scoring_version=game.scoring_version,
         rule_snapshot_version=game.rule_snapshot_version,
         rule_snapshot=game.rule_snapshot,
+        prompt_source_mode=game.prompt_source_mode,
         hint_mode=game.hint_mode,
         drawing_seconds=game.drawing_seconds,
         total_rounds=game.total_rounds,
@@ -633,6 +638,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 "scoring_version": game_record.scoring_version,
                 "rule_snapshot_version": game_record.rule_snapshot_version,
                 "rule_snapshot": game_record.rule_snapshot,
+                "prompt_source_mode": game_record.prompt_source_mode,
+                "prompt_source_revision_ids": sorted(
+                    game_record.prompt_source_revision_ids
+                ),
                 "hint_mode": game_record.hint_mode,
                 "drawing_seconds": game_record.drawing_seconds,
                 "total_rounds": game_record.total_rounds,
@@ -667,6 +676,21 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         "end_reason": item.end_reason,
                         "wrong_guess_count": item.wrong_guess_count,
                         "near_miss_count": item.near_miss_count,
+                        "prompt_offers": [
+                            {
+                                "position": offer.position,
+                                "prompt": offer.prompt,
+                                "selected": offer.selected,
+                                "source_kind": offer.source_kind,
+                                "prompt_version_id": offer.prompt_version_id,
+                                "source_revision_ids": sorted(
+                                    offer.source_revision_ids
+                                ),
+                            }
+                            for offer in sorted(
+                                item.prompt_offers, key=lambda value: value.position
+                            )
+                        ],
                     }
                     for item in turns
                 ),
@@ -702,6 +726,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         record_id = (
             _entity_id(game_record.id) if game_record.id else generate_uuid()
         )
+        game_source_ids = {
+            _entity_id(revision_id)
+            for revision_id in game_record.prompt_source_revision_ids
+        }
         payload_hash = self._payload_hash(game_record, participants, turns, guesses)
         try:
             async with self._session_factory() as session:
@@ -742,6 +770,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     scoring_version=game_record.scoring_version,
                     rule_snapshot_version=game_record.rule_snapshot_version,
                     rule_snapshot=game_record.rule_snapshot,
+                    prompt_source_mode=game_record.prompt_source_mode,
                     hint_mode=game_record.hint_mode,
                     drawing_seconds=game_record.drawing_seconds,
                     total_rounds=game_record.total_rounds,
@@ -750,6 +779,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     finished_at=game_record.finished_at,
                 )
                 session.add(game_db)
+                session.add_all(
+                    GamePromptSource(
+                        game_id=record_id,
+                        prompt_list_revision_id=revision_id,
+                    )
+                    for revision_id in game_source_ids
+                )
 
                 for p in participants:
                     participant_user_id = _entity_id(p.user_id)
@@ -796,6 +832,56 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             near_miss_count=r.near_miss_count,
                         )
                     )
+                    if r.prompt_offers and sum(
+                        offer.selected for offer in r.prompt_offers
+                    ) != 1:
+                        raise ValueError(
+                            f"Turn '{r.id}' must have exactly one selected prompt offer"
+                        )
+                    for offer in r.prompt_offers:
+                        offer_source_ids = {
+                            _entity_id(revision_id)
+                            for revision_id in offer.source_revision_ids
+                        }
+                        if not offer_source_ids.issubset(game_source_ids):
+                            raise ValueError(
+                                f"Turn '{r.id}' offer source is not in the game pool"
+                            )
+                        if offer.source_kind == "curated" and (
+                            not offer.prompt_version_id or not offer_source_ids
+                        ):
+                            raise ValueError(
+                                f"Turn '{r.id}' curated offer lacks exact source identity"
+                            )
+                        if offer.source_kind != "curated" and (
+                            offer.prompt_version_id or offer_source_ids
+                        ):
+                            raise ValueError(
+                                f"Turn '{r.id}' ephemeral offer cannot claim curated identity"
+                            )
+                        offer_id = generate_uuid()
+                        session.add(
+                            TurnPromptOffer(
+                                id=offer_id,
+                                turn_id=rid,
+                                position=offer.position,
+                                prompt_version_id=(
+                                    _entity_id(offer.prompt_version_id)
+                                    if offer.prompt_version_id
+                                    else None
+                                ),
+                                prompt_snapshot=offer.prompt,
+                                selected=offer.selected,
+                                source_kind=offer.source_kind,
+                            )
+                        )
+                        session.add_all(
+                            TurnPromptOfferSource(
+                                offer_id=offer_id,
+                                prompt_list_revision_id=_entity_id(revision_id),
+                            )
+                            for revision_id in offer_source_ids
+                        )
 
                 for g in guesses:
                     try:
@@ -913,6 +999,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     selectinload(GameRecord.participants).selectinload(GameParticipant.user),
                     selectinload(GameRecord.turns).selectinload(TurnRecord.drawer),
                     selectinload(GameRecord.turns).selectinload(TurnRecord.guesses).selectinload(TurnGuess.user),
+                    selectinload(GameRecord.turns)
+                    .selectinload(TurnRecord.prompt_offers)
+                    .selectinload(TurnPromptOffer.sources),
                 )
             )
             result = await session.execute(stmt)
@@ -952,6 +1041,26 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         prompt=r.prompt,
                         duration_seconds=r.duration_seconds,
                         guesses=guess_details,
+                        prompt_offers=[
+                            PromptOfferDetail(
+                                position=offer.position,
+                                prompt=offer.prompt_snapshot,
+                                selected=offer.selected,
+                                source_kind=offer.source_kind,
+                                prompt_version_id=(
+                                    _public_id(offer.prompt_version_id)
+                                    if offer.prompt_version_id
+                                    else None
+                                ),
+                                source_revision_ids=tuple(
+                                    _public_id(source.prompt_list_revision_id)
+                                    for source in offer.sources
+                                ),
+                            )
+                            for offer in sorted(
+                                r.prompt_offers, key=lambda item: item.position
+                            )
+                        ],
                     )
                 )
 
@@ -1627,6 +1736,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             prompts: list[str] = []
             aliases: dict[str, tuple[str, ...]] = {}
             prompt_version_ids: dict[str, str] = {}
+            source_revisions_by_version: dict[UUID, list[str]] = defaultdict(list)
             seen_versions: set[UUID] = set()
             seen_match_versions: dict[str, UUID] = {}
             for revision in revisions:
@@ -1637,6 +1747,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         != PromptContentModerationState.ACTIVE.value
                     ):
                         continue
+                    source_revisions_by_version[prompt_version.id].append(
+                        _public_id(revision.id)
+                    )
                     if prompt_version.id in seen_versions:
                         continue
                     accepted_keys = {
@@ -1671,6 +1784,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 revision_ids=tuple(_public_id(revision.id) for revision in revisions),
                 aliases=aliases,
                 prompt_version_ids=prompt_version_ids,
+                prompt_source_revision_ids={
+                    answer: tuple(source_revisions_by_version[UUID(version_id)])
+                    for answer, version_id in prompt_version_ids.items()
+                },
             )
 
     async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:

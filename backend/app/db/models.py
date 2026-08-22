@@ -32,6 +32,7 @@ from app.domain_values import (
     BRUSH_CURSOR_STYLES,
     DATA_EXPORT_STATUSES,
     DEFAULT_USER_KEY_BINDINGS,
+    GAME_PROMPT_SOURCE_MODES,
     HINT_MODES,
     PROMPT_CONTENT_MODERATION_STATES,
     PROMPT_CONTENT_REPORT_REASONS,
@@ -39,6 +40,7 @@ from app.domain_values import (
     PROMPT_EDITORIAL_DIFFICULTIES,
     PROMPT_LANGUAGES,
     PROMPT_LIST_VISIBILITIES,
+    PROMPT_SOURCE_KINDS,
     REPORT_REASONS,
     REPORT_STATUSES,
     SCORING_MODES,
@@ -731,6 +733,11 @@ class GameRecord(Base):
             "rule_snapshot_version >= 0",
             name="ck_game_records_rule_snapshot_version",
         ),
+        _values_check(
+            "prompt_source_mode",
+            GAME_PROMPT_SOURCE_MODES,
+            "ck_game_records_prompt_source_mode",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -751,6 +758,12 @@ class GameRecord(Base):
     )
     rule_snapshot: Mapped[dict] = mapped_column(
         JSON, default=dict, server_default=text("'{}'"), nullable=False
+    )
+    prompt_source_mode: Mapped[str] = mapped_column(
+        String(24),
+        default="builtin_fallback",
+        server_default="builtin_fallback",
+        nullable=False,
     )
     hint_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     drawing_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -778,6 +791,30 @@ class GameRecord(Base):
         back_populates="game",
         cascade="all, delete-orphan",
     )
+    prompt_sources: Mapped[list[GamePromptSource]] = relationship(
+        back_populates="game",
+        cascade="all, delete-orphan",
+    )
+
+
+class GamePromptSource(Base):
+    """One exact immutable prompt-list revision present in a game's real pool."""
+
+    __tablename__ = "game_prompt_sources"
+
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("game_records.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    prompt_list_revision_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_list_revisions.id", ondelete="RESTRICT"),
+        primary_key=True,
+        index=True,
+    )
+
+    game: Mapped[GameRecord] = relationship(back_populates="prompt_sources")
 
 
 class GameParticipant(Base):
@@ -909,6 +946,81 @@ class TurnRecord(Base):
         back_populates="turn_record",
         cascade="all, delete-orphan",
     )
+    prompt_offers: Mapped[list[TurnPromptOffer]] = relationship(
+        back_populates="turn_record",
+        cascade="all, delete-orphan",
+        order_by="TurnPromptOffer.position",
+    )
+
+
+class TurnPromptOffer(Base):
+    """An immutable prompt option and source snapshot offered for one turn."""
+
+    __tablename__ = "turn_prompt_offers"
+    __table_args__ = (
+        UniqueConstraint(
+            "turn_id", "position", name="uq_turn_prompt_offers_turn_position"
+        ),
+        CheckConstraint("position >= 0", name="ck_turn_prompt_offers_position"),
+        _values_check(
+            "source_kind", PROMPT_SOURCE_KINDS, "ck_turn_prompt_offers_source_kind"
+        ),
+        Index(
+            "uq_turn_prompt_offers_selected",
+            "turn_id",
+            unique=True,
+            sqlite_where=text("selected = 1"),
+            postgresql_where=text("selected"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    prompt_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    prompt_snapshot: Mapped[str] = mapped_column(String(64), nullable=False)
+    selected: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    turn_record: Mapped[TurnRecord] = relationship(back_populates="prompt_offers")
+    sources: Mapped[list[TurnPromptOfferSource]] = relationship(
+        back_populates="offer", cascade="all, delete-orphan"
+    )
+
+
+class TurnPromptOfferSource(Base):
+    """One list revision that contained an offered curated prompt version."""
+
+    __tablename__ = "turn_prompt_offer_sources"
+
+    offer_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_prompt_offers.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    prompt_list_revision_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_list_revisions.id", ondelete="RESTRICT"),
+        primary_key=True,
+        index=True,
+    )
+
+    offer: Mapped[TurnPromptOffer] = relationship(back_populates="sources")
 
 
 class TurnGuess(Base):

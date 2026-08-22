@@ -22,6 +22,19 @@ class TurnEndReason(StrEnum):
     TIMEOUT = "timeout"
 
 
+class PromptSourceKind(StrEnum):
+    CURATED = "curated"
+    CUSTOM = "custom"
+    BUILTIN_FALLBACK = "builtin_fallback"
+
+
+class GamePromptSourceMode(StrEnum):
+    CURATED = "curated"
+    CUSTOM = "custom"
+    MIXED = "mixed"
+    BUILTIN_FALLBACK = "builtin_fallback"
+
+
 class PromptLanguage(StrEnum):
     ENGLISH = "en"
     GERMAN = "de"
@@ -118,6 +131,8 @@ class ReportStatus(StrEnum):
 
 
 SCORING_MODES = tuple(mode.value for mode in ScoringMode)
+PROMPT_SOURCE_KINDS = tuple(kind.value for kind in PromptSourceKind)
+GAME_PROMPT_SOURCE_MODES = tuple(mode.value for mode in GamePromptSourceMode)
 HINT_MODES = tuple(mode.value for mode in HintMode)
 TURN_END_REASONS = tuple(reason.value for reason in TurnEndReason)
 PROMPT_LANGUAGES = tuple(language.value for language in PromptLanguage)

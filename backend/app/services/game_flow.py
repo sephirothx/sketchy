@@ -24,6 +24,7 @@ from app.rooms import DrawingRecapEntry, Player, Room, resolve_hint_mode
 from app.services.game_highlights import build_game_highlights
 from app.services.game_history import build_game_history
 from app.services.prompt_usage import tally_prompt_usage
+from app.prompt_content import prompt_match_key
 from app.presenters import (
     turn_ended_payload,
     room_state_payload,
@@ -103,6 +104,9 @@ class GameFlowService:
         )
         prompt_aliases = dict(fallback.prompt_aliases) if fallback else {}
         prompt_version_ids = dict(fallback.prompt_version_ids) if fallback else {}
+        prompt_source_revision_ids = (
+            dict(fallback.prompt_source_revision_ids) if fallback else {}
+        )
         if (
             fallback is not None
             and prompt_list_slugs == list(fallback.prompt_list_slugs)
@@ -135,6 +139,17 @@ class GameFlowService:
                 prompt_list_revision_ids = list(selection.revision_ids)
                 prompt_aliases = dict(selection.aliases)
                 prompt_version_ids = dict(selection.prompt_version_ids)
+                prompt_source_revision_ids = dict(
+                    selection.prompt_source_revision_ids
+                )
+                if not prompt_source_revision_ids and selection.revision_ids:
+                    # Compatibility for repository adapters implementing the
+                    # older selection DTO. The SQLAlchemy repository always
+                    # supplies exact per-version membership.
+                    prompt_source_revision_ids = {
+                        prompt: tuple(selection.revision_ids)
+                        for prompt in selection.prompts
+                    }
             except PromptListSelectionError as error:
                 raise RoomPromptResolutionError(str(error)) from error
             except Exception as error:
@@ -146,6 +161,7 @@ class GameFlowService:
                     prompt_list_revision_ids = []
                     prompt_aliases = {}
                     prompt_version_ids = {}
+                    prompt_source_revision_ids = {}
                 else:
                     logger.exception(
                         "Failed to resolve prompts for slugs: %s", prompt_list_slugs
@@ -174,6 +190,7 @@ class GameFlowService:
             "prompt_list_revision_ids": prompt_list_revision_ids,
             "prompt_aliases": prompt_aliases,
             "prompt_version_ids": prompt_version_ids,
+            "prompt_source_revision_ids": prompt_source_revision_ids,
             "curated_prompts": curated_prompts,
         }
 
@@ -211,6 +228,12 @@ class GameFlowService:
         room.prompt_list_revision_ids = list(selection.revision_ids)
         room.prompt_aliases = dict(selection.aliases)
         room.prompt_version_ids = dict(selection.prompt_version_ids)
+        room.prompt_source_revision_ids = dict(selection.prompt_source_revision_ids)
+        if not room.prompt_source_revision_ids and selection.revision_ids:
+            room.prompt_source_revision_ids = {
+                prompt: tuple(selection.revision_ids)
+                for prompt in selection.prompts
+            }
 
     def schedule_phase_timer(self, room: Room, seconds: float) -> None:
         async def _runner() -> None:
@@ -343,6 +366,20 @@ class GameFlowService:
         for player in room.player_list():
             player.score = 0
         room.state = "playing"
+        prompt_version_ids = room.effective_prompt_version_ids()
+        source_revision_ids_by_answer = (
+            room.effective_prompt_source_revision_ids()
+        )
+        if not source_revision_ids_by_answer and prompt_version_ids:
+            source_revision_ids_by_answer = {
+                prompt: tuple(room.prompt_list_revision_ids)
+                for prompt in prompt_version_ids
+            }
+        active_source_ids = {
+            revision_id
+            for revision_ids in source_revision_ids_by_answer.values()
+            for revision_id in revision_ids
+        }
         room.game = Game(
             turn_order=[player.id for player in active_players],
             rounds_total=room.rounds,
@@ -356,11 +393,16 @@ class GameFlowService:
             color_mode=room.color_mode,
             prompt_language=room.prompt_language,
             prompt_source_revision_ids=tuple(
-                room.prompt_list_revision_ids
-                if not room.custom_prompts_only
-                else []
+                revision_id
+                for revision_id in room.prompt_list_revision_ids
+                if revision_id in active_source_ids
             ),
-            prompt_version_ids=room.effective_prompt_version_ids(),
+            prompt_version_ids=prompt_version_ids,
+            prompt_source_revision_ids_by_answer=source_revision_ids_by_answer,
+            custom_prompt_keys=frozenset(
+                prompt_match_key(prompt, room.prompt_language)
+                for prompt in room.custom_prompts
+            ),
         )
         await self._emit_room_state(room)
         if restarted:
