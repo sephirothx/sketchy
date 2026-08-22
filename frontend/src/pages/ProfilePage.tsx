@@ -123,15 +123,21 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
         <div className="profile-game-body">
           <ol className="profile-standings">
             {game.participants.map((p) => (
-              <li key={p.userId}>
+              <li key={p.seatId}>
                 <span className="profile-standing-rank">#{p.finalRank}</span>
-                <Link to={`/profile/${p.userId}`}>
+                {p.userId ? <Link to={`/profile/${p.userId}`}>
                   <PlayerName
                     name={p.displayName}
                     nameColor={p.nameColor}
                     isAnonymous={p.isAnonymous}
                   />
-                </Link>
+                </Link> : (
+                  <PlayerName
+                    name={p.displayName}
+                    nameColor={p.nameColor}
+                    isAnonymous={p.isAnonymous}
+                  />
+                )}
                 <span className="profile-standing-score">{p.finalScore}</span>
               </li>
             ))}
@@ -144,9 +150,13 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
             // The rounds carry ids, the standings carry the colors: joining
             // them here keeps every name in a recap the same color, without
             // the detail endpoint repeating what the summary already sent.
-            const byUser = new Map(detail.participants.map((p) => [p.userId, p]));
-            const named = (userId: string, fallbackName: string) => {
-              const participant = byUser.get(userId);
+            const byUser = new Map(
+              detail.participants
+                .filter((p): p is typeof p & { userId: string } => p.userId !== null)
+                .map((p) => [p.userId, p]),
+            );
+            const named = (userId: string | null, fallbackName: string) => {
+              const participant = userId ? byUser.get(userId) : undefined;
               return (
                 <PlayerName
                   name={participant?.displayName ?? fallbackName}
@@ -178,7 +188,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                       {turn.guesses.length === 0
                         ? "nobody"
                         : turn.guesses.map((g, index) => (
-                            <span key={g.userId}>
+                            <span key={g.userId ?? `removed-${index}`}>
                               {index > 0 && ", "}
                               {named(g.userId, g.displayName)} ({g.pointsAwarded})
                             </span>

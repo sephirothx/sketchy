@@ -62,6 +62,7 @@ def game_summary_payload(summary: GameSummary) -> dict:
         "finishedAt": _timestamp(summary.finished_at),
         "participants": [
             {
+                "seatId": p.seat_id,
                 "userId": p.user_id,
                 "displayName": p.display_name,
                 "nameColor": p.name_color,

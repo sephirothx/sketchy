@@ -276,7 +276,7 @@ async def test_postgresql_pool_configuration_is_bounded_and_overridable(monkeypa
 
 
 async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
-    """Raw SQL must see the same cascades that PostgreSQL enforces."""
+    """Raw SQL must enforce cascades and history-preserving SET NULL rules."""
     from app.db import SQLITE_BUSY_TIMEOUT_MS, create_db_engine
 
     db_file = tmp_path / "configured.db"
@@ -284,6 +284,7 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     user_id = generate_uuid()
     game_id = generate_uuid()
+    turn_id = generate_uuid()
 
     try:
         async with engine.begin() as conn:
@@ -317,8 +318,31 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                         id=generate_uuid(),
                         game_id=game_id,
                         user_id=user_id,
+                        display_name_snapshot="Cascade test",
                         final_score=0,
                         final_rank=1,
+                    )
+                )
+                session.add(
+                    TurnRecord(
+                        id=turn_id,
+                        game_id=game_id,
+                        round_number=1,
+                        turn_number=1,
+                        drawer_user_id=user_id,
+                        drawer_display_name_snapshot="Cascade test",
+                        prompt="anchor",
+                        duration_seconds=10,
+                    )
+                )
+                session.add(
+                    TurnGuess(
+                        id=generate_uuid(),
+                        turn_id=turn_id,
+                        user_id=user_id,
+                        display_name_snapshot="Cascade test",
+                        points_awarded=10,
+                        guess_time_seconds=5,
                     )
                 )
 
@@ -329,10 +353,28 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                 text("DELETE FROM users WHERE id = :user_id"),
                 {"user_id": user_id.hex},
             )
-            participant_count = (
-                await conn.execute(text("SELECT count(*) FROM game_participants"))
-            ).scalar_one()
-        assert participant_count == 0
+            participant = (
+                await conn.execute(
+                    text(
+                        "SELECT user_id, display_name_snapshot FROM game_participants"
+                    )
+                )
+            ).one()
+            turn = (
+                await conn.execute(
+                    text(
+                        "SELECT drawer_user_id, drawer_display_name_snapshot FROM turn_records"
+                    )
+                )
+            ).one()
+            guess = (
+                await conn.execute(
+                    text("SELECT user_id, display_name_snapshot FROM turn_guesses")
+                )
+            ).one()
+        assert participant == (None, "Cascade test")
+        assert turn == (None, "Cascade test")
+        assert guess == (None, "Cascade test")
     finally:
         await engine.dispose()
 

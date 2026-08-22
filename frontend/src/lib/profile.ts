@@ -13,7 +13,8 @@ export interface ProfileStats {
 }
 
 export interface GameParticipant {
-  userId: string;
+  seatId: string;
+  userId: string | null;
   displayName: string;
   nameColor: string | null;
   isAnonymous: boolean;
@@ -35,7 +36,7 @@ export interface GameSummary {
 }
 
 export interface TurnGuess {
-  userId: string;
+  userId: string | null;
   displayName: string;
   pointsAwarded: number;
   guessTimeSeconds: number;
@@ -44,7 +45,7 @@ export interface TurnGuess {
 export interface GameTurn {
   roundNumber: number;
   turnNumber: number;
-  drawerUserId: string;
+  drawerUserId: string | null;
   drawerDisplayName: string;
   prompt: string;
   durationSeconds: number;

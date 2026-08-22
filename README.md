@@ -106,6 +106,12 @@ lists.
 Finished games also enforce one participant per account, one turn per
 game/round/turn number, and one correct guess per player and turn at the
 database layer.
+Participant, drawer, and guess rows freeze the player's display name, name
+color, and guest status when the game is saved. Their account foreign keys are
+nullable and use `ON DELETE SET NULL`; even a physical user-row removal cannot
+cascade away turns, guesses, or another player's game. The history API uses a
+stable participant seat ID and renders the frozen presentation when an account
+link is absent.
 Prompt-list counts are derived from prompt membership on read, so adding or
 removing a prompt cannot leave a cached total out of sync.
 Prompt metadata and usage counters also have database-side defaults, keeping

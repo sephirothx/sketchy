@@ -123,10 +123,11 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
         finished_at=game.finished_at,
         participants=[
             GameParticipantSummary(
-                user_id=_public_id(p.user_id),
-                display_name=p.user.display_name if p.user else "Unknown",
-                name_color=p.user.name_color if p.user else None,
-                is_anonymous=p.user.is_anonymous if p.user else True,
+                seat_id=_public_id(p.id),
+                user_id=_public_id(p.user_id) if p.user_id else None,
+                display_name=p.display_name_snapshot,
+                name_color=p.name_color_snapshot,
+                is_anonymous=p.is_anonymous_snapshot,
                 final_score=p.final_score,
                 final_rank=p.final_rank,
             )
@@ -478,6 +479,28 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         )
         async with self._session_factory() as session:
             async with session.begin():
+                referenced_user_ids = {
+                    _entity_id(participant.user_id) for participant in participants
+                }
+                referenced_user_ids.update(
+                    _entity_id(turn.drawer_user_id) for turn in turns
+                )
+                referenced_user_ids.update(
+                    _entity_id(guess.user_id) for guess in guesses
+                )
+                users = (
+                    await session.scalars(
+                        select(User).where(User.id.in_(referenced_user_ids))
+                    )
+                ).all()
+                users_by_id = {user.id: user for user in users}
+                missing = referenced_user_ids - users_by_id.keys()
+                if missing:
+                    raise ValueError(
+                        "Cannot save game with unknown user ids: "
+                        + ", ".join(sorted(str(value) for value in missing))
+                    )
+
                 game_db = GameRecord(
                     id=record_id,
                     room_name=game_record.room_name,
@@ -492,11 +515,16 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 session.add(game_db)
 
                 for p in participants:
+                    participant_user_id = _entity_id(p.user_id)
+                    participant_user = users_by_id[participant_user_id]
                     session.add(
                         GameParticipant(
                             id=generate_uuid(),
                             game_id=record_id,
-                            user_id=_entity_id(p.user_id),
+                            user_id=participant_user_id,
+                            display_name_snapshot=participant_user.display_name,
+                            name_color_snapshot=participant_user.name_color,
+                            is_anonymous_snapshot=participant_user.is_anonymous,
                             final_score=p.final_score,
                             final_rank=p.final_rank,
                             turns_played=p.turns_played,
@@ -509,13 +537,18 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     if rid in created_turn_ids:
                         raise ValueError(f"Duplicate turn id '{r.id}'")
                     created_turn_ids.add(rid)
+                    drawer_user_id = _entity_id(r.drawer_user_id)
+                    drawer_user = users_by_id[drawer_user_id]
                     session.add(
                         TurnRecord(
                             id=rid,
                             game_id=record_id,
                             round_number=r.round_number,
                             turn_number=r.turn_number,
-                            drawer_user_id=_entity_id(r.drawer_user_id),
+                            drawer_user_id=drawer_user_id,
+                            drawer_display_name_snapshot=drawer_user.display_name,
+                            drawer_name_color_snapshot=drawer_user.name_color,
+                            drawer_is_anonymous_snapshot=drawer_user.is_anonymous,
                             prompt=r.prompt,
                             duration_seconds=r.duration_seconds,
                             guesser_count=r.guesser_count,
@@ -538,11 +571,16 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         raise ValueError(
                             f"Guess references unknown turn_id '{g.turn_id}'"
                         )
+                    guess_user_id = _entity_id(g.user_id)
+                    guess_user = users_by_id[guess_user_id]
                     session.add(
                         TurnGuess(
                             id=generate_uuid(),
                             turn_id=target_turn_id,
-                            user_id=_entity_id(g.user_id),
+                            user_id=guess_user_id,
+                            display_name_snapshot=guess_user.display_name,
+                            name_color_snapshot=guess_user.name_color,
+                            is_anonymous_snapshot=guess_user.is_anonymous,
                             points_awarded=g.points_awarded,
                             guess_time_seconds=g.guess_time_seconds,
                             hints_used=g.hints_used,
@@ -639,8 +677,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             for r in sorted(g.turns, key=lambda x: (x.round_number, x.turn_number)):
                 guess_details = [
                     TurnGuessDetail(
-                        user_id=_public_id(guess.user_id),
-                        display_name=guess.user.display_name if guess.user else "Unknown",
+                        user_id=_public_id(guess.user_id) if guess.user_id else None,
+                        display_name=guess.display_name_snapshot,
                         points_awarded=guess.points_awarded,
                         guess_time_seconds=guess.guess_time_seconds,
                     )
@@ -650,8 +688,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     TurnDetail(
                         round_number=r.round_number,
                         turn_number=r.turn_number,
-                        drawer_user_id=_public_id(r.drawer_user_id),
-                        drawer_display_name=r.drawer.display_name if r.drawer else "Unknown",
+                        drawer_user_id=(
+                            _public_id(r.drawer_user_id) if r.drawer_user_id else None
+                        ),
+                        drawer_display_name=r.drawer_display_name_snapshot,
                         prompt=r.prompt,
                         duration_seconds=r.duration_seconds,
                         guesses=guess_details,

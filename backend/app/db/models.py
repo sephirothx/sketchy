@@ -363,11 +363,18 @@ class GameParticipant(Base):
         nullable=False,
         index=True,
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
+    )
+    display_name_snapshot: Mapped[str] = mapped_column(
+        String(32), default="Unknown", nullable=False
+    )
+    name_color_snapshot: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    is_anonymous_snapshot: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
     )
     final_score: Mapped[int] = mapped_column(Integer, nullable=False)
     final_rank: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -378,7 +385,7 @@ class GameParticipant(Base):
     )
 
     game: Mapped[GameRecord] = relationship(back_populates="participants")
-    user: Mapped[User] = relationship()
+    user: Mapped[User | None] = relationship()
 
 
 class TurnRecord(Base):
@@ -409,11 +416,20 @@ class TurnRecord(Base):
     )
     round_number: Mapped[int] = mapped_column(Integer, nullable=False)
     turn_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    drawer_user_id: Mapped[uuid.UUID] = mapped_column(
+    drawer_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
+    )
+    drawer_display_name_snapshot: Mapped[str] = mapped_column(
+        String(32), default="Unknown", nullable=False
+    )
+    drawer_name_color_snapshot: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    drawer_is_anonymous_snapshot: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
     )
     prompt: Mapped[str] = mapped_column(String(64), nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
@@ -448,7 +464,7 @@ class TurnRecord(Base):
     )
 
     game: Mapped[GameRecord] = relationship(back_populates="turns")
-    drawer: Mapped[User] = relationship()
+    drawer: Mapped[User | None] = relationship()
     guesses: Mapped[list[TurnGuess]] = relationship(
         back_populates="turn_record",
         cascade="all, delete-orphan",
@@ -472,11 +488,18 @@ class TurnGuess(Base):
         nullable=False,
         index=True,
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
+    )
+    display_name_snapshot: Mapped[str] = mapped_column(
+        String(32), default="Unknown", nullable=False
+    )
+    name_color_snapshot: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    is_anonymous_snapshot: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
     )
     points_awarded: Mapped[int] = mapped_column(Integer, nullable=False)
     guess_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
@@ -495,7 +518,7 @@ class TurnGuess(Base):
     )
 
     turn_record: Mapped[TurnRecord] = relationship(back_populates="guesses")
-    user: Mapped[User] = relationship()
+    user: Mapped[User | None] = relationship()
 
 
 class PromptList(Base):

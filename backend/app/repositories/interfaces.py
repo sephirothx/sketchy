@@ -134,7 +134,8 @@ class TurnGuessInput:
 class GameParticipantSummary:
     """Summary of player placement in a game record."""
 
-    user_id: str
+    seat_id: str
+    user_id: str | None
     display_name: str
     name_color: str | None
     is_anonymous: bool
@@ -162,7 +163,7 @@ class GameSummary:
 class TurnGuessDetail:
     """Detailed guess event in a past round."""
 
-    user_id: str
+    user_id: str | None
     display_name: str
     points_awarded: int
     guess_time_seconds: float
@@ -174,7 +175,7 @@ class TurnDetail:
 
     round_number: int
     turn_number: int
-    drawer_user_id: str
+    drawer_user_id: str | None
     drawer_display_name: str
     prompt: str
     duration_seconds: float
