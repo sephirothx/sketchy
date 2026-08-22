@@ -469,6 +469,37 @@
   grid-column: 1 / -1;
   margin-top: 6px;
 }
+.prompt-list-language-row {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  margin: 2px 0 7px;
+}
+.prompt-list-language-row label {
+  font-weight: 650;
+}
+.prompt-list-language-row output {
+  color: #334155;
+  font-weight: 750;
+}
+.prompt-list-language-row select {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #1e293b;
+  font: inherit;
+  padding: 5px 28px 5px 8px;
+}
+[data-theme="dark"] .prompt-list-language-row output {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .prompt-list-language-row select {
+  background: #0f172a;
+  border-color: #334155;
+  color: #e2e8f0;
+}
 .toggle-chips {
   display: flex;
   flex-wrap: wrap;

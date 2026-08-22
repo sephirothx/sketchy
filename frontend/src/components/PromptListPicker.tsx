@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../lib/api";
-import type { PromptListSummary } from "../types";
+import { promptLanguageLabel } from "../lib/promptLanguages";
+import type { PromptLanguage, PromptListSummary } from "../types";
 
 interface PromptListPickerProps {
   selectedSlugs: string[];
@@ -48,6 +49,21 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
     }
   }
 
+  const selectedList = promptLists.find((list) => selectedSlugs.includes(list.slug));
+  const activeLanguage = selectedList?.language
+    ?? promptLists.find((list) => list.language === "en")?.language
+    ?? promptLists[0]?.language
+    ?? "en";
+  const languages = [...new Set(promptLists.map((list) => list.language))]
+    .sort((left, right) => promptLanguageLabel(left).localeCompare(promptLanguageLabel(right)));
+  const visibleLists = promptLists.filter((list) => list.language === activeLanguage);
+
+  function handleLanguage(language: PromptLanguage) {
+    if (disabled || language === activeLanguage) return;
+    const firstList = promptLists.find((list) => list.language === language);
+    if (firstList) onChange([firstList.slug]);
+  }
+
   if (loading) {
     return (
       <div className="prompt-list-picker-loading">
@@ -59,7 +75,9 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
   if (fetchError && promptLists.length === 0) {
     return (
       <div className="prompt-list-picker-fallback">
-        <p className="prompt-list-fallback-note">Using default prompt list ({fetchError})</p>
+        <p className="prompt-list-fallback-note">
+          Prompt-list choices are unavailable ({fetchError}). Your current selection is unchanged.
+        </p>
       </div>
     );
   }
@@ -67,8 +85,27 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
   return (
     <fieldset className="room-choice-group prompt-list-picker-group">
       <legend>Prompt lists</legend>
+      <div className="prompt-list-language-row">
+        <label htmlFor="prompt-list-language">Prompt language</label>
+        {languages.length > 1 ? (
+          <select
+            id="prompt-list-language"
+            value={activeLanguage}
+            disabled={disabled}
+            onChange={(event) => handleLanguage(event.target.value as PromptLanguage)}
+          >
+            {languages.map((language) => (
+              <option key={language} value={language}>
+                {promptLanguageLabel(language)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <output>{promptLanguageLabel(activeLanguage)}</output>
+        )}
+      </div>
       <div className="toggle-chips" role="group" aria-label="Prompt lists">
-        {promptLists.map((wl) => {
+        {visibleLists.map((wl) => {
           const isSelected = selectedSlugs.includes(wl.slug);
           const isOnlySelected = isSelected && selectedSlugs.length <= 1;
 

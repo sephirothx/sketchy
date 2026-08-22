@@ -16,6 +16,7 @@ from app.db.models import (
     Prompt,
     TurnGuess,
     TurnRecord,
+    PromptListLocalization,
     generate_uuid,
 )
 from app.repositories.interfaces import (
@@ -27,6 +28,7 @@ from app.repositories.interfaces import (
     TurnRecordInput,
     UsernameTakenError,
     PromptPickTotals,
+    PromptListSelectionError,
     PromptUsage,
 )
 from app.repositories.sqlalchemy import (
@@ -305,6 +307,36 @@ async def test_prompt_list_repository():
         # 4. Get by slugs
         slug_words = await repo.get_prompts_by_slugs(["standard"])
         assert slug_words == ["apple", "banana", "cherry"]
+        resolved = await repo.resolve_selection(["standard"])
+        assert resolved.language == "en"
+        assert resolved.prompts == ("apple", "banana", "cherry")
+
+        french = await repo.upsert_bundled(
+            slug="francais",
+            name="Français",
+            description="Mots français",
+            language="fr",
+            prompts=["éléphant", "vélo"],
+            version=1,
+        )
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    PromptListLocalization(
+                        prompt_list_id=UUID(french.id),
+                        locale="en",
+                        name="French",
+                        description="French words",
+                    )
+                )
+        french_lists = await repo.list_all(language="fr", locale="en")
+        assert [(entry.slug, entry.name, entry.language) for entry in french_lists] == [
+            ("francais", "French", "fr")
+        ]
+        with pytest.raises(PromptListSelectionError, match="same language"):
+            await repo.resolve_selection(["standard", "francais"])
+        with pytest.raises(PromptListSelectionError, match="not found"):
+            await repo.resolve_selection(["missing"])
 
         # 5. Record one finished game's offers and picks
         await repo.record_prompt_usage(

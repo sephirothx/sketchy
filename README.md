@@ -10,7 +10,7 @@ copy and docs alike. Read it before naming anything a player can see.
 ## Features
 
 - Lobby with a live, polled list of public rooms, or join a private room by code.
-- Curated prompt lists (Standard and Extended English) selectable during room creation, combined with optional custom prompts. Pick rate and guess accuracy stats tracked per prompt, and browsable from the lobby on a prompt stats page listing every prompt in a list, searchable and sortable. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned.
+- Curated prompt lists (currently Standard and Extended English) selectable during room creation, combined with optional custom prompts. The picker and stats catalogue show each list's content language; every room resolves exactly one language and cannot combine lists with different matching rules. Pick rate and guess accuracy stats are tracked per prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
 - Drawing rules — two room settings the host sets at creation and edits while waiting.
@@ -123,13 +123,24 @@ display answer, a language-aware match key, editorial difficulty, content
 rating, explicit category tags, and an exact set of accepted **Prompt aliases**.
 Aliases are unique within a concept and language, and are attached separately
 to each version so changing an alias later cannot rewrite how an older game
-matched guesses. English matching case-folds, collapses whitespace, and folds
-canonically decomposable accents. Only languages with implemented matching
-semantics may be stored even when a string is otherwise a valid BCP-47 tag.
+matched guesses. The initial supported Latin-language registry—English,
+German, Spanish, French, Italian, Dutch, and Portuguese—case-folds, collapses
+whitespace, and folds canonically decomposable accents. Other BCP-47 tags are
+rejected until their matching semantics are implemented.
+Each room's **Prompt language** is derived authoritatively from its selected
+lists, carried into exact and near-match game logic, and exposed in room
+payloads. Missing, empty, or mixed-language selections are visible validation
+failures rather than silent fallback. A custom-prompts-only room may continue
+when the list store is unavailable because it does not consume that content.
+List `name` and `description` are authored catalogue copy; optional translated
+copy is stored separately by interface locale and selected from
+`Accept-Language`, so translating the UI never changes a list's content
+language.
 The legacy bundled-list rows are connected to these identities by the later
 #342 seed/revision migration; the new tables deliberately do not merge existing
 same-text rows on their own.
-Stored scoring modes, hint modes, turn outcomes, and supported prompt languages
+Stored scoring modes, hint modes, turn outcomes, supported prompt languages,
+and supported prompt-list catalogue locales
 are string enums backed by portable database `CHECK` constraints. Extending a
 set requires one coordinated code, migration, contract, README, and glossary
 review.

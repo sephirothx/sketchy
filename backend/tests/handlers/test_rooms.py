@@ -6,6 +6,10 @@ import socketio
 
 from app.handlers import register_all_handlers as register_handlers
 from app.presenters import editable_room_settings_payload
+from app.repositories.interfaces import (
+    PromptListSelectionError,
+    ResolvedPromptSelection,
+)
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     RoomManager,
@@ -170,13 +174,16 @@ async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
 class RecordingPromptListRepo:
     """Answers with a fixed pool, and counts how often it was asked."""
 
-    def __init__(self, prompts=("aardvark", "zeppelin")):
+    def __init__(self, prompts=("aardvark", "zeppelin"), language="en"):
         self.prompts = list(prompts)
+        self.language = language
         self.reads = 0
 
-    async def get_prompts_by_slugs(self, slugs):
+    async def resolve_selection(self, slugs):
         self.reads += 1
-        return list(self.prompts)
+        return ResolvedPromptSelection(
+            tuple(slugs), self.language, tuple(self.prompts)
+        )
 
     async def record_prompt_usage(self, slugs, usage):
         return None
@@ -235,6 +242,67 @@ async def test_a_settings_change_retries_prompt_lists_that_never_loaded():
 
 
 @pytest.mark.asyncio
+async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matching():
+    room_manager = RoomManager()
+    repo = RecordingPromptListRepo(("éléphant", "vélo"), language="fr")
+    room, sio = build_settings_room(
+        room_manager,
+        repo,
+        prompt_list_slugs=["english_standard"],
+        curated_prompts=["apple"],
+    )
+    room_manager.add_player(room, "Guest")
+
+    result = await sio.handlers["/"]["update_room_settings"](
+        "host-sid", {"promptListSlugs": ["francais"]}
+    )
+
+    assert result == {"ok": True}
+    assert room.prompt_language == "fr"
+    assert room.curated_prompts == ["éléphant", "vélo"]
+    for payload in (
+        room.to_state_payload(),
+        room.to_public_summary(),
+        editable_room_settings_payload(room),
+    ):
+        assert payload["promptLanguage"] == "fr"
+
+    started = await sio.handlers["/"]["start_game"]("host-sid", None)
+    assert started["ok"] is True
+    assert room.game is not None
+    assert room.game.prompt_language == "fr"
+
+
+@pytest.mark.asyncio
+async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room():
+    class InvalidSelectionRepo:
+        async def resolve_selection(self, slugs):
+            raise PromptListSelectionError(
+                "Selected prompt lists must use the same language"
+            )
+
+    room_manager = RoomManager()
+    room, sio = build_settings_room(
+        room_manager,
+        InvalidSelectionRepo(),
+        prompt_list_slugs=["english_standard"],
+        curated_prompts=["apple"],
+    )
+
+    result = await sio.handlers["/"]["update_room_settings"](
+        "host-sid", {"promptListSlugs": ["english_standard", "francais"]}
+    )
+
+    assert result == {
+        "ok": False,
+        "error": "Selected prompt lists must use the same language",
+        "field": "promptListSlugs",
+    }
+    assert room.prompt_list_slugs == ["english_standard"]
+    assert room.curated_prompts == ["apple"]
+
+
+@pytest.mark.asyncio
 async def test_starting_waits_for_a_settings_change_that_arrived_first():
     """Settings save themselves now, so the host can change one and press Start
     a breath later. Socket.IO gives each event its own task, so arriving first
@@ -256,10 +324,12 @@ async def test_starting_waits_for_a_settings_change_that_arrived_first():
     finish_reading = asyncio.Event()
 
     class BlockingPromptListRepo:
-        async def get_prompts_by_slugs(self, slugs):
+        async def resolve_selection(self, slugs):
             reading.set()
             await finish_reading.wait()
-            return ["aardvark", "zeppelin"]
+            return ResolvedPromptSelection(
+                tuple(slugs), "en", ("aardvark", "zeppelin")
+            )
 
         async def record_prompt_usage(self, slugs, usage):
             return None

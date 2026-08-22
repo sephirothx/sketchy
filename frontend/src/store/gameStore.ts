@@ -12,6 +12,7 @@ import type {
   HintMode,
   ModerationState,
   PlayerInfo,
+  PromptLanguage,
   RoomStatePayload,
   RestartVoteState,
   GuessBreakdown,
@@ -43,6 +44,7 @@ interface GameStore {
   hideMaskedPrompt: boolean;
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
+  promptLanguage: PromptLanguage;
   promptListSlugs: string[];
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
@@ -162,6 +164,7 @@ export const useGameStore = create<GameStore>((set) => ({
   hideMaskedPrompt: false,
   allowedTools: DEFAULT_ALLOWED_TOOLS,
   colorMode: DEFAULT_COLOR_MODE,
+  promptLanguage: "en",
   promptListSlugs: ["english_standard"],
   roomState: "waiting",
   players: [],
@@ -198,6 +201,7 @@ export const useGameStore = create<GameStore>((set) => ({
       hideMaskedPrompt: payload.hideMaskedPrompt ?? false,
       allowedTools: payload.allowedTools ?? DEFAULT_ALLOWED_TOOLS,
       colorMode: payload.colorMode ?? DEFAULT_COLOR_MODE,
+      promptLanguage: payload.promptLanguage ?? "en",
       promptListSlugs: payload.promptListSlugs?.length ? payload.promptListSlugs : ["english_standard"],
       roomState: payload.state,
       finalScores: payload.lastGameScores?.length

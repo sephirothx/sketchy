@@ -24,6 +24,12 @@ class TurnEndReason(StrEnum):
 
 class PromptLanguage(StrEnum):
     ENGLISH = "en"
+    GERMAN = "de"
+    SPANISH = "es"
+    FRENCH = "fr"
+    ITALIAN = "it"
+    DUTCH = "nl"
+    PORTUGUESE = "pt"
 
 
 class PromptEditorialDifficulty(StrEnum):

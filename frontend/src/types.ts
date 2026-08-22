@@ -40,12 +40,13 @@ export interface ColorblindSafeSuggestion {
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 export type ScoringMode = "none" | "default" | "pressure";
 export type ColorMode = "all" | "palette" | "colorblind_safe" | "black_and_white";
+export type PromptLanguage = "de" | "en" | "es" | "fr" | "it" | "nl" | "pt";
 
 export interface PromptListSummary {
   slug: string;
   name: string;
   description: string;
-  language: string;
+  language: PromptLanguage;
   promptCount: number;
   isBundled: boolean;
   version: number;
@@ -95,6 +96,7 @@ export interface RoomSummary {
   hideMaskedPrompt: boolean;
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
+  promptLanguage: PromptLanguage;
   promptListSlugs?: string[];
   state: "waiting" | "playing";
 }
@@ -115,6 +117,7 @@ export interface RoomStatePayload {
   hideMaskedPrompt: boolean;
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
+  promptLanguage: PromptLanguage;
   promptListSlugs?: string[];
   state: "waiting" | "playing";
   lastGameScores?: ScoreEntry[];
@@ -140,6 +143,7 @@ export interface EditableRoomSettings {
   hideMaskedPrompt: boolean;
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
+  promptLanguage: PromptLanguage;
   promptListSlugs?: string[];
 }
 

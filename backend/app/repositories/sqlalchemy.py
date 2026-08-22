@@ -46,10 +46,12 @@ from app.repositories.interfaces import (
     UserStats,
     UsernameTakenError,
     PromptListRepository,
+    PromptListSelectionError,
     PromptListSummary,
     PromptPickTotals,
     PromptStatsSummary,
     PromptUsage,
+    ResolvedPromptSelection,
 )
 
 MAX_PAGINATION_LIMIT = 100
@@ -139,13 +141,25 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
 
 
 def _to_prompt_list_summary(
-    wl: PromptList, prompt_count: int
+    wl: PromptList, prompt_count: int, *, locale: str | None = None
 ) -> PromptListSummary:
+    localization = (
+        next(
+            (
+                candidate
+                for candidate in wl.localizations
+                if candidate.locale == locale
+            ),
+            None,
+        )
+        if locale
+        else None
+    )
     return PromptListSummary(
         id=_public_id(wl.id),
         slug=wl.slug,
-        name=wl.name,
-        description=wl.description,
+        name=localization.name if localization else wl.name,
+        description=localization.description if localization else wl.description,
         language=wl.language,
         prompt_count=prompt_count,
         is_bundled=wl.is_bundled,
@@ -777,24 +791,40 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             .scalar_subquery()
         )
 
-    async def list_all(self) -> list[PromptListSummary]:
+    async def list_all(
+        self, *, language: str | None = None, locale: str | None = None
+    ) -> list[PromptListSummary]:
         async with self._session_factory() as session:
-            stmt = select(PromptList, self._prompt_count()).order_by(PromptList.name)
+            stmt = (
+                select(PromptList, self._prompt_count())
+                .options(selectinload(PromptList.localizations))
+                .order_by(PromptList.name)
+            )
+            if language is not None:
+                stmt = stmt.where(PromptList.language == language)
             result = await session.execute(stmt)
             return [
-                _to_prompt_list_summary(prompt_list, int(prompt_count))
+                _to_prompt_list_summary(
+                    prompt_list, int(prompt_count), locale=locale
+                )
                 for prompt_list, prompt_count in result.all()
             ]
 
-    async def get_by_slug(self, slug: str) -> PromptListSummary | None:
+    async def get_by_slug(
+        self, slug: str, *, locale: str | None = None
+    ) -> PromptListSummary | None:
         async with self._session_factory() as session:
-            stmt = select(PromptList, self._prompt_count()).where(
-                PromptList.slug == slug
+            stmt = (
+                select(PromptList, self._prompt_count())
+                .options(selectinload(PromptList.localizations))
+                .where(PromptList.slug == slug)
             )
             result = await session.execute(stmt)
             row = result.one_or_none()
             return (
-                _to_prompt_list_summary(row[0], int(row[1])) if row else None
+                _to_prompt_list_summary(row[0], int(row[1]), locale=locale)
+                if row
+                else None
             )
 
     async def get_prompts(self, prompt_list_id: str) -> list[str]:
@@ -810,18 +840,50 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
-    async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:
+    async def resolve_selection(self, slugs: list[str]) -> ResolvedPromptSelection:
         if not slugs:
-            return []
+            raise PromptListSelectionError("Select at least one prompt list")
         async with self._session_factory() as session:
+            list_rows = (
+                await session.execute(
+                    select(PromptList.id, PromptList.slug, PromptList.language)
+                    .where(PromptList.slug.in_(slugs))
+                )
+            ).all()
+            found = {row.slug for row in list_rows}
+            missing = [slug for slug in slugs if slug not in found]
+            if missing:
+                raise PromptListSelectionError(
+                    f"Prompt list{'s' if len(missing) != 1 else ''} not found: "
+                    + ", ".join(missing)
+                )
+            languages = {row.language for row in list_rows}
+            if len(languages) != 1:
+                raise PromptListSelectionError(
+                    "Selected prompt lists must use the same language"
+                )
+            list_ids = [row.id for row in list_rows]
             stmt = (
                 select(distinct(Prompt.text))
-                .join(PromptList, Prompt.prompt_list_id == PromptList.id)
-                .where(PromptList.slug.in_(slugs))
+                .where(Prompt.prompt_list_id.in_(list_ids))
                 .order_by(Prompt.text)
             )
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            prompts = tuple(result.scalars().all())
+            if not prompts:
+                raise PromptListSelectionError(
+                    "Selected prompt lists do not contain any prompts"
+                )
+            return ResolvedPromptSelection(
+                slugs=tuple(slugs),
+                language=languages.pop(),
+                prompts=prompts,
+            )
+
+    async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:
+        if not slugs:
+            return []
+        return list((await self.resolve_selection(slugs)).prompts)
 
     async def upsert_bundled(
         self,

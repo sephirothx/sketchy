@@ -33,18 +33,38 @@ def validate_prompt_language(language: str) -> str:
     return canonical
 
 
+def best_supported_prompt_locale(accept_language: str | None) -> str:
+    """Choose the first supported base locale from an Accept-Language value."""
+    for preference in (accept_language or "").split(","):
+        tag = preference.split(";", 1)[0].strip().lower()
+        if not tag:
+            continue
+        if tag in PROMPT_LANGUAGES:
+            return tag
+        base = tag.split("-", 1)[0]
+        if base in PROMPT_LANGUAGES:
+            return base
+    return "en"
+
+
 def prompt_match_key(answer: str, language: str = "en") -> str:
-    """Build a language-specific comparison key, including for empty guesses."""
+    """Build a comparison key for a supported Latin-script language.
+
+    The initial registry deliberately contains only languages whose answers can
+    use the same case-folding, whitespace, and canonical-accent rules. A future
+    language with materially different tokenization must add its own strategy
+    before it can be stored.
+    """
     language = validate_prompt_language(language)
     collapsed = " ".join(answer.split()).casefold()
-    if language == "en":
+    if language in PROMPT_LANGUAGES:
         decomposed = unicodedata.normalize("NFD", collapsed)
         return "".join(
             character
             for character in decomposed
             if not unicodedata.combining(character)
         )
-    raise ValueError("prompt language is not supported")
+    raise AssertionError(f"missing matching strategy for supported language {language}")
 
 
 def normalize_prompt_answer(answer: str, language: str = "en") -> str:

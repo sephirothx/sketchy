@@ -48,6 +48,26 @@ async def seed(prompts, *texts: str) -> None:
     )
 
 
+async def test_prompt_list_catalogue_filters_on_valid_content_language(env):
+    http, prompts = env
+    await seed(prompts, "apple")
+    await prompts.upsert_bundled(
+        slug="francais",
+        name="Français",
+        description="Mots français",
+        language="fr",
+        prompts=["éléphant"],
+        version=1,
+    )
+
+    response = await http.get("/api/prompt-lists?language=fr")
+    assert response.status_code == 200
+    assert [(item["slug"], item["language"]) for item in response.json()] == [
+        ("francais", "fr")
+    ]
+    assert (await http.get("/api/prompt-lists?language=zh")).status_code == 422
+
+
 async def play(prompts, text: str, *, correct: int, guessers: int) -> None:
     """Record one turn's worth of usage for a prompt."""
     await prompts.record_prompt_usage(

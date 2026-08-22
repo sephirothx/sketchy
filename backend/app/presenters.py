@@ -41,6 +41,7 @@ def editable_room_settings_payload(room: Room) -> dict:
         "hideMaskedPrompt": room.hide_masked_prompt,
         "allowedTools": list(room.allowed_tools),
         "colorMode": room.color_mode,
+        "promptLanguage": room.prompt_language,
         "promptListSlugs": list(room.prompt_list_slugs),
     }
 

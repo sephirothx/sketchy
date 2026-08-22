@@ -77,13 +77,15 @@ Three different things, never used for one another:
 | **Prompt concept** | The stable identity of what is being drawn, independent of language, wording, or the lists that explicitly reference it. Equal text never merges two concepts by itself. | prompt ID, canonical prompt, master prompt |
 | **Prompt version** | One immutable language-specific form of a **Prompt concept**, including its canonical display answer, matching rules, aliases, editorial difficulty, content rating, and tags. | translation, prompt row, wording |
 | **Prompt alias** | An alternative accepted guess scoped to one **Prompt concept** and language, and explicitly enabled for exact **Prompt versions**. It is never a player or identity alias. | synonym, alternate spelling, answer |
+| **Prompt language** | The BCP-47 content language shared by every selected **Prompt list** in one room. It selects the game's answer-matching rules; it is distinct from the interface locale used for translated catalogue copy. | locale, UI language, list language |
+| **Prompt-list localization** | Optional translated name and description used to present a **Prompt list** in an interface locale. It does not translate prompts or change the room's **Prompt language**. | translation, localized list, content language |
 | **Editorial difficulty** | An author/editor classification—Unspecified, Easy, Medium, or Hard—stored on a **Prompt version**. It is distinct from measured difficulty in **Prompt stats**. | difficulty rating, live difficulty |
 | **Content rating** | The intended audience classification—Everyone, Teen, or Mature—stored on a **Prompt version**. | NSFW flag, age rating |
 | **Prompt tag** | A stable, explicit category attached to a **Prompt version** for organization and later discovery. | category string, label |
 | **Word** | Keeps its ordinary English meaning, and only that: the individual words making up a multi-word prompt, and the letters and words hints and close guesses work on. It is never a name for the prompt itself. | — |
 | **Prompt options** | The three prompts offered to the drawer during the choosing phase. | word options, word choices, candidates |
 | **Masked prompt** | The prompt shown to guessers as underscores, with any revealed letters filled in and the word breaks visible. | masked word, hidden word, blanks |
-| **Prompt list** | A curated set of prompts a room draws from (Standard English, Extended English). | word list, dictionary, prompt pack, category |
+| **Prompt list** | A curated set of prompts in exactly one **Prompt language** that a room draws from (currently Standard English and Extended English). | word list, dictionary, prompt pack, category |
 | **Custom prompts** | Prompts the host adds when creating the room, on top of or instead of the prompt lists. | custom words, own words, private words |
 | **Prompt stats** | The page, reached from the lobby, listing every prompt in a list and how it has actually played: how often it is picked when offered, and what share of guessers name it. A prompt is only ranked once enough guessers have faced it; the rest are listed as unranked. | word stats, difficulty ratings, prompt leaderboard |
 

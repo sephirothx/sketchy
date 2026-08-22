@@ -60,6 +60,7 @@ const emptySettings: EditableRoomSettings = {
   hideMaskedPrompt: false,
   allowedTools: DEFAULT_ALLOWED_TOOLS,
   colorMode: DEFAULT_COLOR_MODE,
+  promptLanguage: "en",
   promptListSlugs: ["english_standard"],
 };
 

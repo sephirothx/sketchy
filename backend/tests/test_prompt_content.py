@@ -16,6 +16,7 @@ from app.db.models import (
 )
 from app.game import Game, Phase
 from app.prompt_content import (
+    best_supported_prompt_locale,
     clean_prompt_aliases,
     clean_prompt_tags,
     normalize_prompt_answer,
@@ -25,7 +26,11 @@ from app.prompt_content import (
 
 def test_language_aware_match_keys_and_bounded_metadata():
     assert validate_prompt_language("en") == "en"
+    assert validate_prompt_language("fr") == "fr"
     assert normalize_prompt_answer("  CAFÉ  ", "en") == "cafe"
+    assert normalize_prompt_answer("  ÉLÉPHANT  ", "fr") == "elephant"
+    assert best_supported_prompt_locale("de-CH,de;q=0.9,en;q=0.8") == "de"
+    assert best_supported_prompt_locale("zh-CN,ja;q=0.9") == "en"
     assert clean_prompt_aliases(
         ["Ice-cream", " ice cream ", "ICE-CREAM"],
         canonical_answer="ice cream cone",
@@ -36,7 +41,7 @@ def test_language_aware_match_keys_and_bounded_metadata():
         "cold-things",
     )
 
-    for invalid in ("English", "en_US", "fr"):
+    for invalid in ("English", "en_US", "zh"):
         with pytest.raises(ValueError):
             validate_prompt_language(invalid)
     with pytest.raises(ValueError):

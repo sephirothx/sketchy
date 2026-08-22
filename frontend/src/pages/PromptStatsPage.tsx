@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AccountMenu } from "../components/AccountMenu";
 import { ApiError, apiRequest } from "../lib/api";
+import { promptLanguageLabel } from "../lib/promptLanguages";
 import {
   PROMPT_STATS_SORTS,
   coverageNote,
@@ -126,7 +127,7 @@ export function PromptStatsPage() {
             >
               {lists.map((entry) => (
                 <option key={entry.slug} value={entry.slug}>
-                  {entry.name} ({entry.promptCount})
+                  {entry.name} — {promptLanguageLabel(entry.language)} ({entry.promptCount})
                 </option>
               ))}
             </select>
@@ -169,7 +170,7 @@ export function PromptStatsPage() {
         <div className="prompt-stats-table-scroll">
           <table className="prompt-stats-table">
             <caption>
-              {list ? `${list.name}, ` : ""}
+              {list ? `${list.name} (${promptLanguageLabel(list.language)}), ` : ""}
               {PROMPT_STATS_SORTS.find((option) => option.value === sort)
                 ?.label.toLowerCase()}
             </caption>

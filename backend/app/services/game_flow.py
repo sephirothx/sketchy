@@ -31,6 +31,7 @@ from app.presenters import (
     turn_payload,
 )
 from app.prompts import parse_custom_prompt_list
+from app.repositories.interfaces import PromptListSelectionError
 
 logger = logging.getLogger("sketchy.game_flow")
 
@@ -43,6 +44,11 @@ HISTORY_WRITE_TIMEOUT_SECONDS = 10
 # writes together cannot pin the coroutine for longer than a player would
 # wait before reloading anyway.
 PROMPT_USAGE_WRITE_TIMEOUT_SECONDS = 10
+
+
+class RoomPromptResolutionError(ValueError):
+    """A safe room-configuration failure for selected prompt content."""
+
 
 class GameFlowService:
     """Coordinate workflows that cross handler domains without owning registration."""
@@ -83,6 +89,7 @@ class GameFlowService:
             prompt_list_slugs = ["english_standard"]
 
         curated_prompts: list[str] = []
+        prompt_language = fallback.prompt_language if fallback else "en"
         if (
             fallback is not None
             and prompt_list_slugs == list(fallback.prompt_list_slugs)
@@ -98,9 +105,26 @@ class GameFlowService:
             curated_prompts = list(fallback.curated_prompts)
         elif prompt_list_slugs and self._ctx.prompt_list_repo:
             try:
-                curated_prompts = await self._ctx.prompt_list_repo.get_prompts_by_slugs(prompt_list_slugs)
-            except Exception:
-                logger.exception("Failed to load prompts for slugs: %s", prompt_list_slugs)
+                selection = await self._ctx.prompt_list_repo.resolve_selection(
+                    prompt_list_slugs
+                )
+                curated_prompts = list(selection.prompts)
+                prompt_language = selection.language
+            except PromptListSelectionError as error:
+                raise RoomPromptResolutionError(str(error)) from error
+            except Exception as error:
+                if custom_prompts and value("custom_prompts_only"):
+                    logger.exception(
+                        "Prompt-list store unavailable for custom-only room"
+                    )
+                    curated_prompts = []
+                else:
+                    logger.exception(
+                        "Failed to resolve prompts for slugs: %s", prompt_list_slugs
+                    )
+                    raise RoomPromptResolutionError(
+                        "Prompt lists could not be loaded. Please try again."
+                    ) from error
 
         return {
             "name": value("name"),
@@ -116,6 +140,7 @@ class GameFlowService:
             "hide_masked_prompt": hide_masked_prompt,
             "allowed_tools": list(value("allowed_tools")),
             "color_mode": value("color_mode"),
+            "prompt_language": prompt_language,
             "prompt_list_slugs": prompt_list_slugs,
             "curated_prompts": curated_prompts,
         }
@@ -259,6 +284,7 @@ class GameFlowService:
             hint_mode=room.hint_mode,
             scoring_mode=room.scoring_mode,
             hide_masked_prompt=room.hide_masked_prompt,
+            prompt_language=room.prompt_language,
         )
         await self._emit_room_state(room)
         if restarted:

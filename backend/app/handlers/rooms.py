@@ -24,6 +24,7 @@ from app.handlers.identity import (
     resolve_identity,
 )
 from app.presenters import editable_room_settings_payload, session_payload
+from app.services.game_flow import RoomPromptResolutionError
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     RoomFullError,
@@ -61,7 +62,10 @@ async def create_room(ctx: HandlerContext, sid, data):
         )
     except IdentityError as error:
         return {"ok": False, "error": str(error), "field": "nickname"}
-    settings = await ctx.game_flow.room_settings_from_payload(payload)
+    try:
+        settings = await ctx.game_flow.room_settings_from_payload(payload)
+    except RoomPromptResolutionError as error:
+        return {"ok": False, "error": str(error), "field": "promptListSlugs"}
 
     room = ctx.room_manager.create_room(
         **settings,
@@ -150,7 +154,12 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
     async with room.lock:
         if room.state != "waiting" or room.game:
             return {"ok": False, "error": "Settings can only be changed in the waiting room"}
-        settings = await ctx.game_flow.room_settings_from_payload(payload, fallback=room)
+        try:
+            settings = await ctx.game_flow.room_settings_from_payload(
+                payload, fallback=room
+            )
+        except RoomPromptResolutionError as error:
+            return {"ok": False, "error": str(error), "field": "promptListSlugs"}
         active_count = len(room.seated_players())
         if settings["max_players"] < active_count:
             return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}

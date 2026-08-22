@@ -206,6 +206,19 @@ class PromptListSummary:
 
 
 @dataclass(frozen=True)
+class ResolvedPromptSelection:
+    """One valid, language-homogeneous prompt-list selection."""
+
+    slugs: tuple[str, ...]
+    language: str
+    prompts: tuple[str, ...]
+
+
+class PromptListSelectionError(ValueError):
+    """A selected list is missing or cannot be combined with the others."""
+
+
+@dataclass(frozen=True)
 class PromptStatsSummary:
     """Detailed statistics and derived difficulty metrics for a prompt."""
 
@@ -373,12 +386,16 @@ class PromptListRepository(ABC):
     """Data access boundary for curated prompt lists and prompt usage statistics."""
 
     @abstractmethod
-    async def list_all(self) -> list[PromptListSummary]:
-        """List all available prompt lists."""
+    async def list_all(
+        self, *, language: str | None = None, locale: str | None = None
+    ) -> list[PromptListSummary]:
+        """List prompt lists, optionally filtering content and localizing copy."""
         ...
 
     @abstractmethod
-    async def get_by_slug(self, slug: str) -> PromptListSummary | None:
+    async def get_by_slug(
+        self, slug: str, *, locale: str | None = None
+    ) -> PromptListSummary | None:
         """Fetch a prompt list by its slug identifier."""
         ...
 
@@ -390,6 +407,11 @@ class PromptListRepository(ABC):
     @abstractmethod
     async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:
         """Retrieve deduplicated prompt strings across multiple prompt list slugs."""
+        ...
+
+    @abstractmethod
+    async def resolve_selection(self, slugs: list[str]) -> ResolvedPromptSelection:
+        """Resolve an exact selection, rejecting missing or mixed-language lists."""
         ...
 
     @abstractmethod

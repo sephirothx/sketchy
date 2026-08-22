@@ -1038,6 +1038,41 @@ class PromptList(Base):
         back_populates="prompt_list",
         cascade="all, delete-orphan",
     )
+    localizations: Mapped[list[PromptListLocalization]] = relationship(
+        back_populates="prompt_list",
+        cascade="all, delete-orphan",
+    )
+
+
+class PromptListLocalization(Base):
+    """Localized catalogue copy, separate from the list's content language."""
+
+    __tablename__ = "prompt_list_localizations"
+    __table_args__ = (
+        UniqueConstraint(
+            "prompt_list_id", "locale", name="uq_prompt_list_localization_locale"
+        ),
+        _values_check(
+            "locale", PROMPT_LANGUAGES, "ck_prompt_list_localizations_locale"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    prompt_list_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    locale: Mapped[str] = mapped_column(String(16), nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str] = mapped_column(
+        String(255), default="", server_default="", nullable=False
+    )
+
+    prompt_list: Mapped[PromptList] = relationship(back_populates="localizations")
 
 
 class Prompt(Base):

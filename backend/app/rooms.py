@@ -15,6 +15,7 @@ from app.drawing_rules import (
 )
 from app.game import Game
 from app.prompts import PROMPTS
+from app.prompt_content import prompt_match_key
 
 DEFAULT_ROOM_DRAWING_SECONDS = 90
 DEFAULT_ROOM_HINT_MODE = "checkpoints"
@@ -280,6 +281,7 @@ class Room:
     hide_masked_prompt: bool = False
     allowed_tools: list[str] = field(default_factory=lambda: list(DEFAULT_ALLOWED_TOOLS))
     color_mode: str = DEFAULT_COLOR_MODE
+    prompt_language: str = "en"
     prompt_list_slugs: list[str] = field(default_factory=list)
     curated_prompts: list[str] = field(default_factory=list)
     players: dict[str, Player] = field(default_factory=dict)
@@ -393,8 +395,12 @@ class Room:
             return self.curated_prompts
         if self.custom_prompts_only:
             return self.custom_prompts
-        seen = {w.lower() for w in self.custom_prompts}
-        return self.custom_prompts + [w for w in base_prompts if w.lower() not in seen]
+        seen = {prompt_match_key(w, self.prompt_language) for w in self.custom_prompts}
+        return self.custom_prompts + [
+            word
+            for word in base_prompts
+            if prompt_match_key(word, self.prompt_language) not in seen
+        ]
 
     def to_public_summary(self) -> dict:
         active_players = self.seated_players()
@@ -418,6 +424,7 @@ class Room:
             "hideMaskedPrompt": self.hide_masked_prompt,
             "allowedTools": list(self.allowed_tools),
             "colorMode": self.color_mode,
+            "promptLanguage": self.prompt_language,
             "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
         }
@@ -439,6 +446,7 @@ class Room:
             "hideMaskedPrompt": self.hide_masked_prompt,
             "allowedTools": list(self.allowed_tools),
             "colorMode": self.color_mode,
+            "promptLanguage": self.prompt_language,
             "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
             "lastGameScores": self.last_game_scores,
@@ -495,6 +503,7 @@ class RoomManager:
         hide_masked_prompt: bool = False,
         allowed_tools: list[str] | None = None,
         color_mode: str = DEFAULT_COLOR_MODE,
+        prompt_language: str = "en",
         prompt_list_slugs: list[str] | None = None,
         curated_prompts: list[str] | None = None,
     ) -> Room:
@@ -517,6 +526,7 @@ class RoomManager:
             hide_masked_prompt=hide_masked_prompt,
             allowed_tools=list(allowed_tools or DEFAULT_ALLOWED_TOOLS),
             color_mode=color_mode,
+            prompt_language=prompt_language,
             prompt_list_slugs=list(prompt_list_slugs or []),
             curated_prompts=list(curated_prompts or []),
         )

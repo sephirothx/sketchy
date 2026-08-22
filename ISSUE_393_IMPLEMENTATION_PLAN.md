@@ -307,6 +307,11 @@ contracts, ADRs, migrations, tests, and runbooks.
   aliases, editorial difficulty, content rating, and tags.
 - Scope aliases to concept plus language. Accent folding and near-miss matching
   use the exact selected version.
+- Constrain prompt content to an explicit BCP-47 registry with implemented
+  matching strategies. Resolve one authoritative prompt language per room,
+  reject missing/empty/mixed-language selections, and keep translated list
+  catalogue copy in a separate locale-keyed table. List language is content
+  metadata; interface locale never changes gameplay matching.
 - Bundled seed data carries stable concept IDs. Lists share a concept only by
   explicit reference; matching text never silently merges ownership or stats.
 - Give prompt lists registered ownership, private/unlisted visibility,
@@ -494,7 +499,7 @@ ADRs once they exist.
 | #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | Complete | #344-#351 integrated; 564 backend, 156 frontend, and 41 E2E tests pass locally; PostgreSQL CI gate configured; README updated and glossary reviewed (no new game terms) |
 | #339 database invariants | `epic/339-database-invariants` | Complete | #352-#356 integrated; 567 backend, 156 frontend, and 41 E2E tests pass locally; dual-dialect migration gate configured; README updated and glossary reviewed |
 | #340 accounts and privacy | `epic/340-accounts-identity-privacy` | Complete | #357-#366, #394-#396, and #399 integrated. Registered Player settings sync across devices with guest-local and one-time-seed rules; bounded private reports/evidence and temporary/permanent Suspensions have role-gated review, append-only audit correlation, privacy escape paths, session/live-seat enforcement, and export/deletion safeguards; persistent directional Blocks have idempotent APIs, alias-merge preservation, and bounded cached ordinary-chat filtering without hiding game-critical state; the colorblind-safe preference produces only a dismissible, unattributed, host-only live-room suggestion, ignores spectators, and has explicit shared-payload absence coverage. Umbrella gate: 632 backend, 156 frontend, and 45 E2E tests pass; frontend lint/build pass; README and glossary updated |
-| #342 prompt content | `epic/342-prompt-content-usage` | In progress | #392 implemented on its child branch: stable Prompt concepts, immutable language-specific Prompt versions, concept/language-scoped aliases attached to exact versions, explicit tags, editorial difficulty/content rating, BCP-47 syntax plus supported-language matching registry, alias-aware exact/near-miss game logic, reversible migration, and focused identity/constraint tests. README and glossary updated; final child gate pending |
+| #342 prompt content | `epic/342-prompt-content-usage` | In progress | #392 implemented on its child branch: stable Prompt concepts, immutable language-specific Prompt versions, scoped aliases, tags, editorial metadata, and alias-aware matching. #377 implemented on its child branch: constrained seven-language Latin matching registry, single-language room/list resolution with visible validation failures, game-language propagation, API language filtering, locale-keyed catalogue translations selected from `Accept-Language`, and language-aware picker/stats UI. Reversible migrations and focused repository/handler/contract tests pass; README and glossary updated; final child gate pending |
 | #341 game history | `epic/341-game-history-statistics` | Not started | - |
 | #343 live rooms and formats | `epic/343-live-rooms-deployment-formats` | Not started | - |
 | Standalone/cross-epic integration | `epic/393-preproduction-baseline` | Not started | - |

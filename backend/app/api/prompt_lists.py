@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.api.serializers import prompt_list_payload, prompt_stats_payload
 from app.auth.rate_limit import RateLimiter, client_key
+from app.prompt_content import best_supported_prompt_locale, validate_prompt_language
 from app.repositories.interfaces import PromptListRepository, PromptStatsSummary
 
 # How many guessers a prompt must have faced before its difficulty means
@@ -55,8 +56,23 @@ def create_prompt_list_router(prompt_list_repo: PromptListRepository) -> APIRout
     router = APIRouter(prefix="/api")
 
     @router.get("/prompt-lists")
-    async def list_prompt_lists():
-        return [prompt_list_payload(pl) for pl in await prompt_list_repo.list_all()]
+    async def list_prompt_lists(
+        request: Request,
+        language: str | None = Query(default=None),
+    ):
+        """List catalogue entries, localized for the caller when copy exists."""
+        if language is not None:
+            try:
+                language = validate_prompt_language(language)
+            except ValueError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+        locale = best_supported_prompt_locale(request.headers.get("accept-language"))
+        return [
+            prompt_list_payload(prompt_list)
+            for prompt_list in await prompt_list_repo.list_all(
+                language=language, locale=locale
+            )
+        ]
 
     @router.get("/prompt-lists/{slug}/prompt-stats")
     async def prompt_stats(
