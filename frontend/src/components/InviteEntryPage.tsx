@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRoomEntry } from "../hooks/useRoomEntry";
 import { useSettingsStore } from "../store/settingsStore";
+import { describeDrawingRules } from "../lib/drawingRules";
 import type { RoomSummary } from "../types";
 import { SettingsIcon } from "./SettingsIcon";
 import { AccountMenu } from "./AccountMenu";
@@ -88,6 +89,7 @@ export function InviteEntryPage({ code }: { code: string }) {
 
           <ul className="invite-rule-list" aria-label="Room settings">
             <li>{hintModeLabel(room)}</li>
+            <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? "Every tool and color"}</li>
             <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators guess along"}</li>
             <li>
               {room.customPromptCount > 0

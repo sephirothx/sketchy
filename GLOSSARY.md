@@ -106,10 +106,13 @@ Three different things, never used for one another:
 | **Fill** | The tool that floods an enclosed area with the current color. | bucket, paint bucket, flood |
 | **Shape** | The rectangle, ellipse, and triangle tools, collectively. Name the individual ones **rectangle**, **ellipse**, **triangle**. | box, circle/oval, square |
 | **Stroke** | One continuous mark, from the moment the drawer presses down to the moment they lift. What the brush and eraser produce. | line, scribble, path |
-| **Color** | The current drawing color, chosen from the palette or a custom picker. | colour, ink, shade |
+| **Color** | The current drawing color, chosen from the palette or, where the room's **color mode** allows it, a custom picker. | colour, ink, shade |
 | **Undo** | Removes the drawer's most recent mark for everyone. | back, revert, erase |
 | **Clear** | Empties the canvas for everyone. | reset, wipe, erase all |
 | **Drawing limit** | The ceiling on how much one turn's drawing may cost the room to load. Tools grey out for the rest of the turn once it is reached, and the reason names the tool, not the mechanism. | budget, quota, cap, replay cost |
+| **Drawing rules** | The room's **allowed tools** and **color mode** together. Only ever a collective name for the pair; neither setting is called "the drawing rules" on its own. | drawing restrictions, canvas rules, tool preset |
+| **Allowed tools** | The room setting turning **Brush**, **Fill**, and **Shapes** on and off independently. At least one of Brush and Shapes stays on. The eraser is not separately switchable: it goes wherever the brush goes. | tool preset, tool mode, enabled tools |
+| **Color mode** | The room setting choosing which colors a drawer may use: **All colors**, **Palette only**, **Colorblind-safe**, or **Black and white**. Use those four labels verbatim. Every mode permits white, because that is what erasing sends. | color preset, palette mode, color restrictions |
 | **Save image** | Downloading the current canvas as a PNG. | export, download drawing, screenshot |
 | **Recap** | The gallery of every drawing from a finished game, shown on the game over screen. Individual entries are **drawings**, labeled by round and turn. | gallery, replay, history, snapshot |
 

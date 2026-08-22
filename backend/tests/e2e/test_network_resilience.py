@@ -204,6 +204,8 @@ async def test_room_refresh_failure_keeps_last_successful_list():
             "scoringMode": "default",
             "spectatorsSeePrompt": False,
             "hideMaskedPrompt": False,
+            "allowedTools": ["brush", "fill", "shapes"],
+            "colorMode": "all",
             "state": "waiting",
         }
 

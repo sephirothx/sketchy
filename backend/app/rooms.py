@@ -9,6 +9,10 @@ import uuid
 from dataclasses import dataclass, field, replace
 from typing import Literal, Optional
 
+from app.drawing_rules import (
+    DEFAULT_ALLOWED_TOOLS,
+    DEFAULT_COLOR_MODE,
+)
 from app.game import Game
 from app.prompts import PROMPTS
 
@@ -271,6 +275,8 @@ class Room:
     scoring_mode: str = "default"
     spectators_see_prompt: bool = False
     hide_masked_prompt: bool = False
+    allowed_tools: list[str] = field(default_factory=lambda: list(DEFAULT_ALLOWED_TOOLS))
+    color_mode: str = DEFAULT_COLOR_MODE
     prompt_list_slugs: list[str] = field(default_factory=list)
     curated_prompts: list[str] = field(default_factory=list)
     players: dict[str, Player] = field(default_factory=dict)
@@ -404,6 +410,8 @@ class Room:
             "scoringMode": self.scoring_mode,
             "spectatorsSeePrompt": self.spectators_see_prompt,
             "hideMaskedPrompt": self.hide_masked_prompt,
+            "allowedTools": list(self.allowed_tools),
+            "colorMode": self.color_mode,
             "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
         }
@@ -423,6 +431,8 @@ class Room:
             "scoringMode": self.scoring_mode,
             "spectatorsSeePrompt": self.spectators_see_prompt,
             "hideMaskedPrompt": self.hide_masked_prompt,
+            "allowedTools": list(self.allowed_tools),
+            "colorMode": self.color_mode,
             "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
             "lastGameScores": self.last_game_scores,
@@ -477,6 +487,8 @@ class RoomManager:
         scoring_mode: str = "default",
         spectators_see_prompt: bool = False,
         hide_masked_prompt: bool = False,
+        allowed_tools: list[str] | None = None,
+        color_mode: str = DEFAULT_COLOR_MODE,
         prompt_list_slugs: list[str] | None = None,
         curated_prompts: list[str] | None = None,
     ) -> Room:
@@ -497,6 +509,8 @@ class RoomManager:
             scoring_mode=scoring_mode,
             spectators_see_prompt=spectators_see_prompt,
             hide_masked_prompt=hide_masked_prompt,
+            allowed_tools=list(allowed_tools or DEFAULT_ALLOWED_TOOLS),
+            color_mode=color_mode,
             prompt_list_slugs=list(prompt_list_slugs or []),
             curated_prompts=list(curated_prompts or []),
         )

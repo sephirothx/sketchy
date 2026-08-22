@@ -114,6 +114,8 @@ class GameFlowService:
             "scoring_mode": scoring_mode,
             "spectators_see_prompt": value("spectators_see_prompt"),
             "hide_masked_prompt": hide_masked_prompt,
+            "allowed_tools": list(value("allowed_tools")),
+            "color_mode": value("color_mode"),
             "prompt_list_slugs": prompt_list_slugs,
             "curated_prompts": curated_prompts,
         }

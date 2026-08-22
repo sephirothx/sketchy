@@ -67,7 +67,7 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
   return (
     <fieldset className="room-choice-group prompt-list-picker-group">
       <legend>Prompt lists</legend>
-      <div className="prompt-list-chips" role="group" aria-label="Prompt lists">
+      <div className="toggle-chips" role="group" aria-label="Prompt lists">
         {promptLists.map((wl) => {
           const isSelected = selectedSlugs.includes(wl.slug);
           const isOnlySelected = isSelected && selectedSlugs.length <= 1;
@@ -79,16 +79,16 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
             <span key={wl.slug} className="prompt-list-chip-group">
               <button
                 type="button"
-                className={`prompt-list-chip ${isSelected ? "is-selected" : ""}`}
+                className={`toggle-chip ${isSelected ? "is-selected" : ""}`}
                 aria-pressed={isSelected}
                 disabled={disabled || (isSelected && isOnlySelected)}
                 title={wl.description || `${wl.name} (${wl.promptCount} prompts)`}
                 onClick={() => handleToggle(wl.slug)}
               >
-                <span className="prompt-list-chip-status" aria-hidden="true">
+                <span className="toggle-chip-status" aria-hidden="true">
                   {isSelected ? "✓" : "+"}
                 </span>
-                <span className="prompt-list-chip-name">{wl.name}</span>
+                <span className="toggle-chip-name">{wl.name}</span>
                 <span className="prompt-list-chip-count">{wl.promptCount}</span>
               </button>
               {/* A new tab: this picker also lives in the waiting-room settings,

@@ -767,3 +767,164 @@ async def test_request_sync_strokes_seeds_empty_history_revision():
     assert generation == room.game.canvas.generation
     assert sequence == 0
     assert history_hash == 0
+
+
+def _drawing_room(*, allowed_tools=None, color_mode="all"):
+    """A room mid-turn, with its drawer's socket wired up."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(
+        name="Room",
+        is_public=True,
+        allowed_tools=allowed_tools,
+        color_mode=color_mode,
+    )
+    drawer = room_manager.add_player(room, "Drawer")
+    drawer.sid = "drawer-sid"
+    room_manager.add_player(room, "Guesser")
+    room.game = Game(turn_order=list(room.players))
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_prompt_choice()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
+    sio.emit = AsyncMock()
+    return room, sio
+
+
+def _emitted_events(sio):
+    return [call.args[0] for call in sio.emit.await_args_list]
+
+
+@pytest.mark.asyncio
+async def test_a_tool_the_room_disallows_is_never_recorded_or_rebroadcast():
+    room, sio = _drawing_room(allowed_tools=["brush"])
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_fill", {"x": 0.5, "y": 0.5, "color": "#000000"}),
+        canvas_action(room.game, 1),
+    )
+
+    assert room.game.canvas.history == []
+    assert "draw" not in _emitted_events(sio)
+    # The drawer already painted it locally, so they are put back on server truth.
+    assert "sync_strokes" in _emitted_events(sio)
+
+
+@pytest.mark.asyncio
+async def test_a_color_the_mode_disallows_is_never_recorded():
+    room, sio = _drawing_room(color_mode="black_and_white")
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.2, "y": 0.3, "color": "#ed1c24", "width": 4}),
+        canvas_action(room.game, 1),
+    )
+
+    assert room.game.canvas.history == []
+    assert "draw" not in _emitted_events(sio)
+
+
+@pytest.mark.asyncio
+async def test_erasing_survives_a_mode_that_allows_no_other_color():
+    """White is how the eraser reaches the server, so every mode admits it."""
+    room, sio = _drawing_room(color_mode="black_and_white")
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.2, "y": 0.3, "color": "#ffffff", "width": 24}),
+        canvas_action(room.game, 1),
+    )
+
+    assert len(room.game.canvas.history) == 1
+
+
+@pytest.mark.asyncio
+async def test_turning_off_the_brush_takes_the_eraser_with_it():
+    room, sio = _drawing_room(allowed_tools=["shapes", "fill"])
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.2, "y": 0.3, "color": "#ffffff", "width": 24}),
+        canvas_action(room.game, 1),
+    )
+
+    assert room.game.canvas.history == []
+
+
+@pytest.mark.asyncio
+async def test_the_points_trailing_a_refused_path_are_dropped_in_silence():
+    """One refusal is one resync, however many frames the client keeps sending."""
+    room, sio = _drawing_room(color_mode="black_and_white")
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.2, "y": 0.3, "color": "#ed1c24", "width": 4}),
+        canvas_action(room.game, 1),
+    )
+    for _ in range(5):
+        await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.4, "y": 0.4}]}))
+    await draw("drawer-sid", encode_live_drawing("draw_end", {}))
+
+    assert room.game.canvas.history == []
+    assert _emitted_events(sio).count("sync_strokes") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_drawer_keeps_the_tools_the_room_left_them():
+    room, sio = _drawing_room(allowed_tools=["shapes"], color_mode="palette")
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing(
+            "draw_shape",
+            {
+                "shape": "rectangle",
+                "from": {"x": 0.1, "y": 0.1},
+                "to": {"x": 0.4, "y": 0.4},
+                "color": "#ed1c24",
+                "width": 4,
+            },
+        ),
+        canvas_action(room.game, 1),
+    )
+
+    assert len(room.game.canvas.history) == 1
+    assert "draw" in _emitted_events(sio)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_path_does_not_wedge_the_tools_that_remain():
+    """The discard flag a refused path leaves behind governs path frames only,
+    so a room without the brush can still draw everything it does allow."""
+    room, sio = _drawing_room(allowed_tools=["shapes"])
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.2, "y": 0.3, "color": "#000000", "width": 4}),
+        canvas_action(room.game, 1),
+    )
+    await draw(
+        "drawer-sid",
+        encode_live_drawing(
+            "draw_shape",
+            {
+                "shape": "ellipse",
+                "from": {"x": 0.1, "y": 0.1},
+                "to": {"x": 0.4, "y": 0.4},
+                "color": "#000000",
+                "width": 4,
+            },
+        ),
+        canvas_action(room.game, 1),
+    )
+
+    assert len(room.game.canvas.history) == 1

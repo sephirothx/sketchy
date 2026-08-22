@@ -1,3 +1,4 @@
+import { describeDrawingRules } from "../lib/drawingRules";
 import type { RoomSummary } from "../types";
 
 interface PublicRoomCardProps {
@@ -19,6 +20,8 @@ function exceptionalRules(room: RoomSummary) {
     rules.push(room.hintMode === "checkpoints" ? "Timed hints" : room.hintMode === "wheel" ? "Wheel of Fortune" : "Buy letters");
   }
   if (room.spectatorsSeePrompt) rules.push("Spectators see prompt");
+  const drawingRules = describeDrawingRules(room.allowedTools, room.colorMode);
+  if (drawingRules) rules.push(drawingRules);
   return rules;
 }
 
@@ -59,6 +62,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
             <li>{hintDescription(room)}</li>
             <li>{room.customPromptCount > 0 ? (room.customPromptsOnly ? `${room.customPromptCount} custom prompts only` : `${room.customPromptCount} custom prompts plus the default list`) : "Built-in prompt list"}</li>
             <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators see the masked prompt"}</li>
+            <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? "Every tool and color"}</li>
           </ul>
         </details>
       </div>

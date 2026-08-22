@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from functools import partial
 
+from app.drawing_rules import packet_allowed
 from app.game import Phase
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
@@ -23,6 +24,24 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         return
     room, player = current
     if player.id != room.game.current_drawer or room.game.phase != Phase.DRAWING:
+        return
+    if not packet_allowed(
+        packet.event, packet.payload, room.allowed_tools, room.color_mode
+    ):
+        # A stale or modified client drawing with a tool or color the host took
+        # away. Nothing is recorded and nothing is rebroadcast, so the room
+        # never sees it - but the sender already drew it locally, so resync it
+        # onto server truth rather than leaving the two canvases apart.
+        #
+        # Only the frame that opens an action is answered. The points and the
+        # end frame trailing a refused path are dropped in silence, the way the
+        # discard flag drops them after an out-of-date generation: one refusal
+        # is one sync, however many frames the client keeps sending.
+        if packet.event == "draw_start":
+            room.game.canvas.discarding_draw_sequence = True
+        elif packet.event not in {"draw_shape", "draw_fill"}:
+            return
+        await ctx.game_flow._emit_canvas_sync(room, sid)
         return
     starts_action = packet.event in {
         "draw_start",
