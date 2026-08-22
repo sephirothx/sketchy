@@ -373,6 +373,92 @@ async def test_game_record_cascade_and_relationships():
         await engine.dispose()
 
 
+async def test_game_history_natural_keys_reject_duplicate_rows():
+    factory, engine = await create_test_db()
+    game_id = generate_uuid()
+    drawer_id = generate_uuid()
+    guesser_id = generate_uuid()
+    turn_id = generate_uuid()
+    now = datetime.now(timezone.utc)
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    [
+                        User(id=drawer_id, display_name="Drawer"),
+                        User(id=guesser_id, display_name="Guesser"),
+                        GameRecord(
+                            id=game_id,
+                            room_name="Invariant room",
+                            scoring_mode="default",
+                            hint_mode="timed",
+                            drawing_seconds=90,
+                            total_rounds=1,
+                            player_count=2,
+                            started_at=now,
+                            finished_at=now,
+                        ),
+                        GameParticipant(
+                            id=generate_uuid(),
+                            game_id=game_id,
+                            user_id=drawer_id,
+                            final_score=300,
+                            final_rank=1,
+                        ),
+                        TurnRecord(
+                            id=turn_id,
+                            game_id=game_id,
+                            round_number=1,
+                            turn_number=1,
+                            drawer_user_id=drawer_id,
+                            prompt="anchor",
+                            duration_seconds=30,
+                        ),
+                        TurnGuess(
+                            id=generate_uuid(),
+                            turn_id=turn_id,
+                            user_id=guesser_id,
+                            points_awarded=200,
+                            guess_time_seconds=10,
+                        ),
+                    ]
+                )
+
+        duplicates = (
+            GameParticipant(
+                id=generate_uuid(),
+                game_id=game_id,
+                user_id=drawer_id,
+                final_score=999,
+                final_rank=1,
+            ),
+            TurnRecord(
+                id=generate_uuid(),
+                game_id=game_id,
+                round_number=1,
+                turn_number=1,
+                drawer_user_id=drawer_id,
+                prompt="duplicate",
+                duration_seconds=20,
+            ),
+            TurnGuess(
+                id=generate_uuid(),
+                turn_id=turn_id,
+                user_id=guesser_id,
+                points_awarded=999,
+                guess_time_seconds=1,
+            ),
+        )
+        for duplicate in duplicates:
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(duplicate)
+    finally:
+        await engine.dispose()
+
+
 async def test_word_list_and_word_uniqueness():
     factory, engine = await create_test_db()
     try:

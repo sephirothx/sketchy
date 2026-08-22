@@ -132,6 +132,9 @@ class GameParticipant(Base):
     """Player participation and final standing in a finished game."""
 
     __tablename__ = "game_participants"
+    __table_args__ = (
+        Index("uq_game_participants_game_user", "game_id", "user_id", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
@@ -164,6 +167,15 @@ class TurnRecord(Base):
     """Individual round turn details within a finished game."""
 
     __tablename__ = "turn_records"
+    __table_args__ = (
+        Index(
+            "uq_turn_records_game_round_turn",
+            "game_id",
+            "round_number",
+            "turn_number",
+            unique=True,
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
@@ -223,6 +235,9 @@ class TurnGuess(Base):
     """Correct guess recorded for a player in a specific round."""
 
     __tablename__ = "turn_guesses"
+    __table_args__ = (
+        Index("uq_turn_guesses_turn_user", "turn_id", "user_id", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid

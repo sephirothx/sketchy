@@ -103,6 +103,9 @@ naive database value.
 Finished-game guesses reference the UUID of their turn explicitly. Persistence
 never infers that relationship from the positions of two independently ordered
 lists.
+Finished games also enforce one participant per account, one turn per
+game/round/turn number, and one correct guess per player and turn at the
+database layer.
 
 The UUID change rewrites the pre-v1 initial migration rather than converting
 old text keys. Databases created before this baseline must be rebuilt; preserve
