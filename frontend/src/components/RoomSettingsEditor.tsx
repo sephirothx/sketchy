@@ -6,7 +6,15 @@ import {
   InputNumber,
   SegmentedControl,
   Switch,
+  ToggleChips,
 } from "./RoomSetupControls";
+import {
+  COLOR_MODE_OPTIONS,
+  DEFAULT_ALLOWED_TOOLS,
+  DEFAULT_COLOR_MODE,
+  TOOL_GROUP_OPTIONS,
+  canDisallowTool,
+} from "../lib/drawingRules";
 import {
   DEFAULT_DRAWING_SECONDS,
   DEFAULT_HINT_MODE,
@@ -29,7 +37,14 @@ import {
 } from "../lib/roomSettingsAutosave";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
-import type { AckResponse, EditableRoomSettings, HintMode, ScoringMode } from "../types";
+import type {
+  AckResponse,
+  ColorMode,
+  DrawingToolGroup,
+  EditableRoomSettings,
+  HintMode,
+  ScoringMode,
+} from "../types";
 
 const emptySettings: EditableRoomSettings = {
   name: "",
@@ -43,6 +58,8 @@ const emptySettings: EditableRoomSettings = {
   scoringMode: "default",
   spectatorsSeePrompt: false,
   hideMaskedPrompt: false,
+  allowedTools: DEFAULT_ALLOWED_TOOLS,
+  colorMode: DEFAULT_COLOR_MODE,
   promptListSlugs: ["english_standard"],
 };
 
@@ -225,6 +242,21 @@ export function RoomSettingsEditor() {
       <PromptListPicker
         selectedSlugs={settings.promptListSlugs || ["english_standard"]}
         onChange={(promptListSlugs) => update({ promptListSlugs })}
+      />
+      <ToggleChips
+        label="Allowed tools"
+        values={settings.allowedTools}
+        onChange={(allowedTools: DrawingToolGroup[]) => update({ allowedTools })}
+        options={TOOL_GROUP_OPTIONS.map((option) => ({
+          ...option,
+          disabled: !canDisallowTool(option.value, settings.allowedTools),
+        }))}
+      />
+      <ChoiceChips
+        label="Colors"
+        value={settings.colorMode}
+        onChange={(colorMode: ColorMode) => update({ colorMode })}
+        options={COLOR_MODE_OPTIONS}
       />
       <details><summary>Advanced settings</summary><div className="room-settings-advanced">
         <Switch label="Allow spectators to see the prompt" checked={settings.spectatorsSeePrompt} onChange={(spectatorsSeePrompt) => update({ spectatorsSeePrompt })} />

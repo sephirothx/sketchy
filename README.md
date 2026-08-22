@@ -13,6 +13,14 @@ copy and docs alike. Read it before naming anything a player can see.
 - Curated prompt lists (Standard and Extended English) selectable during room creation, combined with optional custom prompts. Pick rate and guess accuracy stats tracked per prompt, and browsable from the lobby on a prompt stats page listing every prompt in a list, searchable and sortable. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
+- Drawing rules — two room settings the host sets at creation and edits while waiting.
+  **Allowed tools** turns the brush, fill, and shapes on and off independently (at least one
+  of brush and shapes stays on, since fill alone can only flood a blank canvas), and
+  **Color mode** picks between all colors, the built-in palette only, a colorblind-safe
+  palette, and black and white. Both are enforced on the server, which refuses a disallowed
+  tool or color before recording or rebroadcasting it, so a stale or modified client gains
+  nothing. Erasing is a white brush stroke on the wire, so it rides with the brush and every
+  color mode permits white.
 - Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the prompt, and private spectator chat restricted to the drawer, spectators, and correct guessers.
 - AFK mode — toggle AFK status anytime so you are skipped for drawing turns and not waited for during rounds.
 - Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
@@ -147,6 +155,7 @@ backend/
     rooms.py      In-memory Room/Player/RoomManager domain model
     state.py      Shared RoomManager singleton
     prompts.py    Prompt list + random choice helper
+    drawing_rules.py Which tools and colors a room allows, and the palettes behind them
   tests/
     handlers/     Focused asyncio integration suites for each Socket.IO handler domain
     e2e/          Multi-browser Playwright scenarios
@@ -158,6 +167,7 @@ frontend/
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL
+    lib/drawingRules.ts The client's copy of the room's tool and color rules
     types.ts      Shared TypeScript types for all socket payloads
 ```
 

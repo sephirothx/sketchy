@@ -39,6 +39,8 @@ def editable_room_settings_payload(room: Room) -> dict:
         "scoringMode": room.scoring_mode,
         "spectatorsSeePrompt": room.spectators_see_prompt,
         "hideMaskedPrompt": room.hide_masked_prompt,
+        "allowedTools": list(room.allowed_tools),
+        "colorMode": room.color_mode,
         "promptListSlugs": list(room.prompt_list_slugs),
     }
 

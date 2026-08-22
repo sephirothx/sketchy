@@ -1,6 +1,9 @@
 import { create } from "zustand";
+import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import type {
   ChatMessage,
+  ColorMode,
+  DrawingToolGroup,
   DrawingRecapMetadata,
   GameEndedPayload,
   GameHighlight,
@@ -37,6 +40,8 @@ interface GameStore {
   scoringMode: ScoringMode;
   spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
+  allowedTools: DrawingToolGroup[];
+  colorMode: ColorMode;
   promptListSlugs: string[];
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
@@ -152,6 +157,8 @@ export const useGameStore = create<GameStore>((set) => ({
   scoringMode: "default" as ScoringMode,
   spectatorsSeePrompt: false,
   hideMaskedPrompt: false,
+  allowedTools: DEFAULT_ALLOWED_TOOLS,
+  colorMode: DEFAULT_COLOR_MODE,
   promptListSlugs: ["english_standard"],
   roomState: "waiting",
   players: [],
@@ -185,6 +192,8 @@ export const useGameStore = create<GameStore>((set) => ({
       scoringMode: payload.scoringMode ?? "default",
       spectatorsSeePrompt: payload.spectatorsSeePrompt ?? false,
       hideMaskedPrompt: payload.hideMaskedPrompt ?? false,
+      allowedTools: payload.allowedTools ?? DEFAULT_ALLOWED_TOOLS,
+      colorMode: payload.colorMode ?? DEFAULT_COLOR_MODE,
       promptListSlugs: payload.promptListSlugs?.length ? payload.promptListSlugs : ["english_standard"],
       roomState: payload.state,
       finalScores: payload.lastGameScores?.length

@@ -33,6 +33,7 @@ export interface RestartVoteState {
 
 export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 export type ScoringMode = "none" | "default" | "pressure";
+export type ColorMode = "all" | "palette" | "colorblind_safe" | "black_and_white";
 
 export interface PromptListSummary {
   slug: string;
@@ -86,6 +87,8 @@ export interface RoomSummary {
   scoringMode: ScoringMode;
   spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
+  allowedTools: DrawingToolGroup[];
+  colorMode: ColorMode;
   promptListSlugs?: string[];
   state: "waiting" | "playing";
 }
@@ -104,6 +107,8 @@ export interface RoomStatePayload {
   scoringMode: ScoringMode;
   spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
+  allowedTools: DrawingToolGroup[];
+  colorMode: ColorMode;
   promptListSlugs?: string[];
   state: "waiting" | "playing";
   lastGameScores?: ScoreEntry[];
@@ -127,6 +132,8 @@ export interface EditableRoomSettings {
   scoringMode: ScoringMode;
   spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
+  allowedTools: DrawingToolGroup[];
+  colorMode: ColorMode;
   promptListSlugs?: string[];
 }
 
@@ -253,6 +260,9 @@ export interface StrokeStartPayload {
 export interface StrokeMovePayload {
   points: StrokePoint[];
 }
+
+/** The chips a host toggles. The eraser rides with the brush - see `drawingRules.ts`. */
+export type DrawingToolGroup = "brush" | "fill" | "shapes";
 
 export type ShapeType = "rectangle" | "ellipse" | "triangle";
 

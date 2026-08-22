@@ -7,7 +7,15 @@ import {
   InputNumber,
   SegmentedControl,
   Switch,
+  ToggleChips,
 } from "../components/RoomSetupControls";
+import {
+  COLOR_MODE_OPTIONS,
+  DEFAULT_ALLOWED_TOOLS,
+  DEFAULT_COLOR_MODE,
+  TOOL_GROUP_OPTIONS,
+  canDisallowTool,
+} from "../lib/drawingRules";
 import {
   DEFAULT_DRAWING_SECONDS,
   DEFAULT_HINT_MODE,
@@ -24,7 +32,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
-import type { AckResponse, HintMode, ScoringMode } from "../types";
+import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, ScoringMode } from "../types";
 import { AccountMenu } from "../components/AccountMenu";
 import { currentPlayerName } from "../store/authStore";
 
@@ -47,6 +55,8 @@ export function CreateRoomPage() {
   const [scoringMode, setScoringMode] = useState<ScoringMode>("default");
   const [spectatorsSeePrompt, setSpectatorsSeePrompt] = useState(false);
   const [hideMaskedPrompt, setHideMaskedPrompt] = useState(false);
+  const [allowedTools, setAllowedTools] = useState<DrawingToolGroup[]>(DEFAULT_ALLOWED_TOOLS);
+  const [colorMode, setColorMode] = useState<ColorMode>(DEFAULT_COLOR_MODE);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -61,7 +71,7 @@ export function CreateRoomPage() {
       const response = await emitWithAck<AckResponse>("create_room", {
         nickname: currentPlayerName(), nameColor, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
-        spectatorsSeePrompt, hideMaskedPrompt, promptListSlugs,
+        spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptListSlugs,
       });
       const session = sessionFrom(response);
       if (session) {
@@ -112,6 +122,16 @@ export function CreateRoomPage() {
         <InputNumber label="Rounds" value={rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={setRounds} />
         <InputNumber label="Drawing time (seconds)" value={drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={setDrawingSeconds} />
         <PromptListPicker selectedSlugs={promptListSlugs} onChange={setPromptListSlugs} />
+        <ToggleChips
+          label="Allowed tools"
+          values={allowedTools}
+          onChange={setAllowedTools}
+          options={TOOL_GROUP_OPTIONS.map((option) => ({
+            ...option,
+            disabled: !canDisallowTool(option.value, allowedTools),
+          }))}
+        />
+        <ChoiceChips label="Colors" value={colorMode} onChange={setColorMode} options={COLOR_MODE_OPTIONS} />
       </div>
       <details className="advanced-settings"><summary>Advanced settings <span>Spectators, scoring, hints, and custom prompts</span></summary>
         <div className="advanced-settings-content">

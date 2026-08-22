@@ -33,6 +33,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from app.drawing_rules import (
+    DEFAULT_ALLOWED_TOOLS,
+    DEFAULT_COLOR_MODE,
+    check_color_mode,
+    clean_allowed_tools,
+)
 from app.game import HINT_MODES, SCORING_MODES
 from app.live_drawing import LiveDrawingPacket, decode_live_drawing
 from app.auth.names import MAX_NAME_LENGTH, NAME_RULE_MESSAGE, NameError_, validate_name
@@ -129,6 +135,10 @@ class RoomSettingsFields(RequestModel):
     scoring_mode: str = Field(default="default", alias="scoringMode")
     spectators_see_prompt: bool = Field(default=False, alias="spectatorsSeePrompt")
     hide_masked_prompt: bool = Field(default=False, alias="hideMaskedPrompt")
+    allowed_tools: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_ALLOWED_TOOLS), alias="allowedTools"
+    )
+    color_mode: str = Field(default=DEFAULT_COLOR_MODE, alias="colorMode")
     prompt_list_slugs: list[str] = Field(default_factory=lambda: ["english_standard"], alias="promptListSlugs")
 
     @field_validator("name", "custom_prompts")
@@ -155,6 +165,16 @@ class RoomSettingsFields(RequestModel):
     @classmethod
     def valid_scoring_mode(cls, value: str) -> str:
         return _check_scoring_mode(value)
+
+    @field_validator("allowed_tools")
+    @classmethod
+    def valid_allowed_tools(cls, value: list[str]) -> list[str]:
+        return clean_allowed_tools(value)
+
+    @field_validator("color_mode")
+    @classmethod
+    def valid_color_mode(cls, value: str) -> str:
+        return check_color_mode(value)
 
 
 class CreateRoomPayload(RoomSettingsFields):
@@ -183,7 +203,19 @@ class UpdateRoomSettingsPayload(RequestModel):
     scoring_mode: str | None = Field(default=None, alias="scoringMode")
     spectators_see_prompt: bool | None = Field(default=None, alias="spectatorsSeePrompt")
     hide_masked_prompt: bool | None = Field(default=None, alias="hideMaskedPrompt")
+    allowed_tools: list[str] | None = Field(default=None, alias="allowedTools")
+    color_mode: str | None = Field(default=None, alias="colorMode")
     prompt_list_slugs: list[str] | None = Field(default=None, alias="promptListSlugs")
+
+    @field_validator("allowed_tools")
+    @classmethod
+    def valid_update_allowed_tools(cls, value: list[str] | None) -> list[str] | None:
+        return None if value is None else clean_allowed_tools(value)
+
+    @field_validator("color_mode")
+    @classmethod
+    def valid_update_color_mode(cls, value: str | None) -> str | None:
+        return None if value is None else check_color_mode(value)
 
     @field_validator("prompt_list_slugs")
     @classmethod

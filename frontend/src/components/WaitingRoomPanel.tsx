@@ -1,7 +1,15 @@
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
-import type { HintMode, PlayerInfo, ScoreEntry, ScoringMode } from "../types";
+import { describeDrawingRules } from "../lib/drawingRules";
+import type {
+  ColorMode,
+  DrawingToolGroup,
+  HintMode,
+  PlayerInfo,
+  ScoreEntry,
+  ScoringMode,
+} from "../types";
 
 interface WaitingRoomPanelProps {
   name: string;
@@ -14,6 +22,8 @@ interface WaitingRoomPanelProps {
   scoringMode: ScoringMode;
   spectatorsSeePrompt: boolean;
   hideMaskedPrompt: boolean;
+  allowedTools: DrawingToolGroup[];
+  colorMode: ColorMode;
   promptListSlugs?: string[];
   players: PlayerInfo[];
   myPlayerId: string | null;
@@ -111,6 +121,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 ? "Spectators can see the prompt"
                 : "Spectators guess along"}
             </li>
+            <li>{describeDrawingRules(props.allowedTools, props.colorMode) ?? "Every tool and color"}</li>
           </ul>
           {props.customPromptCount > 0 && !me?.isSpectator && (
             <CustomPromptsPreview count={props.customPromptCount} />

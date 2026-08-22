@@ -1,31 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
+import {
+  DEFAULT_ALLOWED_TOOLS,
+  DEFAULT_COLOR_MODE,
+  allowsCustomColors,
+  firstAllowedColor,
+  firstAllowedTool,
+  isColorAllowed,
+  isPairedPalette,
+  isToolAllowed,
+  paletteForColorMode,
+} from "../lib/drawingRules";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
+import { useGameStore } from "../store/gameStore";
 import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 import { recordRender } from "../lib/renderDiagnostics";
-
-// Each pair is [light shade, dark shade] for the same color family, laid out
-// as two rows of matching columns (mirroring skribbl.io's palette).
-const COLOR_PAIRS: readonly (readonly [string, string])[] = [
-  ["#ffffff", "#000000"],
-  ["#c1c1c1", "#4c4c4c"],
-  ["#ed1c24", "#7f0000"],
-  ["#ff7f27", "#a0522d"],
-  ["#fff200", "#c9a227"],
-  ["#b5e61d", "#2d5b1e"],
-  ["#22b14c", "#1c6b5a"],
-  ["#7ac9e8", "#2e5090"],
-  ["#3f48cc", "#1b1b6e"],
-  ["#a349a4", "#5c2d91"],
-  ["#ec6ea8", "#7b3f61"],
-  ["#ffae85", "#a9714b"],
-  ["#c69c6d", "#5b3a1e"],
-];
-
-const COLORS = COLOR_PAIRS.flat();
 
 const PRESET_WIDTHS = [2, 4, 6, 8, 12, 16, 24, 32];
 
@@ -167,6 +159,18 @@ export function Toolbar({
   const isMobile = useMediaQuery("(max-width: 900px)");
   const fillAvailable = useCanvasBudgetStore((state) => state.fillAvailable);
   const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
+  // The room's drawing rules. The server refuses a tool or color the host took
+  // away, so everything below only spares the drawer from meeting that refusal
+  // as a stroke that disappears.
+  const allowedTools = useGameStore((state) => state.allowedTools) ?? DEFAULT_ALLOWED_TOOLS;
+  const colorMode = useGameStore((state) => state.colorMode) ?? DEFAULT_COLOR_MODE;
+  const tools = useMemo(
+    () => TOOLS.filter((entry) => isToolAllowed(entry.value, allowedTools)),
+    [allowedTools],
+  );
+  const colors = paletteForColorMode(colorMode);
+  const customColorsAllowed = allowsCustomColors(colorMode);
+  const paletteClass = isPairedPalette(colorMode) ? "" : " is-flat";
   const disabledReason = (value: DrawTool): string | null => {
     if (value === "fill" && !fillAvailable) {
       return "Fill is unavailable for the rest of this turn";
@@ -177,7 +181,7 @@ export function Toolbar({
     }
     return null;
   };
-  const isCustomColor = !COLORS.includes(color);
+  const isCustomColor = !colors.includes(color);
   // The eraser paints white regardless of the palette, so nothing reads as chosen.
   const isSelectedColor = (candidate: string) => candidate === color && tool !== "eraser";
   const activeColor = tool === "eraser" ? "#6c757d" : color;
@@ -189,6 +193,12 @@ export function Toolbar({
 
   const prevColorRef = useRef<string>("#ffffff");
   const [recentColors, setRecentColors] = useState<string[]>(["#000000", "#ffffff"]);
+  // Kept rather than pruned: a host who turns a restriction back off should
+  // find the recent colors where they left them.
+  const shownRecentColors = useMemo(
+    () => recentColors.filter((c) => isColorAllowed(c, colorMode)),
+    [recentColors, colorMode],
+  );
 
   const handleSelectColor = useCallback(
     (newColor: string) => {
@@ -220,7 +230,7 @@ export function Toolbar({
   const currentIdx = PRESET_WIDTHS.indexOf(brushWidth);
   const defaultIdx = tool === "eraser" ? 6 : 2;
   const sliderValue = currentIdx !== -1 ? currentIdx : defaultIdx;
-  const activeTool = TOOLS.find((t) => t.value === tool) ?? TOOLS[0];
+  const activeTool = tools.find((t) => t.value === tool) ?? tools[0];
 
   const handleWidthChange = useCallback(
     (newWidth: number) => {
@@ -278,13 +288,14 @@ export function Toolbar({
 
       if (key === "x") {
         const targetColor = prevColorRef.current;
+        if (!isColorAllowed(targetColor, colorMode)) return;
         prevColorRef.current = color;
         onColorChange(targetColor);
         if (tool === "eraser") onToolChange("brush");
         return;
       }
 
-      const boundTool = TOOLS.find((entry) => toolKeys(kb, entry.value).includes(key));
+      const boundTool = tools.find((entry) => toolKeys(kb, entry.value).includes(key));
       if (boundTool) {
         onToolChange(boundTool.value);
       } else if (kb.brushDecrease.includes(key)) {
@@ -305,7 +316,19 @@ export function Toolbar({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [brushWidth, color, defaultIdx, handleWidthChange, onColorChange, onToolChange, tool]);
+  }, [brushWidth, color, colorMode, defaultIdx, handleWidthChange, onColorChange, onToolChange, tool, tools]);
+
+  // The host can tighten the rules while the toolbar is on screen, and a
+  // drawer arriving mid-turn brings whatever they last held. Either way the
+  // selection can be something this room no longer offers, so put it back on
+  // something it does - otherwise the next stroke is one the server refuses.
+  useEffect(() => {
+    if (!isToolAllowed(tool, allowedTools)) onToolChange(firstAllowedTool(allowedTools));
+  }, [allowedTools, onToolChange, tool]);
+
+  useEffect(() => {
+    if (!isColorAllowed(color, colorMode)) onColorChange(firstAllowedColor(colorMode));
+  }, [color, colorMode, onColorChange]);
 
   const sizePreview = (
     <span
@@ -416,7 +439,7 @@ export function Toolbar({
           {mobilePanel === "tool" && (
             <div id={mobileToolPanelId} className="toolbar-mobile-popover" role="group" aria-label="Choose tool">
               <div className="toolbar-mobile-tools">
-                {TOOLS.map((t) => (
+                {tools.map((t) => (
                   <button
                     key={t.value}
                     type="button"
@@ -438,7 +461,7 @@ export function Toolbar({
           {mobilePanel === "color" && (
             <div id={mobileColorPanelId} className="toolbar-mobile-popover" role="group" aria-label="Choose color">
               <div className="toolbar-mobile-colors">
-                {COLORS.map((c) => (
+                {colors.map((c) => (
                   <ColorSwatch
                     key={c}
                     color={c}
@@ -451,25 +474,27 @@ export function Toolbar({
                     }}
                   />
                 ))}
-                <label
-                  className={`color-swatch color-swatch-custom toolbar-mobile-swatch-btn${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
-                  style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
-                  title="Choose custom color"
-                >
-                  <input
-                    type="color"
-                    value={color}
-                    onChange={(e) => {
-                      handleSelectColor(e.target.value);
-                      setMobilePanel(null);
-                    }}
-                    aria-label="Choose custom color"
-                  />
-                </label>
+                {customColorsAllowed && (
+                  <label
+                    className={`color-swatch color-swatch-custom toolbar-mobile-swatch-btn${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
+                    style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
+                    title="Choose custom color"
+                  >
+                    <input
+                      type="color"
+                      value={color}
+                      onChange={(e) => {
+                        handleSelectColor(e.target.value);
+                        setMobilePanel(null);
+                      }}
+                      aria-label="Choose custom color"
+                    />
+                  </label>
+                )}
               </div>
-              {recentColors.length > 0 && (
+              {shownRecentColors.length > 0 && (
                 <div className="toolbar-mobile-recent" aria-label="Recent colors">
-                  {recentColors.map((c) => (
+                  {shownRecentColors.map((c) => (
                     <ColorSwatch
                       key={c}
                       color={c}
@@ -500,7 +525,7 @@ export function Toolbar({
     <div className="toolbar-container">
         <div className="toolbar">
           <div className="toolbar-group toolbar-tools" aria-label="Drawing tools">
-            {TOOLS.map((t) => {
+            {tools.map((t) => {
               const unavailable = disabledReason(t.value);
               const label = unavailable ?? getToolLabel(t.value, t.name);
               const badge = getToolBadge(t.value);
@@ -541,8 +566,8 @@ export function Toolbar({
 
           <div className="toolbar-divider" />
 
-          <div className="toolbar-group toolbar-colors" aria-label="Color palette">
-            {COLORS.map((c) => (
+          <div className={`toolbar-group toolbar-colors${paletteClass}`} aria-label="Color palette">
+            {colors.map((c) => (
               <ColorSwatch
                 key={c}
                 color={c}
@@ -552,26 +577,28 @@ export function Toolbar({
                 onSelect={() => handleSelectColor(c)}
               />
             ))}
-            <label
-              className={`color-swatch color-swatch-custom${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
-              style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
-              title="Choose custom color"
-            >
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => handleSelectColor(e.target.value)}
-                aria-label="Choose custom color"
-              />
-            </label>
+            {customColorsAllowed && (
+              <label
+                className={`color-swatch color-swatch-custom${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
+                style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
+                title="Choose custom color"
+              >
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => handleSelectColor(e.target.value)}
+                  aria-label="Choose custom color"
+                />
+              </label>
+            )}
           </div>
 
-          {recentColors.length > 0 && (
+          {shownRecentColors.length > 0 && (
             <>
               <div className="toolbar-divider" />
               <div className="toolbar-group recent-colors-group" aria-label="Recent colors" title="Recent colors (Press X to swap color)">
                 <span className="recent-colors-label">Recent:</span>
-                {recentColors.map((c) => (
+                {shownRecentColors.map((c) => (
                   <ColorSwatch
                     key={c}
                     color={c}
