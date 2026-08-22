@@ -248,6 +248,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["schemaVersion"] == 1
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
+    assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 0
+    assert artifact["gameParticipations"][0]["game"]["ruleSnapshot"] == {}
     assert artifact["drawnTurns"][0]["prompt"] == "owner prompt"
     assert artifact["correctGuesses"][0]["prompt"] == "requester guessed this"
     assert artifact["sessions"] and "tokenHash" not in artifact["sessions"][0]

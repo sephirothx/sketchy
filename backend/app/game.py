@@ -19,6 +19,11 @@ from itertools import groupby
 from uuid6 import uuid7
 
 from app.canvas_session import CanvasSession
+from app.drawing_rules import (
+    DEFAULT_ALLOWED_TOOLS,
+    DEFAULT_COLOR_MODE,
+    allowed_colors,
+)
 from app.domain_values import HINT_MODES, SCORING_MODES, TurnEndReason
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_prompt_choices
 from app.prompt_content import prompt_match_key
@@ -32,6 +37,10 @@ DRAWING_SECONDS = 80
 TURN_RESULTS_SECONDS = float(os.getenv("TURN_RESULTS_SECONDS") or 5)
 MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
+# Bump this whenever any parameter or algorithm that can change a score changes.
+SCORING_RULES_VERSION = 1
+# Bump this only when the stored rule-snapshot JSON contract changes.
+GAME_RULE_SNAPSHOT_VERSION = 1
 
 
 def competition_ranks(sorted_scores: Sequence[int]) -> list[int]:
@@ -273,6 +282,7 @@ class Game:
     id: str = field(default_factory=lambda: str(uuid7()))
     rounds_total: int = 3
     scoring_mode: str = "default"
+    scoring_version: int = SCORING_RULES_VERSION
     turn_index: int = -1
     phase: Phase = Phase.CHOOSING_PROMPT
     current_drawer: str | None = None
@@ -300,6 +310,10 @@ class Game:
     drawing_seconds: float = DRAWING_SECONDS
     hint_mode: str = "none"
     hide_masked_prompt: bool = False
+    # Frozen at game start: room settings can outlive this game and must never
+    # reinterpret its drawing record after they change.
+    allowed_tools: tuple[str, ...] = DEFAULT_ALLOWED_TOOLS
+    color_mode: str = DEFAULT_COLOR_MODE
     letter_positions: list[int] = field(default_factory=list)
     revealed_positions: set[int] = field(default_factory=set)
     purchased_hints: dict[str, set[int]] = field(default_factory=dict)  # slot hints ("purchase")
@@ -317,6 +331,55 @@ class Game:
     # need a real timestamp, and a monotonic reading means nothing outside this
     # process.
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def rule_snapshot(self) -> dict[str, object]:
+        """Return the versioned parameters needed to interpret this game's facts."""
+        permitted_colors = allowed_colors(self.color_mode)
+        return {
+            "schemaVersion": GAME_RULE_SNAPSHOT_VERSION,
+            "scoring": {
+                "mode": self.scoring_mode,
+                "version": self.scoring_version,
+                "default": {
+                    "minimumGuessPoints": MIN_GUESS_POINTS,
+                    "maximumGuessPoints": MAX_GUESS_POINTS,
+                    "algorithm": "linear_remaining_time",
+                },
+                "pressure": {
+                    "maximumGuessPoints": PRESSURE_MAX_POINTS,
+                    "minimumGuessPoints": PRESSURE_MIN_POINTS,
+                    "decayPerReferenceSecond": PRESSURE_DECAY_PER_SECOND,
+                    "referenceSeconds": PRESSURE_REFERENCE_SECONDS,
+                    "postGuessMultiplier": PRESSURE_MULTIPLIER,
+                },
+                "drawerBonus": "sum_net_correct_guess_points",
+            },
+            "hints": {
+                "mode": self.hint_mode,
+                "minimumHiddenLetters": MIN_HIDDEN_LETTERS,
+                "escalatingBaseCost": HINT_BASE_COST,
+                "maximumSpendPerTurn": MAX_HINT_SPEND,
+                "wheel": {
+                    "vowelBaseCost": WHEEL_VOWEL_BASE_COST,
+                    "consonantBaseCost": WHEEL_CONSONANT_BASE_COST,
+                    "minimumFrequencyMultiplier": WHEEL_MIN_FREQUENCY_MULTIPLIER,
+                    "maximumFrequencyMultiplier": WHEEL_MAX_FREQUENCY_MULTIPLIER,
+                },
+            },
+            "drawing": {
+                "seconds": self.drawing_seconds,
+                "allowedTools": list(self.allowed_tools),
+                "colorMode": self.color_mode,
+                "allowedColors": (
+                    list(permitted_colors) if permitted_colors is not None else None
+                ),
+            },
+            "prompt": {
+                "language": self.prompt_language,
+                "hideMaskedPrompt": self.hide_masked_prompt,
+                "sourceRevisionIds": list(self.prompt_source_revision_ids),
+            },
+        }
     # Every token that was ever in the rotation, including players who have
     # since left. `turn_order` shrinks on departure, so it cannot answer "who
     # played this game?" once the game is over.

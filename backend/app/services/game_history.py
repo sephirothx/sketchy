@@ -179,6 +179,7 @@ def build_game_history(
                 )
             )
 
+    rule_snapshot = game.rule_snapshot()
     return GameHistoryWrite(
         record=GameRecordInput(
             id=game.id,
@@ -190,6 +191,9 @@ def build_game_history(
             player_count=len(participants),
             started_at=game.started_at,
             finished_at=finished_at,
+            scoring_version=game.scoring_version,
+            rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
+            rule_snapshot=rule_snapshot,
         ),
         participants=participants,
         turns=turns,

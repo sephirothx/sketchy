@@ -26,6 +26,8 @@ export interface GameSummary {
   id: string;
   roomName: string;
   scoringMode: string;
+  scoringVersion: number;
+  ruleSnapshotVersion: number;
   hintMode: string;
   drawingSeconds: number;
   totalRounds: number;
@@ -52,7 +54,55 @@ export interface GameTurn {
   guesses: TurnGuess[];
 }
 
-export type GameDetail = GameSummary & { turns: GameTurn[] };
+export interface GameRuleSnapshot {
+  schemaVersion: number;
+  scoring: {
+    mode: string;
+    version: number;
+    default: {
+      minimumGuessPoints: number;
+      maximumGuessPoints: number;
+      algorithm: string;
+    };
+    pressure: {
+      maximumGuessPoints: number;
+      minimumGuessPoints: number;
+      decayPerReferenceSecond: number;
+      referenceSeconds: number;
+      postGuessMultiplier: number;
+    };
+    drawerBonus: string;
+  };
+  hints: {
+    mode: string;
+    minimumHiddenLetters: number;
+    escalatingBaseCost: number;
+    maximumSpendPerTurn: number;
+    wheel: {
+      vowelBaseCost: number;
+      consonantBaseCost: number;
+      minimumFrequencyMultiplier: number;
+      maximumFrequencyMultiplier: number;
+    };
+  };
+  drawing: {
+    seconds: number;
+    allowedTools: string[];
+    colorMode: string;
+    allowedColors: string[] | null;
+  };
+  prompt: {
+    language: string;
+    hideMaskedPrompt: boolean;
+    sourceRevisionIds: string[];
+  };
+}
+
+export type GameDetail = GameSummary & {
+  // Empty only for legacy version-zero games.
+  ruleSnapshot: GameRuleSnapshot | Record<string, never>;
+  turns: GameTurn[];
+};
 
 export const HISTORY_PAGE_SIZE = 10;
 

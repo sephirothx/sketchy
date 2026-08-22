@@ -352,6 +352,8 @@ class GameFlowService:
             hint_mode=room.hint_mode,
             scoring_mode=room.scoring_mode,
             hide_masked_prompt=room.hide_masked_prompt,
+            allowed_tools=tuple(room.allowed_tools),
+            color_mode=room.color_mode,
             prompt_language=room.prompt_language,
             prompt_source_revision_ids=tuple(
                 room.prompt_list_revision_ids

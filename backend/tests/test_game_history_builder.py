@@ -131,6 +131,14 @@ def test_record_carries_the_settings_the_game_was_played_under():
         ("Ann", "user-ann", 300, False),
         ("Bob", "user-bob", 100, False),
     )
+    game.scoring_mode = "pressure"
+    game.hint_mode = "wheel"
+    game.drawing_seconds = 120
+    game.allowed_tools = ("brush", "shapes")
+    game.color_mode = "black_and_white"
+    game.prompt_language = "de"
+    game.hide_masked_prompt = True
+    game.prompt_source_revision_ids = ("revision-one", "revision-two")
     game.completed_turns = [turn(players["Ann"].id)]
 
     history = build_game_history(room, game, finished_at=FINISHED_AT)
@@ -139,6 +147,27 @@ def test_record_carries_the_settings_the_game_was_played_under():
     assert history.record.total_rounds == 2
     assert history.record.started_at == game.started_at
     assert history.record.finished_at == FINISHED_AT
+    assert history.record.scoring_version == 1
+    assert history.record.rule_snapshot_version == 1
+    assert history.record.rule_snapshot["scoring"]["mode"] == "pressure"
+    assert history.record.rule_snapshot["scoring"]["pressure"] == {
+        "maximumGuessPoints": 300,
+        "minimumGuessPoints": 50,
+        "decayPerReferenceSecond": 0.98,
+        "referenceSeconds": 90.0,
+        "postGuessMultiplier": 2.0,
+    }
+    assert history.record.rule_snapshot["drawing"] == {
+        "seconds": 120,
+        "allowedTools": ["brush", "shapes"],
+        "colorMode": "black_and_white",
+        "allowedColors": ["#000000", "#ffffff"],
+    }
+    assert history.record.rule_snapshot["prompt"] == {
+        "language": "de",
+        "hideMaskedPrompt": True,
+        "sourceRevisionIds": ["revision-one", "revision-two"],
+    }
     assert history.turns[0].duration_seconds == 42.5
 
 

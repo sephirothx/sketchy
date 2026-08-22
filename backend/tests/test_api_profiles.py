@@ -189,6 +189,9 @@ async def test_participants_see_the_turn_by_turn_detail(env):
     body = (await http.get(f"/api/games/{game_id}")).json()
 
     assert body["roomName"] == "Studio 0"
+    assert body["scoringVersion"] == 0
+    assert body["ruleSnapshotVersion"] == 0
+    assert body["ruleSnapshot"] == {}
     assert len(body["turns"]) == 1
     assert body["turns"][0]["prompt"] == "jackpot"
     assert body["turns"][0]["drawerDisplayName"] == "Ann"

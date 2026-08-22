@@ -121,6 +121,11 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
 
       {expanded && (
         <div className="profile-game-body">
+          <p className="profile-note">
+            Rules: {game.scoringMode} scoring
+            {game.scoringVersion > 0 ? ` v${game.scoringVersion}` : " (legacy version unknown)"}
+            {` · ${game.hintMode} hints · ${game.drawingSeconds} seconds`}
+          </p>
           <ol className="profile-standings">
             {game.participants.map((p) => (
               <li key={p.seatId}>

@@ -116,6 +116,15 @@ content is idempotent—even if collection order changes—while reusing an ID f
 different content raises an operator-visible conflict instead of duplicating or
 silently replacing history. The digest is an integrity/idempotency aid, not a
 credential or an event timestamp.
+Finished games also store a scoring-rules version and a versioned exact rule
+snapshot. The snapshot freezes the numeric default/pressure/hint parameters,
+drawer-bonus algorithm, drawing time, permitted tools and colors, prompt
+visibility/language, and pinned prompt-source revisions. Historical points can
+therefore be interpreted under the rules that produced them after defaults or
+algorithms change. Legacy rows use version `0` and an empty snapshot rather
+than claiming parameters that cannot be reconstructed. Participant-only game
+detail and private account export include the exact snapshot; public history
+summaries expose only its versions and typed mode/time fields.
 Finished games also enforce one participant per account, one turn per
 game/round/turn number, and one correct guess per player and turn at the
 database layer.
@@ -755,6 +764,9 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
   most a single guess can ever be worth. In Pressure mode the 50-point floor guarantees the *gross*
   award only; the hint spend is settled after it.
 - The drawer receives the sum of points earned by all correct guessers in that turn (`drawer_score = sum of guesser scores`, after each guesser's hint spend), balancing drawing and guessing potential across complete rotations.
+- These parameters are scoring rules version 1. Changing an outcome-producing
+  constant or algorithm requires a version bump; every completed game freezes
+  the full rule snapshot used for its scores.
 
 ### Spectating
 

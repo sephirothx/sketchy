@@ -147,6 +147,8 @@ Three different things, never used for one another:
 | **Points** | What a single guess or turn is worth. | score (for one award) |
 | **Score** | A player's running total across the game. Never goes down. | points (for a total), rating |
 | **Scoring mode** | The room setting chosen at creation: **Default**, **Pressure**, or **No scoring**. Use those three labels verbatim. | points mode, scoring type, "Just for fun", "Points on" |
+| **Scoring version** | The integer identifying the exact score-producing algorithm family used by a **Game**. It changes whenever a scoring parameter or algorithm changes; zero means legacy rules are unknown. | game version, rules name |
+| **Rule snapshot** | The versioned, immutable parameters frozen for a **Game**: scoring and hint algorithms, drawing time/tools/colors, prompt visibility/language, and exact prompt-source revisions. | current settings, room defaults, config dump |
 | **Default** | A correct guess is worth 100–300 points, falling steadily as the timer runs down. | normal, standard, classic |
 | **Pressure** | A correct guess decays from 300 points, and decays faster for everyone once the first player gets the prompt. | hardcore, fast, decay |
 | **No scoring** | Guesses are still detected and turns still end, but everyone stays on zero and no standings are shown. | casual, fun mode, unscored |

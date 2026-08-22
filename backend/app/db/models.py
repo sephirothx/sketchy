@@ -724,6 +724,13 @@ class GameRecord(Base):
             "scoring_mode", SCORING_MODES, "ck_game_records_scoring_mode"
         ),
         _values_check("hint_mode", HINT_MODES, "ck_game_records_hint_mode"),
+        CheckConstraint(
+            "scoring_version >= 0", name="ck_game_records_scoring_version"
+        ),
+        CheckConstraint(
+            "rule_snapshot_version >= 0",
+            name="ck_game_records_rule_snapshot_version",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -734,6 +741,17 @@ class GameRecord(Base):
     )
     room_name: Mapped[str] = mapped_column(String(64), nullable=False)
     scoring_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Version zero/empty JSON identify legacy/manual rows whose exact rules are
+    # unknown. Production game writes always provide the current versions.
+    scoring_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    rule_snapshot_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    rule_snapshot: Mapped[dict] = mapped_column(
+        JSON, default=dict, server_default=text("'{}'"), nullable=False
+    )
     hint_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     drawing_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     total_rounds: Mapped[int] = mapped_column(Integer, nullable=False)

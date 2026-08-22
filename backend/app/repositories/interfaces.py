@@ -96,6 +96,9 @@ class GameRecordInput:
     started_at: datetime
     finished_at: datetime
     id: str | None = None
+    scoring_version: int = 0
+    rule_snapshot_version: int = 0
+    rule_snapshot: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -166,6 +169,9 @@ class GameSummary:
     started_at: datetime
     finished_at: datetime
     participants: list[GameParticipantSummary] = field(default_factory=list)
+    scoring_version: int = 0
+    rule_snapshot_version: int = 0
+    rule_snapshot: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

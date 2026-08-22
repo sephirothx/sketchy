@@ -56,6 +56,8 @@ def game_summary_payload(summary: GameSummary) -> dict:
         "id": summary.id,
         "roomName": summary.room_name,
         "scoringMode": summary.scoring_mode,
+        "scoringVersion": summary.scoring_version,
+        "ruleSnapshotVersion": summary.rule_snapshot_version,
         "hintMode": summary.hint_mode,
         "drawingSeconds": summary.drawing_seconds,
         "totalRounds": summary.total_rounds,
@@ -80,6 +82,7 @@ def game_summary_payload(summary: GameSummary) -> dict:
 def game_detail_payload(detail: GameDetail) -> dict:
     return {
         **game_summary_payload(detail.summary),
+        "ruleSnapshot": detail.summary.rule_snapshot,
         "turns": [
             {
                 "roundNumber": r.round_number,
