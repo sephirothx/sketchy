@@ -30,6 +30,7 @@ from app.db.models import (
     TurnGuess,
     TurnRecord,
     User,
+    UserSettings,
     generate_uuid,
 )
 from app.domain_values import AccountState, DataExportStatus
@@ -298,6 +299,7 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert owner_guess.points_awarded == 150
         assert await session.scalar(select(func.count(GameRecord.id))) == 1
         assert await session.get(DataExport, UUID(export_status["id"])) is None
+        assert await session.get(UserSettings, account.id) is None
         assert not list(
             (
                 await session.scalars(

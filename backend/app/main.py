@@ -11,6 +11,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.profiles import create_profile_router
 from app.api.prompt_lists import create_prompt_list_router
+from app.api.user_settings import create_user_settings_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db
@@ -139,6 +140,7 @@ api.include_router(
 )
 api.include_router(create_profile_router(user_repo, game_history_repo))
 api.include_router(create_prompt_list_router(prompt_list_repo))
+api.include_router(create_user_settings_router(async_session_factory))
 
 
 @api.get("/api/health")

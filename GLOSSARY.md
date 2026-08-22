@@ -146,6 +146,8 @@ Three different things, never used for one another:
 | **Room code** | The short code that identifies a room to join. The shareable URL carrying it is the **invite link**. | friend code, game code, PIN, room ID |
 | **Room settings** | The host-controlled configuration: rounds, drawing time, max players, prompt lists, hint mode, scoring mode, spectator rules. | options, config, preferences, rules |
 | **Player settings** | A player's own preferences, which travel with them between rooms. | user settings, profile settings |
+| **Colorblind-safe preference** | A private **Player setting** asking hosts to prefer **Colorblind-safe** room colors. Only an anonymous aggregate suggestion may reach a host; never expose who enabled it. | disability flag, accessibility request |
+| **Clear guesses after sending** | The **Player setting** choosing whether a sent guess empties the guess field or remains available to edit and resend. | clear chat, keep guesses |
 
 ## Votes and moderation
 

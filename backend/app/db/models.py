@@ -29,17 +29,22 @@ from app.auth.avatars import BUILT_IN_AVATAR_KEYS
 from app.db.types import UTCDateTime
 from app.domain_values import (
     ACCOUNT_STATES,
+    BRUSH_CURSOR_STYLES,
     DATA_EXPORT_STATUSES,
+    DEFAULT_USER_KEY_BINDINGS,
     HINT_MODES,
     PROMPT_LANGUAGES,
     SCORING_MODES,
     TURN_END_REASONS,
     USER_ROLES,
+    USER_THEMES,
     AccountState,
+    BrushCursorStyle,
     DataExportStatus,
     PromptLanguage,
     TurnEndReason,
     UserRole,
+    UserTheme,
 )
 
 
@@ -186,6 +191,78 @@ class User(Base):
             if value
             else AccountState.REGISTERED.value
         )
+
+
+class UserSettings(Base):
+    """Cross-device preferences for a registered account."""
+
+    __tablename__ = "user_settings"
+    __table_args__ = (
+        _values_check("theme", USER_THEMES, "ck_user_settings_theme"),
+        _values_check(
+            "brush_cursor", BRUSH_CURSOR_STYLES, "ck_user_settings_brush_cursor"
+        ),
+        CheckConstraint(
+            "sound_effects_volume >= 0.0 AND sound_effects_volume <= 1.0",
+            name="ck_user_settings_volume",
+        ),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    theme: Mapped[str] = mapped_column(
+        String(16),
+        default=UserTheme.SYSTEM.value,
+        server_default=UserTheme.SYSTEM.value,
+        nullable=False,
+    )
+    sound_effects: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    confetti_effects: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    sound_effects_volume: Mapped[float] = mapped_column(
+        Float, default=0.7, server_default=text("0.7"), nullable=False
+    )
+    brush_cursor: Mapped[str] = mapped_column(
+        String(16),
+        default=BrushCursorStyle.CROSSHAIR.value,
+        server_default=BrushCursorStyle.CROSSHAIR.value,
+        nullable=False,
+    )
+    key_bindings: Mapped[dict] = mapped_column(
+        JSON,
+        default=lambda: {
+            key: list(value) for key, value in DEFAULT_USER_KEY_BINDINGS.items()
+        },
+        server_default=text(
+            "'{\"brush\":[\"p\",\"1\"],\"fill\":[\"f\",\"2\"],"
+            "\"eraser\":[\"e\",\"3\"],\"rectangle\":[\"r\",\"4\"],"
+            "\"triangle\":[\"t\",\"5\"],\"ellipse\":[\"c\",\"6\"],"
+            "\"brushDecrease\":[\"[\"],\"brushIncrease\":[\"]\"],"
+            "\"undo\":[\"z\"]}'"
+        ),
+        nullable=False,
+    )
+    colorblind_safe_colors: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    auto_clear_chat_on_guess: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    custom_brush_presets: Mapped[list] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class AuditEvent(Base):

@@ -50,6 +50,7 @@ from app.auth.password import (
     verify_password,
 )
 from app.api.serializers import user_payload
+from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.rooms import normalize_name_color
 from app.repositories.interfaces import (
@@ -89,6 +90,10 @@ class CredentialsBody(BaseModel):
 
     username: str = Field(max_length=MAX_NAME_LENGTH)
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+
+
+class RegistrationBody(CredentialsBody):
+    settings: UserSettingsSeed = Field(default_factory=UserSettingsSeed)
 
 
 class DisplayNameBody(BaseModel):
@@ -291,7 +296,7 @@ def create_auth_router(
         return user_payload(updated or user)
 
     @router.post("/register")
-    async def register(body: CredentialsBody, request: Request, response: Response):
+    async def register(body: RegistrationBody, request: Request, response: Response):
         """Claim the caller's current guest account with a username and password.
 
         Claiming keeps the same user id, which is what preserves everything the
@@ -337,6 +342,12 @@ def create_auth_router(
             ) from error
 
         refreshed = await user_repo.touch_last_login(claimed.id)
+        # The browser's current local preferences become the account's initial
+        # cross-device copy exactly once. Later registration retries cannot
+        # overwrite a row that already exists.
+        await seed_user_settings(
+            session_factory, user_id=claimed.id, values=body.settings
+        )
         await revoke_current(request)
         await issue_cookie(response, request, claimed.id)
         return user_payload(refreshed or claimed)

@@ -115,12 +115,27 @@ function loadStoredTheme(): AppTheme {
   return DEFAULT_THEME;
 }
 
-/** An opt-out flag: anything but a stored "false" — including no storage — is on. */
-function loadStoredFlag(key: string): boolean {
+function loadStoredFlag(key: string, defaultValue = true): boolean {
   try {
-    return localStorage.getItem(key) !== "false";
+    const raw = localStorage.getItem(key);
+    return raw === null ? defaultValue : raw !== "false";
   } catch {
-    return true;
+    return defaultValue;
+  }
+}
+
+function loadStoredBrushPresets(): Record<string, unknown>[] {
+  try {
+    const parsed: unknown = JSON.parse(
+      localStorage.getItem("sketchy_custombrushpresets") ?? "[]",
+    );
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is Record<string, unknown> => (
+        typeof item === "object" && item !== null && !Array.isArray(item)
+      )).slice(0, 20)
+      : [];
+  } catch {
+    return [];
   }
 }
 
@@ -159,6 +174,9 @@ interface SettingsStore {
   confettiEffects: boolean;
   soundEffects: boolean;
   volume: number;
+  colorblindSafeColors: boolean;
+  autoClearChatOnGuess: boolean;
+  customBrushPresets: Record<string, unknown>[];
   nameColor: string;
   setAllSettings: (payload: {
     keyBindings: KeyBindings;
@@ -167,6 +185,9 @@ interface SettingsStore {
     confettiEffects?: boolean;
     soundEffects?: boolean;
     volume?: number;
+    colorblindSafeColors?: boolean;
+    autoClearChatOnGuess?: boolean;
+    customBrushPresets?: Record<string, unknown>[];
     nameColor: string;
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
@@ -176,6 +197,8 @@ interface SettingsStore {
   setConfettiEffects: (enabled: boolean) => void;
   setSoundEffects: (enabled: boolean) => void;
   setVolume: (volume: number) => void;
+  setColorblindSafeColors: (enabled: boolean) => void;
+  setAutoClearChatOnGuess: (enabled: boolean) => void;
   resetKeyBindings: () => void;
 }
 
@@ -192,6 +215,9 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   confettiEffects: loadStoredFlag("sketchy_confettieffects"),
   soundEffects: loadStoredFlag("sketchy_soundeffects"),
   volume: loadStoredVolume(),
+  colorblindSafeColors: loadStoredFlag("sketchy_colorblindsafecolors", false),
+  autoClearChatOnGuess: loadStoredFlag("sketchy_autoclearchatonguess"),
+  customBrushPresets: loadStoredBrushPresets(),
   nameColor: loadStoredNameColor(),
   setAllSettings: ({
     keyBindings,
@@ -200,6 +226,9 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     confettiEffects = true,
     soundEffects = true,
     volume = 0.7,
+    colorblindSafeColors = false,
+    autoClearChatOnGuess = true,
+    customBrushPresets = [],
     nameColor,
   }) =>
     set(() => {
@@ -210,6 +239,9 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_confettieffects", String(confettiEffects));
       localStorage.setItem("sketchy_soundeffects", String(soundEffects));
       localStorage.setItem("sketchy_volume", String(volume));
+      localStorage.setItem("sketchy_colorblindsafecolors", String(colorblindSafeColors));
+      localStorage.setItem("sketchy_autoclearchatonguess", String(autoClearChatOnGuess));
+      localStorage.setItem("sketchy_custombrushpresets", JSON.stringify(customBrushPresets));
       localStorage.setItem("sketchy_namecolor", nameColor);
       applyThemeToDocument(theme);
       return {
@@ -219,6 +251,9 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         confettiEffects,
         soundEffects,
         volume,
+        colorblindSafeColors,
+        autoClearChatOnGuess,
+        customBrushPresets,
         nameColor,
       };
     }),
@@ -259,6 +294,16 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_volume", String(volume));
       return { volume };
+    }),
+  setColorblindSafeColors: (enabled) =>
+    set(() => {
+      localStorage.setItem("sketchy_colorblindsafecolors", String(enabled));
+      return { colorblindSafeColors: enabled };
+    }),
+  setAutoClearChatOnGuess: (enabled) =>
+    set(() => {
+      localStorage.setItem("sketchy_autoclearchatonguess", String(enabled));
+      return { autoClearChatOnGuess: enabled };
     }),
   resetKeyBindings: () =>
     set(() => {

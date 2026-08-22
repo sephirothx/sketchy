@@ -18,6 +18,7 @@ import {
   useSettingsStore,
 } from "../store/settingsStore";
 import { socket } from "../lib/socket";
+import { patchUserSettings } from "../lib/userSettings";
 
 type SettingsTab = "general" | "game" | "shortcuts";
 
@@ -45,7 +46,7 @@ function formatKey(key: string): string {
 }
 
 function SettingsModalContent() {
-  const { closeSettings, keyBindings, brushCursor, theme, confettiEffects, soundEffects, volume, nameColor, setAllSettings } =
+  const { closeSettings, keyBindings, brushCursor, theme, confettiEffects, soundEffects, volume, colorblindSafeColors, autoClearChatOnGuess, customBrushPresets, nameColor, setAllSettings } =
     useSettingsStore();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -58,6 +59,10 @@ function SettingsModalContent() {
   const [draftConfettiEffects, setDraftConfettiEffects] = useState<boolean>(confettiEffects);
   const [draftSoundEffects, setDraftSoundEffects] = useState<boolean>(soundEffects);
   const [draftVolume, setDraftVolume] = useState<number>(volume);
+  const [draftColorblindSafeColors, setDraftColorblindSafeColors] =
+    useState<boolean>(colorblindSafeColors);
+  const [draftAutoClearChatOnGuess, setDraftAutoClearChatOnGuess] =
+    useState<boolean>(autoClearChatOnGuess);
   const [draftNameColor, setDraftNameColor] = useState<string>(nameColor);
   const authUser = useAuthStore((state) => state.user);
   const setDisplayName = useAuthStore((state) => state.setDisplayName);
@@ -69,6 +74,8 @@ function SettingsModalContent() {
   const isGuest = Boolean(authUser?.isAnonymous);
   const [draftName, setDraftName] = useState<string>(authUser?.displayName ?? "");
   const [nameError, setNameError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [activeRebind, setActiveRebind] = useState<{
     action: keyof KeyBindings;
@@ -117,6 +124,9 @@ function SettingsModalContent() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
     const trimmedName = draftName.trim();
     const nameChanged = isGuest && trimmedName !== (authUser?.displayName ?? "");
     if (nameChanged) {
@@ -124,6 +134,7 @@ function SettingsModalContent() {
       if (invalid) {
         setNameError(invalid);
         setActiveTab("general");
+        setSaving(false);
         return;
       }
       try {
@@ -137,6 +148,7 @@ function SettingsModalContent() {
           if (!response.ok) {
             setNameError(response.error || "Could not change your display name.");
             setActiveTab("general");
+            setSaving(false);
             return;
           }
           await useAuthStore.getState().fetchMe();
@@ -153,17 +165,38 @@ function SettingsModalContent() {
             : "Could not change your display name. Please try again.",
         );
         setActiveTab("general");
+        setSaving(false);
         return;
       }
     }
 
-    setAllSettings({
+    const persistedSettings = {
       keyBindings: draftKeyBindings,
       brushCursor: draftBrushCursor,
       theme: draftTheme,
       confettiEffects: draftConfettiEffects,
       soundEffects: draftSoundEffects,
       volume: draftVolume,
+      colorblindSafeColors: draftColorblindSafeColors,
+      autoClearChatOnGuess: draftAutoClearChatOnGuess,
+      customBrushPresets,
+    };
+    if (!isGuest) {
+      try {
+        await patchUserSettings(persistedSettings);
+      } catch (error) {
+        setSaveError(
+          error instanceof ApiError
+            ? error.message
+            : "Could not save settings to your account. Please try again.",
+        );
+        setSaving(false);
+        return;
+      }
+    }
+
+    setAllSettings({
+      ...persistedSettings,
       nameColor: draftNameColor,
     });
     // Guests are pinned to the guest grey server-side, so sending a color
@@ -176,6 +209,7 @@ function SettingsModalContent() {
       socket.emit("update_player_settings", { nameColor: draftNameColor });
       void setNameColor(draftNameColor).catch(() => {});
     }
+    setSaving(false);
     closeSettings();
   };
 
@@ -359,6 +393,13 @@ function SettingsModalContent() {
                   onChange={setDraftTheme}
                 />
 
+                <Switch
+                  label="Prefer colorblind-safe colors"
+                  hint="Suggest colorblind-safe room colors to a host without exposing who requested them."
+                  checked={draftColorblindSafeColors}
+                  onChange={setDraftColorblindSafeColors}
+                />
+
                 <h4 className="settings-fields-heading">Audio</h4>
                 <Switch
                   label="Sound effects"
@@ -403,6 +444,13 @@ function SettingsModalContent() {
                   value={draftBrushCursor}
                   options={BRUSH_CURSOR_OPTIONS}
                   onChange={setDraftBrushCursor}
+                />
+
+                <Switch
+                  label="Clear guesses after sending"
+                  hint="Empty the guess field after each submission. Turn this off to edit and resend it."
+                  checked={draftAutoClearChatOnGuess}
+                  onChange={setDraftAutoClearChatOnGuess}
                 />
 
                 <Switch
@@ -490,11 +538,12 @@ function SettingsModalContent() {
         </div>
 
         <div className="settings-modal-footer">
-          <button type="button" className="modal-button secondary" onClick={handleDiscard}>
+          {saveError && <p className="auth-error" role="alert">{saveError}</p>}
+          <button type="button" className="modal-button secondary" onClick={handleDiscard} disabled={saving}>
             Discard
           </button>
-          <button type="button" className="modal-button" onClick={() => void handleSave()}>
-            Save
+          <button type="button" className="modal-button" onClick={() => void handleSave()} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
@@ -514,6 +563,24 @@ function SettingsModalContent() {
 
 export function SettingsModal() {
   const isSettingsOpen = useSettingsStore((s) => s.isSettingsOpen);
+  // A login performed from inside the dialog can replace the browser's values
+  // with the registered account's copy. Keying the draft editor to that
+  // durable snapshot remounts it with the new values without synchronously
+  // cascading local state updates from an effect.
+  const settingsSnapshot = useSettingsStore((s) =>
+    JSON.stringify({
+      keyBindings: s.keyBindings,
+      brushCursor: s.brushCursor,
+      theme: s.theme,
+      confettiEffects: s.confettiEffects,
+      soundEffects: s.soundEffects,
+      volume: s.volume,
+      colorblindSafeColors: s.colorblindSafeColors,
+      autoClearChatOnGuess: s.autoClearChatOnGuess,
+      customBrushPresets: s.customBrushPresets,
+      nameColor: s.nameColor,
+    }),
+  );
   if (!isSettingsOpen) return null;
-  return <SettingsModalContent />;
+  return <SettingsModalContent key={settingsSnapshot} />;
 }

@@ -24,6 +24,7 @@ from app.db.models import (
     TurnRecord,
     UploadedAvatarAsset,
     User,
+    UserSettings,
     generate_uuid,
 )
 from app.domain_values import AccountState, DataExportStatus, UserRole
@@ -198,6 +199,7 @@ async def _build_export_artifact(
             )
         ).all()
     )
+    settings = await session.get(UserSettings, account.id)
 
     return {
         "schemaVersion": EXPORT_SCHEMA_VERSION,
@@ -217,6 +219,23 @@ async def _build_export_artifact(
             "lastLoginAt": _timestamp(account.last_login_at),
             "lastActiveAt": _timestamp(account.last_active_at),
         },
+        "settings": (
+            {
+                "theme": settings.theme,
+                "soundEffects": settings.sound_effects,
+                "confettiEffects": settings.confetti_effects,
+                "volume": settings.sound_effects_volume,
+                "brushCursor": settings.brush_cursor,
+                "keyBindings": settings.key_bindings,
+                "colorblindSafeColors": settings.colorblind_safe_colors,
+                "autoClearChatOnGuess": settings.auto_clear_chat_on_guess,
+                "customBrushPresets": settings.custom_brush_presets,
+                "createdAt": _timestamp(settings.created_at),
+                "updatedAt": _timestamp(settings.updated_at),
+            }
+            if settings is not None
+            else None
+        ),
         "linkedIdentities": [
             {
                 "id": str(source.id),
@@ -564,6 +583,9 @@ async def anonymize_account(
             )
             await session.execute(
                 delete(DataExport).where(DataExport.user_id.in_(identity_ids))
+            )
+            await session.execute(
+                delete(UserSettings).where(UserSettings.user_id.in_(identity_ids))
             )
 
             for identity in (

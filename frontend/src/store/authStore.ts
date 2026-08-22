@@ -3,6 +3,11 @@ import { apiRequest, ApiError } from "../lib/api";
 import { socket } from "../lib/socket";
 import { useGameStore } from "./gameStore";
 import { useSettingsStore } from "./settingsStore";
+import {
+  applyAccountSettings,
+  currentSettingsPayload,
+  fetchUserSettings,
+} from "../lib/userSettings";
 
 export interface AuthUser {
   id: string;
@@ -95,6 +100,16 @@ function reconcileNameColor(user: AuthUser | null): void {
     .catch(() => {});
 }
 
+async function loadRegisteredSettings(user: AuthUser | null): Promise<void> {
+  if (!user || user.isAnonymous) return;
+  try {
+    applyAccountSettings(await fetchUserSettings());
+  } catch {
+    // Settings are an enhancement, not an authentication dependency. Keep the
+    // local copy when offline and try again on the next account resolution.
+  }
+}
+
 let inFlightFetchMe: Promise<AuthUser | null> | null = null;
 
 export function currentPlayerName(): string {
@@ -119,6 +134,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
         const user = await apiRequest<AuthUser>("/api/auth/me");
         set({ user, isLoading: false, hasResolved: true });
         reconcileNameColor(user);
+        await loadRegisteredSettings(user);
         return user;
       } catch {
         // Offline or the server is down. The app still works: play continues
@@ -154,10 +170,11 @@ export const useAuthStore = create<AuthStore>((set) => ({
   register: async (username, password) => {
     const user = await apiRequest<AuthUser>("/api/auth/register", {
       method: "POST",
-      body: { username, password },
+      body: { username, password, settings: currentSettingsPayload() },
     });
     set({ user, hasResolved: true });
     reconcileNameColor(user);
+    await loadRegisteredSettings(user);
     reconnectSocketAsNewIdentity();
     return user;
   },
@@ -169,6 +186,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     });
     set({ user, hasResolved: true });
     reconcileNameColor(user);
+    await loadRegisteredSettings(user);
     releaseSeatBeforeIdentityChange();
     reconnectSocketAsNewIdentity();
     return user;

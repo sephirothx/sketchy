@@ -22,6 +22,7 @@ from app.db.models import (
     TurnGuess,
     TurnRecord,
     User,
+    UserSettings,
     Prompt,
     PromptList,
     generate_uuid,
@@ -34,6 +35,8 @@ from app.domain_values import (
     SCORING_MODES,
     TURN_END_REASONS,
     USER_ROLES,
+    USER_THEMES,
+    BRUSH_CURSOR_STYLES,
     AccountState,
     UserRole,
 )
@@ -133,6 +136,8 @@ async def test_account_state_and_role_constants_cover_database_values():
     assert ACCOUNT_STATES == ("anonymous", "registered", "merged", "deleted")
     assert USER_ROLES == ("user", "moderator", "admin")
     assert DATA_EXPORT_STATUSES == ("pending", "processing", "ready", "failed")
+    assert USER_THEMES == ("light", "dark", "system")
+    assert BRUSH_CURSOR_STYLES == ("crosshair", "circle")
 
 
 async def test_get_database_url_normalization(monkeypatch):
@@ -171,6 +176,7 @@ async def test_entity_ids_are_time_ordered_uuidv7_with_native_postgresql_type():
         User.id,
         DataExport.id,
         DataExport.user_id,
+        UserSettings.user_id,
         GameRecord.id,
         GameParticipant.id,
         GameParticipant.game_id,

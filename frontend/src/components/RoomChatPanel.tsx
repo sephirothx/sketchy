@@ -7,6 +7,7 @@ import { recordRender } from "../lib/renderDiagnostics";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { useSettingsStore } from "../store/settingsStore";
 
 interface RoomChatPanelProps {
   messages: ChatMessage[];
@@ -74,6 +75,9 @@ export function RoomChatPanel({
   // Matches the mobile block in game-room.css so JS and CSS agree on the breakpoint.
   const isMobile = useMediaQuery("(max-width: 900px)");
   const inputVisible = mode !== "playing" || !isDrawer;
+  const autoClearChatOnGuess = useSettingsStore(
+    (state) => state.autoClearChatOnGuess,
+  );
 
   useEffect(() => {
     return () => {
@@ -245,8 +249,10 @@ export function RoomChatPanel({
           : current,
       );
       setHistoryIndex(null);
-      draftTextRef.current = "";
-      setText("");
+      if (autoClearChatOnGuess) {
+        draftTextRef.current = "";
+        setText("");
+      }
       scrollToBottom();
       return;
     }

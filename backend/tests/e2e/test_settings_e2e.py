@@ -38,6 +38,7 @@ async def test_theme_defaults_to_system_preference_unless_saved(
             await context.close()
             await browser.close()
 
+
 @pytest.mark.asyncio
 async def test_settings_dialog_brush_cursor_scenario():
     """
@@ -131,4 +132,82 @@ async def test_settings_dialog_brush_cursor_scenario():
 
         finally:
             await context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_registered_player_settings_follow_login_to_a_fresh_device():
+    """Account settings override a fresh browser's local defaults after login."""
+    username = "CrossDeviceSettings"
+    password = "a-good-password"
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        first_device = await browser.new_context(color_scheme="light")
+        first_page = await first_device.new_page()
+
+        try:
+            await first_page.goto(BASE_URL)
+            await register_account(first_page, username, password)
+            await first_page.click("button.header-settings-button")
+
+            dialog = first_page.locator(".settings-modal-card")
+            await dialog.wait_for(state="visible")
+            theme = dialog.get_by_role("group", name="Theme")
+            await theme.get_by_role("button", name="Dark").click()
+            await dialog.get_by_role(
+                "switch", name="Prefer colorblind-safe colors"
+            ).check()
+            await dialog.get_by_role("tab", name="Game").click()
+            cursor = dialog.get_by_role("group", name="Brush cursor style")
+            await cursor.get_by_role("button", name="Outline").click()
+            await dialog.get_by_role(
+                "switch", name="Clear guesses after sending"
+            ).uncheck()
+            await dialog.get_by_role("button", name="Save").click()
+            await dialog.wait_for(state="hidden")
+
+            fresh_device = await browser.new_context(color_scheme="light")
+            fresh_page = await fresh_device.new_page()
+            try:
+                await fresh_page.goto(BASE_URL)
+                await fresh_page.click(".first-run-login")
+                login = fresh_page.get_by_role("dialog", name="Log in")
+                await login.get_by_label("Username").fill(username)
+                await login.get_by_label("Password").fill(password)
+                await login.get_by_role("button", name="Log in", exact=True).click()
+                await login.wait_for(state="hidden")
+
+                await fresh_page.wait_for_function(
+                    "() => document.documentElement.dataset.theme === 'dark'"
+                )
+                stored = await fresh_page.evaluate(
+                    """() => ({
+                        theme: localStorage.getItem('sketchy_theme'),
+                        cursor: localStorage.getItem('sketchy_brushcursor'),
+                        colors: localStorage.getItem('sketchy_colorblindsafecolors'),
+                        clearGuess: localStorage.getItem('sketchy_autoclearchatonguess'),
+                    })"""
+                )
+                assert stored == {
+                    "theme": "dark",
+                    "cursor": "circle",
+                    "colors": "true",
+                    "clearGuess": "false",
+                }
+
+                await fresh_page.click("button.header-settings-button")
+                fresh_dialog = fresh_page.locator(".settings-modal-card")
+                await fresh_dialog.wait_for(state="visible")
+                assert await fresh_dialog.get_by_role(
+                    "switch", name="Prefer colorblind-safe colors"
+                ).is_checked()
+                await fresh_dialog.get_by_role("tab", name="Game").click()
+                assert not await fresh_dialog.get_by_role(
+                    "switch", name="Clear guesses after sending"
+                ).is_checked()
+            finally:
+                await fresh_device.close()
+        finally:
+            await first_device.close()
             await browser.close()
