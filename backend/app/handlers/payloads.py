@@ -140,6 +140,9 @@ class RoomSettingsFields(RequestModel):
     )
     color_mode: str = Field(default=DEFAULT_COLOR_MODE, alias="colorMode")
     prompt_list_slugs: list[str] = Field(default_factory=lambda: ["english_standard"], alias="promptListSlugs")
+    prompt_list_share_codes: list[str] = Field(
+        default_factory=list, alias="promptListShareCodes", max_length=MAX_PROMPT_LISTS
+    )
 
     @field_validator("name", "custom_prompts")
     @classmethod
@@ -150,6 +153,14 @@ class RoomSettingsFields(RequestModel):
     @classmethod
     def clean_prompt_list_slugs(cls, slugs: list[str]) -> list[str]:
         return _clean_slugs(slugs) or ["english_standard"]
+
+    @field_validator("prompt_list_share_codes")
+    @classmethod
+    def clean_prompt_list_share_codes(cls, codes: list[str]) -> list[str]:
+        cleaned = list(dict.fromkeys(code.strip() for code in codes if code.strip()))
+        if any(len(code) < 8 or len(code) > 24 for code in cleaned):
+            raise ValueError("invalid prompt-list share code")
+        return cleaned
 
     @field_validator("drawing_seconds")
     @classmethod
@@ -209,6 +220,9 @@ class UpdateRoomSettingsPayload(RequestModel):
     allowed_tools: list[str] | None = Field(default=None, alias="allowedTools")
     color_mode: str | None = Field(default=None, alias="colorMode")
     prompt_list_slugs: list[str] | None = Field(default=None, alias="promptListSlugs")
+    prompt_list_share_codes: list[str] | None = Field(
+        default=None, alias="promptListShareCodes", max_length=MAX_PROMPT_LISTS
+    )
 
     @field_validator("allowed_tools")
     @classmethod
@@ -228,6 +242,18 @@ class UpdateRoomSettingsPayload(RequestModel):
         cleaned = _clean_slugs(slugs)
         if not cleaned:
             raise ValueError("at least one prompt list must be selected")
+        return cleaned
+
+    @field_validator("prompt_list_share_codes")
+    @classmethod
+    def clean_update_prompt_list_share_codes(
+        cls, codes: list[str] | None
+    ) -> list[str] | None:
+        if codes is None:
+            return None
+        cleaned = list(dict.fromkeys(code.strip() for code in codes if code.strip()))
+        if any(len(code) < 8 or len(code) > 24 for code in cleaned):
+            raise ValueError("invalid prompt-list share code")
         return cleaned
 
     @field_validator("name", "custom_prompts")

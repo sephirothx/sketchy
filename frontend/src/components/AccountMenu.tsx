@@ -176,6 +176,16 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                 role="menuitem"
                 onClick={() => {
                   setMenuOpen(false);
+                  navigate("/my-prompt-lists");
+                }}
+              >
+                My prompt lists
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
                   setSessionsOpen(true);
                 }}
               >

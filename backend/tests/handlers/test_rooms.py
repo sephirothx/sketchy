@@ -190,7 +190,9 @@ class RecordingPromptListRepo:
         self.prompt_version_ids = dict(prompt_version_ids or {})
         self.reads = 0
 
-    async def resolve_selection(self, slugs):
+    async def resolve_selection(
+        self, slugs, *, requesting_user_id=None, share_codes=()
+    ):
         self.reads += 1
         return ResolvedPromptSelection(
             tuple(slugs),
@@ -203,6 +205,55 @@ class RecordingPromptListRepo:
 
     async def record_prompt_usage(self, slugs, usage):
         return None
+
+
+@pytest.mark.asyncio
+async def test_owned_and_shared_list_authority_never_leaks_into_room_payloads():
+    class AuthorizingPromptListRepo(RecordingPromptListRepo):
+        def __init__(self):
+            super().__init__(("capybara",), revision_ids=("revision-user-1",))
+            self.authorization = None
+
+        async def resolve_selection(
+            self, slugs, *, requesting_user_id=None, share_codes=()
+        ):
+            self.authorization = (requesting_user_id, tuple(share_codes))
+            return await super().resolve_selection(
+                slugs,
+                requesting_user_id=requesting_user_id,
+                share_codes=share_codes,
+            )
+
+    room_manager = RoomManager()
+    users = FakeUserRepository()
+    users.add_registered("user-1", "Host")
+    prompts = AuthorizingPromptListRepo()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(
+        sio, room_manager, user_repo=users, prompt_list_repo=prompts
+    )
+    sio.get_session = AsyncMock(return_value={"user_id": "user-1"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid",
+        {
+            "nickname": "Ignored",
+            "promptListSlugs": ["user-private-list"],
+            "promptListShareCodes": ["bearer-secret"],
+        },
+    )
+
+    assert response["ok"] is True
+    assert prompts.authorization == ("user-1", ("bearer-secret",))
+    room = room_manager.get_room(response["roomId"])
+    assert room is not None
+    assert room.prompt_list_share_codes == ["bearer-secret"]
+    assert "promptListShareCodes" not in room.to_state_payload()
+    assert "promptListShareCodes" not in editable_room_settings_payload(room)
+    assert "bearer-secret" not in repr(room)
 
 
 def build_settings_room(room_manager, prompt_list_repo, **room_kwargs):

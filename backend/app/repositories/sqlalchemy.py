@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 import hashlib
 import json
+import secrets
 from uuid import UUID
 
 from sqlalchemy import and_, case, distinct, func, or_, select, update
@@ -61,18 +62,31 @@ from app.repositories.interfaces import (
     UserStats,
     UsernameTakenError,
     PromptListRepository,
+    PromptListConflictError,
+    PromptListEntry,
+    PromptListEntryInput,
+    PromptListMutationError,
+    PromptListNotFoundError,
     PromptListSelectionError,
     PromptSeedConflictError,
     PromptListSummary,
+    OwnedPromptList,
     PromptPickTotals,
     PromptStatsSummary,
     PromptUsage,
     ResolvedPromptSelection,
 )
-from app.prompt_content import normalize_prompt_answer, prompt_match_key
+from app.prompt_content import (
+    clean_prompt_aliases,
+    normalize_prompt_answer,
+    prompt_match_key,
+    validate_prompt_language,
+)
 
 MAX_PAGINATION_LIMIT = 100
 DEFAULT_PAGINATION_LIMIT = 20
+MAX_OWNED_PROMPT_LISTS = 25
+MAX_PROMPTS_PER_OWNED_LIST = 500
 
 
 def _entity_id(value: str | UUID) -> UUID:
@@ -184,6 +198,27 @@ def _to_prompt_list_summary(
     )
 
 
+def _to_owned_prompt_list(
+    wl: PromptList,
+    prompts: Sequence[PromptListEntry] = (),
+    *,
+    prompt_count: int | None = None,
+) -> OwnedPromptList:
+    return OwnedPromptList(
+        id=_public_id(wl.id),
+        slug=wl.slug,
+        name=wl.name,
+        description=wl.description,
+        language=wl.language,
+        visibility=wl.visibility,
+        share_code=wl.share_code,
+        moderation_state=wl.moderation_state,
+        version=wl.version,
+        prompt_count=len(prompts) if prompt_count is None else prompt_count,
+        created_at=wl.created_at,
+        updated_at=wl.updated_at,
+        prompts=tuple(prompts),
+    )
 def _bundled_revision_hash(
     *, language: str, prompts: Sequence[BundledPromptDefinition]
 ) -> str:
@@ -840,6 +875,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             stmt = (
                 select(PromptList, self._prompt_count())
                 .options(selectinload(PromptList.localizations))
+                .where(
+                    PromptList.is_bundled.is_(True),
+                    PromptList.moderation_state
+                    == PromptContentModerationState.ACTIVE.value,
+                )
                 .order_by(PromptList.name)
             )
             if language is not None:
@@ -859,7 +899,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             stmt = (
                 select(PromptList, self._prompt_count())
                 .options(selectinload(PromptList.localizations))
-                .where(PromptList.slug == slug)
+                .where(
+                    PromptList.slug == slug,
+                    PromptList.is_bundled.is_(True),
+                    PromptList.moderation_state
+                    == PromptContentModerationState.ACTIVE.value,
+                )
             )
             result = await session.execute(stmt)
             row = result.one_or_none()
@@ -868,6 +913,487 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 if row
                 else None
             )
+
+    @staticmethod
+    def _clean_owned_entries(
+        entries: Sequence[PromptListEntryInput], *, language: str
+    ) -> tuple[PromptListEntryInput, ...]:
+        if not entries:
+            raise PromptListMutationError("Add at least one prompt.")
+        if len(entries) > MAX_PROMPTS_PER_OWNED_LIST:
+            raise PromptListMutationError(
+                f"A prompt list can contain at most {MAX_PROMPTS_PER_OWNED_LIST} prompts."
+            )
+        cleaned: list[PromptListEntryInput] = []
+        seen_matches: set[str] = set()
+        seen_concepts: set[str] = set()
+        for entry in entries:
+            answer = " ".join(entry.answer.split())
+            try:
+                match_key = normalize_prompt_answer(answer, language)
+                aliases = clean_prompt_aliases(
+                    list(entry.aliases),
+                    canonical_answer=answer,
+                    language=language,
+                )
+            except ValueError as error:
+                raise PromptListMutationError(str(error)) from error
+            accepted_keys = {
+                match_key,
+                *(normalize_prompt_answer(alias, language) for alias in aliases),
+            }
+            if seen_matches.intersection(accepted_keys):
+                raise PromptListMutationError(
+                    "Prompt answers and aliases must be unambiguous within a list."
+                )
+            seen_matches.update(accepted_keys)
+            if entry.concept_id:
+                try:
+                    concept_id = str(UUID(entry.concept_id))
+                except (ValueError, TypeError, AttributeError) as error:
+                    raise PromptListMutationError("Invalid prompt identity.") from error
+                if concept_id in seen_concepts:
+                    raise PromptListMutationError(
+                        "A prompt can appear only once in a list revision."
+                    )
+                seen_concepts.add(concept_id)
+            else:
+                concept_id = None
+            cleaned.append(
+                PromptListEntryInput(
+                    answer=answer,
+                    concept_id=concept_id,
+                    aliases=aliases,
+                )
+            )
+        return tuple(cleaned)
+
+    @staticmethod
+    def _clean_owned_metadata(
+        *, name: str, description: str, language: str, visibility: str
+    ) -> tuple[str, str, str, str]:
+        name = " ".join(name.split())
+        description = " ".join(description.split())
+        if not name or len(name) > 64:
+            raise PromptListMutationError("Name must be 1-64 characters.")
+        if len(description) > 255:
+            raise PromptListMutationError("Description must be at most 255 characters.")
+        try:
+            language = validate_prompt_language(language)
+        except ValueError as error:
+            raise PromptListMutationError(str(error)) from error
+        if visibility not in {
+            PromptListVisibility.PRIVATE.value,
+            PromptListVisibility.UNLISTED.value,
+        }:
+            raise PromptListMutationError(
+                "Player prompt lists may be private or unlisted."
+            )
+        return name, description, language, visibility
+
+    async def _new_share_code(self, session: AsyncSession) -> str:
+        for _ in range(8):
+            code = secrets.token_urlsafe(9)
+            exists = await session.scalar(
+                select(PromptList.id).where(PromptList.share_code == code)
+            )
+            if exists is None:
+                return code
+        raise PromptListMutationError("Could not generate a share code. Try again.")
+
+    async def list_owned(self, owner_user_id: str) -> list[OwnedPromptList]:
+        owner_id = _optional_entity_id(owner_user_id)
+        if owner_id is None:
+            return []
+        async with self._session_factory() as session:
+            rows = (
+                await session.execute(
+                    select(PromptList, self._prompt_count())
+                    .where(
+                        PromptList.owner_user_id == owner_id,
+                        PromptList.is_bundled.is_(False),
+                    )
+                    .order_by(PromptList.updated_at.desc(), PromptList.name)
+                )
+            ).all()
+            return [
+                _to_owned_prompt_list(prompt_list, prompt_count=int(prompt_count))
+                for prompt_list, prompt_count in rows
+            ]
+
+    async def _owned_with_entries(
+        self, session: AsyncSession, owner_id: UUID, prompt_list_id: UUID
+    ) -> OwnedPromptList | None:
+        prompt_list = await session.scalar(
+            select(PromptList).where(
+                PromptList.id == prompt_list_id,
+                PromptList.owner_user_id == owner_id,
+                PromptList.is_bundled.is_(False),
+            )
+        )
+        if prompt_list is None:
+            return None
+        revision = await session.scalar(
+            select(PromptListRevision)
+            .where(
+                PromptListRevision.prompt_list_id == prompt_list.id,
+                PromptListRevision.version == prompt_list.version,
+            )
+            .options(
+                selectinload(PromptListRevision.items)
+                .selectinload(PromptListRevisionItem.prompt_version)
+                .selectinload(PromptVersion.version_aliases)
+                .selectinload(PromptVersionAlias.alias)
+            )
+        )
+        entries = tuple(
+            PromptListEntry(
+                concept_id=_public_id(item.prompt_version.concept_id),
+                prompt_version_id=_public_id(item.prompt_version.id),
+                answer=item.prompt_version.canonical_answer,
+                aliases=tuple(
+                    sorted(link.alias.answer for link in item.prompt_version.version_aliases)
+                ),
+            )
+            for item in (revision.items if revision else ())
+        )
+        return _to_owned_prompt_list(prompt_list, entries)
+
+    async def get_owned(
+        self, owner_user_id: str, prompt_list_id: str
+    ) -> OwnedPromptList | None:
+        owner_id = _optional_entity_id(owner_user_id)
+        list_id = _optional_entity_id(prompt_list_id)
+        if owner_id is None or list_id is None:
+            return None
+        async with self._session_factory() as session:
+            return await self._owned_with_entries(session, owner_id, list_id)
+
+    async def get_shared(self, share_code: str) -> PromptListSummary | None:
+        async with self._session_factory() as session:
+            row = (
+                await session.execute(
+                    select(PromptList, self._prompt_count()).where(
+                        PromptList.share_code == share_code,
+                        PromptList.visibility == PromptListVisibility.UNLISTED.value,
+                        PromptList.moderation_state
+                        == PromptContentModerationState.ACTIVE.value,
+                        PromptList.is_bundled.is_(False),
+                    )
+                )
+            ).one_or_none()
+            return _to_prompt_list_summary(row[0], int(row[1])) if row else None
+
+    async def create_owned(
+        self,
+        owner_user_id: str,
+        *,
+        name: str,
+        description: str,
+        language: str,
+        visibility: str,
+        prompts: Sequence[PromptListEntryInput],
+    ) -> OwnedPromptList:
+        owner_id = _optional_entity_id(owner_user_id)
+        if owner_id is None:
+            raise PromptListMutationError("Invalid owner.")
+        name, description, language, visibility = self._clean_owned_metadata(
+            name=name,
+            description=description,
+            language=language,
+            visibility=visibility,
+        )
+        entries = self._clean_owned_entries(prompts, language=language)
+        if any(entry.concept_id for entry in entries):
+            raise PromptListMutationError(
+                "New lists cannot claim existing prompt identities."
+            )
+        async with self._session_factory() as session:
+            async with session.begin():
+                count = await session.scalar(
+                    select(func.count(PromptList.id)).where(
+                        PromptList.owner_user_id == owner_id,
+                        PromptList.is_bundled.is_(False),
+                    )
+                )
+                if int(count or 0) >= MAX_OWNED_PROMPT_LISTS:
+                    raise PromptListMutationError(
+                        f"An account can own at most {MAX_OWNED_PROMPT_LISTS} prompt lists."
+                    )
+                list_id = generate_uuid()
+                prompt_list = PromptList(
+                    id=list_id,
+                    owner_user_id=owner_id,
+                    slug=f"user-{list_id}",
+                    name=name,
+                    description=description,
+                    language=language,
+                    is_bundled=False,
+                    visibility=visibility,
+                    share_code=(
+                        await self._new_share_code(session)
+                        if visibility == PromptListVisibility.UNLISTED.value
+                        else None
+                    ),
+                    moderation_state=PromptContentModerationState.ACTIVE.value,
+                    version=1,
+                )
+                session.add(prompt_list)
+                await session.flush()
+                await self._write_owned_revision(
+                    session, prompt_list=prompt_list, entries=entries, version=1
+                )
+            result = await self._owned_with_entries(session, owner_id, list_id)
+            assert result is not None
+            return result
+
+    async def update_owned(
+        self,
+        owner_user_id: str,
+        prompt_list_id: str,
+        *,
+        expected_version: int,
+        name: str,
+        description: str,
+        visibility: str,
+        prompts: Sequence[PromptListEntryInput],
+    ) -> OwnedPromptList:
+        owner_id = _optional_entity_id(owner_user_id)
+        list_id = _optional_entity_id(prompt_list_id)
+        if owner_id is None or list_id is None:
+            raise PromptListNotFoundError("Prompt list not found.")
+        async with self._session_factory() as session:
+            async with session.begin():
+                prompt_list = await session.scalar(
+                    select(PromptList)
+                    .where(
+                        PromptList.id == list_id,
+                        PromptList.owner_user_id == owner_id,
+                        PromptList.is_bundled.is_(False),
+                    )
+                    .with_for_update()
+                )
+                if prompt_list is None:
+                    raise PromptListNotFoundError("Prompt list not found.")
+                name, description, language, visibility = self._clean_owned_metadata(
+                    name=name,
+                    description=description,
+                    language=prompt_list.language,
+                    visibility=visibility,
+                )
+                entries = self._clean_owned_entries(
+                    prompts, language=prompt_list.language
+                )
+                if prompt_list.version != expected_version:
+                    raise PromptListConflictError(
+                        "This list changed since you opened it. Reload before saving."
+                    )
+                next_version = prompt_list.version + 1
+                await self._write_owned_revision(
+                    session,
+                    prompt_list=prompt_list,
+                    entries=entries,
+                    version=next_version,
+                )
+                prompt_list.name = name
+                prompt_list.description = description
+                if visibility == PromptListVisibility.UNLISTED.value:
+                    prompt_list.share_code = (
+                        prompt_list.share_code or await self._new_share_code(session)
+                    )
+                else:
+                    prompt_list.share_code = None
+                prompt_list.visibility = visibility
+                prompt_list.version = next_version
+                prompt_list.updated_at = datetime.now(timezone.utc)
+            result = await self._owned_with_entries(session, owner_id, list_id)
+            assert result is not None
+            return result
+
+    async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
+        owner_id = _optional_entity_id(owner_user_id)
+        list_id = _optional_entity_id(prompt_list_id)
+        if owner_id is None or list_id is None:
+            return False
+        async with self._session_factory() as session:
+            async with session.begin():
+                prompt_list = await session.scalar(
+                    select(PromptList).where(
+                        PromptList.id == list_id,
+                        PromptList.owner_user_id == owner_id,
+                        PromptList.is_bundled.is_(False),
+                    )
+                )
+                if prompt_list is None:
+                    return False
+                await session.delete(prompt_list)
+            return True
+
+    async def _write_owned_revision(
+        self,
+        session: AsyncSession,
+        *,
+        prompt_list: PromptList,
+        entries: Sequence[PromptListEntryInput],
+        version: int,
+    ) -> None:
+        previous = await session.scalar(
+            select(PromptListRevision)
+            .where(
+                PromptListRevision.prompt_list_id == prompt_list.id,
+                PromptListRevision.version == prompt_list.version,
+            )
+            .options(
+                selectinload(PromptListRevision.items)
+                .selectinload(PromptListRevisionItem.prompt_version)
+                .selectinload(PromptVersion.version_aliases)
+                .selectinload(PromptVersionAlias.alias)
+            )
+        )
+        current_by_concept = {
+            item.prompt_version.concept_id: item.prompt_version
+            for item in (previous.items if previous else ())
+        }
+        supplied_ids = {
+            UUID(entry.concept_id) for entry in entries if entry.concept_id is not None
+        }
+        if not supplied_ids.issubset(current_by_concept):
+            raise PromptListMutationError(
+                "A prompt identity does not belong to the current list revision."
+            )
+
+        alias_map: dict[tuple[UUID, str], PromptAlias] = {}
+        if current_by_concept:
+            aliases = (
+                await session.scalars(
+                    select(PromptAlias).where(
+                        PromptAlias.concept_id.in_(current_by_concept),
+                        PromptAlias.language == prompt_list.language,
+                    )
+                )
+            ).all()
+            alias_map = {
+                (alias.concept_id, alias.match_key): alias for alias in aliases
+            }
+
+        resolved: list[tuple[UUID, PromptVersion, PromptListEntryInput]] = []
+        pending_links: list[tuple[PromptVersion, PromptAlias]] = []
+        for entry in entries:
+            concept_id = UUID(entry.concept_id) if entry.concept_id else generate_uuid()
+            existing = current_by_concept.get(concept_id)
+            actual_aliases = (
+                tuple(sorted(link.alias.answer for link in existing.version_aliases))
+                if existing
+                else ()
+            )
+            if (
+                existing is not None
+                and existing.canonical_answer == entry.answer
+                and actual_aliases == tuple(sorted(entry.aliases))
+            ):
+                resolved.append((concept_id, existing, entry))
+                continue
+            if existing is None:
+                session.add(PromptConcept(id=concept_id))
+                prompt_version_number = 1
+            else:
+                prompt_version_number = existing.version + 1
+            prompt_version = PromptVersion(
+                id=generate_uuid(),
+                concept_id=concept_id,
+                language=prompt_list.language,
+                version=prompt_version_number,
+                canonical_answer=entry.answer,
+                match_key=normalize_prompt_answer(entry.answer, prompt_list.language),
+            )
+            session.add(prompt_version)
+            for alias_answer in entry.aliases:
+                alias_key = normalize_prompt_answer(alias_answer, prompt_list.language)
+                alias = alias_map.get((concept_id, alias_key))
+                if alias is None:
+                    alias = PromptAlias(
+                        id=generate_uuid(),
+                        concept_id=concept_id,
+                        language=prompt_list.language,
+                        answer=alias_answer,
+                        match_key=alias_key,
+                    )
+                    session.add(alias)
+                    alias_map[(concept_id, alias_key)] = alias
+                pending_links.append((prompt_version, alias))
+            resolved.append((concept_id, prompt_version, entry))
+        await session.flush()
+        session.add_all(
+            PromptVersionAlias(
+                prompt_version_id=prompt_version.id, alias_id=alias.id
+            )
+            for prompt_version, alias in pending_links
+        )
+
+        content_payload = {
+            "language": prompt_list.language,
+            "prompts": [
+                {
+                    "concept_id": str(concept_id),
+                    "prompt_version_id": str(prompt_version.id),
+                    "prompt": entry.answer,
+                    "aliases": sorted(entry.aliases),
+                }
+                for concept_id, prompt_version, entry in resolved
+            ],
+        }
+        content_hash = hashlib.sha256(
+            json.dumps(
+                content_payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+        revision = PromptListRevision(
+            id=generate_uuid(),
+            prompt_list_id=prompt_list.id,
+            version=version,
+            language=prompt_list.language,
+            content_hash=content_hash,
+        )
+        session.add(revision)
+        await session.flush()
+        session.add_all(
+            PromptListRevisionItem(
+                revision_id=revision.id,
+                prompt_version_id=prompt_version.id,
+                position=position,
+            )
+            for position, (_, prompt_version, _) in enumerate(resolved)
+        )
+
+        transitional_rows = (
+            await session.scalars(
+                select(Prompt).where(Prompt.prompt_list_id == prompt_list.id)
+            )
+        ).all()
+        rows_by_concept = {
+            row.concept_id: row for row in transitional_rows if row.concept_id
+        }
+        retained = {concept_id for concept_id, _, _ in resolved}
+        for row in transitional_rows:
+            if row.concept_id not in retained:
+                await session.delete(row)
+            else:
+                row.text = f"__editing__{row.id}"
+        await session.flush()
+        for concept_id, prompt_version, entry in resolved:
+            row = rows_by_concept.get(concept_id)
+            if row is None:
+                row = Prompt(
+                    id=generate_uuid(),
+                    prompt_list_id=prompt_list.id,
+                    concept_id=concept_id,
+                )
+                session.add(row)
+            row.prompt_version_id = prompt_version.id
+            row.text = entry.answer
 
     async def get_prompts(self, prompt_list_id: str) -> list[str]:
         db_prompt_list_id = _optional_entity_id(prompt_list_id)
@@ -882,29 +1408,59 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
-    async def resolve_selection(self, slugs: list[str]) -> ResolvedPromptSelection:
+    async def resolve_selection(
+        self,
+        slugs: list[str],
+        *,
+        requesting_user_id: str | None = None,
+        share_codes: Sequence[str] = (),
+    ) -> ResolvedPromptSelection:
         if not slugs:
             raise PromptListSelectionError("Select at least one prompt list")
+        requester_id = _optional_entity_id(requesting_user_id)
+        supplied_share_codes = set(share_codes)
         async with self._session_factory() as session:
             list_rows = (
                 await session.execute(
-                    select(PromptList.id, PromptList.slug, PromptList.language)
+                    select(
+                        PromptList.id,
+                        PromptList.slug,
+                        PromptList.language,
+                        PromptList.is_bundled,
+                        PromptList.owner_user_id,
+                        PromptList.visibility,
+                        PromptList.share_code,
+                        PromptList.moderation_state,
+                    )
                     .where(PromptList.slug.in_(slugs))
                 )
             ).all()
-            found = {row.slug for row in list_rows}
+            authorized_rows = [
+                row
+                for row in list_rows
+                if row.moderation_state == PromptContentModerationState.ACTIVE.value
+                and (
+                    row.is_bundled
+                    or (requester_id is not None and row.owner_user_id == requester_id)
+                    or (
+                        row.visibility == PromptListVisibility.UNLISTED.value
+                        and row.share_code in supplied_share_codes
+                    )
+                )
+            ]
+            found = {row.slug for row in authorized_rows}
             missing = [slug for slug in slugs if slug not in found]
             if missing:
                 raise PromptListSelectionError(
                     f"Prompt list{'s' if len(missing) != 1 else ''} not found: "
                     + ", ".join(missing)
                 )
-            languages = {row.language for row in list_rows}
+            languages = {row.language for row in authorized_rows}
             if len(languages) != 1:
                 raise PromptListSelectionError(
                     "Selected prompt lists must use the same language"
                 )
-            rows_by_slug = {row.slug: row for row in list_rows}
+            rows_by_slug = {row.slug: row for row in authorized_rows}
             revisions: list[PromptListRevision] = []
             for slug in slugs:
                 row = rows_by_slug[slug]
@@ -934,24 +1490,24 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             aliases: dict[str, tuple[str, ...]] = {}
             prompt_version_ids: dict[str, str] = {}
             seen_versions: set[UUID] = set()
-            seen_answer_versions: dict[str, UUID] = {}
+            seen_match_versions: dict[str, UUID] = {}
             for revision in revisions:
                 for item in revision.items:
                     prompt_version = item.prompt_version
                     if prompt_version.id in seen_versions:
                         continue
-                    prior_version_id = seen_answer_versions.get(
-                        prompt_version.match_key
-                    )
-                    if (
-                        prior_version_id is not None
-                        and prior_version_id != prompt_version.id
-                    ):
+                    accepted_keys = {
+                        prompt_version.match_key,
+                        *(link.alias.match_key for link in prompt_version.version_aliases),
+                    }
+                    if any(key in seen_match_versions for key in accepted_keys):
                         raise PromptListSelectionError(
-                            "Selected prompt lists contain ambiguous duplicate answers"
+                            "Selected prompt lists contain ambiguous answers or aliases"
                         )
                     seen_versions.add(prompt_version.id)
-                    seen_answer_versions[prompt_version.match_key] = prompt_version.id
+                    seen_match_versions.update(
+                        (key, prompt_version.id) for key in accepted_keys
+                    )
                     answer = prompt_version.canonical_answer
                     prompts.append(answer)
                     aliases[answer] = tuple(
@@ -1437,7 +1993,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             stmt = (
                 select(Prompt)
                 .join(PromptList, Prompt.prompt_list_id == PromptList.id)
-                .where(PromptList.slug == prompt_list_slug)
+                .where(
+                    PromptList.slug == prompt_list_slug,
+                    PromptList.is_bundled.is_(True),
+                    PromptList.moderation_state
+                    == PromptContentModerationState.ACTIVE.value,
+                )
                 .order_by(Prompt.text)
             )
             result = await session.execute(stmt)

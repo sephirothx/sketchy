@@ -34,19 +34,21 @@ import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, ScoringMode } from "../types";
 import { AccountMenu } from "../components/AccountMenu";
-import { currentPlayerName } from "../store/authStore";
+import { currentPlayerName, useAuthStore } from "../store/authStore";
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const colorblindSafeColors = useSettingsStore((state) => state.colorblindSafeColors);
+  const authUser = useAuthStore((state) => state.user);
   const [roomName, setRoomName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
   const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
+  const [promptListShareCodes, setPromptListShareCodes] = useState<string[]>([]);
   const [customPrompts, dispatchCustomPrompts] = useReducer(
     customPromptsReducer,
     undefined,
@@ -73,6 +75,7 @@ export function CreateRoomPage() {
         nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
         spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptListSlugs,
+        promptListShareCodes,
       });
       const session = sessionFrom(response);
       if (session) {
@@ -122,7 +125,12 @@ export function CreateRoomPage() {
         <InputNumber label="Max players" value={maxPlayers} min={MAX_PLAYERS_MIN} max={MAX_PLAYERS_MAX} onChange={setMaxPlayers} />
         <InputNumber label="Rounds" value={rounds} min={ROUNDS_MIN} max={ROUNDS_MAX} onChange={setRounds} />
         <InputNumber label="Drawing time (seconds)" value={drawingSeconds} options={DRAWING_TIME_OPTIONS} onChange={setDrawingSeconds} />
-        <PromptListPicker selectedSlugs={promptListSlugs} onChange={setPromptListSlugs} />
+        <PromptListPicker
+          selectedSlugs={promptListSlugs}
+          onChange={setPromptListSlugs}
+          shareCodes={promptListShareCodes}
+          onShareCodesChange={setPromptListShareCodes}
+        />
         <ToggleChips
           label="Allowed tools"
           values={allowedTools}
@@ -166,7 +174,20 @@ export function CreateRoomPage() {
           />
           {hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
           {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">Point-purchase hint modes require scoring.</p>}
-          <CustomPromptsEditor value={customPrompts.value} analysis={customPrompts.analysis} onChange={handleCustomPromptsChange} />
+          <CustomPromptsEditor
+            value={customPrompts.value}
+            analysis={customPrompts.analysis}
+            onChange={handleCustomPromptsChange}
+            footer={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
+              <button
+                type="button"
+                className="custom-prompts-apply"
+                onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
+              >
+                Save as reusable list
+              </button>
+            ) : undefined}
+          />
           <Switch
             label="Only use custom prompts"
             hint="Add a usable custom prompt to enable this option."

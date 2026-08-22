@@ -1,12 +1,30 @@
 """Prompt list discovery, and the usage statistics the games feed back into it."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from typing import Literal
 
-from app.api.serializers import prompt_list_payload, prompt_stats_payload
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.api.serializers import (
+    owned_prompt_list_payload,
+    prompt_list_payload,
+    prompt_stats_payload,
+)
 from app.auth.rate_limit import RateLimiter, client_key
 from app.prompt_content import best_supported_prompt_locale, validate_prompt_language
-from app.repositories.interfaces import PromptListRepository, PromptStatsSummary
+from app.prompts import MAX_PROMPT_LENGTH
+from app.repositories.interfaces import (
+    PromptListConflictError,
+    PromptListEntryInput,
+    PromptListMutationError,
+    PromptListNotFoundError,
+    PromptListRepository,
+    PromptStatsSummary,
+    UserData,
+    UserRepository,
+)
+from app.repositories.sqlalchemy import MAX_PROMPTS_PER_OWNED_LIST
 
 # How many guessers a prompt must have faced before its difficulty means
 # anything. `correct_guess_ratio` is 0.0 both for a prompt nobody has ever
@@ -25,6 +43,45 @@ SORTS = ("hardest", "easiest", "most-picked")
 # The bundled lists top out around 600 prompts, and this reads them whole.
 # Generous for someone browsing, tight enough to be a poor scraping tool.
 stats_limiter = RateLimiter(limit=60, window_seconds=60)
+share_limiter = RateLimiter(limit=30, window_seconds=60)
+
+
+class PromptEntryRequest(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
+
+    concept_id: str | None = Field(default=None, alias="conceptId", max_length=36)
+    prompt: str = Field(min_length=1, max_length=MAX_PROMPT_LENGTH)
+    aliases: list[str] = Field(default_factory=list, max_length=20)
+
+
+class CreateOwnedPromptListRequest(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
+
+    name: str = Field(min_length=1, max_length=64)
+    description: str = Field(default="", max_length=255)
+    language: str = Field(default="en", min_length=2, max_length=16)
+    visibility: Literal["private", "unlisted"] = "private"
+    prompts: list[PromptEntryRequest] = Field(
+        min_length=1, max_length=MAX_PROMPTS_PER_OWNED_LIST
+    )
+
+
+class UpdateOwnedPromptListRequest(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
+
+    expected_version: int = Field(alias="expectedVersion", ge=1)
+    name: str = Field(min_length=1, max_length=64)
+    description: str = Field(default="", max_length=255)
+    visibility: Literal["private", "unlisted"] = "private"
+    prompts: list[PromptEntryRequest] = Field(
+        min_length=1, max_length=MAX_PROMPTS_PER_OWNED_LIST
+    )
+
+
+class SharedPromptListRequest(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    code: str = Field(min_length=8, max_length=24)
 
 
 def _is_rated(summary: PromptStatsSummary) -> bool:
@@ -52,8 +109,42 @@ def _ordered(summaries: list[PromptStatsSummary], sort: str) -> list[PromptStats
     return rated + unrated
 
 
-def create_prompt_list_router(prompt_list_repo: PromptListRepository) -> APIRouter:
+def create_prompt_list_router(
+    prompt_list_repo: PromptListRepository,
+    user_repo: UserRepository | None = None,
+) -> APIRouter:
     router = APIRouter(prefix="/api")
+
+    async def require_registered(request: Request) -> UserData:
+        user_id = getattr(request.state, "user_id", None)
+        user = await user_repo.get_by_id(user_id) if user_repo and user_id else None
+        if user is None:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        if user.is_anonymous:
+            raise HTTPException(
+                status_code=403,
+                detail="Create an account to save reusable prompt lists.",
+            )
+        return user
+
+    def entry_inputs(
+        prompts: list[PromptEntryRequest],
+    ) -> tuple[PromptListEntryInput, ...]:
+        return tuple(
+            PromptListEntryInput(
+                concept_id=prompt.concept_id,
+                answer=prompt.prompt,
+                aliases=tuple(prompt.aliases),
+            )
+            for prompt in prompts
+        )
+
+    def mutation_error(error: PromptListMutationError) -> HTTPException:
+        if isinstance(error, PromptListNotFoundError):
+            return HTTPException(status_code=404, detail=str(error))
+        if isinstance(error, PromptListConflictError):
+            return HTTPException(status_code=409, detail=str(error))
+        return HTTPException(status_code=422, detail=str(error))
 
     @router.get("/prompt-lists")
     async def list_prompt_lists(
@@ -73,6 +164,87 @@ def create_prompt_list_router(prompt_list_repo: PromptListRepository) -> APIRout
                 language=language, locale=locale
             )
         ]
+
+    @router.get("/prompt-lists/mine")
+    async def list_my_prompt_lists(request: Request):
+        user = await require_registered(request)
+        return [
+            owned_prompt_list_payload(prompt_list)
+            for prompt_list in await prompt_list_repo.list_owned(user.id)
+        ]
+
+    @router.post(
+        "/prompt-lists/mine",
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def create_my_prompt_list(
+        body: CreateOwnedPromptListRequest, request: Request
+    ):
+        user = await require_registered(request)
+        try:
+            created = await prompt_list_repo.create_owned(
+                user.id,
+                name=body.name,
+                description=body.description,
+                language=body.language,
+                visibility=body.visibility,
+                prompts=entry_inputs(body.prompts),
+            )
+        except PromptListMutationError as error:
+            raise mutation_error(error) from error
+        return owned_prompt_list_payload(created)
+
+    @router.get("/prompt-lists/mine/{prompt_list_id}")
+    async def get_my_prompt_list(prompt_list_id: str, request: Request):
+        user = await require_registered(request)
+        prompt_list = await prompt_list_repo.get_owned(user.id, prompt_list_id)
+        if prompt_list is None:
+            raise HTTPException(status_code=404, detail="Prompt list not found.")
+        return owned_prompt_list_payload(prompt_list)
+
+    @router.put("/prompt-lists/mine/{prompt_list_id}")
+    async def update_my_prompt_list(
+        prompt_list_id: str,
+        body: UpdateOwnedPromptListRequest,
+        request: Request,
+    ):
+        user = await require_registered(request)
+        try:
+            updated = await prompt_list_repo.update_owned(
+                user.id,
+                prompt_list_id,
+                expected_version=body.expected_version,
+                name=body.name,
+                description=body.description,
+                visibility=body.visibility,
+                prompts=entry_inputs(body.prompts),
+            )
+        except PromptListMutationError as error:
+            raise mutation_error(error) from error
+        return owned_prompt_list_payload(updated)
+
+    @router.delete(
+        "/prompt-lists/mine/{prompt_list_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    async def delete_my_prompt_list(prompt_list_id: str, request: Request):
+        user = await require_registered(request)
+        if not await prompt_list_repo.delete_owned(user.id, prompt_list_id):
+            raise HTTPException(status_code=404, detail="Prompt list not found.")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.post("/prompt-lists/shared")
+    async def resolve_shared_prompt_list(
+        body: SharedPromptListRequest, request: Request
+    ):
+        if not share_limiter.check(client_key(request)):
+            raise HTTPException(
+                status_code=429, detail="Too many attempts. Please wait and try again."
+            )
+        prompt_list = await prompt_list_repo.get_shared(body.code)
+        if prompt_list is None:
+            raise HTTPException(status_code=404, detail="No shared prompt list found.")
+        return prompt_list_payload(prompt_list)
 
     @router.get("/prompt-lists/{slug}/prompt-stats")
     async def prompt_stats(

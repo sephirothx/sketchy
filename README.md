@@ -10,7 +10,7 @@ copy and docs alike. Read it before naming anything a player can see.
 ## Features
 
 - Lobby with a live, polled list of public rooms, or join a private room by code.
-- Curated prompt lists (currently Standard and Extended English) selectable during room creation, combined with optional custom prompts. The picker and stats catalogue show each list's content language; every room resolves exactly one language and cannot combine lists with different matching rules. Pick rate and guess accuracy stats are tracked per prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned.
+- Prompt lists selectable during room creation, combined with optional custom prompts. Standard and Extended English ship with the game; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, keep them Private, or make them Unlisted with a share code. The picker and stats catalogue show each official list's content language; every room resolves exactly one language and cannot combine lists with different matching rules. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
 - Drawing rules — two room settings the host sets at creation and edits while waiting.
@@ -70,7 +70,7 @@ flowchart LR
 - **REST** is used for health checks, room discovery, and data queries.
 - **WebSocket (Socket.IO)** powers all real-time gameplay interactions, drawing replication, and room events.
 - **In-Memory Engine**: Active rooms, canvas sessions, timers, and game progression run entirely in memory.
-- **Durable Persistence**: Accounts, game history records, and curated prompt lists are stored via abstract repository interfaces backed by SQLAlchemy.
+- **Durable Persistence**: Accounts, game history records, and official or player-owned prompt lists are stored via abstract repository interfaces backed by SQLAlchemy.
 
 ## Tech stack
 
@@ -171,11 +171,27 @@ discovery: this v1 baseline intentionally exposes no community discovery,
 favorite/star table, or user-facing fork endpoint.
 Quick **Custom prompts** remain deliberately ephemeral room input: they are
 not auto-saved, do not acquire an implicit owner/list, and disappear with the
-in-memory room. The reusable alternative is an explicitly saved private list
-implemented by #318, so merely typing party prompts never creates durable
-account content without the host asking. Runtime attribution already observes
-that boundary: completed turns snapshot nullable prompt-version source IDs,
-and usage writes intersect those IDs with the game's pinned list revisions.
+in-memory room. A registered host can explicitly send usable quick prompts to
+**My prompt lists** and save them as a reusable Private list; nothing is stored
+merely because it was typed. An account may own at most 25 lists and a saved
+list may contain at most 500 prompts. Editing uses optimistic concurrency and
+creates a new immutable revision instead of rewriting the revision a running or
+finished game pinned. The content language cannot change after creation.
+
+Private lists resolve only for their owner. Switching a list to Unlisted creates
+a cryptographically random **Prompt-list share code**; a host must add that code
+in the prompt picker before the server will resolve the list. These codes are
+bearer capabilities, not UUIDs: they are retained only in private in-memory
+room state and never appear in shared room, history, or log payloads.
+User-owned lists and their prompt stats never enter the public official
+catalogue. Hiding or deleting a list makes future resolution fail visibly.
+Account data exports include the owner's complete revision history; account
+deletion removes the lists and their owned prompt concepts rather than leaving
+ownerless content.
+
+Runtime attribution observes the ephemeral/persistent boundary: completed
+turns snapshot nullable prompt-version source IDs, and usage writes intersect
+those IDs with the game's pinned list revisions.
 An ephemeral prompt has a null source even when its display text equals a
 curated prompt, so neither its offers, picks, nor guess results can inflate the
 curated list's statistics (#330).
@@ -710,7 +726,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ## Key design decisions & limitations
 
-- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, prompt lists) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers) remains purely in memory for minimal latency.
+- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, and explicitly saved player prompt lists) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency.
 - **Single process**: no horizontal scaling story; one uvicorn worker holds all rooms. Fine for
   small deployments, not for internet-scale traffic.
 - **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO

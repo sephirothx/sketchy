@@ -50,6 +50,25 @@ export interface PromptListSummary {
   promptCount: number;
   isBundled: boolean;
   version: number;
+  visibility?: "private" | "unlisted" | "public";
+  shareCode?: string | null;
+}
+
+export interface OwnedPromptEntry {
+  conceptId: string;
+  promptVersionId: string;
+  prompt: string;
+  aliases: string[];
+}
+
+export interface OwnedPromptList extends PromptListSummary {
+  id: string;
+  visibility: "private" | "unlisted";
+  shareCode: string | null;
+  moderationState: "active" | "under_review" | "hidden";
+  createdAt: string;
+  updatedAt: string;
+  prompts: OwnedPromptEntry[];
 }
 
 /** How one prompt has actually played, as reported by the stats endpoint. */
@@ -145,6 +164,7 @@ export interface EditableRoomSettings {
   colorMode: ColorMode;
   promptLanguage: PromptLanguage;
   promptListSlugs?: string[];
+  promptListShareCodes?: string[];
 }
 
 export type GamePhase = "idle" | "choosing_prompt" | "drawing" | "turn_results" | "game_end";

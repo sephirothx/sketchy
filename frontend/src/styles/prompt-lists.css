@@ -1,0 +1,197 @@
+.prompt-list-share-form {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.prompt-list-share-form label {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.prompt-list-share-form > div {
+  display: flex;
+  gap: 8px;
+}
+
+.prompt-list-share-form input {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  flex: 0 1 240px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.prompt-list-share-form button,
+.prompt-list-manager-card button {
+  background: #4c6ef5;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.prompt-list-manager-card button:disabled,
+.prompt-list-share-form button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.prompt-list-manager-page {
+  margin: 0 auto;
+  max-width: 1000px;
+  padding: 24px 16px 64px;
+}
+
+.prompt-list-manager-page .site-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.prompt-list-manager-page .back-link { margin: 0; }
+
+.prompt-list-manager-card {
+  background: #fff;
+  border: 1px solid #dfe1e6;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.prompt-list-manager-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.prompt-list-manager-heading p {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.prompt-list-manager-heading h1 { margin: 0; }
+
+.prompt-list-manager-layout {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  margin-top: 24px;
+}
+
+.prompt-list-manager-layout aside {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.prompt-list-manager-card .prompt-list-manager-layout aside button {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+}
+
+.prompt-list-manager-card .prompt-list-manager-layout aside button.is-selected {
+  background: #eef2ff;
+  border-color: #818cf8;
+}
+
+.prompt-list-manager-layout aside span { color: #64748b; font-size: 12px; }
+
+.prompt-list-manager-layout form,
+.prompt-list-manager-layout form > label {
+  display: grid;
+  gap: 12px;
+}
+
+.prompt-list-manager-layout form > label,
+.prompt-list-manager-meta label {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 5px;
+}
+
+.prompt-list-manager-layout input,
+.prompt-list-manager-layout select {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: 400;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.prompt-list-manager-meta {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.prompt-list-manager-meta label { display: grid; }
+
+.prompt-list-entry-heading,
+.prompt-list-manager-actions,
+.prompt-list-share-code {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.prompt-list-entry-heading h2 { font-size: 18px; margin: 8px 0 0; }
+.prompt-list-entry-heading span { color: #64748b; font-size: 12px; }
+
+.prompt-list-entry-editor {
+  display: grid;
+  gap: 8px;
+  max-height: 440px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.prompt-list-entry-editor > div { display: flex; gap: 8px; }
+.prompt-list-entry-editor label { flex: 1; }
+.prompt-list-manager-card .prompt-list-entry-editor button,
+.prompt-list-manager-card .danger-button {
+  background: #fff;
+  border: 1px solid #ef4444;
+  color: #b91c1c;
+}
+
+.prompt-list-share-code {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.prompt-list-share-code code { font-size: 16px; font-weight: 800; }
+.prompt-list-manager-notice { color: #15803d; }
+.prompt-list-manager-empty { color: #475569; margin-top: 24px; }
+
+@media (max-width: 700px) {
+  .prompt-list-manager-card { padding: 18px; }
+  .prompt-list-manager-layout { grid-template-columns: 1fr; }
+  .prompt-list-manager-layout aside {
+    display: flex;
+    overflow-x: auto;
+  }
+  .prompt-list-manager-layout aside button { flex: 0 0 180px; }
+  .prompt-list-manager-meta { grid-template-columns: 1fr; }
+}

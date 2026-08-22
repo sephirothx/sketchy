@@ -158,7 +158,7 @@ api.include_router(
     )
 )
 api.include_router(create_profile_router(user_repo, game_history_repo))
-api.include_router(create_prompt_list_router(prompt_list_repo))
+api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))
 api.include_router(
     create_user_blocks_router(async_session_factory, block_service)

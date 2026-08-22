@@ -54,7 +54,7 @@ the rotation itself are counted in *rounds*.
 | **Avatar** | The deployment-hosted visual representing an account. The generated initial is the default. | profile picture, external avatar URL |
 | **Signed-in device** | One revocable account login, labeled coarsely by browser and platform. | JWT, login token, active session |
 | **Linked guest** | A former guest identity whose history now belongs to a registered account without rewriting past game seats. | abandoned guest, duplicate account |
-| **Data export** | A private, versioned JSON download containing one player's own account and gameplay data. It never includes other players' profile fields or message bodies. | archive, backup, dump |
+| **Data export** | A private, versioned JSON download containing one player's own account, gameplay data, and authored prompt-list revision history. It never includes other players' profile fields or message bodies. | archive, backup, dump |
 | **Deleted player** | The neutral name replacing a deleted account in retained shared game history. | removed user, anonymous, unknown |
 | **AFK** | A status a player sets on themselves, or the room votes onto them. AFK players are skipped for turns and not waited for. Always the initialism, uppercase. | away, idle, inactive, afk |
 
@@ -85,9 +85,10 @@ Three different things, never used for one another:
 | **Word** | Keeps its ordinary English meaning, and only that: the individual words making up a multi-word prompt, and the letters and words hints and close guesses work on. It is never a name for the prompt itself. | — |
 | **Prompt options** | The three prompts offered to the drawer during the choosing phase. | word options, word choices, candidates |
 | **Masked prompt** | The prompt shown to guessers as underscores, with any revealed letters filled in and the word breaks visible. | masked word, hidden word, blanks |
-| **Prompt list** | A curated set of prompts in exactly one **Prompt language** that a room draws from (currently Standard English and Extended English). | word list, dictionary, prompt pack, category |
+| **Prompt list** | An ordered set of prompts in exactly one **Prompt language** that a room draws from. A list is either official bundled content or content a registered player explicitly saved and owns. | word list, dictionary, prompt pack, category |
 | **Prompt-list revision** | One immutable, content-hashed, ordered membership snapshot of a **Prompt list**. A game pins the exact revisions it resolves at start, so later edits cannot rewrite what it used. | list version, prompt pack version, current list |
 | **Prompt-list visibility** | Who may resolve a user-owned **Prompt list** in v1: Private means only its owner; Unlisted means its owner or someone with its share code. Public is reserved for official/future moderated discovery and is not user-selectable. | privacy, published, discoverable |
+| **Prompt-list share code** | The random bearer capability required to add and resolve an Unlisted **Prompt list** as someone other than its owner. It is never derived from a UUID and never appears in shared room state or history. | list ID, slug, room code, invite code |
 | **Prompt-content moderation state** | The review state of a user-owned **Prompt list**: Active, Under review, or Hidden. It is separate from visibility and from a prompt version's audience-facing **Content rating**. | NSFW flag, visibility, report status |
 | **Fork provenance** | The exact source **Prompt-list revision** from which a later revision was derived. The v1 schema preserves it even though user-facing forking is deferred. | copied from, parent list, clone |
 | **Custom prompts** | Ephemeral prompts the host types for one in-memory room, on top of or instead of its **Prompt lists**. They have no persisted prompt-version source and never affect curated **Prompt stats**. | custom words, own words, private words, saved list |

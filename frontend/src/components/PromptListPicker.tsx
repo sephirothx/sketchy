@@ -1,26 +1,46 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { apiRequest } from "../lib/api";
 import { promptLanguageLabel } from "../lib/promptLanguages";
+import { listOwnedPromptLists, resolveSharedPromptList } from "../lib/promptLists";
+import { addSharedPromptSelection } from "../lib/promptListDrafts";
+import { useAuthStore } from "../store/authStore";
 import type { PromptLanguage, PromptListSummary } from "../types";
 
 interface PromptListPickerProps {
   selectedSlugs: string[];
   onChange: (slugs: string[]) => void;
+  shareCodes?: string[];
+  onShareCodesChange?: (codes: string[]) => void;
   disabled?: boolean;
 }
 
-export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: PromptListPickerProps) {
+export function PromptListPicker({
+  selectedSlugs,
+  onChange,
+  shareCodes = [],
+  onShareCodesChange,
+  disabled = false,
+}: PromptListPickerProps) {
+  const user = useAuthStore((state) => state.user);
+  const userId = user?.id;
+  const isAnonymous = user?.isAnonymous;
   const [promptLists, setPromptLists] = useState<PromptListSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [shareCode, setShareCode] = useState("");
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [resolvingShare, setResolvingShare] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function loadLists() {
       try {
-        const data = await apiRequest<PromptListSummary[]>("/api/prompt-lists");
+        const bundled = await apiRequest<PromptListSummary[]>("/api/prompt-lists");
+        const owned = userId && !isAnonymous
+          ? await listOwnedPromptLists().catch(() => [])
+          : [];
         if (!cancelled) {
-          setPromptLists(data);
+          setPromptLists([...bundled, ...owned]);
         }
       } catch (err) {
         if (!cancelled) {
@@ -36,7 +56,30 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId, isAnonymous]);
+
+  async function addSharedList(event: FormEvent) {
+    event.preventDefault();
+    if (disabled || resolvingShare || !shareCode.trim()) return;
+    setResolvingShare(true);
+    setShareError(null);
+    try {
+      const shared = await resolveSharedPromptList(shareCode);
+      setPromptLists((current) => current.some((item) => item.slug === shared.slug)
+        ? current
+        : [...current, shared]);
+      const selection = addSharedPromptSelection(
+        selectedSlugs, shareCodes, shared, shareCode, activeLanguage
+      );
+      onShareCodesChange?.(selection.shareCodes);
+      onChange(selection.slugs);
+      setShareCode("");
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : "Could not add that shared list.");
+    } finally {
+      setResolvingShare(false);
+    }
+  }
 
   function handleToggle(slug: string) {
     if (disabled) return;
@@ -131,7 +174,7 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
               {/* A new tab: this picker also lives in the waiting-room settings,
                   where navigating away would discard settings the host is
                   part-way through editing. */}
-              <a
+              {wl.isBundled && <a
                 className="prompt-list-chip-info"
                 href={`/prompt-lists/${wl.slug}`}
                 target="_blank"
@@ -140,11 +183,16 @@ export function PromptListPicker({ selectedSlugs, onChange, disabled = false }: 
                 aria-label={`How ${wl.name} prompts play`}
               >
                 <span aria-hidden="true">i</span>
-              </a>
+              </a>}
             </span>
           );
         })}
       </div>
+      <form className="prompt-list-share-form" onSubmit={(event) => void addSharedList(event)}>
+        <label htmlFor="prompt-list-share-code">Add an unlisted list by code</label>
+        <div><input id="prompt-list-share-code" value={shareCode} disabled={disabled || resolvingShare} maxLength={24} autoComplete="off" onChange={(event) => setShareCode(event.target.value)} /><button type="submit" disabled={disabled || resolvingShare || !shareCode.trim()}>{resolvingShare ? "Adding…" : "Add"}</button></div>
+        {shareError && <p className="prompt-list-fallback-note" role="alert">{shareError}</p>}
+      </form>
     </fieldset>
   );
 }

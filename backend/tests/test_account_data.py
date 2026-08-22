@@ -34,6 +34,8 @@ from app.db.models import (
     UserBan,
     UserBlock,
     UserSettings,
+    PromptConcept,
+    PromptList,
     generate_uuid,
 )
 from app.domain_values import AccountState, DataExportStatus
@@ -42,10 +44,12 @@ from app.repositories.interfaces import (
     GameRecordInput,
     TurnGuessInput,
     TurnRecordInput,
+    PromptListEntryInput,
 )
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
+    SqlAlchemyPromptListRepository,
 )
 
 
@@ -211,6 +215,14 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     game_id = await record_private_game(
         history, owner_id=owner["id"], other_id=other.id
     )
+    await SqlAlchemyPromptListRepository(factory).create_owned(
+        owner["id"],
+        name="Exported prompts",
+        description="Requester-authored content",
+        language="en",
+        visibility="unlisted",
+        prompts=(PromptListEntryInput(answer="red panda"),),
+    )
 
     status, artifact = await request_ready_export(http)
     assert status["schemaVersion"] == 1
@@ -227,6 +239,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["suspensions"][0]["reason"] == "Historic suspension"
     assert "bannedByUserId" not in artifact["suspensions"][0]
     assert artifact["blocks"][0]["blockedUserId"] == other.id
+    assert artifact["promptLists"][0]["name"] == "Exported prompts"
+    assert artifact["promptLists"][0]["revisions"][0]["prompts"][0]["prompt"] == "red panda"
 
     encoded = json.dumps(artifact)
     assert "Private Bob" not in encoded
@@ -287,6 +301,14 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
     other = await users.create_anonymous("Other player")
     await record_private_game(history, owner_id=owner["id"], other_id=other.id)
     export_status, _ = await request_ready_export(http)
+    await SqlAlchemyPromptListRepository(factory).create_owned(
+        owner["id"],
+        name="Delete me",
+        description="",
+        language="en",
+        visibility="private",
+        prompts=(PromptListEntryInput(answer="private prompt"),),
+    )
 
     missing = await http.request("DELETE", "/api/auth/account", json={})
     assert missing.status_code == 400
@@ -337,6 +359,8 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert await session.get(DataExport, UUID(export_status["id"])) is None
         assert await session.get(UserSettings, account.id) is None
         assert await session.scalar(select(func.count(UserBlock.id))) == 0
+        assert await session.scalar(select(func.count(PromptList.id))) == 0
+        assert await session.scalar(select(func.count(PromptConcept.id))) == 0
         assert not list(
             (
                 await session.scalars(

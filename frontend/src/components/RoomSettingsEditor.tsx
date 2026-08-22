@@ -62,6 +62,7 @@ const emptySettings: EditableRoomSettings = {
   colorMode: DEFAULT_COLOR_MODE,
   promptLanguage: "en",
   promptListSlugs: ["english_standard"],
+  promptListShareCodes: [],
 };
 
 const STATUS_TEXT: Record<SaveStatus, string> = {
@@ -243,6 +244,8 @@ export function RoomSettingsEditor() {
       <PromptListPicker
         selectedSlugs={settings.promptListSlugs || ["english_standard"]}
         onChange={(promptListSlugs) => update({ promptListSlugs })}
+        shareCodes={settings.promptListShareCodes || []}
+        onShareCodesChange={(promptListShareCodes) => update({ promptListShareCodes })}
       />
       <ToggleChips
         label="Allowed tools"

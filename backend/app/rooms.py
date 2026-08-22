@@ -283,6 +283,9 @@ class Room:
     color_mode: str = DEFAULT_COLOR_MODE
     prompt_language: str = "en"
     prompt_list_slugs: list[str] = field(default_factory=list)
+    # Bearer capabilities used only to authorize unlisted content. Never expose
+    # these in room state, settings responses, logs, or history.
+    prompt_list_share_codes: list[str] = field(default_factory=list, repr=False)
     prompt_list_revision_ids: list[str] = field(default_factory=list)
     prompt_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     prompt_version_ids: dict[str, str] = field(default_factory=dict)
@@ -535,6 +538,7 @@ class RoomManager:
         color_mode: str = DEFAULT_COLOR_MODE,
         prompt_language: str = "en",
         prompt_list_slugs: list[str] | None = None,
+        prompt_list_share_codes: list[str] | None = None,
         prompt_list_revision_ids: list[str] | None = None,
         prompt_aliases: dict[str, tuple[str, ...]] | None = None,
         prompt_version_ids: dict[str, str] | None = None,
@@ -561,6 +565,7 @@ class RoomManager:
             color_mode=color_mode,
             prompt_language=prompt_language,
             prompt_list_slugs=list(prompt_list_slugs or []),
+            prompt_list_share_codes=list(prompt_list_share_codes or []),
             prompt_list_revision_ids=list(prompt_list_revision_ids or []),
             prompt_aliases=dict(prompt_aliases or {}),
             prompt_version_ids=dict(prompt_version_ids or {}),

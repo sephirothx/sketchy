@@ -206,6 +206,44 @@ class PromptListSummary:
 
 
 @dataclass(frozen=True)
+class PromptListEntryInput:
+    """One ordered prompt supplied while creating or revising a player list."""
+
+    answer: str
+    concept_id: str | None = None
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PromptListEntry:
+    """Editable content from the latest immutable player-list revision."""
+
+    concept_id: str
+    prompt_version_id: str
+    answer: str
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class OwnedPromptList:
+    """Owner-facing list metadata plus its current ordered content."""
+
+    id: str
+    slug: str
+    name: str
+    description: str
+    language: str
+    visibility: str
+    share_code: str | None
+    moderation_state: str
+    version: int
+    prompt_count: int
+    created_at: datetime
+    updated_at: datetime
+    prompts: tuple[PromptListEntry, ...] = ()
+
+
+@dataclass(frozen=True)
 class ResolvedPromptSelection:
     """One valid, language-homogeneous prompt-list selection."""
 
@@ -223,6 +261,18 @@ class PromptListSelectionError(ValueError):
 
 class PromptSeedConflictError(ValueError):
     """Bundled source contradicts an already-persisted immutable revision."""
+
+
+class PromptListMutationError(ValueError):
+    """A safe validation or authorization failure for a player-owned list."""
+
+
+class PromptListConflictError(PromptListMutationError):
+    """An edit was based on a stale immutable list revision."""
+
+
+class PromptListNotFoundError(PromptListMutationError):
+    """The requested player-owned list is absent or not owned by the caller."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -430,8 +480,65 @@ class PromptListRepository(ABC):
         ...
 
     @abstractmethod
-    async def resolve_selection(self, slugs: list[str]) -> ResolvedPromptSelection:
-        """Resolve an exact selection, rejecting missing or mixed-language lists."""
+    async def resolve_selection(
+        self,
+        slugs: list[str],
+        *,
+        requesting_user_id: str | None = None,
+        share_codes: Sequence[str] = (),
+    ) -> ResolvedPromptSelection:
+        """Resolve an authorized, language-homogeneous list selection."""
+        ...
+
+    @abstractmethod
+    async def list_owned(self, owner_user_id: str) -> list[OwnedPromptList]:
+        """List the caller's reusable prompt lists without their prompt bodies."""
+        ...
+
+    @abstractmethod
+    async def get_owned(
+        self, owner_user_id: str, prompt_list_id: str
+    ) -> OwnedPromptList | None:
+        """Return one owned list with its current immutable content."""
+        ...
+
+    @abstractmethod
+    async def get_shared(self, share_code: str) -> PromptListSummary | None:
+        """Resolve active unlisted-list metadata by its explicit bearer code."""
+        ...
+
+    @abstractmethod
+    async def create_owned(
+        self,
+        owner_user_id: str,
+        *,
+        name: str,
+        description: str,
+        language: str,
+        visibility: str,
+        prompts: Sequence[PromptListEntryInput],
+    ) -> OwnedPromptList:
+        """Create a reusable player list and immutable revision one."""
+        ...
+
+    @abstractmethod
+    async def update_owned(
+        self,
+        owner_user_id: str,
+        prompt_list_id: str,
+        *,
+        expected_version: int,
+        name: str,
+        description: str,
+        visibility: str,
+        prompts: Sequence[PromptListEntryInput],
+    ) -> OwnedPromptList:
+        """Create the next immutable revision using optimistic concurrency."""
+        ...
+
+    @abstractmethod
+    async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
+        """Delete a player-owned list and all of its revisions."""
         ...
 
     @abstractmethod

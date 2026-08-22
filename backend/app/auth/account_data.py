@@ -10,6 +10,7 @@ from uuid import UUID
 
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 
 from app.db import async_engine, async_session_factory, init_db
 from app.db.models import (
@@ -21,6 +22,12 @@ from app.db.models import (
     GameRecord,
     IdentityAlias,
     PlayerReport,
+    PromptConcept,
+    PromptList,
+    PromptListRevision,
+    PromptListRevisionItem,
+    PromptVersion,
+    PromptVersionAlias,
     TurnGuess,
     TurnRecord,
     UploadedAvatarAsset,
@@ -230,6 +237,22 @@ async def _build_export_artifact(
         ).all()
     )
     settings = await session.get(UserSettings, account.id)
+    prompt_lists = list(
+        (
+            await session.scalars(
+                select(PromptList)
+                .where(PromptList.owner_user_id.in_(identity_ids))
+                .options(
+                    selectinload(PromptList.revisions)
+                    .selectinload(PromptListRevision.items)
+                    .selectinload(PromptListRevisionItem.prompt_version)
+                    .selectinload(PromptVersion.version_aliases)
+                    .selectinload(PromptVersionAlias.alias)
+                )
+                .order_by(PromptList.created_at, PromptList.id)
+            )
+        ).all()
+    )
 
     return {
         "schemaVersion": EXPORT_SCHEMA_VERSION,
@@ -266,6 +289,48 @@ async def _build_export_artifact(
             if settings is not None
             else None
         ),
+        "promptLists": [
+            {
+                "id": str(prompt_list.id),
+                "slug": prompt_list.slug,
+                "name": prompt_list.name,
+                "description": prompt_list.description,
+                "language": prompt_list.language,
+                "visibility": prompt_list.visibility,
+                "shareCode": prompt_list.share_code,
+                "moderationState": prompt_list.moderation_state,
+                "version": prompt_list.version,
+                "createdAt": _timestamp(prompt_list.created_at),
+                "updatedAt": _timestamp(prompt_list.updated_at),
+                "revisions": [
+                    {
+                        "id": str(revision.id),
+                        "version": revision.version,
+                        "language": revision.language,
+                        "contentHash": revision.content_hash,
+                        "createdAt": _timestamp(revision.created_at),
+                        "prompts": [
+                            {
+                                "conceptId": str(item.prompt_version.concept_id),
+                                "promptVersionId": str(item.prompt_version.id),
+                                "promptVersion": item.prompt_version.version,
+                                "prompt": item.prompt_version.canonical_answer,
+                                "aliases": sorted(
+                                    link.alias.answer
+                                    for link in item.prompt_version.version_aliases
+                                ),
+                                "position": item.position,
+                            }
+                            for item in revision.items
+                        ],
+                    }
+                    for revision in sorted(
+                        prompt_list.revisions, key=lambda item: item.version
+                    )
+                ],
+            }
+            for prompt_list in prompt_lists
+        ],
         "linkedIdentities": [
             {
                 "id": str(source.id),
@@ -607,6 +672,30 @@ async def anonymize_account(
             )
             identity_ids = [account.id, *source_ids]
 
+            owned_concept_ids = list(
+                (
+                    await session.scalars(
+                        select(PromptVersion.concept_id)
+                        .join(
+                            PromptListRevisionItem,
+                            PromptListRevisionItem.prompt_version_id
+                            == PromptVersion.id,
+                        )
+                        .join(
+                            PromptListRevision,
+                            PromptListRevision.id
+                            == PromptListRevisionItem.revision_id,
+                        )
+                        .join(
+                            PromptList,
+                            PromptList.id == PromptListRevision.prompt_list_id,
+                        )
+                        .where(PromptList.owner_user_id.in_(identity_ids))
+                        .distinct()
+                    )
+                ).all()
+            )
+
             sessions = await session.execute(
                 update(AuthSession)
                 .where(
@@ -658,6 +747,16 @@ async def anonymize_account(
             await session.execute(
                 delete(UserSettings).where(UserSettings.user_id.in_(identity_ids))
             )
+            # Player-authored lists are private account data, unlike shared game
+            # history. Remove their revisions and then their now-unreferenced
+            # prompt concepts instead of leaving ownerless content behind.
+            await session.execute(
+                delete(PromptList).where(PromptList.owner_user_id.in_(identity_ids))
+            )
+            if owned_concept_ids:
+                await session.execute(
+                    delete(PromptConcept).where(PromptConcept.id.in_(owned_concept_ids))
+                )
             await session.execute(
                 delete(UserBlock).where(
                     or_(

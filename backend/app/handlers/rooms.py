@@ -63,7 +63,9 @@ async def create_room(ctx: HandlerContext, sid, data):
     except IdentityError as error:
         return {"ok": False, "error": str(error), "field": "nickname"}
     try:
-        settings = await ctx.game_flow.room_settings_from_payload(payload)
+        settings = await ctx.game_flow.room_settings_from_payload(
+            payload, requesting_user_id=identity.user_id
+        )
     except RoomPromptResolutionError as error:
         return {"ok": False, "error": str(error), "field": "promptListSlugs"}
 
@@ -146,7 +148,7 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
         return {"ok": False, "error": "Only the host can change room settings"}
-    room, _ = current
+    room, player = current
     # Resolving the prompt lists reads the repository, and the host may press
     # Start while that is in the air. Under the lock the game cannot begin
     # half-way through this, so a setting that arrived first is a setting the
@@ -156,7 +158,9 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
             return {"ok": False, "error": "Settings can only be changed in the waiting room"}
         try:
             settings = await ctx.game_flow.room_settings_from_payload(
-                payload, fallback=room
+                payload,
+                fallback=room,
+                requesting_user_id=player.user_id,
             )
         except RoomPromptResolutionError as error:
             return {"ok": False, "error": str(error), "field": "promptListSlugs"}

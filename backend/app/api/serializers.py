@@ -10,6 +10,7 @@ from datetime import datetime
 from app.repositories.interfaces import (
     GameDetail,
     GameSummary,
+    OwnedPromptList,
     PromptListSummary,
     PromptStatsSummary,
     UserData,
@@ -110,6 +111,33 @@ def prompt_list_payload(prompt_list: PromptListSummary) -> dict:
         "promptCount": prompt_list.prompt_count,
         "isBundled": prompt_list.is_bundled,
         "version": prompt_list.version,
+    }
+
+
+def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
+    return {
+        "id": prompt_list.id,
+        "slug": prompt_list.slug,
+        "name": prompt_list.name,
+        "description": prompt_list.description,
+        "language": prompt_list.language,
+        "isBundled": False,
+        "visibility": prompt_list.visibility,
+        "shareCode": prompt_list.share_code,
+        "moderationState": prompt_list.moderation_state,
+        "version": prompt_list.version,
+        "promptCount": prompt_list.prompt_count,
+        "createdAt": _timestamp(prompt_list.created_at),
+        "updatedAt": _timestamp(prompt_list.updated_at),
+        "prompts": [
+            {
+                "conceptId": entry.concept_id,
+                "promptVersionId": entry.prompt_version_id,
+                "prompt": entry.answer,
+                "aliases": list(entry.aliases),
+            }
+            for entry in prompt_list.prompts
+        ],
     }
 
 

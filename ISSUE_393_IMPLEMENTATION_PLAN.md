@@ -135,13 +135,15 @@ then flow down.
 | #339 | #352-#356 |
 | #340 | #357-#366, #394-#396, #399 |
 | #341 | #367-#374, #386, #387, #389, #390 |
-| #342 | #375-#379, #392, #398 |
+| #342 | #318, #375-#379, #392, #398 |
 | #343 | #380-#385, #391 |
 
-Standalone and adjacent issues (#316, #318-#323, #330, #336, #337, #388,
+Standalone and adjacent issues (#316, #319-#323, #330, #336, #337, #388,
 #397) use `issue/<number>-<slug>` branches and normally target
 `epic/393-preproduction-baseline` directly. They may target an umbrella only
-when the decision log assigns a single clear owner before work begins. #385 is
+when the decision log assigns a single clear owner before work begins. #318 is
+assigned to #342 because it is the player-facing consumer of that umbrella's
+prompt ownership and immutable-revision model. #385 is
 not implemented independently; it is consolidated into #323, with #390 owning
 the idempotency prerequisite. #23 is already on `main`.
 
@@ -503,7 +505,7 @@ ADRs once they exist.
 | #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | Complete | #344-#351 integrated; 564 backend, 156 frontend, and 41 E2E tests pass locally; PostgreSQL CI gate configured; README updated and glossary reviewed (no new game terms) |
 | #339 database invariants | `epic/339-database-invariants` | Complete | #352-#356 integrated; 567 backend, 156 frontend, and 41 E2E tests pass locally; dual-dialect migration gate configured; README updated and glossary reviewed |
 | #340 accounts and privacy | `epic/340-accounts-identity-privacy` | Complete | #357-#366, #394-#396, and #399 integrated. Registered Player settings sync across devices with guest-local and one-time-seed rules; bounded private reports/evidence and temporary/permanent Suspensions have role-gated review, append-only audit correlation, privacy escape paths, session/live-seat enforcement, and export/deletion safeguards; persistent directional Blocks have idempotent APIs, alias-merge preservation, and bounded cached ordinary-chat filtering without hiding game-critical state; the colorblind-safe preference produces only a dismissible, unattributed, host-only live-room suggestion, ignores spectators, and has explicit shared-payload absence coverage. Umbrella gate: 632 backend, 156 frontend, and 45 E2E tests pass; frontend lint/build pass; README and glossary updated |
-| #342 prompt content | `epic/342-prompt-content-usage` | In progress | #392 implemented stable concepts/versions and metadata; #377 added explicit language semantics/localized catalogue copy; #376 added UUIDv7 bundled identities, immutable revisions, conflict-safe seeding, and game pinning; #398 added the locked ownership/visibility/provenance/moderation schema while leaving discovery/favorites/user-facing forks absent. #379 now locks quick custom prompts as explicit ephemeral room input and closes #330 durably: completed turns carry nullable source-version IDs, usage is authorized by exact pinned revision membership, and equal custom text cannot credit curated offers, picks, or guess totals in custom-only or mixed games. #318 will provide the opt-in save-as-private-list path. Reversible migrations and focused constraint/repository/pure/handler/contract tests pass; README and glossary updated; final child gate pending |
+| #342 prompt content | `epic/342-prompt-content-usage` | In progress | #392 implemented stable concepts/versions and metadata; #377 added explicit language semantics/localized catalogue copy; #376 added UUIDv7 bundled identities, immutable revisions, conflict-safe seeding, and game pinning; #398 added the locked ownership/visibility/provenance/moderation schema while leaving discovery/favorites/user-facing forks absent. #379 locks quick custom prompts as explicit ephemeral room input and closes #330 durably: completed turns carry nullable source-version IDs, usage is authorized by exact pinned revision membership, and equal custom text cannot credit curated offers, picks, or guess totals. #318 now provides registered owner create/edit/delete/reuse, 25-list and 500-prompt caps, UUIDv7 immutable revisions with stale-write conflicts, Private/Unlisted authorization, random share-code room selection without capability leakage, the My prompt lists UI and explicit quick-prompt save path, public-catalogue isolation, plus export/deletion lifecycle coverage. Child gate: 649 backend tests (1 skipped), 158 frontend tests, 46 E2E tests, frontend lint, and production build pass; README and glossary updated; #375/#378 and final umbrella gate pending |
 | #341 game history | `epic/341-game-history-statistics` | Not started | - |
 | #343 live rooms and formats | `epic/343-live-rooms-deployment-formats` | Not started | - |
 | Standalone/cross-epic integration | `epic/393-preproduction-baseline` | Not started | - |
