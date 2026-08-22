@@ -1360,8 +1360,85 @@ class PromptListLocalization(Base):
     prompt_list: Mapped[PromptList] = relationship(back_populates="localizations")
 
 
+class PromptUsageFact(Base):
+    """Append-only, per-game usage totals for one prompt in one pinned revision."""
+
+    __tablename__ = "prompt_usage_facts"
+    __table_args__ = (
+        UniqueConstraint(
+            "batch_id",
+            "prompt_list_revision_id",
+            "prompt_version_id",
+            name="uq_prompt_usage_fact_batch_revision_version",
+        ),
+        CheckConstraint("offer_count >= 0", name="ck_prompt_usage_facts_offers"),
+        CheckConstraint("pick_count >= 0", name="ck_prompt_usage_facts_picks"),
+        CheckConstraint(
+            "correct_guess_count >= 0",
+            name="ck_prompt_usage_facts_correct_guesses",
+        ),
+        CheckConstraint(
+            "total_guesser_count >= 0",
+            name="ck_prompt_usage_facts_total_guessers",
+        ),
+        _values_check(
+            "scoring_mode", SCORING_MODES, "ck_prompt_usage_facts_scoring_mode"
+        ),
+        _values_check(
+            "hint_mode", HINT_MODES, "ck_prompt_usage_facts_hint_mode"
+        ),
+        Index(
+            "ix_prompt_usage_facts_revision_occurred_at",
+            "prompt_list_revision_id",
+            "occurred_at",
+        ),
+        Index(
+            "ix_prompt_usage_facts_version_occurred_at",
+            "prompt_version_id",
+            "occurred_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+    )
+    prompt_list_revision_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_list_revisions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    # Legacy counter imports have no truthful occurrence time or rules. New
+    # writes always populate all three nullable dimensions.
+    occurred_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    scoring_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    hint_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    offer_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    pick_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    correct_guess_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    total_guesser_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+
 class Prompt(Base):
-    """Individual prompt belonging to a prompt list with usage statistics."""
+    """Current display row for one prompt concept in a prompt list."""
 
     __tablename__ = "prompts"
 
@@ -1394,17 +1471,4 @@ class Prompt(Base):
         index=True,
     )
     text: Mapped[str] = mapped_column(String(64), nullable=False)
-    offer_count: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=sql_text("0"), nullable=False
-    )
-    pick_count: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=sql_text("0"), nullable=False
-    )
-    correct_guess_count: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=sql_text("0"), nullable=False
-    )
-    total_guesser_count: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=sql_text("0"), nullable=False
-    )
-
     prompt_list: Mapped[PromptList] = relationship(back_populates="prompts")

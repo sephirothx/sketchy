@@ -1,4 +1,4 @@
-"""Turn a finished game's turns into the counters its prompt lists record.
+"""Turn a finished game's turns into immutable prompt-usage facts.
 
 Kept apart from `GameFlowService` for the same reason as `game_history`: it is
 pure. No sockets, no database, no timers - just the mapping from what the game
@@ -8,12 +8,20 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable
+from datetime import datetime
 
 from app.game import CompletedTurnStats
 from app.repositories.interfaces import PromptPickTotals, PromptUsage
 
 
-def tally_prompt_usage(turns: Iterable[CompletedTurnStats]) -> PromptUsage:
+def tally_prompt_usage(
+    turns: Iterable[CompletedTurnStats],
+    *,
+    batch_id: str | None = None,
+    occurred_at: datetime | None = None,
+    scoring_mode: str = "default",
+    hint_mode: str = "none",
+) -> PromptUsage:
     """Aggregate every turn's offers and picks into one set of increments.
 
     Aggregating rather than replaying turn by turn is what lets a whole game
@@ -41,6 +49,12 @@ def tally_prompt_usage(turns: Iterable[CompletedTurnStats]) -> PromptUsage:
         correct_guesses[chosen] += turn.correct_guess_count
         total_guessers[chosen] += turn.total_guesser_count
 
+    dimensions = {
+        "scoring_mode": scoring_mode,
+        "hint_mode": hint_mode,
+        **({"batch_id": batch_id} if batch_id is not None else {}),
+        **({"occurred_at": occurred_at} if occurred_at is not None else {}),
+    }
     return PromptUsage(
         offers=dict(offers),
         picks={
@@ -51,4 +65,5 @@ def tally_prompt_usage(turns: Iterable[CompletedTurnStats]) -> PromptUsage:
             )
             for prompt, count in picks.items()
         },
+        **dimensions,
     )

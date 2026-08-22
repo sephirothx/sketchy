@@ -114,8 +114,17 @@ stable participant seat ID and renders the frozen presentation when an account
 link is absent.
 Prompt-list counts are derived from prompt membership on read, so adding or
 removing a prompt cannot leave a cached total out of sync.
-Prompt metadata and usage counters also have database-side defaults, keeping
-ORM, raw SQL, bulk imports, and migration backfills consistent.
+Prompt usage is not stored as mutable totals on the current display row.
+Each finished game appends an idempotent **Prompt-usage fact** for every used
+prompt/version and pinned list revision, carrying the authoritative occurrence
+time plus scoring and hint modes. Stats are derived by stable prompt concept,
+so a later wording revision keeps its history without matching on display text.
+The fact indexes support time-window and rule filters; the Prompt stats page
+offers all-time, 30-day, and 90-day windows plus scoring/hint segmentation.
+The minimum-guesser ranking floor applies independently to the selected slice.
+Pre-cutover counters migrate into facts with null time/rule dimensions rather
+than fabricated metadata: all-time unfiltered reads retain them, while bounded
+or segmented reads deliberately exclude what cannot be attributed truthfully.
 Prompt content has a stable identity independent of its spelling. A
 **Prompt concept** may have immutable, language-specific **Prompt versions**;
 equal text never merges concepts implicitly. Versions store a canonical
@@ -380,10 +389,10 @@ HttpOnly session is their only credential. Deletion immediately revokes every
 linked session, removes export/provider/avatar records, clears login and profile
 identity, and replaces the player's frozen participant/drawer/guess names with
 **Deleted player**. The stable anonymized row, scores, prompts, and shared game
-structure remain, so another player's history is never damaged. Existing
-aggregate prompt counters cannot be decremented because they have no per-user
-attribution; the #342 prompt-content workstream replaces them with rebuildable
-projections over retained game facts.
+structure remain, so another player's history is never damaged. Prompt usage
+facts contain no user identifier and remain reconcilable with retained,
+anonymized game outcomes; deletion neither invents nor silently decrements a
+server-wide gameplay observation.
 
 Passwords use Argon2id. On every successful login, Sketchy compares the encoded
 hash with the current cost parameters and replaces stale hashes atomically;

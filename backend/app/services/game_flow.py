@@ -641,12 +641,14 @@ class GameFlowService:
         self,
         room: Room,
         game: Game,
+        *,
+        occurred_at: datetime,
     ) -> None:
-        """Fold a finished game's prompts into the prompt-list metrics.
+        """Append a finished game's prompt-list facts.
 
         Runs after the room has been told the game ended, and is bounded,
         for the same reasons as `_persist_game_history`: nothing a player
-        can see depends on these counters, so a database that is slow or
+        can see depends on these facts, so a database that is slow or
         locked must not be able to hold a room open waiting for them.
 
         The whole game goes in one call, and the repository writes it in
@@ -656,7 +658,13 @@ class GameFlowService:
         revision_ids = game.prompt_source_revision_ids
         if not self._ctx.prompt_list_repo or not revision_ids:
             return
-        usage = tally_prompt_usage(game.completed_turns)
+        usage = tally_prompt_usage(
+            game.completed_turns,
+            batch_id=game.prompt_usage_batch_id,
+            occurred_at=occurred_at,
+            scoring_mode=game.scoring_mode,
+            hint_mode=game.hint_mode,
+        )
         if not usage:
             return
         try:
@@ -677,6 +685,7 @@ class GameFlowService:
         game = room.game
         assert game is not None
         if game.is_finished():
+            finished_at = datetime.now(timezone.utc)
             # Snapshot the result before anything is touched or awaited.
             # Everything below mutates the room and then yields, and the
             # room is already reporting itself as waiting by then - so a
@@ -684,7 +693,7 @@ class GameFlowService:
             # and departed seats out from under a history built later.
             history = (
                 build_game_history(
-                    room, game, finished_at=datetime.now(timezone.utc)
+                    room, game, finished_at=finished_at
                 )
                 if self._ctx.game_history_repo
                 else None
@@ -726,7 +735,7 @@ class GameFlowService:
             # Last, so that nothing a player is waiting to see is behind a
             # database round trip.
             await self._persist_game_history(room, history)
-            await self._record_prompt_usage(room, game)
+            await self._record_prompt_usage(room, game, occurred_at=finished_at)
         else:
             await self._start_turn(room)
 

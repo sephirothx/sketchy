@@ -30,6 +30,7 @@ from app.db.models import (
     PromptListRevision,
     PromptListRevisionItem,
     PromptTag,
+    PromptUsageFact,
     PromptVersion,
     PromptVersionAlias,
     PromptVersionTag,
@@ -72,7 +73,6 @@ from app.repositories.interfaces import (
     PromptListSummary,
     SharedPromptList,
     OwnedPromptList,
-    PromptPickTotals,
     PromptStatsSummary,
     PromptUsage,
     ResolvedPromptSelection,
@@ -1948,7 +1948,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         prompt_list_revision_ids: Sequence[str],
         usage: PromptUsage,
     ) -> None:
-        """Apply a game's ID-attributed counters to its pinned revisions.
+        """Append a game's ID-attributed facts to its pinned revisions.
 
         Both the revision and prompt-version IDs came from the game's start
         snapshot. Their intersection is checked again here so no display-text
@@ -1959,101 +1959,138 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             for raw in prompt_list_revision_ids
             if (revision_id := _optional_entity_id(raw)) is not None
         ]
+        batch_id = _optional_entity_id(usage.batch_id)
         if not revision_ids or not usage:
             return
+        if batch_id is None:
+            raise ValueError("Prompt usage batch ID must be a UUID.")
         async with self._session_factory() as session:
             async with session.begin():
-                list_ids = (
-                    await session.execute(
-                        select(distinct(PromptListRevision.prompt_list_id)).where(
-                            PromptListRevision.id.in_(revision_ids)
-                        )
-                    )
-                ).scalars().all()
-                if not list_ids:
+                if await session.scalar(
+                    select(PromptUsageFact.id).where(
+                        PromptUsageFact.batch_id == batch_id
+                    ).limit(1)
+                ):
+                    # A committed-after-timeout retry of the same finished game
+                    # is harmless. One transaction means a batch is all-or-none.
                     return
-                allowed_version_ids = set(
-                    (
-                        await session.execute(
-                            select(PromptListRevisionItem.prompt_version_id).where(
-                                PromptListRevisionItem.revision_id.in_(revision_ids)
-                            )
-                        )
-                    ).scalars().all()
-                )
-
-                offers_by_count: dict[int, list[UUID]] = defaultdict(list)
-                for raw_version_id, count in usage.offers.items():
-                    prompt_version_id = _optional_entity_id(raw_version_id)
-                    if prompt_version_id in allowed_version_ids:
-                        offers_by_count[count].append(prompt_version_id)
-                for count, prompt_version_ids in offers_by_count.items():
+                memberships = (
                     await session.execute(
-                        update(Prompt)
-                        .where(
-                            and_(
-                                Prompt.prompt_list_id.in_(list_ids),
-                                Prompt.prompt_version_id.in_(prompt_version_ids),
-                            )
+                        select(
+                            PromptListRevisionItem.revision_id,
+                            PromptListRevisionItem.prompt_version_id,
+                        ).where(
+                            PromptListRevisionItem.revision_id.in_(revision_ids)
                         )
-                        .values(offer_count=Prompt.offer_count + count)
                     )
-
-                picks_by_totals: dict[PromptPickTotals, list[UUID]] = defaultdict(list)
-                for raw_version_id, totals in usage.picks.items():
-                    prompt_version_id = _optional_entity_id(raw_version_id)
-                    if prompt_version_id in allowed_version_ids:
-                        picks_by_totals[totals].append(prompt_version_id)
-                for totals, prompt_version_ids in picks_by_totals.items():
-                    await session.execute(
-                        update(Prompt)
-                        .where(
-                            and_(
-                                Prompt.prompt_list_id.in_(list_ids),
-                                Prompt.prompt_version_id.in_(prompt_version_ids),
-                            )
-                        )
-                        .values(
-                            pick_count=Prompt.pick_count + totals.picks,
+                ).all()
+                facts: list[PromptUsageFact] = []
+                for revision_id, prompt_version_id in memberships:
+                    version_key = _public_id(prompt_version_id)
+                    offer_count = usage.offers.get(version_key, 0)
+                    totals = usage.picks.get(version_key)
+                    if offer_count <= 0 and totals is None:
+                        continue
+                    facts.append(
+                        PromptUsageFact(
+                            id=generate_uuid(),
+                            batch_id=batch_id,
+                            prompt_list_revision_id=revision_id,
+                            prompt_version_id=prompt_version_id,
+                            occurred_at=usage.occurred_at,
+                            scoring_mode=usage.scoring_mode,
+                            hint_mode=usage.hint_mode,
+                            offer_count=offer_count,
+                            pick_count=totals.picks if totals else 0,
                             correct_guess_count=(
-                                Prompt.correct_guess_count + totals.correct_guesses
+                                totals.correct_guesses if totals else 0
                             ),
                             total_guesser_count=(
-                                Prompt.total_guesser_count + totals.total_guessers
+                                totals.total_guessers if totals else 0
                             ),
                         )
                     )
+                session.add_all(facts)
 
     async def get_prompt_stats(
         self,
         prompt_list_slug: str,
+        *,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
+        scoring_mode: str | None = None,
+        hint_mode: str | None = None,
     ) -> list[PromptStatsSummary]:
         async with self._session_factory() as session:
-            stmt = (
-                select(Prompt)
-                .join(PromptList, Prompt.prompt_list_id == PromptList.id)
-                .where(
+            prompt_list = await session.scalar(
+                select(PromptList).where(
                     PromptList.slug == prompt_list_slug,
                     PromptList.is_bundled.is_(True),
                     PromptList.moderation_state
                     == PromptContentModerationState.ACTIVE.value,
                 )
-                .order_by(Prompt.text)
             )
-            result = await session.execute(stmt)
-            prompts = result.scalars().all()
+            if prompt_list is None:
+                return []
+            prompts = (
+                await session.scalars(
+                    select(Prompt)
+                    .where(Prompt.prompt_list_id == prompt_list.id)
+                    .order_by(Prompt.text)
+                )
+            ).all()
+
+            fact_filters = [
+                PromptListRevision.prompt_list_id == prompt_list.id,
+            ]
+            if from_time is not None:
+                fact_filters.append(PromptUsageFact.occurred_at >= from_time)
+            if to_time is not None:
+                fact_filters.append(PromptUsageFact.occurred_at < to_time)
+            if scoring_mode is not None:
+                fact_filters.append(PromptUsageFact.scoring_mode == scoring_mode)
+            if hint_mode is not None:
+                fact_filters.append(PromptUsageFact.hint_mode == hint_mode)
+            aggregates = {
+                concept_id: (offers, picks, correct, guessers)
+                for concept_id, offers, picks, correct, guessers in (
+                    await session.execute(
+                        select(
+                            PromptVersion.concept_id,
+                            func.sum(PromptUsageFact.offer_count),
+                            func.sum(PromptUsageFact.pick_count),
+                            func.sum(PromptUsageFact.correct_guess_count),
+                            func.sum(PromptUsageFact.total_guesser_count),
+                        )
+                        .join(
+                            PromptUsageFact,
+                            PromptUsageFact.prompt_version_id == PromptVersion.id,
+                        )
+                        .join(
+                            PromptListRevision,
+                            PromptListRevision.id
+                            == PromptUsageFact.prompt_list_revision_id,
+                        )
+                        .where(*fact_filters)
+                        .group_by(PromptVersion.concept_id)
+                    )
+                ).all()
+            }
 
             summaries: list[PromptStatsSummary] = []
-            for w in prompts:
-                pick_rate = (w.pick_count / w.offer_count) if w.offer_count > 0 else 0.0
-                ratio = (w.correct_guess_count / w.total_guesser_count) if w.total_guesser_count > 0 else 0.0
+            for prompt in prompts:
+                offer_count, pick_count, correct_count, guesser_count = (
+                    aggregates.get(prompt.concept_id, (0, 0, 0, 0))
+                )
+                pick_rate = pick_count / offer_count if offer_count > 0 else 0.0
+                ratio = correct_count / guesser_count if guesser_count > 0 else 0.0
                 summaries.append(
                     PromptStatsSummary(
-                        text=w.text,
-                        offer_count=w.offer_count,
-                        pick_count=w.pick_count,
-                        correct_guess_count=w.correct_guess_count,
-                        total_guesser_count=w.total_guesser_count,
+                        text=prompt.text,
+                        offer_count=offer_count,
+                        pick_count=pick_count,
+                        correct_guess_count=correct_count,
+                        total_guesser_count=guesser_count,
                         pick_rate=round(pick_rate, 4),
                         correct_guess_ratio=round(ratio, 4),
                     )

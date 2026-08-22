@@ -1,7 +1,7 @@
 """Unit tests for repository implementations."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 from uuid import UUID
 
@@ -19,6 +19,7 @@ from app.db.models import (
     TurnRecord,
     PromptListLocalization,
     PromptListRevision,
+    PromptUsageFact,
     PromptVersion,
     generate_uuid,
 )
@@ -306,10 +307,6 @@ async def test_prompt_list_repository():
                         id=generate_uuid(),
                         prompt_list_id=UUID(wl.id),
                         text="dragonfruit",
-                        offer_count=0,
-                        pick_count=0,
-                        correct_guess_count=0,
-                        total_guesser_count=0,
                     )
                 )
         assert (await repo.get_by_slug("standard")).prompt_count == 4
@@ -626,6 +623,62 @@ async def test_prompt_usage_reaches_every_named_list_in_one_call():
         # Words are only touched in the lists that actually contain them.
         assert _stat(await repo.get_prompt_stats("alpha"), "banana").offer_count == 1
         assert _stat(await repo.get_prompt_stats("beta"), "castle").offer_count == 1
+    finally:
+        await engine.dispose()
+
+
+async def test_prompt_usage_is_idempotent_windowable_and_segmentable():
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await _seed_two_lists(repo)
+        selection = await repo.resolve_selection(["alpha"])
+        apple_id = selection.prompt_version_ids["apple"]
+        occurred_at = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+        usage = PromptUsage(
+            offers={apple_id: 1},
+            picks={
+                apple_id: PromptPickTotals(
+                    picks=1, correct_guesses=2, total_guessers=3
+                )
+            },
+            batch_id=str(generate_uuid()),
+            occurred_at=occurred_at,
+            scoring_mode="pressure",
+            hint_mode="wheel",
+        )
+
+        await repo.record_prompt_usage(selection.revision_ids, usage)
+        await repo.record_prompt_usage(selection.revision_ids, usage)
+
+        async with factory() as session:
+            facts = list(
+                (
+                    await session.scalars(
+                        select(PromptUsageFact).where(
+                            PromptUsageFact.batch_id == UUID(usage.batch_id)
+                        )
+                    )
+                ).all()
+            )
+        assert len(facts) == 1
+        assert facts[0].scoring_mode == "pressure"
+        assert facts[0].hint_mode == "wheel"
+
+        included = await repo.get_prompt_stats(
+            "alpha",
+            from_time=occurred_at - timedelta(seconds=1),
+            to_time=occurred_at + timedelta(seconds=1),
+            scoring_mode="pressure",
+            hint_mode="wheel",
+        )
+        assert _stat(included, "apple").pick_count == 1
+        excluded = await repo.get_prompt_stats(
+            "alpha", from_time=occurred_at + timedelta(seconds=1)
+        )
+        assert _stat(excluded, "apple").pick_count == 0
+        wrong_mode = await repo.get_prompt_stats("alpha", scoring_mode="default")
+        assert _stat(wrong_mode, "apple").pick_count == 0
     finally:
         await engine.dispose()
 

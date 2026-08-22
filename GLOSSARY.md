@@ -94,6 +94,7 @@ Three different things, never used for one another:
 | **Fork provenance** | The exact source **Prompt-list revision** from which a later revision was derived. The v1 schema preserves it even though user-facing forking is deferred. | copied from, parent list, clone |
 | **Custom prompts** | Ephemeral prompts the host types for one in-memory room, on top of or instead of its **Prompt lists**. They have no persisted prompt-version source and never affect curated **Prompt stats**. | custom words, own words, private words, saved list |
 | **Prompt source** | The immutable **Prompt version** and **Prompt-list revision** that supplied a curated prompt to a game. An ephemeral **Custom prompt** has no source, even when its text is equal. | matching text, origin list, attribution guess |
+| **Prompt-usage fact** | One append-only, idempotent finished-game observation for an exact **Prompt version** in a pinned **Prompt-list revision**, with offers, picks, guess totals, occurrence time, scoring mode, and hint mode. Stats are derived from facts; they are not mutable counters on a prompt. | prompt counter, analytics event, player tracking |
 | **Prompt stats** | The page, reached from the lobby, listing every prompt in a list and how it has actually played: how often it is picked when offered, and what share of guessers name it. A prompt is only ranked once enough guessers have faced it; the rest are listed as unranked. | word stats, difficulty ratings, prompt leaderboard |
 
 ## Hints

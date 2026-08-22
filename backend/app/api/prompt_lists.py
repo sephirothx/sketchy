@@ -1,6 +1,7 @@
 """Prompt list discovery, and the usage statistics the games feed back into it."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -26,6 +27,7 @@ from app.repositories.interfaces import (
     UserRepository,
 )
 from app.repositories.sqlalchemy import MAX_PROMPTS_PER_OWNED_LIST
+from app.domain_values import HintMode, ScoringMode
 
 # How many guessers a prompt must have faced before its difficulty means
 # anything. `correct_guess_ratio` is 0.0 both for a prompt nobody has ever
@@ -253,12 +255,16 @@ def create_prompt_list_router(
         request: Request,
         sort: str = Query(default="hardest"),
         limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+        from_time: datetime | None = Query(default=None, alias="from"),
+        to_time: datetime | None = Query(default=None, alias="to"),
+        scoring_mode: ScoringMode | None = Query(default=None, alias="scoringMode"),
+        hint_mode: HintMode | None = Query(default=None, alias="hintMode"),
     ):
         """How a list's prompts have actually played, hardest first by default.
 
-        Ranking and slicing happen here rather than in the repository: the
-        largest bundled list is a few hundred rows, which is nothing to sort in
-        memory, and `get_prompt_stats` is relied on unchanged by several suites.
+        Fact filtering and aggregation happen in the repository. Ranking and
+        slicing stay here: the largest bundled list is a few hundred rows,
+        which is small enough to sort in memory after aggregation.
 
         Every prompt in the list comes back, so a player can look one up. Only
         those with enough guessers behind them are ranked; the rest follow,
@@ -272,8 +278,26 @@ def create_prompt_list_router(
             )
         if sort not in SORTS:
             raise HTTPException(status_code=422, detail="Unknown sort.")
+        for field_name, value in (("from", from_time), ("to", to_time)):
+            if value is not None and value.tzinfo is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"{field_name} must include a timezone.",
+                )
+        if from_time is not None:
+            from_time = from_time.astimezone(timezone.utc)
+        if to_time is not None:
+            to_time = to_time.astimezone(timezone.utc)
+        if from_time is not None and to_time is not None and from_time >= to_time:
+            raise HTTPException(status_code=422, detail="from must be earlier than to.")
 
-        summaries = await prompt_list_repo.get_prompt_stats(slug)
+        summaries = await prompt_list_repo.get_prompt_stats(
+            slug,
+            from_time=from_time,
+            to_time=to_time,
+            scoring_mode=scoring_mode.value if scoring_mode else None,
+            hint_mode=hint_mode.value if hint_mode else None,
+        )
         if not summaries:
             raise HTTPException(status_code=404, detail="No such prompt list.")
 

@@ -744,10 +744,7 @@ async def test_prompt_server_defaults_apply_to_raw_inserts():
         assert prompt_list.is_bundled is True
         assert prompt_list.version == 1
         assert prompt is not None
-        assert prompt.offer_count == 0
-        assert prompt.pick_count == 0
-        assert prompt.correct_guess_count == 0
-        assert prompt.total_guesser_count == 0
+        assert prompt.text == "anchor"
     finally:
         await engine.dispose()
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
+
+from uuid6 import uuid7
 
 from app.domain_values import TurnEndReason
 
@@ -332,7 +334,7 @@ class PromptPickTotals:
 
 @dataclass(frozen=True, slots=True)
 class PromptUsage:
-    """One finished game's effect on a prompt list's counters.
+    """One finished game's immutable prompt-usage fact batch.
 
     Keyed by immutable prompt-version ID. Display text is deliberately absent:
     ephemeral custom prompts can equal curated text without receiving curated
@@ -341,6 +343,12 @@ class PromptUsage:
 
     offers: Mapping[str, int]
     picks: Mapping[str, PromptPickTotals]
+    batch_id: str = field(default_factory=lambda: str(uuid7()))
+    occurred_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    scoring_mode: str = "default"
+    hint_mode: str = "none"
 
     def __bool__(self) -> bool:
         return bool(self.offers or self.picks)
@@ -576,7 +584,7 @@ class PromptListRepository(ABC):
         prompt_list_revision_ids: Sequence[str],
         usage: PromptUsage,
     ) -> None:
-        """Apply one finished game's offers and picks to every named list.
+        """Append one finished game's offers and picks to every pinned revision.
 
         One call for the whole game rather than one per prompt per revision: this
         runs at the moment a game ends, and a transaction per turn is the
@@ -588,6 +596,11 @@ class PromptListRepository(ABC):
     async def get_prompt_stats(
         self,
         prompt_list_slug: str,
+        *,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
+        scoring_mode: str | None = None,
+        hint_mode: str | None = None,
     ) -> list[PromptStatsSummary]:
-        """Retrieve usage statistics and difficulty ratios for prompts in a list."""
+        """Derive windowed/dimensioned statistics from immutable usage facts."""
         ...

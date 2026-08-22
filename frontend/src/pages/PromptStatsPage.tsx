@@ -12,10 +12,31 @@ import {
   statsRows,
 } from "../lib/promptStats";
 import type {
+  HintMode,
   PromptListSummary,
   PromptStatsResponse,
   PromptStatsSort,
+  ScoringMode,
 } from "../types";
+
+const WINDOWS = [
+  { value: "all", label: "All time", days: null },
+  { value: "30d", label: "Last 30 days", days: 30 },
+  { value: "90d", label: "Last 90 days", days: 90 },
+] as const;
+const SCORING_FILTERS: Array<{ value: "all" | ScoringMode; label: string }> = [
+  { value: "all", label: "All scoring modes" },
+  { value: "none", label: "No scoring" },
+  { value: "default", label: "Default scoring" },
+  { value: "pressure", label: "Pressure scoring" },
+];
+const HINT_FILTERS: Array<{ value: "all" | HintMode; label: string }> = [
+  { value: "all", label: "All hint modes" },
+  { value: "none", label: "No hints" },
+  { value: "checkpoints", label: "Checkpoint hints" },
+  { value: "purchase", label: "Purchased hints" },
+  { value: "wheel", label: "Letter wheel" },
+];
 
 export function PromptStatsPage() {
   const params = useParams<{ slug?: string }>();
@@ -36,6 +57,18 @@ export function PromptStatsPage() {
 
   const requested = searchParams.get("sort") ?? "hardest";
   const sort: PromptStatsSort = isPromptStatsSort(requested) ? requested : "hardest";
+  const requestedWindow = searchParams.get("window") ?? "all";
+  const windowFilter = WINDOWS.some((item) => item.value === requestedWindow)
+    ? requestedWindow as typeof WINDOWS[number]["value"]
+    : "all";
+  const requestedScoring = searchParams.get("scoringMode") ?? "all";
+  const scoringMode = SCORING_FILTERS.some((item) => item.value === requestedScoring)
+    ? requestedScoring as "all" | ScoringMode
+    : "all";
+  const requestedHints = searchParams.get("hintMode") ?? "all";
+  const hintMode = HINT_FILTERS.some((item) => item.value === requestedHints)
+    ? requestedHints as "all" | HintMode
+    : "all";
 
   useEffect(() => {
     let cancelled = false;
@@ -65,8 +98,18 @@ export function PromptStatsPage() {
       setLoading(true);
       setError(null);
       try {
+        const requestParams = new URLSearchParams({ sort });
+        const selectedWindow = WINDOWS.find((item) => item.value === windowFilter);
+        if (selectedWindow?.days) {
+          requestParams.set(
+            "from",
+            new Date(Date.now() - selectedWindow.days * 86_400_000).toISOString(),
+          );
+        }
+        if (scoringMode !== "all") requestParams.set("scoringMode", scoringMode);
+        if (hintMode !== "all") requestParams.set("hintMode", hintMode);
         const response = await apiRequest<PromptStatsResponse>(
-          `/api/prompt-lists/${encodeURIComponent(slug)}/prompt-stats?sort=${sort}`,
+          `/api/prompt-lists/${encodeURIComponent(slug)}/prompt-stats?${requestParams}`,
         );
         if (cancelled) return;
         setStats(response);
@@ -84,7 +127,7 @@ export function PromptStatsPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug, sort]);
+  }, [slug, sort, windowFilter, scoringMode, hintMode]);
 
   const list = lists.find((entry) => entry.slug === slug) ?? null;
   const matches = stats ? matchingPrompts(stats.prompts, query) : [];
@@ -96,7 +139,15 @@ export function PromptStatsPage() {
 
   function chooseList(nextSlug: string) {
     setQuery("");
-    navigate(`/prompt-lists/${nextSlug}?sort=${sort}`);
+    const queryString = searchParams.toString();
+    navigate(`/prompt-lists/${nextSlug}${queryString ? `?${queryString}` : ""}`);
+  }
+
+  function setFilter(name: string, value: string, defaultValue: string) {
+    const next = new URLSearchParams(searchParams);
+    if (value === defaultValue) next.delete(name);
+    else next.set(name, value);
+    setSearchParams(next);
   }
 
   return (
@@ -138,13 +189,31 @@ export function PromptStatsPage() {
           <select
             id="prompt-stats-sort"
             value={sort}
-            onChange={(event) => setSearchParams({ sort: event.target.value })}
+            onChange={(event) => setFilter("sort", event.target.value, "hardest")}
           >
             {PROMPT_STATS_SORTS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
+          </select>
+        </div>
+        <div className="prompt-stats-control">
+          <label htmlFor="prompt-stats-window">Period</label>
+          <select id="prompt-stats-window" value={windowFilter} onChange={(event) => setFilter("window", event.target.value, "all")}>
+            {WINDOWS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </div>
+        <div className="prompt-stats-control">
+          <label htmlFor="prompt-stats-scoring">Scoring</label>
+          <select id="prompt-stats-scoring" value={scoringMode} onChange={(event) => setFilter("scoringMode", event.target.value, "all")}>
+            {SCORING_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </div>
+        <div className="prompt-stats-control">
+          <label htmlFor="prompt-stats-hints">Hints</label>
+          <select id="prompt-stats-hints" value={hintMode} onChange={(event) => setFilter("hintMode", event.target.value, "all")}>
+            {HINT_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </div>
         <div className="prompt-stats-control prompt-stats-search">

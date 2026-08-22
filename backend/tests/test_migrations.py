@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 import warnings
 
 import pytest
@@ -139,6 +140,95 @@ async def test_sqlite_migration_chain_round_trip(tmp_path):
     )
     try:
         await _exercise_migration_chain(engine)
+    finally:
+        await engine.dispose()
+
+
+async def test_prompt_counter_migration_preserves_lifetime_totals(tmp_path):
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'prompt-fact-migration.db'}"
+    )
+    script = ScriptDirectory.from_config(get_alembic_config())
+    previous = script.get_revision("e4b7c2d9a615").down_revision
+    assert isinstance(previous, str)
+    identifiers = {name: uuid.uuid4().hex for name in (
+        "list", "concept", "version", "revision", "prompt"
+    )}
+    try:
+        await _migrate(engine, alembic_command.upgrade, previous)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("INSERT INTO prompt_concepts (id) VALUES (:concept)"),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_versions "
+                    "(id, concept_id, language, version, canonical_answer, match_key) "
+                    "VALUES (:version, :concept, 'en', 1, 'apple', 'apple')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_lists (id, slug, name) "
+                    "VALUES (:list, 'legacy', 'Legacy')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revisions "
+                    "(id, prompt_list_id, version, language, content_hash) "
+                    "VALUES (:revision, :list, 1, 'en', 'legacy-hash')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revision_items "
+                    "(revision_id, prompt_version_id, position) "
+                    "VALUES (:revision, :version, 0)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompts "
+                    "(id, prompt_list_id, concept_id, prompt_version_id, text, "
+                    "offer_count, pick_count, correct_guess_count, "
+                    "total_guesser_count) VALUES "
+                    "(:prompt, :list, :concept, :version, 'apple', 9, 4, 7, 12)"
+                ),
+                identifiers,
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.connect() as connection:
+            fact = (
+                await connection.execute(
+                    text(
+                        "SELECT offer_count, pick_count, correct_guess_count, "
+                        "total_guesser_count, occurred_at, scoring_mode, hint_mode "
+                        "FROM prompt_usage_facts"
+                    )
+                )
+            ).one()
+        assert tuple(fact[:4]) == (9, 4, 7, 12)
+        assert tuple(fact[4:]) == (None, None, None)
+
+        await _migrate(engine, alembic_command.downgrade, previous)
+        async with engine.connect() as connection:
+            restored = (
+                await connection.execute(
+                    text(
+                        "SELECT offer_count, pick_count, correct_guess_count, "
+                        "total_guesser_count FROM prompts WHERE id = :prompt"
+                    ),
+                    identifiers,
+                )
+            ).one()
+        assert tuple(restored) == (9, 4, 7, 12)
     finally:
         await engine.dispose()
 

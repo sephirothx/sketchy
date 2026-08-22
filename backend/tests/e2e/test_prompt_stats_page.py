@@ -51,6 +51,16 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             await page.wait_for_url("**sort=most-picked")
             assert await page.locator("#prompt-stats-sort").input_value() == "most-picked"
 
+            # Facts can be sliced without resetting or rewriting them. The
+            # chosen period and rule dimensions remain linkable in the URL.
+            await page.select_option("#prompt-stats-window", "30d")
+            await page.wait_for_url("**window=30d*")
+            await page.select_option("#prompt-stats-scoring", "pressure")
+            await page.wait_for_url("**scoringMode=pressure*")
+            await page.select_option("#prompt-stats-hints", "wheel")
+            await page.wait_for_url("**hintMode=wheel*")
+            await table.wait_for()
+
             # An unknown list says so rather than showing an empty table.
             await page.goto(f"{BASE_URL}/prompt-lists/not-a-real-list")
             await page.get_by_text("There is no prompt list with that name.").wait_for()

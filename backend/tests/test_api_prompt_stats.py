@@ -1,6 +1,8 @@
 """The prompt statistics endpoint: what it ranks, and what it refuses to rank."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
@@ -75,7 +77,16 @@ async def test_prompt_list_catalogue_filters_on_valid_content_language(env):
     assert (await http.get("/api/prompt-lists?language=zh")).status_code == 422
 
 
-async def play(prompts, text: str, *, correct: int, guessers: int) -> None:
+async def play(
+    prompts,
+    text: str,
+    *,
+    correct: int,
+    guessers: int,
+    occurred_at: datetime | None = None,
+    scoring_mode: str = "default",
+    hint_mode: str = "none",
+) -> None:
     """Record one turn's worth of usage for a prompt."""
     selection = await prompts.resolve_selection(["standard"])
     prompt_version_id = selection.prompt_version_ids[text]
@@ -88,6 +99,9 @@ async def play(prompts, text: str, *, correct: int, guessers: int) -> None:
                     picks=1, correct_guesses=correct, total_guessers=guessers
                 )
             },
+            **({"occurred_at": occurred_at} if occurred_at else {}),
+            scoring_mode=scoring_mode,
+            hint_mode=hint_mode,
         ),
     )
 
@@ -201,6 +215,59 @@ async def test_most_picked_ranks_on_how_often_an_offer_was_taken(env):
 
     assert [p["text"] for p in body["prompts"]] == ["popular", "ignored"]
     assert body["prompts"][0]["pickRate"] > body["prompts"][1]["pickRate"]
+
+
+async def test_stats_can_be_windowed_and_segmented_by_game_rules(env):
+    http, prompts = env
+    await seed(prompts, "apple")
+    old = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    recent = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    await play(
+        prompts,
+        "apple",
+        correct=0,
+        guessers=5,
+        occurred_at=old,
+        scoring_mode="default",
+        hint_mode="none",
+    )
+    await play(
+        prompts,
+        "apple",
+        correct=4,
+        guessers=5,
+        occurred_at=recent,
+        scoring_mode="pressure",
+        hint_mode="wheel",
+    )
+
+    response = await http.get(
+        "/api/prompt-lists/standard/prompt-stats",
+        params={
+            "from": (recent - timedelta(days=1)).isoformat(),
+            "to": (recent + timedelta(days=1)).isoformat(),
+            "scoringMode": "pressure",
+            "hintMode": "wheel",
+        },
+    )
+    assert response.status_code == 200
+    prompt = response.json()["prompts"][0]
+    assert prompt["pickCount"] == 1
+    assert prompt["correctGuessCount"] == 4
+    assert prompt["totalGuesserCount"] == 5
+
+    assert (
+        await http.get(
+            "/api/prompt-lists/standard/prompt-stats",
+            params={"scoringMode": "invented"},
+        )
+    ).status_code == 422
+    assert (
+        await http.get(
+            "/api/prompt-lists/standard/prompt-stats",
+            params={"from": recent.isoformat(), "to": old.isoformat()},
+        )
+    ).status_code == 422
 
 
 async def test_the_limit_bounds_the_page_and_is_itself_bounded(env):
