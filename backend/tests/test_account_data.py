@@ -32,6 +32,7 @@ from app.db.models import (
     TurnRecord,
     User,
     UserBan,
+    UserBlock,
     UserSettings,
     generate_uuid,
 )
@@ -200,6 +201,13 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                     is_active=False,
                 )
             )
+            session.add(
+                UserBlock(
+                    id=generate_uuid(),
+                    blocker_user_id=owner_row.id,
+                    blocked_user_id=other_row.id,
+                )
+            )
     game_id = await record_private_game(
         history, owner_id=owner["id"], other_id=other.id
     )
@@ -218,6 +226,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert "reportedUserId" not in artifact["reportsSubmitted"][0]
     assert artifact["suspensions"][0]["reason"] == "Historic suspension"
     assert "bannedByUserId" not in artifact["suspensions"][0]
+    assert artifact["blocks"][0]["blockedUserId"] == other.id
 
     encoded = json.dumps(artifact)
     assert "Private Bob" not in encoded
@@ -327,6 +336,7 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert await session.scalar(select(func.count(GameRecord.id))) == 1
         assert await session.get(DataExport, UUID(export_status["id"])) is None
         assert await session.get(UserSettings, account.id) is None
+        assert await session.scalar(select(func.count(UserBlock.id))) == 0
         assert not list(
             (
                 await session.scalars(

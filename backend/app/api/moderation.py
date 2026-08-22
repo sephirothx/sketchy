@@ -15,8 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.auth.rate_limit import (
     PersistentRateLimiter,
     client_key,
-    keyed_client_hash,
 )
+from app.auth.audit import audit_coordinates
 from app.auth.bans import active_ban_filter, active_ban_for_user
 from app.auth.sessions import revoke_all_sessions
 from app.db.models import (
@@ -164,24 +164,6 @@ def _ban_payload(ban: UserBan) -> dict:
     }
 
 
-def _request_id(request: Request) -> str:
-    supplied = request.headers.get("x-request-id", "").strip()
-    if supplied:
-        try:
-            return str(UUID(supplied))
-        except ValueError:
-            pass
-    return str(generate_uuid())
-
-
-async def _audit_coordinates(
-    request: Request, session_factory: async_sessionmaker[AsyncSession]
-) -> tuple[str, str]:
-    return _request_id(request), await keyed_client_hash(
-        session_factory, client_key(request)
-    )
-
-
 async def _reviewer(session: AsyncSession, request: Request) -> User:
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
@@ -218,7 +200,7 @@ def create_moderation_router(
         db_reporter_id = UUID(reporter_id)
         if db_reporter_id == body.reported_user_id:
             raise HTTPException(status_code=422, detail="You cannot report yourself.")
-        request_id, ip_hash = await _audit_coordinates(request, session_factory)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
 
         async with session_factory() as session:
             async with session.begin():
@@ -299,7 +281,7 @@ def create_moderation_router(
 
     @router.patch("/moderation/reports/{report_id}")
     async def review_report(report_id: UUID, body: ReportReviewBody, request: Request):
-        request_id, ip_hash = await _audit_coordinates(request, session_factory)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
         now = datetime.now(timezone.utc)
         async with session_factory() as session:
             async with session.begin():
@@ -336,7 +318,7 @@ def create_moderation_router(
 
     @router.post("/moderation/bans", status_code=201)
     async def create_ban(body: BanBody, request: Request):
-        request_id, ip_hash = await _audit_coordinates(request, session_factory)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
         now = datetime.now(timezone.utc)
         if body.expires_at is not None and body.expires_at <= now:
             raise HTTPException(status_code=422, detail="expiresAt must be in the future.")
@@ -436,7 +418,7 @@ def create_moderation_router(
 
     @router.post("/moderation/bans/{ban_id}/revoke")
     async def revoke_ban(ban_id: UUID, body: BanRevokeBody, request: Request):
-        request_id, ip_hash = await _audit_coordinates(request, session_factory)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
         now = datetime.now(timezone.utc)
         async with session_factory() as session:
             async with session.begin():

@@ -415,6 +415,37 @@ class UserBan(Base):
     revoke_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
+class UserBlock(Base):
+    """Directional player block used to mute ordinary social interaction."""
+
+    __tablename__ = "user_blocks"
+    __table_args__ = (
+        UniqueConstraint("blocker_user_id", "blocked_user_id", name="uq_user_block"),
+        CheckConstraint(
+            "blocker_user_id != blocked_user_id", name="chk_no_self_block"
+        ),
+        Index("ix_user_blocks_blocked_user_id", "blocked_user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    blocker_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    blocked_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+
 class IdentityAlias(Base):
     """Immutable mapping from a merged guest identity to its account."""
 

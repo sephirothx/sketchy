@@ -24,6 +24,56 @@ def _chat_line(player, text: str, **extra) -> dict:
     }
 
 
+async def _emit_player_chat(
+    ctx: HandlerContext,
+    room,
+    player,
+    payload: dict,
+    *,
+    recipients: list[str] | None = None,
+) -> None:
+    """Emit ordinary player-authored chat minus recipients who blocked them.
+
+    Blocking is intentionally a presentation filter. Correct-guess events,
+    scores, turns, votes, and room state keep their normal room-wide delivery.
+    """
+    blockers = (
+        await ctx.block_service.blockers_of(player.user_id)
+        if ctx.block_service is not None
+        else frozenset()
+    )
+    if not blockers:
+        if recipients is None:
+            await ctx.sio.emit("chat_message", payload, room=room.id)
+        elif recipients:
+            await ctx.sio.emit("chat_message", payload, to=recipients)
+        return
+
+    candidate_sids = (
+        recipients
+        if recipients is not None
+        else [
+            candidate.sid
+            for candidate in room.players.values()
+            if candidate.connected and candidate.sid
+        ]
+    )
+    players_by_sid = {
+        candidate.sid: candidate
+        for candidate in room.players.values()
+        if candidate.connected and candidate.sid
+    }
+    visible_to = [
+        candidate_sid
+        for candidate_sid in candidate_sids
+        if candidate_sid == player.sid
+        or players_by_sid.get(candidate_sid) is None
+        or players_by_sid[candidate_sid].user_id not in blockers
+    ]
+    if visible_to:
+        await ctx.sio.emit("chat_message", payload, to=visible_to)
+
+
 async def send_chat(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(TextPayload, data)
@@ -41,10 +91,11 @@ async def send_chat(ctx: HandlerContext, sid, data):
     if player.is_afk and not player.is_spectator:
         player.is_afk = False
         await ctx.game_flow._emit_room_state(room)
-    await ctx.sio.emit(
-        "chat_message",
+    await _emit_player_chat(
+        ctx,
+        room,
+        player,
         _chat_line(player, text, isSpectator=player.is_spectator),
-        room=room.id,
     )
     return {"ok": True}
 
@@ -79,20 +130,23 @@ async def guess(ctx: HandlerContext, sid, data):
     if player.is_spectator or player.id in game.correct_guessers:
         recipients = ctx.game_flow._privileged_sids(room, game)
         if recipients:
-            await ctx.sio.emit(
-                "chat_message",
+            await _emit_player_chat(
+                ctx,
+                room,
+                player,
                 _chat_line(
                     player, text, restricted=True, isSpectator=player.is_spectator
                 ),
-                to=recipients,
+                recipients=recipients,
             )
         return
 
     if len(text) > MAX_PROMPT_LENGTH:
-        await ctx.sio.emit(
-            "chat_message",
+        await _emit_player_chat(
+            ctx,
+            room,
+            player,
             _chat_line(player, text),
-            room=room.id,
         )
         return
 
@@ -115,16 +169,19 @@ async def guess(ctx: HandlerContext, sid, data):
             )
             recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
             if recipients:
-                await ctx.sio.emit(
-                    "chat_message",
+                await _emit_player_chat(
+                    ctx,
+                    room,
+                    player,
                     _chat_line(player, text),
-                    to=recipients,
+                    recipients=recipients,
                 )
         else:
-            await ctx.sio.emit(
-                "chat_message",
+            await _emit_player_chat(
+                ctx,
+                room,
+                player,
                 _chat_line(player, text),
-                room=room.id,
             )
         return
 
@@ -150,10 +207,12 @@ async def guess(ctx: HandlerContext, sid, data):
     )
     recipients = ctx.game_flow._privileged_sids(room, game)
     if recipients:
-        await ctx.sio.emit(
-            "chat_message",
+        await _emit_player_chat(
+            ctx,
+            room,
+            player,
             _chat_line(player, text, correct=True),
-            to=recipients,
+            recipients=recipients,
         )
 
     await ctx.game_flow._end_turn_if_all_guessed(room)

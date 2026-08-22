@@ -13,6 +13,8 @@ from app.api.profiles import create_profile_router
 from app.api.prompt_lists import create_prompt_list_router
 from app.api.moderation import create_moderation_router
 from app.api.user_settings import create_user_settings_router
+from app.api.user_blocks import create_user_blocks_router
+from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db
@@ -68,6 +70,7 @@ def configure_frontend(app: FastAPI, directory: Path) -> None:
 user_repo = SqlAlchemyUserRepository(async_session_factory)
 game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
 prompt_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
+block_service = BlockService(async_session_factory)
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 handler_context = register_all_handlers(
@@ -77,6 +80,7 @@ handler_context = register_all_handlers(
     game_history_repo=game_history_repo,
     prompt_list_repo=prompt_list_repo,
     session_factory=async_session_factory,
+    block_service=block_service,
 )
 
 
@@ -110,6 +114,7 @@ async def _remove_account_from_live_rooms(user_id: str, *, reason: str) -> None:
 
 
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
+    block_service.clear()
     await _remove_account_from_live_rooms(
         user_id, reason="Your account was deleted."
     )
@@ -149,11 +154,15 @@ api.include_router(
         user_repo,
         async_session_factory,
         on_account_deleted=remove_deleted_account_from_live_rooms,
+        on_identity_merged=block_service.clear,
     )
 )
 api.include_router(create_profile_router(user_repo, game_history_repo))
 api.include_router(create_prompt_list_router(prompt_list_repo))
 api.include_router(create_user_settings_router(async_session_factory))
+api.include_router(
+    create_user_blocks_router(async_session_factory, block_service)
+)
 api.include_router(
     create_moderation_router(
         async_session_factory,

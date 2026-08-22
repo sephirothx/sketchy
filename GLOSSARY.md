@@ -156,6 +156,7 @@ Three different things, never used for one another:
 | **Report** | A private request for a moderator to review another player's behavior, with a reason, the reporter's details, and bounded context evidence. Reports are never room announcements or public profile data. | complaint, flag |
 | **Moderation evidence** | The protected context retained with a **Report** so a reviewer can understand what happened. It may outlive account anonymization and is never ordinary public history. | telemetry, public replay |
 | **Suspension** | A temporary or permanent service-wide block imposed by a moderator or administrator. It revokes signed-in devices and prevents HTTP and Socket.IO authentication while active. | ban (in player-facing copy), kick |
+| **Block** | A player's private, directional choice to hide another player's ordinary chat and prevent future direct invites. It never hides game-critical state and is not a **Kick vote** or **Suspension**. | mute, ignore, ban |
 | **Restart vote** | A proposal to restart the current game, carried by a strict majority of active players. | vote restart, game restart, reset vote |
 | **Kick vote** | A proposal to remove a player from the room. | vote kick, vote-kick, boot |
 | **AFK vote** | A proposal to mark a player AFK. | vote AFK, idle vote |

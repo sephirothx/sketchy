@@ -16,6 +16,7 @@ from app.rooms import RoomManager
 from app.services.timers import TimerManager
 
 if TYPE_CHECKING:
+    from app.auth.blocks import BlockService
     from app.services.game_flow import GameFlowService
 
 
@@ -31,4 +32,5 @@ class HandlerContext:
     prompt_list_repo: PromptListRepository | None = None
     # Needed to resolve a hashed opaque session when a socket presents a cookie.
     session_factory: async_sessionmaker[AsyncSession] | None = None
+    block_service: BlockService | None = None
     game_flow: GameFlowService = field(init=False)

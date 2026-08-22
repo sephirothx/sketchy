@@ -26,6 +26,7 @@ from app.db.models import (
     UploadedAvatarAsset,
     User,
     UserBan,
+    UserBlock,
     UserSettings,
     generate_uuid,
 )
@@ -210,6 +211,15 @@ async def _build_export_artifact(
             )
         ).all()
     )
+    blocks = list(
+        (
+            await session.scalars(
+                select(UserBlock)
+                .where(UserBlock.blocker_user_id.in_(identity_ids))
+                .order_by(UserBlock.created_at, UserBlock.id)
+            )
+        ).all()
+    )
     export_jobs = list(
         (
             await session.scalars(
@@ -375,6 +385,14 @@ async def _build_export_artifact(
                 "revokedAt": _timestamp(ban.revoked_at),
             }
             for ban in suspensions
+        ],
+        "blocks": [
+            {
+                "id": str(block.id),
+                "blockedUserId": str(block.blocked_user_id),
+                "createdAt": _timestamp(block.created_at),
+            }
+            for block in blocks
         ],
         # Audit details and other actor identifiers are deliberately omitted:
         # they can contain moderator or third-party data. This still exposes
@@ -639,6 +657,14 @@ async def anonymize_account(
             )
             await session.execute(
                 delete(UserSettings).where(UserSettings.user_id.in_(identity_ids))
+            )
+            await session.execute(
+                delete(UserBlock).where(
+                    or_(
+                        UserBlock.blocker_user_id.in_(identity_ids),
+                        UserBlock.blocked_user_id.in_(identity_ids),
+                    )
+                )
             )
 
             for identity in (

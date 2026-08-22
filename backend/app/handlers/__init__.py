@@ -5,6 +5,7 @@ import socketio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.handlers import chat, connection, drawing, game, moderation, restart, rooms
+from app.auth.blocks import BlockService
 from app.handlers.context import HandlerContext
 from app.repositories.interfaces import (
     GameHistoryRepository,
@@ -25,6 +26,7 @@ def register_all_handlers(
     game_history_repo: GameHistoryRepository | None = None,
     prompt_list_repo: PromptListRepository | None = None,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
+    block_service: BlockService | None = None,
 ) -> HandlerContext:
     """Create the shared context and register every domain exactly once."""
     ctx = HandlerContext(
@@ -35,6 +37,13 @@ def register_all_handlers(
         game_history_repo=game_history_repo,
         prompt_list_repo=prompt_list_repo,
         session_factory=session_factory,
+        block_service=(
+            block_service
+            if block_service is not None
+            else BlockService(session_factory)
+            if session_factory is not None
+            else None
+        ),
     )
     ctx.game_flow = GameFlowService(ctx)
 

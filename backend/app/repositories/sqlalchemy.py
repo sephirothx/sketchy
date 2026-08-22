@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import and_, case, distinct, func, select, update
+from sqlalchemy import and_, case, distinct, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -18,6 +18,7 @@ from app.db.models import (
     TurnGuess,
     TurnRecord,
     User,
+    UserBlock,
     AuditEvent,
     Prompt,
     PromptList,
@@ -368,6 +369,46 @@ class SqlAlchemyUserRepository(UserRepository):
                         details={"source_user_id": str(source.id)},
                     )
                 )
+                # Blocks are account preferences, not historical identity
+                # facts. Carry both outgoing mutes and incoming protection to
+                # the registered identity, collapsing duplicates and any
+                # source/target pair that would become a self-block.
+                blocks = (
+                    await session.scalars(
+                        select(UserBlock).where(
+                            or_(
+                                UserBlock.blocker_user_id == source.id,
+                                UserBlock.blocked_user_id == source.id,
+                            )
+                        )
+                    )
+                ).all()
+                for block in blocks:
+                    blocker_id = (
+                        target.id
+                        if block.blocker_user_id == source.id
+                        else block.blocker_user_id
+                    )
+                    blocked_id = (
+                        target.id
+                        if block.blocked_user_id == source.id
+                        else block.blocked_user_id
+                    )
+                    if blocker_id == blocked_id:
+                        await session.delete(block)
+                        continue
+                    duplicate = await session.scalar(
+                        select(UserBlock.id).where(
+                            UserBlock.id != block.id,
+                            UserBlock.blocker_user_id == blocker_id,
+                            UserBlock.blocked_user_id == blocked_id,
+                        )
+                    )
+                    if duplicate is not None:
+                        await session.delete(block)
+                    else:
+                        block.blocker_user_id = blocker_id
+                        block.blocked_user_id = blocked_id
                 await session.flush()
             await session.refresh(target)
             return _to_user_data(target)

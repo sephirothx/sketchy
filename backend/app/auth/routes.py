@@ -120,6 +120,7 @@ def create_auth_router(
     session_factory,
     *,
     on_account_deleted: Callable[[str], Awaitable[None]] | None = None,
+    on_identity_merged: Callable[[], None] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
@@ -397,6 +398,8 @@ def create_auth_router(
                     status_code=409,
                     detail="Guest progress could not be linked to this account.",
                 ) from error
+            if on_identity_merged is not None:
+                on_identity_merged()
             await revoke_all_sessions(session_factory, user_id=current.id)
 
         refreshed = await user_repo.touch_last_login(credentials.user.id)

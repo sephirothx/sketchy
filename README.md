@@ -353,6 +353,32 @@ hash under the deployment's `IP_HASH_SECRET`; raw addresses, report text, and
 context evidence are never copied into ordinary request logs or public player,
 room, preview, or lobby payloads.
 
+### Player blocks
+
+Every account, including a guest, has a directional **Block** list at
+`GET`/`POST /api/users/me/blocks`; `DELETE
+/api/users/me/blocks/{user_id}` removes an entry idempotently. Self-blocks are
+rejected and each pair is unique at the database layer. A historical guest
+alias resolves to its registered account, and login merges both incoming and
+outgoing blocks without creating duplicates or a self-block. Account deletion
+removes every block owned by or targeting the anonymized identities; a data
+export includes the requester's block IDs and timestamps.
+
+Blocking filters only ordinary player-authored chat for the player who created
+the block. The sender still sees their own line, while room state, players,
+scores, turns, correct-guess events, votes, and room-authored announcements are
+never hidden. This keeps blocking from changing gameplay facts or creating a
+different game state for each player. Block lookups use a bounded 1,024-sender
+LRU populated from PostgreSQL/SQLite and invalidated immediately by the REST
+mutation in the supported single-worker process, avoiding one database query
+per chat line.
+
+Sketchy currently has shareable room invite links, not direct player-to-player
+invites, so there is no direct-invite delivery path to filter yet. Any future
+direct invite feature must consult `user_blocks` before delivery; a room link
+someone obtains independently remains usable because a Block is not a
+service-wide **Suspension**.
+
 ## Project structure
 
 ```
