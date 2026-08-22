@@ -491,7 +491,7 @@ ADRs once they exist.
 
 | Workstream | Branch | Status | Evidence |
 | --- | --- | --- | --- |
-| #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | In progress | #344-#349 complete; #350 multi-revision replay/downgrade/drift verification implemented |
+| #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | In progress | #344-#350 complete; #351 centralized aware-UTC persistence implemented; umbrella verification pending |
 | #339 database invariants | `epic/339-database-invariants` | Not started | - |
 | #340 accounts and privacy | `epic/340-accounts-identity-privacy` | Not started | - |
 | #342 prompt content | `epic/342-prompt-content-usage` | Not started | - |

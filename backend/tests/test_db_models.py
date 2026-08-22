@@ -1,7 +1,7 @@
 """Unit tests for SQLAlchemy models and database schema."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 import uuid
@@ -10,7 +10,7 @@ import warnings
 import pytest
 from sqlalchemy import Uuid, select, text
 from sqlalchemy.dialects import postgresql, sqlite
-from sqlalchemy.exc import IntegrityError, SAWarning
+from sqlalchemy.exc import IntegrityError, SAWarning, StatementError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.models import (
@@ -153,6 +153,56 @@ async def test_entity_ids_are_time_ordered_uuidv7_with_native_postgresql_type():
     id_type = User.__table__.c.id.type
     assert id_type.compile(dialect=postgresql.dialect()) == "UUID"
     assert id_type.compile(dialect=sqlite.dialect()) == "CHAR(32)"
+
+
+async def test_timestamp_type_normalizes_sqlite_results_to_aware_utc():
+    factory, engine = await create_test_db()
+    source_timezone = timezone(timedelta(hours=5, minutes=30))
+    source_started_at = datetime(2026, 8, 22, 12, 0, tzinfo=source_timezone)
+    game_id = generate_uuid()
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    GameRecord(
+                        id=game_id,
+                        room_name="UTC room",
+                        scoring_mode="default",
+                        hint_mode="timed",
+                        drawing_seconds=90,
+                        total_rounds=1,
+                        player_count=1,
+                        started_at=source_started_at,
+                        finished_at=source_started_at + timedelta(minutes=5),
+                    )
+                )
+
+        async with factory() as session:
+            loaded = await session.get(GameRecord, game_id)
+            assert loaded is not None
+            assert loaded.started_at == source_started_at.astimezone(timezone.utc)
+            assert loaded.started_at.tzinfo is timezone.utc
+            assert loaded.finished_at.tzinfo is timezone.utc
+
+        with pytest.raises(StatementError, match="requires an aware datetime"):
+            async with factory() as session:
+                async with session.begin():
+                    session.add(
+                        GameRecord(
+                            id=generate_uuid(),
+                            room_name="Naive time",
+                            scoring_mode="default",
+                            hint_mode="timed",
+                            drawing_seconds=90,
+                            total_rounds=1,
+                            player_count=1,
+                            started_at=datetime(2026, 8, 22, 12, 0),
+                            finished_at=datetime(2026, 8, 22, 12, 5),
+                        )
+                    )
+    finally:
+        await engine.dispose()
 
 
 async def test_postgresql_pool_configuration_is_bounded_and_overridable(monkeypatch):

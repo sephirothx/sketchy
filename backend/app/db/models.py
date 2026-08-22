@@ -6,7 +6,6 @@ import uuid
 
 from sqlalchemy import (
     Boolean,
-    DateTime,
     Float,
     ForeignKey,
     Index,
@@ -21,6 +20,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from uuid6 import uuid7
+
+from app.db.types import UTCDateTime
 
 
 def generate_uuid() -> uuid.UUID:
@@ -76,12 +77,12 @@ class User(Base):
     # exists so recovery can be added without migrating live accounts.
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         server_default=func.now(),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
@@ -89,7 +90,7 @@ class User(Base):
     # Distinct from updated_at, which moves on any write. Set on guest
     # provision and refreshed on login, register, and GET /api/auth/me.
     last_login_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         server_default=func.now(),
         nullable=False,
     )
@@ -109,12 +110,12 @@ class GameRecord(Base):
     drawing_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     total_rounds: Mapped[int] = mapped_column(Integer, nullable=False)
     player_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     # Indexed because every read of a player's history sorts on it: the page
     # query filters to the games they took part in and takes the newest first,
     # which without this orders the whole matching set on each request.
     finished_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True
+        UTCDateTime(), nullable=False, index=True
     )
 
     participants: Mapped[list[GameParticipant]] = relationship(

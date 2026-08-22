@@ -95,6 +95,11 @@ UUID strings. UUID order improves index locality, but timestamps such as
 `created_at` remain the authoritative event time. Security tokens and room
 codes remain independently random and are not derived from entity IDs.
 
+All persisted timestamps require timezone-aware inputs and are normalized to
+aware UTC values when written and read. This keeps SQLite and PostgreSQL
+behavior identical; application code never has to infer a local timezone for a
+naive database value.
+
 The UUID change rewrites the pre-v1 initial migration rather than converting
 old text keys. Databases created before this baseline must be rebuilt; preserve
 no production data on a preproduction schema.

@@ -294,10 +294,6 @@ class SqlAlchemyUserRepository(UserRepository):
                     return None
                 now = datetime.now(timezone.utc)
                 previous = user.last_login_at
-                if previous is not None and previous.tzinfo is None:
-                    # SQLite hands back naive datetimes; treat them as UTC so the
-                    # comparison below does not raise on mixed awareness.
-                    previous = previous.replace(tzinfo=timezone.utc)
                 is_recent = (
                     min_interval_seconds > 0
                     and previous is not None

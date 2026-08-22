@@ -5,7 +5,7 @@ camelCase throughout, matching what the frontend already consumes from
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from app.repositories.interfaces import (
     GameDetail,
@@ -18,18 +18,9 @@ from app.repositories.interfaces import (
 
 
 def _timestamp(value: datetime | None) -> str | None:
-    """Serialize a timestamp with an explicit offset.
-
-    Every one of these columns is ``DateTime(timezone=True)`` and every value
-    written is UTC, but SQLite has nowhere to keep the zone and hands back a
-    naive datetime. Serialized bare, an ISO string without an offset is parsed
-    by the browser as *local* time, silently shifting every game's time by the
-    caller's offset.
-    """
+    """Serialize the aware UTC values supplied by the persistence boundary."""
     if value is None:
         return None
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
     return value.isoformat()
 
 
