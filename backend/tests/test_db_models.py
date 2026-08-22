@@ -412,10 +412,11 @@ async def test_database_head_verification_reports_stale_schema(tmp_path):
 async def test_migrations_match_the_models(tmp_path):
     """A fresh upgrade must leave nothing for autogenerate to add.
 
-    The three original migrations were squashed into one, so nothing replays a
-    historical chain any more; what matters instead is that the single migration
-    still describes the models. Drift here means a model changed without a
-    migration, and the next deployment gets a schema the code does not expect.
+    The historical migrations were squashed into a foundation before data
+    existed. Later revisions now form a replayable chain; this focused check
+    still proves a fresh SQLite upgrade describes the models. Drift here means
+    a model changed without a migration, and the next deployment gets a schema
+    the code does not expect.
 
     Note what this cannot see: an expression index (`ix_users_username_lower`)
     is invisible to autogenerate on SQLite, so dropping it from the migration

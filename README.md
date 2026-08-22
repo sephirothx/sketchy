@@ -123,8 +123,10 @@ process. These deployment settings can be tuned without code changes:
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
 | `DB_POOL_RECYCLE_SECONDS` | `1800` | Maximum age before a connection is replaced |
 
-CI upgrades a fresh PostgreSQL 17 database with Alembic and runs the repository
-suite against the migrated schema. To reproduce that check locally, point both
+CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete
+migration chain down and up on PostgreSQL and SQLite, checks schema drift and
+the hand-written username index, then runs the repository suite against the
+migrated schema. To reproduce the PostgreSQL checks locally, point both
 variables at a disposable test database:
 
 ```bash
@@ -132,7 +134,7 @@ cd backend
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   .venv/bin/python -m app.db.migrate
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
-  .venv/bin/pytest -q tests/test_repositories.py
+  .venv/bin/pytest -q tests/test_migrations.py tests/test_repositories.py
 ```
 
 The repository suite deletes application rows from `TEST_DATABASE_URL`; never

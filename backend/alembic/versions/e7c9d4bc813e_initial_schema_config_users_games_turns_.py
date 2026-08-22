@@ -1,9 +1,9 @@
 """initial schema: config, users, games, turns, guesses, prompt lists
 
-The single migration for the whole schema. It was regenerated when the tables
-were renamed rather than given a rename migration, because the database held no
-data worth keeping - a database created by any earlier revision has to be
-rebuilt rather than migrated.
+The foundation migration for the whole schema. It was regenerated when the
+tables were renamed rather than given a rename migration, because the database
+held no data worth keeping - a database created by any earlier revision has to
+be rebuilt rather than migrated.
 
 Revision ID: e7c9d4bc813e
 Revises: 
@@ -73,18 +73,6 @@ def upgrade() -> None:
     sa.Column('last_login_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    # Expression-based and unique, so autogenerate cannot see it: SQLite cannot
-    # reflect such an index and silently omits it. It has to be written by hand
-    # here, or usernames stop being unique case-insensitively. See
-    # User.__table_args__.
-    with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.create_index(
-            'ix_users_username_lower',
-            [sa.text('lower(username)')],
-            unique=True,
-            sqlite_where=sa.text('username IS NOT NULL'),
-            postgresql_where=sa.text('username IS NOT NULL'),
-        )
     op.create_table('game_participants',
     sa.Column('id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
     sa.Column('game_id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
@@ -177,9 +165,6 @@ def downgrade() -> None:
         batch_op.drop_index(batch_op.f('ix_game_participants_game_id'))
 
     op.drop_table('game_participants')
-    with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.drop_index('ix_users_username_lower')
-
     op.drop_table('users')
     with op.batch_alter_table('prompt_lists', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_prompt_lists_slug'))

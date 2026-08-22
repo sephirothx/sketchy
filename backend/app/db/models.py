@@ -51,7 +51,8 @@ class User(Base):
     # SQLite - the dialect has no way to reflect such an index, and skips it
     # rather than emitting a spurious CREATE on every run. Any change to this
     # index therefore has to be written into a migration by hand: autogenerate
-    # will report nothing and mean nothing by it.
+    # will report nothing and mean nothing by it. Revision 9b6f4e2d1a70 pins it
+    # explicitly and the migration suite checks the database definition.
     __table_args__ = (
         Index(
             "ix_users_username_lower",

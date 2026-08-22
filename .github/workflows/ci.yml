@@ -75,6 +75,9 @@ jobs:
       - name: Upgrade a fresh PostgreSQL database
         run: python -m app.db.migrate
 
+      - name: Replay migrations in both directions and check schema drift
+        run: pytest -q tests/test_migrations.py
+
       - name: Run repositories against PostgreSQL
         run: pytest -q tests/test_repositories.py
 
