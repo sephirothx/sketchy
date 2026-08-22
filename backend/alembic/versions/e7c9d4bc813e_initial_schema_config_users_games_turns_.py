@@ -31,7 +31,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('key')
     )
     op.create_table('game_records',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
     sa.Column('room_name', sa.String(length=64), nullable=False),
     sa.Column('scoring_mode', sa.String(length=16), nullable=False),
     sa.Column('hint_mode', sa.String(length=16), nullable=False),
@@ -46,7 +46,7 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_game_records_finished_at'), ['finished_at'], unique=False)
 
     op.create_table('prompt_lists',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
     sa.Column('slug', sa.String(length=64), nullable=False),
     sa.Column('name', sa.String(length=64), nullable=False),
     sa.Column('description', sa.String(length=255), nullable=False),
@@ -60,7 +60,7 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_prompt_lists_slug'), ['slug'], unique=True)
 
     op.create_table('users',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
     sa.Column('username', sa.String(length=32), nullable=True),
     sa.Column('password_hash', sa.String(length=255), nullable=True),
     sa.Column('display_name', sa.String(length=32), nullable=False),
@@ -86,9 +86,9 @@ def upgrade() -> None:
             postgresql_where=sa.text('username IS NOT NULL'),
         )
     op.create_table('game_participants',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('game_id', sa.String(length=36), nullable=False),
-    sa.Column('user_id', sa.String(length=36), nullable=False),
+    sa.Column('id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
+    sa.Column('game_id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
+    sa.Column('user_id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
     sa.Column('final_score', sa.Integer(), nullable=False),
     sa.Column('final_rank', sa.Integer(), nullable=False),
     sa.Column('turns_played', sa.Integer(), server_default=sa.text('0'), nullable=False),
@@ -101,8 +101,8 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_game_participants_user_id'), ['user_id'], unique=False)
 
     op.create_table('prompts',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('prompt_list_id', sa.String(length=36), nullable=False),
+    sa.Column('id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
+    sa.Column('prompt_list_id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
     sa.Column('text', sa.String(length=64), nullable=False),
     sa.Column('offer_count', sa.Integer(), nullable=False),
     sa.Column('pick_count', sa.Integer(), nullable=False),
@@ -116,11 +116,11 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_prompts_prompt_list_id'), ['prompt_list_id'], unique=False)
 
     op.create_table('turn_records',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('game_id', sa.String(length=36), nullable=False),
+    sa.Column('id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
+    sa.Column('game_id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
     sa.Column('round_number', sa.Integer(), nullable=False),
     sa.Column('turn_number', sa.Integer(), nullable=False),
-    sa.Column('drawer_user_id', sa.String(length=36), nullable=False),
+    sa.Column('drawer_user_id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
     sa.Column('prompt', sa.String(length=64), nullable=False),
     sa.Column('duration_seconds', sa.Float(), nullable=False),
     sa.Column('guesser_count', sa.Integer(), server_default=sa.text('0'), nullable=False),
@@ -138,9 +138,9 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_turn_records_game_id'), ['game_id'], unique=False)
 
     op.create_table('turn_guesses',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('turn_id', sa.String(length=36), nullable=False),
-    sa.Column('user_id', sa.String(length=36), nullable=False),
+    sa.Column('id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
+    sa.Column('turn_id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
+    sa.Column('user_id', sa.Uuid(as_uuid=True, native_uuid=True), nullable=False),
     sa.Column('points_awarded', sa.Integer(), nullable=False),
     sa.Column('guess_time_seconds', sa.Float(), nullable=False),
     sa.Column('hints_used', sa.Integer(), server_default=sa.text('0'), nullable=False),

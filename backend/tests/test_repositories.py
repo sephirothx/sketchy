@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import os
+from uuid import UUID
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -69,6 +70,8 @@ async def test_user_repository_crud_and_stats():
 
         # 1. Create anonymous user
         anon = await repo.create_anonymous("Bob", name_color=None)
+        assert isinstance(anon.id, str)
+        assert UUID(anon.id).version == 7
         assert anon.display_name == "Bob"
         assert anon.is_anonymous is True
         assert anon.username is None
@@ -364,7 +367,7 @@ async def test_save_game_persists_the_analytics_columns():
         async with factory() as session:
             round_row = (
                 await session.execute(
-                    select(TurnRecord).where(TurnRecord.game_id == game_id)
+                    select(TurnRecord).where(TurnRecord.game_id == UUID(game_id))
                 )
             ).scalar_one()
             assert round_row.guesser_count == 4
@@ -387,11 +390,13 @@ async def test_save_game_persists_the_analytics_columns():
                 row.user_id: row.turns_played
                 for row in (
                     await session.execute(
-                        select(GameParticipant).where(GameParticipant.game_id == game_id)
+                        select(GameParticipant).where(
+                            GameParticipant.game_id == UUID(game_id)
+                        )
                     )
                 ).scalars()
             }
-            assert played == {drawer.id: 2, guesser.id: 1}
+            assert played == {UUID(drawer.id): 2, UUID(guesser.id): 1}
     finally:
         await engine.dispose()
 

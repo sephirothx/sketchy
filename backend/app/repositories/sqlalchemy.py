@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime, timezone
+from uuid import UUID
 
 from sqlalchemy import and_, case, distinct, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -49,10 +50,26 @@ MAX_PAGINATION_LIMIT = 100
 DEFAULT_PAGINATION_LIMIT = 20
 
 
+def _entity_id(value: str | UUID) -> UUID:
+    """Convert a domain/wire identifier at the persistence boundary."""
+    return value if isinstance(value, UUID) else UUID(value)
+
+
+def _optional_entity_id(value: str | UUID) -> UUID | None:
+    try:
+        return _entity_id(value)
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _public_id(value: UUID) -> str:
+    return str(value)
+
+
 def _to_user_data(user: User) -> UserData:
     """Convert a database User entity to a public UserData DTO (without password_hash)."""
     return UserData(
-        id=user.id,
+        id=_public_id(user.id),
         username=user.username,
         display_name=user.display_name,
         name_color=user.name_color,
@@ -67,7 +84,7 @@ def _to_user_data(user: User) -> UserData:
 def _to_game_summary(game: GameRecord) -> GameSummary:
     """Convert a stored game and its participants to the DTO both read paths return."""
     return GameSummary(
-        id=game.id,
+        id=_public_id(game.id),
         room_name=game.room_name,
         scoring_mode=game.scoring_mode,
         hint_mode=game.hint_mode,
@@ -78,7 +95,7 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
         finished_at=game.finished_at,
         participants=[
             GameParticipantSummary(
-                user_id=p.user_id,
+                user_id=_public_id(p.user_id),
                 display_name=p.user.display_name if p.user else "Unknown",
                 name_color=p.user.name_color if p.user else None,
                 is_anonymous=p.user.is_anonymous if p.user else True,
@@ -92,7 +109,7 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
 
 def _to_prompt_list_summary(wl: PromptList) -> PromptListSummary:
     return PromptListSummary(
-        id=wl.id,
+        id=_public_id(wl.id),
         slug=wl.slug,
         name=wl.name,
         description=wl.description,
@@ -133,7 +150,7 @@ class SqlAlchemyUserRepository(UserRepository):
         async with self._session_factory() as session:
             async with session.begin():
                 user = User(
-                    id=user_id or generate_uuid(),
+                    id=_entity_id(user_id) if user_id else generate_uuid(),
                     username=None,
                     password_hash=None,
                     # Left empty on purpose: "has no name yet" is what tells
@@ -149,8 +166,11 @@ class SqlAlchemyUserRepository(UserRepository):
             return _to_user_data(user)
 
     async def get_by_id(self, user_id: str) -> UserData | None:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return None
         async with self._session_factory() as session:
-            stmt = select(User).where(User.id == user_id)
+            stmt = select(User).where(User.id == db_user_id)
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()
             return _to_user_data(user) if user else None
@@ -188,11 +208,14 @@ class SqlAlchemyUserRepository(UserRepository):
             raise ValueError("Username cannot be empty")
         if not password_hash:
             raise ValueError("Password hash cannot be empty")
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            raise ValueError(f"User '{user_id}' not found")
 
         async with self._session_factory() as session:
             async with session.begin():
                 # 1. Fetch user to claim
-                stmt = select(User).where(User.id == user_id)
+                stmt = select(User).where(User.id == db_user_id)
                 result = await session.execute(stmt)
                 user = result.scalar_one_or_none()
                 if user is None:
@@ -204,7 +227,7 @@ class SqlAlchemyUserRepository(UserRepository):
                 collision_stmt = select(User.id).where(
                     and_(
                         func.lower(User.username) == clean_username.lower(),
-                        User.id != user_id,
+                        User.id != db_user_id,
                     )
                 )
                 existing_owner = (await session.execute(collision_stmt)).scalar_one_or_none()
@@ -237,10 +260,13 @@ class SqlAlchemyUserRepository(UserRepository):
         name_color: str | None = None,
         avatar_url: str | None = None,
     ) -> UserData | None:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return None
         validated_avatar = _validate_avatar_url(avatar_url) if avatar_url is not None else None
         async with self._session_factory() as session:
             async with session.begin():
-                stmt = select(User).where(User.id == user_id)
+                stmt = select(User).where(User.id == db_user_id)
                 result = await session.execute(stmt)
                 user = result.scalar_one_or_none()
                 if not user:
@@ -257,9 +283,12 @@ class SqlAlchemyUserRepository(UserRepository):
     async def touch_last_login(
         self, user_id: str, min_interval_seconds: float = 0.0
     ) -> UserData | None:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return None
         async with self._session_factory() as session:
             async with session.begin():
-                stmt = select(User).where(User.id == user_id)
+                stmt = select(User).where(User.id == db_user_id)
                 user = (await session.execute(stmt)).scalar_one_or_none()
                 if not user:
                     return None
@@ -280,6 +309,9 @@ class SqlAlchemyUserRepository(UserRepository):
             return _to_user_data(user)
 
     async def get_stats(self, user_id: str) -> UserStats:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return UserStats(user_id=user_id)
         async with self._session_factory() as session:
             # 1. Games count, wins, and score
             part_stmt = select(
@@ -294,7 +326,7 @@ class SqlAlchemyUserRepository(UserRepository):
                     0,
                 ).label("games_won"),
                 func.coalesce(func.sum(GameParticipant.final_score), 0).label("total_score"),
-            ).where(GameParticipant.user_id == user_id)
+            ).where(GameParticipant.user_id == db_user_id)
             part_res = (await session.execute(part_stmt)).one()
             games_played = int(part_res.games_played or 0)
             games_won = int(part_res.games_won or 0)
@@ -310,18 +342,22 @@ class SqlAlchemyUserRepository(UserRepository):
                     GameParticipant,
                     and_(
                         GameParticipant.game_id == TurnRecord.game_id,
-                        GameParticipant.user_id == user_id,
+                        GameParticipant.user_id == db_user_id,
                     ),
                 )
             )
             turns_played = int((await session.execute(turns_stmt)).scalar() or 0)
 
             # 3. Correct guesses made
-            guesses_stmt = select(func.count(TurnGuess.id)).where(TurnGuess.user_id == user_id)
+            guesses_stmt = select(func.count(TurnGuess.id)).where(
+                TurnGuess.user_id == db_user_id
+            )
             prompts_guessed = int((await session.execute(guesses_stmt)).scalar() or 0)
 
             # 4. Drawings made
-            drawings_stmt = select(func.count(TurnRecord.id)).where(TurnRecord.drawer_user_id == user_id)
+            drawings_stmt = select(func.count(TurnRecord.id)).where(
+                TurnRecord.drawer_user_id == db_user_id
+            )
             drawings_made = int((await session.execute(drawings_stmt)).scalar() or 0)
 
             return UserStats(
@@ -350,7 +386,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         turns: list[TurnRecordInput],
         guesses: list[TurnGuessInput],
     ) -> str:
-        record_id = game_record.id or generate_uuid()
+        record_id = (
+            _entity_id(game_record.id) if game_record.id else generate_uuid()
+        )
         async with self._session_factory() as session:
             async with session.begin():
                 game_db = GameRecord(
@@ -371,16 +409,16 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         GameParticipant(
                             id=generate_uuid(),
                             game_id=record_id,
-                            user_id=p.user_id,
+                            user_id=_entity_id(p.user_id),
                             final_score=p.final_score,
                             final_rank=p.final_rank,
                             turns_played=p.turns_played,
                         )
                     )
 
-                created_turn_ids: list[str] = []
+                created_turn_ids: list[UUID] = []
                 for r in turns:
-                    rid = r.id or generate_uuid()
+                    rid = _entity_id(r.id) if r.id else generate_uuid()
                     created_turn_ids.append(rid)
                     session.add(
                         TurnRecord(
@@ -388,7 +426,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             game_id=record_id,
                             round_number=r.round_number,
                             turn_number=r.turn_number,
-                            drawer_user_id=r.drawer_user_id,
+                            drawer_user_id=_entity_id(r.drawer_user_id),
                             prompt=r.prompt,
                             duration_seconds=r.duration_seconds,
                             guesser_count=r.guesser_count,
@@ -410,7 +448,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         TurnGuess(
                             id=generate_uuid(),
                             turn_id=target_turn_id,
-                            user_id=g.user_id,
+                            user_id=_entity_id(g.user_id),
                             points_awarded=g.points_awarded,
                             guess_time_seconds=g.guess_time_seconds,
                             hints_used=g.hints_used,
@@ -419,7 +457,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     )
 
-        return record_id
+        return _public_id(record_id)
 
     async def get_user_games(
         self,
@@ -427,6 +465,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         limit: int = DEFAULT_PAGINATION_LIMIT,
         offset: int = 0,
     ) -> list[GameSummary]:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return []
         clamped_limit = max(1, min(limit, MAX_PAGINATION_LIMIT))
         clamped_offset = max(0, offset)
 
@@ -434,7 +475,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             # Find game IDs the user was a participant in
             user_games_subq = (
                 select(GameParticipant.game_id)
-                .where(GameParticipant.user_id == user_id)
+                .where(GameParticipant.user_id == db_user_id)
                 .scalar_subquery()
             )
 
@@ -459,10 +500,20 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         game_id: str,
         requesting_user_id: str | None = None,
     ) -> GameDetail | None:
+        db_game_id = _optional_entity_id(game_id)
+        if db_game_id is None:
+            return None
+        db_requesting_user_id = (
+            _optional_entity_id(requesting_user_id)
+            if requesting_user_id is not None
+            else None
+        )
+        if requesting_user_id is not None and db_requesting_user_id is None:
+            return None
         async with self._session_factory() as session:
             stmt = (
                 select(GameRecord)
-                .where(GameRecord.id == game_id)
+                .where(GameRecord.id == db_game_id)
                 .options(
                     selectinload(GameRecord.participants).selectinload(GameParticipant.user),
                     selectinload(GameRecord.turns).selectinload(TurnRecord.drawer),
@@ -475,8 +526,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 return None
 
             # Authorization scoping: If a requesting user is specified, ensure they participated in this game
-            if requesting_user_id is not None:
-                is_participant = any(p.user_id == requesting_user_id for p in g.participants)
+            if db_requesting_user_id is not None:
+                is_participant = any(
+                    p.user_id == db_requesting_user_id for p in g.participants
+                )
                 if not is_participant:
                     return None
 
@@ -486,7 +539,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             for r in sorted(g.turns, key=lambda x: (x.round_number, x.turn_number)):
                 guess_details = [
                     TurnGuessDetail(
-                        user_id=guess.user_id,
+                        user_id=_public_id(guess.user_id),
                         display_name=guess.user.display_name if guess.user else "Unknown",
                         points_awarded=guess.points_awarded,
                         guess_time_seconds=guess.guess_time_seconds,
@@ -497,7 +550,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     TurnDetail(
                         round_number=r.round_number,
                         turn_number=r.turn_number,
-                        drawer_user_id=r.drawer_user_id,
+                        drawer_user_id=_public_id(r.drawer_user_id),
                         drawer_display_name=r.drawer.display_name if r.drawer else "Unknown",
                         prompt=r.prompt,
                         duration_seconds=r.duration_seconds,
@@ -528,8 +581,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             return _to_prompt_list_summary(wl) if wl else None
 
     async def get_prompts(self, prompt_list_id: str) -> list[str]:
+        db_prompt_list_id = _optional_entity_id(prompt_list_id)
+        if db_prompt_list_id is None:
+            return []
         async with self._session_factory() as session:
-            stmt = select(Prompt.text).where(Prompt.prompt_list_id == prompt_list_id).order_by(Prompt.text)
+            stmt = (
+                select(Prompt.text)
+                .where(Prompt.prompt_list_id == db_prompt_list_id)
+                .order_by(Prompt.text)
+            )
             result = await session.execute(stmt)
             return list(result.scalars().all())
 

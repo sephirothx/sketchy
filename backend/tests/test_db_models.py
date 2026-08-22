@@ -4,11 +4,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+import uuid
 import warnings
 
 import pytest
-from sqlalchemy import select, text
-from sqlalchemy.dialects import postgresql
+from sqlalchemy import Uuid, select, text
+from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.exc import IntegrityError, SAWarning
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -120,6 +121,40 @@ async def test_boolean_server_default_is_valid_postgresql():
     assert rendered == "false"
 
 
+async def test_entity_ids_are_time_ordered_uuidv7_with_native_postgresql_type():
+    generated = [generate_uuid() for _ in range(20)]
+
+    assert all(isinstance(value, uuid.UUID) for value in generated)
+    assert all(value.version == 7 for value in generated)
+    assert generated == sorted(generated)
+
+    entity_id_columns = (
+        User.id,
+        GameRecord.id,
+        GameParticipant.id,
+        GameParticipant.game_id,
+        GameParticipant.user_id,
+        TurnRecord.id,
+        TurnRecord.game_id,
+        TurnRecord.drawer_user_id,
+        TurnGuess.id,
+        TurnGuess.turn_id,
+        TurnGuess.user_id,
+        PromptList.id,
+        Prompt.id,
+        Prompt.prompt_list_id,
+    )
+    for attribute in entity_id_columns:
+        column_type = attribute.property.columns[0].type
+        assert isinstance(column_type, Uuid)
+        assert column_type.as_uuid is True
+        assert column_type.native_uuid is True
+
+    id_type = User.__table__.c.id.type
+    assert id_type.compile(dialect=postgresql.dialect()) == "UUID"
+    assert id_type.compile(dialect=sqlite.dialect()) == "CHAR(32)"
+
+
 async def test_postgresql_pool_configuration_is_bounded_and_overridable(monkeypatch):
     from app.db import get_engine_pool_options
 
@@ -205,7 +240,8 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
         # on-delete rule declared by the schema.
         async with engine.begin() as conn:
             await conn.execute(
-                text("DELETE FROM users WHERE id = :user_id"), {"user_id": user_id}
+                text("DELETE FROM users WHERE id = :user_id"),
+                {"user_id": user_id.hex},
             )
             participant_count = (
                 await conn.execute(text("SELECT count(*) FROM game_participants"))

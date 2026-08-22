@@ -14,16 +14,18 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Uuid,
     false,
     func,
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from uuid6 import uuid7
 
 
-def generate_uuid() -> str:
-    """Generate a standard UUID string for primary keys."""
-    return str(uuid.uuid4())
+def generate_uuid() -> uuid.UUID:
+    """Generate a time-ordered UUIDv7 for a persisted entity."""
+    return uuid7()
 
 
 class Base(DeclarativeBase):
@@ -60,7 +62,9 @@ class User(Base):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
     username: Mapped[str | None] = mapped_column(String(32), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -95,7 +99,9 @@ class GameRecord(Base):
 
     __tablename__ = "game_records"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
     room_name: Mapped[str] = mapped_column(String(64), nullable=False)
     scoring_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     hint_mode: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -125,15 +131,17 @@ class GameParticipant(Base):
 
     __tablename__ = "game_participants"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    game_id: Mapped[str] = mapped_column(
-        String(36),
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("game_records.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id: Mapped[str] = mapped_column(
-        String(36),
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -155,17 +163,19 @@ class TurnRecord(Base):
 
     __tablename__ = "turn_records"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    game_id: Mapped[str] = mapped_column(
-        String(36),
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("game_records.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     round_number: Mapped[int] = mapped_column(Integer, nullable=False)
     turn_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    drawer_user_id: Mapped[str] = mapped_column(
-        String(36),
+    drawer_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -212,15 +222,17 @@ class TurnGuess(Base):
 
     __tablename__ = "turn_guesses"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    turn_id: Mapped[str] = mapped_column(
-        String(36),
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("turn_records.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id: Mapped[str] = mapped_column(
-        String(36),
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -250,7 +262,9 @@ class PromptList(Base):
 
     __tablename__ = "prompt_lists"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
     slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str] = mapped_column(String(255), default="", nullable=False)
@@ -274,9 +288,11 @@ class Prompt(Base):
         UniqueConstraint("prompt_list_id", "text", name="uq_prompt_list_text"),
     )
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    prompt_list_id: Mapped[str] = mapped_column(
-        String(36),
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    prompt_list_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

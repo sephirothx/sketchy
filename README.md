@@ -88,6 +88,17 @@ on server startup via Alembic.
 SQLite connections enforce foreign keys, use WAL mode for concurrent readers,
 and wait up to five seconds for a busy database before failing a write.
 
+Persisted entity IDs are time-ordered UUIDv7 values. SQLAlchemy stores them as
+native 16-byte `uuid` columns on PostgreSQL and dialect-compatible `CHAR(32)`
+columns on SQLite; API and Socket.IO boundaries continue to expose canonical
+UUID strings. UUID order improves index locality, but timestamps such as
+`created_at` remain the authoritative event time. Security tokens and room
+codes remain independently random and are not derived from entity IDs.
+
+The UUID change rewrites the pre-v1 initial migration rather than converting
+old text keys. Databases created before this baseline must be rebuilt; preserve
+no production data on a preproduction schema.
+
 PostgreSQL migrations are an explicit deployment step protected by a database
 advisory lock, so concurrent deploy jobs cannot race. Run the migration command
 before starting or replacing any application replicas; application startup
