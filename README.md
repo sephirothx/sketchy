@@ -207,6 +207,12 @@ keeps existing sessions valid if the database is ever rebuilt:
 JWT_SECRET=$(openssl rand -base64 48) ./scripts/serve.sh
 ```
 
+Passwords use Argon2id. On every successful login, Sketchy compares the encoded
+hash with the current cost parameters and replaces stale hashes atomically;
+raising the configured Argon2 cost therefore upgrades active accounts without
+a bulk plaintext migration. The encoded hash carries its algorithm and cost
+parameters, so a redundant schema version column is not used.
+
 The authentication endpoints are rate limited per client address. The defaults
 suit a normal deployment; raise them if many of your players share one address:
 

@@ -279,6 +279,13 @@ class UserRepository(ABC):
         ...
 
     @abstractmethod
+    async def replace_password_hash(
+        self, user_id: str, expected_hash: str, new_hash: str
+    ) -> bool:
+        """Atomically replace a credential hash if it has not changed."""
+        ...
+
+    @abstractmethod
     async def update_profile(
         self,
         user_id: str,

@@ -24,6 +24,7 @@ from app.auth.password import (
     PASSWORD_RULE_MESSAGE,
     PasswordPolicyError,
     hash_password,
+    password_needs_rehash,
     validate_password,
     verify_password,
 )
@@ -276,6 +277,14 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         matched = await verify_password(password_hash, body.password)
         if credentials is None or not matched:
             raise HTTPException(status_code=401, detail="Incorrect username or password.")
+
+        if await password_needs_rehash(credentials.password_hash):
+            replacement_hash = await hash_password(body.password)
+            await user_repo.replace_password_hash(
+                credentials.user.id,
+                credentials.password_hash,
+                replacement_hash,
+            )
 
         refreshed = await user_repo.touch_last_login(credentials.user.id)
         await issue_cookie(response, request, credentials.user.id)

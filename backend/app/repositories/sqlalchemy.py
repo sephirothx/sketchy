@@ -276,6 +276,24 @@ class SqlAlchemyUserRepository(UserRepository):
             await session.refresh(user)
             return _to_user_data(user)
 
+    async def replace_password_hash(
+        self, user_id: str, expected_hash: str, new_hash: str
+    ) -> bool:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None or not expected_hash or not new_hash:
+            return False
+        async with self._session_factory() as session:
+            async with session.begin():
+                result = await session.execute(
+                    update(User)
+                    .where(
+                        User.id == db_user_id,
+                        User.password_hash == expected_hash,
+                    )
+                    .values(password_hash=new_hash)
+                )
+                return bool(result.rowcount)
+
     async def touch_last_login(
         self, user_id: str, min_interval_seconds: float = 0.0
     ) -> UserData | None:

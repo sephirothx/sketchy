@@ -134,6 +134,14 @@ class FakeUserRepository(UserRepository):
         self.users[user_id] = updated
         return updated
 
+    async def replace_password_hash(
+        self, user_id: str, expected_hash: str, new_hash: str
+    ) -> bool:
+        if self.password_hashes.get(user_id) != expected_hash:
+            return False
+        self.password_hashes[user_id] = new_hash
+        return True
+
     async def touch_last_login(
         self, user_id: str, min_interval_seconds: float = 0.0
     ) -> UserData | None:

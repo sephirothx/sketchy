@@ -63,3 +63,17 @@ async def verify_password(password_hash: str, password: str) -> bool:
             return False
 
     return await run_in_threadpool(_verify)
+
+
+async def password_needs_rehash(password_hash: str) -> bool:
+    """Whether a valid encoded hash predates the current Argon2 parameters."""
+    if not password_hash:
+        return False
+
+    def _check() -> bool:
+        try:
+            return _hasher.check_needs_rehash(password_hash)
+        except (InvalidHashError, VerificationError):
+            return False
+
+    return await run_in_threadpool(_check)

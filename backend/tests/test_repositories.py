@@ -104,6 +104,15 @@ async def test_user_repository_crud_and_stats():
         assert creds.user.id == anon.id
         assert creds.password_hash == "hashed_pw"
 
+        assert await repo.replace_password_hash(
+            anon.id, "wrong-current-hash", "replacement"
+        ) is False
+        assert await repo.replace_password_hash(
+            anon.id, "hashed_pw", "replacement"
+        ) is True
+        creds = await repo.get_credentials_by_username("BOB123")
+        assert creds is not None and creds.password_hash == "replacement"
+
         # 7. Get by username (case-insensitive) returns UserData without password_hash
         by_name = await repo.get_by_username("BOB123")
         assert by_name is not None

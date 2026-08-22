@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
+from argon2 import PasswordHasher
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -15,6 +16,7 @@ from app.auth.password import (
     DUMMY_HASH,
     PasswordPolicyError,
     hash_password,
+    password_needs_rehash,
     validate_password,
     verify_password,
 )
@@ -46,6 +48,7 @@ async def client():
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http:
+        http._test_user_repo = repo
         yield http
     await engine.dispose()
     jwt_module.reset_secret_cache()
@@ -93,6 +96,20 @@ async def test_dummy_hash_is_verifiable_but_never_matches():
     """Used for absent usernames, so it must behave like a real hash."""
     assert await verify_password(DUMMY_HASH, "no-such-account") is True
     assert await verify_password(DUMMY_HASH, "anything-else") is False
+
+
+@pytest.mark.asyncio
+async def test_stale_argon2_parameters_are_detected_and_hashes_fit_storage():
+    password = "a-good-password"
+    current = await hash_password(password)
+    stale = PasswordHasher(
+        time_cost=1, memory_cost=8192, parallelism=1
+    ).hash(password)
+
+    assert await password_needs_rehash(current) is False
+    assert await password_needs_rehash(stale) is True
+    assert await password_needs_rehash("not-a-hash") is False
+    assert len(current) <= 255
 
 
 @pytest.mark.parametrize("bad", ["", "short", "x" * 129, 12345, None])
@@ -277,6 +294,37 @@ async def test_login_logout_round_trip(client):
     )
     assert signed_in.status_code == 200
     assert signed_in.json()["username"] == "Stefano"
+
+
+@pytest.mark.asyncio
+async def test_login_rehashes_a_stale_password(client, monkeypatch):
+    from unittest.mock import AsyncMock
+    from app.auth import routes as routes_module
+
+    await client.post(
+        "/api/auth/register",
+        json={"username": "RehashMe", "password": "a-good-password"},
+    )
+    credentials = await client._test_user_repo.get_credentials_by_username("RehashMe")
+    assert credentials is not None
+
+    monkeypatch.setattr(
+        routes_module, "password_needs_rehash", AsyncMock(return_value=True)
+    )
+    replacement = await hash_password("a-good-password")
+    monkeypatch.setattr(
+        routes_module, "hash_password", AsyncMock(return_value=replacement)
+    )
+
+    response = await client.post(
+        "/api/auth/login",
+        json={"username": "RehashMe", "password": "a-good-password"},
+    )
+    assert response.status_code == 200
+    refreshed = await client._test_user_repo.get_credentials_by_username("RehashMe")
+    assert refreshed is not None
+    assert refreshed.password_hash == replacement
+    assert refreshed.password_hash != credentials.password_hash
 
 
 @pytest.mark.asyncio
