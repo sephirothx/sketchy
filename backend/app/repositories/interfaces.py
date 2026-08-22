@@ -268,9 +268,9 @@ class PromptPickTotals:
 class PromptUsage:
     """One finished game's effect on a prompt list's counters.
 
-    Keyed by the prompt as stored - trimmed and lower-cased - so the repository
-    matches rows without re-deriving it. Aggregated across the game's turns,
-    which is what lets the whole game be written in a few statements.
+    Keyed by immutable prompt-version ID. Display text is deliberately absent:
+    ephemeral custom prompts can equal curated text without receiving curated
+    attribution. Aggregation lets a whole game be written in a few statements.
     """
 
     offers: Mapping[str, int]
@@ -450,12 +450,12 @@ class PromptListRepository(ABC):
     @abstractmethod
     async def record_prompt_usage(
         self,
-        prompt_list_slugs: Sequence[str],
+        prompt_list_revision_ids: Sequence[str],
         usage: PromptUsage,
     ) -> None:
         """Apply one finished game's offers and picks to every named list.
 
-        One call for the whole game rather than one per prompt per list: this
+        One call for the whole game rather than one per prompt per revision: this
         runs at the moment a game ends, and a transaction per turn is the
         difference between a handful of statements and dozens of commits.
         """

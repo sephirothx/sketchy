@@ -588,7 +588,6 @@ class GameFlowService:
         self,
         room: Room,
         game: Game,
-        prompt_list_slugs: list[str],
     ) -> None:
         """Fold a finished game's prompts into the prompt-list metrics.
 
@@ -601,14 +600,15 @@ class GameFlowService:
         one transaction. Failure is logged and swallowed, like the history
         write: there is nothing a player could do about it.
         """
-        if not self._ctx.prompt_list_repo or not prompt_list_slugs:
+        revision_ids = game.prompt_source_revision_ids
+        if not self._ctx.prompt_list_repo or not revision_ids:
             return
         usage = tally_prompt_usage(game.completed_turns)
         if not usage:
             return
         try:
             await asyncio.wait_for(
-                self._ctx.prompt_list_repo.record_prompt_usage(prompt_list_slugs, usage),
+                self._ctx.prompt_list_repo.record_prompt_usage(revision_ids, usage),
                 timeout=PROMPT_USAGE_WRITE_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
@@ -637,9 +637,6 @@ class GameFlowService:
                 else None
             )
             # Snapshotted for the same reason: the room is an editable
-            # waiting room again by the time the metrics are written, so
-            # the host can change its prompt lists out from under them.
-            prompt_list_slugs = list(room.prompt_list_slugs)
             self._timers.cancel_restart_timer(room.id)
             room.restart_vote = None
             room.restart_vote_cooldown_until = 0
@@ -676,7 +673,7 @@ class GameFlowService:
             # Last, so that nothing a player is waiting to see is behind a
             # database round trip.
             await self._persist_game_history(room, history)
-            await self._record_prompt_usage(room, game, prompt_list_slugs)
+            await self._record_prompt_usage(room, game)
         else:
             await self._start_turn(room)
 

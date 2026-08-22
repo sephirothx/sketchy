@@ -10,6 +10,7 @@ import socketio
 from app.game import MAX_GUESS_POINTS, MIN_GUESS_POINTS, Game
 from app.handlers import register_all_handlers as register_handlers
 from app.rooms import RoomManager
+from app.prompts import PROMPTS
 from app.services import game_flow
 from tests.fake_game_history_repo import FakeGameHistoryRepository
 from tests.handlers.helpers import (
@@ -19,6 +20,14 @@ from tests.handlers.helpers import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+def attach_curated_sources(room, *revision_ids: str) -> None:
+    """Give the real Game source IDs while its prompt text uses the built-ins."""
+    room.prompt_list_revision_ids = list(revision_ids or ("revision-standard",))
+    room.prompt_version_ids = {
+        prompt: f"version-{index}" for index, prompt in enumerate(PROMPTS)
+    }
 
 
 async def test_completed_game_records_every_round_with_participants_and_guesses():
@@ -261,6 +270,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
 
     ctx.prompt_list_repo = RestartingWordRepo()
     room.prompt_list_slugs = ["english_standard"]
+    attach_curated_sources(room)
 
     await flow._start_fresh_game(room, room.player_list())
     # Two players over one round is two turns; the interference lands on the
@@ -347,11 +357,11 @@ class FakeWordListRepository:
         self._timeline = timeline if timeline is not None else []
         self._hang = hang
 
-    async def record_prompt_usage(self, prompt_list_slugs, usage):
+    async def record_prompt_usage(self, prompt_list_revision_ids, usage):
         if self._hang:
             await asyncio.sleep(3600)
-        self.calls.append((tuple(prompt_list_slugs), usage))
-        self._timeline.append(("prompt", tuple(prompt_list_slugs)))
+        self.calls.append((tuple(prompt_list_revision_ids), usage))
+        self._timeline.append(("prompt", tuple(prompt_list_revision_ids)))
 
 
 def emitted_payload(ctx, event: str):
@@ -366,6 +376,7 @@ async def test_game_ended_is_emitted_before_any_word_usage_is_written():
     timeline: list[tuple] = []
     room_manager, room, players = build_room(rounds=1)
     room.prompt_list_slugs = ["english_standard", "english_extended"]
+    attach_curated_sources(room, "revision-standard", "revision-extended")
     words = FakeWordListRepository(timeline=timeline)
     ctx = build_context(
         room_manager, FakeGameHistoryRepository(), words, timeline=timeline
@@ -384,6 +395,7 @@ async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
     """A locked database must cost the counters, not the room."""
     room_manager, room, players = build_room(rounds=1)
     room.prompt_list_slugs = ["english_standard"]
+    attach_curated_sources(room)
     words = FakeWordListRepository(hang=True)
     ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
 
@@ -404,6 +416,7 @@ async def test_every_turn_and_list_is_folded_into_a_single_write():
     """The whole game goes down in one call, not one per turn per list."""
     room_manager, room, players = build_room(rounds=2)
     room.prompt_list_slugs = ["english_standard", "english_extended"]
+    attach_curated_sources(room, "revision-standard", "revision-extended")
     words = FakeWordListRepository()
     ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
 
@@ -412,8 +425,41 @@ async def test_every_turn_and_list_is_folded_into_a_single_write():
     # Two players over two rounds is four turns, each offering three words and
     # drawing one - and previously two writes per turn per list, so sixteen.
     assert len(words.calls) == 1
-    slugs, usage = words.calls[0]
-    assert slugs == ("english_standard", "english_extended")
+    revision_ids, usage = words.calls[0]
+    assert revision_ids == ("revision-standard", "revision-extended")
     assert sum(usage.offers.values()) == 12
     assert sum(totals.picks for totals in usage.picks.values()) == 4
-    assert all(prompt == prompt.strip().lower() for prompt in usage.offers)
+    assert all(prompt.startswith("version-") for prompt in usage.offers)
+
+
+async def test_custom_only_game_never_writes_curated_usage_on_text_collision():
+    room_manager, room, players = build_room(rounds=1)
+    room.custom_prompts = ["apple", "kite", "tree"]
+    room.custom_prompts_only = True
+    room.prompt_list_slugs = ["english_standard"]
+    attach_curated_sources(room)
+    words = FakeWordListRepository()
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
+
+    await play_to_completion(ctx, room, players)
+
+    assert words.calls == []
+
+
+async def test_mixed_game_attributes_the_source_not_equal_custom_text():
+    room_manager, room, players = build_room(rounds=1)
+    room.custom_prompts = ["apple"]
+    room.curated_prompts = ["apple", "banana", "castle"]
+    room.prompt_list_slugs = ["english_standard"]
+    attach_curated_sources(room)
+    custom_collision_id = room.prompt_version_ids["apple"]
+    words = FakeWordListRepository()
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
+
+    await play_to_completion(ctx, room, players)
+
+    assert len(words.calls) == 1
+    _, usage = words.calls[0]
+    assert custom_collision_id not in usage.offers
+    assert custom_collision_id not in usage.picks
+    assert sum(usage.offers.values()) == 4  # two curated offers over two turns

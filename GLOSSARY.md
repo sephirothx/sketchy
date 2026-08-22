@@ -90,7 +90,8 @@ Three different things, never used for one another:
 | **Prompt-list visibility** | Who may resolve a user-owned **Prompt list** in v1: Private means only its owner; Unlisted means its owner or someone with its share code. Public is reserved for official/future moderated discovery and is not user-selectable. | privacy, published, discoverable |
 | **Prompt-content moderation state** | The review state of a user-owned **Prompt list**: Active, Under review, or Hidden. It is separate from visibility and from a prompt version's audience-facing **Content rating**. | NSFW flag, visibility, report status |
 | **Fork provenance** | The exact source **Prompt-list revision** from which a later revision was derived. The v1 schema preserves it even though user-facing forking is deferred. | copied from, parent list, clone |
-| **Custom prompts** | Prompts the host adds when creating the room, on top of or instead of the prompt lists. | custom words, own words, private words |
+| **Custom prompts** | Ephemeral prompts the host types for one in-memory room, on top of or instead of its **Prompt lists**. They have no persisted prompt-version source and never affect curated **Prompt stats**. | custom words, own words, private words, saved list |
+| **Prompt source** | The immutable **Prompt version** and **Prompt-list revision** that supplied a curated prompt to a game. An ephemeral **Custom prompt** has no source, even when its text is equal. | matching text, origin list, attribution guess |
 | **Prompt stats** | The page, reached from the lobby, listing every prompt in a list and how it has actually played: how often it is picked when offered, and what share of guessers name it. A prompt is only ranked once enough guessers have faced it; the rest are listed as unranked. | word stats, difficulty ratings, prompt leaderboard |
 
 ## Hints

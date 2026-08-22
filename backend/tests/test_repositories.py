@@ -368,12 +368,18 @@ async def test_prompt_list_repository():
             await repo.resolve_selection(["missing"])
 
         # 5. Record one finished game's offers and picks
+        apple_id = resolved.prompt_version_ids["apple"]
+        banana_id = resolved.prompt_version_ids["banana"]
         await repo.record_prompt_usage(
-            ["standard"],
+            resolved.revision_ids,
             PromptUsage(
-                offers={"apple": 1, "banana": 1, "dragon": 1},
+                offers={
+                    apple_id: 1,
+                    banana_id: 1,
+                    str(generate_uuid()): 1,
+                },
                 picks={
-                    "apple": PromptPickTotals(
+                    apple_id: PromptPickTotals(
                         picks=1, correct_guesses=3, total_guessers=4
                     )
                 },
@@ -591,13 +597,17 @@ async def test_prompt_usage_reaches_every_named_list_in_one_call():
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         await _seed_two_lists(repo)
+        selection = await repo.resolve_selection(["alpha", "beta"])
+        apple_id = selection.prompt_version_ids["apple"]
+        banana_id = selection.prompt_version_ids["banana"]
+        castle_id = selection.prompt_version_ids["castle"]
 
         await repo.record_prompt_usage(
-            ["alpha", "beta"],
+            selection.revision_ids,
             PromptUsage(
-                offers={"apple": 3, "banana": 1, "castle": 1},
+                offers={apple_id: 3, banana_id: 1, castle_id: 1},
                 picks={
-                    "apple": PromptPickTotals(
+                    apple_id: PromptPickTotals(
                         picks=2, correct_guesses=5, total_guessers=8
                     )
                 },
@@ -620,19 +630,22 @@ async def test_prompt_usage_reaches_every_named_list_in_one_call():
         await engine.dispose()
 
 
-async def test_a_slug_that_no_longer_exists_does_not_cost_the_others():
-    """A room outlives the lists it was created with; a deleted one is not fatal."""
+async def test_a_revision_that_no_longer_exists_does_not_cost_the_others():
+    """A pinned revision disappearing beside a valid one is not fatal."""
     factory, engine = await create_test_db()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         await _seed_two_lists(repo)
+        alpha = await repo.resolve_selection(["alpha"])
+        apple_id = alpha.prompt_version_ids["apple"]
+        missing_revision_id = str(generate_uuid())
 
         await repo.record_prompt_usage(
-            ["alpha", "gone-missing"],
+            [*alpha.revision_ids, missing_revision_id],
             PromptUsage(
-                offers={"apple": 1},
+                offers={apple_id: 1},
                 picks={
-                    "apple": PromptPickTotals(
+                    apple_id: PromptPickTotals(
                         picks=1, correct_guesses=1, total_guessers=2
                     )
                 },
@@ -640,8 +653,10 @@ async def test_a_slug_that_no_longer_exists_does_not_cost_the_others():
         )
 
         assert _stat(await repo.get_prompt_stats("alpha"), "apple").pick_count == 1
-        # And a call naming only missing lists is a no-op rather than an error.
-        await repo.record_prompt_usage(["gone-missing"], PromptUsage(offers={"apple": 1}, picks={}))
+        # A call naming only missing revisions is a no-op rather than an error.
+        await repo.record_prompt_usage(
+            [missing_revision_id], PromptUsage(offers={apple_id: 1}, picks={})
+        )
         assert _stat(await repo.get_prompt_stats("alpha"), "apple").offer_count == 1
     finally:
         await engine.dispose()
@@ -652,9 +667,11 @@ async def test_recording_nothing_touches_no_counters():
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         await _seed_two_lists(repo)
+        alpha = await repo.resolve_selection(["alpha"])
+        apple_id = alpha.prompt_version_ids["apple"]
 
-        await repo.record_prompt_usage([], PromptUsage(offers={"apple": 1}, picks={}))
-        await repo.record_prompt_usage(["alpha"], PromptUsage(offers={}, picks={}))
+        await repo.record_prompt_usage([], PromptUsage(offers={apple_id: 1}, picks={}))
+        await repo.record_prompt_usage(alpha.revision_ids, PromptUsage(offers={}, picks={}))
 
         assert _stat(await repo.get_prompt_stats("alpha"), "apple").offer_count == 0
     finally:

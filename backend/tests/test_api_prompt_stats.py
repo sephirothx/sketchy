@@ -77,12 +77,14 @@ async def test_prompt_list_catalogue_filters_on_valid_content_language(env):
 
 async def play(prompts, text: str, *, correct: int, guessers: int) -> None:
     """Record one turn's worth of usage for a prompt."""
+    selection = await prompts.resolve_selection(["standard"])
+    prompt_version_id = selection.prompt_version_ids[text]
     await prompts.record_prompt_usage(
-        ["standard"],
+        selection.revision_ids,
         PromptUsage(
-            offers={text: 1},
+            offers={prompt_version_id: 1},
             picks={
-                text: PromptPickTotals(
+                prompt_version_id: PromptPickTotals(
                     picks=1, correct_guesses=correct, total_guessers=guessers
                 )
             },
@@ -179,12 +181,14 @@ async def test_most_picked_ranks_on_how_often_an_offer_was_taken(env):
     await seed(prompts, "popular", "ignored")
     await play(prompts, "popular", correct=3, guessers=MIN_RATED_GUESSERS)
     # Offered twice as often and picked once: a lower rate, same pick count.
+    selection = await prompts.resolve_selection(["standard"])
+    ignored_id = selection.prompt_version_ids["ignored"]
     await prompts.record_prompt_usage(
-        ["standard"],
+        selection.revision_ids,
         PromptUsage(
-            offers={"ignored": 3},
+            offers={ignored_id: 3},
             picks={
-                "ignored": PromptPickTotals(
+                ignored_id: PromptPickTotals(
                     picks=1, correct_guesses=3, total_guessers=MIN_RATED_GUESSERS
                 )
             },

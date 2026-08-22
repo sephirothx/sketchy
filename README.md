@@ -169,6 +169,16 @@ content rating remain on the exact immutable prompt version where their
 meaning belongs. The `public` value is reserved for future moderation-approved
 discovery: this v1 baseline intentionally exposes no community discovery,
 favorite/star table, or user-facing fork endpoint.
+Quick **Custom prompts** remain deliberately ephemeral room input: they are
+not auto-saved, do not acquire an implicit owner/list, and disappear with the
+in-memory room. The reusable alternative is an explicitly saved private list
+implemented by #318, so merely typing party prompts never creates durable
+account content without the host asking. Runtime attribution already observes
+that boundary: completed turns snapshot nullable prompt-version source IDs,
+and usage writes intersect those IDs with the game's pinned list revisions.
+An ephemeral prompt has a null source even when its display text equals a
+curated prompt, so neither its offers, picks, nor guess results can inflate the
+curated list's statistics (#330).
 Stored scoring modes, hint modes, turn outcomes, supported prompt languages,
 and supported prompt-list catalogue locales
 are string enums backed by portable database `CHECK` constraints. Extending a

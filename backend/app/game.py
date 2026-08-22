@@ -241,6 +241,10 @@ class CompletedTurnStats:
     # Who could still have guessed. Without it, "two players guessed" could
     # equally mean two out of two or two out of eight.
     total_guesser_count: int
+    # Source identity is recorded alongside display snapshots. ``None`` means
+    # an ephemeral room custom prompt and must never enter curated projections.
+    offered_prompt_version_ids: tuple[str | None, ...] = ()
+    chosen_prompt_version_id: str | None = None
     drawer_token: str = ""
     # Real elapsed drawing time, not the configured limit: a turn ends as soon
     # as everyone has guessed.
@@ -808,6 +812,13 @@ class Game:
                 chosen_prompt=self.prompt or "",
                 correct_guess_count=len(self.correct_guessers),
                 total_guesser_count=total_guesser_count,
+                offered_prompt_version_ids=tuple(
+                    self.prompt_version_ids.get(prompt)
+                    for prompt in self.prompt_choices
+                ),
+                chosen_prompt_version_id=self.prompt_version_ids.get(
+                    self.prompt or ""
+                ),
                 drawer_token=self.current_drawer or "",
                 duration_seconds=self.elapsed_drawing_seconds(),
                 guesses=tuple(

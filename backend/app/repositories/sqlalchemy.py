@@ -934,12 +934,24 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             aliases: dict[str, tuple[str, ...]] = {}
             prompt_version_ids: dict[str, str] = {}
             seen_versions: set[UUID] = set()
+            seen_answer_versions: dict[str, UUID] = {}
             for revision in revisions:
                 for item in revision.items:
                     prompt_version = item.prompt_version
                     if prompt_version.id in seen_versions:
                         continue
+                    prior_version_id = seen_answer_versions.get(
+                        prompt_version.match_key
+                    )
+                    if (
+                        prior_version_id is not None
+                        and prior_version_id != prompt_version.id
+                    ):
+                        raise PromptListSelectionError(
+                            "Selected prompt lists contain ambiguous duplicate answers"
+                        )
                     seen_versions.add(prompt_version.id)
+                    seen_answer_versions[prompt_version.match_key] = prompt_version.id
                     answer = prompt_version.canonical_answer
                     prompts.append(answer)
                     aliases[answer] = tuple(
@@ -1338,54 +1350,72 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
 
     async def record_prompt_usage(
         self,
-        prompt_list_slugs: Sequence[str],
+        prompt_list_revision_ids: Sequence[str],
         usage: PromptUsage,
     ) -> None:
-        """Apply a whole game's counters to every named list in one transaction.
+        """Apply a game's ID-attributed counters to its pinned revisions.
 
-        Prompts carrying the same increment are updated together, so the cost is
-        a handful of statements rather than one per prompt per list. A game ends
-        with as many turns as it had players and rounds, and this used to be a
-        commit apiece.
+        Both the revision and prompt-version IDs came from the game's start
+        snapshot. Their intersection is checked again here so no display-text
+        collision—or malformed internal call—can credit unrelated content.
         """
-        slugs = list(prompt_list_slugs)
-        if not slugs or not usage:
+        revision_ids = [
+            revision_id
+            for raw in prompt_list_revision_ids
+            if (revision_id := _optional_entity_id(raw)) is not None
+        ]
+        if not revision_ids or not usage:
             return
         async with self._session_factory() as session:
             async with session.begin():
                 list_ids = (
                     await session.execute(
-                        select(PromptList.id).where(PromptList.slug.in_(slugs))
+                        select(distinct(PromptListRevision.prompt_list_id)).where(
+                            PromptListRevision.id.in_(revision_ids)
+                        )
                     )
                 ).scalars().all()
                 if not list_ids:
                     return
+                allowed_version_ids = set(
+                    (
+                        await session.execute(
+                            select(PromptListRevisionItem.prompt_version_id).where(
+                                PromptListRevisionItem.revision_id.in_(revision_ids)
+                            )
+                        )
+                    ).scalars().all()
+                )
 
-                offers_by_count: dict[int, list[str]] = defaultdict(list)
-                for text, count in usage.offers.items():
-                    offers_by_count[count].append(text)
-                for count, texts in offers_by_count.items():
+                offers_by_count: dict[int, list[UUID]] = defaultdict(list)
+                for raw_version_id, count in usage.offers.items():
+                    prompt_version_id = _optional_entity_id(raw_version_id)
+                    if prompt_version_id in allowed_version_ids:
+                        offers_by_count[count].append(prompt_version_id)
+                for count, prompt_version_ids in offers_by_count.items():
                     await session.execute(
                         update(Prompt)
                         .where(
                             and_(
                                 Prompt.prompt_list_id.in_(list_ids),
-                                Prompt.text.in_(texts),
+                                Prompt.prompt_version_id.in_(prompt_version_ids),
                             )
                         )
                         .values(offer_count=Prompt.offer_count + count)
                     )
 
-                picks_by_totals: dict[PromptPickTotals, list[str]] = defaultdict(list)
-                for text, totals in usage.picks.items():
-                    picks_by_totals[totals].append(text)
-                for totals, texts in picks_by_totals.items():
+                picks_by_totals: dict[PromptPickTotals, list[UUID]] = defaultdict(list)
+                for raw_version_id, totals in usage.picks.items():
+                    prompt_version_id = _optional_entity_id(raw_version_id)
+                    if prompt_version_id in allowed_version_ids:
+                        picks_by_totals[totals].append(prompt_version_id)
+                for totals, prompt_version_ids in picks_by_totals.items():
                     await session.execute(
                         update(Prompt)
                         .where(
                             and_(
                                 Prompt.prompt_list_id.in_(list_ids),
-                                Prompt.text.in_(texts),
+                                Prompt.prompt_version_id.in_(prompt_version_ids),
                             )
                         )
                         .values(

@@ -92,15 +92,19 @@ async def test_prompt_usage_tracking_metrics():
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         await seed_prompt_lists(repo)
+        selection = await repo.resolve_selection(["english_standard"])
+        apple_id = selection.prompt_version_ids["apple"]
+        banana_id = selection.prompt_version_ids["banana"]
+        robot_id = selection.prompt_version_ids["robot"]
 
         # One game: "apple", "banana" and "robot" offered, "robot" drawn and
         # guessed by 2 of 3 possible guessers.
         await repo.record_prompt_usage(
-            ["english_standard"],
+            selection.revision_ids,
             PromptUsage(
-                offers={"apple": 1, "banana": 1, "robot": 1},
+                offers={apple_id: 1, banana_id: 1, robot_id: 1},
                 picks={
-                    "robot": PromptPickTotals(
+                    robot_id: PromptPickTotals(
                         picks=1, correct_guesses=2, total_guessers=3
                     )
                 },

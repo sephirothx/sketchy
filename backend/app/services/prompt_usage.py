@@ -13,11 +13,6 @@ from app.game import CompletedTurnStats
 from app.repositories.interfaces import PromptPickTotals, PromptUsage
 
 
-def _stored_form(prompt: str) -> str:
-    """Match how `upsert_bundled` stores a prompt, so rows can be found by text."""
-    return prompt.strip().lower()
-
-
 def tally_prompt_usage(turns: Iterable[CompletedTurnStats]) -> PromptUsage:
     """Aggregate every turn's offers and picks into one set of increments.
 
@@ -26,8 +21,9 @@ def tally_prompt_usage(turns: Iterable[CompletedTurnStats]) -> PromptUsage:
     a set: the same prompt can be offered in several turns, and a pool too small
     to keep excluding what it has already used can have it chosen twice too.
 
-    Prompts that no list contains - a room's custom prompts, which live only in
-    memory - simply match no row, so they cost nothing to include here.
+    Identity, never display text, decides attribution. Ephemeral room prompts
+    carry null source IDs and are discarded even if their text is identical to
+    a curated prompt. The display snapshots remain available to history.
     """
     offers: Counter[str] = Counter()
     picks: Counter[str] = Counter()
@@ -35,12 +31,11 @@ def tally_prompt_usage(turns: Iterable[CompletedTurnStats]) -> PromptUsage:
     total_guessers: Counter[str] = Counter()
 
     for turn in turns:
-        for offered in turn.offered_prompts:
-            prompt = _stored_form(offered)
-            if prompt:
-                offers[prompt] += 1
-        chosen = _stored_form(turn.chosen_prompt)
-        if not chosen:
+        for prompt_version_id in turn.offered_prompt_version_ids:
+            if prompt_version_id:
+                offers[prompt_version_id] += 1
+        chosen = turn.chosen_prompt_version_id
+        if chosen is None:
             continue
         picks[chosen] += 1
         correct_guesses[chosen] += turn.correct_guess_count
