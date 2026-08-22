@@ -202,6 +202,23 @@ async def test_game_history_repository():
 
         game_id = await history_repo.save_game(game_input, participants, rounds, guesses)
         assert game_id is not None
+        async with factory() as session:
+            stored_game = await session.get(GameRecord, UUID(game_id))
+            stored_participants = (
+                await session.scalars(
+                    select(GameParticipant).where(
+                        GameParticipant.game_id == UUID(game_id)
+                    )
+                )
+            ).all()
+            stored_turn = await session.get(TurnRecord, UUID(turn_id))
+            stored_guess = await session.scalar(
+                select(TurnGuess).where(TurnGuess.turn_id == UUID(turn_id))
+            )
+            assert stored_game is not None and stored_game.persisted_at is not None
+            assert all(item.created_at is not None for item in stored_participants)
+            assert stored_turn is not None and stored_turn.created_at is not None
+            assert stored_guess is not None and stored_guess.created_at is not None
 
         # A guess cannot reference a turn outside this write.
         invalid_guesses = [
@@ -295,6 +312,7 @@ async def test_game_history_stable_id_is_idempotent_and_rejects_conflicts():
             assert await session.scalar(select(func.count(GameRecord.id))) == 1
             stored = await session.get(GameRecord, UUID(game_id))
             assert stored is not None and len(stored.payload_hash) == 64
+            assert stored.persisted_at is not None
 
         changed = GameRecordInput(
             id=game_id,

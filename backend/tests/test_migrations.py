@@ -144,6 +144,55 @@ async def test_sqlite_migration_chain_round_trip(tmp_path):
         await engine.dispose()
 
 
+async def test_write_timestamp_migration_preserves_unknown_legacy_times(tmp_path):
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'write-timestamp-migration.db'}"
+    )
+    script = ScriptDirectory.from_config(get_alembic_config())
+    previous = script.get_revision("a1e4c7d9b632").down_revision
+    assert isinstance(previous, str)
+    try:
+        await _migrate(engine, alembic_command.upgrade, previous)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO app_config (key, value) "
+                    "VALUES ('legacy_secret', 'legacy')"
+                )
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.begin() as connection:
+            legacy = (
+                await connection.execute(
+                    text(
+                        "SELECT created_at, updated_at FROM app_config "
+                        "WHERE key = 'legacy_secret'"
+                    )
+                )
+            ).one()
+            assert tuple(legacy) == (None, None)
+
+            await connection.execute(
+                text(
+                    "INSERT INTO app_config (key, value) "
+                    "VALUES ('new_secret', 'new')"
+                )
+            )
+            current = (
+                await connection.execute(
+                    text(
+                        "SELECT created_at, updated_at FROM app_config "
+                        "WHERE key = 'new_secret'"
+                    )
+                )
+            ).one()
+            assert current.created_at is not None
+            assert current.updated_at is not None
+    finally:
+        await engine.dispose()
+
+
 async def test_prompt_counter_migration_preserves_lifetime_totals(tmp_path):
     engine = create_db_engine(
         f"sqlite+aiosqlite:///{tmp_path / 'prompt-fact-migration.db'}"

@@ -75,6 +75,10 @@ async def test_app_config_crud():
             loaded = result.scalar_one()
             assert loaded.key == "feature_mode"
             assert loaded.value == "safe"
+            assert loaded.created_at is not None
+            assert loaded.created_at.tzinfo is not None
+            assert loaded.updated_at is not None
+            assert loaded.updated_at.tzinfo is not None
     finally:
         await engine.dispose()
 
@@ -745,6 +749,8 @@ async def test_prompt_server_defaults_apply_to_raw_inserts():
         assert prompt_list.version == 1
         assert prompt is not None
         assert prompt.text == "anchor"
+        assert prompt.created_at is not None
+        assert prompt.created_at.tzinfo is not None
     finally:
         await engine.dispose()
 

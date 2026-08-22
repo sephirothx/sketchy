@@ -84,6 +84,14 @@ class AppConfig(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
+    # Nullable only for rows created before timestamp coverage existed. New
+    # database writes receive both values from the server clock.
+    created_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=True
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=True
+    )
 
 
 class AuthRateLimitBucket(Base):
@@ -737,6 +745,12 @@ class GameRecord(Base):
     finished_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, index=True
     )
+    # Deliberately distinct from game event time. This supports save-lag and
+    # retry diagnosis; legacy rows remain null rather than receiving a false
+    # migration timestamp.
+    persisted_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=True
+    )
 
     participants: Mapped[list[GameParticipant]] = relationship(
         back_populates="game",
@@ -784,6 +798,9 @@ class GameParticipant(Base):
     # a full game otherwise look identical, which skews win rate and averages.
     turns_played: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
+    )
+    created_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=True
     )
 
     game: Mapped[GameRecord] = relationship(back_populates="participants")
@@ -864,6 +881,9 @@ class TurnRecord(Base):
     near_miss_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
+    created_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=True
+    )
 
     game: Mapped[GameRecord] = relationship(back_populates="turns")
     drawer: Mapped[User | None] = relationship()
@@ -917,6 +937,9 @@ class TurnGuess(Base):
     )
     wrong_guesses_before: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
+    )
+    created_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=True
     )
 
     turn_record: Mapped[TurnRecord] = relationship(back_populates="guesses")
@@ -1474,4 +1497,9 @@ class Prompt(Base):
         index=True,
     )
     text: Mapped[str] = mapped_column(String(64), nullable=False)
+    # This is when the current prompt membership entered the list, not the
+    # immutable concept/version creation time. Legacy memberships are unknown.
+    created_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=True
+    )
     prompt_list: Mapped[PromptList] = relationship(back_populates="prompts")

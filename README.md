@@ -99,6 +99,12 @@ All persisted timestamps require timezone-aware inputs and are normalized to
 aware UTC values when written and read. This keeps SQLite and PostgreSQL
 behavior identical; application code never has to infer a local timezone for a
 naive database value.
+Configuration rows, prompt memberships, and each finished-game fact also carry
+their database write time. `game_records.persisted_at` is intentionally separate
+from `started_at` and `finished_at`, making delayed/retried-save lag measurable
+for performance and incident diagnosis. Rows from before timestamp coverage
+keep a null write time rather than receiving a fabricated migration timestamp;
+all new writes receive the database clock automatically.
 
 Finished-game guesses reference the UUID of their turn explicitly. Persistence
 never infers that relationship from the positions of two independently ordered
