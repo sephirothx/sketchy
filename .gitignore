@@ -36,6 +36,7 @@ pnpm-debug.log*
 Thumbs.db
 
 # --- AI ---
+.codex/
 .agents/
 .cursor/
 AGENTS.md
