@@ -76,7 +76,7 @@ flowchart LR
 
 | Layer    | Technology |
 |----------|------------|
-| Backend  | Python 3.14, FastAPI, python-socketio (`AsyncServer`, ASGI), uvicorn, SQLAlchemy 2.0 (async), aiosqlite, Alembic |
+| Backend  | Python 3.14, FastAPI, python-socketio (`AsyncServer`, ASGI), uvicorn, SQLAlchemy 2.0 (async), PostgreSQL, aiosqlite, Alembic |
 | Frontend | React 19, TypeScript, Vite, react-router-dom, zustand, socket.io-client |
 | Testing  | pytest + pytest-asyncio (backend unit tests), Playwright (multi-browser E2E testing) |
 
@@ -89,6 +89,21 @@ To use an external PostgreSQL database instead, set the `DATABASE_URL` environme
 ```bash
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy ./scripts/serve.sh
 ```
+
+CI upgrades a fresh PostgreSQL 17 database with Alembic and runs the repository
+suite against the migrated schema. To reproduce that check locally, point both
+variables at a disposable test database:
+
+```bash
+cd backend
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  .venv/bin/alembic upgrade head
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  .venv/bin/pytest -q tests/test_repositories.py
+```
+
+The repository suite deletes application rows from `TEST_DATABASE_URL`; never
+point it at a development or production database.
 
 ### Accounts
 

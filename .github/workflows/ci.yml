@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # Child issue branches merge through epic umbrellas before reaching main.
+  # Run the same checks regardless of which branch a pull request targets.
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,6 +35,48 @@ jobs:
       - run: pip install -r requirements-dev.txt
 
       - run: pytest -q
+
+  postgresql:
+    name: PostgreSQL migrations & repositories
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: sketchy_test
+          POSTGRES_USER: sketchy
+          POSTGRES_PASSWORD: sketchy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sketchy -d sketchy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
+      TEST_DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - run: pip install -r requirements-dev.txt
+
+      - name: Upgrade a fresh PostgreSQL database
+        run: alembic upgrade head
+
+      - name: Run repositories against PostgreSQL
+        run: pytest -q tests/test_repositories.py
 
   frontend:
     name: Frontend test, lint & build
