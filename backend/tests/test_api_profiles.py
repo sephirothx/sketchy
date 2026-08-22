@@ -13,7 +13,7 @@ from app.api.profiles import create_profile_router, profile_limiter
 from app.auth import jwt as jwt_module
 from app.auth.jwt import COOKIE_NAME, create_token, get_or_create_secret
 from app.auth.middleware import SessionAuthMiddleware
-from app.db.models import Base
+from app.db.models import Base, generate_uuid
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
@@ -58,6 +58,7 @@ async def sign_in_as(http, session_factory, user_id: str) -> None:
 
 
 async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
+    turn_id = str(generate_uuid())
     return await history.save_game(
         GameRecordInput(
             room_name=f"Studio {index}",
@@ -75,6 +76,7 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
         ],
         [
             TurnRecordInput(
+                id=turn_id,
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=winner,
@@ -84,7 +86,7 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
         ],
         [
             TurnGuessInput(
-                turn_index=0,
+                turn_id=turn_id,
                 user_id=loser,
                 points_awarded=100,
                 guess_time_seconds=12.0,

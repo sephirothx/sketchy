@@ -15,6 +15,7 @@ from app.db.models import (
     GameParticipant,
     TurnGuess,
     TurnRecord,
+    generate_uuid,
 )
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
@@ -155,8 +156,10 @@ async def test_game_history_repository():
             GameParticipantInput(user_id=u1.id, final_score=350, final_rank=1),
             GameParticipantInput(user_id=u2.id, final_score=200, final_rank=2),
         ]
+        turn_id = str(generate_uuid())
         rounds = [
             TurnRecordInput(
+                id=turn_id,
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=u1.id,
@@ -166,7 +169,7 @@ async def test_game_history_repository():
         ]
         guesses = [
             TurnGuessInput(
-                turn_index=0,
+                turn_id=turn_id,
                 user_id=u2.id,
                 points_awarded=200,
                 guess_time_seconds=10.0,
@@ -176,16 +179,16 @@ async def test_game_history_repository():
         game_id = await history_repo.save_game(game_input, participants, rounds, guesses)
         assert game_id is not None
 
-        # Invalid guess turn_index fails loudly
+        # A guess cannot reference a turn outside this write.
         invalid_guesses = [
             TurnGuessInput(
-                turn_index=99,
+                turn_id=str(generate_uuid()),
                 user_id=u2.id,
                 points_awarded=100,
                 guess_time_seconds=5.0,
             )
         ]
-        with pytest.raises(ValueError, match="out of bounds"):
+        with pytest.raises(ValueError, match="unknown turn_id"):
             await history_repo.save_game(game_input, participants, rounds, invalid_guesses)
 
         # Check user games list with pagination clamping
@@ -317,6 +320,7 @@ async def test_save_game_persists_the_analytics_columns():
         guesser = await user_repo.create_anonymous("Guesser")
 
         now = datetime.now(timezone.utc)
+        turn_id = str(generate_uuid())
         game_id = await history_repo.save_game(
             GameRecordInput(
                 room_name="Analytics Room",
@@ -338,6 +342,7 @@ async def test_save_game_persists_the_analytics_columns():
             ],
             [
                 TurnRecordInput(
+                    id=turn_id,
                     round_number=1,
                     turn_number=1,
                     drawer_user_id=drawer.id,
@@ -353,7 +358,7 @@ async def test_save_game_persists_the_analytics_columns():
             ],
             [
                 TurnGuessInput(
-                    turn_index=0,
+                    turn_id=turn_id,
                     user_id=guesser.id,
                     points_awarded=200,
                     guess_time_seconds=12.5,

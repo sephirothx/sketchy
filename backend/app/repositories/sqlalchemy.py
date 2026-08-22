@@ -412,10 +412,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     )
 
-                created_turn_ids: list[UUID] = []
+                created_turn_ids: set[UUID] = set()
                 for r in turns:
-                    rid = _entity_id(r.id) if r.id else generate_uuid()
-                    created_turn_ids.append(rid)
+                    rid = _entity_id(r.id)
+                    if rid in created_turn_ids:
+                        raise ValueError(f"Duplicate turn id '{r.id}'")
+                    created_turn_ids.add(rid)
                     session.add(
                         TurnRecord(
                             id=rid,
@@ -435,11 +437,16 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
 
                 for g in guesses:
-                    if not (0 <= g.turn_index < len(created_turn_ids)):
+                    try:
+                        target_turn_id = _entity_id(g.turn_id)
+                    except (ValueError, AttributeError, TypeError) as error:
                         raise ValueError(
-                            f"Invalid guess turn_index {g.turn_index}: out of bounds for {len(created_turn_ids)} turns"
+                            f"Invalid guess turn_id '{g.turn_id}'"
+                        ) from error
+                    if target_turn_id not in created_turn_ids:
+                        raise ValueError(
+                            f"Guess references unknown turn_id '{g.turn_id}'"
                         )
-                    target_turn_id = created_turn_ids[g.turn_index]
                     session.add(
                         TurnGuess(
                             id=generate_uuid(),

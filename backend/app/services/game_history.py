@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from uuid6 import uuid7
 
 from app.game import Game, competition_ranks
 from app.repositories.interfaces import (
@@ -145,9 +146,10 @@ def build_game_history(
             # Nothing to hang the turn off: `TurnRecord.drawer_user_id` is a
             # NOT NULL foreign key. The rest of the game still persists.
             continue
-        turn_index = len(turns)
+        turn_id = str(uuid7())
         turns.append(
             TurnRecordInput(
+                id=turn_id,
                 round_number=turn.round_number,
                 turn_number=turn.turn_number,
                 drawer_user_id=drawer.user_id,
@@ -167,7 +169,7 @@ def build_game_history(
                 continue
             guesses.append(
                 TurnGuessInput(
-                    turn_index=turn_index,
+                    turn_id=turn_id,
                     user_id=guesser.user_id,
                     points_awarded=guess.points_awarded,
                     guess_time_seconds=guess.guess_time_seconds,

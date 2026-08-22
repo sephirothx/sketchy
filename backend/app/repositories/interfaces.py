@@ -94,6 +94,7 @@ class GameParticipantInput:
 class TurnRecordInput:
     """Input payload for an individual turn/round in a game."""
 
+    id: str
     round_number: int
     turn_number: int
     drawer_user_id: str
@@ -105,14 +106,13 @@ class TurnRecordInput:
     end_reason: str = "timeout"
     wrong_guess_count: int = 0
     near_miss_count: int = 0
-    id: str | None = None
 
 
 @dataclass(frozen=True)
 class TurnGuessInput:
     """Input payload for a correct guess in a round."""
 
-    turn_index: int  # 0-based index matching the list of TurnRecordInput
+    turn_id: str
     user_id: str
     points_awarded: int
     guess_time_seconds: float

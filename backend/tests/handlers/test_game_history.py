@@ -41,7 +41,7 @@ async def test_completed_game_records_every_round_with_participants_and_guesses(
     assert saved.record.finished_at >= saved.record.started_at
     # Every turn has exactly one eligible guesser, and they all guessed.
     assert len(saved.guesses) == 4
-    assert {g.turn_index for g in saved.guesses} == {0, 1, 2, 3}
+    assert {g.turn_id for g in saved.guesses} == {turn.id for turn in saved.turns}
 
 
 async def test_seat_without_an_account_is_skipped_and_the_rest_still_persists():
@@ -221,7 +221,7 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     assert first_round.end_reason == "all_guessed"
     assert first_round.wrong_guess_count == 1
 
-    hinted = next(g for g in saved.guesses if g.turn_index == 0)
+    hinted = next(g for g in saved.guesses if g.turn_id == first_round.id)
     assert hinted.hints_used == 1
     assert hinted.points_spent_on_hints == price
     # What lands in history is what the player actually banked: net of hints.

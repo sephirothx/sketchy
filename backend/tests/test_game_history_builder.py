@@ -78,7 +78,7 @@ def test_spectators_are_left_out_of_the_standings():
     assert history.record.player_count == 2
 
 
-def test_guess_indices_follow_the_rounds_actually_written():
+def test_guess_ids_follow_the_turns_actually_written():
     _, room, players, game = build(
         ("Ann", "user-ann", 300, False),
         ("Bob", "user-bob", 100, False),
@@ -95,9 +95,9 @@ def test_guess_indices_follow_the_rounds_actually_written():
     history = build_game_history(room, game, finished_at=FINISHED_AT)
 
     assert [r.turn_number for r in history.turns] == [1, 3]
-    assert [(g.turn_index, g.user_id) for g in history.guesses] == [
-        (0, "user-bob"),
-        (1, "user-ann"),
+    assert [(g.turn_id, g.user_id) for g in history.guesses] == [
+        (history.turns[0].id, "user-bob"),
+        (history.turns[1].id, "user-ann"),
     ]
 
 
