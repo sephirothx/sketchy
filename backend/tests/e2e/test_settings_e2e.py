@@ -71,6 +71,11 @@ async def test_settings_dialog_brush_cursor_scenario():
             await use_guest_name(page, "SettingsTester")
             await page.click('button:has-text("Create room")')
             await page.click('button:has-text("Create room")')
+            # Wait for the room before claiming the account. The create-room
+            # page carries an identity chip of its own, so registering while
+            # the room is still in flight opens the menu on that page and the
+            # navigation unmounts it mid-click.
+            await page.wait_for_selector('[data-testid="waiting-room"]')
 
             # Name colours belong to registered players: a guest is pinned to
             # the grey that marks their name as unclaimed, so claim the account
