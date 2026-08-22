@@ -194,6 +194,8 @@ def test_record_carries_the_settings_the_game_was_played_under():
         False,
         False,
     ]
+    assert history.turns[0].prompt_version_id == "version-jackpot"
+    assert history.turns[0].prompt_source_kind == "curated"
     assert history.turns[0].prompt_offers[1].source_revision_ids == (
         "revision-one",
         "revision-two",
@@ -224,6 +226,8 @@ def test_actual_pool_distinguishes_custom_curated_and_fallback_offers():
         "builtin_fallback",
     ]
     assert history.turns[0].prompt_offers[0].prompt_version_id is None
+    assert history.turns[0].prompt_version_id is None
+    assert history.turns[0].prompt_source_kind == "custom"
     assert history.turns[0].prompt_offers[1].prompt_version_id == "version-b"
     assert history.turns[0].prompt_offers[2].source_revision_ids == ()
 

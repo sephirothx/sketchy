@@ -91,6 +91,8 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 "drawerUserId": r.drawer_user_id,
                 "drawerDisplayName": r.drawer_display_name,
                 "prompt": r.prompt,
+                "promptVersionId": r.prompt_version_id,
+                "promptSourceKind": r.prompt_source_kind,
                 "durationSeconds": r.duration_seconds,
                 "promptOffers": [
                     {

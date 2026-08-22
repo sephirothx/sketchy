@@ -192,9 +192,11 @@ async def test_participants_see_the_turn_by_turn_detail(env):
     assert body["scoringVersion"] == 0
     assert body["ruleSnapshotVersion"] == 0
     assert body["ruleSnapshot"] == {}
-    assert body["promptSourceMode"] == "builtin_fallback"
+    assert body["promptSourceMode"] == "legacy_unknown"
     assert len(body["turns"]) == 1
     assert body["turns"][0]["prompt"] == "jackpot"
+    assert body["turns"][0]["promptVersionId"] is None
+    assert body["turns"][0]["promptSourceKind"] == "legacy_unknown"
     assert body["turns"][0]["promptOffers"] == []
     assert body["turns"][0]["drawerDisplayName"] == "Ann"
     assert body["turns"][0]["guesses"][0]["displayName"] == "Bob"

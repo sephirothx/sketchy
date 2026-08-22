@@ -23,13 +23,14 @@ def upgrade() -> None:
             sa.Column(
                 "prompt_source_mode",
                 sa.String(length=24),
-                server_default="builtin_fallback",
+                server_default="legacy_unknown",
                 nullable=False,
             )
         )
         batch_op.create_check_constraint(
             "ck_game_records_prompt_source_mode",
-            "prompt_source_mode IN ('curated', 'custom', 'mixed', 'builtin_fallback')",
+            "prompt_source_mode IN "
+            "('legacy_unknown', 'curated', 'custom', 'mixed', 'builtin_fallback')",
         )
 
     op.create_table(

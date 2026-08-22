@@ -184,6 +184,15 @@ def build_game_history(
                 drawer_user_id=drawer.user_id,
                 prompt=turn.chosen_prompt,
                 duration_seconds=turn.duration_seconds,
+                prompt_version_id=(
+                    turn.chosen_prompt_version_id
+                    or game.prompt_version_ids.get(turn.chosen_prompt)
+                ),
+                prompt_source_kind=(
+                    turn.offered_prompt_source_kinds[selected_position]
+                    if selected_position < len(turn.offered_prompt_source_kinds)
+                    else game.prompt_source_kind(turn.chosen_prompt)
+                ),
                 guesser_count=turn.total_guesser_count,
                 prompt_auto_picked=turn.prompt_auto_picked,
                 stroke_count=turn.stroke_count,

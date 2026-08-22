@@ -28,7 +28,7 @@ export interface GameSummary {
   scoringMode: string;
   scoringVersion: number;
   ruleSnapshotVersion: number;
-  promptSourceMode: "curated" | "custom" | "mixed" | "builtin_fallback";
+  promptSourceMode: "legacy_unknown" | "curated" | "custom" | "mixed" | "builtin_fallback";
   hintMode: string;
   drawingSeconds: number;
   totalRounds: number;
@@ -52,6 +52,8 @@ export interface GameTurn {
   drawerDisplayName: string;
   prompt: string;
   durationSeconds: number;
+  promptVersionId: string | null;
+  promptSourceKind: "legacy_unknown" | "curated" | "custom" | "builtin_fallback";
   promptOffers: PromptOffer[];
   guesses: TurnGuess[];
 }

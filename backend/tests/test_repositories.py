@@ -383,6 +383,8 @@ async def test_game_history_records_the_actual_prompt_pool_and_every_offer():
                     drawer_user_id=drawer.id,
                     prompt="banana",
                     duration_seconds=20,
+                    prompt_version_id=selection.prompt_version_ids["banana"],
+                    prompt_source_kind="curated",
                     prompt_offers=tuple(
                         PromptOfferInput(
                             position=position,
@@ -418,6 +420,10 @@ async def test_game_history_records_the_actual_prompt_pool_and_every_offer():
         detail = await history.get_game_detail(game_id, drawer.id)
         assert detail is not None
         assert detail.summary.prompt_source_mode == "curated"
+        assert detail.turns[0].prompt_version_id == selection.prompt_version_ids[
+            "banana"
+        ]
+        assert detail.turns[0].prompt_source_kind == "curated"
         assert [offer.prompt for offer in detail.turns[0].prompt_offers] == [
             "apple",
             "banana",

@@ -135,6 +135,12 @@ that version. Custom and fallback options have explicit source kinds and null
 curated identities, so collisions cannot inflate curated statistics or make a
 bad prompt untraceable. Exact offers are participant-only history and private
 export data; share codes are never stored with them.
+The turn row also carries the selected option's source kind and a nullable
+foreign key directly to its immutable prompt version. Curated turns are
+therefore joinable without text normalization; custom/fallback turns retain
+only their factual text snapshot. Database checks and the history writer keep
+the selected offer, turn text, source kind, and version identical. Rows from
+before provenance coverage use `legacy_unknown`, never a fabricated source.
 Finished games also enforce one participant per account, one turn per
 game/round/turn number, and one correct guess per player and turn at the
 database layer.

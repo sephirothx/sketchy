@@ -669,6 +669,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         "turn_number": item.turn_number,
                         "drawer_user_id": item.drawer_user_id,
                         "prompt": item.prompt,
+                        "prompt_version_id": item.prompt_version_id,
+                        "prompt_source_kind": item.prompt_source_kind,
                         "duration_seconds": item.duration_seconds,
                         "guesser_count": item.guesser_count,
                         "prompt_auto_picked": item.prompt_auto_picked,
@@ -823,6 +825,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             drawer_name_color_snapshot=drawer_user.name_color,
                             drawer_is_anonymous_snapshot=drawer_user.is_anonymous,
                             prompt=r.prompt,
+                            prompt_version_id=(
+                                _entity_id(r.prompt_version_id)
+                                if r.prompt_version_id
+                                else None
+                            ),
+                            prompt_source_kind=r.prompt_source_kind,
                             duration_seconds=r.duration_seconds,
                             guesser_count=r.guesser_count,
                             prompt_auto_picked=r.prompt_auto_picked,
@@ -837,6 +845,17 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     ) != 1:
                         raise ValueError(
                             f"Turn '{r.id}' must have exactly one selected prompt offer"
+                        )
+                    selected_offer = next(
+                        (offer for offer in r.prompt_offers if offer.selected), None
+                    )
+                    if selected_offer is not None and (
+                        selected_offer.prompt != r.prompt
+                        or selected_offer.prompt_version_id != r.prompt_version_id
+                        or selected_offer.source_kind != r.prompt_source_kind
+                    ):
+                        raise ValueError(
+                            f"Turn '{r.id}' selected offer does not match its prompt identity"
                         )
                     for offer in r.prompt_offers:
                         offer_source_ids = {
@@ -1040,6 +1059,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         drawer_display_name=r.drawer_display_name_snapshot,
                         prompt=r.prompt,
                         duration_seconds=r.duration_seconds,
+                        prompt_version_id=(
+                            _public_id(r.prompt_version_id)
+                            if r.prompt_version_id
+                            else None
+                        ),
+                        prompt_source_kind=r.prompt_source_kind,
                         guesses=guess_details,
                         prompt_offers=[
                             PromptOfferDetail(

@@ -411,6 +411,10 @@ async def _build_export_artifact(
                 "roundNumber": turn.round_number,
                 "turnNumber": turn.turn_number,
                 "prompt": turn.prompt,
+                "promptVersionId": (
+                    str(turn.prompt_version_id) if turn.prompt_version_id else None
+                ),
+                "promptSourceKind": turn.prompt_source_kind,
                 "durationSeconds": turn.duration_seconds,
                 "guesserCount": turn.guesser_count,
                 "promptAutoPicked": turn.prompt_auto_picked,

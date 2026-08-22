@@ -124,6 +124,7 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                 drawer_user_id=owner_id,
                 prompt="owner prompt",
                 duration_seconds=25,
+                prompt_source_kind="custom",
                 prompt_offers=(
                     PromptOfferInput(0, "owner prompt", True, "custom"),
                     PromptOfferInput(1, "other option", False, "custom"),
@@ -136,6 +137,7 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                 drawer_user_id=other_id,
                 prompt="requester guessed this",
                 duration_seconds=30,
+                prompt_source_kind="custom",
             ),
         ],
         [
@@ -265,6 +267,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         "promptVersionId": None,
         "sourceRevisionIds": [],
     }
+    assert artifact["drawnTurns"][0]["promptVersionId"] is None
+    assert artifact["drawnTurns"][0]["promptSourceKind"] == "custom"
     assert artifact["drawnTurns"][0]["prompt"] == "owner prompt"
     assert artifact["correctGuesses"][0]["prompt"] == "requester guessed this"
     assert artifact["sessions"] and "tokenHash" not in artifact["sessions"][0]

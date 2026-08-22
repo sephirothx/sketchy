@@ -99,7 +99,7 @@ class GameRecordInput:
     scoring_version: int = 0
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
-    prompt_source_mode: str = "builtin_fallback"
+    prompt_source_mode: str = "legacy_unknown"
     prompt_source_revision_ids: tuple[str, ...] = ()
 
 
@@ -123,6 +123,8 @@ class TurnRecordInput:
     drawer_user_id: str
     prompt: str
     duration_seconds: float
+    prompt_version_id: str | None = None
+    prompt_source_kind: str = "legacy_unknown"
     guesser_count: int = 0
     prompt_auto_picked: bool = False
     stroke_count: int = 0
@@ -187,7 +189,7 @@ class GameSummary:
     scoring_version: int = 0
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
-    prompt_source_mode: str = "builtin_fallback"
+    prompt_source_mode: str = "legacy_unknown"
 
 
 @dataclass(frozen=True)
@@ -210,6 +212,8 @@ class TurnDetail:
     drawer_display_name: str
     prompt: str
     duration_seconds: float
+    prompt_version_id: str | None = None
+    prompt_source_kind: str = "legacy_unknown"
     guesses: list[TurnGuessDetail] = field(default_factory=list)
     prompt_offers: list[PromptOfferDetail] = field(default_factory=list)
 

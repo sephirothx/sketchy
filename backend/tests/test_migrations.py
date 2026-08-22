@@ -193,6 +193,73 @@ async def test_write_timestamp_migration_preserves_unknown_legacy_times(tmp_path
         await engine.dispose()
 
 
+async def test_prompt_identity_migration_marks_legacy_provenance_unknown(tmp_path):
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'prompt-identity-migration.db'}"
+    )
+    script = ScriptDirectory.from_config(get_alembic_config())
+    previous = script.get_revision("d4b7f1a3c965").down_revision
+    assert isinstance(previous, str)
+    identifiers = {
+        "user": uuid.uuid4().hex,
+        "game": uuid.uuid4().hex,
+        "turn": uuid.uuid4().hex,
+    }
+    try:
+        await _migrate(engine, alembic_command.upgrade, previous)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, display_name, state) "
+                    "VALUES (:user, 'Legacy player', 'anonymous')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_records "
+                    "(id, payload_hash, room_name, scoring_mode, hint_mode, "
+                    "drawing_seconds, total_rounds, player_count, started_at, "
+                    "finished_at) VALUES "
+                    "(:game, '', 'Legacy game', 'default', 'none', 90, 1, 1, "
+                    "'2026-08-01 00:00:00', '2026-08-01 00:01:00')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO turn_records "
+                    "(id, game_id, round_number, turn_number, drawer_user_id, "
+                    "drawer_display_name_snapshot, drawer_is_anonymous_snapshot, "
+                    "prompt, duration_seconds) VALUES "
+                    "(:turn, :game, 1, 1, :user, 'Legacy player', 1, 'apple', 30)"
+                ),
+                identifiers,
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.connect() as connection:
+            game_mode = await connection.scalar(
+                text(
+                    "SELECT prompt_source_mode FROM game_records WHERE id = :game"
+                ),
+                identifiers,
+            )
+            turn_identity = (
+                await connection.execute(
+                    text(
+                        "SELECT prompt_source_kind, prompt_version_id "
+                        "FROM turn_records WHERE id = :turn"
+                    ),
+                    identifiers,
+                )
+            ).one()
+        assert game_mode == "legacy_unknown"
+        assert tuple(turn_identity) == ("legacy_unknown", None)
+    finally:
+        await engine.dispose()
+
+
 async def test_prompt_counter_migration_preserves_lifetime_totals(tmp_path):
     engine = create_db_engine(
         f"sqlite+aiosqlite:///{tmp_path / 'prompt-fact-migration.db'}"

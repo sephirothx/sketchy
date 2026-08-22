@@ -124,6 +124,8 @@
     "drawnTurns[].roundNumber",
     "drawnTurns[].turnNumber",
     "drawnTurns[].prompt",
+    "drawnTurns[].promptVersionId",
+    "drawnTurns[].promptSourceKind",
     "drawnTurns[].durationSeconds",
     "drawnTurns[].guesserCount",
     "drawnTurns[].promptAutoPicked",

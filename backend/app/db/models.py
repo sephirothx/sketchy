@@ -40,6 +40,7 @@ from app.domain_values import (
     PROMPT_EDITORIAL_DIFFICULTIES,
     PROMPT_LANGUAGES,
     PROMPT_LIST_VISIBILITIES,
+    PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
     REPORT_REASONS,
     REPORT_STATUSES,
@@ -761,8 +762,8 @@ class GameRecord(Base):
     )
     prompt_source_mode: Mapped[str] = mapped_column(
         String(24),
-        default="builtin_fallback",
-        server_default="builtin_fallback",
+        default="legacy_unknown",
+        server_default="legacy_unknown",
         nullable=False,
     )
     hint_mode: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -877,6 +878,16 @@ class TurnRecord(Base):
         _values_check(
             "end_reason", TURN_END_REASONS, "ck_turn_records_end_reason"
         ),
+        _values_check(
+            "prompt_source_kind",
+            PROMPT_SOURCE_KINDS,
+            "ck_turn_records_prompt_source_kind",
+        ),
+        CheckConstraint(
+            "(prompt_source_kind = 'curated' AND prompt_version_id IS NOT NULL) "
+            "OR (prompt_source_kind != 'curated' AND prompt_version_id IS NULL)",
+            name="ck_turn_records_prompt_identity",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -906,6 +917,18 @@ class TurnRecord(Base):
         Boolean, default=True, nullable=False
     )
     prompt: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    prompt_source_kind: Mapped[str] = mapped_column(
+        String(24),
+        default="legacy_unknown",
+        server_default="legacy_unknown",
+        nullable=False,
+    )
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     # How many players could still have guessed. Correct-guess counts are
     # uninterpretable without it: two of two is not two of eight.
@@ -963,7 +986,9 @@ class TurnPromptOffer(Base):
         ),
         CheckConstraint("position >= 0", name="ck_turn_prompt_offers_position"),
         _values_check(
-            "source_kind", PROMPT_SOURCE_KINDS, "ck_turn_prompt_offers_source_kind"
+            "source_kind",
+            PROMPT_OFFER_SOURCE_KINDS,
+            "ck_turn_prompt_offers_source_kind",
         ),
         Index(
             "uq_turn_prompt_offers_selected",
