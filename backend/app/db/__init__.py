@@ -7,7 +7,10 @@ from typing import Any
 
 from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
-from sqlalchemy import event
+from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
+from sqlalchemy import event, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -21,6 +24,11 @@ POSTGRES_POOL_SIZE = 5
 POSTGRES_MAX_OVERFLOW = 5
 POSTGRES_POOL_TIMEOUT_SECONDS = 10
 POSTGRES_POOL_RECYCLE_SECONDS = 1_800
+POSTGRES_MIGRATION_LOCK_ID = int.from_bytes(b"SKETCHY", "big")
+
+
+class DatabaseRevisionError(RuntimeError):
+    """Raised when an externally managed database is not at Alembic head."""
 
 
 def _configure_sqlite_connection(dbapi_connection: Any, _: Any) -> None:
@@ -125,15 +133,55 @@ def get_alembic_config(ini_path: Path | None = None) -> AlembicConfig:
     return cfg
 
 
-def _run_alembic_upgrade_sync(connection: Any, alembic_cfg: AlembicConfig) -> None:
+def _run_alembic_upgrade_sync(
+    connection: Connection, alembic_cfg: AlembicConfig
+) -> None:
     alembic_cfg.attributes["connection"] = connection
     alembic_command.upgrade(alembic_cfg, "head")
 
 
-async def init_db(engine: AsyncEngine | None = None) -> None:
-    """Initialize database schema by running Alembic migrations to head."""
+def _database_revisions_sync(
+    connection: Connection, alembic_cfg: AlembicConfig
+) -> tuple[set[str], set[str]]:
+    current = set(MigrationContext.configure(connection).get_current_heads())
+    expected = set(ScriptDirectory.from_config(alembic_cfg).get_heads())
+    return current, expected
+
+
+async def upgrade_database(engine: AsyncEngine | None = None) -> None:
+    """Upgrade to Alembic head, serializing PostgreSQL deploys."""
     target_engine = engine or async_engine
     alembic_cfg = get_alembic_config()
 
     async with target_engine.begin() as conn:
+        if target_engine.dialect.name == "postgresql":
+            # A transaction-scoped lock releases automatically on both commit
+            # and rollback, including when migration DDL fails.
+            await conn.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_id)"),
+                {"lock_id": POSTGRES_MIGRATION_LOCK_ID},
+            )
         await conn.run_sync(_run_alembic_upgrade_sync, alembic_cfg)
+
+
+async def verify_database_head(engine: AsyncEngine | None = None) -> None:
+    """Fail startup clearly when a managed database has not been migrated."""
+    target_engine = engine or async_engine
+    alembic_cfg = get_alembic_config()
+    async with target_engine.connect() as conn:
+        current, expected = await conn.run_sync(_database_revisions_sync, alembic_cfg)
+    if current != expected:
+        raise DatabaseRevisionError(
+            "Database schema is not at Alembic head "
+            f"(current: {sorted(current) or ['base']}; expected: {sorted(expected)}). "
+            "Run `python -m app.db.migrate` before starting Sketchy."
+        )
+
+
+async def init_db(engine: AsyncEngine | None = None) -> None:
+    """Prepare zero-config SQLite or verify externally managed databases."""
+    target_engine = engine or async_engine
+    if target_engine.dialect.name == "sqlite":
+        await upgrade_database(target_engine)
+    else:
+        await verify_database_head(target_engine)

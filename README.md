@@ -82,14 +82,23 @@ flowchart LR
 
 ## Database & Configuration
 
-Sketchy requires zero configuration by default, using an embedded SQLite database stored locally at `./sketchy.db`. Database migrations run automatically on server startup via Alembic.
+Sketchy requires zero configuration by default, using an embedded SQLite
+database stored locally at `./sketchy.db`. SQLite migrations run automatically
+on server startup via Alembic.
 SQLite connections enforce foreign keys, use WAL mode for concurrent readers,
 and wait up to five seconds for a busy database before failing a write.
 
-To use an external PostgreSQL database instead, set the `DATABASE_URL` environment variable:
+PostgreSQL migrations are an explicit deployment step protected by a database
+advisory lock, so concurrent deploy jobs cannot race. Run the migration command
+before starting or replacing any application replicas; application startup
+verifies the revision and fails with a direct instruction if the step was
+missed:
 
 ```bash
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy ./scripts/serve.sh
+cd backend
+export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
+.venv/bin/python -m app.db.migrate
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 PostgreSQL connections are checked before checkout, recycled after 30 minutes,
@@ -110,7 +119,7 @@ variables at a disposable test database:
 ```bash
 cd backend
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
-  .venv/bin/alembic upgrade head
+  .venv/bin/python -m app.db.migrate
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   .venv/bin/pytest -q tests/test_repositories.py
 ```

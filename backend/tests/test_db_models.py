@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 import warnings
 
 import pytest
@@ -334,6 +336,39 @@ async def test_init_db_runs_alembic_migrations(tmp_path):
                 session.add(AppConfig(key="migrated", value="yes"))
             res = await session.execute(select(AppConfig).where(AppConfig.key == "migrated"))
             assert res.scalar_one().value == "yes"
+    finally:
+        await engine.dispose()
+
+
+async def test_non_sqlite_startup_verifies_without_migrating(monkeypatch):
+    from app import db
+
+    engine = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+    verify = AsyncMock()
+    upgrade = AsyncMock()
+    monkeypatch.setattr(db, "verify_database_head", verify)
+    monkeypatch.setattr(db, "upgrade_database", upgrade)
+
+    await db.init_db(engine)
+
+    verify.assert_awaited_once_with(engine)
+    upgrade.assert_not_awaited()
+
+
+async def test_database_head_verification_reports_stale_schema(tmp_path):
+    from app.db import DatabaseRevisionError, upgrade_database, verify_database_head
+
+    db_file = tmp_path / "revision-check.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_file}")
+    try:
+        await upgrade_database(engine)
+        await verify_database_head(engine)
+
+        async with engine.begin() as conn:
+            await conn.execute(text("DELETE FROM alembic_version"))
+
+        with pytest.raises(DatabaseRevisionError, match="python -m app.db.migrate"):
+            await verify_database_head(engine)
     finally:
         await engine.dispose()
 
