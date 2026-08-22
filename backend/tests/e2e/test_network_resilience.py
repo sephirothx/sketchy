@@ -1,7 +1,6 @@
 import asyncio
 
 import pytest
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import use_guest_name
 
@@ -60,6 +59,7 @@ async def test_page_load_and_reload_never_show_the_connection_banner():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         page = await browser.new_page()
+        await page.clock.install()
 
         # The banner is only up while the socket opens, so polling for it would
         # miss it. Watch the DOM from before the first script runs instead.
@@ -88,7 +88,11 @@ async def test_page_load_and_reload_never_show_the_connection_banner():
 
         async def assert_no_banner_during_load():
             await page.wait_for_selector(".lobby-page")
-            await page.wait_for_timeout(1000)
+            await page.clock.fast_forward(1000)
+            # Let the deliberately slow request finish before reloading or
+            # closing, while the init-script observer keeps watching for any
+            # transient banner during the ensuing socket connection.
+            await page.wait_for_selector(".first-run")
             # `is False`, not falsy: an undefined flag means the watcher never
             # ran, which would make this test pass without checking anything.
             assert await page.evaluate("window.__bannerSeen") is False, (
@@ -114,6 +118,7 @@ async def test_mid_session_socket_reconnects_to_room():
         context2 = await browser2.new_context()
         host = await context1.new_page()
         guest = await context2.new_page()
+        await guest.clock.install()
 
         # Proxy the guest's Socket.IO transport so the test can sever it on
         # demand; each reconnect attempt routes through here too.
@@ -156,17 +161,9 @@ async def test_mid_session_socket_reconnects_to_room():
             # that beats it is a pass, not a miss - what matters is that the
             # session comes back, which the assertions below cover. The banner
             # appearing at all is covered by the offline test above.
-            #
-            # Short timeout for exactly that reason: this is an optional
-            # sighting, and locally the reconnect always wins the race, so a
-            # long one is time the suite spends never seeing anything.
-            try:
-                await guest.wait_for_selector(
-                    '.connection-status-banner.offline, .connection-status-banner.reconnecting',
-                    timeout=1500,
-                )
-            except PlaywrightTimeoutError:
-                pass
+            # Fast-forward the client's reconnect backoff and one-second
+            # banner grace period; the server clock continues normally.
+            await guest.clock.fast_forward(2000)
             await guest.wait_for_selector(".connection-status-banner", state="hidden", timeout=15000)
 
             await host.wait_for_selector("text=GuestReconnect reconnected", timeout=10000)

@@ -192,6 +192,7 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
         host_context = await browser.new_context()
         guest_context = await browser.new_context()
         host = await host_context.new_page()
+        await host.clock.install()
         guest = await guest_context.new_page()
         host.set_default_timeout(20000)
         guest.set_default_timeout(20000)
@@ -256,7 +257,7 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
             assert "EndHost" == await host.input_value(".auth-form input")
 
             # Well past the ten-second dismissal had it kept running.
-            await host.wait_for_timeout(4000)
+            await host.clock.fast_forward(11000)
             assert await host.is_visible('[data-testid="game-end-overlay"]')
             assert "s" not in (
                 await host.inner_text(".game-end-actions button:last-child")
