@@ -33,9 +33,11 @@ from app.domain_values import (
     DATA_EXPORT_STATUSES,
     DEFAULT_USER_KEY_BINDINGS,
     HINT_MODES,
+    PROMPT_CONTENT_MODERATION_STATES,
     PROMPT_CONTENT_RATINGS,
     PROMPT_EDITORIAL_DIFFICULTIES,
     PROMPT_LANGUAGES,
+    PROMPT_LIST_VISIBILITIES,
     REPORT_REASONS,
     REPORT_STATUSES,
     SCORING_MODES,
@@ -45,9 +47,11 @@ from app.domain_values import (
     AccountState,
     BrushCursorStyle,
     DataExportStatus,
-    PromptLanguage,
     PromptContentRating,
+    PromptContentModerationState,
     PromptEditorialDifficulty,
+    PromptLanguage,
+    PromptListVisibility,
     ReportReason,
     ReportStatus,
     TurnEndReason,
@@ -984,6 +988,9 @@ class PromptTag(Base):
     version_tags: Mapped[list[PromptVersionTag]] = relationship(
         back_populates="tag", cascade="all, delete-orphan"
     )
+    list_revision_tags: Mapped[list[PromptListRevisionTag]] = relationship(
+        back_populates="tag", cascade="all, delete-orphan"
+    )
 
 
 class PromptVersionTag(Base):
@@ -1014,10 +1021,32 @@ class PromptList(Base):
     __tablename__ = "prompt_lists"
     __table_args__ = (
         _values_check("language", PROMPT_LANGUAGES, "ck_prompt_lists_language"),
+        _values_check(
+            "visibility", PROMPT_LIST_VISIBILITIES, "ck_prompt_lists_visibility"
+        ),
+        _values_check(
+            "moderation_state",
+            PROMPT_CONTENT_MODERATION_STATES,
+            "ck_prompt_lists_moderation_state",
+        ),
+        CheckConstraint(
+            "is_bundled = false OR owner_user_id IS NULL",
+            name="ck_prompt_lists_bundled_owner",
+        ),
+        CheckConstraint(
+            "visibility != 'unlisted' OR share_code IS NOT NULL",
+            name="ck_prompt_lists_unlisted_share_code",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1033,8 +1062,37 @@ class PromptList(Base):
     is_bundled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False
     )
+    visibility: Mapped[str] = mapped_column(
+        String(16),
+        default=PromptListVisibility.PRIVATE.value,
+        server_default=PromptListVisibility.PRIVATE.value,
+        nullable=False,
+        index=True,
+    )
+    share_code: Mapped[str | None] = mapped_column(
+        String(24), nullable=True, unique=True, index=True
+    )
+    moderation_state: Mapped[str] = mapped_column(
+        String(16),
+        default=PromptContentModerationState.ACTIVE.value,
+        server_default=PromptContentModerationState.ACTIVE.value,
+        nullable=False,
+        index=True,
+    )
+    moderated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    moderated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     version: Mapped[int] = mapped_column(
         Integer, default=1, server_default=text("1"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     prompts: Mapped[list[Prompt]] = relationship(
@@ -1076,6 +1134,12 @@ class PromptListRevision(Base):
         nullable=False,
         index=True,
     )
+    forked_from_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_list_revisions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     language: Mapped[str] = mapped_column(String(16), nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1088,6 +1152,9 @@ class PromptListRevision(Base):
         back_populates="revision",
         cascade="all, delete-orphan",
         order_by="PromptListRevisionItem.position",
+    )
+    revision_tags: Mapped[list[PromptListRevisionTag]] = relationship(
+        back_populates="revision", cascade="all, delete-orphan"
     )
 
 
@@ -1120,6 +1187,28 @@ class PromptListRevisionItem(Base):
     prompt_version: Mapped[PromptVersion] = relationship(
         back_populates="revision_items"
     )
+
+
+class PromptListRevisionTag(Base):
+    """Structured discovery metadata attached to one immutable list revision."""
+
+    __tablename__ = "prompt_list_revision_tags"
+
+    revision_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_list_revisions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tag_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_tags.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    revision: Mapped[PromptListRevision] = relationship(
+        back_populates="revision_tags"
+    )
+    tag: Mapped[PromptTag] = relationship(back_populates="list_revision_tags")
 
 
 class PromptListLocalization(Base):

@@ -45,6 +45,18 @@ class PromptContentRating(StrEnum):
     MATURE = "mature"
 
 
+class PromptListVisibility(StrEnum):
+    PRIVATE = "private"
+    UNLISTED = "unlisted"
+    PUBLIC = "public"
+
+
+class PromptContentModerationState(StrEnum):
+    ACTIVE = "active"
+    UNDER_REVIEW = "under_review"
+    HIDDEN = "hidden"
+
+
 class AccountState(StrEnum):
     """Lifecycle state for a persisted player identity."""
 
@@ -104,6 +116,12 @@ PROMPT_EDITORIAL_DIFFICULTIES = tuple(
     difficulty.value for difficulty in PromptEditorialDifficulty
 )
 PROMPT_CONTENT_RATINGS = tuple(rating.value for rating in PromptContentRating)
+PROMPT_LIST_VISIBILITIES = tuple(
+    visibility.value for visibility in PromptListVisibility
+)
+PROMPT_CONTENT_MODERATION_STATES = tuple(
+    state.value for state in PromptContentModerationState
+)
 ACCOUNT_STATES = tuple(state.value for state in AccountState)
 USER_ROLES = tuple(role.value for role in UserRole)
 DATA_EXPORT_STATUSES = tuple(status.value for status in DataExportStatus)

@@ -159,6 +159,16 @@ metadata requires both the same `conceptId` and a higher `promptVersion`.
 Adding/removing/reordering membership requires a higher top-level list
 `version`. Optional `aliases`, `difficulty`, `contentRating`, and `tags` belong
 to that immutable prompt version.
+Prompt-list governance is schema-first and deny-by-default. User-owned lists
+default to **Private**; **Unlisted** requires a unique share code. Official
+bundled lists alone are currently **Public**. Ownership, exact source-revision
+fork provenance, structured revision tags, moderation actor/time, and the
+Active/Under review/Hidden moderation state are relational fields with
+portable constraints—never JSON tags or a lossy `is_nsfw` flag. Difficulty and
+content rating remain on the exact immutable prompt version where their
+meaning belongs. The `public` value is reserved for future moderation-approved
+discovery: this v1 baseline intentionally exposes no community discovery,
+favorite/star table, or user-facing fork endpoint.
 Stored scoring modes, hint modes, turn outcomes, supported prompt languages,
 and supported prompt-list catalogue locales
 are string enums backed by portable database `CHECK` constraints. Extending a

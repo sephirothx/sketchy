@@ -34,7 +34,11 @@ from app.db.models import (
     PromptVersionTag,
     generate_uuid,
 )
-from app.domain_values import AccountState
+from app.domain_values import (
+    AccountState,
+    PromptContentModerationState,
+    PromptListVisibility,
+)
 from app.auth.avatars import validate_avatar_key
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
@@ -1015,6 +1019,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         description=description,
                         language=language,
                         is_bundled=True,
+                        visibility=PromptListVisibility.PUBLIC.value,
+                        moderation_state=PromptContentModerationState.ACTIVE.value,
                         version=version,
                     )
                     session.add(wl)
@@ -1045,6 +1051,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         )
                     wl.name = name
                     wl.description = description
+                    wl.visibility = PromptListVisibility.PUBLIC.value
+                    wl.moderation_state = PromptContentModerationState.ACTIVE.value
                 elif version < wl.version:
                     raise PromptSeedConflictError(
                         f"bundled list {slug} cannot roll back from version "
@@ -1120,6 +1128,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     wl.name = name
                     wl.description = description
                     wl.language = language
+                    wl.visibility = PromptListVisibility.PUBLIC.value
+                    wl.moderation_state = PromptContentModerationState.ACTIVE.value
                     wl.version = version
 
             await session.refresh(wl)

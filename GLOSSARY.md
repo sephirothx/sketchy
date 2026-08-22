@@ -87,6 +87,9 @@ Three different things, never used for one another:
 | **Masked prompt** | The prompt shown to guessers as underscores, with any revealed letters filled in and the word breaks visible. | masked word, hidden word, blanks |
 | **Prompt list** | A curated set of prompts in exactly one **Prompt language** that a room draws from (currently Standard English and Extended English). | word list, dictionary, prompt pack, category |
 | **Prompt-list revision** | One immutable, content-hashed, ordered membership snapshot of a **Prompt list**. A game pins the exact revisions it resolves at start, so later edits cannot rewrite what it used. | list version, prompt pack version, current list |
+| **Prompt-list visibility** | Who may resolve a user-owned **Prompt list** in v1: Private means only its owner; Unlisted means its owner or someone with its share code. Public is reserved for official/future moderated discovery and is not user-selectable. | privacy, published, discoverable |
+| **Prompt-content moderation state** | The review state of a user-owned **Prompt list**: Active, Under review, or Hidden. It is separate from visibility and from a prompt version's audience-facing **Content rating**. | NSFW flag, visibility, report status |
+| **Fork provenance** | The exact source **Prompt-list revision** from which a later revision was derived. The v1 schema preserves it even though user-facing forking is deferred. | copied from, parent list, clone |
 | **Custom prompts** | Prompts the host adds when creating the room, on top of or instead of the prompt lists. | custom words, own words, private words |
 | **Prompt stats** | The page, reached from the lobby, listing every prompt in a list and how it has actually played: how often it is picked when offered, and what share of guessers name it. A prompt is only ranked once enough guessers have faced it; the rest are listed as unranked. | word stats, difficulty ratings, prompt leaderboard |
 

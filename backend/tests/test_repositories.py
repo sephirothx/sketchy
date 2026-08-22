@@ -14,6 +14,7 @@ from app.db.models import (
     Base,
     GameParticipant,
     Prompt,
+    PromptList,
     TurnGuess,
     TurnRecord,
     PromptListLocalization,
@@ -285,6 +286,12 @@ async def test_prompt_list_repository():
         )
         assert wl.slug == "standard"
         assert wl.prompt_count == 3
+        async with factory() as session:
+            stored_list = await session.get(PromptList, UUID(wl.id))
+            assert stored_list is not None
+            assert stored_list.owner_user_id is None
+            assert stored_list.visibility == "public"
+            assert stored_list.moderation_state == "active"
 
         # 2. List all
         all_lists = await repo.list_all()
