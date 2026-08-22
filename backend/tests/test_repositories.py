@@ -17,10 +17,13 @@ from app.db.models import (
     TurnGuess,
     TurnRecord,
     PromptListLocalization,
+    PromptListRevision,
+    PromptVersion,
     generate_uuid,
 )
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
+    BundledPromptDefinition,
     GameParticipantInput,
     GameRecordInput,
     InvalidProfileDataError,
@@ -29,6 +32,7 @@ from app.repositories.interfaces import (
     UsernameTakenError,
     PromptPickTotals,
     PromptListSelectionError,
+    PromptSeedConflictError,
     PromptUsage,
 )
 from app.repositories.sqlalchemy import (
@@ -259,12 +263,24 @@ async def test_prompt_list_repository():
         repo = SqlAlchemyPromptListRepository(factory)
 
         # 1. Upsert bundled prompt list
+        apple_concept = str(generate_uuid())
+        banana_concept = str(generate_uuid())
+        cherry_concept = str(generate_uuid())
         wl = await repo.upsert_bundled(
             slug="standard",
             name="Standard List",
             description="Standard curated words",
             language="en",
-            prompts=["apple", "banana", "cherry", "apple"],  # includes duplicate
+            prompts=[
+                BundledPromptDefinition(
+                    apple_concept,
+                    "apple",
+                    aliases=("malus",),
+                    tags=("fruit",),
+                ),
+                BundledPromptDefinition(banana_concept, "banana"),
+                BundledPromptDefinition(cherry_concept, "cherry"),
+            ],
             version=1,
         )
         assert wl.slug == "standard"
@@ -310,13 +326,19 @@ async def test_prompt_list_repository():
         resolved = await repo.resolve_selection(["standard"])
         assert resolved.language == "en"
         assert resolved.prompts == ("apple", "banana", "cherry")
+        assert resolved.aliases["apple"] == ("malus",)
+        assert len(resolved.revision_ids) == 1
+        assert resolved.prompt_version_ids["apple"]
 
         french = await repo.upsert_bundled(
             slug="francais",
             name="Français",
             description="Mots français",
             language="fr",
-            prompts=["éléphant", "vélo"],
+            prompts=[
+                BundledPromptDefinition(str(generate_uuid()), "éléphant"),
+                BundledPromptDefinition(str(generate_uuid()), "vélo"),
+            ],
             version=1,
         )
         async with factory() as session:
@@ -366,12 +388,23 @@ async def test_prompt_list_repository():
         assert banana_stat.pick_rate == 0.0
 
         # 7. Version upgrade maintains stats
+        date_concept = str(generate_uuid())
+        first_revision_ids = resolved.revision_ids
         upgraded = await repo.upsert_bundled(
             slug="standard",
             name="Standard List v2",
             description="Updated words",
             language="en",
-            prompts=["apple", "date"],  # banana removed, date added
+            prompts=[
+                BundledPromptDefinition(
+                    apple_concept,
+                    "apple tree",
+                    prompt_version=2,
+                    aliases=("apple", "malus"),
+                    tags=("fruit",),
+                ),
+                BundledPromptDefinition(date_concept, "date"),
+            ],
             version=2,
         )
         assert upgraded.version == 2
@@ -379,8 +412,42 @@ async def test_prompt_list_repository():
 
         new_stats = await repo.get_prompt_stats("standard")
         assert len(new_stats) == 2
-        apple_stat_v2 = next(s for s in new_stats if s.text == "apple")
+        apple_stat_v2 = next(s for s in new_stats if s.text == "apple tree")
         assert apple_stat_v2.pick_count == 1  # preserved stats
+        resolved_v2 = await repo.resolve_selection(["standard"])
+        assert resolved_v2.revision_ids != first_revision_ids
+        assert resolved_v2.aliases["apple tree"] == ("apple", "malus")
+        assert (
+            resolved_v2.prompt_version_ids["apple tree"]
+            != resolved.prompt_version_ids["apple"]
+        )
+        async with factory() as session:
+            revisions = (
+                await session.execute(
+                    select(PromptListRevision).where(
+                        PromptListRevision.prompt_list_id == UUID(wl.id)
+                    )
+                )
+            ).scalars().all()
+            versions = (
+                await session.execute(
+                    select(PromptVersion).where(
+                        PromptVersion.concept_id == UUID(apple_concept)
+                    )
+                )
+            ).scalars().all()
+        assert {revision.version for revision in revisions} == {1, 2}
+        assert {entry.canonical_answer for entry in versions} == {"apple", "apple tree"}
+
+        with pytest.raises(PromptSeedConflictError, match="changed in place"):
+            await repo.upsert_bundled(
+                slug="standard",
+                name="Contradictory",
+                description="",
+                language="en",
+                prompts=[BundledPromptDefinition(apple_concept, "apple tree", 2)],
+                version=2,
+            )
     finally:
         await engine.dispose()
 
@@ -483,12 +550,16 @@ async def test_save_game_persists_the_analytics_columns():
 
 
 async def _seed_two_lists(repo):
+    apple = str(generate_uuid())
     await repo.upsert_bundled(
         slug="alpha",
         name="Alpha",
         description="",
         language="en",
-        prompts=["apple", "banana"],
+        prompts=[
+            BundledPromptDefinition(apple, "apple"),
+            BundledPromptDefinition(str(generate_uuid()), "banana"),
+        ],
         version=1,
     )
     await repo.upsert_bundled(
@@ -496,7 +567,10 @@ async def _seed_two_lists(repo):
         name="Beta",
         description="",
         language="en",
-        prompts=["apple", "castle"],
+        prompts=[
+            BundledPromptDefinition(apple, "apple"),
+            BundledPromptDefinition(str(generate_uuid()), "castle"),
+        ],
         version=1,
     )
 

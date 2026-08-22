@@ -86,6 +86,7 @@ Three different things, never used for one another:
 | **Prompt options** | The three prompts offered to the drawer during the choosing phase. | word options, word choices, candidates |
 | **Masked prompt** | The prompt shown to guessers as underscores, with any revealed letters filled in and the word breaks visible. | masked word, hidden word, blanks |
 | **Prompt list** | A curated set of prompts in exactly one **Prompt language** that a room draws from (currently Standard English and Extended English). | word list, dictionary, prompt pack, category |
+| **Prompt-list revision** | One immutable, content-hashed, ordered membership snapshot of a **Prompt list**. A game pins the exact revisions it resolves at start, so later edits cannot rewrite what it used. | list version, prompt pack version, current list |
 | **Custom prompts** | Prompts the host adds when creating the room, on top of or instead of the prompt lists. | custom words, own words, private words |
 | **Prompt stats** | The page, reached from the lobby, listing every prompt in a list and how it has actually played: how often it is picked when offered, and what share of guessers name it. A prompt is only ranked once enough guessers have faced it; the rest are listed as unranked. | word stats, difficulty ratings, prompt leaderboard |
 

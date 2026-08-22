@@ -289,6 +289,8 @@ class Game:
     # frozen into history.
     prompt_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     prompt_language: str = "en"
+    prompt_source_revision_ids: tuple[str, ...] = ()
+    prompt_version_ids: dict[str, str] = field(default_factory=dict)
     drawing_seconds: float = DRAWING_SECONDS
     hint_mode: str = "none"
     hide_masked_prompt: bool = False

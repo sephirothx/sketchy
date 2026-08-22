@@ -174,15 +174,31 @@ async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
 class RecordingPromptListRepo:
     """Answers with a fixed pool, and counts how often it was asked."""
 
-    def __init__(self, prompts=("aardvark", "zeppelin"), language="en"):
+    def __init__(
+        self,
+        prompts=("aardvark", "zeppelin"),
+        language="en",
+        *,
+        revision_ids=(),
+        aliases=None,
+        prompt_version_ids=None,
+    ):
         self.prompts = list(prompts)
         self.language = language
+        self.revision_ids = tuple(revision_ids)
+        self.aliases = dict(aliases or {})
+        self.prompt_version_ids = dict(prompt_version_ids or {})
         self.reads = 0
 
     async def resolve_selection(self, slugs):
         self.reads += 1
         return ResolvedPromptSelection(
-            tuple(slugs), self.language, tuple(self.prompts)
+            tuple(slugs),
+            self.language,
+            tuple(self.prompts),
+            revision_ids=self.revision_ids,
+            aliases=self.aliases,
+            prompt_version_ids=self.prompt_version_ids,
         )
 
     async def record_prompt_usage(self, slugs, usage):
@@ -244,7 +260,13 @@ async def test_a_settings_change_retries_prompt_lists_that_never_loaded():
 @pytest.mark.asyncio
 async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matching():
     room_manager = RoomManager()
-    repo = RecordingPromptListRepo(("éléphant", "vélo"), language="fr")
+    repo = RecordingPromptListRepo(
+        ("éléphant", "vélo"),
+        language="fr",
+        revision_ids=("revision-fr-1",),
+        aliases={"vélo": ("bicyclette",)},
+        prompt_version_ids={"éléphant": "prompt-fr-1", "vélo": "prompt-fr-2"},
+    )
     room, sio = build_settings_room(
         room_manager,
         repo,
@@ -260,6 +282,7 @@ async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matc
     assert result == {"ok": True}
     assert room.prompt_language == "fr"
     assert room.curated_prompts == ["éléphant", "vélo"]
+    assert room.prompt_list_revision_ids == ["revision-fr-1"]
     for payload in (
         room.to_state_payload(),
         room.to_public_summary(),
@@ -271,6 +294,12 @@ async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matc
     assert started["ok"] is True
     assert room.game is not None
     assert room.game.prompt_language == "fr"
+    assert room.game.prompt_aliases == {"vélo": ("bicyclette",)}
+    assert room.game.prompt_source_revision_ids == ("revision-fr-1",)
+    assert room.game.prompt_version_ids == {
+        "éléphant": "prompt-fr-1",
+        "vélo": "prompt-fr-2",
+    }
 
 
 @pytest.mark.asyncio

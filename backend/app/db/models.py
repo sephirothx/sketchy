@@ -901,6 +901,9 @@ class PromptVersion(Base):
     version_tags: Mapped[list[PromptVersionTag]] = relationship(
         back_populates="prompt_version", cascade="all, delete-orphan"
     )
+    revision_items: Mapped[list[PromptListRevisionItem]] = relationship(
+        back_populates="prompt_version"
+    )
 
 
 class PromptAlias(Base):
@@ -1042,6 +1045,81 @@ class PromptList(Base):
         back_populates="prompt_list",
         cascade="all, delete-orphan",
     )
+    revisions: Mapped[list[PromptListRevision]] = relationship(
+        back_populates="prompt_list",
+        cascade="all, delete-orphan",
+    )
+
+
+class PromptListRevision(Base):
+    """Immutable, content-addressed membership for one list version."""
+
+    __tablename__ = "prompt_list_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "prompt_list_id", "version", name="uq_prompt_list_revision_version"
+        ),
+        CheckConstraint(
+            "version >= 1", name="ck_prompt_list_revisions_version_positive"
+        ),
+        _values_check(
+            "language", PROMPT_LANGUAGES, "ck_prompt_list_revisions_language"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    prompt_list_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    language: Mapped[str] = mapped_column(String(16), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    prompt_list: Mapped[PromptList] = relationship(back_populates="revisions")
+    items: Mapped[list[PromptListRevisionItem]] = relationship(
+        back_populates="revision",
+        cascade="all, delete-orphan",
+        order_by="PromptListRevisionItem.position",
+    )
+
+
+class PromptListRevisionItem(Base):
+    """Ordered membership in one immutable prompt-list revision."""
+
+    __tablename__ = "prompt_list_revision_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "revision_id", "position", name="uq_prompt_list_revision_item_position"
+        ),
+        CheckConstraint(
+            "position >= 0", name="ck_prompt_list_revision_items_position_nonnegative"
+        ),
+    )
+
+    revision_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_list_revisions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    revision: Mapped[PromptListRevision] = relationship(back_populates="items")
+    prompt_version: Mapped[PromptVersion] = relationship(
+        back_populates="revision_items"
+    )
 
 
 class PromptListLocalization(Base):
@@ -1082,6 +1160,9 @@ class Prompt(Base):
 
     __table_args__ = (
         UniqueConstraint("prompt_list_id", "text", name="uq_prompt_list_text"),
+        UniqueConstraint(
+            "prompt_list_id", "concept_id", name="uq_prompt_list_concept"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1091,6 +1172,18 @@ class Prompt(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+    concept_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_concepts.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    prompt_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
+        nullable=True,
         index=True,
     )
     text: Mapped[str] = mapped_column(String(64), nullable=False)

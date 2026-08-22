@@ -12,8 +12,12 @@ from app.api.prompt_lists import (
     create_prompt_list_router,
     stats_limiter,
 )
-from app.db.models import Base
-from app.repositories.interfaces import PromptPickTotals, PromptUsage
+from app.db.models import Base, generate_uuid
+from app.repositories.interfaces import (
+    BundledPromptDefinition,
+    PromptPickTotals,
+    PromptUsage,
+)
 from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 
 pytestmark = pytest.mark.asyncio
@@ -43,7 +47,10 @@ async def seed(prompts, *texts: str) -> None:
         name="Standard",
         description="",
         language="en",
-        prompts=list(texts),
+        prompts=[
+            BundledPromptDefinition(str(generate_uuid()), text)
+            for text in texts
+        ],
         version=1,
     )
 
@@ -56,7 +63,7 @@ async def test_prompt_list_catalogue_filters_on_valid_content_language(env):
         name="Français",
         description="Mots français",
         language="fr",
-        prompts=["éléphant"],
+        prompts=[BundledPromptDefinition(str(generate_uuid()), "éléphant")],
         version=1,
     )
 

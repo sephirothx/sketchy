@@ -90,6 +90,11 @@ class GameFlowService:
 
         curated_prompts: list[str] = []
         prompt_language = fallback.prompt_language if fallback else "en"
+        prompt_list_revision_ids = (
+            list(fallback.prompt_list_revision_ids) if fallback else []
+        )
+        prompt_aliases = dict(fallback.prompt_aliases) if fallback else {}
+        prompt_version_ids = dict(fallback.prompt_version_ids) if fallback else {}
         if (
             fallback is not None
             and prompt_list_slugs == list(fallback.prompt_list_slugs)
@@ -110,6 +115,9 @@ class GameFlowService:
                 )
                 curated_prompts = list(selection.prompts)
                 prompt_language = selection.language
+                prompt_list_revision_ids = list(selection.revision_ids)
+                prompt_aliases = dict(selection.aliases)
+                prompt_version_ids = dict(selection.prompt_version_ids)
             except PromptListSelectionError as error:
                 raise RoomPromptResolutionError(str(error)) from error
             except Exception as error:
@@ -118,6 +126,9 @@ class GameFlowService:
                         "Prompt-list store unavailable for custom-only room"
                     )
                     curated_prompts = []
+                    prompt_list_revision_ids = []
+                    prompt_aliases = {}
+                    prompt_version_ids = {}
                 else:
                     logger.exception(
                         "Failed to resolve prompts for slugs: %s", prompt_list_slugs
@@ -142,6 +153,9 @@ class GameFlowService:
             "color_mode": value("color_mode"),
             "prompt_language": prompt_language,
             "prompt_list_slugs": prompt_list_slugs,
+            "prompt_list_revision_ids": prompt_list_revision_ids,
+            "prompt_aliases": prompt_aliases,
+            "prompt_version_ids": prompt_version_ids,
             "curated_prompts": curated_prompts,
         }
 
@@ -280,11 +294,18 @@ class GameFlowService:
             turn_order=[player.id for player in active_players],
             rounds_total=room.rounds,
             prompt_pool=room.effective_prompt_pool(),
+            prompt_aliases=room.effective_prompt_aliases(),
             drawing_seconds=room.drawing_seconds,
             hint_mode=room.hint_mode,
             scoring_mode=room.scoring_mode,
             hide_masked_prompt=room.hide_masked_prompt,
             prompt_language=room.prompt_language,
+            prompt_source_revision_ids=tuple(
+                room.prompt_list_revision_ids
+                if not room.custom_prompts_only
+                else []
+            ),
+            prompt_version_ids=room.effective_prompt_version_ids(),
         )
         await self._emit_room_state(room)
         if restarted:

@@ -48,6 +48,41 @@ async def test_seed_bundled_prompt_lists():
 
         combined_words = await repo.get_prompts_by_slugs(["english_standard", "english_extended"])
         assert len(combined_words) >= len(std_words)
+        combined = await repo.resolve_selection(
+            ["english_standard", "english_extended"]
+        )
+        assert combined.prompts.count("anchor") == 1
+        assert len(combined.revision_ids) == 2
+
+        first_revision_ids = combined.revision_ids
+        await seed_prompt_lists(repo)
+        assert (
+            await repo.resolve_selection(
+                ["english_standard", "english_extended"]
+            )
+        ).revision_ids == first_revision_ids
+    finally:
+        await engine.dispose()
+
+
+async def test_legacy_text_only_seed_format_is_rejected(tmp_path):
+    source = tmp_path / "legacy.json"
+    source.write_text(
+        """{
+          "slug": "legacy",
+          "name": "Legacy",
+          "language": "en",
+          "version": 1,
+          "prompts": ["text-keyed prompt"]
+        }""",
+        encoding="utf-8",
+    )
+    factory, engine = await create_test_db()
+    try:
+        with pytest.raises(ValueError, match="stable conceptId"):
+            await seed_prompt_lists(
+                SqlAlchemyPromptListRepository(factory), directory=tmp_path
+            )
     finally:
         await engine.dispose()
 
@@ -103,6 +138,8 @@ async def test_room_effective_prompt_pool_with_curated_and_custom_prompts():
         curated_prompts=["apple", "banana", "cherry"],
         custom_prompts=["dragon", "APPLE"],
         custom_prompts_only=False,
+        prompt_aliases={"apple": ("malus",), "banana": ("plantain",)},
+        prompt_version_ids={"apple": "apple-v1", "banana": "banana-v1"},
     )
     pool = room.effective_prompt_pool()
     assert pool is not None
@@ -112,8 +149,12 @@ async def test_room_effective_prompt_pool_with_curated_and_custom_prompts():
     assert "banana" in pool
     assert "cherry" in pool
     assert pool.count("apple") + pool.count("APPLE") == 1
+    assert room.effective_prompt_aliases() == {"banana": ("plantain",)}
+    assert room.effective_prompt_version_ids() == {"banana": "banana-v1"}
 
     # Custom prompts only
     room.custom_prompts_only = True
     pool_custom = room.effective_prompt_pool()
     assert pool_custom == ["dragon", "APPLE"]
+    assert room.effective_prompt_aliases() == {}
+    assert room.effective_prompt_version_ids() == {}

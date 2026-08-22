@@ -212,10 +212,30 @@ class ResolvedPromptSelection:
     slugs: tuple[str, ...]
     language: str
     prompts: tuple[str, ...]
+    revision_ids: tuple[str, ...] = ()
+    aliases: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    prompt_version_ids: Mapping[str, str] = field(default_factory=dict)
 
 
 class PromptListSelectionError(ValueError):
     """A selected list is missing or cannot be combined with the others."""
+
+
+class PromptSeedConflictError(ValueError):
+    """Bundled source contradicts an already-persisted immutable revision."""
+
+
+@dataclass(frozen=True, slots=True)
+class BundledPromptDefinition:
+    """One explicit prompt identity in a checked-in bundled seed file."""
+
+    concept_id: str
+    answer: str
+    prompt_version: int = 1
+    aliases: tuple[str, ...] = ()
+    editorial_difficulty: str = "unspecified"
+    content_rating: str = "everyone"
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -421,10 +441,10 @@ class PromptListRepository(ABC):
         name: str,
         description: str,
         language: str,
-        prompts: list[str],
+        prompts: Sequence[BundledPromptDefinition],
         version: int,
     ) -> PromptListSummary:
-        """Insert or update a bundled prompt list, preserving existing usage statistics on matching prompts."""
+        """Store one immutable bundled revision without text-keyed identity."""
         ...
 
     @abstractmethod

@@ -314,6 +314,10 @@ contracts, ADRs, migrations, tests, and runbooks.
   metadata; interface locale never changes gameplay matching.
 - Bundled seed data carries stable concept IDs. Lists share a concept only by
   explicit reference; matching text never silently merges ownership or stats.
+- Bundled list and prompt-version numbers are immutable contracts guarded by
+  canonical content hashes. Rewording retains the explicit concept, advances
+  the prompt version, and preserves the transitional counter row; membership
+  changes advance an immutable ordered list revision that games pin at start.
 - Give prompt lists registered ownership, private/unlisted visibility,
   moderation state, stable share code, optional fork provenance, and immutable
   revisions. Games pin the exact revisions resolved at start.
@@ -499,7 +503,7 @@ ADRs once they exist.
 | #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | Complete | #344-#351 integrated; 564 backend, 156 frontend, and 41 E2E tests pass locally; PostgreSQL CI gate configured; README updated and glossary reviewed (no new game terms) |
 | #339 database invariants | `epic/339-database-invariants` | Complete | #352-#356 integrated; 567 backend, 156 frontend, and 41 E2E tests pass locally; dual-dialect migration gate configured; README updated and glossary reviewed |
 | #340 accounts and privacy | `epic/340-accounts-identity-privacy` | Complete | #357-#366, #394-#396, and #399 integrated. Registered Player settings sync across devices with guest-local and one-time-seed rules; bounded private reports/evidence and temporary/permanent Suspensions have role-gated review, append-only audit correlation, privacy escape paths, session/live-seat enforcement, and export/deletion safeguards; persistent directional Blocks have idempotent APIs, alias-merge preservation, and bounded cached ordinary-chat filtering without hiding game-critical state; the colorblind-safe preference produces only a dismissible, unattributed, host-only live-room suggestion, ignores spectators, and has explicit shared-payload absence coverage. Umbrella gate: 632 backend, 156 frontend, and 45 E2E tests pass; frontend lint/build pass; README and glossary updated |
-| #342 prompt content | `epic/342-prompt-content-usage` | In progress | #392 implemented on its child branch: stable Prompt concepts, immutable language-specific Prompt versions, scoped aliases, tags, editorial metadata, and alias-aware matching. #377 implemented on its child branch: constrained seven-language Latin matching registry, single-language room/list resolution with visible validation failures, game-language propagation, API language filtering, locale-keyed catalogue translations selected from `Accept-Language`, and language-aware picker/stats UI. Reversible migrations and focused repository/handler/contract tests pass; README and glossary updated; final child gate pending |
+| #342 prompt content | `epic/342-prompt-content-usage` | In progress | #392 implemented stable Prompt concepts, immutable localized versions, scoped aliases/tags/editorial metadata, and alias-aware matching. #377 added the constrained seven-language registry, homogeneous room resolution, localized catalogue copy, and language-aware UI. #376 now gives every bundled entry an explicit shared-only-by-reference UUIDv7 concept ID, creates immutable content-hashed ordered list revisions and prompt versions, rejects in-place/rollback seed conflicts, preserves counters across explicit rewording, batches first-seed persistence, and pins revision/version/alias data into each game. Reversible migrations and focused repository/handler/contract tests pass; README and glossary updated; final child gate pending |
 | #341 game history | `epic/341-game-history-statistics` | Not started | - |
 | #343 live rooms and formats | `epic/343-live-rooms-deployment-formats` | Not started | - |
 | Standalone/cross-epic integration | `epic/393-preproduction-baseline` | Not started | - |

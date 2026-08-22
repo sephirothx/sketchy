@@ -4,6 +4,8 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime, timezone
+import hashlib
+import json
 from uuid import UUID
 
 from sqlalchemy import and_, case, distinct, func, or_, select, update
@@ -21,13 +23,22 @@ from app.db.models import (
     UserBlock,
     AuditEvent,
     Prompt,
+    PromptAlias,
+    PromptConcept,
     PromptList,
+    PromptListRevision,
+    PromptListRevisionItem,
+    PromptTag,
+    PromptVersion,
+    PromptVersionAlias,
+    PromptVersionTag,
     generate_uuid,
 )
 from app.domain_values import AccountState
 from app.auth.avatars import validate_avatar_key
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
+    BundledPromptDefinition,
     GameDetail,
     GameHistoryRepository,
     GameParticipantInput,
@@ -47,12 +58,14 @@ from app.repositories.interfaces import (
     UsernameTakenError,
     PromptListRepository,
     PromptListSelectionError,
+    PromptSeedConflictError,
     PromptListSummary,
     PromptPickTotals,
     PromptStatsSummary,
     PromptUsage,
     ResolvedPromptSelection,
 )
+from app.prompt_content import normalize_prompt_answer, prompt_match_key
 
 MAX_PAGINATION_LIMIT = 100
 DEFAULT_PAGINATION_LIMIT = 20
@@ -165,6 +178,31 @@ def _to_prompt_list_summary(
         is_bundled=wl.is_bundled,
         version=wl.version,
     )
+
+
+def _bundled_revision_hash(
+    *, language: str, prompts: Sequence[BundledPromptDefinition]
+) -> str:
+    """Hash the exact ordered immutable content, independent of JSON layout."""
+    payload = {
+        "language": language,
+        "prompts": [
+            {
+                "concept_id": prompt.concept_id,
+                "prompt_version": prompt.prompt_version,
+                "canonical_prompt": prompt.answer,
+                "aliases": sorted(prompt.aliases),
+                "difficulty": prompt.editorial_difficulty,
+                "content_rating": prompt.content_rating,
+                "tags": sorted(prompt.tags),
+            }
+            for prompt in prompts
+        ],
+    }
+    encoded = json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class SqlAlchemyUserRepository(UserRepository):
@@ -862,14 +900,51 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 raise PromptListSelectionError(
                     "Selected prompt lists must use the same language"
                 )
-            list_ids = [row.id for row in list_rows]
-            stmt = (
-                select(distinct(Prompt.text))
-                .where(Prompt.prompt_list_id.in_(list_ids))
-                .order_by(Prompt.text)
-            )
-            result = await session.execute(stmt)
-            prompts = tuple(result.scalars().all())
+            rows_by_slug = {row.slug: row for row in list_rows}
+            revisions: list[PromptListRevision] = []
+            for slug in slugs:
+                row = rows_by_slug[slug]
+                revision = await session.scalar(
+                    select(PromptListRevision)
+                    .where(
+                        PromptListRevision.prompt_list_id == row.id,
+                        PromptListRevision.version
+                        == select(PromptList.version)
+                        .where(PromptList.id == row.id)
+                        .scalar_subquery(),
+                    )
+                    .options(
+                        selectinload(PromptListRevision.items)
+                        .selectinload(PromptListRevisionItem.prompt_version)
+                        .selectinload(PromptVersion.version_aliases)
+                        .selectinload(PromptVersionAlias.alias)
+                    )
+                )
+                if revision is None:
+                    raise PromptListSelectionError(
+                        f"Prompt list has no seeded revision: {slug}"
+                    )
+                revisions.append(revision)
+
+            prompts: list[str] = []
+            aliases: dict[str, tuple[str, ...]] = {}
+            prompt_version_ids: dict[str, str] = {}
+            seen_versions: set[UUID] = set()
+            for revision in revisions:
+                for item in revision.items:
+                    prompt_version = item.prompt_version
+                    if prompt_version.id in seen_versions:
+                        continue
+                    seen_versions.add(prompt_version.id)
+                    answer = prompt_version.canonical_answer
+                    prompts.append(answer)
+                    aliases[answer] = tuple(
+                        sorted(
+                            link.alias.answer
+                            for link in prompt_version.version_aliases
+                        )
+                    )
+                    prompt_version_ids[answer] = _public_id(prompt_version.id)
             if not prompts:
                 raise PromptListSelectionError(
                     "Selected prompt lists do not contain any prompts"
@@ -877,7 +952,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             return ResolvedPromptSelection(
                 slugs=tuple(slugs),
                 language=languages.pop(),
-                prompts=prompts,
+                prompts=tuple(prompts),
+                revision_ids=tuple(_public_id(revision.id) for revision in revisions),
+                aliases=aliases,
+                prompt_version_ids=prompt_version_ids,
             )
 
     async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:
@@ -891,26 +969,45 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         name: str,
         description: str,
         language: str,
-        prompts: list[str],
+        prompts: Sequence[BundledPromptDefinition],
         version: int,
     ) -> PromptListSummary:
-        # Deduplicate incoming prompts case-insensitively
-        seen_prompts: set[str] = set()
-        clean_prompts: list[str] = []
-        for w in prompts:
-            trimmed = w.strip()
-            lower = trimmed.lower()
-            if trimmed and lower not in seen_prompts:
-                seen_prompts.add(lower)
-                clean_prompts.append(lower)
+        source_prompts = tuple(prompts)
+        if not source_prompts:
+            raise PromptSeedConflictError("bundled prompt lists cannot be empty")
+        concept_ids = [UUID(prompt.concept_id) for prompt in source_prompts]
+        if len(set(concept_ids)) != len(concept_ids):
+            raise PromptSeedConflictError(
+                "a concept may appear only once in a prompt-list revision"
+            )
+        answer_keys = [
+            normalize_prompt_answer(prompt.answer, language)
+            for prompt in source_prompts
+        ]
+        if len(set(answer_keys)) != len(answer_keys):
+            raise PromptSeedConflictError(
+                "a prompt-list revision cannot contain duplicate displayed answers"
+            )
+        content_hash = _bundled_revision_hash(
+            language=language, prompts=source_prompts
+        )
 
         async with self._session_factory() as session:
             async with session.begin():
-                stmt = select(PromptList).where(PromptList.slug == slug).options(selectinload(PromptList.prompts))
+                stmt = (
+                    select(PromptList)
+                    .where(PromptList.slug == slug)
+                    .options(
+                        selectinload(PromptList.prompts),
+                        selectinload(PromptList.revisions),
+                    )
+                )
                 result = await session.execute(stmt)
                 wl = result.scalar_one_or_none()
 
                 if wl is None:
+                    existing_prompts: tuple[Prompt, ...] = ()
+                    existing_revisions: tuple[PromptListRevision, ...] = ()
                     wl = PromptList(
                         id=generate_uuid(),
                         slug=slug,
@@ -921,52 +1018,313 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         version=version,
                     )
                     session.add(wl)
-                    for text in clean_prompts:
-                        session.add(
-                            Prompt(
+                    await session.flush()
+                elif not wl.is_bundled:
+                    raise PromptSeedConflictError(
+                        f"bundled seed cannot replace user-owned list {slug}"
+                    )
+                else:
+                    existing_prompts = tuple(wl.prompts)
+                    existing_revisions = tuple(wl.revisions)
+
+                existing_revision = next(
+                    (
+                        revision
+                        for revision in existing_revisions
+                        if revision.version == version
+                    ),
+                    None,
+                )
+                if existing_revision is not None:
+                    if (
+                        existing_revision.content_hash != content_hash
+                        or existing_revision.language != language
+                    ):
+                        raise PromptSeedConflictError(
+                            f"bundled list {slug} version {version} changed in place"
+                        )
+                    wl.name = name
+                    wl.description = description
+                elif version < wl.version:
+                    raise PromptSeedConflictError(
+                        f"bundled list {slug} cannot roll back from version "
+                        f"{wl.version} to {version}"
+                    )
+                else:
+                    prompt_versions = await self._ensure_bundled_prompt_versions(
+                        session, definitions=source_prompts, language=language
+                    )
+                    revision = PromptListRevision(
+                        id=generate_uuid(),
+                        prompt_list_id=wl.id,
+                        version=version,
+                        language=language,
+                        content_hash=content_hash,
+                    )
+                    session.add(revision)
+                    await session.flush()
+                    session.add_all(
+                        [
+                            PromptListRevisionItem(
+                                revision_id=revision.id,
+                                prompt_version_id=prompt_version.id,
+                                position=position,
+                            )
+                            for position, prompt_version in enumerate(prompt_versions)
+                        ]
+                    )
+
+                    existing_by_concept = {
+                        prompt.concept_id: prompt
+                        for prompt in existing_prompts
+                        if prompt.concept_id is not None
+                    }
+                    unlinked_by_key = {
+                        prompt_match_key(prompt.text, language): prompt
+                        for prompt in existing_prompts
+                        if prompt.concept_id is None
+                    }
+                    selected_rows: dict[UUID, Prompt] = {}
+                    for definition, prompt_version, answer_key in zip(
+                        source_prompts, prompt_versions, answer_keys
+                    ):
+                        concept_id = UUID(definition.concept_id)
+                        prompt_row = existing_by_concept.get(concept_id)
+                        if prompt_row is None:
+                            prompt_row = unlinked_by_key.get(answer_key)
+                        if prompt_row is not None:
+                            selected_rows[concept_id] = prompt_row
+
+                    retained_ids = {id(prompt) for prompt in selected_rows.values()}
+                    for prompt_row in existing_prompts:
+                        if id(prompt_row) not in retained_ids:
+                            await session.delete(prompt_row)
+                    await session.flush()
+
+                    for definition, prompt_version in zip(
+                        source_prompts, prompt_versions
+                    ):
+                        concept_id = UUID(definition.concept_id)
+                        prompt_row = selected_rows.get(concept_id)
+                        if prompt_row is None:
+                            prompt_row = Prompt(
                                 id=generate_uuid(),
                                 prompt_list_id=wl.id,
-                                text=text,
-                                offer_count=0,
-                                pick_count=0,
-                                correct_guess_count=0,
-                                total_guesser_count=0,
+                                text=definition.answer,
                             )
-                        )
-                elif version > wl.version:
+                            session.add(prompt_row)
+                        prompt_row.concept_id = concept_id
+                        prompt_row.prompt_version_id = prompt_version.id
+                        prompt_row.text = definition.answer
+
                     wl.name = name
                     wl.description = description
                     wl.language = language
                     wl.version = version
-
-                    existing_prompts_map = {w.text.lower(): w for w in wl.prompts}
-                    target_set = set(clean_prompts)
-
-                    # Remove deleted prompts
-                    for old_text, prompt_obj in list(existing_prompts_map.items()):
-                        if old_text not in target_set:
-                            await session.delete(prompt_obj)
-
-                    # Add new prompts
-                    for text in clean_prompts:
-                        if text not in existing_prompts_map:
-                            session.add(
-                                Prompt(
-                                    id=generate_uuid(),
-                                    prompt_list_id=wl.id,
-                                    text=text,
-                                    offer_count=0,
-                                    pick_count=0,
-                                    correct_guess_count=0,
-                                    total_guesser_count=0,
-                                )
-                            )
 
             await session.refresh(wl)
             prompt_count = await session.scalar(
                 select(func.count(Prompt.id)).where(Prompt.prompt_list_id == wl.id)
             )
             return _to_prompt_list_summary(wl, int(prompt_count or 0))
+
+    async def _ensure_bundled_prompt_versions(
+        self,
+        session: AsyncSession,
+        *,
+        definitions: Sequence[BundledPromptDefinition],
+        language: str,
+    ) -> list[PromptVersion]:
+        """Resolve one source revision with bounded, set-based database reads."""
+        concept_ids = [UUID(definition.concept_id) for definition in definitions]
+
+        existing_concept_ids: set[UUID] = set()
+        existing_versions: list[PromptVersion] = []
+        for offset in range(0, len(concept_ids), 500):
+            concept_chunk = concept_ids[offset : offset + 500]
+            existing_concept_ids.update(
+                (
+                    await session.scalars(
+                        select(PromptConcept.id).where(
+                            PromptConcept.id.in_(concept_chunk)
+                        )
+                    )
+                ).all()
+            )
+            existing_versions.extend(
+                (
+                    await session.scalars(
+                        select(PromptVersion)
+                        .where(
+                            PromptVersion.concept_id.in_(concept_chunk),
+                            PromptVersion.language == language,
+                        )
+                        .options(
+                            selectinload(PromptVersion.version_aliases).selectinload(
+                                PromptVersionAlias.alias
+                            ),
+                            selectinload(PromptVersion.version_tags).selectinload(
+                                PromptVersionTag.tag
+                            ),
+                        )
+                    )
+                ).all()
+            )
+
+        session.add_all(
+            PromptConcept(id=concept_id)
+            for concept_id in concept_ids
+            if concept_id not in existing_concept_ids
+        )
+        version_map = {
+            (entry.concept_id, entry.version): entry for entry in existing_versions
+        }
+        latest_versions: dict[UUID, int] = defaultdict(int)
+        for entry in existing_versions:
+            latest_versions[entry.concept_id] = max(
+                latest_versions[entry.concept_id], entry.version
+            )
+
+        resolved: list[PromptVersion] = []
+        new_pairs: list[tuple[BundledPromptDefinition, PromptVersion]] = []
+        for definition, concept_id in zip(definitions, concept_ids):
+            match_key = normalize_prompt_answer(definition.answer, language)
+            prompt_version = version_map.get(
+                (concept_id, definition.prompt_version)
+            )
+            if prompt_version is not None:
+                actual_aliases = tuple(
+                    sorted(
+                        link.alias.answer
+                        for link in prompt_version.version_aliases
+                    )
+                )
+                actual_tags = tuple(
+                    sorted(
+                        link.tag.slug for link in prompt_version.version_tags
+                    )
+                )
+                if (
+                    prompt_version.canonical_answer != definition.answer
+                    or prompt_version.match_key != match_key
+                    or prompt_version.editorial_difficulty
+                    != definition.editorial_difficulty
+                    or prompt_version.content_rating != definition.content_rating
+                    or actual_aliases != tuple(sorted(definition.aliases))
+                    or actual_tags != tuple(sorted(definition.tags))
+                ):
+                    raise PromptSeedConflictError(
+                        f"prompt concept {definition.concept_id} version "
+                        f"{definition.prompt_version} changed in place"
+                    )
+                resolved.append(prompt_version)
+                continue
+
+            expected_version = latest_versions[concept_id] + 1
+            if definition.prompt_version != expected_version:
+                raise PromptSeedConflictError(
+                    f"prompt concept {definition.concept_id} expected version "
+                    f"{expected_version}, got {definition.prompt_version}"
+                )
+            prompt_version = PromptVersion(
+                id=generate_uuid(),
+                concept_id=concept_id,
+                language=language,
+                version=definition.prompt_version,
+                canonical_answer=definition.answer,
+                match_key=match_key,
+                editorial_difficulty=definition.editorial_difficulty,
+                content_rating=definition.content_rating,
+            )
+            session.add(prompt_version)
+            latest_versions[concept_id] = definition.prompt_version
+            new_pairs.append((definition, prompt_version))
+            resolved.append(prompt_version)
+        await session.flush()
+
+        requested_alias_keys = {
+            (UUID(definition.concept_id), normalize_prompt_answer(alias, language))
+            for definition, _ in new_pairs
+            for alias in definition.aliases
+        }
+        alias_map: dict[tuple[UUID, str], PromptAlias] = {}
+        if requested_alias_keys:
+            alias_concepts = {key[0] for key in requested_alias_keys}
+            aliases = (
+                await session.scalars(
+                    select(PromptAlias).where(
+                        PromptAlias.concept_id.in_(alias_concepts),
+                        PromptAlias.language == language,
+                    )
+                )
+            ).all()
+            alias_map = {
+                (alias.concept_id, alias.match_key): alias for alias in aliases
+            }
+
+        requested_tags = {
+            tag for definition, _ in new_pairs for tag in definition.tags
+        }
+        tag_map = {
+            tag.slug: tag
+            for tag in (
+                (
+                    await session.scalars(
+                        select(PromptTag).where(PromptTag.slug.in_(requested_tags))
+                    )
+                ).all()
+                if requested_tags
+                else []
+            )
+        }
+
+        alias_links: list[tuple[PromptVersion, PromptAlias]] = []
+        tag_links: list[tuple[PromptVersion, PromptTag]] = []
+        for definition, prompt_version in new_pairs:
+            concept_id = UUID(definition.concept_id)
+            for alias_answer in definition.aliases:
+                alias_key = normalize_prompt_answer(alias_answer, language)
+                alias = alias_map.get((concept_id, alias_key))
+                if alias is None:
+                    alias = PromptAlias(
+                        id=generate_uuid(),
+                        concept_id=concept_id,
+                        language=language,
+                        answer=alias_answer,
+                        match_key=alias_key,
+                    )
+                    session.add(alias)
+                    alias_map[(concept_id, alias_key)] = alias
+                elif alias.answer != alias_answer:
+                    raise PromptSeedConflictError(
+                        f"prompt alias {alias_answer!r} changes immutable display copy"
+                    )
+                alias_links.append((prompt_version, alias))
+            for tag_slug in definition.tags:
+                tag = tag_map.get(tag_slug)
+                if tag is None:
+                    tag = PromptTag(
+                        id=generate_uuid(),
+                        slug=tag_slug,
+                        name=tag_slug.replace("-", " ").title(),
+                    )
+                    session.add(tag)
+                    tag_map[tag_slug] = tag
+                tag_links.append((prompt_version, tag))
+        await session.flush()
+        session.add_all(
+            PromptVersionAlias(
+                prompt_version_id=prompt_version.id, alias_id=alias.id
+            )
+            for prompt_version, alias in alias_links
+        )
+        session.add_all(
+            PromptVersionTag(
+                prompt_version_id=prompt_version.id, tag_id=tag.id
+            )
+            for prompt_version, tag in tag_links
+        )
+        return resolved
 
     async def record_prompt_usage(
         self,

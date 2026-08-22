@@ -136,9 +136,29 @@ List `name` and `description` are authored catalogue copy; optional translated
 copy is stored separately by interface locale and selected from
 `Accept-Language`, so translating the UI never changes a list's content
 language.
-The legacy bundled-list rows are connected to these identities by the later
-#342 seed/revision migration; the new tables deliberately do not merge existing
-same-text rows on their own.
+Bundled JSON entries carry an explicit UUIDv7 `conceptId`; equal text shares a
+concept only when the checked-in files deliberately repeat that ID. Every
+language-specific wording has an immutable `promptVersion`, and every bundled
+list version becomes a content-hashed immutable **Prompt-list revision** with
+ordered membership. Deploying different content under an already-seen list or
+prompt version is a startup-failing seed conflict, not an in-place rewrite.
+Rooms resolve and games pin the exact revision IDs at start. During the
+transition to rebuildable projections, the legacy counter row is linked by
+concept and updated in place when a new prompt version rewords it, preserving
+its existing statistics; old revisions keep referencing the old wording.
+
+The checked-in seed shape is therefore identity-based rather than text-keyed:
+
+```json
+{"conceptId":"01a02b7b-b42d-7afc-a278-fc0ecc83b994","answer":"anchor",
+ "promptVersion":1}
+```
+
+Changing only capitalization, punctuation, wording, aliases, or editorial
+metadata requires both the same `conceptId` and a higher `promptVersion`.
+Adding/removing/reordering membership requires a higher top-level list
+`version`. Optional `aliases`, `difficulty`, `contentRating`, and `tags` belong
+to that immutable prompt version.
 Stored scoring modes, hint modes, turn outcomes, supported prompt languages,
 and supported prompt-list catalogue locales
 are string enums backed by portable database `CHECK` constraints. Extending a
@@ -415,7 +435,7 @@ service-wide **Suspension**.
 backend/
   alembic/        Alembic migration environment and versioned migration scripts
   data/
-    prompt_lists/ Bundled curated prompt list JSON definitions
+    prompt_lists/ Identity-based bundled prompt list JSON definitions
   app/
     db/           SQLAlchemy models, engine setup, seeding, and migration runner
     repositories/ Abstract repository interfaces and SQLAlchemy implementations

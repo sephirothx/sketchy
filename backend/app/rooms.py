@@ -283,6 +283,9 @@ class Room:
     color_mode: str = DEFAULT_COLOR_MODE
     prompt_language: str = "en"
     prompt_list_slugs: list[str] = field(default_factory=list)
+    prompt_list_revision_ids: list[str] = field(default_factory=list)
+    prompt_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    prompt_version_ids: dict[str, str] = field(default_factory=dict)
     curated_prompts: list[str] = field(default_factory=list)
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
@@ -402,6 +405,33 @@ class Room:
             if prompt_match_key(word, self.prompt_language) not in seen
         ]
 
+    def effective_prompt_aliases(self) -> dict[str, tuple[str, ...]]:
+        """Aliases for curated prompts that custom room content did not shadow."""
+        if self.custom_prompts_only:
+            return {}
+        custom_keys = {
+            prompt_match_key(prompt, self.prompt_language)
+            for prompt in self.custom_prompts
+        }
+        return {
+            answer: aliases
+            for answer, aliases in self.prompt_aliases.items()
+            if prompt_match_key(answer, self.prompt_language) not in custom_keys
+        }
+
+    def effective_prompt_version_ids(self) -> dict[str, str]:
+        if self.custom_prompts_only:
+            return {}
+        custom_keys = {
+            prompt_match_key(prompt, self.prompt_language)
+            for prompt in self.custom_prompts
+        }
+        return {
+            answer: version_id
+            for answer, version_id in self.prompt_version_ids.items()
+            if prompt_match_key(answer, self.prompt_language) not in custom_keys
+        }
+
     def to_public_summary(self) -> dict:
         active_players = self.seated_players()
         spectators = [p for p in self.players.values() if p.is_spectator]
@@ -505,6 +535,9 @@ class RoomManager:
         color_mode: str = DEFAULT_COLOR_MODE,
         prompt_language: str = "en",
         prompt_list_slugs: list[str] | None = None,
+        prompt_list_revision_ids: list[str] | None = None,
+        prompt_aliases: dict[str, tuple[str, ...]] | None = None,
+        prompt_version_ids: dict[str, str] | None = None,
         curated_prompts: list[str] | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
@@ -528,6 +561,9 @@ class RoomManager:
             color_mode=color_mode,
             prompt_language=prompt_language,
             prompt_list_slugs=list(prompt_list_slugs or []),
+            prompt_list_revision_ids=list(prompt_list_revision_ids or []),
+            prompt_aliases=dict(prompt_aliases or {}),
+            prompt_version_ids=dict(prompt_version_ids or {}),
             curated_prompts=list(curated_prompts or []),
         )
         self.rooms[room_id] = room
