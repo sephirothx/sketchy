@@ -27,7 +27,7 @@ async def _migrate(engine: AsyncEngine, operation, target: str) -> None:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
-                message=r".*ix_users_username_lower.*",
+                message=r".*ix_users_(?:username|email)_lower.*",
                 category=SAWarning,
             )
             operation(config, target)
@@ -45,20 +45,22 @@ async def _current_revisions(engine: AsyncEngine) -> set[str]:
         )
 
 
-async def _index_definition(engine: AsyncEngine) -> str | None:
+async def _index_definition(
+    engine: AsyncEngine, name: str = "ix_users_username_lower"
+) -> str | None:
     async with engine.connect() as connection:
         if engine.dialect.name == "sqlite":
             statement = text(
                 "SELECT sql FROM sqlite_master "
-                "WHERE type = 'index' AND name = 'ix_users_username_lower'"
+                "WHERE type = 'index' AND name = :name"
             )
         else:
             statement = text(
                 "SELECT indexdef FROM pg_indexes "
                 "WHERE schemaname = current_schema() "
-                "AND indexname = 'ix_users_username_lower'"
+                "AND indexname = :name"
             )
-        return (await connection.execute(statement)).scalar_one_or_none()
+        return (await connection.execute(statement, {"name": name})).scalar_one_or_none()
 
 
 async def _schema_differences(engine: AsyncEngine):
@@ -69,10 +71,14 @@ async def _schema_differences(engine: AsyncEngine):
     # this suite covers that deliberate autogenerate blind spot.
     with warnings.catch_warnings():
         warnings.filterwarnings(
-            "ignore", message=r".*ix_users_username_lower.*", category=SAWarning
+            "ignore",
+            message=r".*ix_users_(?:username|email)_lower.*",
+            category=SAWarning,
         )
         warnings.filterwarnings(
-            "ignore", message=r".*ix_users_username_lower.*", category=UserWarning
+            "ignore",
+            message=r".*ix_users_(?:username|email)_lower.*",
+            category=UserWarning,
         )
         async with engine.connect() as connection:
             return await connection.run_sync(diff)
@@ -95,6 +101,11 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     assert "lower" in normalized_index
     assert "username" in normalized_index
     assert "where" in normalized_index
+    email_index = await _index_definition(engine, "ix_users_email_lower")
+    assert email_index is not None
+    assert "unique" in email_index.lower()
+    assert "lower" in email_index.lower()
+    assert "where" in email_index.lower()
 
     # Run the newest real revision backward and replay it.
     await _migrate(engine, alembic_command.downgrade, foundation)
@@ -103,6 +114,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     await _migrate(engine, alembic_command.upgrade, "head")
     assert await _current_revisions(engine) == {head}
     assert await _index_definition(engine) is not None
+    assert await _index_definition(engine, "ix_users_email_lower") is not None
 
     # Prove the entire chain can be removed, then rebuilt from an empty schema.
     await _migrate(engine, alembic_command.downgrade, "base")
@@ -118,6 +130,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     assert await _current_revisions(engine) == {head}
     assert await _schema_differences(engine) == []
     assert await _index_definition(engine) is not None
+    assert await _index_definition(engine, "ix_users_email_lower") is not None
 
 
 async def test_sqlite_migration_chain_round_trip(tmp_path):

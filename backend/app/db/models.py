@@ -83,8 +83,23 @@ class User(Base):
             postgresql_where=text("username IS NOT NULL"),
             sqlite_where=text("username IS NOT NULL"),
         ),
+        Index(
+            "ix_users_email_lower",
+            func.lower(text("email")),
+            unique=True,
+            postgresql_where=text("email IS NOT NULL"),
+            sqlite_where=text("email IS NOT NULL"),
+        ),
         _values_check("state", ACCOUNT_STATES, "ck_users_state"),
         _values_check("role", USER_ROLES, "ck_users_role"),
+        CheckConstraint(
+            "email IS NULL OR email = lower(trim(email))",
+            name="ck_users_email_normalized",
+        ),
+        CheckConstraint(
+            "email IS NOT NULL OR email_verified_at IS NULL",
+            name="ck_users_verified_email_present",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -107,9 +122,12 @@ class User(Base):
         server_default=UserRole.USER.value,
         nullable=False,
     )
-    # Reserved for password recovery; no reset flow ships yet, but the column
-    # exists so recovery can be added without migrating live accounts.
+    # A verified delivery flow does not ship yet. This field is deliberately
+    # not exposed as a recovery channel until verification can be completed.
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(),
         server_default=func.now(),

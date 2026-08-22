@@ -145,7 +145,7 @@ def _run_alembic_upgrade_sync(
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
-            message=r".*ix_users_username_lower.*",
+            message=r".*ix_users_(?:username|email)_lower.*",
             category=SAWarning,
         )
         alembic_command.upgrade(alembic_cfg, "head")

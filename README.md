@@ -185,6 +185,12 @@ Roles are service-wide privileges. A room **host** remains an ordinary
 gameplay role and is never an administrator merely because they created a
 room.
 
+Account email identity is nullable, normalized only by trimming and
+lowercasing, and protected by a case-insensitive unique index. Verification is
+recorded separately in `email_verified_at`. Sketchy does not expose email-based
+account recovery until a delivery and verification flow exists; merely storing
+an address never makes it a trusted recovery channel.
+
 Sessions are signed with a key that is generated once and stored in the
 database. Set `JWT_SECRET` to supply your own — required if you run more than
 one server process, since they must all sign with the same key, and it also

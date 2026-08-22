@@ -732,8 +732,8 @@ async def test_migrations_match_the_models(tmp_path):
     a model changed without a migration, and the next deployment gets a schema
     the code does not expect.
 
-    Note what this cannot see: an expression index (`ix_users_username_lower`)
-    is invisible to autogenerate on SQLite, so dropping it from the migration
+    Note what this cannot see: the username and email expression indexes are
+    invisible to autogenerate on SQLite, so dropping either from a migration
     would not fail this test. See `User.__table_args__`.
     """
     from alembic import command as alembic_command
@@ -754,7 +754,7 @@ async def test_migrations_match_the_models(tmp_path):
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
-                message=r".*ix_users_username_lower.*",
+                message=r".*ix_users_(?:username|email)_lower.*",
                 category=SAWarning,
             )
             alembic_command.upgrade(config, "head")
@@ -773,12 +773,12 @@ async def test_migrations_match_the_models(tmp_path):
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
-                message=r".*ix_users_username_lower.*",
+                message=r".*ix_users_(?:username|email)_lower.*",
                 category=SAWarning,
             )
             warnings.filterwarnings(
                 "ignore",
-                message=r".*ix_users_username_lower.*",
+                message=r".*ix_users_(?:username|email)_lower.*",
                 category=UserWarning,
             )
             async with engine.connect() as connection:
