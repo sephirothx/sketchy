@@ -19,6 +19,7 @@ from typing import Sequence
 from itertools import groupby
 
 from app.canvas_session import CanvasSession
+from app.domain_values import HINT_MODES, SCORING_MODES, TurnEndReason
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_prompt_choices
 
 CHOOSE_PROMPT_SECONDS = 15
@@ -30,7 +31,6 @@ DRAWING_SECONDS = 80
 TURN_RESULTS_SECONDS = float(os.getenv("TURN_RESULTS_SECONDS") or 5)
 MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
-SCORING_MODES = ("none", "default", "pressure")
 
 
 def competition_ranks(sorted_scores: Sequence[int]) -> list[int]:
@@ -88,7 +88,6 @@ PRESSURE_MIN_POINTS = 50
 #   (vowels cost more than consonants, and more common letters across the
 #   room's prompt pool cost more than rare ones) and is charged whether or not
 #   the letter turns out to be in the prompt.
-HINT_MODES = ("none", "checkpoints", "purchase", "wheel")
 # Each hint a player buys in a turn costs more than the last: 12, 24, 36, ...
 HINT_BASE_COST = 12
 MIN_HIDDEN_LETTERS = 2
@@ -261,7 +260,7 @@ class CompletedTurnStats:
     stroke_count: int = 0
     # "all_guessed" or "timeout". A turn the drawer abandons never completes,
     # so it is never recorded and cannot appear here.
-    end_reason: str = "timeout"
+    end_reason: str = TurnEndReason.TIMEOUT.value
     wrong_guess_count: int = 0
     near_miss_count: int = 0
     # Everyone still in the rotation as the turn ended, which is what makes a
@@ -812,9 +811,9 @@ class Game:
                 prompt_auto_picked=self.prompt_auto_picked,
                 stroke_count=len(self.canvas.history),
                 end_reason=(
-                    "all_guessed"
+                    TurnEndReason.ALL_GUESSED.value
                     if self.all_guessed(total_guesser_count)
-                    else "timeout"
+                    else TurnEndReason.TIMEOUT.value
                 ),
                 wrong_guess_count=sum(self.wrong_guesses.values()),
                 near_miss_count=self.near_miss_count,

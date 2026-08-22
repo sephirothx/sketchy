@@ -25,6 +25,12 @@ from app.db.models import (
     PromptList,
     generate_uuid,
 )
+from app.domain_values import (
+    HINT_MODES,
+    PROMPT_LANGUAGES,
+    SCORING_MODES,
+    TURN_END_REASONS,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -169,7 +175,7 @@ async def test_timestamp_type_normalizes_sqlite_results_to_aware_utc():
                         id=game_id,
                         room_name="UTC room",
                         scoring_mode="default",
-                        hint_mode="timed",
+                        hint_mode="checkpoints",
                         drawing_seconds=90,
                         total_rounds=1,
                         player_count=1,
@@ -193,7 +199,7 @@ async def test_timestamp_type_normalizes_sqlite_results_to_aware_utc():
                             id=generate_uuid(),
                             room_name="Naive time",
                             scoring_mode="default",
-                            hint_mode="timed",
+                            hint_mode="checkpoints",
                             drawing_seconds=90,
                             total_rounds=1,
                             player_count=1,
@@ -268,7 +274,7 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                         id=game_id,
                         room_name="Cascade room",
                         scoring_mode="default",
-                        hint_mode="timed",
+                        hint_mode="checkpoints",
                         drawing_seconds=90,
                         total_rounds=1,
                         player_count=1,
@@ -392,7 +398,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                             id=game_id,
                             room_name="Invariant room",
                             scoring_mode="default",
-                            hint_mode="timed",
+                            hint_mode="checkpoints",
                             drawing_seconds=90,
                             total_rounds=1,
                             player_count=2,
@@ -455,6 +461,101 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                 async with factory() as session:
                     async with session.begin():
                         session.add(duplicate)
+    finally:
+        await engine.dispose()
+
+
+async def test_database_rejects_unknown_modes_statuses_and_languages():
+    factory, engine = await create_test_db()
+    now = datetime.now(timezone.utc)
+    valid_game_id = generate_uuid()
+    drawer_id = generate_uuid()
+
+    try:
+        invalid_rows = (
+            GameRecord(
+                id=generate_uuid(),
+                room_name="Bad scoring",
+                scoring_mode="typo",
+                hint_mode="none",
+                drawing_seconds=90,
+                total_rounds=1,
+                player_count=1,
+                started_at=now,
+                finished_at=now,
+            ),
+            GameRecord(
+                id=generate_uuid(),
+                room_name="Bad hints",
+                scoring_mode="default",
+                hint_mode="mystery",
+                drawing_seconds=90,
+                total_rounds=1,
+                player_count=1,
+                started_at=now,
+                finished_at=now,
+            ),
+            PromptList(
+                id=generate_uuid(),
+                slug="unsupported-language",
+                name="Unsupported language",
+                language="xx",
+            ),
+        )
+        for invalid_row in invalid_rows:
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(invalid_row)
+
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=drawer_id, display_name="Drawer"))
+                session.add(
+                    GameRecord(
+                        id=valid_game_id,
+                        room_name="Valid game",
+                        scoring_mode="default",
+                        hint_mode="none",
+                        drawing_seconds=90,
+                        total_rounds=1,
+                        player_count=1,
+                        started_at=now,
+                        finished_at=now,
+                    )
+                )
+
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    session.add(
+                        TurnRecord(
+                            id=generate_uuid(),
+                            game_id=valid_game_id,
+                            round_number=1,
+                            turn_number=1,
+                            drawer_user_id=drawer_id,
+                            prompt="anchor",
+                            duration_seconds=30,
+                            end_reason="drawer_vanished",
+                        )
+                    )
+
+        expected_values = {
+            "ck_game_records_scoring_mode": SCORING_MODES,
+            "ck_game_records_hint_mode": HINT_MODES,
+            "ck_turn_records_end_reason": TURN_END_REASONS,
+            "ck_prompt_lists_language": PROMPT_LANGUAGES,
+        }
+        constraints = {
+            constraint.name: str(constraint.sqltext)
+            for table in (GameRecord, TurnRecord, PromptList)
+            for constraint in table.__table__.constraints
+            if constraint.name in expected_values
+        }
+        for name, values in expected_values.items():
+            assert name in constraints
+            assert all(repr(value) in constraints[name] for value in values)
     finally:
         await engine.dispose()
 
@@ -620,7 +721,13 @@ async def test_migrations_match_the_models(tmp_path):
 
     def upgrade(connection):
         config.attributes["connection"] = connection
-        alembic_command.upgrade(config, "head")
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*ix_users_username_lower.*",
+                category=SAWarning,
+            )
+            alembic_command.upgrade(config, "head")
 
     def diff(connection):
         context = MigrationContext.configure(connection)

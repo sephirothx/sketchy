@@ -24,7 +24,13 @@ async def _migrate(engine: AsyncEngine, operation, target: str) -> None:
 
     def run(connection):
         config.attributes["connection"] = connection
-        operation(config, target)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*ix_users_username_lower.*",
+                category=SAWarning,
+            )
+            operation(config, target)
 
     async with engine.begin() as connection:
         await connection.run_sync(run)

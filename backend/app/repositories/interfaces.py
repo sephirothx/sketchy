@@ -6,6 +6,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from app.domain_values import TurnEndReason
+
 
 class RepositoryError(Exception):
     """Base class for domain repository errors."""
@@ -103,7 +105,7 @@ class TurnRecordInput:
     guesser_count: int = 0
     prompt_auto_picked: bool = False
     stroke_count: int = 0
-    end_reason: str = "timeout"
+    end_reason: str = TurnEndReason.TIMEOUT.value
     wrong_guess_count: int = 0
     near_miss_count: int = 0
 

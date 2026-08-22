@@ -6,6 +6,7 @@ import uuid
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Float,
     ForeignKey,
     Index,
@@ -19,11 +20,24 @@ from sqlalchemy import (
     text,
     true,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import text as sql_text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from uuid6 import uuid7
 
 from app.db.types import UTCDateTime
+from app.domain_values import (
+    HINT_MODES,
+    PROMPT_LANGUAGES,
+    SCORING_MODES,
+    TURN_END_REASONS,
+    PromptLanguage,
+    TurnEndReason,
+)
+
+
+def _values_check(column: str, values: tuple[str, ...], name: str) -> CheckConstraint:
+    allowed = ", ".join(repr(value) for value in values)
+    return CheckConstraint(f"{column} IN ({allowed})", name=name)
 
 
 def generate_uuid() -> uuid.UUID:
@@ -102,6 +116,12 @@ class GameRecord(Base):
     """Finished multiplayer game summary."""
 
     __tablename__ = "game_records"
+    __table_args__ = (
+        _values_check(
+            "scoring_mode", SCORING_MODES, "ck_game_records_scoring_mode"
+        ),
+        _values_check("hint_mode", HINT_MODES, "ck_game_records_hint_mode"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
@@ -177,6 +197,9 @@ class TurnRecord(Base):
             "turn_number",
             unique=True,
         ),
+        _values_check(
+            "end_reason", TURN_END_REASONS, "ck_turn_records_end_reason"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -216,7 +239,10 @@ class TurnRecord(Base):
     # "all_guessed" or "timeout". A turn whose drawer leaves never completes,
     # so it is never recorded and cannot appear here.
     end_reason: Mapped[str] = mapped_column(
-        String(16), default="timeout", server_default="timeout", nullable=False
+        String(16),
+        default=TurnEndReason.TIMEOUT.value,
+        server_default=TurnEndReason.TIMEOUT.value,
+        nullable=False,
     )
     wrong_guess_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
@@ -280,6 +306,9 @@ class PromptList(Base):
     """Curated or custom prompt collection."""
 
     __tablename__ = "prompt_lists"
+    __table_args__ = (
+        _values_check("language", PROMPT_LANGUAGES, "ck_prompt_lists_language"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
@@ -290,7 +319,10 @@ class PromptList(Base):
         String(255), default="", server_default="", nullable=False
     )
     language: Mapped[str] = mapped_column(
-        String(16), default="en", server_default="en", nullable=False
+        String(16),
+        default=PromptLanguage.ENGLISH.value,
+        server_default=PromptLanguage.ENGLISH.value,
+        nullable=False,
     )
     is_bundled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False

@@ -3,6 +3,7 @@ import json
 import logging
 from pathlib import Path
 
+from app.domain_values import PromptLanguage
 from app.repositories.interfaces import PromptListRepository, PromptListSummary
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,9 @@ async def seed_prompt_lists(
             slug = str(data["slug"]).strip()
             name = str(data["name"]).strip()
             description = str(data.get("description", "")).strip()
-            language = str(data.get("language", "en")).strip()
+            language = str(
+                data.get("language", PromptLanguage.ENGLISH.value)
+            ).strip()
             version = int(data.get("version", 1))
             prompts = [str(w) for w in data.get("prompts", []) if str(w).strip()]
 

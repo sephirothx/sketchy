@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any
+import warnings
 
 from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
@@ -11,6 +12,7 @@ from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import event, text
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import SAWarning
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -137,7 +139,16 @@ def _run_alembic_upgrade_sync(
     connection: Connection, alembic_cfg: AlembicConfig
 ) -> None:
     alembic_cfg.attributes["connection"] = connection
-    alembic_command.upgrade(alembic_cfg, "head")
+    # SQLite cannot reflect the one hand-written expression index. Revision
+    # 9b6f4e2d1a70 and the migration suite pin its exact definition directly,
+    # so suppress only this known warning while batch migrations reflect FKs.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*ix_users_username_lower.*",
+            category=SAWarning,
+        )
+        alembic_command.upgrade(alembic_cfg, "head")
 
 
 def _database_revisions_sync(

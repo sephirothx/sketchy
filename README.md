@@ -110,6 +110,10 @@ Prompt-list counts are derived from prompt membership on read, so adding or
 removing a prompt cannot leave a cached total out of sync.
 Prompt metadata and usage counters also have database-side defaults, keeping
 ORM, raw SQL, bulk imports, and migration backfills consistent.
+Stored scoring modes, hint modes, turn outcomes, and supported prompt languages
+are string enums backed by portable database `CHECK` constraints. Extending a
+set requires one coordinated code, migration, contract, README, and glossary
+review.
 
 The UUID change rewrites the pre-v1 initial migration rather than converting
 old text keys. Databases created before this baseline must be rebuilt; preserve
