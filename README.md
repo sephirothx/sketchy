@@ -191,6 +191,13 @@ recorded separately in `email_verified_at`. Sketchy does not expose email-based
 account recovery until a delivery and verification flow exists; merely storing
 an address never makes it a trusted recovery channel.
 
+Avatars never hotlink arbitrary third-party URLs. An account may store only a
+key from the deployment-hosted built-in catalog (`initial`, `pencil`, `palette`,
+or `spark`); an absent key uses the existing generated initial. Schema for
+future uploaded assets and external identity providers is reserved, but no
+upload or provider-login API is enabled until storage validation, moderation,
+and identity-linking flows ship.
+
 Sessions are signed with a key that is generated once and stored in the
 database. Set `JWT_SECRET` to supply your own — required if you run more than
 one server process, since they must all sign with the same key, and it also

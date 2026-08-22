@@ -37,7 +37,7 @@ class UserData:
     username: str | None
     display_name: str
     name_color: str | None
-    avatar_url: str | None
+    avatar_key: str | None
     is_anonymous: bool
     created_at: datetime
     updated_at: datetime
@@ -285,7 +285,7 @@ class UserRepository(ABC):
         *,
         display_name: str | None = None,
         name_color: str | None = None,
-        avatar_url: str | None = None,
+        avatar_key: str | None = None,
     ) -> UserData | None:
         """Update display settings for a user."""
         ...

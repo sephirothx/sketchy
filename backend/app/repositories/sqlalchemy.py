@@ -22,6 +22,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.domain_values import AccountState
+from app.auth.avatars import validate_avatar_key
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     GameDetail,
@@ -74,7 +75,7 @@ def _to_user_data(user: User) -> UserData:
         username=user.username,
         display_name=user.display_name,
         name_color=user.name_color,
-        avatar_url=user.avatar_url,
+        avatar_key=user.avatar_key,
         is_anonymous=user.is_anonymous,
         state=user.state,
         role=user.role,
@@ -125,21 +126,6 @@ def _to_prompt_list_summary(
     )
 
 
-def _validate_avatar_url(url: str | None) -> str | None:
-    if url is None:
-        return None
-    trimmed = url.strip()
-    if not trimmed:
-        return None
-    lower = trimmed.lower()
-    # Allow http, https, or root-relative paths only. Disallow control chars, quotes, and dangerous schemes.
-    is_valid_scheme = lower.startswith("https://") or lower.startswith("http://") or lower.startswith("/")
-    has_forbidden_chars = any(c in trimmed for c in ("\r", "\n", "<", ">", '"', "'"))
-    if not is_valid_scheme or has_forbidden_chars or lower.startswith("javascript:") or lower.startswith("data:"):
-        raise InvalidProfileDataError("Invalid avatar_url: must be a valid http/https or relative URL")
-    return trimmed
-
-
 class SqlAlchemyUserRepository(UserRepository):
     """SQLAlchemy-backed implementation of UserRepository."""
 
@@ -163,7 +149,7 @@ class SqlAlchemyUserRepository(UserRepository):
                     # the player - they choose, or they sign up.
                     display_name=display_name.strip(),
                     name_color=name_color,
-                    avatar_url=None,
+                    avatar_key=None,
                     state=AccountState.ANONYMOUS.value,
                 )
                 session.add(user)
@@ -263,12 +249,17 @@ class SqlAlchemyUserRepository(UserRepository):
         *,
         display_name: str | None = None,
         name_color: str | None = None,
-        avatar_url: str | None = None,
+        avatar_key: str | None = None,
     ) -> UserData | None:
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
             return None
-        validated_avatar = _validate_avatar_url(avatar_url) if avatar_url is not None else None
+        try:
+            validated_avatar = (
+                validate_avatar_key(avatar_key) if avatar_key is not None else None
+            )
+        except ValueError as error:
+            raise InvalidProfileDataError(str(error)) from error
         async with self._session_factory() as session:
             async with session.begin():
                 stmt = select(User).where(User.id == db_user_id)
@@ -280,8 +271,8 @@ class SqlAlchemyUserRepository(UserRepository):
                     user.display_name = display_name.strip() or user.display_name
                 if name_color is not None:
                     user.name_color = name_color
-                if avatar_url is not None:
-                    user.avatar_url = validated_avatar
+                if avatar_key is not None:
+                    user.avatar_key = validated_avatar
             await session.refresh(user)
             return _to_user_data(user)
 

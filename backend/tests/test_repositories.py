@@ -110,18 +110,22 @@ async def test_user_repository_crud_and_stats():
         assert by_name.id == anon.id
         assert not hasattr(by_name, "password_hash")
 
-        # 8. Update profile with valid and invalid avatar URLs
-        updated = await repo.update_profile(anon.id, name_color="#00ff00", avatar_url="https://example.com/avatar.png")
+        # 8. Update profile with a deployment-hosted avatar key.
+        updated = await repo.update_profile(
+            anon.id, name_color="#00ff00", avatar_key="PENCIL"
+        )
         assert updated is not None
         assert updated.name_color == "#00ff00"
-        assert updated.avatar_url == "https://example.com/avatar.png"
+        assert updated.avatar_key == "pencil"
 
-        # Disallow javascript: schemes or XSS characters in avatar_url
+        # Arbitrary URLs and unrecognized asset names never reach a browser.
         with pytest.raises(InvalidProfileDataError):
-            await repo.update_profile(anon.id, avatar_url="javascript:alert(1)")
+            await repo.update_profile(
+                anon.id, avatar_key="https://example.com/avatar.png"
+            )
 
         with pytest.raises(InvalidProfileDataError):
-            await repo.update_profile(anon.id, avatar_url='https://example.com/"onerror="alert(1)')
+            await repo.update_profile(anon.id, avatar_key="unknown")
 
         # 9. Stats with 0 games
         stats = await repo.get_stats(anon.id)
