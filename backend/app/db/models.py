@@ -33,6 +33,8 @@ from app.domain_values import (
     DATA_EXPORT_STATUSES,
     DEFAULT_USER_KEY_BINDINGS,
     HINT_MODES,
+    PROMPT_CONTENT_RATINGS,
+    PROMPT_EDITORIAL_DIFFICULTIES,
     PROMPT_LANGUAGES,
     REPORT_REASONS,
     REPORT_STATUSES,
@@ -44,6 +46,8 @@ from app.domain_values import (
     BrushCursorStyle,
     DataExportStatus,
     PromptLanguage,
+    PromptContentRating,
+    PromptEditorialDifficulty,
     ReportReason,
     ReportStatus,
     TurnEndReason,
@@ -810,6 +814,195 @@ class TurnGuess(Base):
 
     turn_record: Mapped[TurnRecord] = relationship(back_populates="guesses")
     user: Mapped[User | None] = relationship()
+
+
+class PromptConcept(Base):
+    """Stable prompt identity shared only by explicit references."""
+
+    __tablename__ = "prompt_concepts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    versions: Mapped[list[PromptVersion]] = relationship(
+        back_populates="concept", cascade="all, delete-orphan"
+    )
+    aliases: Mapped[list[PromptAlias]] = relationship(
+        back_populates="concept", cascade="all, delete-orphan"
+    )
+
+
+class PromptVersion(Base):
+    """Immutable language-specific answer and editorial metadata."""
+
+    __tablename__ = "prompt_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "concept_id",
+            "language",
+            "version",
+            name="uq_prompt_version_concept_language_version",
+        ),
+        _values_check(
+            "language", PROMPT_LANGUAGES, "ck_prompt_versions_language"
+        ),
+        _values_check(
+            "editorial_difficulty",
+            PROMPT_EDITORIAL_DIFFICULTIES,
+            "ck_prompt_versions_editorial_difficulty",
+        ),
+        _values_check(
+            "content_rating",
+            PROMPT_CONTENT_RATINGS,
+            "ck_prompt_versions_content_rating",
+        ),
+        CheckConstraint("version >= 1", name="ck_prompt_versions_version_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    concept_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_concepts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    language: Mapped[str] = mapped_column(String(16), nullable=False)
+    version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=text("1"), nullable=False
+    )
+    canonical_answer: Mapped[str] = mapped_column(String(64), nullable=False)
+    match_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    editorial_difficulty: Mapped[str] = mapped_column(
+        String(16),
+        default=PromptEditorialDifficulty.UNSPECIFIED.value,
+        server_default=PromptEditorialDifficulty.UNSPECIFIED.value,
+        nullable=False,
+    )
+    content_rating: Mapped[str] = mapped_column(
+        String(16),
+        default=PromptContentRating.EVERYONE.value,
+        server_default=PromptContentRating.EVERYONE.value,
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    concept: Mapped[PromptConcept] = relationship(back_populates="versions")
+    version_aliases: Mapped[list[PromptVersionAlias]] = relationship(
+        back_populates="prompt_version", cascade="all, delete-orphan"
+    )
+    version_tags: Mapped[list[PromptVersionTag]] = relationship(
+        back_populates="prompt_version", cascade="all, delete-orphan"
+    )
+
+
+class PromptAlias(Base):
+    """Concept-and-language-scoped accepted answer."""
+
+    __tablename__ = "prompt_aliases"
+    __table_args__ = (
+        UniqueConstraint(
+            "concept_id",
+            "language",
+            "match_key",
+            name="uq_prompt_alias_concept_language_match_key",
+        ),
+        _values_check("language", PROMPT_LANGUAGES, "ck_prompt_aliases_language"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    concept_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_concepts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    language: Mapped[str] = mapped_column(String(16), nullable=False)
+    answer: Mapped[str] = mapped_column(String(64), nullable=False)
+    match_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    concept: Mapped[PromptConcept] = relationship(back_populates="aliases")
+    alias_versions: Mapped[list[PromptVersionAlias]] = relationship(
+        back_populates="alias", cascade="all, delete-orphan"
+    )
+
+
+class PromptVersionAlias(Base):
+    """Attach a concept alias to the exact immutable versions accepting it."""
+
+    __tablename__ = "prompt_version_aliases"
+
+    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    alias_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_aliases.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    prompt_version: Mapped[PromptVersion] = relationship(
+        back_populates="version_aliases"
+    )
+    alias: Mapped[PromptAlias] = relationship(back_populates="alias_versions")
+
+
+class PromptTag(Base):
+    """Stable searchable category shared by explicit version membership."""
+
+    __tablename__ = "prompt_tags"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    slug: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str] = mapped_column(
+        String(255), default="", server_default="", nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    version_tags: Mapped[list[PromptVersionTag]] = relationship(
+        back_populates="tag", cascade="all, delete-orphan"
+    )
+
+
+class PromptVersionTag(Base):
+    """Explicit tag membership for an immutable prompt version."""
+
+    __tablename__ = "prompt_version_tags"
+
+    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tag_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_tags.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    prompt_version: Mapped[PromptVersion] = relationship(
+        back_populates="version_tags"
+    )
+    tag: Mapped[PromptTag] = relationship(back_populates="version_tags")
 
 
 class PromptList(Base):

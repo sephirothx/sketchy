@@ -116,6 +116,19 @@ Prompt-list counts are derived from prompt membership on read, so adding or
 removing a prompt cannot leave a cached total out of sync.
 Prompt metadata and usage counters also have database-side defaults, keeping
 ORM, raw SQL, bulk imports, and migration backfills consistent.
+Prompt content has a stable identity independent of its spelling. A
+**Prompt concept** may have immutable, language-specific **Prompt versions**;
+equal text never merges concepts implicitly. Versions store a canonical
+display answer, a language-aware match key, editorial difficulty, content
+rating, explicit category tags, and an exact set of accepted **Prompt aliases**.
+Aliases are unique within a concept and language, and are attached separately
+to each version so changing an alias later cannot rewrite how an older game
+matched guesses. English matching case-folds, collapses whitespace, and folds
+canonically decomposable accents. Only languages with implemented matching
+semantics may be stored even when a string is otherwise a valid BCP-47 tag.
+The legacy bundled-list rows are connected to these identities by the later
+#342 seed/revision migration; the new tables deliberately do not merge existing
+same-text rows on their own.
 Stored scoring modes, hint modes, turn outcomes, and supported prompt languages
 are string enums backed by portable database `CHECK` constraints. Extending a
 set requires one coordinated code, migration, contract, README, and glossary

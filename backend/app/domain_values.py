@@ -26,6 +26,19 @@ class PromptLanguage(StrEnum):
     ENGLISH = "en"
 
 
+class PromptEditorialDifficulty(StrEnum):
+    UNSPECIFIED = "unspecified"
+    EASY = "easy"
+    MEDIUM = "medium"
+    HARD = "hard"
+
+
+class PromptContentRating(StrEnum):
+    EVERYONE = "everyone"
+    TEEN = "teen"
+    MATURE = "mature"
+
+
 class AccountState(StrEnum):
     """Lifecycle state for a persisted player identity."""
 
@@ -81,6 +94,10 @@ SCORING_MODES = tuple(mode.value for mode in ScoringMode)
 HINT_MODES = tuple(mode.value for mode in HintMode)
 TURN_END_REASONS = tuple(reason.value for reason in TurnEndReason)
 PROMPT_LANGUAGES = tuple(language.value for language in PromptLanguage)
+PROMPT_EDITORIAL_DIFFICULTIES = tuple(
+    difficulty.value for difficulty in PromptEditorialDifficulty
+)
+PROMPT_CONTENT_RATINGS = tuple(rating.value for rating in PromptContentRating)
 ACCOUNT_STATES = tuple(state.value for state in AccountState)
 USER_ROLES = tuple(role.value for role in UserRole)
 DATA_EXPORT_STATUSES = tuple(status.value for status in DataExportStatus)

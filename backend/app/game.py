@@ -10,7 +10,6 @@ import random
 import re
 import string
 import time
-import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -21,6 +20,7 @@ from itertools import groupby
 from app.canvas_session import CanvasSession
 from app.domain_values import HINT_MODES, SCORING_MODES, TurnEndReason
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_prompt_choices
+from app.prompt_content import prompt_match_key
 
 CHOOSE_PROMPT_SECONDS = 15
 DRAWING_SECONDS = 80
@@ -126,7 +126,7 @@ class Phase(str, Enum):
     GAME_END = "game_end"
 
 
-def _normalize(text: str) -> str:
+def _normalize(text: str, language: str = "en") -> str:
     """Normalize guesses while preserving letters without canonical ASCII forms.
 
     Whitespace and case differences are ignored as before. Canonically
@@ -134,13 +134,7 @@ def _normalize(text: str) -> str:
     Letters such as "ø" and "ł" remain distinct because Unicode NFD does not
     decompose them into ASCII letters.
     """
-    collapsed = " ".join(text.split()).lower()
-    decomposed = unicodedata.normalize("NFD", collapsed)
-    return "".join(
-        character
-        for character in decomposed
-        if not unicodedata.combining(character)
-    )
+    return prompt_match_key(text, language)
 
 
 def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
@@ -290,6 +284,11 @@ class Game:
     phase_deadline: float | None = None
     used_prompts: set[str] = field(default_factory=set)
     prompt_pool: list[str] | None = None
+    # Aliases belong to the exact localized prompt versions resolved when the
+    # game starts. They never alter the canonical answer shown in the UI or
+    # frozen into history.
+    prompt_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    prompt_language: str = "en"
     drawing_seconds: float = DRAWING_SECONDS
     hint_mode: str = "none"
     hide_masked_prompt: bool = False
@@ -699,9 +698,9 @@ class Game:
             return False, 0
         if len(text) > MAX_PROMPT_LENGTH:
             return False, 0
-        normalized_guess = _normalize(text)
-        normalized_prompt = _normalize(self.prompt)
-        if normalized_guess != normalized_prompt:
+        normalized_guess = _normalize(text, self.prompt_language)
+        accepted_answers = self._accepted_answer_keys()
+        if normalized_guess not in accepted_answers:
             # Counted here rather than at the caller so that only real attempts
             # land: the drawer and players who already have it return above,
             # and their messages are chat, not guesses.
@@ -752,23 +751,38 @@ class Game:
             return None
         if len(text) > MAX_PROMPT_LENGTH:
             return None
-        guess = _normalize(text)
-        prompt = _normalize(self.prompt)
-        if guess == prompt:
+        guess = _normalize(text, self.prompt_language)
+        accepted_answers = self._accepted_answer_keys()
+        if guess in accepted_answers:
             return None
-        if _is_close_pair(guess, prompt):
+        if any(_is_close_pair(guess, answer) for answer in accepted_answers):
             return "close"
-        word_tokens = prompt.split(" ")
-        if len(word_tokens) > 1:
-            guess_tokens = guess.split(" ")
-            if abs(len(guess_tokens) - len(word_tokens)) <= 1:
-                # Bag-of-words intersection: matches regardless of word order,
-                # capping duplicate words at the lower count on either side.
-                overlap = Counter(guess_tokens) & Counter(word_tokens)
-                correct_letter_count = sum(len(w) * count for w, count in overlap.items())
-                if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
-                    return "partial"
+        guess_tokens = guess.split(" ")
+        for answer in accepted_answers:
+            word_tokens = answer.split(" ")
+            if len(word_tokens) <= 1 or abs(len(guess_tokens) - len(word_tokens)) > 1:
+                continue
+            # Bag-of-words intersection: matches regardless of word order,
+            # capping duplicate words at the lower count on either side.
+            overlap = Counter(guess_tokens) & Counter(word_tokens)
+            correct_letter_count = sum(
+                len(word) * count for word, count in overlap.items()
+            )
+            if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
+                return "partial"
         return None
+
+    def _accepted_answer_keys(self) -> tuple[str, ...]:
+        """Canonical answer plus aliases for this exact selected version."""
+        if not self.prompt:
+            return ()
+        aliases = self.prompt_aliases.get(self.prompt, ())
+        return tuple(
+            dict.fromkeys(
+                _normalize(answer, self.prompt_language)
+                for answer in (self.prompt, *aliases)
+            )
+        )
 
     def all_guessed(self, total_guessers: int) -> bool:
         return total_guessers > 0 and len(self.correct_guessers) >= total_guessers
