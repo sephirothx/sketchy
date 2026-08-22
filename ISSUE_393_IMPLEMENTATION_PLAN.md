@@ -492,7 +492,7 @@ ADRs once they exist.
 | Workstream | Branch | Status | Evidence |
 | --- | --- | --- | --- |
 | #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | Complete | #344-#351 integrated; 564 backend, 156 frontend, and 41 E2E tests pass locally; PostgreSQL CI gate configured; README updated and glossary reviewed (no new game terms) |
-| #339 database invariants | `epic/339-database-invariants` | In progress | #352 and #354-#356 complete; #353 portable stored-value checks implemented; umbrella verification pending; README current and glossary reviewed |
+| #339 database invariants | `epic/339-database-invariants` | Complete | #352-#356 integrated; 567 backend, 156 frontend, and 41 E2E tests pass locally; dual-dialect migration gate configured; README updated and glossary reviewed |
 | #340 accounts and privacy | `epic/340-accounts-identity-privacy` | Not started | - |
 | #342 prompt content | `epic/342-prompt-content-usage` | Not started | - |
 | #341 game history | `epic/341-game-history-statistics` | Not started | - |
