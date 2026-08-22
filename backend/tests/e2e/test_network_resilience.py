@@ -1,7 +1,6 @@
 import asyncio
 
 import pytest
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import use_guest_name
 
@@ -75,32 +74,59 @@ async def test_page_load_and_reload_never_show_the_connection_banner():
               childList: true,
               subtree: true,
             });
+            window.__socketConnected = false;
+            const OrigWS = window.WebSocket;
+            window.WebSocket = function(...args) {
+              const ws = new OrigWS(...args);
+              ws.addEventListener('open', () => {
+                window.__socketConnected = true;
+              });
+              return ws;
+            };
             """
         )
 
-        # Slow the identity lookup the socket waits on, so the gap this test is
-        # about is wide enough to be more than a timing coincidence.
+        me_event = asyncio.Event()
+        route_reached = asyncio.Event()
+
+        # Hold the identity lookup the socket waits on, so we can verify the banner
+        # stays suppressed throughout the first-connect grace window without
+        # depending on arbitrary sleeps.
         async def handle_me(route):
-            await asyncio.sleep(0.5)
+            route_reached.set()
+            await me_event.wait()
             await route.continue_()
 
         await page.route("**/api/auth/me", handle_me)
+        await page.clock.install()
 
-        async def assert_no_banner_during_load():
-            await page.wait_for_selector(".lobby-page")
-            await page.wait_for_timeout(1000)
-            # `is False`, not falsy: an undefined flag means the watcher never
-            # ran, which would make this test pass without checking anything.
+        async def assert_no_banner_during_load(navigate):
+            me_event.clear()
+            route_reached.clear()
+            nav_task = asyncio.create_task(navigate())
+            await route_reached.wait()
+            # Advance clock within the 3000ms FIRST_CONNECT_GRACE_MS grace window.
+            await page.clock.fast_forward(2000)
             assert await page.evaluate("window.__bannerSeen") is False, (
-                "the connection banner appeared while the page was loading"
+                "the connection banner appeared while waiting for identity"
+            )
+            # Fulfill the auth lookup and let the socket connect.
+            me_event.set()
+            await nav_task
+            await page.wait_for_selector(".lobby-page")
+            await page.wait_for_function("window.__socketConnected === true")
+            # Fast-forward past the full grace window: the connected socket must have
+            # cleared the timer, keeping the banner hidden.
+            await page.clock.fast_forward(5000)
+            assert await page.evaluate("window.__bannerSeen") is False, (
+                "the connection banner appeared after the page was loaded"
             )
 
         try:
-            await page.goto(BASE_URL)
-            await assert_no_banner_during_load()
-            await page.reload()
-            await assert_no_banner_during_load()
+            await assert_no_banner_during_load(lambda: page.goto(BASE_URL))
+            await assert_no_banner_during_load(page.reload)
         finally:
+            me_event.set()
             await browser.close()
 
 
@@ -124,6 +150,7 @@ async def test_mid_session_socket_reconnects_to_room():
             live_sockets.append(ws)
 
         await guest.route_web_socket("**/socket.io/**", route_socket)
+        await guest.clock.install()
 
         try:
             await host.goto(BASE_URL)
@@ -152,22 +179,10 @@ async def test_mid_session_socket_reconnects_to_room():
                 "transport to sever - it may have fallen back to polling"
             )
             await live_sockets[-1].close()
-            # The banner waits a beat before announcing a drop, so a reconnect
-            # that beats it is a pass, not a miss - what matters is that the
-            # session comes back, which the assertions below cover. The banner
-            # appearing at all is covered by the offline test above.
-            #
-            # Short timeout for exactly that reason: this is an optional
-            # sighting, and locally the reconnect always wins the race, so a
-            # long one is time the suite spends never seeing anything.
-            try:
-                await guest.wait_for_selector(
-                    '.connection-status-banner.offline, .connection-status-banner.reconnecting',
-                    timeout=1500,
-                )
-            except PlaywrightTimeoutError:
-                pass
-            await guest.wait_for_selector(".connection-status-banner", state="hidden", timeout=15000)
+
+            # Fast-forward past the socket.io reconnect delay (1000ms) to trigger
+            # immediate reconnection without waiting out real-world backoff.
+            await guest.clock.fast_forward(2000)
 
             await host.wait_for_selector("text=GuestReconnect reconnected", timeout=10000)
 

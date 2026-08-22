@@ -36,6 +36,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await host.wait_for_selector('[data-testid="waiting-room"]')
             code = (await host.inner_text('.room-copy-button')).split("Code:")[1].strip()
 
+            await visitor.clock.install()
             await visitor.goto(BASE_URL)
             await use_guest_name(visitor, "CardVisitor")
             card = visitor.locator('[data-testid="public-room-card"]', has_text="Room cards")
@@ -92,6 +93,9 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await host.click('.waiting-start-button')
             await host.wait_for_selector('.game-layout')
 
+            # Fast-forward the visitor's clock past the 4s room-list poll interval
+            # so the updated "In progress" state arrives without waiting out real time.
+            await visitor.clock.fast_forward(4500)
             await card.get_by_text("In progress", exact=True).wait_for()
             assert await card.get_by_role("button", name="Join in progress", exact=True).is_visible()
             await card.get_by_role("button", name="Join in progress", exact=True).click()
