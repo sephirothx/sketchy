@@ -22,7 +22,13 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             table = page.locator(".prompt-stats-table")
             await table.wait_for()
             rows = page.locator(".prompt-stats-table tbody tr")
-            listed = await rows.count()
+            row_data = await rows.evaluate_all(
+                """rows => rows.map(row => ({
+                    cells: [...row.querySelectorAll("td")].map(cell => cell.innerText),
+                    unrated: row.classList.contains("is-unrated"),
+                }))"""
+            )
+            listed = len(row_data)
             selected = await page.locator("#prompt-stats-list").input_value()
             expected = 592 if selected == "english_extended" else 260
             assert listed == expected, f"listed {listed} of {expected} prompts"
@@ -30,11 +36,10 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             # Which rows are ranked is not ours to predict - the suite shares
             # one server with tests playing games - but a ranked row must show
             # a measurement and an unranked one must not pretend to.
-            for index in range(listed):
-                row = rows.nth(index)
-                cells = await row.locator("td").all_inner_texts()
+            for row in row_data:
+                cells = row["cells"]
                 band, guessed = cells[0], cells[1]
-                if "is-unrated" in (await row.get_attribute("class") or ""):
+                if row["unrated"]:
                     assert guessed == "—", f"unranked row shows a figure: {cells}"
                     assert band == "Not played enough", f"unranked row banded: {cells}"
                 else:

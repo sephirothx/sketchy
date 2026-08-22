@@ -263,10 +263,11 @@ backend/.venv/bin/python -m playwright install chromium firefox
 database, and runs the Playwright suite across as many xdist workers as the
 machine has cores, capped at eight — past that the browsers contend for CPU and
 timing-sensitive tests start to flake. Override with `E2E_WORKERS=<number>`.
-The E2E server also runs with `TURN_RESULTS_SECONDS=0.5`, because the suite
-plays whole games end to end and the production five-second pause after every
-turn otherwise dominates the run. Clients read the phase length off the
-payload, so a shortened pause is still a faithful turn.
+The E2E server also runs with `TURN_RESULTS_SECONDS=0.5` and
+`RESTART_DELAY_SECONDS=0.25`, because the suite plays whole games and approved
+restart flows end to end, and their production pauses would otherwise dominate
+the run. Clients read both lengths off server payloads, so shortened pauses
+remain faithful transitions.
 
 Two rules keep the suite fast as it grows. A test waits on the condition it
 actually cares about — the next phase arriving, the element appearing — never on
