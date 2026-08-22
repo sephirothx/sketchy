@@ -195,6 +195,7 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
         guest = await guest_context.new_page()
         host.set_default_timeout(20000)
         guest.set_default_timeout(20000)
+        await host.clock.install()
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "EndHost")
@@ -255,8 +256,9 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
             await host.wait_for_selector(".modal-card")
             assert "EndHost" == await host.input_value(".auth-form input")
 
-            # Well past the ten-second dismissal had it kept running.
-            await host.wait_for_timeout(4000)
+            # Fast-forward past the full ten-second dismissal window to verify
+            # the countdown is held without sitting out the real-time delay.
+            await host.clock.fast_forward(12000)
             assert await host.is_visible('[data-testid="game-end-overlay"]')
             assert "s" not in (
                 await host.inner_text(".game-end-actions button:last-child")
