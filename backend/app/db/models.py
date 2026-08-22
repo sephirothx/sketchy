@@ -29,12 +29,14 @@ from app.auth.avatars import BUILT_IN_AVATAR_KEYS
 from app.db.types import UTCDateTime
 from app.domain_values import (
     ACCOUNT_STATES,
+    DATA_EXPORT_STATUSES,
     HINT_MODES,
     PROMPT_LANGUAGES,
     SCORING_MODES,
     TURN_END_REASONS,
     USER_ROLES,
     AccountState,
+    DataExportStatus,
     PromptLanguage,
     TurnEndReason,
     UserRole,
@@ -327,6 +329,45 @@ class AuthSession(Base):
     )
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class DataExport(Base):
+    """Durable asynchronous snapshot of the data belonging to one account."""
+
+    __tablename__ = "data_exports"
+    __table_args__ = (
+        _values_check("status", DATA_EXPORT_STATUSES, "ck_data_exports_status"),
+        Index("ix_data_exports_user_created_at", "user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        default=DataExportStatus.PENDING.value,
+        server_default=DataExportStatus.PENDING.value,
+        nullable=False,
+    )
+    schema_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=text("1"), nullable=False
+    )
+    artifact: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, index=True
+    )
 
 
 class GameRecord(Base):

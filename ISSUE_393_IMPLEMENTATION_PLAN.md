@@ -1,6 +1,6 @@
 # Issue #393 implementation plan
 
-Status: approved planning baseline; implementation not started  
+Status: approved planning baseline; implementation in progress
 Tracker: https://github.com/sephirothx/sketchy/issues/393  
 Last updated: 2026-08-22
 
@@ -493,7 +493,7 @@ ADRs once they exist.
 | --- | --- | --- | --- |
 | #338 PostgreSQL and migrations | `epic/338-postgresql-migrations` | Complete | #344-#351 integrated; 564 backend, 156 frontend, and 41 E2E tests pass locally; PostgreSQL CI gate configured; README updated and glossary reviewed (no new game terms) |
 | #339 database invariants | `epic/339-database-invariants` | Complete | #352-#356 integrated; 567 backend, 156 frontend, and 41 E2E tests pass locally; dual-dialect migration gate configured; README updated and glossary reviewed |
-| #340 accounts and privacy | `epic/340-accounts-identity-privacy` | In progress | #357-#365 complete; #364 adds HMAC-keyed persistent auth rate-limit buckets that survive restarts/replicas with bounded expiry cleanup while low-risk throttles stay local; 596 backend and 41 E2E tests pass; README updated and glossary reviewed |
+| #340 accounts and privacy | `epic/340-accounts-identity-privacy` | In progress | #357-#366 complete; #366 adds requester-only asynchronous format-v1 exports, bounded crash recovery, and password-confirmed history-safe anonymization with player UI; 602 backend, 156 frontend, and 42 E2E tests pass; README and glossary updated |
 | #342 prompt content | `epic/342-prompt-content-usage` | Not started | - |
 | #341 game history | `epic/341-game-history-statistics` | Not started | - |
 | #343 live rooms and formats | `epic/343-live-rooms-deployment-formats` | Not started | - |

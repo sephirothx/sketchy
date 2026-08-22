@@ -240,6 +240,37 @@ identities keeps two factual seats rather than violating a uniqueness rule or
 losing a player. Account history and statistics resolve the account plus all
 of its guest aliases; the guest's sessions are revoked during the merge.
 
+Every guest or registered player can open **Your data** from the account menu.
+An export request creates a durable asynchronous job and produces a private,
+versioned JSON document containing that player's account fields, linked guest
+identities, session metadata, game seats, drawn turns, correct guesses, and
+account-event metadata. Password/session hashes, other players' profile fields,
+and other players' message or guess bodies are never included. Format v1
+exports expire after seven days. The HTTP flow is `POST
+/api/auth/data-exports`, `GET /api/auth/data-exports/{id}`, then the returned
+`downloadUrl`; only the owning account may read any of those records.
+
+The application schedules generation after returning the request. Jobs are
+stored before work begins, so an operator can retry a bounded batch left
+pending—or processing for more than 15 minutes after a crash—with:
+
+```bash
+cd backend
+.venv/bin/python -m app.auth.account_data --limit 25
+```
+
+**Delete account** requires the current password for a registered account and
+an explicit `DELETE` confirmation in the UI. Guests can delete the
+automatically provisioned account without a password because possession of its
+HttpOnly session is their only credential. Deletion immediately revokes every
+linked session, removes export/provider/avatar records, clears login and profile
+identity, and replaces the player's frozen participant/drawer/guess names with
+**Deleted player**. The stable anonymized row, scores, prompts, and shared game
+structure remain, so another player's history is never damaged. Existing
+aggregate prompt counters cannot be decremented because they have no per-user
+attribution; the #342 prompt-content workstream replaces them with rebuildable
+projections over retained game facts.
+
 Passwords use Argon2id. On every successful login, Sketchy compares the encoded
 hash with the current cost parameters and replaces stale hashes atomically;
 raising the configured Argon2 cost therefore upgrades active accounts without

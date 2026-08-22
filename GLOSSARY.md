@@ -54,6 +54,8 @@ the rotation itself are counted in *rounds*.
 | **Avatar** | The deployment-hosted visual representing an account. The generated initial is the default. | profile picture, external avatar URL |
 | **Signed-in device** | One revocable account login, labeled coarsely by browser and platform. | JWT, login token, active session |
 | **Linked guest** | A former guest identity whose history now belongs to a registered account without rewriting past game seats. | abandoned guest, duplicate account |
+| **Data export** | A private, versioned JSON download containing one player's own account and gameplay data. It never includes other players' profile fields or message bodies. | archive, backup, dump |
+| **Deleted player** | The neutral name replacing a deleted account in retained shared game history. | removed user, anonymous, unknown |
 | **AFK** | A status a player sets on themselves, or the room votes onto them. AFK players are skipped for turns and not waited for. Always the initialism, uppercase. | away, idle, inactive, afk |
 
 ## Names

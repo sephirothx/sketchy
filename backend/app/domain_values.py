@@ -43,9 +43,19 @@ class UserRole(StrEnum):
     ADMIN = "admin"
 
 
+class DataExportStatus(StrEnum):
+    """Lifecycle of a durable asynchronous account-data export."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    READY = "ready"
+    FAILED = "failed"
+
+
 SCORING_MODES = tuple(mode.value for mode in ScoringMode)
 HINT_MODES = tuple(mode.value for mode in HintMode)
 TURN_END_REASONS = tuple(reason.value for reason in TurnEndReason)
 PROMPT_LANGUAGES = tuple(language.value for language in PromptLanguage)
 ACCOUNT_STATES = tuple(state.value for state in AccountState)
 USER_ROLES = tuple(role.value for role in UserRole)
+DATA_EXPORT_STATUSES = tuple(status.value for status in DataExportStatus)

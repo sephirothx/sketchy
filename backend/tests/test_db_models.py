@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.db.models import (
     AppConfig,
     Base,
+    DataExport,
     GameParticipant,
     GameRecord,
     TurnGuess,
@@ -27,6 +28,7 @@ from app.db.models import (
 )
 from app.domain_values import (
     ACCOUNT_STATES,
+    DATA_EXPORT_STATUSES,
     HINT_MODES,
     PROMPT_LANGUAGES,
     SCORING_MODES,
@@ -130,6 +132,7 @@ async def test_user_state_and_role_are_database_constrained(column, invalid):
 async def test_account_state_and_role_constants_cover_database_values():
     assert ACCOUNT_STATES == ("anonymous", "registered", "merged", "deleted")
     assert USER_ROLES == ("user", "moderator", "admin")
+    assert DATA_EXPORT_STATUSES == ("pending", "processing", "ready", "failed")
 
 
 async def test_get_database_url_normalization(monkeypatch):
@@ -166,6 +169,8 @@ async def test_entity_ids_are_time_ordered_uuidv7_with_native_postgresql_type():
 
     entity_id_columns = (
         User.id,
+        DataExport.id,
+        DataExport.user_id,
         GameRecord.id,
         GameParticipant.id,
         GameParticipant.game_id,

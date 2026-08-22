@@ -20,6 +20,7 @@ forbids half of one.
 from __future__ import annotations
 
 import ast
+import json
 import re
 from pathlib import Path
 
@@ -33,6 +34,15 @@ FRONTEND_SRC = REPO_ROOT / "frontend" / "src"
 # command reply shares. Neither is part of the game vocabulary.
 BUILTIN_EVENTS = {"connect", "disconnect", "connect_error"}
 ACK_FIELDS = {"ok", "error", "field"}
+EXPORT_CONTRACT = json.loads(
+    (REPO_ROOT / "fixtures" / "account_data_export_v1_fields.json").read_text(
+        encoding="utf-8"
+    )
+)
+EXPORT_DOWNLOAD_FIELDS = {
+    path.rsplit(".", 1)[-1].removeprefix("[]")
+    for path in EXPORT_CONTRACT["fieldPaths"]
+}
 
 
 def _python_sources() -> list[ast.Module]:
@@ -111,7 +121,14 @@ def test_server_payload_keys_are_read_by_the_client(trees, frontend):
                         keys.add(key.value)
 
     assert keys, "found no camelCase payload keys - has the extraction broken?"
-    unread = sorted(key for key in keys if not _mentions(frontend, key))
+    # A data export is downloaded as an opaque artifact rather than parsed by
+    # the browser. Its v1 field surface is pinned by a dedicated checked-in
+    # contract and generation test instead of this live client/server check.
+    unread = sorted(
+        key
+        for key in keys
+        if key not in EXPORT_DOWNLOAD_FIELDS and not _mentions(frontend, key)
+    )
     assert not unread, (
         "the server sends payload keys the client never names: "
         f"{unread}. Either the client reads a different name (a half-finished "

@@ -78,6 +78,35 @@ handler_context = register_all_handlers(
 )
 
 
+async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
+    """End already-authenticated socket seats after an account is deleted."""
+    for room in list(room_manager.rooms.values()):
+        player = room_manager.get_player_by_user_id(room, user_id)
+        if player is None:
+            continue
+        player_id = player.id
+        player_sid = player.sid
+        handler_context.timers.cancel_disconnect_timer(player_id)
+        room_manager.remove_player(room, player_id)
+        if room.game and room.state == "playing":
+            await handler_context.game_flow._remove_player_from_game(room, player_id)
+        if player_sid:
+            await sio.emit(
+                "session_superseded",
+                {"reason": "Your account was deleted."},
+                to=player_sid,
+            )
+            await sio.leave_room(player_sid, room.id)
+            await sio.disconnect(player_sid)
+        if room.connected_players():
+            await handler_context.game_flow._emit_room_state(room)
+        else:
+            handler_context.timers.cancel_phase_timer(room.id)
+            handler_context.timers.cancel_hint_timers(room.id)
+            handler_context.timers.cancel_restart_timer(room.id)
+            room_manager.remove_room_if_empty(room.id)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     try:
@@ -101,7 +130,13 @@ api.add_middleware(
     allow_headers=["*"],
 )
 api.add_middleware(SessionAuthMiddleware, session_factory=async_session_factory)
-api.include_router(create_auth_router(user_repo, async_session_factory))
+api.include_router(
+    create_auth_router(
+        user_repo,
+        async_session_factory,
+        on_account_deleted=remove_deleted_account_from_live_rooms,
+    )
+)
 api.include_router(create_profile_router(user_repo, game_history_repo))
 api.include_router(create_prompt_list_router(prompt_list_repo))
 

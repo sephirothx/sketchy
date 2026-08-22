@@ -301,3 +301,44 @@ async def test_identity_controls_wait_for_provisioning_to_settle():
             assert await page.inner_text(".identity-name") == "RaceProof"
         finally:
             await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_player_can_download_then_delete_account_from_account_menu():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await register_account(page, "AccountDataE2E")
+            await page.click(".identity-chip")
+            await page.get_by_role("menuitem", name="Your data").click()
+            dialog = page.locator(".account-data-dialog")
+            await dialog.wait_for(state="visible")
+
+            await dialog.get_by_role("button", name="Request export").click()
+            download_link = dialog.get_by_role("link", name="Download")
+            await download_link.wait_for(state="visible")
+            async with page.expect_download() as pending_download:
+                await download_link.click()
+            download = await pending_download.value
+            assert download.suggested_filename.startswith("sketchy-data-export-")
+            assert download.suggested_filename.endswith(".json")
+
+            await dialog.get_by_role("button", name="Delete account…").click()
+            await dialog.get_by_label("Password").fill("a-good-password")
+            await dialog.get_by_label("Type DELETE to confirm").fill("DELETE")
+            await dialog.get_by_role("button", name="Permanently delete").click()
+
+            await dialog.wait_for(state="hidden")
+            await page.wait_for_selector(".first-run")
+            current = await page.evaluate(
+                """async () => {
+                    const response = await fetch('/api/auth/me');
+                    return response.json();
+                }"""
+            )
+            assert current["isAnonymous"] is True
+            assert current["username"] is None
+        finally:
+            await browser.close()

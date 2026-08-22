@@ -10,6 +10,7 @@ import {
   useFocusTrap,
 } from "../hooks/useFocusTrap";
 import { SessionManagerDialog } from "./SessionManagerDialog";
+import { AccountDataDialog } from "./AccountDataDialog";
 
 export type AuthMode = "claim" | "login";
 
@@ -36,6 +37,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [accountDataOpen, setAccountDataOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -134,6 +136,16 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           >
             My profile
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMenuOpen(false);
+              setAccountDataOpen(true);
+            }}
+          >
+            Your data
+          </button>
           {isGuest ? (
             <>
               <button
@@ -195,6 +207,9 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
       )}
       {sessionsOpen && (
         <SessionManagerDialog onClose={() => setSessionsOpen(false)} />
+      )}
+      {accountDataOpen && (
+        <AccountDataDialog onClose={() => setAccountDataOpen(false)} />
       )}
     </div>
   );

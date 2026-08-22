@@ -240,6 +240,38 @@
 .session-revoke-all { background: #dc2626; border-color: #dc2626 !important; color: #fff; }
 .session-list button:disabled, .session-actions button:disabled { cursor: wait; opacity: 0.6; }
 
+.account-data-dialog { max-width: 620px; text-align: left; }
+.account-data-section { border-top: 1px solid #cbd5e1; margin-top: 18px; padding-top: 16px; }
+.account-data-section h4 { margin: 0; }
+.account-data-heading-row { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
+.account-data-heading-row button,
+.account-export-list a,
+.account-danger-zone button,
+.account-data-actions button {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+.account-data-heading-row button, .account-data-actions button { background: transparent; }
+.account-export-list { display: grid; gap: 8px; list-style: none; margin: 12px 0; padding: 0; }
+.account-export-list li { align-items: center; border: 1px solid #cbd5e1; border-radius: 10px; display: flex; gap: 12px; justify-content: space-between; padding: 12px; }
+.account-export-list li > span { display: grid; gap: 3px; min-width: 0; }
+.account-export-list small, .account-data-note, .account-data-empty { color: #64748b; font-size: 13px; }
+.account-export-list a { background: #4f46e5; border-color: #4f46e5; color: #fff; text-decoration: none; }
+.account-danger-zone { border-color: #fecaca; }
+.account-danger-zone > p { font-size: 14px; line-height: 1.5; }
+.account-delete-start, .account-delete-confirm { background: #dc2626; border-color: #dc2626 !important; color: #fff !important; }
+.account-delete-form { display: grid; gap: 12px; }
+.account-delete-form label { display: grid; font-size: 13px; font-weight: 700; gap: 5px; }
+.account-delete-form input { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; color: #0f172a; font-size: 16px; padding: 9px 11px; }
+.account-delete-actions, .account-data-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.account-data-actions { margin-top: 18px; }
+.account-danger-zone button:disabled, .account-data-heading-row button:disabled { cursor: wait; opacity: .6; }
+
 /* First-run block: account primary, guest secondary. */
 .first-run {
   border: 1px solid #cbd5e1;

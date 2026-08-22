@@ -2,10 +2,23 @@
 from __future__ import annotations
 
 import os
+import logging
+from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.responses import JSONResponse
 
+from app.auth.account_data import (
+    AccountDataError,
+    anonymize_account,
+    create_data_export,
+    export_status_payload,
+    get_data_export,
+    list_data_exports,
+    process_data_export,
+)
 from app.auth.middleware import (
     clear_session_cookie,
     is_secure_request,
@@ -45,6 +58,9 @@ from app.repositories.interfaces import (
     UsernameTakenError,
     UserRepository,
 )
+
+
+logger = logging.getLogger(__name__)
 
 def _limit(name: str, default: int) -> int:
     """Read a rate limit from the environment, falling back to the default.
@@ -87,7 +103,18 @@ class NameColorBody(BaseModel):
     name_color: str = Field(max_length=16, alias="nameColor")
 
 
-def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
+class DeleteAccountBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: str | None = Field(default=None, max_length=MAX_PASSWORD_LENGTH)
+
+
+def create_auth_router(
+    user_repo: UserRepository,
+    session_factory,
+    *,
+    on_account_deleted: Callable[[str], Awaitable[None]] | None = None,
+) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
     # deploys, crashes, and multiple application replicas.
@@ -136,6 +163,13 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
             raise HTTPException(
                 status_code=429, detail="Too many attempts. Please wait and try again."
             )
+
+    async def require_user(request: Request):
+        user_id = getattr(request.state, "user_id", None)
+        user = await user_repo.get_by_id(user_id) if user_id else None
+        if user is None:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        return user
 
     @router.get("/me")
     async def me(request: Request, response: Response):
@@ -402,6 +436,112 @@ def create_auth_router(user_repo: UserRepository, session_factory) -> APIRouter:
         revoked = await revoke_all_sessions(session_factory, user_id=user_id)
         clear_session_cookie(response, secure=is_secure_request(request))
         return {"ok": True, "revoked": revoked}
+
+    @router.post("/data-exports", status_code=202)
+    async def request_data_export(
+        request: Request, background_tasks: BackgroundTasks
+    ):
+        """Create a durable export job and generate it after responding."""
+        user = await require_user(request)
+        try:
+            job = await create_data_export(session_factory, user_id=user.id)
+        except AccountDataError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        background_tasks.add_task(
+            process_data_export, session_factory, export_id=job.id
+        )
+        return export_status_payload(job)
+
+    @router.get("/data-exports")
+    async def data_exports(request: Request):
+        user = await require_user(request)
+        jobs = await list_data_exports(session_factory, user_id=user.id)
+        return {"exports": [export_status_payload(job) for job in jobs]}
+
+    @router.get("/data-exports/{export_id}")
+    async def data_export_status(export_id: str, request: Request):
+        user = await require_user(request)
+        try:
+            job = await get_data_export(
+                session_factory, export_id=export_id, user_id=user.id
+            )
+        except AccountDataError as error:
+            raise HTTPException(status_code=404, detail="Export not found.") from error
+        if job is None:
+            raise HTTPException(status_code=404, detail="Export not found.")
+        if job.expires_at <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Export has expired.")
+        return export_status_payload(job)
+
+    @router.get("/data-exports/{export_id}/download")
+    async def download_data_export(export_id: str, request: Request):
+        user = await require_user(request)
+        try:
+            job = await get_data_export(
+                session_factory, export_id=export_id, user_id=user.id
+            )
+        except AccountDataError as error:
+            raise HTTPException(status_code=404, detail="Export not found.") from error
+        if job is None:
+            raise HTTPException(status_code=404, detail="Export not found.")
+        if job.expires_at <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Export has expired.")
+        if job.status != "ready" or job.artifact is None:
+            raise HTTPException(status_code=409, detail="Export is not ready.")
+        return JSONResponse(
+            content=job.artifact,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="sketchy-data-export-{job.id}.json"'
+                ),
+                "Cache-Control": "private, no-store",
+            },
+        )
+
+    @router.delete("/account")
+    async def delete_account(
+        body: DeleteAccountBody, request: Request, response: Response
+    ):
+        """Anonymize this identity without deleting shared game results."""
+        user = await require_user(request)
+        if not user.is_anonymous:
+            if not body.password:
+                raise HTTPException(
+                    status_code=400, detail="Enter your password to delete the account."
+                )
+            credentials = (
+                await user_repo.get_credentials_by_username(user.username)
+                if user.username
+                else None
+            )
+            if (
+                credentials is None
+                or credentials.user.id != user.id
+                or not await verify_password(credentials.password_hash, body.password)
+            ):
+                raise HTTPException(status_code=401, detail="Password is incorrect.")
+        try:
+            result = await anonymize_account(session_factory, user_id=user.id)
+        except AccountDataError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        if on_account_deleted is not None:
+            try:
+                await on_account_deleted(result.user_id)
+            except Exception:
+                # The database deletion is already committed and must not be
+                # presented as failed. Revoked credentials prevent a new
+                # connection; this hook only removes an already-live seat.
+                logger.exception(
+                    "Could not remove deleted account %s from live rooms",
+                    result.user_id,
+                )
+        clear_session_cookie(response, secure=is_secure_request(request))
+        return {
+            "ok": True,
+            "identitiesAnonymized": result.identities_anonymized,
+            "sessionsRevoked": result.sessions_revoked,
+        }
 
     @router.post("/logout")
     async def logout(request: Request, response: Response):
