@@ -10,7 +10,12 @@ import {
   updateOwnedPromptList,
   type PromptListDraft,
 } from "../lib/promptLists";
-import { promptEntriesFromQuickInput } from "../lib/promptListDrafts";
+import {
+  describePromptMerge,
+  mergePromptEntries,
+  promptEntriesFromQuickInput,
+  MAX_LIST_PROMPTS,
+} from "../lib/promptListDrafts";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import { useAuthStore } from "../store/authStore";
 import type { OwnedPromptList, PromptLanguage } from "../types";
@@ -21,7 +26,7 @@ const EMPTY_DRAFT: PromptListDraft = {
   description: "",
   language: "en",
   visibility: "private",
-  prompts: [{ prompt: "", aliases: [] }],
+  prompts: [],
 };
 
 function draftFromList(promptList: OwnedPromptList): PromptListDraft {
@@ -58,6 +63,7 @@ export function MyPromptListsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [bulkInput, setBulkInput] = useState("");
 
   useEffect(() => {
     if (!userId || isAnonymous) return;
@@ -81,7 +87,8 @@ export function MyPromptListsPage() {
     setShareCode(null);
     setModerationState("active");
     setPromptModeration({});
-    setDraft({ ...EMPTY_DRAFT, prompts: [{ prompt: "", aliases: [] }] });
+    setDraft({ ...EMPTY_DRAFT, prompts: [] });
+    setBulkInput("");
     setError(null);
     setNotice(null);
   }
@@ -99,6 +106,7 @@ export function MyPromptListsPage() {
         loaded.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
       ));
       setDraft(draftFromList(loaded));
+      setBulkInput("");
     } catch {
       setError("Could not open that prompt list.");
     } finally {
@@ -106,17 +114,25 @@ export function MyPromptListsPage() {
     }
   }
 
-  function updatePrompt(index: number, value: string) {
-    setDraft((current) => ({
-      ...current,
-      prompts: current.prompts.map((prompt, position) =>
-        position === index ? { ...prompt, prompt: value } : prompt
-      ),
-    }));
+  function addBulkPrompts() {
+    const result = mergePromptEntries(draft.prompts, bulkInput);
+    if (!result.added && !result.duplicates && !result.tooLong.length && !result.overLimit) {
+      return;
+    }
+    setDraft((current) => ({ ...current, prompts: result.entries }));
+    setBulkInput("");
+    setError(null);
+    // Silence on a clean import: the list itself is the feedback. Anything
+    // dropped has to be said, or a paste quietly loses entries.
+    setNotice(describePromptMerge(result));
   }
 
   async function save() {
     if (busy) return;
+    if (draft.prompts.length === 0) {
+      setError("Add at least one prompt before saving.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -224,15 +240,35 @@ export function MyPromptListsPage() {
               <span>Share code</span><code>{shareCode}</code>
               <button type="button" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError("Could not copy the share code."))}>Copy</button>
             </div>}
-            <div className="prompt-list-entry-heading"><h2>Prompts</h2><span>{draft.prompts.length}/500</span></div>
-            <div className="prompt-list-entry-editor">
-              {draft.prompts.map((prompt, index) => <div key={prompt.conceptId ?? `new-${index}`}>
-                <label><span className="sr-only">Prompt {index + 1}</span><input value={prompt.prompt} maxLength={32} required onChange={(event) => updatePrompt(index, event.target.value)} /></label>
-                {prompt.conceptId && promptModeration[prompt.conceptId] !== "active" && <span className="prompt-list-entry-moderation">{promptModeration[prompt.conceptId]?.replace("_", " ")}</span>}
-                <button type="button" aria-label={`Remove prompt ${index + 1}`} disabled={draft.prompts.length === 1} onClick={() => setDraft({ ...draft, prompts: draft.prompts.filter((_, position) => position !== index) })}>Remove</button>
-              </div>)}
+            <div className="prompt-list-entry-heading"><h2>Prompts</h2><span>{draft.prompts.length}/{MAX_LIST_PROMPTS}</span></div>
+            <div className="prompt-list-bulk-add">
+              <label htmlFor="prompt-bulk-input">Add prompts, one per line or separated by commas</label>
+              <textarea
+                id="prompt-bulk-input"
+                value={bulkInput}
+                rows={3}
+                placeholder={"apple\nbicycle, cathedral\ndragon"}
+                onChange={(event) => setBulkInput(event.target.value)}
+              />
+              <button
+                type="button"
+                disabled={!bulkInput.trim() || draft.prompts.length >= MAX_LIST_PROMPTS}
+                onClick={addBulkPrompts}
+              >
+                Add to list
+              </button>
             </div>
-            <button type="button" disabled={draft.prompts.length >= 500} onClick={() => setDraft({ ...draft, prompts: [...draft.prompts, { prompt: "", aliases: [] }] })}>Add prompt</button>
+            {draft.prompts.length === 0 ? (
+              <p className="prompt-list-manager-empty">No prompts yet. Paste some above to get started.</p>
+            ) : (
+              <ul className="prompt-list-entry-editor">
+                {draft.prompts.map((prompt, index) => <li key={prompt.conceptId ?? `new-${index}-${prompt.prompt}`}>
+                  <span className="prompt-list-entry-text">{prompt.prompt}</span>
+                  {prompt.conceptId && promptModeration[prompt.conceptId] !== "active" && <span className="prompt-list-entry-moderation">{promptModeration[prompt.conceptId]?.replace("_", " ")}</span>}
+                  <button type="button" aria-label={`Remove ${prompt.prompt}`} onClick={() => setDraft({ ...draft, prompts: draft.prompts.filter((_, position) => position !== index) })}>Remove</button>
+                </li>)}
+              </ul>
+            )}
             {error && <p className="auth-error" role="alert">{error}</p>}
             {notice && <p className="prompt-list-manager-notice" role="status">{notice}</p>}
             <div className="prompt-list-manager-actions">

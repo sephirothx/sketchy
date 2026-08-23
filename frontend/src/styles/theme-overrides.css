@@ -1171,3 +1171,88 @@
 [data-theme="dark"] .prompt-stats-table tbody tr.is-unrated td {
   color: #64748b;
 }
+
+/* --- Reusable prompt lists -------------------------------------------------
+   This page shipped with only its light styles, so in dark mode it rendered a
+   white card with barely-visible headings. */
+
+[data-theme="dark"] .prompt-list-manager-card {
+  background: #0f172a;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .prompt-list-manager-heading h1,
+[data-theme="dark"] .prompt-list-entry-heading h2,
+[data-theme="dark"] .prompt-list-entry-text {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .prompt-list-manager-empty,
+[data-theme="dark"] .prompt-list-entry-heading span,
+[data-theme="dark"] .prompt-list-manager-layout aside span {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .prompt-list-manager-layout form > label,
+[data-theme="dark"] .prompt-list-manager-meta label,
+[data-theme="dark"] .prompt-list-bulk-add label {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .prompt-list-manager-layout input,
+[data-theme="dark"] .prompt-list-manager-layout select,
+[data-theme="dark"] .prompt-list-manager-layout .prompt-list-bulk-add textarea {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .prompt-list-manager-card .prompt-list-manager-layout aside button {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .prompt-list-manager-card .prompt-list-manager-layout aside button.is-selected {
+  background: #312e81;
+  border-color: #818cf8;
+}
+
+[data-theme="dark"] .prompt-list-entry-editor > li {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .prompt-list-manager-card .prompt-list-entry-editor > li button {
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .prompt-list-share-code {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .prompt-list-share-form {
+  border-top-color: #334155;
+}
+
+[data-theme="dark"] .prompt-list-share-form label {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .prompt-list-share-form input {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .prompt-list-moderation-warning {
+  background: #422006;
+  border-color: #b45309;
+  color: #fed7aa;
+}
+
+[data-theme="dark"] .prompt-list-manager-notice {
+  color: #86efac;
+}

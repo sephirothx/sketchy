@@ -25,15 +25,29 @@ async def test_registered_owner_can_manage_and_share_a_prompt_list():
 
             await owner.get_by_label("Name").fill("Party animals")
             await owner.get_by_label("Description").fill("For Friday games")
-            await owner.get_by_label("Prompt 1", exact=True).fill("red panda")
-            await owner.get_by_role("button", name="Add prompt").click()
-            await owner.get_by_label("Prompt 2", exact=True).fill("capybara")
+            # Prompts arrive in batches, and a batch merges into what is
+            # already there rather than replacing it.
+            await owner.get_by_label(
+                "Add prompts, one per line or separated by commas"
+            ).fill("red panda, capybara")
+            await owner.get_by_role("button", name="Add to list").click()
+            await owner.get_by_role("button", name="Remove red panda").wait_for()
+            await owner.get_by_role("button", name="Remove capybara").wait_for()
             await owner.get_by_role("button", name="Save list").click()
             await owner.get_by_text("Prompt list saved.").wait_for()
             await owner.locator("aside").get_by_text("2 prompts · private").wait_for()
 
             # A subsequent save creates revision two and a random bearer code.
-            await owner.get_by_label("Prompt 1", exact=True).fill("giant panda")
+            # Re-adding an existing prompt is silently skipped, so the edit here
+            # is a removal plus a fresh batch.
+            await owner.get_by_role("button", name="Remove red panda").click()
+            await owner.get_by_label(
+                "Add prompts, one per line or separated by commas"
+            ).fill("giant panda\ncapybara")
+            await owner.get_by_role("button", name="Add to list").click()
+            await owner.get_by_text(
+                "Added 1 prompt; skipped 1 already in the list."
+            ).wait_for()
             await owner.get_by_label("Visibility").select_option("unlisted")
             await owner.get_by_role("button", name="Save list").click()
             await owner.get_by_text("Prompt list saved.").wait_for()
