@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.api.moderation import create_moderation_router
@@ -263,3 +263,69 @@ async def test_report_snapshots_survive_owner_deletion(env):
         assert report.list_name_snapshot == "Evidence list"
         assert report.prompt_snapshot == "reported prompt"
         assert report.details == "Retain this evidence."
+
+
+async def test_the_same_content_cannot_be_reported_twice_while_it_waits(env):
+    """A second open report on the same target adds no evidence, only noise."""
+
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    reporter_http = new_client()
+    moderator_http = new_client()
+    owner = await register(owner_http, "DupeOwner")
+    await register(reporter_http, "DupeReporter")
+    moderator = await register(moderator_http, "DupeModerator")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+
+    prompt_list = await prompts.create_owned(
+        owner["id"],
+        name="Reported twice",
+        description="",
+        language="en",
+        visibility="unlisted",
+        prompts=(
+            PromptListEntryInput(answer="first prompt"),
+            PromptListEntryInput(answer="second prompt"),
+        ),
+    )
+    body = {
+        "promptListId": prompt_list.id,
+        "shareCode": prompt_list.share_code,
+        "reason": "spam",
+        "details": "Reporting the list itself.",
+    }
+
+    first = await reporter_http.post("/api/prompt-content-reports", json=body)
+    assert first.status_code == 201
+
+    again = await reporter_http.post("/api/prompt-content-reports", json=body)
+    assert again.status_code == 409
+    assert "already reported" in again.json()["detail"]
+
+    # A specific prompt inside the same list is a different target, so it is
+    # still reportable while the list-level report is open.
+    prompt_report = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={**body, "promptVersionId": prompt_list.prompts[0].prompt_version_id},
+    )
+    assert prompt_report.status_code == 201
+
+    async with factory() as session:
+        open_reports = await session.scalar(
+            select(func.count(PromptContentReport.id)).where(
+                PromptContentReport.status == "pending"
+            )
+        )
+    assert open_reports == 2
+
+    # Once a moderator has dealt with it, the same reporter may raise it again:
+    # that is a new incident rather than a repeat of an unread one.
+    await moderator_http.patch(
+        f"/api/moderation/prompt-content-reports/{first.json()['id']}",
+        json={"status": "dismissed", "note": "Not actionable."},
+    )
+    after_review = await reporter_http.post("/api/prompt-content-reports", json=body)
+    assert after_review.status_code == 201

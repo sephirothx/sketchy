@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -385,6 +386,28 @@ def create_moderation_router(
                             detail="That prompt does not belong to this list.",
                         )
 
+                # The rate limiter bounds how many reports one client may
+                # send; this bounds how many times the same content may be
+                # reported by the same person, which is the noise a queue
+                # actually drowns in.
+                already_open = await session.scalar(
+                    select(PromptContentReport.id).where(
+                        PromptContentReport.reporter_user_id == db_reporter_id,
+                        PromptContentReport.status == ReportStatus.PENDING.value,
+                        PromptContentReport.prompt_list_id == prompt_list.id,
+                        PromptContentReport.prompt_version_id
+                        == (prompt_version.id if prompt_version else None),
+                    )
+                )
+                if already_open is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "You have already reported this, and a moderator "
+                            "has not reviewed it yet."
+                        ),
+                    )
+
                 report = PromptContentReport(
                     id=generate_uuid(),
                     reporter_user_id=db_reporter_id,
@@ -419,7 +442,20 @@ def create_moderation_router(
                         },
                     )
                 )
-                await session.flush()
+                try:
+                    await session.flush()
+                except IntegrityError as error:
+                    # Two submissions in the same instant both passed the
+                    # check above; the partial unique index is what really
+                    # decides, and the loser is told what a slower
+                    # duplicate would have been told.
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "You have already reported this, and a moderator "
+                            "has not reviewed it yet."
+                        ),
+                    ) from error
             return {
                 "id": str(report.id),
                 "status": report.status,

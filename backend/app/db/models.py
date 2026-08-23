@@ -811,6 +811,34 @@ class PromptContentReport(Base):
         Index(
             "ix_prompt_content_reports_status_created_at", "status", "created_at"
         ),
+        # One open report per reporter per target. Reporting the same content
+        # again while a moderator has yet to look at it adds no evidence and
+        # buries the queue; once a report is resolved or dismissed the same
+        # reporter may raise a new one, because that is a new incident.
+        # Two indexes rather than one because NULL is distinct from NULL in a
+        # unique index, so a list-level report would never collide with itself.
+        Index(
+            "uq_prompt_content_reports_open_list",
+            "reporter_user_id",
+            "prompt_list_id",
+            unique=True,
+            postgresql_where=text(
+                "status = 'pending' AND prompt_version_id IS NULL"
+            ),
+            sqlite_where=text("status = 'pending' AND prompt_version_id IS NULL"),
+        ),
+        Index(
+            "uq_prompt_content_reports_open_prompt",
+            "reporter_user_id",
+            "prompt_version_id",
+            unique=True,
+            postgresql_where=text(
+                "status = 'pending' AND prompt_version_id IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "status = 'pending' AND prompt_version_id IS NOT NULL"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
