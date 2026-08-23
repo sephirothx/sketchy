@@ -122,7 +122,8 @@ Three different things, never used for one another:
 | --- | --- | --- |
 | **Guess** | A chat message from a guesser during the drawing phase, checked against the prompt. | answer, attempt, submission |
 | **Correct guess** | A guess that matches the prompt. Announced to the room without revealing it. | win, hit |
-| **Close guess** | A guess one small edit away from the prompt, or one that gets some words of a multi-word prompt right. Shown only to the guesser who made it. | near miss, almost |
+| **Wrong guess** | A guess that does not match the prompt. Its text is a **Retained message** for 30 days; per-seat and per-turn wrong/close totals remain as durable **Turn outcome** facts after the text expires. | failed answer, incorrect chat |
+| **Close guess** | A wrong guess one small edit away from the prompt, or one that gets some words of a multi-word prompt right. The classification hint is shown only to the guesser; the original text has the **Prompt-aware audience**. | near miss, almost |
 | **Chat** | The room's message stream. **Spectator chat** is the restricted stream that only the drawer, spectators, and correct guessers can see. | messages, log, feed |
 
 ## Drawing

@@ -197,6 +197,11 @@ messages immediately and tombstones the presentation on copied evidence; the
 evidence text continues under the protected report retention policy. Numeric
 wrong/near-miss outcomes remain in game history independently, supporting game
 analysis without turning 30-day message text into lifetime player tracking.
+During that window, correlated wrong-guess text and its near-miss classification
+can support matching-rule evaluation and abuse investigation. After 30 days the
+raw strings intentionally cannot be replayed through a new matcher: durable
+per-seat and per-turn counts still support difficulty and attempt analysis, and
+that bounded loss is the accepted privacy and storage-volume tradeoff.
 Scored games additionally keep an ordered, append-only **score-event ledger**.
 Each UUIDv7 event identifies the participant seat and turn, carries the scoring
 and rule-snapshot versions, and records one signed delta as a gross guess award,
