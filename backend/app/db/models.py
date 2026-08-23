@@ -13,6 +13,7 @@ from sqlalchemy import (
     Index,
     Integer,
     JSON,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -49,6 +50,7 @@ from app.domain_values import (
     RETAINED_MESSAGE_KINDS,
     SCORE_EVENT_TYPES,
     SCORING_MODES,
+    TURN_DRAWING_STATUSES,
     TURN_ELIGIBILITY_REASONS,
     TURN_END_REASONS,
     TURN_PARTICIPANT_OUTCOMES,
@@ -1441,6 +1443,86 @@ class TurnRecord(Base):
     score_events: Mapped[list[ScoreEvent]] = relationship(
         back_populates="turn_record"
     )
+    drawing: Mapped[TurnDrawing | None] = relationship(
+        back_populates="turn_record",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class TurnDrawing(Base):
+    """The drawing made during one turn, kept for as long as its game.
+
+    The blob is the exact frame the canvas produced, stored verbatim; the format
+    it declares in its own first bytes decides which decoder reads it back.
+    ``app/canvas_storage.py`` holds the rules that keep that readable.
+    """
+
+    __tablename__ = "turn_drawings"
+    __table_args__ = (
+        _values_check("status", TURN_DRAWING_STATUSES, "ck_turn_drawings_status"),
+        CheckConstraint(
+            "status <> 'ready' OR ("
+            "format_magic IS NOT NULL AND format_version IS NOT NULL "
+            "AND byte_size IS NOT NULL AND checksum_sha256 IS NOT NULL "
+            "AND (payload IS NOT NULL OR object_key IS NOT NULL))",
+            name="ck_turn_drawings_ready_identity",
+        ),
+        # Erasure is structural, not procedural: no future code path can leave
+        # bytes behind on a row that says the drawing is gone.
+        CheckConstraint(
+            "status NOT IN ('unavailable', 'deleted') OR payload IS NULL",
+            name="ck_turn_drawings_erased",
+        ),
+        CheckConstraint(
+            "(status = 'unavailable') = (unavailable_reason IS NOT NULL)",
+            name="ck_turn_drawings_unavailable_reason",
+        ),
+        # A structural sanity bound, deliberately not the exact protocol limit:
+        # that one is derived from the action and point caps, so pinning it here
+        # would make raising either of them fail writes with no migration.
+        CheckConstraint(
+            "byte_size IS NULL OR (byte_size > 0 AND byte_size <= 8388608)",
+            name="ck_turn_drawings_byte_size",
+        ),
+        Index("ix_turn_drawings_status_created_at", "status", "created_at"),
+    )
+
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("game_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Read from the blob rather than assumed, so a row can be found by format
+    # without parsing bytes.
+    format_magic: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    format_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    payload: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    byte_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    checksum_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Reserved for the day drawings move to object storage; a stored key and a
+    # stored payload are alternatives, which the ready-identity check accepts
+    # either way.
+    object_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    unavailable_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    stored_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+    turn_record: Mapped[TurnRecord] = relationship(back_populates="drawing")
 
 
 class ScoreEvent(Base):

@@ -10,6 +10,7 @@ from app.repositories.interfaces import (
     GameRecordInput,
     GameSummary,
     ScoreEventInput,
+    TurnDrawingInput,
     TurnGuessInput,
     TurnRecordInput,
 )
@@ -22,6 +23,7 @@ class SavedGame:
     turns: list[TurnRecordInput]
     guesses: list[TurnGuessInput]
     score_events: list[ScoreEventInput]
+    drawings: list[TurnDrawingInput]
 
 
 class FakeGameHistoryRepository(GameHistoryRepository):
@@ -38,6 +40,7 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         turns: list[TurnRecordInput],
         guesses: list[TurnGuessInput],
         score_events: list[ScoreEventInput] | None = None,
+        drawings: list[TurnDrawingInput] | None = None,
     ) -> str:
         if self.fail:
             raise RuntimeError("database unavailable")
@@ -49,6 +52,7 @@ class FakeGameHistoryRepository(GameHistoryRepository):
                 turns=list(turns),
                 guesses=list(guesses),
                 score_events=list(score_events or []),
+                drawings=list(drawings or []),
             )
         )
         return record_id

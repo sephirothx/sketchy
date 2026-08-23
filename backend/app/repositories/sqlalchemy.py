@@ -19,6 +19,7 @@ from app.db.models import (
     GamePromptSource,
     GameRecord,
     IdentityAlias,
+    TurnDrawing,
     TurnGuess,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -42,8 +43,10 @@ from app.db.models import (
     PromptVersionTag,
     generate_uuid,
 )
+from app.canvas_storage import prepare_stored_drawing
 from app.domain_values import (
     AccountState,
+    DRAWING_UNAVAILABLE_RECAP_BUDGET,
     GAME_PROMPT_SOURCE_MODES,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
@@ -53,6 +56,7 @@ from app.domain_values import (
     TURN_ELIGIBILITY_REASONS,
     TURN_PARTICIPANT_OUTCOMES,
     TURN_PARTICIPANT_STATES,
+    TurnDrawingStatus,
 )
 from app.auth.avatars import validate_avatar_key
 from app.services.user_stats_projection import (
@@ -75,6 +79,7 @@ from app.repositories.interfaces import (
     IdentityMergeError,
     TurnDetail,
     TurnGuessDetail,
+    TurnDrawingInput,
     TurnGuessInput,
     TurnParticipantOutcomeDetail,
     TurnParticipantOutcomeInput,
@@ -127,6 +132,39 @@ def _optional_entity_id(value: str | UUID) -> UUID | None:
 
 def _public_id(value: UUID) -> str:
     return str(value)
+
+
+def _turn_drawing(
+    drawing: TurnDrawingInput, turn_id: UUID, game_id: UUID
+) -> TurnDrawing:
+    """Build the row for one turn's drawing, stored or explained.
+
+    A drawing the recap had to drop is recorded as unavailable rather than
+    omitted, so history says the same thing the players were told instead of
+    implying the turn was never drawn.
+    """
+
+    if drawing.payload is None:
+        return TurnDrawing(
+            turn_id=turn_id,
+            game_id=game_id,
+            status=TurnDrawingStatus.UNAVAILABLE.value,
+            unavailable_reason=(
+                drawing.unavailable_reason or DRAWING_UNAVAILABLE_RECAP_BUDGET
+            ),
+        )
+    blob, magic, version, checksum = prepare_stored_drawing(drawing.payload)
+    return TurnDrawing(
+        turn_id=turn_id,
+        game_id=game_id,
+        status=TurnDrawingStatus.READY.value,
+        format_magic=magic.decode("ascii"),
+        format_version=version,
+        payload=blob,
+        byte_size=len(blob),
+        checksum_sha256=checksum,
+        stored_at=datetime.now(timezone.utc),
+    )
 
 
 def _to_user_data(user: User) -> UserData:
@@ -770,6 +808,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         turns: list[TurnRecordInput],
         guesses: list[TurnGuessInput],
         score_events: list[ScoreEventInput] | None = None,
+        drawings: list[TurnDrawingInput] | None = None,
     ) -> str:
         score_events = list(score_events or [])
         record_id = (
@@ -1144,6 +1183,23 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 ),
                             )
                         )
+
+                # Drawings ride in the same transaction as their turns: the
+                # bytes live only in the process that just played the game, so
+                # a row written now and filled in later could never be
+                # completed by any retry.
+                for drawing in drawings or []:
+                    drawing_turn_id = _optional_entity_id(drawing.turn_id)
+                    if (
+                        drawing_turn_id is None
+                        or drawing_turn_id not in created_turn_ids
+                    ):
+                        raise ValueError(
+                            f"Drawing references unknown turn_id '{drawing.turn_id}'"
+                        )
+                    session.add(
+                        _turn_drawing(drawing, drawing_turn_id, record_id)
+                    )
 
                 guess_outcome_keys: set[tuple[UUID, UUID]] = set()
                 guess_inputs_by_key: dict[tuple[UUID, UUID], TurnGuessInput] = {}

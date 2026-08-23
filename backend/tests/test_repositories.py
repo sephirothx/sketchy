@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+from pathlib import Path
 from uuid import UUID
 
 import pytest
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models import (
     GameParticipant,
@@ -15,6 +19,7 @@ from app.db.models import (
     Prompt,
     PromptList,
     ScoreEvent,
+    TurnDrawing,
     TurnGuess,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -35,6 +40,7 @@ from app.repositories.interfaces import (
     InvalidProfileDataError,
     TurnGuessInput,
     TurnParticipantOutcomeInput,
+    TurnDrawingInput,
     TurnRecordInput,
     UsernameTakenError,
     PromptPickTotals,
@@ -1188,5 +1194,158 @@ async def test_recording_nothing_touches_no_counters():
         await repo.record_prompt_usage(alpha.revision_ids, PromptUsage(offers={}, picks={}))
 
         assert _stat(await repo.get_prompt_stats("alpha"), "apple").offer_count == 0
+    finally:
+        await engine.dispose()
+
+
+def _skch_bytes(name: str = "representative") -> bytes:
+    """A real canvas frame from the cross-language golden fixtures."""
+
+    fixtures = json.loads(
+        (Path(__file__).parents[2] / "fixtures" / "canvas_protocol_v1.json").read_text()
+    )
+    entry = next(item for item in fixtures["histories"] if item["name"] == name)
+    return bytes.fromhex(entry["binary"])
+
+
+async def _save_game_with_drawings(history_repo, user_repo, drawings_for):
+    """Persist a one-turn game, letting the caller decide the drawing rows."""
+
+    drawer = await user_repo.create_anonymous("Drawer")
+    guesser = await user_repo.create_anonymous("Guesser")
+    now = datetime.now(timezone.utc)
+    turn_id = str(generate_uuid())
+    game_id = await history_repo.save_game(
+        GameRecordInput(
+            room_name="Studio",
+            scoring_mode="default",
+            hint_mode="purchase",
+            drawing_seconds=90,
+            total_rounds=1,
+            player_count=2,
+            started_at=now,
+            finished_at=now,
+        ),
+        [
+            GameParticipantInput(
+                user_id=drawer.id, final_score=300, final_rank=1, turns_played=1
+            ),
+            GameParticipantInput(
+                user_id=guesser.id, final_score=100, final_rank=2, turns_played=0
+            ),
+        ],
+        [
+            TurnRecordInput(
+                id=turn_id,
+                round_number=1,
+                turn_number=1,
+                drawer_user_id=drawer.id,
+                prompt="guitar",
+                duration_seconds=30.0,
+            )
+        ],
+        [],
+        None,
+        drawings_for(turn_id),
+    )
+    return game_id, turn_id, drawer, guesser
+
+
+async def test_a_drawing_is_stored_verbatim_beside_its_turn():
+    factory, engine = await create_test_db()
+    try:
+        user_repo = SqlAlchemyUserRepository(factory)
+        history_repo = SqlAlchemyGameHistoryRepository(factory)
+        blob = _skch_bytes()
+
+        game_id, turn_id, _, _ = await _save_game_with_drawings(
+            history_repo,
+            user_repo,
+            lambda tid: [TurnDrawingInput(turn_id=tid, payload=blob)],
+        )
+
+        async with factory() as session:
+            row = await session.get(TurnDrawing, UUID(turn_id))
+            assert row is not None
+            assert row.payload == blob, "the stored bytes must be the canvas's bytes"
+            assert row.status == "ready"
+            assert row.format_magic == "SKCH"
+            assert row.format_version == 1
+            assert row.byte_size == len(blob)
+            assert row.checksum_sha256 == hashlib.sha256(blob).hexdigest()
+            assert row.game_id == UUID(game_id)
+            assert row.unavailable_reason is None
+    finally:
+        await engine.dispose()
+
+
+async def test_a_drawing_the_recap_dropped_is_stored_as_unavailable():
+    factory, engine = await create_test_db()
+    try:
+        user_repo = SqlAlchemyUserRepository(factory)
+        history_repo = SqlAlchemyGameHistoryRepository(factory)
+
+        _, turn_id, _, _ = await _save_game_with_drawings(
+            history_repo,
+            user_repo,
+            lambda tid: [
+                TurnDrawingInput(
+                    turn_id=tid, payload=None, unavailable_reason="recap_budget"
+                )
+            ],
+        )
+
+        async with factory() as session:
+            row = await session.get(TurnDrawing, UUID(turn_id))
+            assert row.status == "unavailable"
+            assert row.payload is None
+            assert row.unavailable_reason == "recap_budget"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_drawing_for_an_unknown_turn_is_refused_loudly():
+    """Silent data loss is the failure this guard exists to prevent."""
+
+    factory, engine = await create_test_db()
+    try:
+        user_repo = SqlAlchemyUserRepository(factory)
+        history_repo = SqlAlchemyGameHistoryRepository(factory)
+        stray = str(generate_uuid())
+
+        with pytest.raises(ValueError, match="unknown turn_id"):
+            await _save_game_with_drawings(
+                history_repo,
+                user_repo,
+                lambda _tid: [
+                    TurnDrawingInput(turn_id=stray, payload=_skch_bytes("empty"))
+                ],
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_erasing_a_drawing_cannot_leave_its_bytes_behind():
+    """The constraint, not the calling code, is what guarantees erasure."""
+
+    factory, engine = await create_test_db()
+    try:
+        user_repo = SqlAlchemyUserRepository(factory)
+        history_repo = SqlAlchemyGameHistoryRepository(factory)
+        blob = _skch_bytes()
+        _, turn_id, _, _ = await _save_game_with_drawings(
+            history_repo,
+            user_repo,
+            lambda tid: [TurnDrawingInput(turn_id=tid, payload=blob)],
+        )
+
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    await session.execute(
+                        update(TurnDrawing)
+                        .where(TurnDrawing.turn_id == UUID(turn_id))
+                        .values(status="deleted")
+                    )
     finally:
         await engine.dispose()

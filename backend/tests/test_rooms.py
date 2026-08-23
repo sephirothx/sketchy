@@ -1,5 +1,6 @@
 import pytest
 
+from app.identifiers import generate_uuid7
 from app.canvas_history import encode_canvas_history
 from app.game import Game
 from app.domain_values import HINT_MODES, SCORING_MODES
@@ -246,6 +247,7 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
     drawer = rm.add_player(room, "Drawer")
     room.last_game_drawings.append(
         DrawingRecapEntry(
+            turn_id=str(generate_uuid7()),
             round_number=1,
             turn_number=1,
             drawer_id=drawer.id,
@@ -277,6 +279,7 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
 
 def recap_entry(turn: int, canvas: bytes) -> DrawingRecapEntry:
     return DrawingRecapEntry(
+        turn_id=str(generate_uuid7()),
         round_number=1,
         turn_number=turn,
         drawer_id=f"drawer-{turn}",

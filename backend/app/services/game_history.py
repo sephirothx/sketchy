@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.domain_values import DRAWING_UNAVAILABLE_RECAP_BUDGET
 from app.game import (
     CompletedTurnStats,
     Game,
@@ -21,6 +22,7 @@ from app.repositories.interfaces import (
     GameRecordInput,
     PromptOfferInput,
     ScoreEventInput,
+    TurnDrawingInput,
     TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
@@ -47,6 +49,10 @@ class GameHistoryWrite:
     turns: list[TurnRecordInput]
     guesses: list[TurnGuessInput]
     score_events: list[ScoreEventInput]
+    # Captured here rather than read later because the room reverts to an
+    # editable waiting room the moment this function returns, for the same
+    # reason the scores and highlights above are captured.
+    drawings: list[TurnDrawingInput]
 
 
 @dataclass
@@ -227,6 +233,32 @@ def _turn_participant_outcomes(
     return tuple(sorted(resolved, key=lambda row: row.seat_id))
 
 
+def _drawings(room: Room, turn_ids: set[str]) -> list[TurnDrawingInput]:
+    """Pair this game's recap entries with the turns actually being recorded.
+
+    A turn whose drawer was never a factual seat is not persisted, so its
+    drawing is not either - filtering on the turn ids that survived the loop
+    above is what keeps a drawing from outliving its turn.
+    """
+
+    drawings: list[TurnDrawingInput] = []
+    for entry in room.last_game_drawings:
+        if entry.turn_id not in turn_ids:
+            continue
+        drawings.append(
+            TurnDrawingInput(
+                turn_id=entry.turn_id,
+                payload=entry.canvas_history,
+                unavailable_reason=(
+                    None
+                    if entry.is_available
+                    else DRAWING_UNAVAILABLE_RECAP_BUDGET
+                ),
+            )
+        )
+    return drawings
+
+
 def build_game_history(
     room: Room,
     game: Game,
@@ -375,6 +407,7 @@ def build_game_history(
             )
 
     return GameHistoryWrite(
+        drawings=_drawings(room, {turn.id for turn in turns}),
         record=GameRecordInput(
             id=game.id,
             room_name=room.name,

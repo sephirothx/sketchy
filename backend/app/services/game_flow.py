@@ -675,6 +675,10 @@ class GameFlowService:
             drawer.score += drawer_bonus
         room.record_drawing_recap(
             DrawingRecapEntry(
+                # end_turn appended this turn a moment ago, so it is the one
+                # being recapped. current_turn_id is never cleared and would
+                # name the previous turn if these calls ever reordered.
+                turn_id=game.completed_turns[-1].id,
                 round_number=game.round_number,
                 turn_number=len(room.last_game_drawings) + 1,
                 drawer_id=game.current_drawer or "",
@@ -715,6 +719,7 @@ class GameFlowService:
                     history.turns,
                     history.guesses,
                     history.score_events,
+                    history.drawings,
                 ),
                 timeout=HISTORY_WRITE_TIMEOUT_SECONDS,
             )

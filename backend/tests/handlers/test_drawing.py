@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 import socketio
 
+from app.identifiers import generate_uuid7
 from app.canvas_history import (
     ClearAction,
     FillAction,
@@ -494,6 +495,7 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
     canvas = encode_canvas_history([ClearAction()])
     room.last_game_drawings.append(
         DrawingRecapEntry(
+            turn_id=str(generate_uuid7()),
             round_number=2,
             turn_number=4,
             drawer_id=player.id,

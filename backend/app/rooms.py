@@ -232,6 +232,10 @@ class DepartedSeat:
 
 @dataclass(frozen=True, slots=True)
 class DrawingRecapEntry:
+    # The durable UUIDv7 of the turn this drawing belongs to. Round and turn
+    # numbers identify a drawing inside one live recap; only this survives into
+    # history, where a turn is keyed by id.
+    turn_id: str
     round_number: int
     turn_number: int
     drawer_id: str

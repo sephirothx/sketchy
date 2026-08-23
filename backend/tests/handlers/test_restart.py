@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import socketio
 
+from app.identifiers import generate_uuid7
 from app.canvas_history import encode_canvas_history
 from app.game import Game, Phase
 from app.handlers import register_all_handlers as register_handlers
@@ -218,6 +219,7 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     voter.score = 1
     room.last_game_drawings.append(
         DrawingRecapEntry(
+            turn_id=str(generate_uuid7()),
             round_number=1,
             turn_number=1,
             drawer_id=proposer.id,

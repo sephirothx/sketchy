@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 import socketio
 
+from app.identifiers import generate_uuid7
 from app.canvas_history import encode_canvas_history
 from app.handlers import register_all_handlers as register_handlers
 from tests.handlers.helpers import contains_secret
@@ -42,6 +43,7 @@ async def test_public_player_ids_are_broadcast_but_account_identity_is_private()
     ]
     room.last_game_drawings.append(
         DrawingRecapEntry(
+            turn_id=str(generate_uuid7()),
             round_number=1,
             turn_number=1,
             drawer_id=host.id,

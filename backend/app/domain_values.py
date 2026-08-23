@@ -154,6 +154,30 @@ class DataExportStatus(StrEnum):
     FAILED = "failed"
 
 
+class TurnDrawingStatus(StrEnum):
+    """Lifecycle of one turn's stored drawing.
+
+    Only ``ready`` and ``unavailable`` are reachable today: the blob is written
+    inside the same transaction as its game, so there is no window in which a
+    drawing is promised but missing. ``pending`` and ``failed`` are kept for the
+    day storage moves out of the database and a write can outlive its
+    transaction.
+    """
+
+    PENDING = "pending"
+    READY = "ready"
+    UNAVAILABLE = "unavailable"
+    FAILED = "failed"
+    DELETED = "deleted"
+
+
+TURN_DRAWING_STATUSES = tuple(status.value for status in TurnDrawingStatus)
+
+# The recap drops a drawing's bytes once a room exceeds its per-game budget.
+# That turn is stored as unavailable so history matches what players saw.
+DRAWING_UNAVAILABLE_RECAP_BUDGET = "recap_budget"
+
+
 class UserTheme(StrEnum):
     LIGHT = "light"
     DARK = "dark"

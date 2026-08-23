@@ -158,6 +158,15 @@ class TurnRecordInput:
 
 
 @dataclass(frozen=True)
+class TurnDrawingInput:
+    """One turn's drawing as it will be stored, or the reason it was not kept."""
+
+    turn_id: str
+    payload: bytes | None
+    unavailable_reason: str | None = None
+
+
+@dataclass(frozen=True)
 class PromptOfferInput:
     """One exact option offered to a drawer during a recorded turn."""
 
@@ -582,6 +591,7 @@ class GameHistoryRepository(ABC):
         turns: list[TurnRecordInput],
         guesses: list[TurnGuessInput],
         score_events: list[ScoreEventInput] | None = None,
+        drawings: list[TurnDrawingInput] | None = None,
     ) -> str:
         """Persist a completed game along with participants, turns, and guesses in a single transaction."""
         ...

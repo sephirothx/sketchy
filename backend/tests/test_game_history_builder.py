@@ -4,8 +4,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from app.domain_values import DRAWING_UNAVAILABLE_RECAP_BUDGET
 from app.game import CompletedTurnStats, Game, TurnGuessRecord
-from app.rooms import RoomManager
+from app.identifiers import generate_uuid7
+from app.rooms import DrawingRecapEntry, RoomManager
 from app.services.game_history import build_game_history
 
 FINISHED_AT = datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc)
@@ -32,9 +34,13 @@ def build(*seats: tuple[str, str | None, int, bool]):
 
 
 def turn(
-    drawer_id: str, *, number: int = 1, guesses=(), present=()
+    drawer_id: str, *, number: int = 1, guesses=(), present=(), turn_id=None
 ) -> CompletedTurnStats:
     return CompletedTurnStats(
+        # A real turn always carries the id allocated when it started, and the
+        # drawing is matched to it by that id, so the default mirrors the game
+        # rather than leaving the builder to mint a replacement.
+        id=turn_id or str(generate_uuid7()),
         round_number=1,
         turn_number=number,
         offered_prompts=["jackpot", "b", "c"],
@@ -304,3 +310,86 @@ def test_turns_played_separates_a_walkout_from_a_full_game():
 
     played = {p.user_id: p.turns_played for p in history.participants}
     assert played == {"user-ann": 2, "user-bob": 1}
+
+
+def recap(room, completed, *, canvas: bytes | None = b"SKCH-bytes"):
+    room.last_game_drawings.append(
+        DrawingRecapEntry(
+            turn_id=completed.id,
+            round_number=completed.round_number,
+            turn_number=completed.turn_number,
+            drawer_id=completed.drawer_token,
+            drawer_nickname="Drawer",
+            drawer_name_color=None,
+            prompt=completed.chosen_prompt,
+            action_count=3,
+            canvas_history=canvas,
+        )
+    )
+
+
+def test_a_drawing_follows_its_turn_by_id_not_by_position():
+    _, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+    )
+    first = turn(players["Ann"].id, number=1)
+    second = turn(players["Bob"].id, number=2)
+    game.completed_turns = [first, second]
+    # Recorded out of order on purpose: nothing may depend on the list order.
+    recap(room, second, canvas=b"second")
+    recap(room, first, canvas=b"first")
+
+    history = build_game_history(room, game, finished_at=FINISHED_AT)
+
+    by_turn = {d.turn_id: d.payload for d in history.drawings}
+    assert by_turn[first.id] == b"first"
+    assert by_turn[second.id] == b"second"
+
+
+def test_a_turn_the_history_skips_takes_its_drawing_with_it():
+    """A spectator-only drawer has no factual seat, so neither turn nor drawing lands."""
+
+    _, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+        ("Cid", "user-cid", 0, True),
+    )
+    kept = turn(players["Ann"].id, number=1)
+    skipped = turn(players["Cid"].id, number=2)
+    game.completed_turns = [kept, skipped]
+    recap(room, kept)
+    recap(room, skipped)
+
+    history = build_game_history(room, game, finished_at=FINISHED_AT)
+
+    assert [d.turn_id for d in history.drawings] == [kept.id]
+    assert {t.id for t in history.turns} == {kept.id}
+
+
+def test_a_drawing_dropped_for_budget_is_recorded_as_unavailable():
+    _, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+    )
+    dropped = turn(players["Ann"].id)
+    game.completed_turns = [dropped]
+    recap(room, dropped, canvas=None)
+
+    history = build_game_history(room, game, finished_at=FINISHED_AT)
+
+    assert len(history.drawings) == 1
+    assert history.drawings[0].payload is None
+    assert history.drawings[0].unavailable_reason == DRAWING_UNAVAILABLE_RECAP_BUDGET
+
+
+def test_a_game_with_no_recap_records_no_drawings():
+    _, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+    )
+    game.completed_turns = [turn(players["Ann"].id)]
+
+    history = build_game_history(room, game, finished_at=FINISHED_AT)
+
+    assert history.drawings == []
