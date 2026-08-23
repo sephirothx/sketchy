@@ -174,6 +174,18 @@ scoring child of a correct outcome. Ordinary history retains these numeric
 facts but not guess text; text retention and evidence are governed separately.
 No-scoring games record the same factual outcomes with zero awarded points and
 never invent hypothetical score awards.
+Scored games additionally keep an ordered, append-only **score-event ledger**.
+Each UUIDv7 event identifies the participant seat and turn, carries the scoring
+and rule-snapshot versions, and records one signed delta as a gross guess award,
+hint charge, drawer bonus, or later correction. Corrections point to an earlier
+event and append a new delta; prior events are never rewritten. The history
+writer proves the gameplay events agree with correct guesses and hint spend,
+then requires every participant's ledger sum to equal the cached final score in
+the same transaction. Legacy games explicitly use ledger version `0` because
+gross awards and drawer bonuses cannot be reconstructed from their net totals.
+No-scoring games use the current ledger version with an empty event list. Game
+detail, the profile breakdown, and private account export expose these audit
+facts to participants.
 Prompt-list counts are derived from prompt membership on read, so adding or
 removing a prompt cannot leave a cached total out of sync.
 Prompt usage is not stored as mutable totals on the current display row.

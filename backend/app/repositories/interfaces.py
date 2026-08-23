@@ -96,6 +96,7 @@ class GameRecordInput:
     finished_at: datetime
     id: str | None = None
     scoring_version: int = 0
+    score_ledger_version: int = 0
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
     prompt_source_mode: str = "legacy_unknown"
@@ -183,6 +184,22 @@ class TurnGuessInput:
 
 
 @dataclass(frozen=True)
+class ScoreEventInput:
+    """One ordered, append-only point change in a finished game."""
+
+    id: str
+    participant_seat_id: str
+    participant_user_id: str | None
+    event_order: int
+    event_type: str
+    points_delta: int
+    scoring_version: int
+    rule_snapshot_version: int
+    turn_id: str | None = None
+    corrects_event_id: str | None = None
+
+
+@dataclass(frozen=True)
 class GameParticipantSummary:
     """Summary of player placement in a game record."""
 
@@ -210,6 +227,7 @@ class GameSummary:
     finished_at: datetime
     participants: list[GameParticipantSummary] = field(default_factory=list)
     scoring_version: int = 0
+    score_ledger_version: int = 0
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
     prompt_source_mode: str = "legacy_unknown"
@@ -242,6 +260,22 @@ class TurnParticipantOutcomeDetail:
     near_miss_count: int
     hints_used: int
     points_spent_on_hints: int
+
+
+@dataclass(frozen=True)
+class ScoreEventDetail:
+    """Participant-visible auditable score change."""
+
+    id: str
+    participant_seat_id: str
+    participant_user_id: str | None
+    event_order: int
+    event_type: str
+    points_delta: int
+    scoring_version: int
+    rule_snapshot_version: int
+    turn_id: str | None
+    corrects_event_id: str | None
 
 
 @dataclass(frozen=True)
@@ -282,6 +316,7 @@ class GameDetail:
 
     summary: GameSummary
     turns: list[TurnDetail] = field(default_factory=list)
+    score_events: list[ScoreEventDetail] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -546,6 +581,7 @@ class GameHistoryRepository(ABC):
         participants: list[GameParticipantInput],
         turns: list[TurnRecordInput],
         guesses: list[TurnGuessInput],
+        score_events: list[ScoreEventInput] | None = None,
     ) -> str:
         """Persist a completed game along with participants, turns, and guesses in a single transaction."""
         ...

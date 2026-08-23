@@ -95,7 +95,11 @@ async def play_to_completion(ctx, room, players, *, guessers=None):
                 continue
             if guessers is not None and player.nickname not in guessers:
                 continue
-            game.submit_guess(player.id, game.prompt)
+            correct, points = game.submit_guess(player.id, game.prompt)
+            if correct:
+                # Mirror the chat handler's score mutation; the flow service
+                # separately applies the drawer bonus at turn end.
+                player.score += points
         await flow._end_turn(room)
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)

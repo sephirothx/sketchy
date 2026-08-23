@@ -20,6 +20,7 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     PromptOfferInput,
+    ScoreEventInput,
     TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
@@ -34,6 +35,7 @@ from app.rooms import Room
 # leaves mid-game remains a participant, so an opponent walking out does not
 # erase the turns that were genuinely played.
 MIN_RECORDED_PARTICIPANTS = 2
+SCORE_LEDGER_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,7 @@ class GameHistoryWrite:
     participants: list[GameParticipantInput]
     turns: list[TurnRecordInput]
     guesses: list[TurnGuessInput]
+    score_events: list[ScoreEventInput]
 
 
 @dataclass
@@ -239,6 +242,9 @@ def build_game_history(
 
     turns: list[TurnRecordInput] = []
     guesses: list[TurnGuessInput] = []
+    score_events: list[ScoreEventInput] = []
+    score_event_order = 0
+    rule_snapshot = game.rule_snapshot()
     for turn in game.completed_turns:
         drawer = seats.get(turn.drawer_token)
         if drawer is None:
@@ -319,8 +325,55 @@ def build_game_history(
                     wrong_guesses_before=guess.wrong_guesses_before,
                 )
             )
+            if game.scoring_mode != "none":
+                gross_award = guess.points_awarded + guess.points_spent_on_hints
+                if gross_award > 0:
+                    score_event_order += 1
+                    score_events.append(
+                        ScoreEventInput(
+                            id=str(generate_uuid7()),
+                            participant_seat_id=guesser.participant_id,
+                            participant_user_id=guesser.user_id,
+                            turn_id=turn_id,
+                            event_order=score_event_order,
+                            event_type="guess_award",
+                            points_delta=gross_award,
+                            scoring_version=game.scoring_version,
+                            rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
+                        )
+                    )
+                if guess.points_spent_on_hints > 0:
+                    score_event_order += 1
+                    score_events.append(
+                        ScoreEventInput(
+                            id=str(generate_uuid7()),
+                            participant_seat_id=guesser.participant_id,
+                            participant_user_id=guesser.user_id,
+                            turn_id=turn_id,
+                            event_order=score_event_order,
+                            event_type="hint_charge",
+                            points_delta=-guess.points_spent_on_hints,
+                            scoring_version=game.scoring_version,
+                            rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
+                        )
+                    )
+        drawer_bonus = sum(guess.points_awarded for guess in turn.guesses)
+        if game.scoring_mode != "none" and drawer_bonus > 0:
+            score_event_order += 1
+            score_events.append(
+                ScoreEventInput(
+                    id=str(generate_uuid7()),
+                    participant_seat_id=drawer.participant_id,
+                    participant_user_id=drawer.user_id,
+                    turn_id=turn_id,
+                    event_order=score_event_order,
+                    event_type="drawer_bonus",
+                    points_delta=drawer_bonus,
+                    scoring_version=game.scoring_version,
+                    rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
+                )
+            )
 
-    rule_snapshot = game.rule_snapshot()
     return GameHistoryWrite(
         record=GameRecordInput(
             id=game.id,
@@ -333,6 +386,7 @@ def build_game_history(
             started_at=game.started_at,
             finished_at=finished_at,
             scoring_version=game.scoring_version,
+            score_ledger_version=SCORE_LEDGER_VERSION,
             rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
             rule_snapshot=rule_snapshot,
             prompt_source_mode=game.prompt_source_mode(),
@@ -341,4 +395,5 @@ def build_game_history(
         participants=participants,
         turns=turns,
         guesses=guesses,
+        score_events=score_events,
     )

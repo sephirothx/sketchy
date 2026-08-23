@@ -29,6 +29,7 @@ from app.db.models import (
     GameRecord,
     PlayerReport,
     PromptContentReport,
+    ScoreEvent,
     TurnGuess,
     TurnRecord,
     User,
@@ -44,6 +45,7 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     PromptOfferInput,
+    ScoreEventInput,
     TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
@@ -103,6 +105,9 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
         GameRecordInput(
             room_name="Export room",
             scoring_mode="default",
+            scoring_version=1,
+            score_ledger_version=1,
+            rule_snapshot_version=1,
             hint_mode="checkpoints",
             drawing_seconds=90,
             total_rounds=1,
@@ -114,7 +119,7 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
         [
             GameParticipantInput(
                 user_id=owner_id,
-                final_score=300,
+                final_score=250,
                 final_rank=1,
                 turns_played=2,
                 seat_id=owner_seat,
@@ -122,8 +127,8 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
             ),
             GameParticipantInput(
                 user_id=other_id,
-                final_score=100,
-                final_rank=2,
+                final_score=250,
+                final_rank=1,
                 turns_played=2,
                 seat_id=other_seat,
                 display_name="Other player",
@@ -193,6 +198,52 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                 seat_id=owner_seat,
                 points_awarded=150,
                 guess_time_seconds=12,
+            ),
+        ],
+        [
+            ScoreEventInput(
+                id=str(generate_uuid()),
+                participant_seat_id=other_seat,
+                participant_user_id=other_id,
+                turn_id=owner_turn,
+                event_order=1,
+                event_type="guess_award",
+                points_delta=100,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            ScoreEventInput(
+                id=str(generate_uuid()),
+                participant_seat_id=owner_seat,
+                participant_user_id=owner_id,
+                turn_id=owner_turn,
+                event_order=2,
+                event_type="drawer_bonus",
+                points_delta=100,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            ScoreEventInput(
+                id=str(generate_uuid()),
+                participant_seat_id=owner_seat,
+                participant_user_id=owner_id,
+                turn_id=other_turn,
+                event_order=3,
+                event_type="guess_award",
+                points_delta=150,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            ScoreEventInput(
+                id=str(generate_uuid()),
+                participant_seat_id=other_seat,
+                participant_user_id=other_id,
+                turn_id=other_turn,
+                event_order=4,
+                event_type="drawer_bonus",
+                points_delta=150,
+                scoring_version=1,
+                rule_snapshot_version=1,
             ),
         ],
     )
@@ -297,7 +348,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["schemaVersion"] == 1
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
-    assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 0
+    assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
+    assert artifact["gameParticipations"][0]["game"]["scoreLedgerVersion"] == 1
     assert artifact["gameParticipations"][0]["game"]["ruleSnapshot"] == {}
     assert artifact["gameParticipations"][0]["game"]["promptSourceMode"] == "custom"
     assert artifact["drawnTurns"][0]["promptOffers"][0] == {
@@ -313,6 +365,10 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["drawnTurns"][0]["prompt"] == "owner prompt"
     assert artifact["correctGuesses"][0]["prompt"] == "requester guessed this"
     assert artifact["turnOutcomes"][0]["participantSeatId"]
+    assert [event["eventType"] for event in artifact["scoreEvents"]] == [
+        "drawer_bonus",
+        "guess_award",
+    ]
     assert artifact["turnOutcomes"][0]["outcome"] == "correct"
     assert artifact["turnOutcomes"][0]["terminalState"] == "active"
     assert artifact["sessions"] and "tokenHash" not in artifact["sessions"][0]
@@ -428,7 +484,7 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         owner_seat = next(seat for seat in seats if seat.user_id == account.id)
         other_seat = next(seat for seat in seats if seat.user_id != account.id)
         assert owner_seat.display_name_snapshot == "Deleted player"
-        assert owner_seat.final_score == 300
+        assert owner_seat.final_score == 250
         assert other_seat.display_name_snapshot == "Other player"
 
         owner_turn = await session.scalar(
@@ -444,6 +500,7 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert owner_guess.display_name_snapshot == "Deleted player"
         assert owner_guess.points_awarded == 150
         assert await session.scalar(select(func.count(GameRecord.id))) == 1
+        assert await session.scalar(select(func.count(ScoreEvent.id))) == 4
         assert await session.get(DataExport, UUID(export_status["id"])) is None
         assert await session.get(UserSettings, account.id) is None
         assert await session.scalar(select(func.count(UserBlock.id))) == 0

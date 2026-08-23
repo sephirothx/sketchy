@@ -29,6 +29,7 @@ from app.db.models import (
     PromptListRevisionItem,
     PromptVersion,
     PromptVersionAlias,
+    ScoreEvent,
     TurnGuess,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -209,6 +210,19 @@ async def _build_export_artifact(
                     TurnRecord.round_number,
                     TurnRecord.turn_number,
                 )
+            )
+        ).all()
+    )
+    score_events = list(
+        (
+            await session.execute(
+                select(ScoreEvent, GameParticipant)
+                .join(
+                    GameParticipant,
+                    GameParticipant.id == ScoreEvent.participant_id,
+                )
+                .where(GameParticipant.user_id.in_(identity_ids))
+                .order_by(ScoreEvent.game_id, ScoreEvent.event_order)
             )
         ).all()
     )
@@ -399,6 +413,7 @@ async def _build_export_artifact(
                     "roomName": game.room_name,
                     "scoringMode": game.scoring_mode,
                     "scoringVersion": game.scoring_version,
+                    "scoreLedgerVersion": game.score_ledger_version,
                     "ruleSnapshotVersion": game.rule_snapshot_version,
                     "ruleSnapshot": game.rule_snapshot,
                     "promptSourceMode": game.prompt_source_mode,
@@ -507,6 +522,29 @@ async def _build_export_artifact(
                 "pointsSpentOnHints": outcome.points_spent_on_hints,
             }
             for outcome, turn in turn_outcomes
+        ],
+        "scoreEvents": [
+            {
+                "eventId": str(event.id),
+                "gameId": str(event.game_id),
+                "turnId": str(event.turn_id) if event.turn_id else None,
+                "participantSeatId": str(event.participant_id),
+                "identityId": (
+                    str(participant.user_id) if participant.user_id else None
+                ),
+                "eventOrder": event.event_order,
+                "eventType": event.event_type,
+                "pointsDelta": event.points_delta,
+                "scoringVersion": event.scoring_version,
+                "ruleSnapshotVersion": event.rule_snapshot_version,
+                "correctsEventId": (
+                    str(event.corrects_event_id)
+                    if event.corrects_event_id
+                    else None
+                ),
+                "createdAt": _timestamp(event.created_at),
+            }
+            for event, participant in score_events
         ],
         # A reporter's own text and submitted evidence belongs in their export.
         # The reported account id, reviewer id, and internal resolution note do

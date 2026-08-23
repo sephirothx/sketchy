@@ -35,6 +35,7 @@ from app.db.models import (
     PromptListRevisionItem,
     PromptTag,
     PromptUsageFact,
+    ScoreEvent,
     PromptVersion,
     PromptVersionAlias,
     PromptVersionTag,
@@ -45,6 +46,7 @@ from app.domain_values import (
     GAME_PROMPT_SOURCE_MODES,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
+    SCORE_EVENT_TYPES,
     PromptContentModerationState,
     PromptListVisibility,
     TURN_ELIGIBILITY_REASONS,
@@ -62,6 +64,8 @@ from app.repositories.interfaces import (
     GameParticipantSummary,
     GameRecordInput,
     GameSummary,
+    ScoreEventDetail,
+    ScoreEventInput,
     InvalidProfileDataError,
     IdentityMergeError,
     TurnDetail,
@@ -166,6 +170,7 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
         room_name=game.room_name,
         scoring_mode=game.scoring_mode,
         scoring_version=game.scoring_version,
+        score_ledger_version=game.score_ledger_version,
         rule_snapshot_version=game.rule_snapshot_version,
         rule_snapshot=game.rule_snapshot,
         prompt_source_mode=game.prompt_source_mode,
@@ -638,6 +643,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         participants: list[GameParticipantInput],
         turns: list[TurnRecordInput],
         guesses: list[TurnGuessInput],
+        score_events: list[ScoreEventInput] | None = None,
     ) -> str:
         """Canonical digest used only to distinguish retries from conflicts."""
         payload = {
@@ -645,6 +651,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 "room_name": game_record.room_name,
                 "scoring_mode": game_record.scoring_mode,
                 "scoring_version": game_record.scoring_version,
+                "score_ledger_version": game_record.score_ledger_version,
                 "rule_snapshot_version": game_record.rule_snapshot_version,
                 "rule_snapshot": game_record.rule_snapshot,
                 "prompt_source_mode": game_record.prompt_source_mode,
@@ -754,6 +761,24 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     item["seat_id"] or item["user_id"] or "",
                 ),
             ),
+            "score_events": sorted(
+                (
+                    {
+                        "id": item.id,
+                        "participant_seat_id": item.participant_seat_id,
+                        "participant_user_id": item.participant_user_id,
+                        "turn_id": item.turn_id,
+                        "event_order": item.event_order,
+                        "event_type": item.event_type,
+                        "points_delta": item.points_delta,
+                        "scoring_version": item.scoring_version,
+                        "rule_snapshot_version": item.rule_snapshot_version,
+                        "corrects_event_id": item.corrects_event_id,
+                    }
+                    for item in score_events or []
+                ),
+                key=lambda item: item["event_order"],
+            ),
         }
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -765,7 +790,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         participants: list[GameParticipantInput],
         turns: list[TurnRecordInput],
         guesses: list[TurnGuessInput],
+        score_events: list[ScoreEventInput] | None = None,
     ) -> str:
+        score_events = list(score_events or [])
         record_id = (
             _entity_id(game_record.id) if game_record.id else generate_uuid()
         )
@@ -775,7 +802,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         }
         if game_record.prompt_source_mode not in GAME_PROMPT_SOURCE_MODES:
             raise ValueError("Unknown game prompt source mode")
-        payload_hash = self._payload_hash(game_record, participants, turns, guesses)
+        payload_hash = self._payload_hash(
+            game_record, participants, turns, guesses, score_events
+        )
         try:
             async with self._session_factory() as session:
                 existing = await session.get(GameRecord, record_id)
@@ -821,6 +850,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     room_name=game_record.room_name,
                     scoring_mode=game_record.scoring_mode,
                     scoring_version=game_record.scoring_version,
+                    score_ledger_version=game_record.score_ledger_version,
                     rule_snapshot_version=game_record.rule_snapshot_version,
                     rule_snapshot=game_record.rule_snapshot,
                     prompt_source_mode=game_record.prompt_source_mode,
@@ -897,6 +927,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
 
                 created_turn_ids: set[UUID] = set()
+                turn_inputs_by_id: dict[UUID, TurnRecordInput] = {}
+                drawer_participant_ids_by_turn: dict[UUID, UUID] = {}
                 outcome_ids_by_key: dict[tuple[UUID, UUID], UUID] = {}
                 outcome_inputs_by_key: dict[
                     tuple[UUID, UUID], TurnParticipantOutcomeInput
@@ -917,6 +949,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     if rid in created_turn_ids:
                         raise ValueError(f"Duplicate turn id '{r.id}'")
                     created_turn_ids.add(rid)
+                    turn_inputs_by_id[rid] = r
                     drawer_user_id = (
                         _entity_id(r.drawer_user_id) if r.drawer_user_id else None
                     )
@@ -938,6 +971,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         raise ValueError(
                             f"Turn '{r.id}' drawer seat and user identity disagree"
                         )
+                    drawer_participant_ids_by_turn[rid] = drawer_participant_id
                     drawer_snapshot = participant_snapshots_by_id[
                         drawer_participant_id
                     ]
@@ -1133,6 +1167,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
 
                 guess_outcome_keys: set[tuple[UUID, UUID]] = set()
+                guess_inputs_by_key: dict[tuple[UUID, UUID], TurnGuessInput] = {}
                 for g in guesses:
                     try:
                         target_turn_id = _entity_id(g.turn_id)
@@ -1167,6 +1202,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         guess_participant_id
                     ]
                     outcome_key = (target_turn_id, guess_participant_id)
+                    if outcome_key in guess_inputs_by_key:
+                        raise ValueError(
+                            "A participant seat cannot have two correct guesses in one turn"
+                        )
+                    guess_inputs_by_key[outcome_key] = g
                     outcome_input = outcome_inputs_by_key.get(outcome_key)
                     if target_turn_id in turns_with_outcomes:
                         if outcome_input is None or outcome_input.outcome != "correct":
@@ -1213,6 +1253,152 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     raise ValueError(
                         "Correct participant outcomes and guess rows disagree"
                     )
+
+                if game_record.score_ledger_version not in (0, 1):
+                    raise ValueError("Unsupported score ledger version")
+                if game_record.score_ledger_version == 0 and score_events:
+                    raise ValueError("Legacy games cannot claim score events")
+                if game_record.score_ledger_version == 1:
+                    if game_record.scoring_mode == "none":
+                        if score_events:
+                            raise ValueError(
+                                "No-scoring games cannot contain hypothetical score events"
+                            )
+                        if any(participant.final_score != 0 for participant in participants):
+                            raise ValueError(
+                                "No-scoring game participant totals must remain zero"
+                            )
+
+                    ordered_events = sorted(
+                        score_events, key=lambda event: event.event_order
+                    )
+                    if [event.event_order for event in ordered_events] != list(
+                        range(1, len(ordered_events) + 1)
+                    ):
+                        raise ValueError(
+                            "Score event order must be unique and consecutive from one"
+                        )
+
+                    event_inputs_by_id: dict[UUID, ScoreEventInput] = {}
+                    actual_gameplay: defaultdict[
+                        tuple[str, UUID, UUID], list[int]
+                    ] = defaultdict(list)
+                    ledger_totals: defaultdict[UUID, int] = defaultdict(int)
+                    for event in ordered_events:
+                        event_id = _entity_id(event.id)
+                        if event_id in event_inputs_by_id:
+                            raise ValueError("Duplicate score event id")
+                        participant_id = _entity_id(event.participant_seat_id)
+                        participant = participant_inputs_by_id.get(participant_id)
+                        if participant is None:
+                            raise ValueError(
+                                "Score event references an unknown participant seat"
+                            )
+                        if participant.user_id != event.participant_user_id:
+                            raise ValueError(
+                                "Score event seat and user identity disagree"
+                            )
+                        if event.event_type not in SCORE_EVENT_TYPES:
+                            raise ValueError("Score event has an unknown type")
+                        if event.points_delta == 0 or (
+                            event.event_type in {"guess_award", "drawer_bonus"}
+                            and event.points_delta < 0
+                        ) or (
+                            event.event_type == "hint_charge"
+                            and event.points_delta > 0
+                        ):
+                            raise ValueError("Score event delta is invalid for its type")
+                        if (
+                            event.scoring_version != game_record.scoring_version
+                            or event.rule_snapshot_version
+                            != game_record.rule_snapshot_version
+                        ):
+                            raise ValueError(
+                                "Score event rule versions disagree with the game"
+                            )
+                        turn_id = _entity_id(event.turn_id) if event.turn_id else None
+                        if turn_id is not None and turn_id not in turn_inputs_by_id:
+                            raise ValueError("Score event references an unknown turn")
+                        correction_id = (
+                            _entity_id(event.corrects_event_id)
+                            if event.corrects_event_id
+                            else None
+                        )
+                        if event.event_type == "correction":
+                            corrected = event_inputs_by_id.get(correction_id)
+                            if corrected is None:
+                                raise ValueError(
+                                    "A correction must target an earlier score event"
+                                )
+                            if (
+                                corrected.participant_seat_id
+                                != event.participant_seat_id
+                            ):
+                                raise ValueError(
+                                    "A correction must target the same participant"
+                                )
+                        elif correction_id is not None or turn_id is None:
+                            raise ValueError(
+                                "Gameplay score events require a turn and cannot correct"
+                            )
+                        else:
+                            actual_gameplay[
+                                (event.event_type, turn_id, participant_id)
+                            ].append(event.points_delta)
+
+                        event_inputs_by_id[event_id] = event
+                        ledger_totals[participant_id] += event.points_delta
+                        session.add(
+                            ScoreEvent(
+                                id=event_id,
+                                game_id=record_id,
+                                participant_id=participant_id,
+                                turn_id=turn_id,
+                                event_order=event.event_order,
+                                event_type=event.event_type,
+                                points_delta=event.points_delta,
+                                scoring_version=event.scoring_version,
+                                rule_snapshot_version=event.rule_snapshot_version,
+                                corrects_event_id=correction_id,
+                            )
+                        )
+
+                    expected_gameplay: defaultdict[
+                        tuple[str, UUID, UUID], list[int]
+                    ] = defaultdict(list)
+                    if game_record.scoring_mode != "none":
+                        drawer_bonuses: defaultdict[tuple[UUID, UUID], int] = (
+                            defaultdict(int)
+                        )
+                        for (turn_id, participant_id), guess in guess_inputs_by_key.items():
+                            gross_award = (
+                                guess.points_awarded + guess.points_spent_on_hints
+                            )
+                            if gross_award > 0:
+                                expected_gameplay[
+                                    ("guess_award", turn_id, participant_id)
+                                ].append(gross_award)
+                            if guess.points_spent_on_hints > 0:
+                                expected_gameplay[
+                                    ("hint_charge", turn_id, participant_id)
+                                ].append(-guess.points_spent_on_hints)
+                            drawer_bonuses[
+                                (turn_id, drawer_participant_ids_by_turn[turn_id])
+                            ] += guess.points_awarded
+                        for (turn_id, drawer_id), bonus in drawer_bonuses.items():
+                            if bonus > 0:
+                                expected_gameplay[
+                                    ("drawer_bonus", turn_id, drawer_id)
+                                ].append(bonus)
+                    if dict(actual_gameplay) != dict(expected_gameplay):
+                        raise ValueError(
+                            "Score events do not match guess awards, hint charges, and drawer bonuses"
+                        )
+                    for participant_id, participant in participant_inputs_by_id.items():
+                        if ledger_totals[participant_id] != participant.final_score:
+                            raise ValueError(
+                                "Score event ledger does not reconcile to final participant scores"
+                            )
 
                 if referenced_user_ids:
                     await session.execute(
@@ -1308,6 +1494,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     selectinload(GameRecord.turns)
                     .selectinload(TurnRecord.prompt_offers)
                     .selectinload(TurnPromptOffer.sources),
+                    selectinload(GameRecord.score_events),
                 )
             )
             result = await session.execute(stmt)
@@ -1411,7 +1598,37 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
                 )
 
-            return GameDetail(summary=summary, turns=turn_details)
+            participants_by_id = {
+                participant.id: participant for participant in g.participants
+            }
+            score_event_details = [
+                ScoreEventDetail(
+                    id=_public_id(event.id),
+                    participant_seat_id=_public_id(event.participant_id),
+                    participant_user_id=(
+                        _public_id(participants_by_id[event.participant_id].user_id)
+                        if participants_by_id[event.participant_id].user_id
+                        else None
+                    ),
+                    turn_id=_public_id(event.turn_id) if event.turn_id else None,
+                    event_order=event.event_order,
+                    event_type=event.event_type,
+                    points_delta=event.points_delta,
+                    scoring_version=event.scoring_version,
+                    rule_snapshot_version=event.rule_snapshot_version,
+                    corrects_event_id=(
+                        _public_id(event.corrects_event_id)
+                        if event.corrects_event_id
+                        else None
+                    ),
+                )
+                for event in sorted(g.score_events, key=lambda item: item.event_order)
+            ]
+            return GameDetail(
+                summary=summary,
+                turns=turn_details,
+                score_events=score_event_details,
+            )
 
 
 class SqlAlchemyPromptListRepository(PromptListRepository):

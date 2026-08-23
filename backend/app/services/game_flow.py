@@ -714,6 +714,7 @@ class GameFlowService:
                     history.participants,
                     history.turns,
                     history.guesses,
+                    history.score_events,
                 ),
                 timeout=HISTORY_WRITE_TIMEOUT_SECONDS,
             )

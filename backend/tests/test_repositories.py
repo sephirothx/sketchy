@@ -17,6 +17,7 @@ from app.db.models import (
     GameRecord,
     Prompt,
     PromptList,
+    ScoreEvent,
     TurnGuess,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -42,6 +43,7 @@ from app.repositories.interfaces import (
     PromptPickTotals,
     PromptListSelectionError,
     PromptOfferInput,
+    ScoreEventInput,
     PromptSeedConflictError,
     PromptUsage,
 )
@@ -497,6 +499,145 @@ async def test_game_history_stable_id_is_idempotent_and_rejects_conflicts():
         )
         with pytest.raises(GameHistoryConflictError, match="different content"):
             await history.save_game(changed, participants, [], [])
+    finally:
+        await engine.dispose()
+
+
+async def test_score_event_ledger_reconciles_and_is_returned_in_order():
+    factory, engine = await create_test_db()
+    try:
+        users = SqlAlchemyUserRepository(factory)
+        history = SqlAlchemyGameHistoryRepository(factory)
+        drawer = await users.create_anonymous("Ledger drawer")
+        guesser = await users.create_anonymous("Ledger guesser")
+        drawer_seat = str(generate_uuid())
+        guesser_seat = str(generate_uuid())
+        turn_id = str(generate_uuid())
+        event_ids = [str(generate_uuid()) for _ in range(3)]
+        stable_game_id = str(generate_uuid())
+        now = datetime.now(timezone.utc)
+        record = GameRecordInput(
+            id=stable_game_id,
+            room_name="Ledger room",
+            scoring_mode="default",
+            scoring_version=1,
+            score_ledger_version=1,
+            rule_snapshot_version=1,
+            hint_mode="purchase",
+            drawing_seconds=90,
+            total_rounds=1,
+            player_count=2,
+            started_at=now,
+            finished_at=now,
+        )
+        participants = [
+            GameParticipantInput(
+                drawer.id, 250, 1, seat_id=drawer_seat, display_name="Ledger drawer"
+            ),
+            GameParticipantInput(
+                guesser.id,
+                249,
+                1,
+                seat_id=guesser_seat,
+                display_name="Ledger guesser",
+            ),
+        ]
+        turns = [
+            TurnRecordInput(
+                id=turn_id,
+                round_number=1,
+                turn_number=1,
+                drawer_user_id=drawer.id,
+                drawer_seat_id=drawer_seat,
+                prompt="guitar",
+                duration_seconds=20,
+                guesser_count=1,
+                participant_outcomes=(
+                    TurnParticipantOutcomeInput(
+                        seat_id=guesser_seat,
+                        user_id=guesser.id,
+                        eligible=True,
+                        eligibility_reason="eligible",
+                        outcome="correct",
+                        terminal_state="active",
+                        correct_guess_time_seconds=10,
+                        hints_used=1,
+                        points_spent_on_hints=50,
+                    ),
+                ),
+            )
+        ]
+        guesses = [
+            TurnGuessInput(
+                turn_id=turn_id,
+                user_id=guesser.id,
+                seat_id=guesser_seat,
+                points_awarded=250,
+                guess_time_seconds=10,
+                hints_used=1,
+                points_spent_on_hints=50,
+            )
+        ]
+        events = [
+            ScoreEventInput(
+                id=event_ids[0],
+                participant_seat_id=guesser_seat,
+                participant_user_id=guesser.id,
+                turn_id=turn_id,
+                event_order=1,
+                event_type="guess_award",
+                points_delta=300,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            ScoreEventInput(
+                id=event_ids[1],
+                participant_seat_id=guesser_seat,
+                participant_user_id=guesser.id,
+                turn_id=turn_id,
+                event_order=2,
+                event_type="hint_charge",
+                points_delta=-50,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            ScoreEventInput(
+                id=event_ids[2],
+                participant_seat_id=drawer_seat,
+                participant_user_id=drawer.id,
+                turn_id=turn_id,
+                event_order=3,
+                event_type="drawer_bonus",
+                points_delta=250,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+        ]
+
+        with pytest.raises(ValueError, match="does not reconcile"):
+            await history.save_game(record, participants, turns, guesses, events)
+
+        participants[1] = GameParticipantInput(
+            guesser.id,
+            250,
+            1,
+            seat_id=guesser_seat,
+            display_name="Ledger guesser",
+        )
+        game_id = await history.save_game(record, participants, turns, guesses, events)
+        assert (
+            await history.save_game(
+                record, participants, turns, guesses, list(reversed(events))
+            )
+            == game_id
+        )
+        detail = await history.get_game_detail(game_id, drawer.id)
+        assert detail is not None
+        assert detail.summary.score_ledger_version == 1
+        assert [event.id for event in detail.score_events] == event_ids
+        assert [event.points_delta for event in detail.score_events] == [300, -50, 250]
+        async with factory() as session:
+            assert await session.scalar(select(func.count(ScoreEvent.id))) == 3
     finally:
         await engine.dispose()
 

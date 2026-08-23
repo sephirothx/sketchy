@@ -43,6 +43,7 @@ from app.domain_values import (
     PROMPT_SOURCE_KINDS,
     REPORT_REASONS,
     REPORT_STATUSES,
+    SCORE_EVENT_TYPES,
     SCORING_MODES,
     TURN_ELIGIBILITY_REASONS,
     TURN_END_REASONS,
@@ -734,6 +735,10 @@ class GameRecord(Base):
             "scoring_version >= 0", name="ck_game_records_scoring_version"
         ),
         CheckConstraint(
+            "score_ledger_version >= 0",
+            name="ck_game_records_score_ledger_version",
+        ),
+        CheckConstraint(
             "rule_snapshot_version >= 0",
             name="ck_game_records_rule_snapshot_version",
         ),
@@ -755,6 +760,9 @@ class GameRecord(Base):
     # Version zero/empty JSON identify legacy/manual rows whose exact rules are
     # unknown. Production game writes always provide the current versions.
     scoring_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    score_ledger_version: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
     rule_snapshot_version: Mapped[int] = mapped_column(
@@ -798,6 +806,11 @@ class GameRecord(Base):
     prompt_sources: Mapped[list[GamePromptSource]] = relationship(
         back_populates="game",
         cascade="all, delete-orphan",
+    )
+    score_events: Mapped[list[ScoreEvent]] = relationship(
+        back_populates="game",
+        cascade="all, delete-orphan",
+        order_by="ScoreEvent.event_order",
     )
 
 
@@ -864,6 +877,9 @@ class GameParticipant(Base):
 
     game: Mapped[GameRecord] = relationship(back_populates="participants")
     user: Mapped[User | None] = relationship()
+    score_events: Mapped[list[ScoreEvent]] = relationship(
+        back_populates="participant"
+    )
 
 
 class TurnRecord(Base):
@@ -988,6 +1004,86 @@ class TurnRecord(Base):
     participant_outcomes: Mapped[list[TurnParticipantOutcome]] = relationship(
         back_populates="turn_record",
         cascade="all, delete-orphan",
+    )
+    score_events: Mapped[list[ScoreEvent]] = relationship(
+        back_populates="turn_record"
+    )
+
+
+class ScoreEvent(Base):
+    """Ordered append-only point delta beside a participant's cached score."""
+
+    __tablename__ = "score_events"
+    __table_args__ = (
+        UniqueConstraint("game_id", "event_order", name="uq_score_events_game_order"),
+        _values_check("event_type", SCORE_EVENT_TYPES, "ck_score_events_event_type"),
+        CheckConstraint("event_order > 0", name="ck_score_events_order_positive"),
+        CheckConstraint("points_delta != 0", name="ck_score_events_delta_nonzero"),
+        CheckConstraint(
+            "scoring_version >= 0 AND rule_snapshot_version >= 0",
+            name="ck_score_events_versions_nonnegative",
+        ),
+        CheckConstraint(
+            "(event_type IN ('guess_award', 'drawer_bonus') AND points_delta > 0) "
+            "OR (event_type = 'hint_charge' AND points_delta < 0) "
+            "OR event_type = 'correction'",
+            name="ck_score_events_delta_direction",
+        ),
+        CheckConstraint(
+            "(event_type = 'correction' AND corrects_event_id IS NOT NULL) OR "
+            "(event_type != 'correction' AND corrects_event_id IS NULL)",
+            name="ck_score_events_correction_target",
+        ),
+        CheckConstraint(
+            "event_type = 'correction' OR turn_id IS NOT NULL",
+            name="ck_score_events_turn_required",
+        ),
+        CheckConstraint(
+            "corrects_event_id IS NULL OR id != corrects_event_id",
+            name="ck_score_events_not_self_correction",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("game_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("game_participants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    event_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    points_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    scoring_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    rule_snapshot_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    corrects_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("score_events.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    game: Mapped[GameRecord] = relationship(back_populates="score_events")
+    participant: Mapped[GameParticipant] = relationship(back_populates="score_events")
+    turn_record: Mapped[TurnRecord | None] = relationship(back_populates="score_events")
+    corrected_event: Mapped[ScoreEvent | None] = relationship(
+        remote_side="ScoreEvent.id", foreign_keys=[corrects_event_id]
     )
 
 

@@ -27,6 +27,7 @@ export interface GameSummary {
   roomName: string;
   scoringMode: string;
   scoringVersion: number;
+  scoreLedgerVersion: number;
   ruleSnapshotVersion: number;
   promptSourceMode: "legacy_unknown" | "curated" | "custom" | "mixed" | "builtin_fallback";
   hintMode: string;
@@ -59,6 +60,19 @@ export interface TurnParticipantOutcome {
   nearMissCount: number;
   hintsUsed: number;
   pointsSpentOnHints: number;
+}
+
+export interface ScoreEvent {
+  id: string;
+  participantSeatId: string;
+  participantUserId: string | null;
+  turnId: string | null;
+  eventOrder: number;
+  eventType: "guess_award" | "hint_charge" | "drawer_bonus" | "correction";
+  pointsDelta: number;
+  scoringVersion: number;
+  ruleSnapshotVersion: number;
+  correctsEventId: string | null;
 }
 
 export interface GameTurn {
@@ -135,6 +149,7 @@ export type GameDetail = GameSummary & {
   // Empty only for legacy version-zero games.
   ruleSnapshot: GameRuleSnapshot | Record<string, never>;
   turns: GameTurn[];
+  scoreEvents: ScoreEvent[];
 };
 
 export const HISTORY_PAGE_SIZE = 10;

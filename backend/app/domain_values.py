@@ -44,6 +44,15 @@ class TurnParticipantState(StrEnum):
     LEGACY_UNKNOWN = "legacy_unknown"
 
 
+class ScoreEventType(StrEnum):
+    """Constrained reasons for an append-only change to a game score."""
+
+    GUESS_AWARD = "guess_award"
+    HINT_CHARGE = "hint_charge"
+    DRAWER_BONUS = "drawer_bonus"
+    CORRECTION = "correction"
+
+
 class PromptSourceKind(StrEnum):
     LEGACY_UNKNOWN = "legacy_unknown"
     CURATED = "curated"
@@ -165,6 +174,7 @@ TURN_END_REASONS = tuple(reason.value for reason in TurnEndReason)
 TURN_ELIGIBILITY_REASONS = tuple(reason.value for reason in TurnEligibilityReason)
 TURN_PARTICIPANT_OUTCOMES = tuple(outcome.value for outcome in TurnParticipantOutcome)
 TURN_PARTICIPANT_STATES = tuple(state.value for state in TurnParticipantState)
+SCORE_EVENT_TYPES = tuple(event_type.value for event_type in ScoreEventType)
 PROMPT_LANGUAGES = tuple(language.value for language in PromptLanguage)
 PROMPT_EDITORIAL_DIFFICULTIES = tuple(
     difficulty.value for difficulty in PromptEditorialDifficulty

@@ -29,6 +29,7 @@ from app.db.models import (
     UserBlock,
     Prompt,
     PromptList,
+    ScoreEvent,
     generate_uuid,
 )
 from app.domain_values import (
@@ -39,6 +40,7 @@ from app.domain_values import (
     REPORT_REASONS,
     REPORT_STATUSES,
     SCORING_MODES,
+    SCORE_EVENT_TYPES,
     TURN_END_REASONS,
     USER_ROLES,
     USER_THEMES,
@@ -684,6 +686,124 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
         await engine.dispose()
 
 
+async def test_score_events_constrain_order_reason_direction_and_corrections():
+    factory, engine = await create_test_db()
+    game_id = generate_uuid()
+    turn_id = generate_uuid()
+    user_id = generate_uuid()
+    seat_id = generate_uuid()
+    event_id = generate_uuid()
+    now = datetime.now(timezone.utc)
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    [
+                        User(id=user_id, display_name="Scorer"),
+                        GameRecord(
+                            id=game_id,
+                            room_name="Ledger",
+                            scoring_mode="default",
+                            scoring_version=1,
+                            score_ledger_version=1,
+                            rule_snapshot_version=1,
+                            hint_mode="none",
+                            drawing_seconds=90,
+                            total_rounds=1,
+                            player_count=1,
+                            started_at=now,
+                            finished_at=now,
+                        ),
+                        GameParticipant(
+                            id=seat_id,
+                            game_id=game_id,
+                            user_id=user_id,
+                            final_score=100,
+                            final_rank=1,
+                        ),
+                        TurnRecord(
+                            id=turn_id,
+                            game_id=game_id,
+                            round_number=1,
+                            turn_number=1,
+                            drawer_user_id=user_id,
+                            drawer_participant_id=seat_id,
+                            prompt="anchor",
+                            duration_seconds=30,
+                        ),
+                        ScoreEvent(
+                            id=event_id,
+                            game_id=game_id,
+                            participant_id=seat_id,
+                            turn_id=turn_id,
+                            event_order=1,
+                            event_type="guess_award",
+                            points_delta=100,
+                            scoring_version=1,
+                            rule_snapshot_version=1,
+                        ),
+                    ]
+                )
+
+        invalid_rows = (
+            ScoreEvent(
+                id=generate_uuid(),
+                game_id=game_id,
+                participant_id=seat_id,
+                turn_id=turn_id,
+                event_order=2,
+                event_type="hint_charge",
+                points_delta=10,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            ScoreEvent(
+                id=generate_uuid(),
+                game_id=game_id,
+                participant_id=seat_id,
+                event_order=2,
+                event_type="correction",
+                points_delta=-10,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            ScoreEvent(
+                id=generate_uuid(),
+                game_id=game_id,
+                participant_id=seat_id,
+                turn_id=turn_id,
+                event_order=1,
+                event_type="drawer_bonus",
+                points_delta=1,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+        )
+        for invalid_row in invalid_rows:
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(invalid_row)
+
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    ScoreEvent(
+                        id=generate_uuid(),
+                        game_id=game_id,
+                        participant_id=seat_id,
+                        event_order=2,
+                        event_type="correction",
+                        points_delta=-10,
+                        scoring_version=1,
+                        rule_snapshot_version=1,
+                        corrects_event_id=event_id,
+                    )
+                )
+    finally:
+        await engine.dispose()
+
+
 async def test_database_rejects_unknown_modes_statuses_and_languages():
     factory, engine = await create_test_db()
     now = datetime.now(timezone.utc)
@@ -764,11 +884,12 @@ async def test_database_rejects_unknown_modes_statuses_and_languages():
             "ck_game_records_scoring_mode": SCORING_MODES,
             "ck_game_records_hint_mode": HINT_MODES,
             "ck_turn_records_end_reason": TURN_END_REASONS,
+            "ck_score_events_event_type": SCORE_EVENT_TYPES,
             "ck_prompt_lists_language": PROMPT_LANGUAGES,
         }
         constraints = {
             constraint.name: str(constraint.sqltext)
-            for table in (GameRecord, TurnRecord, PromptList)
+            for table in (GameRecord, TurnRecord, ScoreEvent, PromptList)
             for constraint in table.__table__.constraints
             if constraint.name in expected_values
         }
@@ -996,10 +1117,14 @@ async def test_migrations_match_the_models(tmp_path):
                 )
                 in inline_reference_columns
             )
-            or (
-                difference[0] == "add_constraint"
-                and difference[1].name == "ck_turn_records_prompt_identity"
-            )
+                or (
+                    difference[0] == "add_constraint"
+                    and difference[1].name
+                    in {
+                        "ck_turn_records_prompt_identity",
+                        "ck_game_records_score_ledger_version",
+                    }
+                )
         )
     ]
     assert differences == [], f"models and migrations have drifted: {differences}"

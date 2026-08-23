@@ -11,7 +11,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
-from sqlalchemy.exc import IntegrityError, SAWarning
+from sqlalchemy.exc import DBAPIError, IntegrityError, SAWarning
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.db import create_db_engine, get_alembic_config
@@ -111,7 +111,13 @@ async def _schema_differences(engine: AsyncEngine):
             )
             or (
                 difference[0] == "add_constraint"
-                and difference[1].name == "ck_turn_records_prompt_identity"
+                and difference[1].name
+                in {
+                    "ck_turn_records_prompt_identity",
+                    # SQLite enforces this as the inline column CHECK added
+                    # without rebuilding the history parent table.
+                    "ck_game_records_score_ledger_version",
+                }
             )
         )
     ]
@@ -384,6 +390,89 @@ async def test_prompt_identity_migration_marks_legacy_provenance_unknown(tmp_pat
                     text(
                         "UPDATE turn_records SET prompt_source_kind = 'curated' "
                         "WHERE id = :turn"
+                    ),
+                    identifiers,
+                )
+    finally:
+        await engine.dispose()
+
+
+async def test_score_ledger_migration_does_not_invent_legacy_events(tmp_path):
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'score-ledger-migration.db'}"
+    )
+    identifiers = {
+        "user": uuid.uuid4().hex,
+        "game": uuid.uuid4().hex,
+        "participant": uuid.uuid4().hex,
+        "turn": uuid.uuid4().hex,
+        "event": uuid.uuid4().hex,
+    }
+    try:
+        await _migrate(engine, alembic_command.upgrade, "f7d9c3a6b281")
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, display_name, state) "
+                    "VALUES (:user, 'Legacy player', 'anonymous')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_records "
+                    "(id, payload_hash, room_name, scoring_mode, hint_mode, "
+                    "drawing_seconds, total_rounds, player_count, started_at, finished_at) "
+                    "VALUES (:game, '', 'Legacy score', 'default', 'none', 90, 1, 1, "
+                    "'2026-08-01 00:00:00', '2026-08-01 00:01:00')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_participants "
+                    "(id, game_id, user_id, display_name_snapshot, "
+                    "is_anonymous_snapshot, final_score, final_rank) "
+                    "VALUES (:participant, :game, :user, 'Legacy player', 1, 100, 1)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO turn_records "
+                    "(id, game_id, round_number, turn_number, drawer_user_id, "
+                    "drawer_participant_id, drawer_display_name_snapshot, "
+                    "drawer_is_anonymous_snapshot, prompt, duration_seconds) "
+                    "VALUES (:turn, :game, 1, 1, :user, :participant, "
+                    "'Legacy player', 1, 'apple', 30)"
+                ),
+                identifiers,
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.begin() as connection:
+            assert await connection.scalar(
+                text(
+                    "SELECT score_ledger_version FROM game_records WHERE id = :game"
+                ),
+                identifiers,
+            ) == 0
+            assert await connection.scalar(text("SELECT count(*) FROM score_events")) == 0
+            await connection.execute(
+                text(
+                    "INSERT INTO score_events "
+                    "(id, game_id, participant_id, turn_id, event_order, event_type, "
+                    "points_delta, scoring_version, rule_snapshot_version) "
+                    "VALUES (:event, :game, :participant, :turn, 1, 'guess_award', "
+                    "100, 0, 0)"
+                ),
+                identifiers,
+            )
+        with pytest.raises(DBAPIError, match="immutable"):
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "UPDATE score_events SET points_delta = 99 WHERE id = :event"
                     ),
                     identifiers,
                 )

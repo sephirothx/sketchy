@@ -16,6 +16,7 @@ from app.db.models import Base, generate_uuid
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
+    ScoreEventInput,
     TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
@@ -61,10 +62,14 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
     winner_seat = str(generate_uuid())
     loser_seat = str(generate_uuid())
     turn_id = str(generate_uuid())
+    drawer_bonus_event_id = str(generate_uuid())
     return await history.save_game(
         GameRecordInput(
             room_name=f"Studio {index}",
             scoring_mode="default",
+            scoring_version=1,
+            score_ledger_version=1,
+            rule_snapshot_version=1,
             hint_mode="checkpoints",
             drawing_seconds=90,
             total_rounds=1,
@@ -119,6 +124,41 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
                 points_awarded=100,
                 guess_time_seconds=12.0,
             )
+        ],
+        [
+            ScoreEventInput(
+                id=str(generate_uuid()),
+                participant_seat_id=loser_seat,
+                participant_user_id=loser,
+                turn_id=turn_id,
+                event_order=1,
+                event_type="guess_award",
+                points_delta=100,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            ScoreEventInput(
+                id=drawer_bonus_event_id,
+                participant_seat_id=winner_seat,
+                participant_user_id=winner,
+                turn_id=turn_id,
+                event_order=2,
+                event_type="drawer_bonus",
+                points_delta=100,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            ScoreEventInput(
+                id=str(generate_uuid()),
+                participant_seat_id=winner_seat,
+                participant_user_id=winner,
+                event_order=3,
+                event_type="correction",
+                points_delta=200,
+                scoring_version=1,
+                rule_snapshot_version=1,
+                corrects_event_id=drawer_bonus_event_id,
+            ),
         ],
     )
 
@@ -218,9 +258,21 @@ async def test_participants_see_the_turn_by_turn_detail(env):
     body = (await http.get(f"/api/games/{game_id}")).json()
 
     assert body["roomName"] == "Studio 0"
-    assert body["scoringVersion"] == 0
-    assert body["ruleSnapshotVersion"] == 0
+    assert body["scoringVersion"] == 1
+    assert body["scoreLedgerVersion"] == 1
+    assert body["ruleSnapshotVersion"] == 1
     assert body["ruleSnapshot"] == {}
+    assert [event["eventType"] for event in body["scoreEvents"]] == [
+        "guess_award",
+        "drawer_bonus",
+        "correction",
+    ]
+    assert sum(
+        event["pointsDelta"]
+        for event in body["scoreEvents"]
+        if event["participantUserId"] == ann.id
+    ) == 300
+    assert body["scoreEvents"][2]["correctsEventId"] == body["scoreEvents"][1]["id"]
     assert body["promptSourceMode"] == "legacy_unknown"
     assert len(body["turns"]) == 1
     assert body["turns"][0]["prompt"] == "jackpot"

@@ -51,6 +51,22 @@ async def test_completed_game_records_every_round_with_participants_and_guesses(
     # Every turn has exactly one eligible guesser, and they all guessed.
     assert len(saved.guesses) == 4
     assert {g.turn_id for g in saved.guesses} == {turn.id for turn in saved.turns}
+    assert saved.record.score_ledger_version == 1
+    assert [event.event_order for event in saved.score_events] == list(
+        range(1, len(saved.score_events) + 1)
+    )
+    ledger_totals = {
+        participant.seat_id: sum(
+            event.points_delta
+            for event in saved.score_events
+            if event.participant_seat_id == participant.seat_id
+        )
+        for participant in saved.participants
+    }
+    assert ledger_totals == {
+        participant.seat_id: participant.final_score
+        for participant in saved.participants
+    }
 
 
 async def test_seat_without_an_account_is_fully_preserved():
@@ -260,8 +276,42 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     assert outcome.hints_used == 1
     assert outcome.points_spent_on_hints == price
 
+    first_turn_events = [
+        event for event in saved.score_events if event.turn_id == first_round.id
+    ]
+    assert [event.event_type for event in first_turn_events] == [
+        "guess_award",
+        "hint_charge",
+        "drawer_bonus",
+    ]
+    assert [event.points_delta for event in first_turn_events] == [
+        gross,
+        -price,
+        awarded,
+    ]
+    assert all(event.scoring_version == game.scoring_version for event in first_turn_events)
+
     # Both players were in the rotation for both turns.
     assert {p.turns_played for p in saved.participants} == {2}
+
+
+async def test_no_scoring_game_has_outcomes_but_no_hypothetical_score_events():
+    room_manager, room, _ = build_room(rounds=1)
+    room.scoring_mode = "none"
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+
+    await play_to_completion(ctx, room, room.player_list())
+
+    saved = history.saved[0]
+    assert saved.record.score_ledger_version == 1
+    assert saved.score_events == []
+    assert all(participant.final_score == 0 for participant in saved.participants)
+    assert all(
+        outcome.outcome == "correct"
+        for turn in saved.turns
+        for outcome in turn.participant_outcomes
+    )
 
 
 async def test_a_player_who_never_guesses_correctly_keeps_attempt_and_hint_facts():

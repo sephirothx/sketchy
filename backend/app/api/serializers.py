@@ -57,6 +57,7 @@ def game_summary_payload(summary: GameSummary) -> dict:
         "roomName": summary.room_name,
         "scoringMode": summary.scoring_mode,
         "scoringVersion": summary.scoring_version,
+        "scoreLedgerVersion": summary.score_ledger_version,
         "ruleSnapshotVersion": summary.rule_snapshot_version,
         "promptSourceMode": summary.prompt_source_mode,
         "hintMode": summary.hint_mode,
@@ -84,6 +85,21 @@ def game_detail_payload(detail: GameDetail) -> dict:
     return {
         **game_summary_payload(detail.summary),
         "ruleSnapshot": detail.summary.rule_snapshot,
+        "scoreEvents": [
+            {
+                "id": event.id,
+                "participantSeatId": event.participant_seat_id,
+                "participantUserId": event.participant_user_id,
+                "turnId": event.turn_id,
+                "eventOrder": event.event_order,
+                "eventType": event.event_type,
+                "pointsDelta": event.points_delta,
+                "scoringVersion": event.scoring_version,
+                "ruleSnapshotVersion": event.rule_snapshot_version,
+                "correctsEventId": event.corrects_event_id,
+            }
+            for event in detail.score_events
+        ],
         "turns": [
             {
                 "roundNumber": r.round_number,

@@ -183,6 +183,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
               return `not eligible (${outcome.eligibilityReason})`;
             };
             return (
+            <>
             <table className="profile-turns">
               <caption className="visually-hidden">Turn by turn</caption>
               <thead>
@@ -232,6 +233,34 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                 ))}
               </tbody>
             </table>
+            {detail.scoreLedgerVersion === 0 ? (
+              <p className="profile-note">Score breakdown unavailable for this legacy game.</p>
+            ) : detail.scoreEvents.length === 0 ? (
+              <p className="profile-note">No score changed in this game.</p>
+            ) : (
+              <table className="profile-score-events">
+                <caption>Score ledger</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Order</th>
+                    <th scope="col">Player</th>
+                    <th scope="col">Reason</th>
+                    <th scope="col">Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.scoreEvents.map((event) => (
+                    <tr key={event.id}>
+                      <td>{event.eventOrder}</td>
+                      <td>{named(event.participantSeatId, "Unknown player")}</td>
+                      <td>{event.eventType.replaceAll("_", " ")}</td>
+                      <td>{event.pointsDelta > 0 ? "+" : ""}{event.pointsDelta}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            </>
             );
           })()}
         </div>
