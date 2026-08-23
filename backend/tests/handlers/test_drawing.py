@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import suppress
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 import socketio

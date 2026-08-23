@@ -2,7 +2,7 @@ import pytest
 
 from app.canvas_history import encode_canvas_history
 from app.game import Game
-from app.game import HINT_MODES, SCORING_MODES
+from app.domain_values import HINT_MODES, SCORING_MODES
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     DrawingRecapEntry,
@@ -94,7 +94,7 @@ def test_add_player_respects_max_players():
     rm.add_player(room, "Alice")
     try:
         rm.add_player(room, "Bob")
-        assert False, "expected RoomFullError"
+        raise AssertionError("expected RoomFullError")
     except RoomFullError:
         pass
 
@@ -178,7 +178,7 @@ def test_spectator_can_join_full_room_and_option_in_payload():
     # Active player join fails when full
     try:
         rm.add_player(room, "Bob", is_spectator=False)
-        assert False, "expected RoomFullError"
+        raise AssertionError("expected RoomFullError")
     except RoomFullError:
         pass
 

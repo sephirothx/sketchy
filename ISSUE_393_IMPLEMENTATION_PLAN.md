@@ -46,11 +46,13 @@ update to this document and issue #393 before dependent work merges.
    UUID storage and portable storage on SQLite. Python values are `uuid.UUID`;
    public contracts use canonical hyphenated strings.
 4. UUIDv7 generation is centralized in a locked `generate_uuid7()` wrapper.
-   While Python 3.12 is supported, use one pinned UUIDv7 backport on every
-   Python version so generation semantics do not differ by runtime. When the
-   minimum becomes Python 3.14, the wrapper may switch to `uuid.uuid7()` without
-   a data migration. Tests cover version/variant bits, clock rollback,
-   concurrent generation, monotonic process-local order, and uniqueness.
+   The supported runtime is Python 3.14 or newer, enforced at startup by
+   `validate_python_runtime()` and gated by a single-version CI matrix; 3.12
+   support was withdrawn on 2026-08-23. The wrapper still calls the pinned
+   backport, and may switch to the stdlib `uuid.uuid7()` without a data
+   migration now that the minimum allows it. Tests cover version/variant bits,
+   clock rollback, concurrent generation, monotonic process-local order, and
+   uniqueness.
 5. UUIDv7 is not a credential and not the authoritative business timestamp.
    Session tokens, recovery codes, room codes, and share codes remain
    cryptographically random. Queries that require chronological truth order by
@@ -477,6 +479,7 @@ pass, and the frontend production build succeeds.
 ### Sub-issue PR gate
 
 - Focused unit/integration tests for the changed behavior.
+- `ruff check app tests` and the frontend lint both pass.
 - Schema/contract/privacy/retention impact documented.
 - `README.md` and `GLOSSARY.md` updated in the same PR, or an explicit
   no-documentation-impact statement included in the PR description.

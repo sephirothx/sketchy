@@ -600,9 +600,14 @@ class GameHistoryRepository(ABC):
     async def get_game_detail(
         self,
         game_id: str,
-        requesting_user_id: str | None = None,
+        requesting_user_id: str,
     ) -> GameDetail | None:
-        """Fetch full round-by-round details for a specific game, optionally scoped to a participant."""
+        """Fetch one game's round-by-round detail for a player who was there.
+
+        The requester is required rather than optional: this payload carries
+        every prompt, guess and timing of the game, so there is no caller for
+        whom an unscoped read is the right default.
+        """
         ...
 
 

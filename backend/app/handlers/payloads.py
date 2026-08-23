@@ -39,7 +39,7 @@ from app.drawing_rules import (
     check_color_mode,
     clean_allowed_tools,
 )
-from app.game import HINT_MODES, SCORING_MODES
+from app.domain_values import HINT_MODES, SCORING_MODES
 from app.live_drawing import LiveDrawingPacket, decode_live_drawing
 from app.auth.names import MAX_NAME_LENGTH, NAME_RULE_MESSAGE, NameError_, validate_name
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH

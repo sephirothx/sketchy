@@ -1,0 +1,11 @@
+# Lint configuration for the backend. The rule set is deliberately small: it
+# catches real defects (undefined and unused names, mutable default arguments,
+# silently truncating zips, blocking sleeps in async code) without imposing a
+# formatting opinion on a codebase that already reads consistently.
+target-version = "py314"
+
+[lint]
+select = ["F", "B", "ASYNC"]
+# FastAPI's Query/Depends/Path defaults are function calls in argument
+# defaults by design, which is exactly what B008 exists to warn about.
+ignore = ["B008"]

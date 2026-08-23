@@ -24,8 +24,6 @@ from app.drawing_rules import (
     allowed_colors,
 )
 from app.domain_values import (
-    HINT_MODES,
-    SCORING_MODES,
     GamePromptSourceMode,
     PromptSourceKind,
     TurnEligibilityReason,
@@ -180,7 +178,7 @@ def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
         return len(b) if len(b) <= max_distance else over_limit
     if not b:
         return len(a) if len(a) <= max_distance else over_limit
-    len_a, len_b = len(a), len(b)
+    len_b = len(b)
 
     previous_previous: dict[int, int] = {}
     previous = {j: j for j in range(min(len_b, max_distance) + 1)}

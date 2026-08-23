@@ -13,11 +13,8 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend tests (${{ matrix.python-version }})
+    name: Backend lint & tests
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12", "3.14"]
     defaults:
       run:
         working-directory: backend
@@ -26,13 +23,15 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: |
             backend/requirements.txt
             backend/requirements-dev.txt
 
       - run: pip install -r requirements-dev.txt
+
+      - run: ruff check app tests
 
       - run: pytest -q
 
@@ -81,6 +80,9 @@ jobs:
       - name: Run repositories against PostgreSQL
         run: pytest -q tests/test_repositories.py
 
+      - name: Run row-locking services against PostgreSQL
+        run: pytest -q tests/test_room_presets.py tests/test_persistent_rooms.py
+
   frontend:
     name: Frontend test, lint & build
     runs-on: ubuntu-latest
@@ -112,7 +114,7 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: |
             backend/requirements.txt

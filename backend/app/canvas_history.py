@@ -9,6 +9,7 @@ from array import array
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from dataclasses import field
+from itertools import pairwise
 from typing import TypeAlias
 
 CANVAS_HISTORY_VERSION = 1
@@ -459,10 +460,7 @@ def decode_binary_canvas_history(payload) -> PackedCanvasHistory:
         or offsets_with_end[-1] != data_length
         or any(
             current >= following
-            for current, following in zip(
-                offsets_with_end,
-                offsets_with_end[1:],
-            )
+            for current, following in pairwise(offsets_with_end)
         )
     ):
         if action_count == 0 and offsets_with_end == [0] and data_length == 0:

@@ -140,7 +140,7 @@ def _participants(seats: dict[str, _Seat]) -> list[GameParticipantInput]:
     ordered = sorted(by_identity.values(), key=lambda seat: -seat.score)
     ranks = competition_ranks([seat.score for seat in ordered])
     participants: list[GameParticipantInput] = []
-    for seat, rank in zip(ordered, ranks):
+    for seat, rank in zip(ordered, ranks, strict=True):
         participants.append(
             GameParticipantInput(
                 user_id=seat.user_id,

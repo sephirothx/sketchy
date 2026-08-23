@@ -78,7 +78,7 @@ flowchart LR
 |----------|------------|
 | Backend  | Python 3.14, FastAPI, python-socketio (`AsyncServer`, ASGI), uvicorn, SQLAlchemy 2.0 (async), PostgreSQL, aiosqlite, Alembic |
 | Frontend | React 19, TypeScript, Vite, react-router-dom, zustand, socket.io-client |
-| Testing  | pytest + pytest-asyncio (backend unit tests), Playwright (multi-browser E2E testing) |
+| Testing  | pytest + pytest-asyncio (backend unit tests), ruff (backend lint), Playwright (multi-browser E2E testing) |
 
 ## Database & Configuration
 
@@ -737,7 +737,7 @@ frontend/
 
 ## Getting started
 
-Requires Python 3.11+ and Node 20+.
+Requires Python 3.14+ and Node 20+. Startup refuses an older interpreter.
 
 ### Quick start
 
@@ -800,6 +800,9 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 
 # Unit & integration tests
 .venv/bin/pytest
+
+# Lint (undefined/unused names, mutable defaults, truncating zips, async sleeps)
+.venv/bin/ruff check app tests
 
 # Backend performance micro-benchmarks
 backend/.venv/bin/python benchmarks/backend.py

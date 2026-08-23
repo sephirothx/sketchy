@@ -21,7 +21,11 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db
 from app.db.seed import seed_prompt_lists
-from app.deployment import shutdown_drain_seconds, validate_worker_topology
+from app.deployment import (
+    shutdown_drain_seconds,
+    validate_python_runtime,
+    validate_worker_topology,
+)
 from app.handlers import register_all_handlers
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -148,6 +152,7 @@ async def lifespan(_app: FastAPI):
         drain_seconds=shutdown_drain_seconds()
     )
     try:
+        validate_python_runtime()
         validate_worker_topology()
         await init_db()
         if handler_context.room_codes is not None:

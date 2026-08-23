@@ -7,9 +7,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import socketio
 
-from app.game import MAX_GUESS_POINTS, MIN_GUESS_POINTS, Game
+from app.game import MAX_GUESS_POINTS, MIN_GUESS_POINTS
 from app.handlers import register_all_handlers as register_handlers
-from app.rooms import RoomManager
 from app.prompts import PROMPTS
 from app.services import game_flow
 from tests.fake_game_history_repo import FakeGameHistoryRepository

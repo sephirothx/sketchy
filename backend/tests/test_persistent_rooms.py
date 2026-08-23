@@ -7,9 +7,8 @@ from unittest.mock import AsyncMock
 import pytest
 import socketio
 from sqlalchemy import delete
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import Base, PersistentRoom, PromptList, RoomCodeReservation, User
+from app.db.models import PersistentRoom, PromptList, RoomCodeReservation, User
 from app.auth.account_data import anonymize_account
 from app.identifiers import generate_uuid7
 from app.handlers import register_all_handlers
@@ -26,14 +25,13 @@ from app.services.persistent_rooms import (
 )
 
 
+from tests.dbfixtures import create_test_db
+
 pytestmark = pytest.mark.asyncio
 
 
 async def _fixture():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     prompts = SqlAlchemyPromptListRepository(factory)
     owner_id = generate_uuid7()
     async with factory() as session:

@@ -99,8 +99,8 @@ async def test_game_that_finishes_inside_window_is_not_abandoned(env):
     sio = AsyncMock()
 
     draining = asyncio.create_task(coordinator.begin_shutdown(sio))
-    while not coordinator.is_draining:
-        await asyncio.sleep(0)
+    while not coordinator.is_draining:  # noqa: ASYNC110 - spin until the
+        await asyncio.sleep(0)  # drain task reaches its first await
     room.state = "waiting"
     room.game = None
     coordinator.notify_game_state_changed()

@@ -79,7 +79,8 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
     reporter_http = new_client()
     moderator_http = new_client()
     owner = await register(owner_http, "PromptOwner")
-    reporter = await register(reporter_http, "PromptReporter")
+    # Registering is what authenticates reporter_http; the payload is unused.
+    await register(reporter_http, "PromptReporter")
     moderator = await register(moderator_http, "PromptModerator")
     async with factory() as session:
         async with session.begin():

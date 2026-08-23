@@ -109,13 +109,16 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
         for player, rank in zip(
             previously_ranked,
             competition_ranks([previous_scores[p.id] for p in previously_ranked]),
+            strict=True,
         )
     }
     ranked = sorted(players, key=lambda player: -player.score)
     new_ranks = {
         player.id: rank
         for player, rank in zip(
-            ranked, competition_ranks([player.score for player in ranked])
+            ranked,
+            competition_ranks([player.score for player in ranked]),
+            strict=True,
         )
     }
     return {

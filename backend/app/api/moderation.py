@@ -38,7 +38,6 @@ from app.db.models import (
 )
 from app.domain_values import (
     AccountState,
-    PromptContentModerationState,
     PromptContentReportReason,
     PromptListVisibility,
     ReportReason,

@@ -2,16 +2,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-import os
 from uuid import UUID
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from sqlalchemy import delete, func, select
 
 from app.db.models import (
-    Base,
     GameParticipant,
     GamePromptSource,
     GameRecord,
@@ -53,34 +50,9 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
 )
 
+from tests.dbfixtures import create_test_db
+
 pytestmark = pytest.mark.asyncio
-
-
-async def create_test_db():
-    external_url = os.environ.get("TEST_DATABASE_URL")
-    if external_url:
-        engine = create_async_engine(external_url, echo=False)
-        # The external database is migrated before this suite starts. Keep the
-        # schema intact so repositories exercise Alembic's output, while
-        # isolating tests by removing application rows in dependency order.
-        async with engine.begin() as conn:
-            for table in reversed(Base.metadata.sorted_tables):
-                await conn.execute(table.delete())
-        factory = async_sessionmaker(
-            engine, expire_on_commit=False, class_=AsyncSession
-        )
-        return factory, engine
-
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        echo=False,
-        connect_args={"check_same_thread": False},
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    return factory, engine
 
 
 async def test_user_repository_crud_and_stats():

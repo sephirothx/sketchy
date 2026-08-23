@@ -9,12 +9,11 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.room_presets import create_room_preset_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import Base, RoomPreset
+from app.db.models import RoomPreset
 from app.repositories.interfaces import PromptListEntryInput
 from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
@@ -22,6 +21,8 @@ from app.repositories.sqlalchemy import (
 )
 from app.services.room_presets import RoomPresetError, RoomPresetService
 
+
+from tests.dbfixtures import create_test_db
 
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
@@ -52,10 +53,7 @@ def settings(slug: str, **overrides) -> dict:
 @pytest_asyncio.fixture
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "room-preset-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     prompt_lists = SqlAlchemyPromptListRepository(factory)
     service = RoomPresetService(factory, prompt_lists)

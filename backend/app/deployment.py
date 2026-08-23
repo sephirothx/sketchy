@@ -2,12 +2,31 @@
 
 from collections.abc import Mapping
 import os
+import sys
 
 
+MINIMUM_PYTHON_VERSION = (3, 14)
 SUPPORTED_APP_WORKERS = 1
 WORKER_COUNT_ENVIRONMENTS = ("WEB_CONCURRENCY", "UVICORN_WORKERS")
 DEFAULT_SHUTDOWN_DRAIN_SECONDS = 30.0
 MAX_SHUTDOWN_DRAIN_SECONDS = 300.0
+
+
+def validate_python_runtime(version: tuple[int, ...] | None = None) -> None:
+    """Refuse to start on a Python older than the one v1 supports.
+
+    Sketchy targets a single Python version so that runtime-dependent
+    behaviour - identifier generation, datetime handling, asyncio shutdown
+    semantics - cannot differ between a developer's machine and production.
+    """
+
+    running = tuple(sys.version_info[:2]) if version is None else tuple(version[:2])
+    if running < MINIMUM_PYTHON_VERSION:
+        wanted = ".".join(str(part) for part in MINIMUM_PYTHON_VERSION)
+        found = ".".join(str(part) for part in running)
+        raise RuntimeError(
+            f"Sketchy requires Python {wanted} or newer; this process is {found}."
+        )
 
 
 def validate_worker_topology(environ: Mapping[str, str] | None = None) -> None:

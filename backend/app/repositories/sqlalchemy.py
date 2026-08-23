@@ -1467,23 +1467,17 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
     async def get_game_detail(
         self,
         game_id: str,
-        requesting_user_id: str | None = None,
+        requesting_user_id: str,
     ) -> GameDetail | None:
         db_game_id = _optional_entity_id(game_id)
         if db_game_id is None:
             return None
-        db_requesting_user_id = (
-            _optional_entity_id(requesting_user_id)
-            if requesting_user_id is not None
-            else None
-        )
-        if requesting_user_id is not None and db_requesting_user_id is None:
+        db_requesting_user_id = _optional_entity_id(requesting_user_id)
+        if db_requesting_user_id is None:
             return None
         async with self._session_factory() as session:
-            requesting_identity_ids = (
-                await _identity_ids(session, db_requesting_user_id)
-                if db_requesting_user_id is not None
-                else ()
+            requesting_identity_ids = await _identity_ids(
+                session, db_requesting_user_id
             )
             stmt = (
                 select(GameRecord)
@@ -1506,13 +1500,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             if not g:
                 return None
 
-            # Authorization scoping: If a requesting user is specified, ensure they participated in this game
-            if db_requesting_user_id is not None:
-                is_participant = any(
-                    p.user_id in requesting_identity_ids for p in g.participants
-                )
-                if not is_participant:
-                    return None
+            # The prompts drawn, who guessed them and how fast belong to the
+            # players who were there, not to anyone holding the game id.
+            if not any(p.user_id in requesting_identity_ids for p in g.participants):
+                return None
 
             summary = _to_game_summary(g)
 
@@ -2489,8 +2480,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         if prompt.concept_id is None
                     }
                     selected_rows: dict[UUID, Prompt] = {}
-                    for definition, prompt_version, answer_key in zip(
-                        source_prompts, prompt_versions, answer_keys
+                    # prompt_versions rides along unused so strict= keeps
+                    # proving the three lists describe the same prompts.
+                    for definition, _prompt_version, answer_key in zip(
+                        source_prompts, prompt_versions, answer_keys, strict=True
                     ):
                         concept_id = UUID(definition.concept_id)
                         prompt_row = existing_by_concept.get(concept_id)
@@ -2506,7 +2499,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     await session.flush()
 
                     for definition, prompt_version in zip(
-                        source_prompts, prompt_versions
+                        source_prompts, prompt_versions, strict=True
                     ):
                         concept_id = UUID(definition.concept_id)
                         prompt_row = selected_rows.get(concept_id)
@@ -2593,7 +2586,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
 
         resolved: list[PromptVersion] = []
         new_pairs: list[tuple[BundledPromptDefinition, PromptVersion]] = []
-        for definition, concept_id in zip(definitions, concept_ids):
+        for definition, concept_id in zip(definitions, concept_ids, strict=True):
             match_key = normalize_prompt_answer(definition.answer, language)
             prompt_version = version_map.get(
                 (concept_id, definition.prompt_version)
