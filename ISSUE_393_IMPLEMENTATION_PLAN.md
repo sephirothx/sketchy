@@ -127,7 +127,9 @@ epic/393-preproduction-baseline
 main
 ```
 
-Branches are shared integration branches. Do not rebase or force-push them.
+Branches are shared integration branches. Do not rebase or force-push them
+during development. The single exception is the final promotion to `main`,
+which flattens the stack on purpose; see "Final promotion to main" below.
 Regularly merge `main` into the #393 branch, then merge the #393 branch down
 into umbrellas that need the latest integrated foundation. Do not merge one
 umbrella directly into a sibling; shared dependencies must reach #393 first and
@@ -171,10 +173,51 @@ or integration fixes target #393 rather than being hidden inside the next
 umbrella.
 
 Each umbrella stays open until its parent epic is complete. Sub-issue PRs may
-be squash-merged into the umbrella. Umbrella-to-#393 and final #393-to-`main`
-PRs use merge commits so the integration boundaries remain visible. Open a
+be squash-merged into the umbrella. Umbrella-to-#393 PRs use merge commits so
+the integration boundaries stay visible while the work is in flight; the final
+#393-to-`main` promotion does not, and flattens them away. Open a
 draft #393-to-`main` PR early for visibility, but do not merge it until every
 release gate passes.
+
+### Final promotion to main
+
+`main` receives a linear history with no merge commits, and every issue commit
+survives on it. This supersedes the rule in force until 2026-08-23, under
+which #393 reached `main` through a merge commit.
+
+Promote by rebasing `epic/393-preproduction-baseline` onto `main` and
+fast-forwarding `main` onto the result. The rebase drops the integration
+merges and replays the content commits in order. Do not squash: one commit per
+issue is the point, and a single squashed commit would satisfy linearity by
+destroying the history it is supposed to preserve.
+
+This is safe to do because the integration merges carry no content of their
+own. Verified on 2026-08-23 against `epic/343`: of 124 commits above `main`,
+63 were merges and none of them held a change that was absent from its
+parents, and replaying the 61 content commits onto `main` produced a
+byte-identical tree with no conflicts. Re-run both checks immediately before
+the real promotion:
+
+```bash
+# Every merge must show an empty combined diff.
+for m in $(git rev-list --merges main..epic/393-preproduction-baseline); do
+  git show --format="" --cc "$m" | head -1
+done
+
+# The flattened branch must have the same tree as the merge-based one.
+git checkout -b tmp/linear-probe epic/393-preproduction-baseline
+git rebase main
+git diff epic/393-preproduction-baseline tmp/linear-probe   # must be empty
+```
+
+If either check fails, stop: a merge resolved a conflict that a rebase would
+silently redo differently, and that merge needs to become its own commit
+before the stack can be flattened.
+
+Flattening discards the umbrella merge subjects, which are the only place the
+umbrella numbers appear. `Umbrella:` trailers carry that grouping into the
+linear history instead; commits written before the trailer rule are given
+theirs during the promotion rebase, which is already a rewrite.
 
 ### Migration serialization
 
@@ -200,6 +243,22 @@ contract surface, and the umbrella integration PR regenerates the complete v1
 fixtures against the latest #393 branch.
 
 ### Information-preservation rules
+
+Every commit message must carry its issue and umbrella as trailers, because
+the final promotion flattens the merges that would otherwise record them:
+
+```text
+Implement bounded graceful shutdown drain (#380)
+
+<body>
+
+Issue: #380
+Umbrella: #343
+```
+
+Cross-cutting work that belongs to no child issue uses `Issue: #393`. A commit
+whose subject already names its issue still carries the trailer, so the
+grouping is machine-readable rather than a convention of prose.
 
 Every sub-issue PR must include:
 
@@ -484,6 +543,7 @@ pass, and the frontend production build succeeds.
 
 - Focused unit/integration tests for the changed behavior.
 - `ruff check app tests` and the frontend lint both pass.
+- Every commit carries `Issue:` and `Umbrella:` trailers.
 - Schema/contract/privacy/retention impact documented.
 - `README.md` and `GLOSSARY.md` updated in the same PR, or an explicit
   no-documentation-impact statement included in the PR description.
