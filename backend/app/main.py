@@ -19,6 +19,7 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db
 from app.db.seed import seed_prompt_lists
+from app.deployment import validate_worker_topology
 from app.handlers import register_all_handlers
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -130,6 +131,7 @@ async def remove_banned_account_from_live_rooms(user_id: str) -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     try:
+        validate_worker_topology()
         await init_db()
         await purge_expired_room_messages(async_session_factory)
         await seed_prompt_lists(prompt_list_repo)

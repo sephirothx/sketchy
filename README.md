@@ -381,6 +381,22 @@ export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+Sketchy v1 supports exactly one application worker. Do not pass Uvicorn
+`--workers`, and leave `WEB_CONCURRENCY`/`UVICORN_WORKERS` unset or set to `1`;
+startup rejects other values. Live rooms, games, canvases, timers, Socket.IO
+sessions, and room-code lookup are process-owned, so a second worker would
+split one logical service into inconsistent islands. Shared PostgreSQL state
+does not change that boundary, and a Socket.IO message queue alone would not
+make multi-worker gameplay correct.
+
+The v1 release-load target for this topology is 50 simultaneous active rooms
+and 400 connected player seats on one worker. This is a validation target, not
+a claim that an arbitrary host will sustain that load: the checked-in #323
+load scenario must measure handler latency, event-loop lag, memory, and drawing
+traffic on the documented reference environment before the production baseline
+is declared complete. Deployments needing multiple workers are outside v1 and
+require shared room/session/timer state plus cross-worker Socket.IO delivery.
+
 PostgreSQL connections are checked before checkout, recycled after 30 minutes,
 and bounded to five persistent plus five overflow connections per server
 process. These deployment settings can be tuned without code changes:
@@ -917,8 +933,11 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 ## Key design decisions & limitations
 
 - **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, explicitly saved player prompt lists, and the bounded retained-message window) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency; message correlation IDs do not make an active game recoverable.
-- **Single process**: no horizontal scaling story; one uvicorn worker holds all rooms. Fine for
-  small deployments, not for internet-scale traffic.
+- **Single application worker**: one Uvicorn worker owns every live room,
+  Socket.IO session, timer, and canvas. Startup rejects common environment-based
+  multi-worker settings, deployment commands pin one worker, and the v1 release
+  gate targets 50 simultaneous active rooms / 400 connected player seats. This
+  is an explicit product ceiling, not an undiscovered horizontal-scaling mode.
 - **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO
   event. Data-bearing path, shape, and fill actions use binary attachments with fixed-width
   colors, widths, shape IDs, and quarter-pixel signed coordinates. Path-end and clear use

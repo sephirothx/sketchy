@@ -27,6 +27,7 @@ and conversation.
 | --- | --- | --- |
 | **Game** | One complete play-through in a room, from **Start game** to final scores. A room outlives the games played in it. | match, session |
 | **Game persistence identity** | The stable UUIDv7 assigned when a **Game** starts and reused by every durable write for that game. Retrying identical content is safe; different content under the same identity is a conflict. | save ID, history ID, match ID |
+| **Application worker** | The one v1 server process that owns every live room, game, canvas, timer, and Socket.IO session. PostgreSQL stores durable data but does not make a second application worker supported. | replica, room shard, web worker |
 | **Persistence time** | The UTC database time when a finished **Game** was durably written. It is diagnostic metadata and can be later than **Game over** after a retry; it is never the time gameplay occurred. | game time, finish time, UUID time |
 | **Round** | One full rotation: every active player draws exactly once. Rooms are configured in rounds ("3 rounds each"). | — |
 | **Turn** | One drawer's stint: they pick a prompt, draw it, and it is revealed. A round of *n* players contains *n* turns. **This is the unit almost everything is scored, timed, and limited by** — points, hint spend, and the drawing limit are all per turn, never per round. | round (for a single drawer's stint) |
