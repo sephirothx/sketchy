@@ -131,6 +131,8 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     monkeypatch.setattr(main.handler_context, "timers", timers)
     monkeypatch.setattr(main, "async_engine", SimpleNamespace(dispose=dispose))
     monkeypatch.setattr(main, "init_db", AsyncMock())
+    purge_messages = AsyncMock()
+    monkeypatch.setattr(main, "purge_expired_room_messages", purge_messages)
     monkeypatch.setattr(main, "seed_prompt_lists", AsyncMock())
     task = asyncio.create_task(asyncio.sleep(60))
     timers.replace_disconnect_timer("player", task)
@@ -153,6 +155,7 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     assert task.cancelled()
     assert timers.disconnect_timers == {}
     assert timers.restart_timers == {}
+    purge_messages.assert_awaited_once_with(main.async_session_factory)
     dispose.assert_awaited_once_with()
     assert sent == [
         {"type": "lifespan.startup.complete"},

@@ -33,6 +33,7 @@ from app.domain_values import (
     DEFAULT_USER_KEY_BINDINGS,
     GAME_PROMPT_SOURCE_MODES,
     HINT_MODES,
+    NEAR_MISS_KINDS,
     PROMPT_CONTENT_MODERATION_STATES,
     PROMPT_CONTENT_REPORT_REASONS,
     PROMPT_CONTENT_RATINGS,
@@ -43,6 +44,8 @@ from app.domain_values import (
     PROMPT_SOURCE_KINDS,
     REPORT_REASONS,
     REPORT_STATUSES,
+    RETAINED_MESSAGE_AUDIENCES,
+    RETAINED_MESSAGE_KINDS,
     SCORE_EVENT_TYPES,
     SCORING_MODES,
     TURN_ELIGIBILITY_REASONS,
@@ -394,6 +397,178 @@ class PlayerReport(Base):
         UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+    message_evidence: Mapped[list[PlayerReportMessageEvidence]] = relationship(
+        back_populates="report",
+        cascade="all, delete-orphan",
+        order_by="PlayerReportMessageEvidence.position",
+    )
+
+
+class RoomMessage(Base):
+    """Short-lived player-authored chat or guess with its real audience."""
+
+    __tablename__ = "room_messages"
+    __table_args__ = (
+        _values_check(
+            "message_kind", RETAINED_MESSAGE_KINDS, "ck_room_messages_kind"
+        ),
+        _values_check(
+            "audience", RETAINED_MESSAGE_AUDIENCES, "ck_room_messages_audience"
+        ),
+        _values_check(
+            "near_miss_kind", NEAR_MISS_KINDS, "ck_room_messages_near_miss_kind"
+        ),
+        CheckConstraint(
+            "message_kind = 'wrong_guess' OR near_miss_kind IS NULL",
+            name="ck_room_messages_near_miss_only_for_wrong_guess",
+        ),
+        CheckConstraint(
+            "turn_id IS NULL OR game_id IS NOT NULL",
+            name="ck_room_messages_turn_has_game",
+        ),
+        CheckConstraint(
+            "message_kind = 'chat' OR (game_id IS NOT NULL AND turn_id IS NOT NULL)",
+            name="ck_room_messages_guesses_have_turn",
+        ),
+        CheckConstraint(
+            "expires_at > created_at", name="ck_room_messages_expiry_after_creation"
+        ),
+        Index("ix_room_messages_expires_at", "expires_at"),
+        Index("ix_room_messages_game_turn_created", "game_id", "turn_id", "created_at"),
+        Index("ix_room_messages_sender_created", "sender_user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    room_instance_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+    )
+    # Games and turns are allocated at runtime but written only when the game
+    # completes. These durable correlation IDs intentionally do not use FKs so
+    # live messages survive a process failure or an abandoned game.
+    game_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    sender_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    sender_player_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    sender_seat_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    sender_display_name_snapshot: Mapped[str] = mapped_column(
+        String(32), nullable=False
+    )
+    sender_name_color_snapshot: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    sender_is_anonymous_snapshot: Mapped[bool] = mapped_column(
+        Boolean, nullable=False
+    )
+    is_spectator: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    message_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    audience: Mapped[str] = mapped_column(String(24), nullable=False)
+    # Exact account recipients at send time, after Blocks are applied. Kept
+    # only for the same short retention window and used to authorize evidence
+    # selection without exposing a transcript API.
+    audience_user_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    near_miss_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
+class PlayerReportMessageEvidence(Base):
+    """Immutable message copy pinned by a player report beyond normal expiry."""
+
+    __tablename__ = "player_report_message_evidence"
+    __table_args__ = (
+        UniqueConstraint(
+            "report_id",
+            "source_message_snapshot_id",
+            name="uq_report_message_evidence_source",
+        ),
+        _values_check(
+            "message_kind",
+            RETAINED_MESSAGE_KINDS,
+            "ck_report_message_evidence_kind",
+        ),
+        _values_check(
+            "audience",
+            RETAINED_MESSAGE_AUDIENCES,
+            "ck_report_message_evidence_audience",
+        ),
+        _values_check(
+            "near_miss_kind",
+            NEAR_MISS_KINDS,
+            "ck_report_message_evidence_near_miss_kind",
+        ),
+        CheckConstraint(
+            "message_kind = 'wrong_guess' OR near_miss_kind IS NULL",
+            name="ck_report_message_evidence_near_miss_only_for_wrong_guess",
+        ),
+        CheckConstraint("position >= 0", name="ck_report_message_evidence_position"),
+    )
+
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("player_reports.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("room_messages.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source_message_snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    game_id_snapshot: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    turn_id_snapshot: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    sender_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    sender_display_name_snapshot: Mapped[str] = mapped_column(
+        String(32), nullable=False
+    )
+    sender_name_color_snapshot: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    sender_is_anonymous_snapshot: Mapped[bool] = mapped_column(
+        Boolean, nullable=False
+    )
+    message_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    audience: Mapped[str] = mapped_column(String(24), nullable=False)
+    near_miss_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    text_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    message_created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False
+    )
+    copied_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    report: Mapped[PlayerReport] = relationship(back_populates="message_evidence")
 
 
 class PromptContentReport(Base):

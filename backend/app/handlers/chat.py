@@ -31,7 +31,11 @@ async def _emit_player_chat(
     payload: dict,
     *,
     recipients: list[str] | None = None,
-) -> None:
+    message_kind: str = "chat",
+    audience: str = "room",
+    near_miss_kind: str | None = None,
+    additional_audience_sids: list[str] | None = None,
+) -> dict:
     """Emit ordinary player-authored chat minus recipients who blocked them.
 
     Blocking is intentionally a presentation filter. Correct-guess events,
@@ -42,13 +46,6 @@ async def _emit_player_chat(
         if ctx.block_service is not None
         else frozenset()
     )
-    if not blockers:
-        if recipients is None:
-            await ctx.sio.emit("chat_message", payload, room=room.id)
-        elif recipients:
-            await ctx.sio.emit("chat_message", payload, to=recipients)
-        return
-
     candidate_sids = (
         recipients
         if recipients is not None
@@ -63,15 +60,36 @@ async def _emit_player_chat(
         for candidate in room.players.values()
         if candidate.connected and candidate.sid
     }
-    visible_to = [
-        candidate_sid
-        for candidate_sid in candidate_sids
-        if candidate_sid == player.sid
-        or players_by_sid.get(candidate_sid) is None
-        or players_by_sid[candidate_sid].user_id not in blockers
-    ]
-    if visible_to:
+    visible_to = list(dict.fromkeys(candidate_sids))
+    if blockers:
+        visible_to = [
+            candidate_sid
+            for candidate_sid in visible_to
+            if candidate_sid == player.sid
+            or players_by_sid.get(candidate_sid) is None
+            or players_by_sid[candidate_sid].user_id not in blockers
+        ]
+    retention_recipients = list(
+        dict.fromkeys([*visible_to, *(additional_audience_sids or [])])
+    )
+    retained_id = None
+    if retention_recipients and ctx.message_retention is not None:
+        retained_id = await ctx.message_retention.record(
+            room=room,
+            player=player,
+            text=payload["text"],
+            message_kind=message_kind,
+            audience=audience,
+            recipient_sids=retention_recipients,
+            near_miss_kind=near_miss_kind,
+        )
+    if retained_id is not None:
+        payload = {**payload, "retainedMessageId": retained_id}
+    if recipients is None and not blockers:
+        await ctx.sio.emit("chat_message", payload, room=room.id)
+    elif visible_to:
         await ctx.sio.emit("chat_message", payload, to=visible_to)
+    return payload
 
 
 async def send_chat(ctx: HandlerContext, sid, data):
@@ -133,16 +151,18 @@ async def guess(ctx: HandlerContext, sid, data):
         or not game.is_turn_eligible(player.id)
     ):
         recipients = ctx.game_flow._privileged_sids(room, game)
-        if recipients:
-            await _emit_player_chat(
-                ctx,
-                room,
-                player,
-                _chat_line(
-                    player, text, restricted=True, isSpectator=player.is_spectator
-                ),
-                recipients=recipients,
-            )
+        if player.sid not in recipients:
+            recipients = [*recipients, player.sid]
+        await _emit_player_chat(
+            ctx,
+            room,
+            player,
+            _chat_line(
+                player, text, restricted=True, isSpectator=player.is_spectator
+            ),
+            recipients=recipients,
+            audience="prompt_aware",
+        )
         return
 
     if len(text) > MAX_PROMPT_LENGTH:
@@ -161,9 +181,21 @@ async def guess(ctx: HandlerContext, sid, data):
             hint_text = f'"{text}" is very close!' if hint == "close" else "Some words are correct"
             # The guesser should always see their own guess, even when it's
             # not broadcast to the rest of the room.
+            recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
+            retained_payload = await _emit_player_chat(
+                ctx,
+                room,
+                player,
+                _chat_line(player, text),
+                recipients=recipients,
+                message_kind="wrong_guess",
+                audience="prompt_aware",
+                near_miss_kind=hint,
+                additional_audience_sids=[sid],
+            )
             await ctx.sio.emit(
                 "chat_message",
-                _chat_line(player, text),
+                retained_payload,
                 to=sid,
             )
             await ctx.sio.emit(
@@ -171,21 +203,13 @@ async def guess(ctx: HandlerContext, sid, data):
                 _chat_line(player, hint_text, close=True),
                 to=sid,
             )
-            recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
-            if recipients:
-                await _emit_player_chat(
-                    ctx,
-                    room,
-                    player,
-                    _chat_line(player, text),
-                    recipients=recipients,
-                )
         else:
             await _emit_player_chat(
                 ctx,
                 room,
                 player,
                 _chat_line(player, text),
+                message_kind="wrong_guess",
             )
         return
 
@@ -217,6 +241,8 @@ async def guess(ctx: HandlerContext, sid, data):
             player,
             _chat_line(player, text, correct=True),
             recipients=recipients,
+            message_kind="correct_guess",
+            audience="prompt_aware",
         )
 
     await ctx.game_flow._end_turn_if_all_guessed(room)

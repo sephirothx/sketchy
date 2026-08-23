@@ -203,6 +203,7 @@ export type GamePhase = "idle" | "choosing_prompt" | "drawing" | "turn_results" 
 
 export interface ChatMessage {
   id: string;
+  retainedMessageId?: string;
   playerId?: string;
   nickname: string;
   nameColor?: string;

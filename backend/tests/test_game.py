@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from app.canvas_history import (
     ClearAction,
     FillAction,
@@ -45,10 +47,16 @@ def shape_payload(shape="rectangle"):
 def test_start_next_turn_rotates_drawer():
     game = make_game(n_players=3, rounds=2)
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    first_turn_id = game.current_turn_id
+    assert first_turn_id is not None
+    assert UUID(first_turn_id).version == 7
     assert game.current_drawer == "p0"
     game.choose_prompt(game.current_drawer, game.prompt_choices[0])
     game.end_turn()
+    assert game.completed_turns[0].id == first_turn_id
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    assert game.current_turn_id != first_turn_id
+    assert UUID(game.current_turn_id).version == 7
     assert game.current_drawer == "p1"
 
 

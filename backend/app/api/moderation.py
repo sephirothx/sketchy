@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 
 from app.auth.rate_limit import (
     PersistentRateLimiter,
@@ -23,11 +24,13 @@ from app.db.models import (
     AuditEvent,
     GameRecord,
     PlayerReport,
+    PlayerReportMessageEvidence,
     PromptContentReport,
     PromptList,
     PromptListRevision,
     PromptListRevisionItem,
     PromptVersion,
+    RoomMessage,
     TurnRecord,
     User,
     UserBan,
@@ -47,6 +50,7 @@ from app.domain_values import (
 MAX_REPORT_CONTEXT_BYTES = 32_768
 MAX_REPORT_DETAILS = 2_000
 MAX_RESOLUTION_NOTE = 2_000
+MAX_REPORT_MESSAGES = 20
 OnUserBanned = Callable[[str], Awaitable[None]]
 
 
@@ -58,6 +62,9 @@ class ReportBody(BaseModel):
     turn_id: UUID | None = Field(default=None, alias="turnId")
     reason: ReportReason
     details: str = Field(min_length=1, max_length=MAX_REPORT_DETAILS)
+    message_ids: list[UUID] = Field(
+        default_factory=list, alias="messageIds", max_length=MAX_REPORT_MESSAGES
+    )
     context_snapshot: dict = Field(default_factory=dict, alias="contextSnapshot")
 
     @field_validator("details")
@@ -74,6 +81,13 @@ class ReportBody(BaseModel):
         encoded = json.dumps(value, separators=(",", ":")).encode("utf-8")
         if len(encoded) > MAX_REPORT_CONTEXT_BYTES:
             raise ValueError("contextSnapshot is too large")
+        return value
+
+    @field_validator("message_ids")
+    @classmethod
+    def unique_message_ids(cls, value: list[UUID]) -> list[UUID]:
+        if len(set(value)) != len(value):
+            raise ValueError("messageIds must be unique")
         return value
 
 
@@ -181,6 +195,37 @@ def _report_payload(report: PlayerReport) -> dict:
         "reason": report.reason,
         "details": report.details,
         "contextSnapshot": report.context_snapshot,
+        "messageEvidence": [
+            {
+                "sourceMessageId": str(evidence.source_message_snapshot_id),
+                "sourceAvailable": evidence.source_message_id is not None,
+                "gameId": (
+                    str(evidence.game_id_snapshot)
+                    if evidence.game_id_snapshot
+                    else None
+                ),
+                "turnId": (
+                    str(evidence.turn_id_snapshot)
+                    if evidence.turn_id_snapshot
+                    else None
+                ),
+                "senderUserId": (
+                    str(evidence.sender_user_id)
+                    if evidence.sender_user_id
+                    else None
+                ),
+                "senderDisplayName": evidence.sender_display_name_snapshot,
+                "senderNameColor": evidence.sender_name_color_snapshot,
+                "senderWasAnonymous": evidence.sender_is_anonymous_snapshot,
+                "messageKind": evidence.message_kind,
+                "audience": evidence.audience,
+                "nearMissKind": evidence.near_miss_kind,
+                "text": evidence.text_snapshot,
+                "messageCreatedAt": evidence.message_created_at.isoformat(),
+                "copiedAt": evidence.copied_at.isoformat(),
+            }
+            for evidence in report.message_evidence
+        ],
         "status": report.status,
         "reviewedByUserId": (
             str(report.reviewed_by_user_id) if report.reviewed_by_user_id else None
@@ -417,6 +462,76 @@ def create_moderation_router(
                         status_code=422,
                         detail="The turn does not belong to that game.",
                     )
+                retained_messages: list[RoomMessage] = []
+                if body.message_ids:
+                    now = datetime.now(timezone.utc)
+                    found = (
+                        await session.scalars(
+                            select(RoomMessage).where(
+                                RoomMessage.id.in_(body.message_ids),
+                                RoomMessage.expires_at > now,
+                            )
+                        )
+                    ).all()
+                    by_id = {message.id: message for message in found}
+                    if set(by_id) != set(body.message_ids):
+                        raise HTTPException(
+                            status_code=422,
+                            detail="One or more selected messages are unavailable.",
+                        )
+                    retained_messages = [
+                        by_id[message_id] for message_id in body.message_ids
+                    ]
+                    if len(
+                        {message.room_instance_id for message in retained_messages}
+                    ) != 1:
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Selected messages must come from one room instance.",
+                        )
+                    for message in retained_messages:
+                        if message.sender_user_id != target.id:
+                            raise HTTPException(
+                                status_code=422,
+                                detail="Evidence must be authored by the reported player.",
+                            )
+                        if reporter_id not in message.audience_user_ids:
+                            raise HTTPException(
+                                status_code=403,
+                                detail="You cannot select a message you did not receive.",
+                            )
+                        if game is not None and message.game_id != game.id:
+                            raise HTTPException(
+                                status_code=422,
+                                detail="Selected message does not belong to that game.",
+                            )
+                        if turn is not None and message.turn_id != turn.id:
+                            raise HTTPException(
+                                status_code=422,
+                                detail="Selected message does not belong to that turn.",
+                            )
+
+                    # Attach existing history context when all evidence agrees.
+                    # Live or abandoned games remain valid evidence even though
+                    # their runtime UUID has no game-history row yet.
+                    selected_game_ids = {
+                        message.game_id
+                        for message in retained_messages
+                        if message.game_id
+                    }
+                    if game is None and len(selected_game_ids) == 1:
+                        game = await session.get(
+                            GameRecord, next(iter(selected_game_ids))
+                        )
+                    selected_turn_ids = {
+                        message.turn_id
+                        for message in retained_messages
+                        if message.turn_id
+                    }
+                    if turn is None and len(selected_turn_ids) == 1:
+                        turn = await session.get(
+                            TurnRecord, next(iter(selected_turn_ids))
+                        )
                 game_id = game.id if game is not None else (turn.game_id if turn else None)
                 report = PlayerReport(
                     id=generate_uuid(),
@@ -432,6 +547,32 @@ def create_moderation_router(
                     },
                 )
                 session.add(report)
+                session.add_all(
+                    PlayerReportMessageEvidence(
+                        report_id=report.id,
+                        position=position,
+                        source_message_id=message.id,
+                        source_message_snapshot_id=message.id,
+                        game_id_snapshot=message.game_id,
+                        turn_id_snapshot=message.turn_id,
+                        sender_user_id=message.sender_user_id,
+                        sender_display_name_snapshot=(
+                            message.sender_display_name_snapshot
+                        ),
+                        sender_name_color_snapshot=(
+                            message.sender_name_color_snapshot
+                        ),
+                        sender_is_anonymous_snapshot=(
+                            message.sender_is_anonymous_snapshot
+                        ),
+                        message_kind=message.message_kind,
+                        audience=message.audience,
+                        near_miss_kind=message.near_miss_kind,
+                        text_snapshot=message.text,
+                        message_created_at=message.created_at,
+                    )
+                    for position, message in enumerate(retained_messages)
+                )
                 session.add(
                     AuditEvent(
                         id=generate_uuid(),
@@ -462,7 +603,9 @@ def create_moderation_router(
     ):
         async with session_factory() as session:
             await _reviewer(session, request)
-            statement = select(PlayerReport)
+            statement = select(PlayerReport).options(
+                selectinload(PlayerReport.message_evidence)
+            )
             if status is not None:
                 statement = statement.where(PlayerReport.status == status.value)
             reports = (
@@ -509,6 +652,7 @@ def create_moderation_router(
                 report = await session.scalar(
                     select(PlayerReport)
                     .where(PlayerReport.id == report_id)
+                    .options(selectinload(PlayerReport.message_evidence))
                     .with_for_update()
                 )
                 if report is None:
@@ -534,6 +678,7 @@ def create_moderation_router(
                 )
                 await session.flush()
                 await session.refresh(report)
+                await session.refresh(report, attribute_names=["message_evidence"])
             return _report_payload(report)
 
     @router.patch("/moderation/prompt-content-reports/{report_id}")

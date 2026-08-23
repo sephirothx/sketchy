@@ -53,6 +53,22 @@ class ScoreEventType(StrEnum):
     CORRECTION = "correction"
 
 
+class RetainedMessageKind(StrEnum):
+    CHAT = "chat"
+    WRONG_GUESS = "wrong_guess"
+    CORRECT_GUESS = "correct_guess"
+
+
+class RetainedMessageAudience(StrEnum):
+    ROOM = "room"
+    PROMPT_AWARE = "prompt_aware"
+
+
+class NearMissKind(StrEnum):
+    CLOSE = "close"
+    PARTIAL = "partial"
+
+
 class PromptSourceKind(StrEnum):
     LEGACY_UNKNOWN = "legacy_unknown"
     CURATED = "curated"
@@ -175,6 +191,11 @@ TURN_ELIGIBILITY_REASONS = tuple(reason.value for reason in TurnEligibilityReaso
 TURN_PARTICIPANT_OUTCOMES = tuple(outcome.value for outcome in TurnParticipantOutcome)
 TURN_PARTICIPANT_STATES = tuple(state.value for state in TurnParticipantState)
 SCORE_EVENT_TYPES = tuple(event_type.value for event_type in ScoreEventType)
+RETAINED_MESSAGE_KINDS = tuple(kind.value for kind in RetainedMessageKind)
+RETAINED_MESSAGE_AUDIENCES = tuple(
+    audience.value for audience in RetainedMessageAudience
+)
+NEAR_MISS_KINDS = tuple(kind.value for kind in NearMissKind)
 PROMPT_LANGUAGES = tuple(language.value for language in PromptLanguage)
 PROMPT_EDITORIAL_DIFFICULTIES = tuple(
     difficulty.value for difficulty in PromptEditorialDifficulty

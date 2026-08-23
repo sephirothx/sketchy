@@ -28,6 +28,7 @@ from app.db.models import (
     GameParticipant,
     GameRecord,
     PlayerReport,
+    PlayerReportMessageEvidence,
     PromptContentReport,
     ScoreEvent,
     TurnGuess,
@@ -38,6 +39,7 @@ from app.db.models import (
     UserSettings,
     PromptConcept,
     PromptList,
+    RoomMessage,
     generate_uuid,
 )
 from app.domain_values import AccountState, DataExportStatus
@@ -280,6 +282,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     linked_guest = await users.create_anonymous("Linked road guest")
     await users.merge_guest_into_account(linked_guest.id, owner["id"])
     other = await users.create_anonymous("Private Bob")
+    submitted_report_id = generate_uuid()
     async with factory() as session:
         async with session.begin():
             owner_row = await session.get(User, UUID(owner["id"]))
@@ -289,7 +292,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             other_row.email = "private-bob@example.test"
             session.add(
                 PlayerReport(
-                    id=generate_uuid(),
+                    id=submitted_report_id,
                     reporter_user_id=owner_row.id,
                     reported_user_id=other_row.id,
                     reason="harassment",
@@ -316,6 +319,62 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     game_id = await record_private_game(
         history, owner_id=owner["id"], other_id=other.id
     )
+    async with factory() as session:
+        async with session.begin():
+            owner_turn = await session.scalar(
+                select(TurnRecord).where(
+                    TurnRecord.game_id == UUID(game_id),
+                    TurnRecord.drawer_user_id == UUID(owner["id"]),
+                )
+            )
+            owner_seat = await session.scalar(
+                select(GameParticipant).where(
+                    GameParticipant.game_id == UUID(game_id),
+                    GameParticipant.user_id == UUID(owner["id"]),
+                )
+            )
+            assert owner_turn is not None and owner_seat is not None
+            session.add(
+                RoomMessage(
+                    id=generate_uuid(),
+                    room_instance_id=generate_uuid(),
+                    game_id=UUID(game_id),
+                    turn_id=owner_turn.id,
+                    sender_user_id=UUID(owner["id"]),
+                    sender_player_id=generate_uuid(),
+                    sender_seat_id=owner_seat.id,
+                    sender_display_name_snapshot="Exporter",
+                    sender_name_color_snapshot="#224466",
+                    sender_is_anonymous_snapshot=False,
+                    is_spectator=False,
+                    message_kind="wrong_guess",
+                    audience="room",
+                    audience_user_ids=[owner["id"], other.id],
+                    near_miss_kind="close",
+                    text="Requester-authored retained guess",
+                    created_at=STARTED + timedelta(minutes=1),
+                    expires_at=STARTED + timedelta(days=30),
+                )
+            )
+            session.add(
+                PlayerReportMessageEvidence(
+                    report_id=submitted_report_id,
+                    position=0,
+                    source_message_id=None,
+                    source_message_snapshot_id=generate_uuid(),
+                    game_id_snapshot=UUID(game_id),
+                    turn_id_snapshot=owner_turn.id,
+                    sender_user_id=UUID(other.id),
+                    sender_display_name_snapshot="Reported player",
+                    sender_name_color_snapshot=None,
+                    sender_is_anonymous_snapshot=True,
+                    message_kind="chat",
+                    audience="room",
+                    near_miss_kind=None,
+                    text_snapshot="Message selected by the requester",
+                    message_created_at=STARTED + timedelta(minutes=2),
+                )
+            )
     exported_list = await SqlAlchemyPromptListRepository(factory).create_owned(
         owner["id"],
         name="Exported prompts",
@@ -371,9 +430,16 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     ]
     assert artifact["turnOutcomes"][0]["outcome"] == "correct"
     assert artifact["turnOutcomes"][0]["terminalState"] == "active"
+    assert artifact["retainedMessages"][0]["text"] == (
+        "Requester-authored retained guess"
+    )
+    assert artifact["retainedMessages"][0]["messageKind"] == "wrong_guess"
     assert artifact["sessions"] and "tokenHash" not in artifact["sessions"][0]
     assert artifact["reportsSubmitted"][0]["details"] == (
         "Requester-authored report details"
+    )
+    assert artifact["reportsSubmitted"][0]["messageEvidence"][0]["text"] == (
+        "Message selected by the requester"
     )
     assert "reportedUserId" not in artifact["reportsSubmitted"][0]
     assert artifact["suspensions"][0]["reason"] == "Historic suspension"
@@ -443,7 +509,79 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
     http, users, history, factory = env
     owner = await register(http)
     other = await users.create_anonymous("Other player")
-    await record_private_game(history, owner_id=owner["id"], other_id=other.id)
+    game_id = await record_private_game(
+        history, owner_id=owner["id"], other_id=other.id
+    )
+    evidence_report_id = generate_uuid()
+    retained_message_id = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            owner_turn = await session.scalar(
+                select(TurnRecord).where(
+                    TurnRecord.game_id == UUID(game_id),
+                    TurnRecord.drawer_user_id == UUID(owner["id"]),
+                )
+            )
+            owner_seat = await session.scalar(
+                select(GameParticipant).where(
+                    GameParticipant.game_id == UUID(game_id),
+                    GameParticipant.user_id == UUID(owner["id"]),
+                )
+            )
+            assert owner_turn is not None and owner_seat is not None
+            session.add(
+                RoomMessage(
+                    id=retained_message_id,
+                    room_instance_id=generate_uuid(),
+                    game_id=UUID(game_id),
+                    turn_id=owner_turn.id,
+                    sender_user_id=UUID(owner["id"]),
+                    sender_player_id=generate_uuid(),
+                    sender_seat_id=owner_seat.id,
+                    sender_display_name_snapshot="Exporter",
+                    sender_name_color_snapshot="#224466",
+                    sender_is_anonymous_snapshot=False,
+                    is_spectator=False,
+                    message_kind="chat",
+                    audience="room",
+                    audience_user_ids=[owner["id"], other.id],
+                    near_miss_kind=None,
+                    text="Erase this retained message",
+                    created_at=STARTED,
+                    expires_at=STARTED + timedelta(days=30),
+                )
+            )
+            session.add(
+                PlayerReport(
+                    id=evidence_report_id,
+                    reporter_user_id=UUID(other.id),
+                    reported_user_id=UUID(owner["id"]),
+                    game_id=UUID(game_id),
+                    turn_id=owner_turn.id,
+                    reason="harassment",
+                    details="Pinned before account deletion",
+                    context_snapshot={"schemaVersion": 1, "submitted": {}},
+                )
+            )
+            session.add(
+                PlayerReportMessageEvidence(
+                    report_id=evidence_report_id,
+                    position=0,
+                    source_message_id=retained_message_id,
+                    source_message_snapshot_id=retained_message_id,
+                    game_id_snapshot=UUID(game_id),
+                    turn_id_snapshot=owner_turn.id,
+                    sender_user_id=UUID(owner["id"]),
+                    sender_display_name_snapshot="Exporter",
+                    sender_name_color_snapshot="#224466",
+                    sender_is_anonymous_snapshot=False,
+                    message_kind="chat",
+                    audience="room",
+                    near_miss_kind=None,
+                    text_snapshot="Pinned evidence survives",
+                    message_created_at=STARTED,
+                )
+            )
     export_status, _ = await request_ready_export(http)
     await SqlAlchemyPromptListRepository(factory).create_owned(
         owner["id"],
@@ -501,6 +639,17 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert owner_guess.points_awarded == 150
         assert await session.scalar(select(func.count(GameRecord.id))) == 1
         assert await session.scalar(select(func.count(ScoreEvent.id))) == 4
+        assert await session.scalar(select(func.count(RoomMessage.id))) == 0
+        evidence = await session.scalar(
+            select(PlayerReportMessageEvidence).where(
+                PlayerReportMessageEvidence.report_id == evidence_report_id
+            )
+        )
+        assert evidence is not None
+        assert evidence.text_snapshot == "Pinned evidence survives"
+        assert evidence.sender_display_name_snapshot == "Deleted player"
+        assert evidence.sender_name_color_snapshot is None
+        assert evidence.sender_is_anonymous_snapshot is True
         assert await session.get(DataExport, UUID(export_status["id"])) is None
         assert await session.get(UserSettings, account.id) is None
         assert await session.scalar(select(func.count(UserBlock.id))) == 0

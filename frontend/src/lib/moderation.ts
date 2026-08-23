@@ -24,6 +24,23 @@ export type ReportReason =
   | "spam";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
 
+export interface PlayerReportMessageEvidence {
+  sourceMessageId: string;
+  sourceAvailable: boolean;
+  gameId: string | null;
+  turnId: string | null;
+  senderUserId: string | null;
+  senderDisplayName: string;
+  senderNameColor: string | null;
+  senderWasAnonymous: boolean;
+  messageKind: "chat" | "wrong_guess" | "correct_guess";
+  audience: "room" | "prompt_aware";
+  nearMissKind: "close" | "partial" | null;
+  text: string;
+  messageCreatedAt: string;
+  copiedAt: string;
+}
+
 export interface PlayerReport {
   id: string;
   reporterUserId: string | null;
@@ -33,6 +50,7 @@ export interface PlayerReport {
   reason: ReportReason;
   details: string;
   contextSnapshot: Record<string, unknown>;
+  messageEvidence: PlayerReportMessageEvidence[];
   status: ReportStatus;
   reviewedByUserId: string | null;
   resolutionNote: string | null;
@@ -60,6 +78,7 @@ export function submitPlayerReport(input: {
   turnId?: string;
   reason: ReportReason;
   details: string;
+  messageIds?: string[];
   contextSnapshot?: Record<string, unknown>;
 }): Promise<{ id: string; status: ReportStatus; createdAt: string }> {
   return apiRequest("/api/reports", { method: "POST", body: input });

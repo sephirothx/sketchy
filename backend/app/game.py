@@ -273,6 +273,9 @@ class CompletedTurnStats:
     # Who could still have guessed. Without it, "two players guessed" could
     # equally mean two out of two or two out of eight.
     total_guesser_count: int
+    # Allocated when the live turn starts so messages written during play and
+    # the eventual history row share one durable UUIDv7 correlation key.
+    id: str = ""
     # Source identity is recorded alongside display snapshots. ``None`` means
     # an ephemeral room custom prompt and must never enter curated projections.
     offered_prompt_version_ids: tuple[str | None, ...] = ()
@@ -309,6 +312,7 @@ class Game:
     scoring_mode: str = "default"
     scoring_version: int = SCORING_RULES_VERSION
     turn_index: int = -1
+    current_turn_id: str | None = None
     phase: Phase = Phase.CHOOSING_PROMPT
     current_drawer: str | None = None
     prompt: str | None = None
@@ -564,6 +568,7 @@ class Game:
                 self.turn_index += 1
                 attempts += 1
         self.current_drawer = self.turn_order[self.turn_index % len(self.turn_order)]
+        self.current_turn_id = str(generate_uuid7())
         self.prompt = None
         self.prompt_choices = random_prompt_choices(3, exclude=self.used_prompts, pool=self.prompt_pool)
         self.correct_guessers = set()
@@ -997,6 +1002,7 @@ class Game:
 
         self.completed_turns.append(
             CompletedTurnStats(
+                id=self.current_turn_id or str(generate_uuid7()),
                 round_number=self.round_number,
                 turn_number=len(self.completed_turns) + 1,
                 offered_prompts=list(self.prompt_choices),

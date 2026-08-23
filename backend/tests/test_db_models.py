@@ -20,6 +20,7 @@ from app.db.models import (
     GameParticipant,
     GameRecord,
     PlayerReport,
+    RoomMessage,
     TurnGuess,
     TurnParticipantOutcome,
     TurnRecord,
@@ -36,9 +37,12 @@ from app.domain_values import (
     ACCOUNT_STATES,
     DATA_EXPORT_STATUSES,
     HINT_MODES,
+    NEAR_MISS_KINDS,
     PROMPT_LANGUAGES,
     REPORT_REASONS,
     REPORT_STATUSES,
+    RETAINED_MESSAGE_AUDIENCES,
+    RETAINED_MESSAGE_KINDS,
     SCORING_MODES,
     SCORE_EVENT_TYPES,
     TURN_END_REASONS,
@@ -158,6 +162,84 @@ async def test_account_state_and_role_constants_cover_database_values():
         "spam",
     )
     assert REPORT_STATUSES == ("pending", "resolved", "dismissed")
+    assert RETAINED_MESSAGE_KINDS == ("chat", "wrong_guess", "correct_guess")
+    assert RETAINED_MESSAGE_AUDIENCES == ("room", "prompt_aware")
+    assert NEAR_MISS_KINDS == ("close", "partial")
+
+
+async def test_retained_messages_enforce_kind_context_and_expiry():
+    factory, engine = await create_test_db()
+    sender_id = generate_uuid()
+    now = datetime.now(timezone.utc)
+    common = {
+        "room_instance_id": generate_uuid(),
+        "sender_user_id": sender_id,
+        "sender_player_id": generate_uuid(),
+        "sender_display_name_snapshot": "Sender",
+        "sender_is_anonymous_snapshot": False,
+        "is_spectator": False,
+        "audience": "room",
+        "audience_user_ids": [str(sender_id)],
+        "created_at": now,
+        "expires_at": now + timedelta(days=30),
+    }
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=sender_id, display_name="Sender"))
+                session.add(
+                    RoomMessage(
+                        id=generate_uuid(),
+                        message_kind="chat",
+                        text="valid room chat",
+                        **common,
+                    )
+                )
+
+        invalid_rows = (
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="unknown",
+                text="invalid kind",
+                **common,
+            ),
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="wrong_guess",
+                text="missing game and turn",
+                **common,
+            ),
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="chat",
+                near_miss_kind="close",
+                text="chat cannot be a near miss",
+                **common,
+            ),
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="chat",
+                audience="private",
+                text="invalid audience",
+                **{key: value for key, value in common.items() if key != "audience"},
+            ),
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="chat",
+                text="invalid expiry",
+                **{
+                    key: (now if key == "expires_at" else value)
+                    for key, value in common.items()
+                },
+            ),
+        )
+        for invalid_row in invalid_rows:
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(invalid_row)
+    finally:
+        await engine.dispose()
 
 
 async def test_get_database_url_normalization(monkeypatch):

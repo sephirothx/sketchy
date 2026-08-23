@@ -23,6 +23,8 @@ from app.db.models import (
     AuthSession,
     Base,
     PlayerReport,
+    PlayerReportMessageEvidence,
+    RoomMessage,
     User,
     UserBan,
     generate_uuid,
@@ -30,6 +32,7 @@ from app.db.models import (
 from app.domain_values import ReportReason, ReportStatus, UserRole
 from app.handlers.connection import connect as socket_connect
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+from app.services.message_retention import purge_expired_room_messages
 
 
 pytestmark = pytest.mark.asyncio
@@ -144,6 +147,102 @@ async def test_report_submission_is_bounded_private_and_audited(env):
             "report_id": str(report.id),
             "reason": "offensive_drawing",
         }
+
+
+async def test_report_pins_only_messages_the_reporter_received(env):
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    moderator_http = new_client()
+    reporter = await register(reporter_http, "EvidenceReporter")
+    target = await register(target_http, "EvidenceTarget")
+    moderator = await register(moderator_http, "EvidenceMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    now = datetime.now(timezone.utc)
+    visible_id = generate_uuid()
+    hidden_id = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            common = {
+                "room_instance_id": generate_uuid(),
+                "sender_user_id": UUID(target["id"]),
+                "sender_player_id": generate_uuid(),
+                "sender_display_name_snapshot": "EvidenceTarget",
+                "sender_is_anonymous_snapshot": False,
+                "is_spectator": False,
+                "message_kind": "chat",
+                "audience": "prompt_aware",
+                "near_miss_kind": None,
+                "created_at": now,
+                "expires_at": now + timedelta(days=30),
+            }
+            session.add_all(
+                [
+                    RoomMessage(
+                        id=visible_id,
+                        audience_user_ids=[reporter["id"], target["id"]],
+                        text="Selected abusive message",
+                        **common,
+                    ),
+                    RoomMessage(
+                        id=hidden_id,
+                        audience_user_ids=[target["id"]],
+                        text="A message the reporter never received",
+                        **common,
+                    ),
+                ]
+            )
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Please review the selected line.",
+            "messageIds": [str(visible_id)],
+        },
+    )
+    assert submitted.status_code == 201
+
+    forbidden = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "This line was not visible to me.",
+            "messageIds": [str(hidden_id)],
+        },
+    )
+    assert forbidden.status_code == 403
+
+    listing = await moderator_http.get("/api/moderation/reports")
+    evidence = listing.json()["reports"][0]["messageEvidence"]
+    assert evidence == [
+        {
+            "sourceMessageId": str(visible_id),
+            "sourceAvailable": True,
+            "gameId": None,
+            "turnId": None,
+            "senderUserId": target["id"],
+            "senderDisplayName": "EvidenceTarget",
+            "senderNameColor": None,
+            "senderWasAnonymous": False,
+            "messageKind": "chat",
+            "audience": "prompt_aware",
+            "nearMissKind": None,
+            "text": "Selected abusive message",
+            "messageCreatedAt": now.isoformat(),
+            "copiedAt": evidence[0]["copiedAt"],
+        }
+    ]
+
+    assert await purge_expired_room_messages(
+        factory, now=now + timedelta(days=31)
+    ) == 2
+    async with factory() as session:
+        pinned = await session.scalar(select(PlayerReportMessageEvidence))
+        assert pinned is not None
+        assert pinned.text_snapshot == "Selected abusive message"
 
 
 async def test_moderator_can_review_once_and_every_action_is_audited(env):

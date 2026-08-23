@@ -18,6 +18,7 @@ from app.services.timers import TimerManager
 if TYPE_CHECKING:
     from app.auth.blocks import BlockService
     from app.services.game_flow import GameFlowService
+    from app.services.message_retention import MessageRetentionService
 
 
 @dataclass
@@ -33,4 +34,5 @@ class HandlerContext:
     # Needed to resolve a hashed opaque session when a socket presents a cookie.
     session_factory: async_sessionmaker[AsyncSession] | None = None
     block_service: BlockService | None = None
+    message_retention: MessageRetentionService | None = None
     game_flow: GameFlowService = field(init=False)

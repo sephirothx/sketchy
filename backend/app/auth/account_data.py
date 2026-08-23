@@ -22,6 +22,7 @@ from app.db.models import (
     GameRecord,
     IdentityAlias,
     PlayerReport,
+    PlayerReportMessageEvidence,
     PromptConcept,
     PromptContentReport,
     PromptList,
@@ -29,6 +30,7 @@ from app.db.models import (
     PromptListRevisionItem,
     PromptVersion,
     PromptVersionAlias,
+    RoomMessage,
     ScoreEvent,
     TurnGuess,
     TurnParticipantOutcome,
@@ -245,7 +247,20 @@ async def _build_export_artifact(
             await session.scalars(
                 select(PlayerReport)
                 .where(PlayerReport.reporter_user_id.in_(identity_ids))
+                .options(selectinload(PlayerReport.message_evidence))
                 .order_by(PlayerReport.created_at, PlayerReport.id)
+            )
+        ).all()
+    )
+    retained_messages = list(
+        (
+            await session.scalars(
+                select(RoomMessage)
+                .where(
+                    RoomMessage.sender_user_id.in_(identity_ids),
+                    RoomMessage.expires_at > generated_at,
+                )
+                .order_by(RoomMessage.created_at, RoomMessage.id)
             )
         ).all()
     )
@@ -546,6 +561,23 @@ async def _build_export_artifact(
             }
             for event, participant in score_events
         ],
+        "retainedMessages": [
+            {
+                "messageId": str(message.id),
+                "gameId": str(message.game_id) if message.game_id else None,
+                "turnId": str(message.turn_id) if message.turn_id else None,
+                "participantSeatId": (
+                    str(message.sender_seat_id) if message.sender_seat_id else None
+                ),
+                "messageKind": message.message_kind,
+                "audience": message.audience,
+                "nearMissKind": message.near_miss_kind,
+                "text": message.text,
+                "createdAt": _timestamp(message.created_at),
+                "expiresAt": _timestamp(message.expires_at),
+            }
+            for message in retained_messages
+        ],
         # A reporter's own text and submitted evidence belongs in their export.
         # The reported account id, reviewer id, and internal resolution note do
         # not: those are other people's or moderation-workflow data.
@@ -557,6 +589,31 @@ async def _build_export_artifact(
                 "reason": report.reason,
                 "details": report.details,
                 "contextSnapshot": report.context_snapshot,
+                "messageEvidence": [
+                    {
+                        "sourceMessageId": str(
+                            evidence.source_message_snapshot_id
+                        ),
+                        "gameId": (
+                            str(evidence.game_id_snapshot)
+                            if evidence.game_id_snapshot
+                            else None
+                        ),
+                        "turnId": (
+                            str(evidence.turn_id_snapshot)
+                            if evidence.turn_id_snapshot
+                            else None
+                        ),
+                        "messageKind": evidence.message_kind,
+                        "audience": evidence.audience,
+                        "nearMissKind": evidence.near_miss_kind,
+                        "text": evidence.text_snapshot,
+                        "messageCreatedAt": _timestamp(
+                            evidence.message_created_at
+                        ),
+                    }
+                    for evidence in report.message_evidence
+                ],
                 "status": report.status,
                 "createdAt": _timestamp(report.created_at),
                 "updatedAt": _timestamp(report.updated_at),
@@ -883,6 +940,23 @@ async def anonymize_account(
                     display_name_snapshot=DELETED_DISPLAY_NAME,
                     name_color_snapshot=None,
                     is_anonymous_snapshot=True,
+                )
+            )
+            # Ordinary retained messages are short-lived user content and are
+            # erased immediately on account deletion. Evidence already copied
+            # into a report survives with neutral presentation.
+            await session.execute(
+                delete(RoomMessage).where(RoomMessage.sender_user_id.in_(identity_ids))
+            )
+            await session.execute(
+                update(PlayerReportMessageEvidence)
+                .where(
+                    PlayerReportMessageEvidence.sender_user_id.in_(identity_ids)
+                )
+                .values(
+                    sender_display_name_snapshot=DELETED_DISPLAY_NAME,
+                    sender_name_color_snapshot=None,
+                    sender_is_anonymous_snapshot=True,
                 )
             )
             await session.execute(

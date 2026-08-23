@@ -174,6 +174,29 @@ scoring child of a correct outcome. Ordinary history retains these numeric
 facts but not guess text; text retention and evidence are governed separately.
 No-scoring games record the same factual outcomes with zero awarded points and
 never invent hypothetical score awards.
+Accepted player-authored chat, wrong guesses, and correct-guess text are kept
+for 30 days in an audience-aware **Retained message** store. Each live turn
+receives its UUIDv7 before play, so a message written during an unfinished game
+can carry the same game, turn, and participant-seat correlation IDs as eventual
+history without making active games durable. Stored audience account IDs are
+the recipients who actually received the line after Blocks and prompt-visibility
+rules were applied: ordinary chat and guesses use the Room audience, while
+near misses, correct guesses, spectator chat during play, and other restricted
+text use the Prompt-aware audience. There is intentionally no transcript or
+profile-history endpoint.
+
+Retention is best-effort and does not delay live availability when storage
+fails; successful writes add `retainedMessageId` to the `chat_message` payload.
+Expired rows are removed at startup and by bounded hourly cleanup during new
+writes. A report may select up to 20 unexpired `messageIds`, but only when the
+reported player authored them and the reporter was in each stored audience.
+The server copies those lines into immutable **Message evidence** before the
+ordinary rows expire. Account export includes a player's own unexpired authored
+messages and evidence they submitted. Account deletion erases ordinary authored
+messages immediately and tombstones the presentation on copied evidence; the
+evidence text continues under the protected report retention policy. Numeric
+wrong/near-miss outcomes remain in game history independently, supporting game
+analysis without turning 30-day message text into lifetime player tracking.
 Scored games additionally keep an ordered, append-only **score-event ledger**.
 Each UUIDv7 event identifies the participant seat and turn, carries the scoring
 and rule-snapshot versions, and records one signed delta as a gross guess award,
@@ -508,7 +531,10 @@ offensive drawing, inappropriate name, cheating, or spam—plus up to 2,000
 characters of detail and an optional 32 KiB JSON context snapshot. Game and
 turn references are validated when supplied. Submitted context is preserved as
 versioned, reporter-supplied evidence; it is not treated as a server-verified
-fact merely because it was stored.
+fact merely because it was stored. The optional `messageIds` field pins up to
+20 server-retained messages authored by the reported player. The server proves
+the reporter actually received every selected line and rejects expired,
+cross-room, wrong-author, or mismatched game/turn evidence.
 
 Only moderators and administrators can list and resolve or dismiss reports via
 `/api/moderation/reports`. Review is one-way: a pending report receives one
@@ -837,7 +863,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ## Key design decisions & limitations
 
-- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, and explicitly saved player prompt lists) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency.
+- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, explicitly saved player prompt lists, and the bounded retained-message window) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency; message correlation IDs do not make an active game recoverable.
 - **Single process**: no horizontal scaling story; one uvicorn worker holds all rooms. Fine for
   small deployments, not for internet-scale traffic.
 - **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO

@@ -26,6 +26,7 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
 )
 from app.state import room_manager
+from app.services.message_retention import purge_expired_room_messages
 
 
 class SPAStaticFiles(StaticFiles):
@@ -130,6 +131,7 @@ async def remove_banned_account_from_live_rooms(user_id: str) -> None:
 async def lifespan(_app: FastAPI):
     try:
         await init_db()
+        await purge_expired_room_messages(async_session_factory)
         await seed_prompt_lists(prompt_list_repo)
         yield
     finally:

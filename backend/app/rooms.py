@@ -14,6 +14,7 @@ from app.drawing_rules import (
     DEFAULT_COLOR_MODE,
 )
 from app.game import Game
+from app.identifiers import generate_uuid7
 from app.prompts import PROMPTS
 from app.prompt_content import prompt_match_key
 
@@ -272,6 +273,9 @@ class Room:
     is_public: bool
     max_players: int
     rounds: int
+    # Durable correlation scope for short-lived messages. The public/live room
+    # id remains an implementation detail and is never stored as a code.
+    retention_scope_id: str = field(default_factory=lambda: str(generate_uuid7()))
     custom_prompts: list[str] = field(default_factory=list)
     custom_prompts_only: bool = False
     drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS

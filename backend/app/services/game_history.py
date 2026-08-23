@@ -252,7 +252,7 @@ def build_game_history(
             # a spectator-only token), so there is no truthful participant
             # identity or presentation snapshot to persist for this turn.
             continue
-        turn_id = str(generate_uuid7())
+        turn_id = turn.id or str(generate_uuid7())
         selected_position = (
             turn.offered_prompts.index(turn.chosen_prompt)
             if turn.chosen_prompt in turn.offered_prompts
