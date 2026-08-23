@@ -248,6 +248,24 @@ cd backend
 .venv/bin/python -m app.services.user_stats_projection --user <account-uuid>
 ```
 
+### Recalculable competitive foundation
+
+Finished-game facts—not profile counters—are the source for any future rating,
+season, achievement, or competitive-standings work. The durable foundation includes game
+event times and exact rule versions, factual participant seats with canonical
+identity aliases, frozen eligibility and per-turn outcomes, prompt provenance,
+and the append-only score-event ledger. Derived rows such as the daily user-stat
+projection may be deleted and rebuilt without changing those facts.
+
+This is deliberately a foundation, not a competitive feature. Sketchy v1 has no
+rating algorithm, season identity, achievement definitions, competitive-mode
+eligibility policy, or server-wide competitive standings. Those choices require a later
+product decision and a versioned projection of the retained facts; they must not
+be introduced as mutable counters or inferred by rewriting finished games.
+Legacy facts with unknown rule/provenance versions remain explicitly unknown so
+a future projection can exclude or classify them according to its own declared
+policy rather than treating invented metadata as truth.
+
 Prompt content has a stable identity independent of its spelling. A
 **Prompt concept** may have immutable, language-specific **Prompt versions**;
 equal text never merges concepts implicitly. Versions store a canonical

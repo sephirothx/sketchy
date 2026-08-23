@@ -64,6 +64,7 @@ the rotation itself are counted in *rounds*.
 | **Deleted player** | The neutral name replacing a deleted account in retained shared game history. | removed user, anonymous, unknown |
 | **Historical presentation** | The display name, name color, and guest/registered state frozen onto a finished-game seat. Profile edits do not rewrite it; deletion replaces identifying fields with the **Deleted player** tombstone. | current profile, username, avatar |
 | **Daily user-stat projection** | A disposable per-canonical-account, per-UTC-day summary of immutable finished-game facts used for bounded-cost profile statistics. Game saves update it transactionally; identity merges and the maintenance command rebuild it. It is never the source of truth. | user stats cache, lifetime counter, analytics tracking |
+| **Competitive projection** | A future, versioned, rebuildable interpretation of finished-game facts for a declared rating, season, achievement, or leaderboard policy. It is not a v1 feature and must never replace or rewrite the underlying game, seat, outcome, prompt-provenance, or score-event facts. | rating counter, permanent rank, source data |
 | **AFK** | A status a player sets on themselves, or the room votes onto them. AFK players are skipped for turns and not waited for. Always the initialism, uppercase. | away, idle, inactive, afk |
 
 ## Names
