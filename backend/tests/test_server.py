@@ -1,11 +1,12 @@
 """The production runner drains before Uvicorn closes established sockets."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 import uvicorn
 
+from app import server
 from app.server import DrainingServer
 
 
@@ -71,3 +72,28 @@ async def test_a_forced_exit_is_offered_to_the_drain():
     assert should_abort() is False
     server.force_exit = True
     assert should_abort() is True
+
+
+def test_ctrl_c_exits_quietly_after_the_shutdown_it_already_completed():
+    """Uvicorn re-raises the captured SIGINT; that must not print a traceback."""
+
+    with (
+        patch.object(server, "DrainingServer"),
+        patch.object(server, "asyncio") as asyncio_module,
+    ):
+        asyncio_module.run.side_effect = KeyboardInterrupt
+        with pytest.raises(SystemExit) as exit_info:
+            server.run()
+
+    assert exit_info.value.code == 130
+
+
+def test_an_ordinary_return_from_serve_is_not_turned_into_an_error():
+    with (
+        patch.object(server, "DrainingServer"),
+        patch.object(server, "asyncio") as asyncio_module,
+    ):
+        asyncio_module.run.return_value = None
+        server.run()
+
+    asyncio_module.run.assert_called_once()

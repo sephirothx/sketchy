@@ -60,7 +60,16 @@ def run() -> None:
         # the ordinary 10-second atomic finished-history write to settle.
         timeout_graceful_shutdown=15,
     )
-    asyncio.run(DrainingServer(config).serve())
+    try:
+        asyncio.run(DrainingServer(config).serve())
+    except KeyboardInterrupt:
+        # Uvicorn re-raises the SIGINT it captured once its own graceful
+        # shutdown has finished, and asyncio.run turns that into a traceback.
+        # The drain and the lifespan cleanup have both already run by now, so
+        # printing a stack trace over a completed shutdown only makes an
+        # operator wonder what crashed. Report the status a process killed by
+        # SIGINT would report, which is what stock Uvicorn ends up with too.
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":
