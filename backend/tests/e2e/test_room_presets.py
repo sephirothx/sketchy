@@ -23,15 +23,21 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
             await page.get_by_role("spinbutton", name="Max players").fill("12")
             await page.get_by_role("spinbutton", name="Rounds").fill("5")
             await page.get_by_role("button", name="Private").click()
-            await page.get_by_label("Preset name").fill("Tournament night")
-            await page.get_by_role("button", name="Save new").click()
-            await page.get_by_label("Saved preset").select_option(label="Tournament night")
+            await page.get_by_role("button", name="Save these settings").click()
+            await page.get_by_placeholder("Name this preset").fill("Tournament night")
+            await page.get_by_role("button", name="Save", exact=True).click()
+            await page.get_by_text("Saved “Tournament night”.").wait_for()
 
             await page.get_by_label("Room name (optional)").fill("Changed")
             await page.get_by_role("spinbutton", name="Max players").fill("3")
             await page.get_by_role("spinbutton", name="Rounds").fill("1")
             await page.get_by_role("button", name="Public").click()
-            await page.get_by_role("button", name="Apply").click()
+
+            # Choosing the preset applies it; there is no separate Apply step.
+            await page.get_by_label("Start from a saved preset").select_option(
+                label="Tournament night"
+            )
+            await page.get_by_text("Applied “Tournament night”.").wait_for()
 
             await expect(page.get_by_label("Room name (optional)")).to_have_value("Friday finals")
             assert await page.get_by_role("spinbutton", name="Max players").input_value() == "12"
@@ -40,6 +46,16 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
             assert not await page.get_by_role(
                 "switch", name="Keep this room for future games"
             ).is_checked()
+
+            # A preset applied by accident is recoverable without leaving the page.
+            await page.get_by_role("button", name="Undo").click()
+            await expect(page.get_by_label("Room name (optional)")).to_have_value("Changed")
+            assert await page.get_by_role("spinbutton", name="Rounds").input_value() == "1"
+
+            await page.get_by_label("Start from a saved preset").select_option(
+                label="Tournament night"
+            )
+            await page.get_by_text("Applied “Tournament night”.").wait_for()
 
             await page.locator(".create-room-submit").click()
             await page.wait_for_selector('[data-testid="waiting-room"]')

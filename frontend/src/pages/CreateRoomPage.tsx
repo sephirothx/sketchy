@@ -76,6 +76,12 @@ export function CreateRoomPage() {
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [presetName, setPresetName] = useState("");
   const [presetBusy, setPresetBusy] = useState(false);
+  const [namingPreset, setNamingPreset] = useState(false);
+  // Carries the settings that were in the form before a preset replaced them,
+  // so choosing one by accident is recoverable without an Apply step.
+  const [presetStatus, setPresetStatus] = useState<
+    { text: string; undo?: RoomPresetSettings } | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,14 +145,46 @@ export function CreateRoomPage() {
     }
   }
 
-  async function handleApplyPreset() {
-    if (!selectedPresetId) return;
+  /** Quick prompts and borrowed share codes are room input, never stored settings. */
+  function presetBlocker(): string | null {
+    if (customPrompts.analysis.usableCount > 0 || promptListShareCodes.length > 0) {
+      return "Save quick prompts as a list, and remove shared codes, before storing a preset.";
+    }
+    return null;
+  }
+
+  function beginNamingPreset() {
+    const blocked = presetBlocker();
+    if (blocked) {
+      setPresetStatus({ text: blocked });
+      return;
+    }
+    setPresetName("");
+    setPresetStatus(null);
+    setNamingPreset(true);
+  }
+
+  function undoPreset() {
+    if (presetStatus?.undo) applySettings(presetStatus.undo);
+    setSelectedPresetId("");
+    setPresetName("");
+    setPresetStatus(null);
+  }
+
+  /** Choosing a preset applies it: the selection is the intent, so there is
+      nothing left for an Apply button to confirm. Undo covers a stray click. */
+  async function handleChoosePreset(id: string) {
+    setSelectedPresetId(id);
+    setPresetStatus(null);
+    if (!id) return;
+    const before = currentPresetSettings();
     setPresetBusy(true);
     setError(null);
     try {
-      const preset = await getRoomPreset(selectedPresetId);
+      const preset = await getRoomPreset(id);
       applySettings(preset.settings);
       setPresetName(preset.name);
+      setPresetStatus({ text: `Applied “${preset.name}”.`, undo: before });
     } catch (presetError) {
       setError(presetError instanceof Error ? presetError.message : "Could not apply that preset.");
     } finally {
@@ -165,6 +203,8 @@ export function CreateRoomPage() {
       const created = await createRoomPreset(presetName, currentPresetSettings());
       await refreshPresets(created.id);
       setPresetName(created.name);
+      setNamingPreset(false);
+      setPresetStatus({ text: `Saved “${created.name}”.` });
     } catch (presetError) {
       setError(presetError instanceof Error ? presetError.message : "Could not save that preset.");
     } finally {
@@ -175,6 +215,11 @@ export function CreateRoomPage() {
   async function handleUpdatePreset() {
     const selected = presets.find((preset) => preset.id === selectedPresetId);
     if (!selected) return;
+    const blocked = presetBlocker();
+    if (blocked) {
+      setPresetStatus({ text: blocked });
+      return;
+    }
     setPresetBusy(true);
     setError(null);
     try {
@@ -185,6 +230,7 @@ export function CreateRoomPage() {
         currentPresetSettings(),
       );
       await refreshPresets(updated.id);
+      setPresetStatus({ text: `Updated “${updated.name}”.` });
       setPresetName(updated.name);
     } catch (presetError) {
       setError(presetError instanceof Error ? presetError.message : "Could not update that preset.");
@@ -253,37 +299,46 @@ export function CreateRoomPage() {
       <div className="create-room-heading"><p>Room setup</p><h1>Create a room</h1></div>
       {error && <p className="create-room-error" role="alert">{error}</p>}
       {authUser && !authUser.isAnonymous && (
-        <section className="room-preset-panel" aria-labelledby="room-preset-heading">
-          <div>
-            <h2 id="room-preset-heading">Room-setting presets</h2>
-            <p>Reuse configuration for a new ordinary room. Presets never reuse a room code, members, scores, or live state.</p>
-          </div>
-          <div className="room-preset-controls">
-            <label>
-              Saved preset
-              <select
-                value={selectedPresetId}
-                onChange={(event) => {
-                  const id = event.target.value;
-                  setSelectedPresetId(id);
-                  setPresetName(presets.find((preset) => preset.id === id)?.name || "");
-                }}
-              >
-                <option value="">Choose a preset</option>
-                {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
-              </select>
-            </label>
-            <button type="button" disabled={!selectedPresetId || presetBusy} onClick={() => void handleApplyPreset()}>Apply</button>
-            <label>
-              Preset name
-              <input type="text" value={presetName} maxLength={64} onChange={(event) => setPresetName(event.target.value)} />
-            </label>
-            <button type="button" disabled={presetBusy || !presetName.trim() || customPrompts.analysis.usableCount > 0 || promptListShareCodes.length > 0} onClick={() => void handleSavePreset()}>Save new</button>
-            <button type="button" disabled={!selectedPresetId || presetBusy || customPrompts.analysis.usableCount > 0 || promptListShareCodes.length > 0} onClick={() => void handleUpdatePreset()}>Update</button>
-            <button type="button" className="room-preset-delete" disabled={!selectedPresetId || presetBusy} onClick={() => void handleDeletePreset()}>Delete</button>
-          </div>
-          {(customPrompts.analysis.usableCount > 0 || promptListShareCodes.length > 0) && <p className="setting-dependency">Save custom prompts as your own prompt list and remove shared-list codes before saving a preset.</p>}
-        </section>
+        <div className="room-preset-bar">
+          {presets.length > 0 && (
+            <select
+              aria-label="Start from a saved preset"
+              value={selectedPresetId}
+              disabled={presetBusy}
+              onChange={(event) => void handleChoosePreset(event.target.value)}
+            >
+              <option value="">Start from a preset…</option>
+              {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+            </select>
+          )}
+          {namingPreset ? (
+            <>
+              <input
+                type="text"
+                className="room-preset-name"
+                value={presetName}
+                placeholder="Name this preset"
+                maxLength={64}
+                autoFocus
+                onChange={(event) => setPresetName(event.target.value)}
+              />
+              <button type="button" className="auth-link" disabled={presetBusy || !presetName.trim()} onClick={() => void handleSavePreset()}>Save</button>
+              <button type="button" className="auth-link" onClick={() => setNamingPreset(false)}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="auth-link" disabled={presetBusy} onClick={beginNamingPreset}>Save these settings</button>
+              {selectedPresetId && <button type="button" className="auth-link" disabled={presetBusy} onClick={() => void handleUpdatePreset()}>Update</button>}
+              {selectedPresetId && <button type="button" className="auth-link room-preset-delete" disabled={presetBusy} onClick={() => void handleDeletePreset()}>Delete</button>}
+            </>
+          )}
+          {presetStatus && (
+            <span className="room-preset-status" role="status">
+              {presetStatus.text}
+              {presetStatus.undo && <button type="button" className="auth-link" onClick={undoPreset}>Undo</button>}
+            </span>
+          )}
+        </div>
       )}
       <div className="create-room-basic-grid">
         <Switch
