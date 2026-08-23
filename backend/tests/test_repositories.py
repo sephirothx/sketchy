@@ -18,6 +18,7 @@ from app.db.models import (
     Prompt,
     PromptList,
     TurnGuess,
+    TurnParticipantOutcome,
     TurnPromptOffer,
     TurnPromptOfferSource,
     TurnRecord,
@@ -35,6 +36,7 @@ from app.repositories.interfaces import (
     GameRecordInput,
     InvalidProfileDataError,
     TurnGuessInput,
+    TurnParticipantOutcomeInput,
     TurnRecordInput,
     UsernameTakenError,
     PromptPickTotals,
@@ -288,6 +290,7 @@ async def test_game_history_preserves_distinct_accountless_seats():
         user_repo = SqlAlchemyUserRepository(factory)
         history_repo = SqlAlchemyGameHistoryRepository(factory)
         account = await user_repo.create_anonymous("Account player")
+        account_seat_id = str(generate_uuid())
         drawer_seat_id = str(generate_uuid())
         guesser_seat_id = str(generate_uuid())
         turn_id = str(generate_uuid())
@@ -305,7 +308,10 @@ async def test_game_history_preserves_distinct_accountless_seats():
                 finished_at=now,
             ),
             [
-                GameParticipantInput(account.id, 50, 3),
+                GameParticipantInput(
+                    account.id, 50, 3, seat_id=account_seat_id,
+                    display_name="Account player",
+                ),
                 GameParticipantInput(
                     None,
                     300,
@@ -332,6 +338,28 @@ async def test_game_history_preserves_distinct_accountless_seats():
                     drawer_seat_id=drawer_seat_id,
                     prompt="guitar",
                     duration_seconds=12.0,
+                    guesser_count=2,
+                    wrong_guess_count=1,
+                    participant_outcomes=(
+                        TurnParticipantOutcomeInput(
+                            seat_id=guesser_seat_id,
+                            user_id=None,
+                            eligible=True,
+                            eligibility_reason="eligible",
+                            outcome="correct",
+                            terminal_state="active",
+                            correct_guess_time_seconds=8.0,
+                            wrong_guess_count=1,
+                        ),
+                        TurnParticipantOutcomeInput(
+                            seat_id=account_seat_id,
+                            user_id=account.id,
+                            eligible=True,
+                            eligibility_reason="eligible",
+                            outcome="no_attempt",
+                            terminal_state="active",
+                        ),
+                    ),
                 )
             ],
             [
@@ -341,6 +369,7 @@ async def test_game_history_preserves_distinct_accountless_seats():
                     seat_id=guesser_seat_id,
                     points_awarded=200,
                     guess_time_seconds=8.0,
+                    wrong_guesses_before=1,
                 )
             ],
         )
@@ -362,18 +391,34 @@ async def test_game_history_preserves_distinct_accountless_seats():
         assert detail.turns[0].guesses[0].user_id is None
         assert detail.turns[0].guesses[0].seat_id == guesser_seat_id
         assert detail.turns[0].guesses[0].display_name == "No-cookie guesser"
+        outcomes = {
+            outcome.seat_id: outcome
+            for outcome in detail.turns[0].participant_outcomes
+        }
+        assert outcomes[guesser_seat_id].outcome == "correct"
+        assert outcomes[guesser_seat_id].wrong_guess_count == 1
+        assert outcomes[account_seat_id].outcome == "no_attempt"
 
         async with factory() as session:
             stored_turn = await session.get(TurnRecord, UUID(turn_id))
             stored_guess = await session.scalar(
                 select(TurnGuess).where(TurnGuess.turn_id == UUID(turn_id))
             )
+            stored_outcomes = (
+                await session.scalars(
+                    select(TurnParticipantOutcome).where(
+                        TurnParticipantOutcome.turn_id == UUID(turn_id)
+                    )
+                )
+            ).all()
         assert stored_turn is not None
         assert stored_turn.drawer_user_id is None
         assert str(stored_turn.drawer_participant_id) == drawer_seat_id
         assert stored_guess is not None
         assert stored_guess.user_id is None
         assert str(stored_guess.participant_id) == guesser_seat_id
+        assert stored_guess.outcome_id is not None
+        assert len(stored_outcomes) == 2
     finally:
         await engine.dispose()
 

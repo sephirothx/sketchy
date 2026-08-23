@@ -62,6 +62,7 @@ async def disconnect(ctx: HandlerContext, sid):
         "player_disconnected", {"playerId": token, "nickname": player.nickname}, room=room.id
     )
     await ctx.game_flow._emit_room_state(room)
+    await ctx.game_flow._end_turn_if_all_guessed(room)
 
     async def _evict_after_grace() -> None:
         try:

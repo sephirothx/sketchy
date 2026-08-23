@@ -46,6 +46,19 @@ export interface TurnGuess {
   guessTimeSeconds: number;
 }
 
+export interface TurnParticipantOutcome {
+  seatId: string;
+  eligible: boolean;
+  eligibilityReason: "eligible" | "afk" | "disconnected" | "joined_late";
+  outcome: "correct" | "incorrect" | "no_attempt" | "ineligible";
+  terminalState: "active" | "afk" | "disconnected" | "left" | "legacy_unknown";
+  correctGuessTimeSeconds: number | null;
+  wrongGuessCount: number;
+  nearMissCount: number;
+  hintsUsed: number;
+  pointsSpentOnHints: number;
+}
+
 export interface GameTurn {
   roundNumber: number;
   turnNumber: number;
@@ -58,6 +71,7 @@ export interface GameTurn {
   promptSourceKind: "legacy_unknown" | "curated" | "custom" | "builtin_fallback";
   promptOffers: PromptOffer[];
   guesses: TurnGuess[];
+  participantOutcomes: TurnParticipantOutcome[];
 }
 
 export interface PromptOffer {

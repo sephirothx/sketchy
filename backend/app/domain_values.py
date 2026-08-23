@@ -22,6 +22,28 @@ class TurnEndReason(StrEnum):
     TIMEOUT = "timeout"
 
 
+class TurnEligibilityReason(StrEnum):
+    ELIGIBLE = "eligible"
+    AFK = "afk"
+    DISCONNECTED = "disconnected"
+    JOINED_LATE = "joined_late"
+
+
+class TurnParticipantOutcome(StrEnum):
+    CORRECT = "correct"
+    INCORRECT = "incorrect"
+    NO_ATTEMPT = "no_attempt"
+    INELIGIBLE = "ineligible"
+
+
+class TurnParticipantState(StrEnum):
+    ACTIVE = "active"
+    AFK = "afk"
+    DISCONNECTED = "disconnected"
+    LEFT = "left"
+    LEGACY_UNKNOWN = "legacy_unknown"
+
+
 class PromptSourceKind(StrEnum):
     LEGACY_UNKNOWN = "legacy_unknown"
     CURATED = "curated"
@@ -140,6 +162,9 @@ PROMPT_OFFER_SOURCE_KINDS = tuple(
 GAME_PROMPT_SOURCE_MODES = tuple(mode.value for mode in GamePromptSourceMode)
 HINT_MODES = tuple(mode.value for mode in HintMode)
 TURN_END_REASONS = tuple(reason.value for reason in TurnEndReason)
+TURN_ELIGIBILITY_REASONS = tuple(reason.value for reason in TurnEligibilityReason)
+TURN_PARTICIPANT_OUTCOMES = tuple(outcome.value for outcome in TurnParticipantOutcome)
+TURN_PARTICIPANT_STATES = tuple(state.value for state in TurnParticipantState)
 PROMPT_LANGUAGES = tuple(language.value for language in PromptLanguage)
 PROMPT_EDITORIAL_DIFFICULTIES = tuple(
     difficulty.value for difficulty in PromptEditorialDifficulty

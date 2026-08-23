@@ -1103,6 +1103,52 @@ def test_near_misses_are_counted_separately():
     assert game.near_miss_count == 1
 
 
+def test_turn_outcomes_preserve_non_success_and_ineligible_states():
+    game = make_hint_game("testing", "purchase", n_players=4)
+    eligible, afk, disconnected = [
+        token for token in game.turn_order if token != game.current_drawer
+    ]
+    game.snapshot_turn_participants(
+        {
+            eligible: "eligible",
+            afk: "afk",
+            disconnected: "disconnected",
+        }
+    )
+    assert game.buy_hint_letter(eligible, 0) is True
+    game.submit_guess(eligible, "testng")
+    game.add_player_to_rotation("late-player")
+    assert game.submit_guess("late-player", "testing") == (False, 0)
+
+    game.end_turn(
+        total_guesser_count=1,
+        terminal_states={
+            eligible: "left",
+            afk: "afk",
+            disconnected: "disconnected",
+            "late-player": "active",
+        },
+    )
+
+    outcomes = {
+        outcome.token: outcome for outcome in game.completed_turns[-1].participant_outcomes
+    }
+    attempted = outcomes[eligible]
+    assert attempted.eligible is True
+    assert attempted.outcome == "incorrect"
+    assert attempted.terminal_state == "left"
+    assert attempted.correct_guess_time_seconds is None
+    assert attempted.wrong_guess_count == 1
+    assert attempted.near_miss_count == 1
+    assert attempted.hints_used == 1
+    assert attempted.points_spent_on_hints > 0
+    assert outcomes[afk].eligibility_reason == "afk"
+    assert outcomes[afk].outcome == "ineligible"
+    assert outcomes[disconnected].terminal_state == "disconnected"
+    assert outcomes["late-player"].eligibility_reason == "joined_late"
+    assert outcomes["late-player"].outcome == "ineligible"
+
+
 def test_a_word_the_drawer_chose_is_not_marked_auto_picked():
     game = make_game(n_players=2, rounds=1)
     choices = game.start_next_turn(canvas_generation=1)

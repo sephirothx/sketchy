@@ -17,6 +17,7 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     TurnGuessInput,
+    TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
 from app.repositories.sqlalchemy import (
@@ -57,6 +58,8 @@ async def sign_in_as(http, session_factory, user_id: str) -> None:
 
 
 async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
+    winner_seat = str(generate_uuid())
+    loser_seat = str(generate_uuid())
     turn_id = str(generate_uuid())
     return await history.save_game(
         GameRecordInput(
@@ -70,8 +73,20 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
             finished_at=START + timedelta(hours=index, minutes=10),
         ),
         [
-            GameParticipantInput(user_id=winner, final_score=300, final_rank=1),
-            GameParticipantInput(user_id=loser, final_score=100, final_rank=2),
+            GameParticipantInput(
+                user_id=winner,
+                final_score=300,
+                final_rank=1,
+                seat_id=winner_seat,
+                display_name="Ann",
+            ),
+            GameParticipantInput(
+                user_id=loser,
+                final_score=100,
+                final_rank=2,
+                seat_id=loser_seat,
+                display_name="Bob",
+            ),
         ],
         [
             TurnRecordInput(
@@ -79,14 +94,28 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=winner,
+                drawer_seat_id=winner_seat,
                 prompt="jackpot",
                 duration_seconds=42.5,
+                guesser_count=1,
+                participant_outcomes=(
+                    TurnParticipantOutcomeInput(
+                        seat_id=loser_seat,
+                        user_id=loser,
+                        eligible=True,
+                        eligibility_reason="eligible",
+                        outcome="correct",
+                        terminal_state="active",
+                        correct_guess_time_seconds=12.0,
+                    ),
+                ),
             )
         ],
         [
             TurnGuessInput(
                 turn_id=turn_id,
                 user_id=loser,
+                seat_id=loser_seat,
                 points_awarded=100,
                 guess_time_seconds=12.0,
             )
@@ -201,6 +230,20 @@ async def test_participants_see_the_turn_by_turn_detail(env):
     assert body["turns"][0]["drawerDisplayName"] == "Ann"
     assert body["turns"][0]["guesses"][0]["displayName"] == "Bob"
     assert body["turns"][0]["guesses"][0]["pointsAwarded"] == 100
+    assert body["turns"][0]["participantOutcomes"] == [
+        {
+            "seatId": body["turns"][0]["guesses"][0]["seatId"],
+            "eligible": True,
+            "eligibilityReason": "eligible",
+            "outcome": "correct",
+            "terminalState": "active",
+            "correctGuessTimeSeconds": 12.0,
+            "wrongGuessCount": 0,
+            "nearMissCount": 0,
+            "hintsUsed": 0,
+            "pointsSpentOnHints": 0,
+        }
+    ]
 
 
 async def test_a_stranger_cannot_read_the_words_of_a_game_they_did_not_play(env):

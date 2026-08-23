@@ -45,6 +45,7 @@ from app.repositories.interfaces import (
     GameRecordInput,
     PromptOfferInput,
     TurnGuessInput,
+    TurnParticipantOutcomeInput,
     TurnRecordInput,
     PromptListEntryInput,
 )
@@ -94,6 +95,8 @@ async def register(http: AsyncClient, username: str = "Exporter") -> dict:
 
 
 async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
+    owner_seat = str(generate_uuid())
+    other_seat = str(generate_uuid())
     owner_turn = str(generate_uuid())
     other_turn = str(generate_uuid())
     return await history.save_game(
@@ -110,10 +113,20 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
         ),
         [
             GameParticipantInput(
-                user_id=owner_id, final_score=300, final_rank=1, turns_played=2
+                user_id=owner_id,
+                final_score=300,
+                final_rank=1,
+                turns_played=2,
+                seat_id=owner_seat,
+                display_name="Exporter",
             ),
             GameParticipantInput(
-                user_id=other_id, final_score=100, final_rank=2, turns_played=2
+                user_id=other_id,
+                final_score=100,
+                final_rank=2,
+                turns_played=2,
+                seat_id=other_seat,
+                display_name="Other player",
             ),
         ],
         [
@@ -122,12 +135,25 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=owner_id,
+                drawer_seat_id=owner_seat,
                 prompt="owner prompt",
                 duration_seconds=25,
                 prompt_source_kind="custom",
+                guesser_count=1,
                 prompt_offers=(
                     PromptOfferInput(0, "owner prompt", True, "custom"),
                     PromptOfferInput(1, "other option", False, "custom"),
+                ),
+                participant_outcomes=(
+                    TurnParticipantOutcomeInput(
+                        seat_id=other_seat,
+                        user_id=other_id,
+                        eligible=True,
+                        eligibility_reason="eligible",
+                        outcome="correct",
+                        terminal_state="active",
+                        correct_guess_time_seconds=10,
+                    ),
                 ),
             ),
             TurnRecordInput(
@@ -135,21 +161,36 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                 round_number=1,
                 turn_number=2,
                 drawer_user_id=other_id,
+                drawer_seat_id=other_seat,
                 prompt="requester guessed this",
                 duration_seconds=30,
                 prompt_source_kind="custom",
+                guesser_count=1,
+                participant_outcomes=(
+                    TurnParticipantOutcomeInput(
+                        seat_id=owner_seat,
+                        user_id=owner_id,
+                        eligible=True,
+                        eligibility_reason="eligible",
+                        outcome="correct",
+                        terminal_state="active",
+                        correct_guess_time_seconds=12,
+                    ),
+                ),
             ),
         ],
         [
             TurnGuessInput(
                 turn_id=owner_turn,
                 user_id=other_id,
+                seat_id=other_seat,
                 points_awarded=100,
                 guess_time_seconds=10,
             ),
             TurnGuessInput(
                 turn_id=other_turn,
                 user_id=owner_id,
+                seat_id=owner_seat,
                 points_awarded=150,
                 guess_time_seconds=12,
             ),
@@ -271,6 +312,9 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["drawnTurns"][0]["promptSourceKind"] == "custom"
     assert artifact["drawnTurns"][0]["prompt"] == "owner prompt"
     assert artifact["correctGuesses"][0]["prompt"] == "requester guessed this"
+    assert artifact["turnOutcomes"][0]["participantSeatId"]
+    assert artifact["turnOutcomes"][0]["outcome"] == "correct"
+    assert artifact["turnOutcomes"][0]["terminalState"] == "active"
     assert artifact["sessions"] and "tokenHash" not in artifact["sessions"][0]
     assert artifact["reportsSubmitted"][0]["details"] == (
         "Requester-authored report details"

@@ -117,6 +117,23 @@ class GameParticipantInput:
 
 
 @dataclass(frozen=True)
+class TurnParticipantOutcomeInput:
+    """One participant seat's complete eligibility and result for a turn."""
+
+    seat_id: str
+    user_id: str | None
+    eligible: bool
+    eligibility_reason: str
+    outcome: str
+    terminal_state: str
+    correct_guess_time_seconds: float | None = None
+    wrong_guess_count: int = 0
+    near_miss_count: int = 0
+    hints_used: int = 0
+    points_spent_on_hints: int = 0
+
+
+@dataclass(frozen=True)
 class TurnRecordInput:
     """Input payload for an individual turn/round in a game."""
 
@@ -136,6 +153,7 @@ class TurnRecordInput:
     near_miss_count: int = 0
     prompt_offers: tuple[PromptOfferInput, ...] = ()
     drawer_seat_id: str | None = None
+    participant_outcomes: tuple[TurnParticipantOutcomeInput, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -209,6 +227,22 @@ class TurnGuessDetail:
 
 
 @dataclass(frozen=True)
+class TurnParticipantOutcomeDetail:
+    """Participant-visible factual outcome for one seat and turn."""
+
+    seat_id: str
+    eligible: bool
+    eligibility_reason: str
+    outcome: str
+    terminal_state: str
+    correct_guess_time_seconds: float | None
+    wrong_guess_count: int
+    near_miss_count: int
+    hints_used: int
+    points_spent_on_hints: int
+
+
+@dataclass(frozen=True)
 class TurnDetail:
     """Detailed view of a single turn in a past game."""
 
@@ -223,6 +257,9 @@ class TurnDetail:
     prompt_source_kind: str = "legacy_unknown"
     guesses: list[TurnGuessDetail] = field(default_factory=list)
     prompt_offers: list[PromptOfferDetail] = field(default_factory=list)
+    participant_outcomes: list[TurnParticipantOutcomeDetail] = field(
+        default_factory=list
+    )
 
 
 @dataclass(frozen=True)

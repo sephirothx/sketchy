@@ -12,6 +12,7 @@ import {
   formatTimestamp,
   HISTORY_PAGE_SIZE,
   type GameDetail,
+  type GameTurn,
   type GameSummary,
   type ProfileStats,
 } from "../lib/profile";
@@ -172,6 +173,15 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                 />
               );
             };
+            const outcomeLabel = (outcome: GameTurn["participantOutcomes"][number]) => {
+              if (outcome.outcome === "correct") return "correct";
+              if (outcome.outcome === "incorrect") {
+                return `${outcome.wrongGuessCount} wrong`;
+              }
+              if (outcome.outcome === "no_attempt") return "no attempt";
+              if (outcome.eligibilityReason === "joined_late") return "joined late";
+              return `not eligible (${outcome.eligibilityReason})`;
+            };
             return (
             <table className="profile-turns">
               <caption className="visually-hidden">Turn by turn</caption>
@@ -181,7 +191,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                   <th scope="col">Prompt</th>
                   <th scope="col">Drawn by</th>
                   <th scope="col">Time</th>
-                  <th scope="col">Guessed by</th>
+                  <th scope="col">Guesser outcomes</th>
                 </tr>
               </thead>
               <tbody>
@@ -192,14 +202,25 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                     <td>{named(turn.drawerSeatId, turn.drawerDisplayName)}</td>
                     <td>{formatDuration(turn.durationSeconds)}</td>
                     <td>
-                      {turn.guesses.length === 0
-                        ? "nobody"
-                        : turn.guesses.map((g, index) => (
-                            <span key={g.seatId ?? `legacy-${index}`}>
+                      {turn.participantOutcomes.length > 0
+                        ? turn.participantOutcomes.map((outcome, index) => (
+                            <span key={outcome.seatId}>
                               {index > 0 && ", "}
-                              {named(g.seatId, g.displayName)} ({g.pointsAwarded})
+                              {named(outcome.seatId, "Unknown player")} ({
+                                outcome.outcome === "correct"
+                                  ? `correct, ${turn.guesses.find((guess) => guess.seatId === outcome.seatId)?.pointsAwarded ?? 0}`
+                                  : outcomeLabel(outcome)
+                              })
                             </span>
-                          ))}
+                          ))
+                        : turn.guesses.length === 0
+                          ? "unknown"
+                          : turn.guesses.map((g, index) => (
+                              <span key={g.seatId ?? `legacy-${index}`}>
+                                {index > 0 && ", "}
+                                {named(g.seatId, g.displayName)} (correct, {g.pointsAwarded})
+                              </span>
+                            ))}
                     </td>
                   </tr>
                 ))}

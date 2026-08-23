@@ -95,6 +95,7 @@ async def _schema_differences(engine: AsyncEngine):
         ("turn_records", "prompt_version_id"),
         ("turn_records", "drawer_participant_id"),
         ("turn_guesses", "participant_id"),
+        ("turn_guesses", "outcome_id"),
     }
     return [
         difference
@@ -121,6 +122,7 @@ async def _sqlite_inline_reference_actions(engine: AsyncEngine) -> dict[tuple[st
         ("turn_records", "prompt_version_id"),
         ("turn_records", "drawer_participant_id"),
         ("turn_guesses", "participant_id"),
+        ("turn_guesses", "outcome_id"),
     }
     actions: dict[tuple[str, str], str] = {}
     async with engine.connect() as connection:
@@ -152,6 +154,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
             ("turn_records", "prompt_version_id"): "RESTRICT",
             ("turn_records", "drawer_participant_id"): "SET NULL",
             ("turn_guesses", "participant_id"): "SET NULL",
+            ("turn_guesses", "outcome_id"): "CASCADE",
         }
     index_definition = await _index_definition(engine)
     assert index_definition is not None
@@ -333,19 +336,44 @@ async def test_prompt_identity_migration_marks_legacy_provenance_unknown(tmp_pat
                     identifiers,
                 )
             ).one()
-            guess_participant_id = await connection.scalar(
-                text(
-                    "SELECT participant_id FROM turn_guesses WHERE id = :guess"
-                ),
-                identifiers,
-            )
+            guess_identity = (
+                await connection.execute(
+                    text(
+                        "SELECT participant_id, outcome_id FROM turn_guesses "
+                        "WHERE id = :guess"
+                    ),
+                    identifiers,
+                )
+            ).one()
+            legacy_outcome = (
+                await connection.execute(
+                    text(
+                        "SELECT id, participant_id, eligible, eligibility_reason, "
+                        "outcome, terminal_state, correct_guess_time_seconds, "
+                        "created_at FROM turn_participant_outcomes"
+                    )
+                )
+            ).one()
         assert game_mode == "legacy_unknown"
         assert tuple(turn_identity) == (
             "legacy_unknown",
             None,
             identifiers["participant"],
         )
-        assert guess_participant_id == identifiers["participant"]
+        assert tuple(guess_identity) == (
+            identifiers["participant"],
+            identifiers["guess"],
+        )
+        assert tuple(legacy_outcome) == (
+            identifiers["guess"],
+            identifiers["participant"],
+            1,
+            "eligible",
+            "correct",
+            "legacy_unknown",
+            10.0,
+            None,
+        )
 
         # SQLite uses equivalent insert/update triggers because it cannot add a
         # table-level cross-column check without rebuilding this parent table.

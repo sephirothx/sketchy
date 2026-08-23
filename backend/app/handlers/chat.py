@@ -125,9 +125,13 @@ async def guess(ctx: HandlerContext, sid, data):
     # messages for the round visible only to the drawer and other
     # players who've also already guessed correctly, flagged so the
     # client can render a clear "restricted visibility" indicator.
-    # Spectators and players who have already guessed correctly can chat,
-    # but their messages are restricted to the drawer, other correct guessers, and spectators.
-    if player.is_spectator or player.id in game.correct_guessers:
+    # Spectators, late/ineligible seats, and players who already guessed can
+    # chat, but only the prompt-aware audience may see those messages.
+    if (
+        player.is_spectator
+        or player.id in game.correct_guessers
+        or not game.is_turn_eligible(player.id)
+    ):
         recipients = ctx.game_flow._privileged_sids(room, game)
         if recipients:
             await _emit_player_chat(

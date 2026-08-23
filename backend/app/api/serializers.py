@@ -116,6 +116,23 @@ def game_detail_payload(detail: GameDetail) -> dict:
                     }
                     for g in r.guesses
                 ],
+                "participantOutcomes": [
+                    {
+                        "seatId": outcome.seat_id,
+                        "eligible": outcome.eligible,
+                        "eligibilityReason": outcome.eligibility_reason,
+                        "outcome": outcome.outcome,
+                        "terminalState": outcome.terminal_state,
+                        "correctGuessTimeSeconds": (
+                            outcome.correct_guess_time_seconds
+                        ),
+                        "wrongGuessCount": outcome.wrong_guess_count,
+                        "nearMissCount": outcome.near_miss_count,
+                        "hintsUsed": outcome.hints_used,
+                        "pointsSpentOnHints": outcome.points_spent_on_hints,
+                    }
+                    for outcome in r.participant_outcomes
+                ],
             }
             for r in detail.turns
         ],

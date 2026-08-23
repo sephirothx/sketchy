@@ -12,6 +12,10 @@ from app.game import (
     Game,
     Phase,
 )
+from app.domain_values import (
+    TurnEligibilityReason,
+    TurnParticipantState,
+)
 from app.handlers.sessions import (
     existing_player_for_sid as resolve_existing_player_for_sid,
     require_current_player as resolve_current_player,
@@ -586,6 +590,19 @@ class GameFlowService:
     async def _begin_drawing(self, room: Room) -> None:
         game = room.game
         assert game is not None
+        game.snapshot_turn_participants(
+            {
+                player.id: (
+                    TurnEligibilityReason.AFK.value
+                    if player.is_afk
+                    else TurnEligibilityReason.DISCONNECTED.value
+                    if not player.connected
+                    else TurnEligibilityReason.ELIGIBLE.value
+                )
+                for player in room.seated_players()
+                if player.id != game.current_drawer
+            }
+        )
         game.set_phase_deadline(game.drawing_seconds)
         for p in room.player_list():
             if not p.sid:
@@ -618,8 +635,39 @@ class GameFlowService:
             return False
         self._timers.cancel_phase_timer(room.id)
         self._timers.cancel_hint_timers(room.id)
-        guesser_count = len(room.eligible_guessers())
-        drawer_bonus = game.end_turn(total_guesser_count=guesser_count)
+        active_eligible = {
+            player.id
+            for player in room.active_players()
+            if game.is_turn_eligible(player.id)
+        }
+        all_active_guessed = bool(active_eligible) and active_eligible.issubset(
+            game.correct_guessers
+        )
+        terminal_states = {}
+        for token in game.turn_eligibility_reasons or {}:
+            player = room.players.get(token)
+            terminal_states[token] = (
+                TurnParticipantState.LEFT.value
+                if player is None
+                else TurnParticipantState.AFK.value
+                if player.is_afk
+                else TurnParticipantState.DISCONNECTED.value
+                if not player.connected
+                else TurnParticipantState.ACTIVE.value
+            )
+        guesser_count = (
+            len(active_eligible)
+            if game.turn_eligibility_reasons is None
+            else sum(
+                reason == TurnEligibilityReason.ELIGIBLE.value
+                for reason in game.turn_eligibility_reasons.values()
+            )
+        )
+        drawer_bonus = game.end_turn(
+            total_guesser_count=guesser_count,
+            terminal_states=terminal_states,
+            all_active_guessed=all_active_guessed,
+        )
         if drawer_bonus is None:
             return False
         drawer = room.players.get(game.current_drawer)
@@ -846,8 +894,20 @@ class GameFlowService:
         game = room.game
         if not game or game.phase != Phase.DRAWING:
             return
-        guesser_count = len(room.eligible_guessers())
-        if game.all_guessed(guesser_count):
+        active_eligible = {
+            player.id
+            for player in room.active_players()
+            if game.is_turn_eligible(player.id)
+        }
+        had_eligible_guesser = (
+            any(
+                reason == TurnEligibilityReason.ELIGIBLE.value
+                for reason in game.turn_eligibility_reasons.values()
+            )
+            if game.turn_eligibility_reasons is not None
+            else bool(active_eligible)
+        )
+        if had_eligible_guesser and active_eligible.issubset(game.correct_guessers):
             await self._end_turn(room)
 
     async def _on_phase_timeout(self, room: Room) -> None:
@@ -880,6 +940,8 @@ class GameFlowService:
             room.game = None
         elif was_drawer:
             await self._abandon_current_turn(room)
+        else:
+            await self._end_turn_if_all_guessed(room)
 
     async def _existing_player_for_sid(self, sid: str, room_id: str) -> Player | None:
         """If this socket already has a live session in the target room, return its player.

@@ -154,6 +154,18 @@ starts even if no session cookie supplied an account. Such a player still
 counts toward the recorded player total and keeps every factual turn and
 correct guess; history never drops or coalesces the seat merely because its
 account link is null.
+When drawing begins, the server freezes the eligible guesser seats. Players who
+were AFK or disconnected then, and players who join after that instant, remain
+ineligible until the next turn; their text is treated as restricted chat rather
+than a guess that could reveal the prompt. Every completed turn stores one
+participant outcome per current or late-arriving non-drawer seat: eligibility
+and its reason, correct/incorrect/no-attempt/ineligible result, terminal
+active/AFK/disconnected/left state, correct time when applicable, and per-seat
+wrong, near-miss, and hint totals. The successful-guess row is the optional
+scoring child of a correct outcome. Ordinary history retains these numeric
+facts but not guess text; text retention and evidence are governed separately.
+No-scoring games record the same factual outcomes with zero awarded points and
+never invent hypothetical score awards.
 Prompt-list counts are derived from prompt membership on read, so adding or
 removing a prompt cannot leave a cached total out of sync.
 Prompt usage is not stored as mutable totals on the current display row.

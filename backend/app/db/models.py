@@ -44,7 +44,10 @@ from app.domain_values import (
     REPORT_REASONS,
     REPORT_STATUSES,
     SCORING_MODES,
+    TURN_ELIGIBILITY_REASONS,
     TURN_END_REASONS,
+    TURN_PARTICIPANT_OUTCOMES,
+    TURN_PARTICIPANT_STATES,
     USER_ROLES,
     USER_THEMES,
     AccountState,
@@ -938,8 +941,8 @@ class TurnRecord(Base):
         nullable=False,
     )
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
-    # How many players could still have guessed. Correct-guess counts are
-    # uninterpretable without it: two of two is not two of eight.
+    # How many player seats were eligible when drawing began. Correct-guess
+    # counts are uninterpretable without it: two of two is not two of eight.
     guesser_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
@@ -981,6 +984,100 @@ class TurnRecord(Base):
         back_populates="turn_record",
         cascade="all, delete-orphan",
         order_by="TurnPromptOffer.position",
+    )
+    participant_outcomes: Mapped[list[TurnParticipantOutcome]] = relationship(
+        back_populates="turn_record",
+        cascade="all, delete-orphan",
+    )
+
+
+class TurnParticipantOutcome(Base):
+    """One participant seat's eligibility and terminal result for a turn."""
+
+    __tablename__ = "turn_participant_outcomes"
+    __table_args__ = (
+        UniqueConstraint(
+            "turn_id",
+            "participant_id",
+            name="uq_turn_participant_outcomes_turn_participant",
+        ),
+        _values_check(
+            "eligibility_reason",
+            TURN_ELIGIBILITY_REASONS,
+            "ck_turn_participant_outcomes_eligibility_reason",
+        ),
+        _values_check(
+            "outcome",
+            TURN_PARTICIPANT_OUTCOMES,
+            "ck_turn_participant_outcomes_outcome",
+        ),
+        _values_check(
+            "terminal_state",
+            TURN_PARTICIPANT_STATES,
+            "ck_turn_participant_outcomes_terminal_state",
+        ),
+        CheckConstraint(
+            "(eligible AND eligibility_reason = 'eligible' "
+            "AND outcome != 'ineligible') OR "
+            "(NOT eligible AND eligibility_reason != 'eligible' "
+            "AND outcome = 'ineligible')",
+            name="ck_turn_participant_outcomes_eligibility",
+        ),
+        CheckConstraint(
+            "(outcome = 'correct' AND correct_guess_time_seconds IS NOT NULL) OR "
+            "(outcome != 'correct' AND correct_guess_time_seconds IS NULL)",
+            name="ck_turn_participant_outcomes_correct_time",
+        ),
+        CheckConstraint(
+            "wrong_guess_count >= 0 AND near_miss_count >= 0 "
+            "AND hints_used >= 0 AND points_spent_on_hints >= 0",
+            name="ck_turn_participant_outcomes_nonnegative",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("game_participants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    eligibility_reason: Mapped[str] = mapped_column(String(24), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    terminal_state: Mapped[str] = mapped_column(String(24), nullable=False)
+    correct_guess_time_seconds: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+    wrong_guess_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    near_miss_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    hints_used: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    points_spent_on_hints: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    created_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=True
+    )
+
+    turn_record: Mapped[TurnRecord] = relationship(
+        back_populates="participant_outcomes"
+    )
+    correct_guess: Mapped[TurnGuess | None] = relationship(
+        back_populates="outcome", uselist=False
     )
 
 
@@ -1057,7 +1154,7 @@ class TurnPromptOfferSource(Base):
 
 
 class TurnGuess(Base):
-    """Correct guess recorded for a player in a specific round."""
+    """Optional scoring child for a participant's correct turn outcome."""
 
     __tablename__ = "turn_guesses"
     __table_args__ = (
@@ -1067,6 +1164,7 @@ class TurnGuess(Base):
             "participant_id",
             unique=True,
         ),
+        Index("uq_turn_guesses_outcome", "outcome_id", unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1090,6 +1188,11 @@ class TurnGuess(Base):
         nullable=True,
         index=True,
     )
+    outcome_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_participant_outcomes.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     display_name_snapshot: Mapped[str] = mapped_column(
         String(32), default="Unknown", nullable=False
     )
@@ -1099,10 +1202,8 @@ class TurnGuess(Base):
     )
     points_awarded: Mapped[int] = mapped_column(Integer, nullable=False)
     guess_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
-    # `points_awarded` is already net of the hints bought that turn, so without
-    # these a cheap win and an expensive one are the same number. Only settled
-    # spend is recorded: hints are free to a player who never guesses, and they
-    # leave no row here at all.
+    # Compatibility copies of the parent outcome's attempt/hint facts. The
+    # complete outcome table also records players who never guessed correctly.
     hints_used: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
@@ -1117,6 +1218,9 @@ class TurnGuess(Base):
     )
 
     turn_record: Mapped[TurnRecord] = relationship(back_populates="guesses")
+    outcome: Mapped[TurnParticipantOutcome | None] = relationship(
+        back_populates="correct_guess"
+    )
     user: Mapped[User | None] = relationship()
 
 

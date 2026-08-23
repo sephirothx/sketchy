@@ -21,6 +21,7 @@ from app.db.models import (
     GameRecord,
     PlayerReport,
     TurnGuess,
+    TurnParticipantOutcome,
     TurnRecord,
     User,
     UserSettings,
@@ -590,6 +591,99 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
         await engine.dispose()
 
 
+async def test_turn_participant_outcomes_enforce_identity_and_state_invariants():
+    factory, engine = await create_test_db()
+    game_id = generate_uuid()
+    turn_id = generate_uuid()
+    drawer_user_id = generate_uuid()
+    guesser_user_id = generate_uuid()
+    drawer_seat_id = generate_uuid()
+    guesser_seat_id = generate_uuid()
+    now = datetime.now(timezone.utc)
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    [
+                        User(id=drawer_user_id, display_name="Drawer"),
+                        User(id=guesser_user_id, display_name="Guesser"),
+                        GameRecord(
+                            id=game_id,
+                            room_name="Outcomes",
+                            scoring_mode="default",
+                            hint_mode="none",
+                            drawing_seconds=90,
+                            total_rounds=1,
+                            player_count=2,
+                            started_at=now,
+                            finished_at=now,
+                        ),
+                        GameParticipant(
+                            id=drawer_seat_id,
+                            game_id=game_id,
+                            user_id=drawer_user_id,
+                            final_score=100,
+                            final_rank=1,
+                        ),
+                        GameParticipant(
+                            id=guesser_seat_id,
+                            game_id=game_id,
+                            user_id=guesser_user_id,
+                            final_score=50,
+                            final_rank=2,
+                        ),
+                        TurnRecord(
+                            id=turn_id,
+                            game_id=game_id,
+                            round_number=1,
+                            turn_number=1,
+                            drawer_user_id=drawer_user_id,
+                            drawer_participant_id=drawer_seat_id,
+                            prompt="anchor",
+                            duration_seconds=30,
+                        ),
+                        TurnParticipantOutcome(
+                            id=generate_uuid(),
+                            turn_id=turn_id,
+                            participant_id=guesser_seat_id,
+                            eligible=True,
+                            eligibility_reason="eligible",
+                            outcome="correct",
+                            terminal_state="active",
+                            correct_guess_time_seconds=10,
+                        ),
+                    ]
+                )
+
+        invalid_rows = (
+            TurnParticipantOutcome(
+                id=generate_uuid(),
+                turn_id=turn_id,
+                participant_id=guesser_seat_id,
+                eligible=True,
+                eligibility_reason="eligible",
+                outcome="no_attempt",
+                terminal_state="active",
+            ),
+            TurnParticipantOutcome(
+                id=generate_uuid(),
+                turn_id=turn_id,
+                participant_id=drawer_seat_id,
+                eligible=True,
+                eligibility_reason="joined_late",
+                outcome="no_attempt",
+                terminal_state="active",
+            ),
+        )
+        for invalid_row in invalid_rows:
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(invalid_row)
+    finally:
+        await engine.dispose()
+
+
 async def test_database_rejects_unknown_modes_statuses_and_languages():
     factory, engine = await create_test_db()
     now = datetime.now(timezone.utc)
@@ -888,6 +982,7 @@ async def test_migrations_match_the_models(tmp_path):
         ("turn_records", "prompt_version_id"),
         ("turn_records", "drawer_participant_id"),
         ("turn_guesses", "participant_id"),
+        ("turn_guesses", "outcome_id"),
     }
     differences = [
         difference

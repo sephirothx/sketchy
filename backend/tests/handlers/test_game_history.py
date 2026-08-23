@@ -214,8 +214,9 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     game = room.game
     game.hint_mode = "purchase"
     game.force_prompt_choice()
-    game.set_phase_deadline(game.drawing_seconds)
     guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
+    game.snapshot_turn_participants({guesser.id: "eligible"})
+    game.set_phase_deadline(game.drawing_seconds)
 
     price = game.hint_cost(guesser.id)
     assert game.buy_hint_letter(guesser.id, 0) is True
@@ -249,9 +250,55 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     # What lands in history is what the player actually banked: net of hints.
     assert hinted.points_awarded == awarded == gross - price
     assert hinted.wrong_guesses_before == 1
+    outcome = first_round.participant_outcomes[0]
+    assert outcome.eligible is True
+    assert outcome.eligibility_reason == "eligible"
+    assert outcome.outcome == "correct"
+    assert outcome.terminal_state == "active"
+    assert outcome.correct_guess_time_seconds == hinted.guess_time_seconds
+    assert outcome.wrong_guess_count == 1
+    assert outcome.hints_used == 1
+    assert outcome.points_spent_on_hints == price
 
     # Both players were in the rotation for both turns.
     assert {p.turns_played for p in saved.participants} == {2}
+
+
+async def test_a_player_who_never_guesses_correctly_keeps_attempt_and_hint_facts():
+    room_manager, room, _ = build_room(rounds=1)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    game.hint_mode = "purchase"
+    game.force_prompt_choice()
+    await flow._begin_drawing(room)
+    guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
+    assert game.buy_hint_letter(guesser.id, 0) is True
+    assert game.submit_guess(guesser.id, "definitely wrong") == (False, 0)
+    await flow._end_turn(room)
+    ctx.timers.cancel_phase_timer(room.id)
+    await flow._finish_or_next(room)
+
+    while room.game is not None:
+        game = room.game
+        game.force_prompt_choice()
+        await flow._begin_drawing(room)
+        await flow._end_turn(room)
+        ctx.timers.cancel_phase_timer(room.id)
+        await flow._finish_or_next(room)
+    await ctx.timers.close()
+
+    first_turn = history.saved[0].turns[0]
+    assert history.saved[0].guesses == []
+    outcome = first_turn.participant_outcomes[0]
+    assert outcome.outcome == "incorrect"
+    assert outcome.correct_guess_time_seconds is None
+    assert outcome.wrong_guess_count == 1
+    assert outcome.hints_used == 1
+    assert outcome.points_spent_on_hints > 0
 
 
 async def test_the_result_is_snapshotted_before_the_room_reopens():

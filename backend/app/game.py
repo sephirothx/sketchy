@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from itertools import groupby
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from app.canvas_session import CanvasSession
 from app.drawing_rules import (
@@ -28,7 +28,10 @@ from app.domain_values import (
     SCORING_MODES,
     GamePromptSourceMode,
     PromptSourceKind,
+    TurnEligibilityReason,
     TurnEndReason,
+    TurnParticipantOutcome,
+    TurnParticipantState,
 )
 from app.identifiers import generate_uuid7
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_prompt_choices
@@ -229,14 +232,27 @@ class TurnGuessRecord:
     token: str
     points_awarded: int
     guess_time_seconds: float
-    # What the guess cost and what it took to get there. `points_awarded` is
-    # already net of the hint spend, so without this a cheap guess and an
-    # expensive one look alike. Only settled spend appears here: a player who
-    # bought hints and never guessed leaves no record at all, because they were
-    # never charged.
+    # Compatibility scoring detail duplicated from the parent participant
+    # outcome. `points_awarded` is already net of settled hint spend.
     hints_used: int = 0
     points_spent_on_hints: int = 0
     wrong_guesses_before: int = 0
+
+
+@dataclass(frozen=True)
+class TurnParticipantOutcomeRecord:
+    """One factual seat's eligibility and terminal result for a turn."""
+
+    token: str
+    eligible: bool
+    eligibility_reason: str
+    outcome: str
+    terminal_state: str
+    correct_guess_time_seconds: float | None = None
+    wrong_guess_count: int = 0
+    near_miss_count: int = 0
+    hints_used: int = 0
+    points_spent_on_hints: int = 0
 
 
 @dataclass(frozen=True)
@@ -282,6 +298,7 @@ class CompletedTurnStats:
     # Everyone still in the rotation as the turn ended, which is what makes a
     # player who quit after one turn distinguishable from one who played on.
     present_tokens: tuple[str, ...] = ()
+    participant_outcomes: tuple[TurnParticipantOutcomeRecord, ...] = ()
 
 
 @dataclass
@@ -336,7 +353,11 @@ class Game:
     hint_spend: dict[str, int] = field(default_factory=dict)
     hint_purchases: dict[str, int] = field(default_factory=dict)
     wrong_guesses: dict[str, int] = field(default_factory=dict)
-    near_miss_count: int = 0
+    near_misses: dict[str, int] = field(default_factory=dict)
+    # Snapshotted when drawing begins. None exists only in direct domain tests
+    # and pre-snapshot compatibility paths; an empty dict means nobody may
+    # guess. Later joiners are added explicitly as joined_late.
+    turn_eligibility_reasons: dict[str, str] | None = None
     prompt_auto_picked: bool = False
     completed_turns: list[CompletedTurnStats] = field(default_factory=list)
     # Wall clock, unlike the monotonic `phase_deadline`: persisted game records
@@ -443,6 +464,14 @@ class Game:
         if token not in self.roster:
             self.roster.append(token)
         self.history_seat_ids.setdefault(token, str(generate_uuid7()))
+        if (
+            self.phase == Phase.DRAWING
+            and self.turn_eligibility_reasons is not None
+            and token != self.current_drawer
+        ):
+            self.turn_eligibility_reasons.setdefault(
+                token, TurnEligibilityReason.JOINED_LATE.value
+            )
         current_round = self.round_number
         current_drawer = self.current_drawer
         self.turn_order.append(token)
@@ -553,7 +582,8 @@ class Game:
         self.hint_spend = {}
         self.hint_purchases = {}
         self.wrong_guesses = {}
-        self.near_miss_count = 0
+        self.near_misses = {}
+        self.turn_eligibility_reasons = None
         self.prompt_auto_picked = False
         self.phase = Phase.CHOOSING_PROMPT
         return self.prompt_choices
@@ -576,6 +606,26 @@ class Game:
         self.used_prompts.add(prompt)
         self.letter_positions = [i for i, ch in enumerate(prompt) if ch.isalnum()]
         self.phase = Phase.DRAWING
+
+    def snapshot_turn_participants(self, reasons: Mapping[str, str]) -> None:
+        """Freeze who may guess and why every other current seat may not."""
+        if self.phase != Phase.DRAWING:
+            raise ValueError("Turn participation can only be snapshotted while drawing")
+        self.turn_eligibility_reasons = dict(reasons)
+
+    def is_turn_eligible(self, token: str) -> bool:
+        """Whether this seat belonged to the guesser population at draw start."""
+        if self.turn_eligibility_reasons is None:
+            return token != self.current_drawer
+        return (
+            self.turn_eligibility_reasons.get(token)
+            == TurnEligibilityReason.ELIGIBLE.value
+        )
+
+    @property
+    def near_miss_count(self) -> int:
+        """Compatibility aggregate; durable outcomes retain the per-seat split."""
+        return sum(self.near_misses.values())
 
     def masked_prompt(
         self,
@@ -683,7 +733,7 @@ class Game:
         """
         if self.hint_mode != "purchase" or self.phase != Phase.DRAWING or not self.prompt:
             return False
-        if token == self.current_drawer or token in self.correct_guessers:
+        if not self.is_turn_eligible(token) or token in self.correct_guessers:
             return False
         if slot < 0 or slot >= len(self.letter_positions):
             return False
@@ -772,7 +822,7 @@ class Game:
         """
         if self.hint_mode != "wheel" or self.phase != Phase.DRAWING or not self.prompt:
             return False
-        if token == self.current_drawer or token in self.correct_guessers:
+        if not self.is_turn_eligible(token) or token in self.correct_guessers:
             return False
         letter = letter.lower()
         if letter not in string.ascii_lowercase:
@@ -798,7 +848,7 @@ class Game:
     def submit_guess(self, token: str, text: str) -> tuple[bool, int]:
         if self.phase != Phase.DRAWING or not self.prompt:
             return False, 0
-        if token == self.current_drawer or token in self.correct_guessers:
+        if not self.is_turn_eligible(token) or token in self.correct_guessers:
             return False, 0
         if len(text) > MAX_PROMPT_LENGTH:
             return False, 0
@@ -810,7 +860,7 @@ class Game:
             # and their messages are chat, not guesses.
             self.wrong_guesses[token] = self.wrong_guesses.get(token, 0) + 1
             if self.guess_hint(token, text) is not None:
-                self.near_miss_count += 1
+                self.near_misses[token] = self.near_misses.get(token, 0) + 1
             return False, 0
         self.guess_times[token] = self.elapsed_drawing_seconds()
         if self.scoring_mode == "none":
@@ -851,7 +901,7 @@ class Game:
         """
         if not self.prompt:
             return None
-        if token == self.current_drawer or token in self.correct_guessers:
+        if not self.is_turn_eligible(token) or token in self.correct_guessers:
             return None
         if len(text) > MAX_PROMPT_LENGTH:
             return None
@@ -891,7 +941,13 @@ class Game:
     def all_guessed(self, total_guessers: int) -> bool:
         return total_guessers > 0 and len(self.correct_guessers) >= total_guessers
 
-    def end_turn(self, total_guesser_count: int = 0) -> int | None:
+    def end_turn(
+        self,
+        total_guesser_count: int = 0,
+        *,
+        terminal_states: Mapping[str, str] | None = None,
+        all_active_guessed: bool | None = None,
+    ) -> int | None:
         """Transition to TURN_RESULTS, return drawer bonus points.
 
         The drawer receives the sum of the points earned by all correct guessers in this turn.
@@ -902,6 +958,43 @@ class Game:
         if self.phase != Phase.DRAWING:
             return None
         self.phase = Phase.TURN_RESULTS
+        participant_outcomes: tuple[TurnParticipantOutcomeRecord, ...] = ()
+        if self.turn_eligibility_reasons is not None:
+            states = terminal_states or {}
+            rows: list[TurnParticipantOutcomeRecord] = []
+            for token, eligibility_reason in self.turn_eligibility_reasons.items():
+                eligible = eligibility_reason == TurnEligibilityReason.ELIGIBLE.value
+                correct = token in self.correct_guessers
+                wrong_count = self.wrong_guesses.get(token, 0)
+                outcome = (
+                    TurnParticipantOutcome.CORRECT.value
+                    if correct
+                    else TurnParticipantOutcome.INCORRECT.value
+                    if eligible and wrong_count
+                    else TurnParticipantOutcome.NO_ATTEMPT.value
+                    if eligible
+                    else TurnParticipantOutcome.INELIGIBLE.value
+                )
+                rows.append(
+                    TurnParticipantOutcomeRecord(
+                        token=token,
+                        eligible=eligible,
+                        eligibility_reason=eligibility_reason,
+                        outcome=outcome,
+                        terminal_state=states.get(
+                            token, TurnParticipantState.LEGACY_UNKNOWN.value
+                        ),
+                        correct_guess_time_seconds=(
+                            self.guess_times.get(token) if correct else None
+                        ),
+                        wrong_guess_count=wrong_count,
+                        near_miss_count=self.near_misses.get(token, 0),
+                        hints_used=self.hint_purchases.get(token, 0),
+                        points_spent_on_hints=self.hint_spend.get(token, 0),
+                    )
+                )
+            participant_outcomes = tuple(rows)
+
         self.completed_turns.append(
             CompletedTurnStats(
                 round_number=self.round_number,
@@ -944,12 +1037,17 @@ class Game:
                 stroke_count=len(self.canvas.history),
                 end_reason=(
                     TurnEndReason.ALL_GUESSED.value
-                    if self.all_guessed(total_guesser_count)
+                    if (
+                        all_active_guessed
+                        if all_active_guessed is not None
+                        else self.all_guessed(total_guesser_count)
+                    )
                     else TurnEndReason.TIMEOUT.value
                 ),
                 wrong_guess_count=sum(self.wrong_guesses.values()),
-                near_miss_count=self.near_miss_count,
+                near_miss_count=sum(self.near_misses.values()),
                 present_tokens=tuple(self.turn_order),
+                participant_outcomes=participant_outcomes,
             )
         )
         return sum(self.guess_points.values())

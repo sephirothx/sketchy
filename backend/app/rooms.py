@@ -150,7 +150,7 @@ class Player:
     nickname: str
     # The account this seat belongs to. None when the client had no session
     # cookie (cookies blocked, embedded webview): such a player still plays
-    # normally but cannot reconnect and is not recorded in game history.
+    # normally and receives a factual history seat, but cannot reconnect.
     user_id: str | None = None
     is_anonymous: bool = True
     name_color: str = field(default_factory=generate_random_name_color)
@@ -332,11 +332,7 @@ class Room:
         ]
 
     def eligible_guessers(self) -> list[Player]:
-        """Active players who still owe this turn a guess - everyone but the drawer.
-
-        Decides both when a round can end early and the guesser count recorded
-        against the turn, so the two can never disagree.
-        """
+        """Currently active non-drawers, independent of the frozen turn snapshot."""
         drawer = self.game.current_drawer if self.game else None
         return [p for p in self.active_players() if p.id != drawer]
 

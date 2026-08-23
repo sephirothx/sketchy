@@ -30,6 +30,7 @@ from app.db.models import (
     PromptVersion,
     PromptVersionAlias,
     TurnGuess,
+    TurnParticipantOutcome,
     TurnPromptOffer,
     TurnRecord,
     UploadedAvatarAsset,
@@ -190,6 +191,24 @@ async def _build_export_artifact(
                 .join(TurnRecord, TurnRecord.id == TurnGuess.turn_id)
                 .where(TurnGuess.user_id.in_(identity_ids))
                 .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number)
+            )
+        ).all()
+    )
+    turn_outcomes = list(
+        (
+            await session.execute(
+                select(TurnParticipantOutcome, TurnRecord)
+                .join(TurnRecord, TurnRecord.id == TurnParticipantOutcome.turn_id)
+                .join(
+                    GameParticipant,
+                    GameParticipant.id == TurnParticipantOutcome.participant_id,
+                )
+                .where(GameParticipant.user_id.in_(identity_ids))
+                .order_by(
+                    TurnRecord.game_id,
+                    TurnRecord.round_number,
+                    TurnRecord.turn_number,
+                )
             )
         ).all()
     )
@@ -467,6 +486,27 @@ async def _build_export_artifact(
                 "wrongGuessesBefore": guess.wrong_guesses_before,
             }
             for guess, turn in guesses
+        ],
+        "turnOutcomes": [
+            {
+                "outcomeId": str(outcome.id),
+                "turnId": str(turn.id),
+                "gameId": str(turn.game_id),
+                "participantSeatId": str(outcome.participant_id),
+                "roundNumber": turn.round_number,
+                "turnNumber": turn.turn_number,
+                "prompt": turn.prompt,
+                "eligible": outcome.eligible,
+                "eligibilityReason": outcome.eligibility_reason,
+                "outcome": outcome.outcome,
+                "terminalState": outcome.terminal_state,
+                "correctGuessTimeSeconds": outcome.correct_guess_time_seconds,
+                "wrongGuessCount": outcome.wrong_guess_count,
+                "nearMissCount": outcome.near_miss_count,
+                "hintsUsed": outcome.hints_used,
+                "pointsSpentOnHints": outcome.points_spent_on_hints,
+            }
+            for outcome, turn in turn_outcomes
         ],
         # A reporter's own text and submitted evidence belongs in their export.
         # The reported account id, reviewer id, and internal resolution note do

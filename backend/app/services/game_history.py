@@ -9,13 +9,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.game import Game, competition_ranks
+from app.game import (
+    CompletedTurnStats,
+    Game,
+    TurnParticipantOutcomeRecord,
+    competition_ranks,
+)
 from app.identifiers import generate_uuid7
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     PromptOfferInput,
     TurnGuessInput,
+    TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
 from app.rooms import Room
@@ -147,6 +153,77 @@ def _participants(seats: dict[str, _Seat]) -> list[GameParticipantInput]:
     return participants
 
 
+def _turn_participant_outcomes(
+    turn: CompletedTurnStats,
+    seats: dict[str, _Seat],
+) -> tuple[TurnParticipantOutcomeInput, ...]:
+    """Resolve runtime tokens to one factual outcome per historical seat."""
+    grouped: dict[str, list[TurnParticipantOutcomeRecord]] = {}
+    for outcome in turn.participant_outcomes:
+        seat = seats.get(outcome.token)
+        if seat is not None:
+            grouped.setdefault(seat.participant_id, []).append(outcome)
+
+    outcome_priority = {
+        "ineligible": 0,
+        "no_attempt": 1,
+        "incorrect": 2,
+        "correct": 3,
+    }
+    terminal_priority = {
+        "legacy_unknown": 0,
+        "left": 1,
+        "disconnected": 2,
+        "afk": 3,
+        "active": 4,
+    }
+    representatives = {
+        seat.participant_id: seat
+        for seat in seats.values()
+        if seat.seat_id == seat.participant_id
+    }
+    resolved: list[TurnParticipantOutcomeInput] = []
+    for seat_id, records in grouped.items():
+        seat = representatives[seat_id]
+        eligible = any(record.eligible for record in records)
+        outcome = max(records, key=lambda row: outcome_priority[row.outcome]).outcome
+        terminal_state = max(
+            records, key=lambda row: terminal_priority[row.terminal_state]
+        ).terminal_state
+        correct_times = [
+            record.correct_guess_time_seconds
+            for record in records
+            if record.correct_guess_time_seconds is not None
+        ]
+        resolved.append(
+            TurnParticipantOutcomeInput(
+                seat_id=seat_id,
+                user_id=seat.user_id,
+                eligible=eligible,
+                eligibility_reason=(
+                    "eligible"
+                    if eligible
+                    else max(
+                        records,
+                        key=lambda row: outcome_priority[row.outcome],
+                    ).eligibility_reason
+                ),
+                outcome=outcome,
+                terminal_state=terminal_state,
+                correct_guess_time_seconds=(
+                    min(correct_times) if correct_times else None
+                ),
+                wrong_guess_count=sum(row.wrong_guess_count for row in records),
+                near_miss_count=sum(row.near_miss_count for row in records),
+                hints_used=sum(row.hints_used for row in records),
+                points_spent_on_hints=sum(
+                    row.points_spent_on_hints for row in records
+                ),
+            )
+        )
+    return tuple(sorted(resolved, key=lambda row: row.seat_id))
+
+
 def build_game_history(
     room: Room,
     game: Game,
@@ -223,6 +300,7 @@ def build_game_history(
                 wrong_guess_count=turn.wrong_guess_count,
                 near_miss_count=turn.near_miss_count,
                 prompt_offers=prompt_offers,
+                participant_outcomes=_turn_participant_outcomes(turn, seats),
             )
         )
         for guess in turn.guesses:
