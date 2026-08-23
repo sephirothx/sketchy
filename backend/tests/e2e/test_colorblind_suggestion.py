@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import use_guest_name
 
@@ -75,6 +75,14 @@ async def test_only_host_sees_suggestion_and_acceptance_switches_room_colors():
             await suggestion.wait_for(state="hidden")
             await player.get_by_text("Colorblind-safe", exact=True).wait_for()
             await spectator.get_by_text("Colorblind-safe", exact=True).wait_for()
+
+            # The host's own form has to move with the room. The palette is the
+            # one setting the room can change without this form asking, and a
+            # form still offering the old one would disagree with the game.
+            host_colors = host.get_by_role("group", name="Colors").get_by_role(
+                "button", name="Colorblind-safe"
+            )
+            await expect(host_colors).to_have_attribute("aria-pressed", "true")
         finally:
             await host_context.close()
             await spectator_context.close()
@@ -122,4 +130,40 @@ async def test_dismissed_suggestion_does_not_return_when_preference_changes():
         finally:
             await host_context.close()
             await player_context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_a_colorblind_host_starts_a_room_on_colorblind_safe_colors():
+    """The palette a host plays with is the one their room should start on."""
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(
+            headless=True, args=["--mute-audio"]
+        )
+        context = await browser.new_context()
+        await context.add_init_script(
+            "localStorage.setItem('sketchy_colorblindsafecolors', 'true')"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "SafeCreator")
+            await page.get_by_role("button", name="Create room").click()
+
+            colors = page.get_by_role("group", name="Colors")
+            await expect(
+                colors.get_by_role("button", name="Colorblind-safe")
+            ).to_have_attribute("aria-pressed", "true")
+            await expect(
+                colors.get_by_role("button", name="All colors")
+            ).to_have_attribute("aria-pressed", "false")
+
+            # Still a choice, not a lock.
+            await colors.get_by_role("button", name="All colors").click()
+            await expect(
+                colors.get_by_role("button", name="All colors")
+            ).to_have_attribute("aria-pressed", "true")
+        finally:
+            await context.close()
             await browser.close()

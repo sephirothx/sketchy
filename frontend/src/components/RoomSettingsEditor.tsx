@@ -37,6 +37,7 @@ import {
 } from "../lib/roomSettingsAutosave";
 import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
+import { useGameStore } from "../store/gameStore";
 import type {
   AckResponse,
   ColorMode,
@@ -76,6 +77,24 @@ const STATUS_TEXT: Record<SaveStatus, string> = {
 
 export function RoomSettingsEditor() {
   const [settings, setSettings] = useState<EditableRoomSettings>(emptySettings);
+  // The colors are the one setting the room can change without this form
+  // asking: accepting the colorblind-safe suggestion switches the palette
+  // server-side. Following the room state keeps the choice shown here from
+  // disagreeing with the one the next game will actually use.
+  const roomColorMode = useGameStore((state) => state.colorMode);
+  const [seenColorMode, setSeenColorMode] = useState(roomColorMode);
+  // Adjusted while rendering rather than in an effect, so the form never shows
+  // a palette the room has already left. Keyed on the room's value changing,
+  // not on it differing: a host who has just picked a palette here is ahead of
+  // the room until the server answers, and must not be pulled back meanwhile.
+  if (roomColorMode !== seenColorMode) {
+    setSeenColorMode(roomColorMode);
+    setSettings((current) =>
+      current.colorMode === roomColorMode
+        ? current
+        : { ...current, colorMode: roomColorMode },
+    );
+  }
   const [customPrompts, dispatchCustomPrompts] = useReducer(
     customPromptsReducer,
     undefined,

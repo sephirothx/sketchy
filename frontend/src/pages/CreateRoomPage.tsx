@@ -69,7 +69,12 @@ export function CreateRoomPage() {
   const [spectatorsSeePrompt, setSpectatorsSeePrompt] = useState(false);
   const [hideMaskedPrompt, setHideMaskedPrompt] = useState(false);
   const [allowedTools, setAllowedTools] = useState<DrawingToolGroup[]>(DEFAULT_ALLOWED_TOOLS);
-  const [colorMode, setColorMode] = useState<ColorMode>(DEFAULT_COLOR_MODE);
+  // A host who plays with colorblind-safe colors almost certainly wants the
+  // room to use them too, so that is where the choice starts. It stays a
+  // choice: nothing stops them picking another palette.
+  const [colorMode, setColorMode] = useState<ColorMode>(
+    colorblindSafeColors ? "colorblind_safe" : DEFAULT_COLOR_MODE,
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [presets, setPresets] = useState<RoomPresetSummary[]>([]);
