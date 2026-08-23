@@ -344,6 +344,11 @@ contracts, ADRs, migrations, tests, and runbooks.
   as hashes. Track device label, creation, last use, expiry, and revocation.
 - Implement hashed, single-use recovery codes shown/downloaded at registration
   and rotation. Recovery changes the password and revokes all sessions.
+  **Not delivered by #340.** No child issue of this umbrella owned it, and it
+  remains unbuilt: standalone #322 carries it, and until that lands a forgotten
+  password means a lost account, because decision 8 also closes email off as a
+  recovery channel. Locked decisions 5 and 8 describe the intended end state,
+  not the current one.
 - Rehash Argon2 credentials after successful login when parameters are stale.
 - Merge guests with an immutable identity-alias row, preserving distinct seats
   when both identities occurred in one historical game.
@@ -520,7 +525,7 @@ contracts, ADRs, migrations, tests, and runbooks.
 - Export Prometheus gauges/counters/histograms for concurrent rooms/players,
   event-loop lag, handler latency, disconnect/reconnect rate, timer overruns,
   canvas frames/points/bytes/syncs, DB pool/query latency, spool depth, and
-  drawing-upload latency. Metrics have no user/room/code labels.
+  drawing-write latency. Metrics have no user/room/code labels.
 - Retain durable anomaly records for 90 days: abandonments, persistence
   timeouts/conflicts, phase failures, protocol mismatches, oversized payloads,
   upload failures, and exhausted retries.
@@ -540,15 +545,18 @@ contracts, ADRs, migrations, tests, and runbooks.
   chat, codes, IPs, URLs, free text, or stack traces. Provide a player opt-out,
   an operator kill switch, strict payload limits, and transient abuse throttles.
 - Provide liveness, readiness, and token-protected metrics endpoints. Readiness
-  checks migration head, database, writable spool, and drawing storage.
-- Add multi-stage Docker packaging and Compose services for PostgreSQL,
-  S3-compatible object storage, a one-shot migrator, the single-worker app, and
-  persistent spool/object volumes.
+  checks migration head, database, and writable spool. Drawings live in the
+  database (decision 13), so they need no separate storage probe.
+- Add multi-stage Docker packaging and Compose services for PostgreSQL, a
+  one-shot migrator, the single-worker app, and a persistent spool volume.
+  Decision 13 removed the object store, so no S3-compatible service is needed
+  until something other than drawings wants one.
 - Document proxy trust, pool sizing, admin bootstrap, telemetry controls,
   graceful shutdown, retention jobs, and the unsupported multi-worker topology.
-- Provide coordinated PostgreSQL/object-store/spool backup and restore commands
-  plus an object-reference manifest. Rollback restores a coordinated backup or
-  uses a forward fix; it does not downgrade a populated production schema.
+- Provide PostgreSQL and spool backup and restore commands. Drawings are rows,
+  so they are inside the database backup and need no object-reference manifest.
+  Rollback restores a backup or uses a forward fix; it does not downgrade a
+  populated production schema.
 
 ## Tests and release gates
 
@@ -586,11 +594,13 @@ pass, and the frontend production build succeeds.
   troubleshooting, API/contract, retention, and limitation guide, and
   `GLOSSARY.md` contains the final canonical v1 vocabulary with retired terms
   still protected by contract tests where applicable.
-- PostgreSQL/MinIO Compose smoke: migrate, seed, play and persist, restart,
-  reopen history/drawing/persistent room, export/delete, scrape metrics, and
-  complete a backup/restore drill.
+- PostgreSQL Compose smoke: migrate, seed, play and persist, restart, reopen
+  history/drawing/persistent room, export/delete, scrape metrics, and complete a
+  backup/restore drill.
 - Concurrent/idempotent persistence, committed-after-timeout retry, DB outage
-  spool, object outage staging, conflict, and orphan cleanup are covered.
+  spool, and conflict handling are covered. Object staging and orphan cleanup
+  no longer apply: a drawing is a row reachable only through its turn, and the
+  foreign key cascades.
 - Session revocation/recovery/rehash, identity merge conflicts, guest expiry,
   ban/block/report/export/delete paths are covered.
 - Prompt revision, alias, language, unlisted authorization, takedown, bundled
@@ -629,5 +639,6 @@ ADRs once they exist.
 | #380 planned shutdown and restart behavior | `issue/380-graceful-shutdown-drain` | Complete | v1 deliberately mitigates rather than restores process-owned state: readiness fails first, clients receive a versioned notice, new rooms/games/restarts are gated, and existing games receive a configurable bounded drain before established sockets close. Completed games use normal atomic persistence; deadline leftovers receive a UUIDv7, privacy-safe 90-day abandonment fact without partial game/canvas content. New live work is refused on the readiness flag alone, rechecked after every repository await, so admission needs no process-wide lock; a second termination signal forfeits the remaining window and its diagnostics. Gate: 722 backend tests (one expected skip), 164 frontend tests, lint/build, migration replay/model-drift checks, one Alembic head, and all 48 browser scenarios pass. README and glossary are current. |
 | #384 stored drawings | `issue/384-drawing-persistence` | Complete | Every completed turn's canvas frame is kept for as long as its game, written in the transaction that records the game because the bytes exist only in the memory of the process that played it. Storage keeps the frame verbatim; a server-side decoder registry keyed on the magic and version the blob declares - entries never removed, decoders answering in the current wire format - is what decouples the stored format from the wire format, so `canvasHistory.ts` is unchanged. Drawings are matched to turns by durable turn id, a turn the history skips takes its drawing with it, a recap-dropped turn is stored as unavailable, and account deletion erases the bytes while the row keeps saying so. Retrieval is participant-scoped and answers 404 to every refusal. Object storage was withdrawn by `docs/adr/0001-store-drawings-in-postgresql.md`. Gate: 762 backend tests (one expected skip), 164 frontend tests, lint/build, one Alembic head, and all 48 browser scenarios pass; README and glossary are current. |
 | #343 live rooms and formats | `epic/343-live-rooms-deployment-formats` | Complete | #380-#384 and #391 are integrated; #385 is consolidated under #323. The umbrella draws the line between durable configuration and live state: globally reserved room codes that retire, persistent rooms and presets that restore configuration and never players or canvases, a single-worker topology that fails startup rather than splitting process-owned state, a bounded planned-deploy drain, and drawings that outlive the process that made them. Umbrella gate: 762 backend tests (one expected skip), 164 frontend tests, ruff and frontend lint, production build, SQLite migration replay/downgrade/model-drift checks, one Alembic head (`d3f8b1e6c294`), and all 48 browser scenarios pass; PostgreSQL runs in the configured CI gate. README and glossary are current. |
-| Standalone/cross-epic integration | `epic/393-preproduction-baseline` | Not started | - |
+| #322 account recovery | `issue/322-account-recovery` | Not started | Locked decisions 5 and 8 assume one-time recovery codes and workstream 2 specifies them, but no #340 child owned the work and none exists. A forgotten password currently loses the account outright, since email is deliberately closed off as a recovery channel until verification exists. This is the only unbuilt item that a v1 player can hit unaided. |
+| Standalone/cross-epic integration | `epic/393-preproduction-baseline` | Not started | #316 deployment/operability, #323 maintenance and runtime analytics, #336 socket command executing after reconnect, #337 prompt-list read failure, and #397 administration audit ledger remain. #317 is closed and #324 merged; #319 and #320 stay deferred. #337 may already be satisfied by #342's visible resolution failure and needs a verification pass rather than new code. |
 | Final production baseline | `epic/393-preproduction-baseline` -> `main` | Not started | - |
