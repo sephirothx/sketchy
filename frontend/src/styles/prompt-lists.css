@@ -343,14 +343,27 @@
   color: #b91c1c;
 }
 
+/* Reads as one of the page's fields: a recessed well holding a value, with
+   its label beside it rather than above. */
 .prompt-list-share-code {
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 10px 12px;
+  border: 1px solid #c7cad1;
+  border-radius: 6px;
+  padding: 6px 6px 6px 12px;
 }
 
-.prompt-list-share-code code { font-size: 16px; font-weight: 800; }
+.prompt-list-share-code > span {
+  color: #475569;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.prompt-list-share-code code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
 .prompt-list-manager-notice { color: #15803d; }
 .prompt-list-manager-empty { color: #475569; margin-top: 24px; }
 
