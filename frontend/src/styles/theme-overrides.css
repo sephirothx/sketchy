@@ -1177,9 +1177,9 @@
    white card with barely-visible headings. */
 
 [data-theme="dark"] .prompt-list-manager-card {
-  background: #0f172a;
+  background: #1e293b;
   border-color: #334155;
-  color: #e2e8f0;
+  color: #f8fafc;
 }
 
 [data-theme="dark"] .prompt-list-manager-heading h1,
@@ -1200,14 +1200,14 @@
 
 [data-theme="dark"] .prompt-list-manager-layout input,
 [data-theme="dark"] .prompt-list-manager-layout select,
-[data-theme="dark"] .prompt-list-manager-layout .prompt-list-bulk-add textarea {
-  background: #1e293b;
-  border-color: #334155;
+[data-theme="dark"] .prompt-list-manager-layout textarea {
+  background: #0f172a;
+  border-color: #475569;
   color: #f8fafc;
 }
 
 [data-theme="dark"] .prompt-list-manager-card .prompt-list-manager-layout aside button {
-  background: #1e293b;
+  background: #0f172a;
   border-color: #334155;
   color: #e2e8f0;
 }
@@ -1218,7 +1218,7 @@
 }
 
 [data-theme="dark"] .prompt-list-entry-editor > li {
-  background: #1e293b;
+  background: #0f172a;
   border-color: #334155;
 }
 
@@ -1267,8 +1267,8 @@
 }
 
 [data-theme="dark"] .prompt-list-share-form input {
-  background: #1e293b;
-  border-color: #334155;
+  background: #0f172a;
+  border-color: #475569;
   color: #f8fafc;
 }
 

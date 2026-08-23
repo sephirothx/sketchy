@@ -29,11 +29,12 @@
 .prompt-list-manager-card button {
   background: #4c6ef5;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   color: #fff;
   cursor: pointer;
-  font-weight: 700;
-  padding: 8px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 16px;
 }
 
 .prompt-list-chip-report {
@@ -95,8 +96,8 @@
 .prompt-list-manager-card {
   background: #fff;
   border: 1px solid #dfe1e6;
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: 10px;
+  padding: 16px 20px;
 }
 
 .prompt-list-manager-heading {
@@ -155,20 +156,21 @@
 
 .prompt-list-manager-layout form > label,
 .prompt-list-manager-meta label {
-  color: #334155;
   font-size: 14px;
-  font-weight: 700;
-  gap: 5px;
+  font-weight: 600;
+  gap: 4px;
 }
 
 .prompt-list-manager-layout input,
-.prompt-list-manager-layout select {
-  border: 1px solid #cbd5e1;
+.prompt-list-manager-layout select,
+.prompt-list-manager-layout textarea {
+  border: 1px solid #c7cad1;
   border-radius: 6px;
   box-sizing: border-box;
   font: inherit;
-  font-weight: 400;
-  padding: 9px 10px;
+  font-size: 15px;
+  font-weight: normal;
+  padding: 8px 10px;
   width: 100%;
 }
 
@@ -199,20 +201,14 @@
 }
 
 .prompt-list-bulk-add > label {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .prompt-list-manager-layout .prompt-list-bulk-add textarea {
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  box-sizing: border-box;
   display: block;
-  font: inherit;
   height: 110px;
-  padding: 9px 10px;
   resize: vertical;
-  width: 100%;
 }
 
 .prompt-list-bulk-actions {
@@ -247,7 +243,8 @@
 }
 
 .prompt-list-entry-filters h3 {
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 600;
   margin: 0;
 }
 
