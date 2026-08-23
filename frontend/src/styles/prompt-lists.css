@@ -180,7 +180,6 @@
 
 .prompt-list-manager-meta label { display: grid; }
 
-.prompt-list-entry-heading,
 .prompt-list-manager-actions,
 .prompt-list-share-code {
   align-items: center;
@@ -189,18 +188,18 @@
   justify-content: space-between;
 }
 
-.prompt-list-entry-heading h2 { font-size: 18px; margin: 8px 0 0; }
-.prompt-list-entry-heading span { color: #64748b; font-size: 12px; }
-
+/* Both halves of the editor follow the rhythm the room-creation prompts field
+   set: a rule above, a bold label, a full-width control, muted counts below. */
 .prompt-list-bulk-add {
+  border-top: 1px solid #e2e8f0;
   display: grid;
   gap: 8px;
-  justify-items: start;
+  margin-top: 18px;
+  padding-top: 16px;
 }
 
-.prompt-list-bulk-add label {
-  color: #334155;
-  font-size: 14px;
+.prompt-list-bulk-add > label {
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -208,10 +207,36 @@
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   box-sizing: border-box;
+  display: block;
   font: inherit;
+  height: 110px;
   padding: 9px 10px;
   resize: vertical;
   width: 100%;
+}
+
+.prompt-list-bulk-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.prompt-list-bulk-summary {
+  color: #475569;
+  font-size: 13px;
+  margin: 0;
+}
+
+/* The list of what is already saved is its own block, so a paste box and the
+   words it fills are never read as one control. */
+.prompt-list-collection {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
 }
 
 .prompt-list-entry-filters {
@@ -219,6 +244,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.prompt-list-entry-filters h3 {
+  font-size: 15px;
+  margin: 0;
 }
 
 .prompt-list-manager-layout .prompt-list-entry-filters input[type="search"] {

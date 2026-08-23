@@ -27,9 +27,7 @@ async def test_registered_owner_can_manage_and_share_a_prompt_list():
             await owner.get_by_label("Description").fill("For Friday games")
             # Prompts arrive in batches, and a batch merges into what is
             # already there rather than replacing it.
-            await owner.get_by_label(
-                "Add prompts, one per line or separated by commas"
-            ).fill("red panda, capybara")
+            await owner.get_by_label("Add prompts", exact=True).fill("red panda, capybara")
             await owner.get_by_role("button", name="Add to list").click()
             await owner.get_by_role("button", name="Remove red panda").wait_for()
             await owner.get_by_role("button", name="Remove capybara").wait_for()
@@ -41,9 +39,7 @@ async def test_registered_owner_can_manage_and_share_a_prompt_list():
             # Re-adding an existing prompt is silently skipped, so the edit here
             # is a removal plus a fresh batch.
             await owner.get_by_role("button", name="Remove red panda").click()
-            await owner.get_by_label(
-                "Add prompts, one per line or separated by commas"
-            ).fill("giant panda\ncapybara")
+            await owner.get_by_label("Add prompts", exact=True).fill("giant panda\ncapybara")
             await owner.get_by_role("button", name="Add to list").click()
             await owner.get_by_text(
                 "Added 1 prompt; skipped 1 already in the list."

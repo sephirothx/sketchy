@@ -66,6 +66,7 @@ export function MyPromptListsPage() {
   const [bulkInput, setBulkInput] = useState("");
   const [promptSearch, setPromptSearch] = useState("");
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
+  const [mergeSummary, setMergeSummary] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId || isAnonymous) return;
@@ -91,6 +92,7 @@ export function MyPromptListsPage() {
     setPromptModeration({});
     setDraft({ ...EMPTY_DRAFT, prompts: [] });
     setBulkInput("");
+    setMergeSummary(null);
     setError(null);
     setNotice(null);
   }
@@ -109,6 +111,7 @@ export function MyPromptListsPage() {
       ));
       setDraft(draftFromList(loaded));
       setBulkInput("");
+      setMergeSummary(null);
     } catch {
       setError("Could not open that prompt list.");
     } finally {
@@ -136,7 +139,7 @@ export function MyPromptListsPage() {
     setError(null);
     // Silence on a clean import: the list itself is the feedback. Anything
     // dropped has to be said, or a paste quietly loses entries.
-    setNotice(describePromptMerge(result));
+    setMergeSummary(describePromptMerge(result));
   }
 
   const flaggedCount = draft.prompts.filter(
@@ -263,29 +266,35 @@ export function MyPromptListsPage() {
               <span>Share code</span><code>{shareCode}</code>
               <button type="button" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError("Could not copy the share code."))}>Copy</button>
             </div>}
-            <div className="prompt-list-entry-heading"><h2>Prompts</h2><span>{draft.prompts.length}/{MAX_LIST_PROMPTS}</span></div>
             <div className="prompt-list-bulk-add">
-              <label htmlFor="prompt-bulk-input">Add prompts, one per line or separated by commas</label>
+              <label htmlFor="prompt-bulk-input">Add prompts</label>
               <textarea
                 id="prompt-bulk-input"
                 value={bulkInput}
-                rows={3}
-                placeholder={"apple\nbicycle, cathedral\ndragon"}
+                placeholder={"One prompt per line\nor separate entries with commas"}
+                aria-describedby="prompt-bulk-summary"
                 onChange={(event) => setBulkInput(event.target.value)}
               />
-              <button
-                type="button"
-                disabled={!bulkInput.trim() || draft.prompts.length >= MAX_LIST_PROMPTS}
-                onClick={addBulkPrompts}
-              >
-                Add to list
-              </button>
+              <div className="prompt-list-bulk-actions">
+                <p id="prompt-bulk-summary" className="prompt-list-bulk-summary" aria-live="polite">
+                  {mergeSummary ?? `${draft.prompts.length} of ${MAX_LIST_PROMPTS} prompts in this list`}
+                </p>
+                <button
+                  type="button"
+                  disabled={!bulkInput.trim() || draft.prompts.length >= MAX_LIST_PROMPTS}
+                  onClick={addBulkPrompts}
+                >
+                  Add to list
+                </button>
+              </div>
             </div>
+            <div className="prompt-list-collection">
             {draft.prompts.length === 0 ? (
               <p className="prompt-list-manager-empty">No prompts yet. Paste some above to get started.</p>
             ) : (
               <>
                 <div className="prompt-list-entry-filters">
+                  <h3>In this list</h3>
                   <label>
                     <span className="visually-hidden">Search prompts</span>
                     <input
@@ -332,6 +341,7 @@ export function MyPromptListsPage() {
                 )}
               </>
             )}
+            </div>
             {error && <p className="auth-error" role="alert">{error}</p>}
             {notice && <p className="prompt-list-manager-notice" role="status">{notice}</p>}
             <div className="prompt-list-manager-actions">

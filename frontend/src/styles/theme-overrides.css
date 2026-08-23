@@ -1183,13 +1183,11 @@
 }
 
 [data-theme="dark"] .prompt-list-manager-heading h1,
-[data-theme="dark"] .prompt-list-entry-heading h2,
 [data-theme="dark"] .prompt-list-entry-text {
   color: #f8fafc;
 }
 
 [data-theme="dark"] .prompt-list-manager-empty,
-[data-theme="dark"] .prompt-list-entry-heading span,
 [data-theme="dark"] .prompt-list-manager-layout aside span {
   color: #94a3b8;
 }
@@ -1238,8 +1236,18 @@
   color: #fecaca;
 }
 
-[data-theme="dark"] .prompt-list-entry-count {
+[data-theme="dark"] .prompt-list-entry-count,
+[data-theme="dark"] .prompt-list-bulk-summary {
   color: #94a3b8;
+}
+
+[data-theme="dark"] .prompt-list-bulk-add,
+[data-theme="dark"] .prompt-list-collection {
+  border-top-color: #334155;
+}
+
+[data-theme="dark"] .prompt-list-entry-filters h3 {
+  color: #f8fafc;
 }
 
 [data-theme="dark"] .prompt-list-entry-flagged {
