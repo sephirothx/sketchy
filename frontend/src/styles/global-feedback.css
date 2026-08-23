@@ -17,16 +17,43 @@
 .connection-status-banner.offline { background: #fef2f2; border-bottom-color: #ef4444; color: #991b1b; }
 
 .server-shutdown-banner {
+  align-items: center;
   background: #fff7ed;
   border-bottom: 1px solid #f97316;
   color: #9a3412;
+  display: flex;
   font-size: 14px;
   font-weight: 800;
+  gap: 12px;
+  justify-content: center;
   padding: 10px 16px;
   position: sticky;
   text-align: center;
   top: 0;
   z-index: 1150;
+}
+
+/* The update is over by the time this shows, so it reads as information
+   rather than a warning, and it waits to be closed. */
+.server-shutdown-banner.is-restarted {
+  background: #eef2ff;
+  border-bottom-color: #6366f1;
+  color: #3730a3;
+}
+
+.server-shutdown-banner.is-restarted button {
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 6px;
+}
+
+.server-shutdown-banner.is-restarted button:hover {
+  background: #e0e7ff;
 }
 
 .toast-viewport {

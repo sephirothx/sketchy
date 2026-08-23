@@ -26,3 +26,21 @@ export function parseShutdownNotice(
     startedAt: notice.startedAt,
   };
 }
+
+/**
+ * Seconds left in the drain window, from the moment the server started it.
+ *
+ * Clamped to the window the server announced: the deadline is the server's,
+ * measured against a clock this browser does not share, and a skewed one must
+ * not be able to promise more time than was ever offered - or count into
+ * negatives after the window has closed.
+ */
+export function shutdownSecondsRemaining(
+  notice: ServerShutdownNotice,
+  now: number = Date.now(),
+): number {
+  const startedAt = Date.parse(notice.startedAt);
+  if (Number.isNaN(startedAt)) return notice.drainSeconds;
+  const remaining = (startedAt + notice.drainSeconds * 1000 - now) / 1000;
+  return Math.min(notice.drainSeconds, Math.max(0, Math.ceil(remaining)));
+}

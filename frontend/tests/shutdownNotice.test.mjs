@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseShutdownNotice } from "../src/lib/shutdownNotice.ts";
+import { parseShutdownNotice, shutdownSecondsRemaining } from "../src/lib/shutdownNotice.ts";
 
 const notice = {
   contractVersion: 1,
@@ -42,4 +42,36 @@ test("a malformed or absent payload never opens the banner", () => {
   ]) {
     assert.equal(parseShutdownNotice(payload), null);
   }
+});
+
+test("the countdown starts from the window the server announced", () => {
+  const started = Date.parse("2026-08-24T12:00:00+00:00");
+  const drain = { ...notice, drainSeconds: 30, startedAt: "2026-08-24T12:00:00+00:00" };
+
+  assert.equal(shutdownSecondsRemaining(drain, started), 30);
+  assert.equal(shutdownSecondsRemaining(drain, started + 10_000), 20);
+  assert.equal(shutdownSecondsRemaining(drain, started + 29_500), 1);
+});
+
+test("the countdown stops at zero rather than going negative", () => {
+  const started = Date.parse("2026-08-24T12:00:00+00:00");
+  const drain = { ...notice, drainSeconds: 30, startedAt: "2026-08-24T12:00:00+00:00" };
+
+  assert.equal(shutdownSecondsRemaining(drain, started + 30_000), 0);
+  assert.equal(shutdownSecondsRemaining(drain, started + 90_000), 0);
+});
+
+test("a browser clock ahead of the server cannot promise extra time", () => {
+  const started = Date.parse("2026-08-24T12:00:00+00:00");
+  const drain = { ...notice, drainSeconds: 30, startedAt: "2026-08-24T12:00:00+00:00" };
+
+  // Client clock five minutes behind: the naive answer would be 330 seconds.
+  assert.equal(shutdownSecondsRemaining(drain, started - 300_000), 30);
+});
+
+test("an unparseable timestamp falls back to the announced window", () => {
+  assert.equal(
+    shutdownSecondsRemaining({ ...notice, drainSeconds: 45, startedAt: "not a date" }),
+    45,
+  );
 });

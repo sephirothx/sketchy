@@ -1292,3 +1292,21 @@
 [data-theme="dark"] .prompt-list-manager-notice {
   color: #86efac;
 }
+
+/* Deployment banners: the connection banner beside them has no dark rules
+   either, but these carry light backgrounds that would glare in a dark app. */
+[data-theme="dark"] .server-shutdown-banner {
+  background: #431407;
+  border-bottom-color: #ea580c;
+  color: #fed7aa;
+}
+
+[data-theme="dark"] .server-shutdown-banner.is-restarted {
+  background: #1e1b4b;
+  border-bottom-color: #6366f1;
+  color: #c7d2fe;
+}
+
+[data-theme="dark"] .server-shutdown-banner.is-restarted button:hover {
+  background: #312e81;
+}
