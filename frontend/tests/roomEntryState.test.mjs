@@ -80,6 +80,23 @@ test("a visitor with no seat sees the preview and is never auto-joined", async (
   assert.deepEqual(machine.getSnapshot().state, { status: "preview", room });
 });
 
+test("a retired room code explains that a new invite is needed", async () => {
+  const machine = new RoomEntryMachine("OLD123", "Ada", dependencies({
+    preview: async () => ({
+      ok: false,
+      error: "This room has ended",
+      codeRetired: true,
+    }),
+  }));
+
+  await machine.load();
+
+  assert.deepEqual(machine.getSnapshot().state, {
+    status: "error",
+    message: "This room has ended. Ask the host for a new invite.",
+  });
+});
+
 test("a nickname breaking the shared name rule is rejected before joining", async () => {
   const joins = [];
   const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({

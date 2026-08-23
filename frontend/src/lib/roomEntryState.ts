@@ -126,7 +126,12 @@ export class RoomEntryMachine {
       } else {
         this.publish({
           ...this.snapshot,
-          state: { status: "error", message: response.error || "This room is no longer available" },
+          state: {
+            status: "error",
+            message: response.codeRetired
+              ? "This room has ended. Ask the host for a new invite."
+              : response.error || "This room is no longer available",
+          },
         });
       }
     } catch (error) {

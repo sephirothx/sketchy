@@ -177,7 +177,7 @@ Three different things, never used for one another:
 | **Waiting room** | A room's state before a game starts or between games, where players gather and the host starts the game. | lobby, pre-game, staging |
 | **Public room** | A room listed in the lobby, joinable by anyone. | open room |
 | **Private room** | A room reachable only by its code or invite link. | closed room, locked room |
-| **Room code** | The short code that identifies a room to join. The shareable URL carrying it is the **invite link**. | friend code, game code, PIN, room ID |
+| **Room code** | The random six-character invite capability that identifies a room to join. Allocation is globally unique. An ephemeral code is retired for 30 days after its room ends; a persistent-room code is never reused. The shareable URL carrying it is the **invite link**. | friend code, game code, PIN, room ID |
 | **Room settings** | The host-controlled configuration: rounds, drawing time, max players, prompt lists, hint mode, scoring mode, spectator rules. | options, config, preferences, rules |
 | **Player settings** | A player's own preferences, which travel with them between rooms. | user settings, profile settings |
 | **Colorblind-safe preference** | A private **Player setting** asking hosts to prefer **Colorblind-safe** room colors. Only an anonymous aggregate suggestion may reach a host; never expose who enabled it. | disability flag, accessibility request |

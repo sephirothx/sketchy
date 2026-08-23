@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import random
 import re
+import secrets
 import string
 import uuid
 from dataclasses import dataclass, field, replace
@@ -561,13 +562,17 @@ class RoomManager:
         prompt_version_ids: dict[str, str] | None = None,
         prompt_source_revision_ids: dict[str, tuple[str, ...]] | None = None,
         curated_prompts: list[str] | None = None,
+        code: str | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
         hint_mode = resolve_hint_mode(hint_mode, scoring_mode, hide_masked_prompt)
+        final_code = code.strip().upper() if code else self._generate_unique_code()
+        if any(room.code == final_code for room in self.rooms.values()):
+            raise ValueError("room code is already active")
         room = Room(
             id=room_id,
-            code=self._generate_unique_code(),
+            code=final_code,
             name=final_name,
             is_public=is_public,
             max_players=max_players,
@@ -597,7 +602,7 @@ class RoomManager:
         alphabet = string.ascii_uppercase + string.digits
         existing = {r.code for r in self.rooms.values()}
         while True:
-            code = "".join(random.choices(alphabet, k=6))
+            code = "".join(secrets.choice(alphabet) for _ in range(6))
             if code not in existing:
                 return code
 
@@ -697,7 +702,9 @@ class RoomManager:
                 p.is_host = True
                 break
 
-    def remove_room_if_empty(self, room_id: str) -> None:
+    def remove_room_if_empty(self, room_id: str) -> Room | None:
         room = self.rooms.get(room_id)
         if room and not room.connected_players():
             del self.rooms[room_id]
+            return room
+        return None

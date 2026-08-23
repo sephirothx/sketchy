@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from typing import TYPE_CHECKING
 
 import socketio
@@ -19,6 +20,10 @@ if TYPE_CHECKING:
     from app.auth.blocks import BlockService
     from app.services.game_flow import GameFlowService
     from app.services.message_retention import MessageRetentionService
+    from app.services.room_codes import RoomCodeService
+
+
+logger = logging.getLogger("sketchy.handlers.context")
 
 
 @dataclass
@@ -35,4 +40,20 @@ class HandlerContext:
     session_factory: async_sessionmaker[AsyncSession] | None = None
     block_service: BlockService | None = None
     message_retention: MessageRetentionService | None = None
+    room_codes: RoomCodeService | None = None
     game_flow: GameFlowService = field(init=False)
+
+    async def remove_room_if_empty(self, room_id: str) -> bool:
+        """Remove an empty live room and retire its published invite code."""
+
+        removed = self.room_manager.remove_room_if_empty(room_id)
+        if removed is None:
+            return False
+        if self.room_codes is not None:
+            try:
+                await self.room_codes.retire_ephemeral(removed.code)
+            except Exception:
+                # The active reservation remains claimed on failure, which is
+                # safer than making a stale invite join an unrelated room.
+                logger.exception("Failed to retire an ephemeral room code")
+        return True

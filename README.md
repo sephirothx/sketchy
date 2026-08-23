@@ -887,6 +887,15 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings.
 
+Room codes are random six-character invite capabilities reserved in the
+database before they are shown to a player. The reservation primary key makes
+allocation global and race-safe even though v1 runs one application worker.
+When an ephemeral room empties, its code is retired for 30 days; a stale invite
+during that window says the room ended instead of silently joining an unrelated
+group. Startup retires any ephemeral reservations orphaned by a restart or
+crash. Expired ephemeral reservations may be reused, while codes allocated to
+future persistent rooms are permanent and never enter the reuse pool.
+
 ### Scoring
 
 - Everyone starts a game on zero points, in every scoring mode.
@@ -932,7 +941,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ## Key design decisions & limitations
 
-- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, explicitly saved player prompt lists, and the bounded retained-message window) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency; message correlation IDs do not make an active game recoverable.
+- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, explicitly saved player prompt lists, global room-code reservations, and the bounded retained-message window) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency; message correlation IDs do not make an active game recoverable.
 - **Single application worker**: one Uvicorn worker owns every live room,
   Socket.IO session, timer, and canvas. Startup rejects common environment-based
   multi-worker settings, deployment commands pin one worker, and the v1 release

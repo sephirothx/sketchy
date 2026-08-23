@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -15,6 +16,58 @@ from app.rooms import (
     RoomManager,
 )
 from tests.fake_user_repo import FakeUserRepository
+
+
+@pytest.mark.asyncio
+async def test_published_room_code_comes_from_global_reservation_service():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    ctx.room_codes = SimpleNamespace(
+        allocate=AsyncMock(return_value="SAFE01"),
+        release_unpublished=AsyncMock(),
+        retire_ephemeral=AsyncMock(),
+        is_retired=AsyncMock(return_value=False),
+    )
+    sio.get_session = AsyncMock(return_value=None)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid", {"nickname": "Host", "name": "Room"}
+    )
+
+    assert response["ok"] is True
+    assert response["code"] == "SAFE01"
+    ctx.room_codes.allocate.assert_awaited_once_with()
+    room = room_manager.get_room(response["roomId"])
+    assert room is not None
+    room.players[response["playerId"]].connected = False
+    assert await ctx.remove_room_if_empty(room.id) is True
+    ctx.room_codes.retire_ephemeral.assert_awaited_once_with("SAFE01")
+
+
+@pytest.mark.asyncio
+async def test_retired_room_code_has_a_distinct_invite_error():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    ctx.room_codes = SimpleNamespace(is_retired=AsyncMock(return_value=True))
+
+    preview = await sio.handlers["/"]["get_room_preview"](
+        "sid", {"code": "OLD123"}
+    )
+    join = await sio.handlers["/"]["join_room"](
+        "sid", {"code": "OLD123", "nickname": "Player"}
+    )
+
+    assert preview == {
+        "ok": False,
+        "error": "This room has ended",
+        "codeRetired": True,
+    }
+    assert join == preview
 
 
 @pytest.mark.asyncio

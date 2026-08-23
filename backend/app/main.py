@@ -112,7 +112,7 @@ async def _remove_account_from_live_rooms(user_id: str, *, reason: str) -> None:
             handler_context.timers.cancel_phase_timer(room.id)
             handler_context.timers.cancel_hint_timers(room.id)
             handler_context.timers.cancel_restart_timer(room.id)
-            room_manager.remove_room_if_empty(room.id)
+            await handler_context.remove_room_if_empty(room.id)
 
 
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
@@ -133,6 +133,8 @@ async def lifespan(_app: FastAPI):
     try:
         validate_worker_topology()
         await init_db()
+        if handler_context.room_codes is not None:
+            await handler_context.room_codes.retire_orphaned_ephemeral()
         await purge_expired_room_messages(async_session_factory)
         await seed_prompt_lists(prompt_list_repo)
         yield

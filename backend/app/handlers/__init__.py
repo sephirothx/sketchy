@@ -15,6 +15,7 @@ from app.repositories.interfaces import (
 from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
 from app.services.message_retention import MessageRetentionService
+from app.services.room_codes import RoomCodeService
 from app.services.timers import TimerManager
 
 
@@ -47,6 +48,11 @@ def register_all_handlers(
         ),
         message_retention=(
             MessageRetentionService(session_factory)
+            if session_factory is not None
+            else None
+        ),
+        room_codes=(
+            RoomCodeService(session_factory)
             if session_factory is not None
             else None
         ),

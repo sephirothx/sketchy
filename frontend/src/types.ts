@@ -361,6 +361,8 @@ export interface AckResponse {
   needsRebind?: boolean;
   /** The player slots are taken - spectating is still open. */
   roomFull?: boolean;
+  /** The code was valid but its ephemeral room has already ended. */
+  codeRetired?: boolean;
 }
 
 export interface RoomPreviewResponse extends AckResponse {

@@ -105,6 +105,28 @@ class AppConfig(Base):
     )
 
 
+class RoomCodeReservation(Base):
+    """Global room invite-code claim, including the post-room retirement window."""
+
+    __tablename__ = "room_code_reservations"
+    __table_args__ = (
+        _values_check("kind", ("ephemeral", "persistent"), "ck_room_code_kind"),
+        CheckConstraint(
+            "(kind = 'persistent' AND retired_until IS NULL) OR kind = 'ephemeral'",
+            name="ck_persistent_room_code_never_retires",
+        ),
+    )
+
+    code: Mapped[str] = mapped_column(String(6), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    retired_until: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True, index=True
+    )
+
+
 class AuthRateLimitBucket(Base):
     """Shared fixed-window bucket for security-sensitive authentication limits."""
 

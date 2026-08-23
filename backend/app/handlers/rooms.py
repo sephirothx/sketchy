@@ -69,9 +69,19 @@ async def create_room(ctx: HandlerContext, sid, data):
     except RoomPromptResolutionError as error:
         return {"ok": False, "error": str(error), "field": "promptListSlugs"}
 
-    room = ctx.room_manager.create_room(
-        **settings,
-    )
+    code = None
+    if ctx.room_codes is not None:
+        try:
+            code = await ctx.room_codes.allocate()
+        except Exception:
+            logger.exception("Failed to allocate a room code")
+            return {"ok": False, "error": "Could not create the room"}
+    try:
+        room = ctx.room_manager.create_room(**settings, code=code)
+    except Exception:
+        if code is not None and ctx.room_codes is not None:
+            await ctx.room_codes.release_unpublished(code)
+        raise
     player = ctx.room_manager.add_player(
         room,
         identity.nickname,
@@ -186,6 +196,12 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     room = ctx.room_manager.get_room_by_code(payload.code)
     if not room:
+        if ctx.room_codes is not None and await ctx.room_codes.is_retired(payload.code):
+            return {
+                "ok": False,
+                "error": "This room has ended",
+                "codeRetired": True,
+            }
         return {"ok": False, "error": "Room not found"}
     return {"ok": True, "room": room.to_public_summary()}
 
@@ -199,6 +215,16 @@ async def join_room(ctx: HandlerContext, sid, data):
 
     room = ctx.room_manager.get_room(payload.room_id) or ctx.room_manager.get_room_by_code(payload.code)
     if not room:
+        if (
+            payload.code
+            and ctx.room_codes is not None
+            and await ctx.room_codes.is_retired(payload.code)
+        ):
+            return {
+                "ok": False,
+                "error": "This room has ended",
+                "codeRetired": True,
+            }
         return {"ok": False, "error": "Room not found"}
 
     # Checked before the token-reconnect branch below: a client's first
@@ -543,7 +569,7 @@ async def leave_room(ctx: HandlerContext, sid, data=None):
         ctx.timers.cancel_phase_timer(room.id)
         ctx.timers.cancel_hint_timers(room.id)
         ctx.timers.cancel_restart_timer(room.id)
-        ctx.room_manager.remove_room_if_empty(room.id)
+        await ctx.remove_room_if_empty(room.id)
     else:
         await ctx.game_flow._remove_player_from_game(room, player.id)
         await ctx.sio.emit("player_left", {"playerId": player.id}, room=room.id)

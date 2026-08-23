@@ -134,6 +134,12 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     purge_messages = AsyncMock()
     monkeypatch.setattr(main, "purge_expired_room_messages", purge_messages)
     monkeypatch.setattr(main, "seed_prompt_lists", AsyncMock())
+    retire_room_codes = AsyncMock()
+    monkeypatch.setattr(
+        main.handler_context.room_codes,
+        "retire_orphaned_ephemeral",
+        retire_room_codes,
+    )
     task = asyncio.create_task(asyncio.sleep(60))
     timers.replace_disconnect_timer("player", task)
     messages = iter(
@@ -156,6 +162,7 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     assert timers.disconnect_timers == {}
     assert timers.restart_timers == {}
     purge_messages.assert_awaited_once_with(main.async_session_factory)
+    retire_room_codes.assert_awaited_once_with()
     dispose.assert_awaited_once_with()
     assert sent == [
         {"type": "lifespan.startup.complete"},
