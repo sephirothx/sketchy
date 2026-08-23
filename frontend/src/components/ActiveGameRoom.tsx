@@ -408,7 +408,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
       {isHost && colorblindSafeSuggestion && (
         <ColorblindSafeSuggestionBanner
-          suggestion={colorblindSafeSuggestion}
           busy={colorSuggestionBusy}
           onAccept={() => void handleColorSuggestion("accept")}
           onDismiss={() => void handleColorSuggestion("dismiss")}

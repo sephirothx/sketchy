@@ -9,6 +9,7 @@ import socketio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import Base, User, UserSettings
+from app.game import Game
 from app.handlers import register_all_handlers as register_handlers
 from app.handlers.payloads import (
     CreateRoomPayload,
@@ -90,8 +91,8 @@ async def test_suggestion_is_unattributed_host_only_and_spectators_do_not_count(
 
     suggestion = _suggestion_calls(sio)[-1]
     assert suggestion.kwargs == {"to": host.sid}
-    assert suggestion.args[1] == {"active": True, "canApply": True}
-    assert set(suggestion.args[1]) == {"active", "canApply"}
+    assert suggestion.args[1] == {"active": True}
+    assert set(suggestion.args[1]) == {"active"}
     assert all(
         call.kwargs.get("room") != room.id
         for call in _suggestion_calls(sio)
@@ -99,10 +100,7 @@ async def test_suggestion_is_unattributed_host_only_and_spectators_do_not_count(
 
     player.is_spectator = True
     await ctx.game_flow._emit_room_state(room)
-    assert _suggestion_calls(sio)[-1].args[1] == {
-        "active": False,
-        "canApply": False,
-    }
+    assert _suggestion_calls(sio)[-1].args[1] == {"active": False}
 
 
 @pytest.mark.asyncio
@@ -282,3 +280,42 @@ async def test_guest_preference_follows_the_local_value_on_join_and_reload():
     )
     assert rejoined["playerId"] == seat.id
     assert seat.colorblind_safe_colors is False
+
+
+@pytest.mark.asyncio
+async def test_an_unanswered_suggestion_clears_when_the_game_starts():
+    """Left alone, it belongs to the waiting room and not over the game."""
+
+    _, room, _, _, sio, ctx = _live_room()
+
+    await ctx.game_flow._emit_room_state(room)
+    assert _suggestion_calls(sio)[-1].args[1] == {"active": True}
+
+    room.state = "playing"
+    room.game = Game(turn_order=[player.id for player in room.player_list()])
+    await ctx.game_flow._emit_room_state(room)
+    assert _suggestion_calls(sio)[-1].args[1] == {"active": False}
+
+    # Back in the waiting room it is offered again: the palette can be changed
+    # now, the player who needs it is still here, and nobody said no.
+    room.state = "waiting"
+    room.game = None
+    await ctx.game_flow._emit_room_state(room)
+    assert _suggestion_calls(sio)[-1].args[1] == {"active": True}
+
+
+@pytest.mark.asyncio
+async def test_a_dismissed_suggestion_stays_gone_across_a_game():
+    _, room, host, _, sio, ctx = _live_room()
+
+    await sio.handlers["/"]["dismiss_colorblind_suggestion"](host.sid)
+    assert _suggestion_calls(sio)[-1].args[1] == {"active": False}
+
+    room.state = "playing"
+    room.game = Game(turn_order=[player.id for player in room.player_list()])
+    await ctx.game_flow._emit_room_state(room)
+    room.state = "waiting"
+    room.game = None
+    await ctx.game_flow._emit_room_state(room)
+
+    assert _suggestion_calls(sio)[-1].args[1] == {"active": False}

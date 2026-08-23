@@ -1,12 +1,8 @@
-import type { ColorblindSafeSuggestion } from "../types";
-
 export function ColorblindSafeSuggestionBanner({
-  suggestion,
   busy,
   onAccept,
   onDismiss,
 }: {
-  suggestion: ColorblindSafeSuggestion;
   busy: boolean;
   onAccept: () => void;
   onDismiss: () => void;
@@ -19,17 +15,13 @@ export function ColorblindSafeSuggestionBanner({
     >
       <div className="colorblind-safe-suggestion-copy">
         <strong>A player in this room plays with colorblind-safe colors.</strong>
-        <span>
-          {suggestion.canApply
-            ? "Switch the room palette for future drawings?"
-            : "The palette can be switched after this game."}
-        </span>
+        <span>Switch the room palette for future drawings?</span>
       </div>
       <div className="colorblind-safe-suggestion-actions">
         <button
           type="button"
           className="primary"
-          disabled={busy || !suggestion.canApply}
+          disabled={busy}
           onClick={onAccept}
         >
           Switch colors

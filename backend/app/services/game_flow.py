@@ -324,9 +324,14 @@ class GameFlowService:
         )
         if host is None:
             return
+        # Only in the waiting room, which is the only place the palette can
+        # change anyway. A suggestion the host left alone would otherwise sit
+        # over the game telling them to come back to it later.
         active = bool(
             not room.colorblind_suggestion_dismissed
             and room.color_mode != "colorblind_safe"
+            and room.state == "waiting"
+            and not room.game
             and any(
                 player.colorblind_safe_colors and not player.is_spectator
                 for player in room.players.values()
@@ -334,12 +339,7 @@ class GameFlowService:
         )
         await self._sio.emit(
             "colorblind_safe_suggestion",
-            {
-                "active": active,
-                "canApply": bool(
-                    active and room.state == "waiting" and not room.game
-                ),
-            },
+            {"active": active},
             to=host.sid,
         )
 
