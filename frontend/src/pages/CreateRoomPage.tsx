@@ -1,4 +1,4 @@
-import { useReducer, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomPromptsEditor } from "../components/CustomPromptsEditor";
 import { PromptListPicker } from "../components/PromptListPicker";
@@ -35,6 +35,15 @@ import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, ScoringMode } from "../types";
 import { AccountMenu } from "../components/AccountMenu";
 import { currentPlayerName, useAuthStore } from "../store/authStore";
+import {
+  createRoomPreset,
+  deleteRoomPreset,
+  getMyRoomPresets,
+  getRoomPreset,
+  updateRoomPreset,
+  type RoomPresetSettings,
+  type RoomPresetSummary,
+} from "../lib/roomPresets";
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
@@ -63,6 +72,143 @@ export function CreateRoomPage() {
   const [colorMode, setColorMode] = useState<ColorMode>(DEFAULT_COLOR_MODE);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [presets, setPresets] = useState<RoomPresetSummary[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState("");
+  const [presetName, setPresetName] = useState("");
+  const [presetBusy, setPresetBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!authUser || authUser.isAnonymous) {
+      return;
+    }
+    void getMyRoomPresets()
+      .then((value) => {
+        if (!cancelled) setPresets(value);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load your room presets.");
+      });
+    return () => { cancelled = true; };
+  }, [authUser]);
+
+  function currentPresetSettings(): RoomPresetSettings {
+    return {
+      name: roomName.trim(),
+      isPublic,
+      maxPlayers,
+      rounds,
+      drawingSeconds,
+      customPrompts: "",
+      customPromptsOnly: false,
+      hintMode,
+      scoringMode,
+      spectatorsSeePrompt,
+      hideMaskedPrompt,
+      allowedTools,
+      colorMode,
+      promptListSlugs,
+      promptListShareCodes: [],
+    };
+  }
+
+  function applySettings(settings: RoomPresetSettings) {
+    setRoomName(settings.name);
+    setIsPublic(settings.isPublic);
+    setMaxPlayers(settings.maxPlayers);
+    setRounds(settings.rounds);
+    setDrawingSeconds(settings.drawingSeconds);
+    setHintMode(settings.hintMode);
+    setScoringMode(settings.scoringMode);
+    setSpectatorsSeePrompt(settings.spectatorsSeePrompt);
+    setHideMaskedPrompt(settings.hideMaskedPrompt);
+    setAllowedTools(settings.allowedTools);
+    setColorMode(settings.colorMode);
+    setPromptListSlugs(settings.promptListSlugs);
+    setPromptListShareCodes([]);
+    dispatchCustomPrompts({ type: "reset", value: "", only: false });
+  }
+
+  async function refreshPresets(preferredId = selectedPresetId) {
+    const value = await getMyRoomPresets();
+    setPresets(value);
+    if (preferredId && value.some((preset) => preset.id === preferredId)) {
+      setSelectedPresetId(preferredId);
+    } else if (preferredId) {
+      setSelectedPresetId("");
+    }
+  }
+
+  async function handleApplyPreset() {
+    if (!selectedPresetId) return;
+    setPresetBusy(true);
+    setError(null);
+    try {
+      const preset = await getRoomPreset(selectedPresetId);
+      applySettings(preset.settings);
+      setPresetName(preset.name);
+    } catch (presetError) {
+      setError(presetError instanceof Error ? presetError.message : "Could not apply that preset.");
+    } finally {
+      setPresetBusy(false);
+    }
+  }
+
+  async function handleSavePreset() {
+    if (!presetName.trim()) {
+      setError("Enter a name for the room preset.");
+      return;
+    }
+    setPresetBusy(true);
+    setError(null);
+    try {
+      const created = await createRoomPreset(presetName, currentPresetSettings());
+      await refreshPresets(created.id);
+      setPresetName(created.name);
+    } catch (presetError) {
+      setError(presetError instanceof Error ? presetError.message : "Could not save that preset.");
+    } finally {
+      setPresetBusy(false);
+    }
+  }
+
+  async function handleUpdatePreset() {
+    const selected = presets.find((preset) => preset.id === selectedPresetId);
+    if (!selected) return;
+    setPresetBusy(true);
+    setError(null);
+    try {
+      const updated = await updateRoomPreset(
+        selected.id,
+        selected.version,
+        presetName.trim() ? presetName : selected.name,
+        currentPresetSettings(),
+      );
+      await refreshPresets(updated.id);
+      setPresetName(updated.name);
+    } catch (presetError) {
+      setError(presetError instanceof Error ? presetError.message : "Could not update that preset.");
+    } finally {
+      setPresetBusy(false);
+    }
+  }
+
+  async function handleDeletePreset() {
+    if (!selectedPresetId) return;
+    if (!window.confirm("Delete this room-setting preset?")) return;
+    setPresetBusy(true);
+    setError(null);
+    try {
+      await deleteRoomPreset(selectedPresetId);
+      await refreshPresets("");
+      setSelectedPresetId("");
+      setPresetName("");
+    } catch (presetError) {
+      setError(presetError instanceof Error ? presetError.message : "Could not delete that preset.");
+    } finally {
+      setPresetBusy(false);
+    }
+  }
 
   async function handleCreate() {
     if (customPrompts.analysis.hasErrors) {
@@ -106,6 +252,39 @@ export function CreateRoomPage() {
     <section className="create-room-card">
       <div className="create-room-heading"><p>Room setup</p><h1>Create a room</h1></div>
       {error && <p className="create-room-error" role="alert">{error}</p>}
+      {authUser && !authUser.isAnonymous && (
+        <section className="room-preset-panel" aria-labelledby="room-preset-heading">
+          <div>
+            <h2 id="room-preset-heading">Room-setting presets</h2>
+            <p>Reuse configuration for a new ordinary room. Presets never reuse a room code, members, scores, or live state.</p>
+          </div>
+          <div className="room-preset-controls">
+            <label>
+              Saved preset
+              <select
+                value={selectedPresetId}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  setSelectedPresetId(id);
+                  setPresetName(presets.find((preset) => preset.id === id)?.name || "");
+                }}
+              >
+                <option value="">Choose a preset</option>
+                {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+              </select>
+            </label>
+            <button type="button" disabled={!selectedPresetId || presetBusy} onClick={() => void handleApplyPreset()}>Apply</button>
+            <label>
+              Preset name
+              <input type="text" value={presetName} maxLength={64} onChange={(event) => setPresetName(event.target.value)} />
+            </label>
+            <button type="button" disabled={presetBusy || !presetName.trim() || customPrompts.analysis.usableCount > 0 || promptListShareCodes.length > 0} onClick={() => void handleSavePreset()}>Save new</button>
+            <button type="button" disabled={!selectedPresetId || presetBusy || customPrompts.analysis.usableCount > 0 || promptListShareCodes.length > 0} onClick={() => void handleUpdatePreset()}>Update</button>
+            <button type="button" className="room-preset-delete" disabled={!selectedPresetId || presetBusy} onClick={() => void handleDeletePreset()}>Delete</button>
+          </div>
+          {(customPrompts.analysis.usableCount > 0 || promptListShareCodes.length > 0) && <p className="setting-dependency">Save custom prompts as your own prompt list and remove shared-list codes before saving a preset.</p>}
+        </section>
+      )}
       <div className="create-room-basic-grid">
         <Switch
           label="Keep this room for future games"

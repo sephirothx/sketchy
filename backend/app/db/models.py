@@ -200,6 +200,69 @@ class PersistentRoom(Base):
     )
 
 
+class RoomPreset(Base):
+    """Private reusable room configuration, with no room or live-state identity."""
+
+    __tablename__ = "room_presets"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id", "name_key", name="uq_room_presets_owner_name"
+        ),
+        _values_check(
+            "scoring_mode", SCORING_MODES, "ck_room_presets_scoring_mode"
+        ),
+        _values_check("hint_mode", HINT_MODES, "ck_room_presets_hint_mode"),
+        _values_check(
+            "color_mode",
+            ("all", "palette", "colorblind_safe", "black_and_white"),
+            "ck_room_presets_color_mode",
+        ),
+        CheckConstraint(
+            "max_players >= 2 AND max_players <= 16",
+            name="ck_room_presets_max_players",
+        ),
+        CheckConstraint("rounds >= 1 AND rounds <= 10", name="ck_room_presets_rounds"),
+        CheckConstraint(
+            "drawing_seconds IN (15, 30, 60, 90, 120, 180, 240, 300)",
+            name="ck_room_presets_drawing_seconds",
+        ),
+        CheckConstraint("version >= 1", name="ck_room_presets_version"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    room_name: Mapped[str] = mapped_column(String(40), nullable=False)
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    max_players: Mapped[int] = mapped_column(Integer, nullable=False)
+    rounds: Mapped[int] = mapped_column(Integer, nullable=False)
+    drawing_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    hint_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    scoring_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    spectators_see_prompt: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    hide_masked_prompt: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    allowed_tools: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    color_mode: Mapped[str] = mapped_column(String(24), nullable=False)
+    prompt_list_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=text("1"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class AuthRateLimitBucket(Base):
     """Shared fixed-window bucket for security-sensitive authentication limits."""
 

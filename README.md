@@ -914,6 +914,23 @@ hidden, or no-longer-authorized list blocks opening visibly instead of falling
 back to default prompts. Quick custom prompts must first be saved as a private
 prompt list.
 
+Registered players may also save up to 20 private **Room-setting presets** from
+the room-creation page. A preset is a named, versioned copy of typed settings
+for a future ordinary room; it has no room code, members, host identity, game,
+scores, timers, chat, canvas, or other live state. Applying one fills the create
+form but does not enable **Keep this room for future games**, so creating from a
+preset allocates a fresh ephemeral code unless the player independently chooses
+to create a persistent room. Presets can be updated with optimistic version
+checks or deleted, are included in the owner's private data export, and are
+erased on account deletion.
+
+Like persistent rooms, presets retain stable IDs for active built-in prompt
+lists or lists owned by the preset owner, then resolve their latest authorized
+revision when applied. Deleted, hidden, or no-longer-owned references produce a
+visible error. Borrowed Unlisted-list share codes and quick custom prompts are
+never stored in a preset; save that prompt content as an owned list first. No
+built-in preset catalogue or preset sharing exists in v1.
+
 Archiving prevents a new live instance from being created and permanently
 reserves the old code. If people are still in the room, their current instance
 becomes ordinary ephemeral state and lasts until empty. Account deletion does

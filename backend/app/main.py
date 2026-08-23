@@ -11,6 +11,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.profiles import create_profile_router
 from app.api.persistent_rooms import create_persistent_room_router
+from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
 from app.api.moderation import create_moderation_router
 from app.api.user_settings import create_user_settings_router
@@ -29,6 +30,7 @@ from app.repositories.sqlalchemy import (
 )
 from app.state import room_manager
 from app.services.message_retention import purge_expired_room_messages
+from app.services.room_presets import RoomPresetService
 
 
 class SPAStaticFiles(StaticFiles):
@@ -74,6 +76,7 @@ user_repo = SqlAlchemyUserRepository(async_session_factory)
 game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
 prompt_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
 block_service = BlockService(async_session_factory)
+room_preset_service = RoomPresetService(async_session_factory, prompt_list_repo)
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 handler_context = register_all_handlers(
@@ -173,6 +176,7 @@ api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))
 if handler_context.persistent_rooms is not None:
     api.include_router(create_persistent_room_router(handler_context.persistent_rooms))
+api.include_router(create_room_preset_router(room_preset_service))
 api.include_router(
     create_user_blocks_router(async_session_factory, block_service)
 )

@@ -4,6 +4,14 @@
 .create-room-heading p { color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 4px; text-transform: uppercase; }
 .create-room-heading h1 { color: #1e293b; margin: 0; }
 .create-room-heading span { color: #64748b; display: block; margin-top: 7px; }
+.room-preset-panel { background: #f8fafc; border: 1px solid #dbe4ef; border-radius: 9px; margin-top: 20px; padding: 14px; }
+.room-preset-panel h2 { color: #1e293b; font-size: 16px; margin: 0; }
+.room-preset-panel p { color: #64748b; font-size: 13px; margin: 4px 0 0; }
+.room-preset-controls { align-items: end; display: grid; gap: 8px; grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr) auto auto auto; margin-top: 12px; }
+.room-preset-controls label { display: flex; flex-direction: column; font-size: 13px; font-weight: 700; gap: 4px; min-width: 0; }
+.room-preset-controls button { background: #e2e8f0; border: 0; border-radius: 6px; color: #334155; cursor: pointer; font: inherit; font-size: 13px; font-weight: 800; min-height: 38px; padding: 8px 10px; }
+.room-preset-controls button:disabled { cursor: not-allowed; opacity: .55; }
+.room-preset-controls .room-preset-delete { color: #b91c1c; }
 .create-room-basic-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 24px; }
 .input-number-field {
   align-items: center;
@@ -357,6 +365,8 @@
 }
 
 @media (max-width: 600px) {
+  .room-preset-controls { grid-template-columns: minmax(0, 1fr) auto; }
+  .room-preset-controls label { grid-column: 1 / -1; }
   .create-room-card { padding: 18px; }
   .create-room-basic-grid { grid-template-columns: 1fr; }
   .create-room-basic-grid .create-room-name-row,

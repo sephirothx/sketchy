@@ -42,6 +42,7 @@ from app.db.models import (
     PromptList,
     RoomMessage,
     RoomCodeReservation,
+    RoomPreset,
     generate_uuid,
 )
 from app.domain_values import AccountState, DataExportStatus
@@ -407,6 +408,25 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                 )
             )
             session.add(
+                RoomPreset(
+                    owner_user_id=UUID(owner["id"]),
+                    name="Tournament night",
+                    name_key="tournament night",
+                    room_name="Friday finals",
+                    is_public=False,
+                    max_players=12,
+                    rounds=5,
+                    drawing_seconds=120,
+                    hint_mode="none",
+                    scoring_mode="pressure",
+                    spectators_see_prompt=True,
+                    hide_masked_prompt=False,
+                    allowed_tools=["brush", "shapes"],
+                    color_mode="colorblind_safe",
+                    prompt_list_ids=[exported_list.id],
+                )
+            )
+            session.add(
                 PromptContentReport(
                     id=generate_uuid(),
                     reporter_user_id=UUID(owner["id"]),
@@ -470,6 +490,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["promptLists"][0]["revisions"][0]["prompts"][0]["prompt"] == "red panda"
     assert artifact["persistentRooms"][0]["code"] == "EXPR01"
     assert artifact["persistentRooms"][0]["promptListIds"] == [exported_list.id]
+    assert artifact["roomPresets"][0]["name"] == "Tournament night"
+    assert artifact["roomPresets"][0]["promptListIds"] == [exported_list.id]
     assert artifact["promptContentReportsSubmitted"][0]["details"] == (
         "Requester-authored prompt report"
     )
@@ -606,7 +628,7 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
                 )
             )
     export_status, _ = await request_ready_export(http)
-    await SqlAlchemyPromptListRepository(factory).create_owned(
+    deleted_list = await SqlAlchemyPromptListRepository(factory).create_owned(
         owner["id"],
         name="Delete me",
         description="",
@@ -614,6 +636,27 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         visibility="private",
         prompts=(PromptListEntryInput(answer="private prompt"),),
     )
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                RoomPreset(
+                    owner_user_id=UUID(owner["id"]),
+                    name="Delete me",
+                    name_key="delete me",
+                    room_name="Private configuration",
+                    is_public=False,
+                    max_players=8,
+                    rounds=3,
+                    drawing_seconds=90,
+                    hint_mode="checkpoints",
+                    scoring_mode="default",
+                    spectators_see_prompt=False,
+                    hide_masked_prompt=False,
+                    allowed_tools=["brush"],
+                    color_mode="all",
+                    prompt_list_ids=[deleted_list.id],
+                )
+            )
 
     missing = await http.request("DELETE", "/api/auth/account", json={})
     assert missing.status_code == 400
@@ -677,6 +720,7 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert await session.get(UserSettings, account.id) is None
         assert await session.scalar(select(func.count(UserBlock.id))) == 0
         assert await session.scalar(select(func.count(PromptList.id))) == 0
+        assert await session.scalar(select(func.count(RoomPreset.id))) == 0
         assert await session.scalar(select(func.count(PromptConcept.id))) == 0
         assert not list(
             (

@@ -86,6 +86,9 @@
 }
 
 [data-theme="dark"] .create-room-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .room-preset-panel { background: #172033; border-color: #475569; }
+[data-theme="dark"] .room-preset-panel h2 { color: #f8fafc; }
+[data-theme="dark"] .room-preset-controls button { background: #334155; color: #f8fafc; }
 [data-theme="dark"] .create-room-heading h1,
 [data-theme="dark"] .advanced-settings summary,
 [data-theme="dark"] .m3-switch-label { color: #f8fafc; }

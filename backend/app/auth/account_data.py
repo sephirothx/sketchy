@@ -24,6 +24,7 @@ from app.db.models import (
     PlayerReport,
     PlayerReportMessageEvidence,
     PersistentRoom,
+    RoomPreset,
     PromptConcept,
     PromptContentReport,
     PromptList,
@@ -327,6 +328,15 @@ async def _build_export_artifact(
             )
         ).all()
     )
+    room_presets = list(
+        (
+            await session.scalars(
+                select(RoomPreset)
+                .where(RoomPreset.owner_user_id.in_(identity_ids))
+                .order_by(RoomPreset.created_at, RoomPreset.id)
+            )
+        ).all()
+    )
 
     return {
         "schemaVersion": EXPORT_SCHEMA_VERSION,
@@ -427,6 +437,28 @@ async def _build_export_artifact(
                 "archivedAt": _timestamp(room.archived_at),
             }
             for room in persistent_rooms
+        ],
+        "roomPresets": [
+            {
+                "id": str(preset.id),
+                "name": preset.name,
+                "roomName": preset.room_name,
+                "isPublic": preset.is_public,
+                "maxPlayers": preset.max_players,
+                "rounds": preset.rounds,
+                "drawingSeconds": preset.drawing_seconds,
+                "hintMode": preset.hint_mode,
+                "scoringMode": preset.scoring_mode,
+                "spectatorsSeePrompt": preset.spectators_see_prompt,
+                "hideMaskedPrompt": preset.hide_masked_prompt,
+                "allowedTools": preset.allowed_tools,
+                "colorMode": preset.color_mode,
+                "promptListIds": preset.prompt_list_ids,
+                "version": preset.version,
+                "createdAt": _timestamp(preset.created_at),
+                "updatedAt": _timestamp(preset.updated_at),
+            }
+            for preset in room_presets
         ],
         "linkedIdentities": [
             {
@@ -1007,6 +1039,9 @@ async def anonymize_account(
             )
             await session.execute(
                 delete(UserSettings).where(UserSettings.user_id.in_(identity_ids))
+            )
+            await session.execute(
+                delete(RoomPreset).where(RoomPreset.owner_user_id.in_(identity_ids))
             )
             # The code is permanent, while an already-running instance is
             # detached by the account-deletion callback and lives only until
