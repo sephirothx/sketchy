@@ -14,9 +14,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Sequence
 from itertools import groupby
-from uuid6 import uuid7
+from typing import Sequence
 
 from app.canvas_session import CanvasSession
 from app.drawing_rules import (
@@ -31,6 +30,7 @@ from app.domain_values import (
     PromptSourceKind,
     TurnEndReason,
 )
+from app.identifiers import generate_uuid7
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_prompt_choices
 from app.prompt_content import prompt_match_key
 
@@ -287,7 +287,7 @@ class CompletedTurnStats:
 @dataclass
 class Game:
     turn_order: list[str]
-    id: str = field(default_factory=lambda: str(uuid7()))
+    id: str = field(default_factory=lambda: str(generate_uuid7()))
     rounds_total: int = 3
     scoring_mode: str = "default"
     scoring_version: int = SCORING_RULES_VERSION
@@ -414,12 +414,14 @@ class Game:
     # since left. `turn_order` shrinks on departure, so it cannot answer "who
     # played this game?" once the game is over.
     roster: list[str] = field(default_factory=list)
+    history_seat_ids: dict[str, str] = field(default_factory=dict)
     _cached_letter_frequencies: dict[str, float] | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         for token in self.turn_order:
             if token not in self.roster:
                 self.roster.append(token)
+            self.history_seat_ids.setdefault(token, str(generate_uuid7()))
 
     @property
     def total_turns(self) -> int:
@@ -440,6 +442,7 @@ class Game:
             return
         if token not in self.roster:
             self.roster.append(token)
+        self.history_seat_ids.setdefault(token, str(generate_uuid7()))
         current_round = self.round_number
         current_drawer = self.current_drawer
         self.turn_order.append(token)

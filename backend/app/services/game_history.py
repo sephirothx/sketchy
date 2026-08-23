@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from uuid6 import uuid7
 
 from app.game import Game, competition_ranks
+from app.identifiers import generate_uuid7
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
@@ -20,10 +20,9 @@ from app.repositories.interfaces import (
 )
 from app.rooms import Room
 
-# A game needs two recordable accounts to mean anything: with one, the sole
-# participant is ranked first against nobody and books a win. This is reachable
-# even though starting a game needs two active players - the others may have
-# been playing without an account, or without a session cookie at all.
+# A game needs two factual player seats to mean anything: with one, the sole
+# participant is ranked first against nobody and books a win. Accountless seats
+# count because they played normally even when no cookie supplied a user row.
 #
 # Note this counts seats that *played*, not seats still present. A player who
 # leaves mid-game remains a participant, so an opponent walking out does not
@@ -43,37 +42,48 @@ class GameHistoryWrite:
 
 @dataclass
 class _Seat:
-    """A roster token resolved to the account and score it ends the game with."""
+    """A factual game seat, whether or not it has an account identity."""
 
-    user_id: str
+    seat_id: str
+    user_id: str | None
+    display_name: str
+    name_color: str | None
+    is_anonymous: bool
     score: int
     present: bool
     turns_played: int = 0
+    participant_id: str = ""
 
 
 def _resolve_seats(room: Room, game: Game) -> dict[str, _Seat]:
-    """Map each roster token to its account, skipping seats we cannot record.
-
-    Spectators never take a turn and would only distort ranks and averages.
-    Players whose browser blocked the session cookie have no account at all
-    (`Player.user_id is None`), and every history table keys on a NOT NULL user
-    id, so those seats are dropped rather than written.
-    """
+    """Map every non-spectator roster token to a stable history seat."""
     seats: dict[str, _Seat] = {}
     for token in game.roster:
         player = room.players.get(token)
         if player is not None:
-            if player.is_spectator or not player.user_id:
+            if player.is_spectator:
                 continue
             seats[token] = _Seat(
-                user_id=player.user_id, score=player.score, present=True
+                seat_id=game.history_seat_ids[token],
+                user_id=player.user_id,
+                display_name=player.nickname,
+                name_color=player.name_color,
+                is_anonymous=player.is_anonymous,
+                score=player.score,
+                present=True,
             )
             continue
         departed = room.departed_seats.get(token)
-        if departed is None or departed.is_spectator or not departed.user_id:
+        if departed is None or departed.is_spectator:
             continue
         seats[token] = _Seat(
-            user_id=departed.user_id, score=departed.score, present=False
+            seat_id=game.history_seat_ids[token],
+            user_id=departed.user_id,
+            display_name=departed.nickname,
+            name_color=departed.name_color,
+            is_anonymous=departed.is_anonymous,
+            score=departed.score,
+            present=False,
         )
     return seats
 
@@ -88,30 +98,37 @@ def _count_turns_played(seats: dict[str, _Seat], game: Game) -> None:
 
 
 def _participants(seats: dict[str, _Seat]) -> list[GameParticipantInput]:
-    """Rank the recordable seats, one row per account.
+    """Rank every factual seat, coalescing only duplicate tokens for one account.
 
     An account that left and rejoined mid-game holds two tokens; the seat it
     still occupies wins, since that is the one whose score kept moving. Ties
     share a rank (1, 1, 3) so that two players who genuinely drew for the lead
     both count as wins in `UserRepository.get_stats`, which filters on rank 1.
     """
-    by_account: dict[str, _Seat] = {}
+    by_identity: dict[str, _Seat] = {}
     for seat in seats.values():
-        existing = by_account.get(seat.user_id)
+        identity_key = seat.user_id or f"seat:{seat.seat_id}"
+        existing = by_identity.get(identity_key)
         if (
             existing is None
             or (seat.present and not existing.present)
             or (seat.present == existing.present and seat.score > existing.score)
         ):
-            by_account[seat.user_id] = seat
+            by_identity[identity_key] = seat
 
     # An account that held two seats played the turns of both.
-    for user_id, winner in by_account.items():
+    for identity_key, winner in by_identity.items():
+        winner.participant_id = winner.seat_id
         winner.turns_played = sum(
-            seat.turns_played for seat in seats.values() if seat.user_id == user_id
+            seat.turns_played
+            for seat in seats.values()
+            if (seat.user_id or f"seat:{seat.seat_id}") == identity_key
         )
+        for seat in seats.values():
+            if (seat.user_id or f"seat:{seat.seat_id}") == identity_key:
+                seat.participant_id = winner.seat_id
 
-    ordered = sorted(by_account.values(), key=lambda seat: -seat.score)
+    ordered = sorted(by_identity.values(), key=lambda seat: -seat.score)
     ranks = competition_ranks([seat.score for seat in ordered])
     participants: list[GameParticipantInput] = []
     for seat, rank in zip(ordered, ranks):
@@ -121,6 +138,10 @@ def _participants(seats: dict[str, _Seat]) -> list[GameParticipantInput]:
                 final_score=seat.score,
                 final_rank=rank,
                 turns_played=seat.turns_played,
+                seat_id=seat.participant_id,
+                display_name=seat.display_name,
+                name_color=seat.name_color,
+                is_anonymous=seat.is_anonymous,
             )
         )
     return participants
@@ -144,10 +165,11 @@ def build_game_history(
     for turn in game.completed_turns:
         drawer = seats.get(turn.drawer_token)
         if drawer is None:
-            # Nothing to hang the turn off: `TurnRecord.drawer_user_id` is a
-            # NOT NULL foreign key. The rest of the game still persists.
+            # The runtime token was never a factual player seat (for example,
+            # a spectator-only token), so there is no truthful participant
+            # identity or presentation snapshot to persist for this turn.
             continue
-        turn_id = str(uuid7())
+        turn_id = str(generate_uuid7())
         selected_position = (
             turn.offered_prompts.index(turn.chosen_prompt)
             if turn.chosen_prompt in turn.offered_prompts
@@ -182,6 +204,7 @@ def build_game_history(
                 round_number=turn.round_number,
                 turn_number=turn.turn_number,
                 drawer_user_id=drawer.user_id,
+                drawer_seat_id=drawer.participant_id,
                 prompt=turn.chosen_prompt,
                 duration_seconds=turn.duration_seconds,
                 prompt_version_id=(
@@ -210,6 +233,7 @@ def build_game_history(
                 TurnGuessInput(
                     turn_id=turn_id,
                     user_id=guesser.user_id,
+                    seat_id=guesser.participant_id,
                     points_awarded=guess.points_awarded,
                     guess_time_seconds=guess.guess_time_seconds,
                     hints_used=guess.hints_used,

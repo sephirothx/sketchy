@@ -497,6 +497,8 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
     game_id = generate_uuid()
     drawer_id = generate_uuid()
     guesser_id = generate_uuid()
+    drawer_seat_id = generate_uuid()
+    guesser_seat_id = generate_uuid()
     turn_id = generate_uuid()
     now = datetime.now(timezone.utc)
 
@@ -519,11 +521,18 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                             finished_at=now,
                         ),
                         GameParticipant(
-                            id=generate_uuid(),
+                            id=drawer_seat_id,
                             game_id=game_id,
                             user_id=drawer_id,
                             final_score=300,
                             final_rank=1,
+                        ),
+                        GameParticipant(
+                            id=guesser_seat_id,
+                            game_id=game_id,
+                            user_id=guesser_id,
+                            final_score=200,
+                            final_rank=2,
                         ),
                         TurnRecord(
                             id=turn_id,
@@ -531,6 +540,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                             round_number=1,
                             turn_number=1,
                             drawer_user_id=drawer_id,
+                            drawer_participant_id=drawer_seat_id,
                             prompt="anchor",
                             duration_seconds=30,
                         ),
@@ -538,6 +548,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                             id=generate_uuid(),
                             turn_id=turn_id,
                             user_id=guesser_id,
+                            participant_id=guesser_seat_id,
                             points_awarded=200,
                             guess_time_seconds=10,
                         ),
@@ -565,6 +576,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                 id=generate_uuid(),
                 turn_id=turn_id,
                 user_id=guesser_id,
+                participant_id=guesser_seat_id,
                 points_awarded=999,
                 guess_time_seconds=1,
             ),
@@ -816,7 +828,11 @@ async def test_migrations_match_the_models(tmp_path):
 
     Note what this cannot see: the username and email expression indexes are
     invisible to autogenerate on SQLite, so dropping either from a migration
-    would not fail this test. See `User.__table_args__`.
+    would not fail this test. See `User.__table_args__`. SQLite also fails to
+    reflect ON DELETE options for references added inline with ADD COLUMN; the
+    migration replay suite asserts their actual PRAGMA values directly. That
+    suite also exercises the trigger equivalent of the cross-column prompt
+    identity check that SQLite cannot add without rebuilding the parent table.
     """
     from alembic import command as alembic_command
     from alembic.autogenerate import compare_metadata
@@ -868,4 +884,27 @@ async def test_migrations_match_the_models(tmp_path):
     finally:
         await engine.dispose()
 
+    inline_reference_columns = {
+        ("turn_records", "prompt_version_id"),
+        ("turn_records", "drawer_participant_id"),
+        ("turn_guesses", "participant_id"),
+    }
+    differences = [
+        difference
+        for difference in differences
+        if not (
+            (
+                difference[0] in {"add_fk", "remove_fk"}
+                and (
+                    difference[1].table.name,
+                    next(iter(difference[1].column_keys)),
+                )
+                in inline_reference_columns
+            )
+            or (
+                difference[0] == "add_constraint"
+                and difference[1].name == "ck_turn_records_prompt_identity"
+            )
+        )
+    ]
     assert differences == [], f"models and migrations have drifted: {differences}"

@@ -41,6 +41,9 @@ from app.db.models import (
 )
 from app.domain_values import (
     AccountState,
+    GAME_PROMPT_SOURCE_MODES,
+    PROMPT_OFFER_SOURCE_KINDS,
+    PROMPT_SOURCE_KINDS,
     PromptContentModerationState,
     PromptListVisibility,
 )
@@ -652,14 +655,18 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             "participants": sorted(
                 (
                     {
+                        "seat_id": item.seat_id,
                         "user_id": item.user_id,
+                        "display_name": item.display_name,
+                        "name_color": item.name_color,
+                        "is_anonymous": item.is_anonymous,
                         "final_score": item.final_score,
                         "final_rank": item.final_rank,
                         "turns_played": item.turns_played,
                     }
                     for item in participants
                 ),
-                key=lambda item: item["user_id"],
+                key=lambda item: item["seat_id"] or item["user_id"] or "",
             ),
             "turns": sorted(
                 (
@@ -668,6 +675,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         "round_number": item.round_number,
                         "turn_number": item.turn_number,
                         "drawer_user_id": item.drawer_user_id,
+                        "drawer_seat_id": item.drawer_seat_id,
                         "prompt": item.prompt,
                         "prompt_version_id": item.prompt_version_id,
                         "prompt_source_kind": item.prompt_source_kind,
@@ -703,6 +711,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     {
                         "turn_id": item.turn_id,
                         "user_id": item.user_id,
+                        "seat_id": item.seat_id,
                         "points_awarded": item.points_awarded,
                         "guess_time_seconds": item.guess_time_seconds,
                         "hints_used": item.hints_used,
@@ -711,7 +720,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     }
                     for item in guesses
                 ),
-                key=lambda item: (item["turn_id"], item["user_id"]),
+                key=lambda item: (
+                    item["turn_id"],
+                    item["seat_id"] or item["user_id"] or "",
+                ),
             ),
         }
         return hashlib.sha256(
@@ -732,6 +744,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             _entity_id(revision_id)
             for revision_id in game_record.prompt_source_revision_ids
         }
+        if game_record.prompt_source_mode not in GAME_PROMPT_SOURCE_MODES:
+            raise ValueError("Unknown game prompt source mode")
         payload_hash = self._payload_hash(game_record, participants, turns, guesses)
         try:
             async with self._session_factory() as session:
@@ -742,14 +756,22 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     raise GameHistoryConflictError(
                         f"Game '{record_id}' already exists with different content."
                     )
+                if game_record.player_count != len(participants):
+                    raise ValueError(
+                        "Game player_count must equal its persisted participant seats"
+                    )
                 referenced_user_ids = {
-                    _entity_id(participant.user_id) for participant in participants
+                    _entity_id(participant.user_id)
+                    for participant in participants
+                    if participant.user_id
                 }
                 referenced_user_ids.update(
-                    _entity_id(turn.drawer_user_id) for turn in turns
+                    _entity_id(turn.drawer_user_id)
+                    for turn in turns
+                    if turn.drawer_user_id
                 )
                 referenced_user_ids.update(
-                    _entity_id(guess.user_id) for guess in guesses
+                    _entity_id(guess.user_id) for guess in guesses if guess.user_id
                 )
                 users = (
                     await session.scalars(
@@ -789,17 +811,56 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     for revision_id in game_source_ids
                 )
 
+                participant_inputs_by_id: dict[UUID, GameParticipantInput] = {}
+                participant_snapshots_by_id: dict[
+                    UUID, tuple[str, str | None, bool]
+                ] = {}
+                participant_ids_by_user: dict[UUID, UUID] = {}
                 for p in participants:
-                    participant_user_id = _entity_id(p.user_id)
-                    participant_user = users_by_id[participant_user_id]
+                    participant_id = (
+                        _entity_id(p.seat_id) if p.seat_id else generate_uuid()
+                    )
+                    if participant_id in participant_inputs_by_id:
+                        raise ValueError(f"Duplicate participant seat id '{p.seat_id}'")
+                    participant_user_id = (
+                        _entity_id(p.user_id) if p.user_id else None
+                    )
+                    participant_user = (
+                        users_by_id[participant_user_id]
+                        if participant_user_id is not None
+                        else None
+                    )
+                    participant_inputs_by_id[participant_id] = p
+                    display_name_snapshot = (
+                        p.display_name
+                        if p.seat_id or participant_user is None
+                        else participant_user.display_name
+                    )
+                    name_color_snapshot = (
+                        p.name_color
+                        if p.seat_id or participant_user is None
+                        else participant_user.name_color
+                    )
+                    is_anonymous_snapshot = (
+                        p.is_anonymous
+                        if p.seat_id or participant_user is None
+                        else participant_user.is_anonymous
+                    )
+                    participant_snapshots_by_id[participant_id] = (
+                        display_name_snapshot,
+                        name_color_snapshot,
+                        is_anonymous_snapshot,
+                    )
+                    if participant_user_id is not None:
+                        participant_ids_by_user[participant_user_id] = participant_id
                     session.add(
                         GameParticipant(
-                            id=generate_uuid(),
+                            id=participant_id,
                             game_id=record_id,
                             user_id=participant_user_id,
-                            display_name_snapshot=participant_user.display_name,
-                            name_color_snapshot=participant_user.name_color,
-                            is_anonymous_snapshot=participant_user.is_anonymous,
+                            display_name_snapshot=display_name_snapshot,
+                            name_color_snapshot=name_color_snapshot,
+                            is_anonymous_snapshot=is_anonymous_snapshot,
                             final_score=p.final_score,
                             final_rank=p.final_rank,
                             turns_played=p.turns_played,
@@ -808,12 +869,44 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
 
                 created_turn_ids: set[UUID] = set()
                 for r in turns:
+                    if r.prompt_source_kind not in PROMPT_SOURCE_KINDS:
+                        raise ValueError(
+                            f"Turn '{r.id}' has an unknown prompt source kind"
+                        )
+                    if (r.prompt_source_kind == "curated") != bool(
+                        r.prompt_version_id
+                    ):
+                        raise ValueError(
+                            f"Turn '{r.id}' prompt source and version disagree"
+                        )
                     rid = _entity_id(r.id)
                     if rid in created_turn_ids:
                         raise ValueError(f"Duplicate turn id '{r.id}'")
                     created_turn_ids.add(rid)
-                    drawer_user_id = _entity_id(r.drawer_user_id)
-                    drawer_user = users_by_id[drawer_user_id]
+                    drawer_user_id = (
+                        _entity_id(r.drawer_user_id) if r.drawer_user_id else None
+                    )
+                    drawer_participant_id = (
+                        _entity_id(r.drawer_seat_id)
+                        if r.drawer_seat_id
+                        else participant_ids_by_user.get(drawer_user_id)
+                    )
+                    drawer_participant = (
+                        participant_inputs_by_id.get(drawer_participant_id)
+                        if drawer_participant_id is not None
+                        else None
+                    )
+                    if drawer_participant is None:
+                        raise ValueError(
+                            f"Turn '{r.id}' references an unknown drawer seat"
+                        )
+                    if drawer_participant.user_id != r.drawer_user_id:
+                        raise ValueError(
+                            f"Turn '{r.id}' drawer seat and user identity disagree"
+                        )
+                    drawer_snapshot = participant_snapshots_by_id[
+                        drawer_participant_id
+                    ]
                     session.add(
                         TurnRecord(
                             id=rid,
@@ -821,9 +914,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             round_number=r.round_number,
                             turn_number=r.turn_number,
                             drawer_user_id=drawer_user_id,
-                            drawer_display_name_snapshot=drawer_user.display_name,
-                            drawer_name_color_snapshot=drawer_user.name_color,
-                            drawer_is_anonymous_snapshot=drawer_user.is_anonymous,
+                            drawer_participant_id=drawer_participant_id,
+                            drawer_display_name_snapshot=drawer_snapshot[0],
+                            drawer_name_color_snapshot=drawer_snapshot[1],
+                            drawer_is_anonymous_snapshot=drawer_snapshot[2],
                             prompt=r.prompt,
                             prompt_version_id=(
                                 _entity_id(r.prompt_version_id)
@@ -858,6 +952,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             f"Turn '{r.id}' selected offer does not match its prompt identity"
                         )
                     for offer in r.prompt_offers:
+                        if offer.source_kind not in PROMPT_OFFER_SOURCE_KINDS:
+                            raise ValueError(
+                                f"Turn '{r.id}' offer has an unknown source kind"
+                            )
                         offer_source_ids = {
                             _entity_id(revision_id)
                             for revision_id in offer.source_revision_ids
@@ -913,16 +1011,37 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         raise ValueError(
                             f"Guess references unknown turn_id '{g.turn_id}'"
                         )
-                    guess_user_id = _entity_id(g.user_id)
-                    guess_user = users_by_id[guess_user_id]
+                    guess_user_id = _entity_id(g.user_id) if g.user_id else None
+                    guess_participant_id = (
+                        _entity_id(g.seat_id)
+                        if g.seat_id
+                        else participant_ids_by_user.get(guess_user_id)
+                    )
+                    guess_participant = (
+                        participant_inputs_by_id.get(guess_participant_id)
+                        if guess_participant_id is not None
+                        else None
+                    )
+                    if guess_participant is None:
+                        raise ValueError(
+                            f"Guess references an unknown participant seat '{g.seat_id}'"
+                        )
+                    if guess_participant.user_id != g.user_id:
+                        raise ValueError(
+                            "Guess participant seat and user identity disagree"
+                        )
+                    guess_snapshot = participant_snapshots_by_id[
+                        guess_participant_id
+                    ]
                     session.add(
                         TurnGuess(
                             id=generate_uuid(),
                             turn_id=target_turn_id,
                             user_id=guess_user_id,
-                            display_name_snapshot=guess_user.display_name,
-                            name_color_snapshot=guess_user.name_color,
-                            is_anonymous_snapshot=guess_user.is_anonymous,
+                            participant_id=guess_participant_id,
+                            display_name_snapshot=guess_snapshot[0],
+                            name_color_snapshot=guess_snapshot[1],
+                            is_anonymous_snapshot=guess_snapshot[2],
                             points_awarded=g.points_awarded,
                             guess_time_seconds=g.guess_time_seconds,
                             hints_used=g.hints_used,
@@ -931,11 +1050,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     )
 
-                await session.execute(
-                    update(User)
-                    .where(User.id.in_(referenced_user_ids))
-                    .values(last_active_at=datetime.now(timezone.utc))
-                )
+                if referenced_user_ids:
+                    await session.execute(
+                        update(User)
+                        .where(User.id.in_(referenced_user_ids))
+                        .values(last_active_at=datetime.now(timezone.utc))
+                    )
                 await session.commit()
         except IntegrityError as error:
             # A concurrent writer may have committed the same stable ID after
@@ -1043,6 +1163,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 guess_details = [
                     TurnGuessDetail(
                         user_id=_public_id(guess.user_id) if guess.user_id else None,
+                        seat_id=(
+                            _public_id(guess.participant_id)
+                            if guess.participant_id
+                            else None
+                        ),
                         display_name=guess.display_name_snapshot,
                         points_awarded=guess.points_awarded,
                         guess_time_seconds=guess.guess_time_seconds,
@@ -1055,6 +1180,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         turn_number=r.turn_number,
                         drawer_user_id=(
                             _public_id(r.drawer_user_id) if r.drawer_user_id else None
+                        ),
+                        drawer_seat_id=(
+                            _public_id(r.drawer_participant_id)
+                            if r.drawer_participant_id
+                            else None
                         ),
                         drawer_display_name=r.drawer_display_name_snapshot,
                         prompt=r.prompt,

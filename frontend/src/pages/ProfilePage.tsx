@@ -156,13 +156,14 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
             // The rounds carry ids, the standings carry the colors: joining
             // them here keeps every name in a recap the same color, without
             // the detail endpoint repeating what the summary already sent.
-            const byUser = new Map(
-              detail.participants
-                .filter((p): p is typeof p & { userId: string } => p.userId !== null)
-                .map((p) => [p.userId, p]),
+            const bySeat = new Map(
+              detail.participants.map((participant) => [participant.seatId, participant]),
             );
-            const named = (userId: string | null, fallbackName: string) => {
-              const participant = userId ? byUser.get(userId) : undefined;
+            const named = (
+              seatId: string | null,
+              fallbackName: string,
+            ) => {
+              const participant = seatId ? bySeat.get(seatId) : undefined;
               return (
                 <PlayerName
                   name={participant?.displayName ?? fallbackName}
@@ -188,15 +189,15 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                   <tr key={`${turn.roundNumber}-${turn.turnNumber}`}>
                     <td>{turn.roundNumber}</td>
                     <td className="profile-turn-prompt">{turn.prompt}</td>
-                    <td>{named(turn.drawerUserId, turn.drawerDisplayName)}</td>
+                    <td>{named(turn.drawerSeatId, turn.drawerDisplayName)}</td>
                     <td>{formatDuration(turn.durationSeconds)}</td>
                     <td>
                       {turn.guesses.length === 0
                         ? "nobody"
                         : turn.guesses.map((g, index) => (
-                            <span key={g.userId ?? `removed-${index}`}>
+                            <span key={g.seatId ?? `legacy-${index}`}>
                               {index > 0 && ", "}
-                              {named(g.userId, g.displayName)} ({g.pointsAwarded})
+                              {named(g.seatId, g.displayName)} ({g.pointsAwarded})
                             </span>
                           ))}
                     </td>

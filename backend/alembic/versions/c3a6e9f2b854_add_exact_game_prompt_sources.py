@@ -18,19 +18,33 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("game_records") as batch_op:
-        batch_op.add_column(
+    source_mode_check = (
+        "prompt_source_mode IN "
+        "('legacy_unknown', 'curated', 'custom', 'mixed', 'builtin_fallback')"
+    )
+    if op.get_bind().dialect.name == "sqlite":
+        # Keep the constraint inline without rebuilding the parent table;
+        # rebuilding it would cascade-delete existing turns.
+        op.execute(
+            "ALTER TABLE game_records ADD COLUMN prompt_source_mode VARCHAR(24) "
+            "DEFAULT 'legacy_unknown' NOT NULL "
+            "CONSTRAINT ck_game_records_prompt_source_mode CHECK ("
+            f"{source_mode_check})"
+        )
+    else:
+        op.add_column(
+            "game_records",
             sa.Column(
                 "prompt_source_mode",
                 sa.String(length=24),
                 server_default="legacy_unknown",
                 nullable=False,
-            )
+            ),
         )
-        batch_op.create_check_constraint(
+        op.create_check_constraint(
             "ck_game_records_prompt_source_mode",
-            "prompt_source_mode IN "
-            "('legacy_unknown', 'curated', 'custom', 'mixed', 'builtin_fallback')",
+            "game_records",
+            source_mode_check,
         )
 
     op.create_table(
@@ -143,8 +157,10 @@ def downgrade() -> None:
         table_name="game_prompt_sources",
     )
     op.drop_table("game_prompt_sources")
-    with op.batch_alter_table("game_records") as batch_op:
-        batch_op.drop_constraint(
-            "ck_game_records_prompt_source_mode", type_="check"
+    if op.get_bind().dialect.name != "sqlite":
+        op.drop_constraint(
+            "ck_game_records_prompt_source_mode",
+            "game_records",
+            type_="check",
         )
-        batch_op.drop_column("prompt_source_mode")
+    op.drop_column("game_records", "prompt_source_mode")

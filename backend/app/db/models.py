@@ -23,7 +23,6 @@ from sqlalchemy import (
 )
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from uuid6 import uuid7
 
 from app.auth.avatars import BUILT_IN_AVATAR_KEYS
 from app.db.types import UTCDateTime
@@ -63,6 +62,7 @@ from app.domain_values import (
     UserRole,
     UserTheme,
 )
+from app.identifiers import generate_uuid7
 
 
 def _values_check(column: str, values: tuple[str, ...], name: str) -> CheckConstraint:
@@ -71,8 +71,8 @@ def _values_check(column: str, values: tuple[str, ...], name: str) -> CheckConst
 
 
 def generate_uuid() -> uuid.UUID:
-    """Generate a time-ordered UUIDv7 for a persisted entity."""
-    return uuid7()
+    """Compatibility name for the central durable UUIDv7 generator."""
+    return generate_uuid7()
 
 
 class Base(DeclarativeBase):
@@ -907,6 +907,14 @@ class TurnRecord(Base):
         nullable=True,
         index=True,
     )
+    # The factual game seat is authoritative. Nullable only for legacy rows
+    # written before seat identity existed; account linkage may always be null.
+    drawer_participant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("game_participants.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     drawer_display_name_snapshot: Mapped[str] = mapped_column(
         String(32), default="Unknown", nullable=False
     )
@@ -1053,7 +1061,12 @@ class TurnGuess(Base):
 
     __tablename__ = "turn_guesses"
     __table_args__ = (
-        Index("uq_turn_guesses_turn_user", "turn_id", "user_id", unique=True),
+        Index(
+            "uq_turn_guesses_turn_participant",
+            "turn_id",
+            "participant_id",
+            unique=True,
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1068,6 +1081,12 @@ class TurnGuess(Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    participant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("game_participants.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

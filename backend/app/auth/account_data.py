@@ -408,6 +408,11 @@ async def _build_export_artifact(
                 "turnId": str(turn.id),
                 "gameId": str(turn.game_id),
                 "identityId": str(turn.drawer_user_id) if turn.drawer_user_id else None,
+                "participantSeatId": (
+                    str(turn.drawer_participant_id)
+                    if turn.drawer_participant_id
+                    else None
+                ),
                 "roundNumber": turn.round_number,
                 "turnNumber": turn.turn_number,
                 "prompt": turn.prompt,
@@ -449,6 +454,9 @@ async def _build_export_artifact(
                 "turnId": str(turn.id),
                 "gameId": str(turn.game_id),
                 "identityId": str(guess.user_id) if guess.user_id else None,
+                "participantSeatId": (
+                    str(guess.participant_id) if guess.participant_id else None
+                ),
                 "roundNumber": turn.round_number,
                 "turnNumber": turn.turn_number,
                 "prompt": turn.prompt,

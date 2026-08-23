@@ -6,9 +6,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from uuid6 import uuid7
-
 from app.domain_values import TurnEndReason
+from app.identifiers import generate_uuid7
 
 
 class RepositoryError(Exception):
@@ -107,10 +106,14 @@ class GameRecordInput:
 class GameParticipantInput:
     """Input payload for a game participant's final standing."""
 
-    user_id: str
+    user_id: str | None
     final_score: int
     final_rank: int
     turns_played: int = 0
+    seat_id: str | None = None
+    display_name: str = "Unknown"
+    name_color: str | None = None
+    is_anonymous: bool = True
 
 
 @dataclass(frozen=True)
@@ -120,7 +123,7 @@ class TurnRecordInput:
     id: str
     round_number: int
     turn_number: int
-    drawer_user_id: str
+    drawer_user_id: str | None
     prompt: str
     duration_seconds: float
     prompt_version_id: str | None = None
@@ -132,6 +135,7 @@ class TurnRecordInput:
     wrong_guess_count: int = 0
     near_miss_count: int = 0
     prompt_offers: tuple[PromptOfferInput, ...] = ()
+    drawer_seat_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -151,12 +155,13 @@ class TurnGuessInput:
     """Input payload for a correct guess in a round."""
 
     turn_id: str
-    user_id: str
+    user_id: str | None
     points_awarded: int
     guess_time_seconds: float
     hints_used: int = 0
     points_spent_on_hints: int = 0
     wrong_guesses_before: int = 0
+    seat_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -197,6 +202,7 @@ class TurnGuessDetail:
     """Detailed guess event in a past round."""
 
     user_id: str | None
+    seat_id: str | None
     display_name: str
     points_awarded: int
     guess_time_seconds: float
@@ -209,6 +215,7 @@ class TurnDetail:
     round_number: int
     turn_number: int
     drawer_user_id: str | None
+    drawer_seat_id: str | None
     drawer_display_name: str
     prompt: str
     duration_seconds: float
@@ -389,7 +396,7 @@ class PromptUsage:
 
     offers: Mapping[str, int]
     picks: Mapping[str, PromptPickTotals]
-    batch_id: str = field(default_factory=lambda: str(uuid7()))
+    batch_id: str = field(default_factory=lambda: str(generate_uuid7()))
     occurred_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )

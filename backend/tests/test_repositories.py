@@ -282,6 +282,102 @@ async def test_game_history_repository():
         await engine.dispose()
 
 
+async def test_game_history_preserves_distinct_accountless_seats():
+    factory, engine = await create_test_db()
+    try:
+        user_repo = SqlAlchemyUserRepository(factory)
+        history_repo = SqlAlchemyGameHistoryRepository(factory)
+        account = await user_repo.create_anonymous("Account player")
+        drawer_seat_id = str(generate_uuid())
+        guesser_seat_id = str(generate_uuid())
+        turn_id = str(generate_uuid())
+        now = datetime.now(timezone.utc)
+
+        game_id = await history_repo.save_game(
+            GameRecordInput(
+                room_name="Accountless seats",
+                scoring_mode="default",
+                hint_mode="none",
+                drawing_seconds=90,
+                total_rounds=1,
+                player_count=3,
+                started_at=now,
+                finished_at=now,
+            ),
+            [
+                GameParticipantInput(account.id, 50, 3),
+                GameParticipantInput(
+                    None,
+                    300,
+                    1,
+                    seat_id=drawer_seat_id,
+                    display_name="No-cookie drawer",
+                    name_color="#112233",
+                ),
+                GameParticipantInput(
+                    None,
+                    200,
+                    2,
+                    seat_id=guesser_seat_id,
+                    display_name="No-cookie guesser",
+                    name_color="#445566",
+                ),
+            ],
+            [
+                TurnRecordInput(
+                    id=turn_id,
+                    round_number=1,
+                    turn_number=1,
+                    drawer_user_id=None,
+                    drawer_seat_id=drawer_seat_id,
+                    prompt="guitar",
+                    duration_seconds=12.0,
+                )
+            ],
+            [
+                TurnGuessInput(
+                    turn_id=turn_id,
+                    user_id=None,
+                    seat_id=guesser_seat_id,
+                    points_awarded=200,
+                    guess_time_seconds=8.0,
+                )
+            ],
+        )
+
+        detail = await history_repo.get_game_detail(game_id, account.id)
+        assert detail is not None
+        assert len(detail.summary.participants) == 3
+        accountless = {
+            participant.seat_id: participant
+            for participant in detail.summary.participants
+            if participant.user_id is None
+        }
+        assert set(accountless) == {drawer_seat_id, guesser_seat_id}
+        assert accountless[drawer_seat_id].display_name == "No-cookie drawer"
+        assert accountless[guesser_seat_id].display_name == "No-cookie guesser"
+        assert detail.turns[0].drawer_user_id is None
+        assert detail.turns[0].drawer_seat_id == drawer_seat_id
+        assert detail.turns[0].drawer_display_name == "No-cookie drawer"
+        assert detail.turns[0].guesses[0].user_id is None
+        assert detail.turns[0].guesses[0].seat_id == guesser_seat_id
+        assert detail.turns[0].guesses[0].display_name == "No-cookie guesser"
+
+        async with factory() as session:
+            stored_turn = await session.get(TurnRecord, UUID(turn_id))
+            stored_guess = await session.scalar(
+                select(TurnGuess).where(TurnGuess.turn_id == UUID(turn_id))
+            )
+        assert stored_turn is not None
+        assert stored_turn.drawer_user_id is None
+        assert str(stored_turn.drawer_participant_id) == drawer_seat_id
+        assert stored_guess is not None
+        assert stored_guess.user_id is None
+        assert str(stored_guess.participant_id) == guesser_seat_id
+    finally:
+        await engine.dispose()
+
+
 async def test_game_history_stable_id_is_idempotent_and_rejects_conflicts():
     factory, engine = await create_test_db()
     try:

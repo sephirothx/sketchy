@@ -40,6 +40,7 @@ export interface GameSummary {
 
 export interface TurnGuess {
   userId: string | null;
+  seatId: string | null;
   displayName: string;
   pointsAwarded: number;
   guessTimeSeconds: number;
@@ -49,6 +50,7 @@ export interface GameTurn {
   roundNumber: number;
   turnNumber: number;
   drawerUserId: string | null;
+  drawerSeatId: string | null;
   drawerDisplayName: string;
   prompt: string;
   durationSeconds: number;

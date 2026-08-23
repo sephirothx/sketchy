@@ -141,15 +141,19 @@ therefore joinable without text normalization; custom/fallback turns retain
 only their factual text snapshot. Database checks and the history writer keep
 the selected offer, turn text, source kind, and version identical. Rows from
 before provenance coverage use `legacy_unknown`, never a fabricated source.
-Finished games also enforce one participant per account, one turn per
-game/round/turn number, and one correct guess per player and turn at the
-database layer.
+Finished games also enforce at most one participant seat per linked account,
+one turn per game/round/turn number, and one correct guess per participant seat
+and turn at the database layer. Multiple accountless seats remain distinct.
 Participant, drawer, and guess rows freeze the player's display name, name
 color, and guest status when the game is saved. Their account foreign keys are
 nullable and use `ON DELETE SET NULL`; even a physical user-row removal cannot
 cascade away turns, guesses, or another player's game. The history API uses a
 stable participant seat ID and renders the frozen presentation when an account
-link is absent.
+link is absent. A live player receives that UUIDv7 seat identity when the game
+starts even if no session cookie supplied an account. Such a player still
+counts toward the recorded player total and keeps every factual turn and
+correct guess; history never drops or coalesces the seat merely because its
+account link is null.
 Prompt-list counts are derived from prompt membership on read, so adding or
 removing a prompt cannot leave a cached total out of sync.
 Prompt usage is not stored as mutable totals on the current display row.

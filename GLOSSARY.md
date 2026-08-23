@@ -46,6 +46,7 @@ the rotation itself are counted in *rounds*.
 | Term | Meaning | Avoid |
 | --- | --- | --- |
 | **Player** | Anyone in a room who can draw and guess. Spectators are not players. | user (that is an account), participant |
+| **Participant seat** | One factual player's stable UUIDv7 identity inside a single **Game**. It exists even without an account or session cookie and is what historical turns and guesses reference; a nullable account link is separate. | user ID, socket token, accountless player |
 | **Active player** | A player who is connected and not AFK — the population that draws, is waited for, and counts toward vote majorities. | live player, ready player |
 | **Drawer** | The player whose turn it is to draw. | artist, painter, sketcher |
 | **Guesser** | Any player in the drawing phase who is not the drawer. Stays a guesser after guessing the prompt. | watcher, viewer |

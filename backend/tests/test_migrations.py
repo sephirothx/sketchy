@@ -11,7 +11,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
-from sqlalchemy.exc import SAWarning
+from sqlalchemy.exc import IntegrityError, SAWarning
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.db import create_db_engine, get_alembic_config
@@ -82,7 +82,59 @@ async def _schema_differences(engine: AsyncEngine):
             category=UserWarning,
         )
         async with engine.connect() as connection:
-            return await connection.run_sync(diff)
+            differences = await connection.run_sync(diff)
+
+    if engine.dialect.name != "sqlite":
+        return differences
+
+    # SQLite enforces ON DELETE on references added inline with ADD COLUMN, but
+    # SQLAlchemy's SQLite DDL parser does not reflect the options for those
+    # columns. Their PRAGMA values are asserted directly below instead of
+    # accepting false remove/add-FK drift from Alembic autogeneration.
+    inline_reference_columns = {
+        ("turn_records", "prompt_version_id"),
+        ("turn_records", "drawer_participant_id"),
+        ("turn_guesses", "participant_id"),
+    }
+    return [
+        difference
+        for difference in differences
+        if not (
+            (
+                difference[0] in {"add_fk", "remove_fk"}
+                and (
+                    difference[1].table.name,
+                    next(iter(difference[1].column_keys)),
+                )
+                in inline_reference_columns
+            )
+            or (
+                difference[0] == "add_constraint"
+                and difference[1].name == "ck_turn_records_prompt_identity"
+            )
+        )
+    ]
+
+
+async def _sqlite_inline_reference_actions(engine: AsyncEngine) -> dict[tuple[str, str], str]:
+    expected_columns = {
+        ("turn_records", "prompt_version_id"),
+        ("turn_records", "drawer_participant_id"),
+        ("turn_guesses", "participant_id"),
+    }
+    actions: dict[tuple[str, str], str] = {}
+    async with engine.connect() as connection:
+        for table_name in {table for table, _ in expected_columns}:
+            rows = (
+                await connection.execute(
+                    text(f"PRAGMA foreign_key_list({table_name})")
+                )
+            ).all()
+            for row in rows:
+                key = (table_name, row._mapping["from"])
+                if key in expected_columns:
+                    actions[key] = row._mapping["on_delete"]
+    return actions
 
 
 async def _exercise_migration_chain(engine: AsyncEngine) -> None:
@@ -95,6 +147,12 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     await _migrate(engine, alembic_command.upgrade, "head")
     assert await _current_revisions(engine) == {head}
     assert await _schema_differences(engine) == []
+    if engine.dialect.name == "sqlite":
+        assert await _sqlite_inline_reference_actions(engine) == {
+            ("turn_records", "prompt_version_id"): "RESTRICT",
+            ("turn_records", "drawer_participant_id"): "SET NULL",
+            ("turn_guesses", "participant_id"): "SET NULL",
+        }
     index_definition = await _index_definition(engine)
     assert index_definition is not None
     normalized_index = index_definition.lower()
@@ -203,7 +261,9 @@ async def test_prompt_identity_migration_marks_legacy_provenance_unknown(tmp_pat
     identifiers = {
         "user": uuid.uuid4().hex,
         "game": uuid.uuid4().hex,
+        "participant": uuid.uuid4().hex,
         "turn": uuid.uuid4().hex,
+        "guess": uuid.uuid4().hex,
     }
     try:
         await _migrate(engine, alembic_command.upgrade, previous)
@@ -228,11 +288,29 @@ async def test_prompt_identity_migration_marks_legacy_provenance_unknown(tmp_pat
             )
             await connection.execute(
                 text(
+                    "INSERT INTO game_participants "
+                    "(id, game_id, user_id, display_name_snapshot, "
+                    "is_anonymous_snapshot, final_score, final_rank) VALUES "
+                    "(:participant, :game, :user, 'Legacy player', 1, 100, 1)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
                     "INSERT INTO turn_records "
                     "(id, game_id, round_number, turn_number, drawer_user_id, "
                     "drawer_display_name_snapshot, drawer_is_anonymous_snapshot, "
                     "prompt, duration_seconds) VALUES "
                     "(:turn, :game, 1, 1, :user, 'Legacy player', 1, 'apple', 30)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO turn_guesses "
+                    "(id, turn_id, user_id, display_name_snapshot, "
+                    "is_anonymous_snapshot, points_awarded, guess_time_seconds) "
+                    "VALUES (:guess, :turn, :user, 'Legacy player', 1, 100, 10)"
                 ),
                 identifiers,
             )
@@ -248,14 +326,39 @@ async def test_prompt_identity_migration_marks_legacy_provenance_unknown(tmp_pat
             turn_identity = (
                 await connection.execute(
                     text(
-                        "SELECT prompt_source_kind, prompt_version_id "
+                        "SELECT prompt_source_kind, prompt_version_id, "
+                        "drawer_participant_id "
                         "FROM turn_records WHERE id = :turn"
                     ),
                     identifiers,
                 )
             ).one()
+            guess_participant_id = await connection.scalar(
+                text(
+                    "SELECT participant_id FROM turn_guesses WHERE id = :guess"
+                ),
+                identifiers,
+            )
         assert game_mode == "legacy_unknown"
-        assert tuple(turn_identity) == ("legacy_unknown", None)
+        assert tuple(turn_identity) == (
+            "legacy_unknown",
+            None,
+            identifiers["participant"],
+        )
+        assert guess_participant_id == identifiers["participant"]
+
+        # SQLite uses equivalent insert/update triggers because it cannot add a
+        # table-level cross-column check without rebuilding this parent table.
+        # PostgreSQL uses the named CHECK constraint directly.
+        with pytest.raises(IntegrityError):
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "UPDATE turn_records SET prompt_source_kind = 'curated' "
+                        "WHERE id = :turn"
+                    ),
+                    identifiers,
+                )
     finally:
         await engine.dispose()
 

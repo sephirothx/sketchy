@@ -89,6 +89,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 "roundNumber": r.round_number,
                 "turnNumber": r.turn_number,
                 "drawerUserId": r.drawer_user_id,
+                "drawerSeatId": r.drawer_seat_id,
                 "drawerDisplayName": r.drawer_display_name,
                 "prompt": r.prompt,
                 "promptVersionId": r.prompt_version_id,
@@ -108,6 +109,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 "guesses": [
                     {
                         "userId": g.user_id,
+                        "seatId": g.seat_id,
                         "displayName": g.display_name,
                         "pointsAwarded": g.points_awarded,
                         "guessTimeSeconds": g.guess_time_seconds,

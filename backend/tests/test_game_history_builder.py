@@ -87,8 +87,8 @@ def test_guess_ids_follow_the_turns_actually_written():
         ("Bob", "user-bob", 100, False),
         ("Cid", None, 50, False),
     )
-    # Cid has no account, so the middle turn cannot be written at all - the
-    # guesses on the turn after it must still point at the right round.
+    # Cid has no account, but their factual seat and the surrounding turn links
+    # remain complete.
     game.completed_turns = [
         turn(players["Ann"].id, number=1, guesses=[(players["Bob"].id, 200, 3.0)]),
         turn(players["Cid"].id, number=2, guesses=[(players["Ann"].id, 150, 8.0)]),
@@ -97,11 +97,15 @@ def test_guess_ids_follow_the_turns_actually_written():
 
     history = build_game_history(room, game, finished_at=FINISHED_AT)
 
-    assert [r.turn_number for r in history.turns] == [1, 3]
+    assert [r.turn_number for r in history.turns] == [1, 2, 3]
     assert [(g.turn_id, g.user_id) for g in history.guesses] == [
         (history.turns[0].id, "user-bob"),
         (history.turns[1].id, "user-ann"),
+        (history.turns[2].id, "user-ann"),
     ]
+    cid = next(participant for participant in history.participants if participant.user_id is None)
+    assert cid.display_name == "Cid"
+    assert history.turns[1].drawer_seat_id == cid.seat_id
 
 
 def test_a_rejoined_account_is_recorded_once():

@@ -53,7 +53,7 @@ async def test_completed_game_records_every_round_with_participants_and_guesses(
     assert {g.turn_id for g in saved.guesses} == {turn.id for turn in saved.turns}
 
 
-async def test_seat_without_an_account_is_skipped_and_the_rest_still_persists():
+async def test_seat_without_an_account_is_fully_preserved():
     room_manager, room, players = build_room(
         rounds=1,
         accounts={"Ann": "user-ann", "Bob": "user-bob", "Cid": None},
@@ -64,12 +64,24 @@ async def test_seat_without_an_account_is_skipped_and_the_rest_still_persists():
     await play_to_completion(ctx, room, players)
 
     saved = history.saved[0]
-    assert {p.user_id for p in saved.participants} == {"user-ann", "user-bob"}
-    assert saved.record.player_count == 2
-    # Three turns were played but Cid's cannot be hung off a drawer account.
-    assert len(saved.turns) == 2
-    assert all(r.drawer_user_id in {"user-ann", "user-bob"} for r in saved.turns)
-    assert all(g.user_id in {"user-ann", "user-bob"} for g in saved.guesses)
+    assert {p.user_id for p in saved.participants} == {
+        "user-ann",
+        "user-bob",
+        None,
+    }
+    assert saved.record.player_count == len(saved.participants) == 3
+    assert len(saved.turns) == 3
+    cid = next(participant for participant in saved.participants if participant.user_id is None)
+    assert cid.display_name == "Cid"
+    assert cid.seat_id
+    assert any(
+        turn.drawer_user_id is None and turn.drawer_seat_id == cid.seat_id
+        for turn in saved.turns
+    )
+    assert any(
+        guess.user_id is None and guess.seat_id == cid.seat_id
+        for guess in saved.guesses
+    )
 
 
 async def test_departed_player_still_counts_as_a_participant():
@@ -150,8 +162,7 @@ async def test_abandoned_game_is_never_persisted():
     assert history.saved == []
 
 
-async def test_a_game_with_only_one_account_is_not_recorded():
-    """One recordable seat would be ranked first against nobody."""
+async def test_one_account_and_one_accountless_seat_are_recorded():
     room_manager, room, players = build_room(
         rounds=1, accounts={"Ann": "user-ann", "Bob": None}
     )
@@ -160,7 +171,9 @@ async def test_a_game_with_only_one_account_is_not_recorded():
 
     await play_to_completion(ctx, room, players)
 
-    assert history.saved == []
+    assert len(history.saved) == 1
+    assert len(history.saved[0].participants) == 2
+    assert history.saved[0].record.player_count == 2
 
 
 async def test_an_opponent_leaving_does_not_erase_the_turns_played():
