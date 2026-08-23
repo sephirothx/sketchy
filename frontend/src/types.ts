@@ -366,6 +366,15 @@ export interface AckResponse {
   roomFull?: boolean;
   /** The code was valid but its ephemeral room has already ended. */
   codeRetired?: boolean;
+  /** The command was refused because a bounded deployment drain has begun. */
+  serverDraining?: boolean;
+}
+
+export interface ServerShutdownNotice {
+  contractVersion: 1;
+  reason: "deployment";
+  drainSeconds: number;
+  startedAt: string;
 }
 
 export interface RoomPreviewResponse extends AckResponse {

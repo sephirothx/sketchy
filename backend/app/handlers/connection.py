@@ -33,6 +33,11 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
         auth_session = resolution.session
         user_id = auth_session.user_id if auth_session else None
     await ctx.sio.save_session(sid, {"user_id": user_id})
+    shutdown = getattr(ctx, "shutdown", None)
+    if shutdown is not None and shutdown.is_draining:
+        await ctx.sio.emit(
+            "server_shutdown", shutdown.notice_payload(), to=sid
+        )
     logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
 
 

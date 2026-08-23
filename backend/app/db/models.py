@@ -1192,6 +1192,61 @@ class GameRecord(Base):
     )
 
 
+class PlannedShutdownAbandonment(Base):
+    """Privacy-safe fact that a planned drain expired with a game still live."""
+
+    __tablename__ = "planned_shutdown_abandonments"
+    __table_args__ = (
+        CheckConstraint("contract_version = 1", name="ck_shutdown_abandonment_contract"),
+        _values_check(
+            "reason",
+            ("drain_timeout",),
+            "ck_shutdown_abandonment_reason",
+        ),
+        _values_check(
+            "phase",
+            ("choosing_prompt", "drawing", "turn_results", "game_end"),
+            "ck_shutdown_abandonment_phase",
+        ),
+        CheckConstraint(
+            "round_number >= 0 AND completed_turn_count >= 0",
+            name="ck_shutdown_abandonment_progress",
+        ),
+        CheckConstraint(
+            "seated_player_count >= 0 AND connected_player_count >= 0 "
+            "AND spectator_count >= 0 AND canvas_action_count >= 0",
+            name="ck_shutdown_abandonment_counts",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    # A partial game intentionally has no game_records parent. Its runtime ID
+    # remains the idempotency/correlation key without pretending it finished.
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, unique=True, index=True
+    )
+    room_instance_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+    )
+    contract_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=text("1"), nullable=False
+    )
+    reason: Mapped[str] = mapped_column(String(24), nullable=False)
+    phase: Mapped[str] = mapped_column(String(24), nullable=False)
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    completed_turn_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    seated_player_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    connected_player_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    spectator_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    canvas_action_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    game_started_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False, index=True
+    )
+
+
 class GamePromptSource(Base):
     """One exact immutable prompt-list revision present in a game's real pool."""
 

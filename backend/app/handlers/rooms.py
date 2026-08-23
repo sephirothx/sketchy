@@ -40,10 +40,16 @@ from app.rooms import (
 logger = logging.getLogger("sketchy.handlers.rooms")
 
 
+class ShutdownInProgress(RuntimeError):
+    pass
+
+
 async def _room_for_code(ctx: HandlerContext, code: str):
     room = ctx.room_manager.get_room_by_code(code)
     if room is not None or ctx.persistent_rooms is None:
         return room
+    if ctx.shutdown is not None and ctx.shutdown.is_draining:
+        raise ShutdownInProgress
     return await ctx.persistent_rooms.materialize(ctx.room_manager, code)
 
 
@@ -65,6 +71,8 @@ async def create_room(ctx: HandlerContext, sid, data):
         payload = parse_payload(CreateRoomPayload, data)
     except PayloadError as error:
         return error.acknowledgement()
+    if ctx.shutdown is not None and ctx.shutdown.is_draining:
+        return ctx.shutdown.rejection_acknowledgement()
     try:
         identity = await resolve_identity(
             ctx,
@@ -80,6 +88,8 @@ async def create_room(ctx: HandlerContext, sid, data):
         )
     except RoomPromptResolutionError as error:
         return {"ok": False, "error": str(error), "field": "promptListSlugs"}
+    if ctx.shutdown is not None and ctx.shutdown.is_draining:
+        return ctx.shutdown.rejection_acknowledgement()
 
     if not settings["name"]:
         settings["name"] = generate_random_room_name()
@@ -93,6 +103,9 @@ async def create_room(ctx: HandlerContext, sid, data):
         except Exception:
             logger.exception("Failed to allocate a room code")
             return {"ok": False, "error": "Could not create the room"}
+        if ctx.shutdown is not None and ctx.shutdown.is_draining:
+            await ctx.room_codes.release_unpublished(code)
+            return ctx.shutdown.rejection_acknowledgement()
     if payload.persistent:
         if code is None or ctx.persistent_rooms is None:
             if code is not None and ctx.room_codes is not None:
@@ -107,6 +120,12 @@ async def create_room(ctx: HandlerContext, sid, data):
         except (PersistentRoomError, ValueError) as error:
             await ctx.room_codes.release_unpublished(code)
             return {"ok": False, "error": str(error)}
+    if ctx.shutdown is not None and ctx.shutdown.is_draining:
+        if persistent_config is not None and ctx.persistent_rooms is not None:
+            await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
+        if code is not None and ctx.room_codes is not None:
+            await ctx.room_codes.release_unpublished(code)
+        return ctx.shutdown.rejection_acknowledgement()
     try:
         room = ctx.room_manager.create_room(
             **settings,
@@ -259,6 +278,9 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
         room = await _room_for_code(ctx, payload.code)
     except PersistentRoomUnavailable as error:
         return {"ok": False, "error": str(error)}
+    except ShutdownInProgress:
+        assert ctx.shutdown is not None
+        return ctx.shutdown.rejection_acknowledgement()
     if not room:
         if ctx.room_codes is not None and await ctx.room_codes.is_retired(payload.code):
             return {
@@ -283,6 +305,9 @@ async def join_room(ctx: HandlerContext, sid, data):
             room = await _room_for_code(ctx, payload.code)
         except PersistentRoomUnavailable as error:
             return {"ok": False, "error": str(error)}
+        except ShutdownInProgress:
+            assert ctx.shutdown is not None
+            return ctx.shutdown.rejection_acknowledgement()
     if not room:
         if (
             payload.code

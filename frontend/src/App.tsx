@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
@@ -15,11 +15,23 @@ import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
 import { useAuthStore } from "./store/authStore";
 import { socket } from "./lib/socket";
+import { parseShutdownNotice } from "./lib/shutdownNotice";
+import type { ServerShutdownNotice } from "./types";
 
 function App() {
   useGameSocketListeners();
   useRoomSessionReconnect();
   const fetchMe = useAuthStore((state) => state.fetchMe);
+  const [shutdownNotice, setShutdownNotice] = useState<ServerShutdownNotice | null>(null);
+
+  useEffect(() => {
+    const onServerShutdown = (payload: unknown) => {
+      const notice = parseShutdownNotice(payload);
+      if (notice) setShutdownNotice(notice);
+    };
+    socket.on("server_shutdown", onServerShutdown);
+    return () => { socket.off("server_shutdown", onServerShutdown); };
+  }, []);
 
   // The only call that provisions a guest, so it runs once on arrival and
   // gives every visitor a durable identity before they create or join a room.
@@ -38,6 +50,11 @@ function App() {
 
   return (
     <ToastProvider>
+      {shutdownNotice && (
+        <div className="server-shutdown-banner" role="status" aria-live="polite">
+          Server update in progress. No new rooms or games can start; a current game has up to {shutdownNotice.drainSeconds} seconds to finish.
+        </div>
+      )}
       <ConnectionStatusBanner />
       <BrowserRouter>
         <Routes>

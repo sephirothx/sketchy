@@ -797,6 +797,8 @@ class GameFlowService:
             room.restart_vote_cooldown_until = 0
             room.state = "waiting"
             room.game = None
+            if self._ctx.shutdown is not None:
+                self._ctx.shutdown.notify_game_state_changed()
             room.last_game_scores = [
                 {
                     "playerId": p.id,
@@ -939,6 +941,8 @@ class GameFlowService:
             room.restart_vote = None
             room.state = "waiting"
             room.game = None
+            if self._ctx.shutdown is not None:
+                self._ctx.shutdown.notify_game_state_changed()
         elif was_drawer:
             await self._abandon_current_turn(room)
         else:

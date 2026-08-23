@@ -75,6 +75,20 @@ def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> Non
         if room.restart_vote is not vote or vote.status != "approved":
             return
 
+        if ctx.shutdown is not None and ctx.shutdown.is_draining:
+            room.restart_vote = None
+            room.restart_vote_cooldown_until = (
+                time.time() + RESTART_VOTE_COOLDOWN_SECONDS
+            )
+            room.state = "waiting"
+            room.game = None
+            ctx.shutdown.notify_game_state_changed()
+            await ctx.game_flow.announce(
+                room, "The restart was cancelled because a server update is in progress."
+            )
+            await ctx.game_flow._emit_room_state(room)
+            return
+
         active_players = room.active_players()
         if len(active_players) < 2:
             room.restart_vote = None
@@ -103,6 +117,8 @@ async def propose_restart_vote(ctx: HandlerContext, sid, data=None):
         parse_empty_payload(data)
     except PayloadError as error:
         return error.acknowledgement()
+    if ctx.shutdown is not None and ctx.shutdown.is_draining:
+        return ctx.shutdown.rejection_acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in this room"}
@@ -153,6 +169,8 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
         payload = parse_payload(RestartVotePayload, data)
     except PayloadError as error:
         return error.acknowledgement()
+    if ctx.shutdown is not None and ctx.shutdown.is_draining:
+        return ctx.shutdown.rejection_acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in this room"}

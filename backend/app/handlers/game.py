@@ -21,6 +21,8 @@ async def start_game(ctx: HandlerContext, sid, data=None):
     if not current or not current[1].is_host:
         return {"ok": False, "error": "Only the host can start the game"}
     room, player = current
+    if ctx.shutdown is not None and ctx.shutdown.is_draining:
+        return ctx.shutdown.rejection_acknowledgement()
     # Waits out a settings change that is still being applied - see Room.lock.
     async with room.lock:
         active_players = room.active_players()
@@ -39,6 +41,9 @@ async def start_game(ctx: HandlerContext, sid, data=None):
                 "error": str(error),
                 "field": "promptListSlugs",
             }
+
+        if ctx.shutdown is not None and ctx.shutdown.is_draining:
+            return ctx.shutdown.rejection_acknowledgement()
 
         await ctx.game_flow._start_fresh_game(room, active_players)
     return {"ok": True}

@@ -21,7 +21,7 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db
 from app.db.seed import seed_prompt_lists
-from app.deployment import validate_worker_topology
+from app.deployment import shutdown_drain_seconds, validate_worker_topology
 from app.handlers import register_all_handlers
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -31,6 +31,10 @@ from app.repositories.sqlalchemy import (
 from app.state import room_manager
 from app.services.message_retention import purge_expired_room_messages
 from app.services.room_presets import RoomPresetService
+from app.services.shutdown import (
+    ShutdownCoordinator,
+    purge_expired_shutdown_abandonments,
+)
 
 
 class SPAStaticFiles(StaticFiles):
@@ -77,6 +81,7 @@ game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
 prompt_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
 block_service = BlockService(async_session_factory)
 room_preset_service = RoomPresetService(async_session_factory, prompt_list_repo)
+shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 handler_context = register_all_handlers(
@@ -87,6 +92,7 @@ handler_context = register_all_handlers(
     prompt_list_repo=prompt_list_repo,
     session_factory=async_session_factory,
     block_service=block_service,
+    shutdown=shutdown_coordinator,
 )
 
 
@@ -138,15 +144,21 @@ async def remove_banned_account_from_live_rooms(user_id: str) -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    shutdown_coordinator.begin_startup(
+        drain_seconds=shutdown_drain_seconds()
+    )
     try:
         validate_worker_topology()
         await init_db()
         if handler_context.room_codes is not None:
             await handler_context.room_codes.retire_orphaned_ephemeral()
         await purge_expired_room_messages(async_session_factory)
+        await purge_expired_shutdown_abandonments(async_session_factory)
         await seed_prompt_lists(prompt_list_repo)
+        shutdown_coordinator.mark_ready()
         yield
     finally:
+        await shutdown_coordinator.begin_shutdown(sio)
         await handler_context.timers.close()
         await async_engine.dispose()
 
@@ -190,7 +202,17 @@ api.include_router(
 
 @api.get("/api/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "readiness": shutdown_coordinator.state}
+
+
+@api.get("/api/ready")
+async def ready():
+    if not shutdown_coordinator.is_ready:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not_ready", "reason": shutdown_coordinator.state},
+        )
+    return {"status": "ready"}
 
 
 @api.get("/api/rooms")

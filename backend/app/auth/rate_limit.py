@@ -270,10 +270,10 @@ def client_key(request: Request) -> str:
     header is attacker-controlled, so a password-guesser could simply send a
     different value with every attempt and never fill a bucket.
 
-    Behind a proxy, run uvicorn with ``--proxy-headers`` and
-    ``--forwarded-allow-ips`` naming that proxy. Uvicorn then validates the
-    header against the trusted hop and rewrites ``request.client`` itself, so
-    the real address arrives here having actually been vouched for.
+    Behind a proxy, run the production server with ``PROXY_HEADERS=1`` and
+    ``FORWARDED_ALLOW_IPS`` naming that proxy. Uvicorn then validates the header
+    against the trusted hop and rewrites ``request.client`` itself, so the real
+    address arrives here having actually been vouched for.
     """
     client = request.client
     return client.host if client else "unknown"

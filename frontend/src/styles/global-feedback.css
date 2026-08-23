@@ -16,6 +16,19 @@
 
 .connection-status-banner.offline { background: #fef2f2; border-bottom-color: #ef4444; color: #991b1b; }
 
+.server-shutdown-banner {
+  background: #fff7ed;
+  border-bottom: 1px solid #f97316;
+  color: #9a3412;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 10px 16px;
+  position: sticky;
+  text-align: center;
+  top: 0;
+  z-index: 1150;
+}
+
 .toast-viewport {
   bottom: 20px;
   display: flex;

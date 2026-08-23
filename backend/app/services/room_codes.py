@@ -43,7 +43,7 @@ class RoomCodeService:
     async def allocate(self, *, kind: str = "ephemeral") -> str:
         if kind not in {"ephemeral", "persistent"}:
             raise ValueError("unsupported room code kind")
-        await self.purge_expired()
+        purged = False
         for _ in range(MAX_ALLOCATION_ATTEMPTS):
             code = self._code_factory().strip().upper()
             if (
@@ -58,6 +58,12 @@ class RoomCodeService:
                 return code
             except IntegrityError:
                 # The primary key is the cross-request/process collision guard.
+                # An expired retirement only matters when its code is drawn
+                # again, so the purge happens on that collision rather than in
+                # every room creation.
+                if not purged:
+                    await self.purge_expired()
+                    purged = True
                 continue
         raise RoomCodeAllocationError("Could not allocate a unique room code")
 

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from app.services.message_retention import MessageRetentionService
     from app.services.room_codes import RoomCodeService
     from app.services.persistent_rooms import PersistentRoomService
+    from app.services.shutdown import ShutdownCoordinator
 
 
 logger = logging.getLogger("sketchy.handlers.context")
@@ -43,6 +44,7 @@ class HandlerContext:
     message_retention: MessageRetentionService | None = None
     room_codes: RoomCodeService | None = None
     persistent_rooms: PersistentRoomService | None = None
+    shutdown: ShutdownCoordinator | None = None
     game_flow: GameFlowService = field(init=False)
 
     async def remove_room_if_empty(self, room_id: str) -> bool:

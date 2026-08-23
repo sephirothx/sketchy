@@ -18,6 +18,7 @@ from app.services.message_retention import MessageRetentionService
 from app.services.room_codes import RoomCodeService
 from app.services.persistent_rooms import PersistentRoomService
 from app.services.timers import TimerManager
+from app.services.shutdown import ShutdownCoordinator
 
 
 def register_all_handlers(
@@ -30,6 +31,7 @@ def register_all_handlers(
     prompt_list_repo: PromptListRepository | None = None,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
     block_service: BlockService | None = None,
+    shutdown: ShutdownCoordinator | None = None,
 ) -> HandlerContext:
     """Create the shared context and register every domain exactly once."""
     ctx = HandlerContext(
@@ -62,6 +64,7 @@ def register_all_handlers(
             if session_factory is not None and prompt_list_repo is not None
             else None
         ),
+        shutdown=shutdown,
     )
     ctx.game_flow = GameFlowService(ctx)
 

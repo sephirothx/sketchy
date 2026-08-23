@@ -126,6 +126,7 @@ async def test_close_cancels_and_awaits_outstanding_tasks():
 async def test_application_lifespan_closes_timer_manager(monkeypatch):
     from app import main
 
+    monkeypatch.setenv("SHUTDOWN_DRAIN_SECONDS", "0")
     timers = TimerManager()
     dispose = AsyncMock()
     monkeypatch.setattr(main.handler_context, "timers", timers)
@@ -133,6 +134,10 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     monkeypatch.setattr(main, "init_db", AsyncMock())
     purge_messages = AsyncMock()
     monkeypatch.setattr(main, "purge_expired_room_messages", purge_messages)
+    purge_abandonments = AsyncMock()
+    monkeypatch.setattr(
+        main, "purge_expired_shutdown_abandonments", purge_abandonments
+    )
     monkeypatch.setattr(main, "seed_prompt_lists", AsyncMock())
     retire_room_codes = AsyncMock()
     monkeypatch.setattr(
@@ -162,8 +167,10 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     assert timers.disconnect_timers == {}
     assert timers.restart_timers == {}
     purge_messages.assert_awaited_once_with(main.async_session_factory)
+    purge_abandonments.assert_awaited_once_with(main.async_session_factory)
     retire_room_codes.assert_awaited_once_with()
     dispose.assert_awaited_once_with()
+    assert main.shutdown_coordinator.state == "stopped"
     assert sent == [
         {"type": "lifespan.startup.complete"},
         {"type": "lifespan.shutdown.complete"},

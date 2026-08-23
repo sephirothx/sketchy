@@ -6,6 +6,8 @@ import os
 
 SUPPORTED_APP_WORKERS = 1
 WORKER_COUNT_ENVIRONMENTS = ("WEB_CONCURRENCY", "UVICORN_WORKERS")
+DEFAULT_SHUTDOWN_DRAIN_SECONDS = 30.0
+MAX_SHUTDOWN_DRAIN_SECONDS = 300.0
 
 
 def validate_worker_topology(environ: Mapping[str, str] | None = None) -> None:
@@ -34,3 +36,22 @@ def validate_worker_topology(environ: Mapping[str, str] | None = None) -> None:
                 "live rooms, games, timers, and socket sessions are process-owned; "
                 f"{variable} requested {worker_count}."
             )
+
+
+def shutdown_drain_seconds(environ: Mapping[str, str] | None = None) -> float:
+    """Parse the bounded planned-deploy drain window."""
+
+    values = os.environ if environ is None else environ
+    raw_value = values.get("SHUTDOWN_DRAIN_SECONDS")
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SHUTDOWN_DRAIN_SECONDS
+    try:
+        seconds = float(raw_value)
+    except ValueError as exc:
+        raise RuntimeError("SHUTDOWN_DRAIN_SECONDS must be a number") from exc
+    if not 0 <= seconds <= MAX_SHUTDOWN_DRAIN_SECONDS:
+        raise RuntimeError(
+            "SHUTDOWN_DRAIN_SECONDS must be between 0 and "
+            f"{int(MAX_SHUTDOWN_DRAIN_SECONDS)}"
+        )
+    return seconds

@@ -50,7 +50,7 @@ flowchart LR
         UI[React SPA]
     end
     subgraph Server[Single Python process]
-        REST["FastAPI REST\n/api/health, /api/rooms"]
+        REST["FastAPI REST\n/api/health, /api/ready, /api/rooms"]
         IO["python-socketio\nAsyncServer"]
         State["In-memory state\nRoomManager + Game"]
         Repo["Repository Layer\nUserRepository\nGameHistoryRepository\nPromptListRepository"]
@@ -378,7 +378,7 @@ missed:
 cd backend
 export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
 .venv/bin/python -m app.db.migrate
-.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
 ```
 
 Sketchy v1 supports exactly one application worker. Do not pass Uvicorn
@@ -397,6 +397,31 @@ traffic on the documented reference environment before the production baseline
 is declared complete. Deployments needing multiple workers are outside v1 and
 require shared room/session/timer state plus cross-worker Socket.IO delivery.
 
+Planned deploys use a bounded drain; they do not snapshot or restore live
+rooms. `GET /api/ready` returns 200 only after startup is complete and switches
+to 503 before shutdown work begins, while `/api/health` remains a liveness check
+and reports the current readiness state. At drain start the server sends every
+connected client the versioned `server_shutdown` notice, rejects new room
+creation, persistent-room materialization, new game starts, and restart votes,
+but leaves existing rooms connected so active games can finish. Set
+`SHUTDOWN_DRAIN_SECONDS` to a value from 0 through 300 (default 30), and give the
+process supervisor a termination grace period longer than that value plus the
+normal 10-second finished-history write bound. A second termination signal
+abandons the rest of the window immediately, so an operator who cannot wait can
+press Ctrl+C (or send `SIGTERM`) again; that forced exit also skips the
+abandonment diagnostic below.
+
+A game that finishes during the window follows the ordinary all-or-nothing
+history and prompt-usage paths. If the deadline expires first, the server does
+not misrepresent a partial game or canvas as completed history. It stores one
+idempotent `planned_shutdown_abandonments` diagnostic row for 90 days instead:
+runtime game/room UUIDs, phase and round, completed-turn and canvas-action
+counts, coarse connected/seated/spectator counts, and timestamps. It never
+stores room codes, room/player names, prompts, chat, or canvas contents. A hard
+crash cannot run this planned-shutdown hook; failed finished-history writes and
+crash-safe retry are handled by the #323 durable spool rather than by live-state
+serialization.
+
 PostgreSQL connections are checked before checkout, recycled after 30 minutes,
 and bounded to five persistent plus five overflow connections per server
 process. These deployment settings can be tuned without code changes:
@@ -407,6 +432,7 @@ process. These deployment settings can be tuned without code changes:
 | `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
 | `DB_POOL_RECYCLE_SECONDS` | `1800` | Maximum age before a connection is replaced |
+| `SHUTDOWN_DRAIN_SECONDS` | `30` | Planned-deploy game drain window, 0-300 seconds |
 
 CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete
 migration chain down and up on PostgreSQL and SQLite, checks schema drift and
@@ -577,11 +603,12 @@ database if you manage secrets externally. Rotating it starts fresh buckets
 without exposing or re-identifying old keys.
 
 Limits are keyed on the connecting address. Behind a reverse proxy or tunnel
-every request arrives from the proxy, so run uvicorn with `--proxy-headers` and
-`--forwarded-allow-ips=<proxy address>` to have the real client address
-recovered from `X-Forwarded-For`. Without that flag the header is ignored on
-purpose: it is attacker-controlled, and trusting it blindly would let a
-password-guesser sidestep the limit by varying it on every attempt.
+every request arrives from the proxy, so run the production server with
+`PROXY_HEADERS=1` and `FORWARDED_ALLOW_IPS=<proxy address>` to have the real
+client address recovered from `X-Forwarded-For`. Without that trusted-proxy
+configuration the header is ignored on purpose: it is attacker-controlled, and
+trusting it blindly would let a password-guesser sidestep the limit by varying
+it on every attempt.
 
 ### Reports and suspensions
 
@@ -739,10 +766,12 @@ cd backend
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt      # runtime only
 # .venv/bin/pip install -r requirements-dev.txt  # runtime + pytest/Playwright
-.venv/bin/uvicorn app.main:app --port 8000
+.venv/bin/python -m app.server
 ```
 
-Runs on http://localhost:8000. `GET /api/health` should return `{"status": "ok"}`.
+Runs on http://localhost:8000. `GET /api/health` should report
+`{"status":"ok","readiness":"ready"}` and `GET /api/ready` should return
+`{"status":"ready"}` after startup.
 Install `requirements-dev.txt` instead when you plan to run unit, integration, or E2E tests.
 
 ### Frontend
@@ -860,7 +889,7 @@ sampled, so neither of their numbers is a projection.
 
 ```bash
 cd frontend && npm run build   # outputs frontend/dist
-cd ../backend && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+cd ../backend && HOST=0.0.0.0 .venv/bin/python -m app.server
 ```
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
@@ -988,6 +1017,12 @@ includes the saved configuration and archive state.
   multi-worker settings, deployment commands pin one worker, and the v1 release
   gate targets 50 simultaneous active rooms / 400 connected player seats. This
   is an explicit product ceiling, not an undiscovered horizontal-scaling mode.
+- **Bounded planned-deploy drain, no live snapshots**: readiness fails before
+  the process rejects new rooms and games and warns connected clients. Existing
+  games have a configured bounded window to finish normally. A deadline
+  leftover receives only a 90-day privacy-safe abandonment fact; partial games,
+  canvases, timers, scores, and rooms are never serialized or restored, and a
+  crash still loses process-owned state.
 - **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO
   event. Data-bearing path, shape, and fill actions use binary attachments with fixed-width
   colors, widths, shape IDs, and quarter-pixel signed coordinates. Path-end and clear use

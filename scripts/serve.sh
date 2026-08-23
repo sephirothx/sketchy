@@ -86,4 +86,4 @@ fi
 # --- Start the server --------------------------------------------------------
 log "Starting server on http://localhost:$PORT (serving frontend/dist + API/Socket.IO)"
 cd "$BACKEND_DIR"
-exec .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port "$PORT"
+exec .venv/bin/python -m app.server
