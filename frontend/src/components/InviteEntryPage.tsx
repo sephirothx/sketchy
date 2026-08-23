@@ -72,7 +72,7 @@ export function InviteEntryPage({ code }: { code: string }) {
         <main className="invite-card">
           <div className="invite-card-heading">
             <div>
-              <p className="invite-eyebrow">{room.isPublic ? "Public room" : "Private invite"} · {room.code}</p>
+              <p className="invite-eyebrow">{room.isPersistent ? "Persistent room" : room.isPublic ? "Public room" : "Private invite"} · {room.code}</p>
               <h1>{room.name}</h1>
             </div>
             <span className={`invite-state-badge ${room.state}`}>

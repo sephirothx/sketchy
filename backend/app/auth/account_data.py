@@ -23,6 +23,7 @@ from app.db.models import (
     IdentityAlias,
     PlayerReport,
     PlayerReportMessageEvidence,
+    PersistentRoom,
     PromptConcept,
     PromptContentReport,
     PromptList,
@@ -317,6 +318,15 @@ async def _build_export_artifact(
             )
         ).all()
     )
+    persistent_rooms = list(
+        (
+            await session.scalars(
+                select(PersistentRoom)
+                .where(PersistentRoom.owner_user_id.in_(identity_ids))
+                .order_by(PersistentRoom.created_at, PersistentRoom.id)
+            )
+        ).all()
+    )
 
     return {
         "schemaVersion": EXPORT_SCHEMA_VERSION,
@@ -394,6 +404,29 @@ async def _build_export_artifact(
                 ],
             }
             for prompt_list in prompt_lists
+        ],
+        "persistentRooms": [
+            {
+                "id": str(room.id),
+                "code": room.code,
+                "name": room.name,
+                "isPublic": room.is_public,
+                "maxPlayers": room.max_players,
+                "rounds": room.rounds,
+                "drawingSeconds": room.drawing_seconds,
+                "hintMode": room.hint_mode,
+                "scoringMode": room.scoring_mode,
+                "spectatorsSeePrompt": room.spectators_see_prompt,
+                "hideMaskedPrompt": room.hide_masked_prompt,
+                "allowedTools": room.allowed_tools,
+                "colorMode": room.color_mode,
+                "promptListIds": room.prompt_list_ids,
+                "version": room.version,
+                "createdAt": _timestamp(room.created_at),
+                "updatedAt": _timestamp(room.updated_at),
+                "archivedAt": _timestamp(room.archived_at),
+            }
+            for room in persistent_rooms
         ],
         "linkedIdentities": [
             {
@@ -974,6 +1007,18 @@ async def anonymize_account(
             )
             await session.execute(
                 delete(UserSettings).where(UserSettings.user_id.in_(identity_ids))
+            )
+            # The code is permanent, while an already-running instance is
+            # detached by the account-deletion callback and lives only until
+            # empty. Archived configuration remains in the private export/audit
+            # trail without being materializable again.
+            await session.execute(
+                update(PersistentRoom)
+                .where(
+                    PersistentRoom.owner_user_id.in_(identity_ids),
+                    PersistentRoom.archived_at.is_(None),
+                )
+                .values(archived_at=deleted_at, updated_at=deleted_at)
             )
             # Player-authored lists are private account data, unlike shared game
             # history. Remove their revisions and then their now-unreferenced

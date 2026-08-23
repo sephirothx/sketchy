@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from app.services.game_flow import GameFlowService
     from app.services.message_retention import MessageRetentionService
     from app.services.room_codes import RoomCodeService
+    from app.services.persistent_rooms import PersistentRoomService
 
 
 logger = logging.getLogger("sketchy.handlers.context")
@@ -41,6 +42,7 @@ class HandlerContext:
     block_service: BlockService | None = None
     message_retention: MessageRetentionService | None = None
     room_codes: RoomCodeService | None = None
+    persistent_rooms: PersistentRoomService | None = None
     game_flow: GameFlowService = field(init=False)
 
     async def remove_room_if_empty(self, room_id: str) -> bool:
@@ -49,7 +51,7 @@ class HandlerContext:
         removed = self.room_manager.remove_room_if_empty(room_id)
         if removed is None:
             return False
-        if self.room_codes is not None:
+        if self.room_codes is not None and removed.persistent_room_id is None:
             try:
                 await self.room_codes.retire_ephemeral(removed.code)
             except Exception:

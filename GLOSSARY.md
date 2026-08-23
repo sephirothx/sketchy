@@ -177,6 +177,8 @@ Three different things, never used for one another:
 | **Waiting room** | A room's state before a game starts or between games, where players gather and the host starts the game. | lobby, pre-game, staging |
 | **Public room** | A room listed in the lobby, joinable by anyone. | open room |
 | **Private room** | A room reachable only by its code or invite link. | closed room, locked room |
+| **Persistent room** | An owner-controlled room identity whose permanent code and typed configuration survive empty periods and restarts. Opening it creates a fresh **live room instance**; players, scores, games, timers, canvases, recaps, and quick custom prompts are never restored. | permanent game, saved live room, group session |
+| **Live room instance** | The process-owned, temporary realization of a room in which players join and games run. A persistent room can create many fresh live instances over time, but none is a snapshot or continuation of an earlier one. | persistent room, saved game, replica |
 | **Room code** | The random six-character invite capability that identifies a room to join. Allocation is globally unique. An ephemeral code is retired for 30 days after its room ends; a persistent-room code is never reused. The shareable URL carrying it is the **invite link**. | friend code, game code, PIN, room ID |
 | **Room settings** | The host-controlled configuration: rounds, drawing time, max players, prompt lists, hint mode, scoring mode, spectator rules. | options, config, preferences, rules |
 | **Player settings** | A player's own preferences, which travel with them between rooms. | user settings, profile settings |

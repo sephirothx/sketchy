@@ -7,6 +7,8 @@ import { SettingsIcon } from "../components/SettingsIcon";
 import { AccountMenu } from "../components/AccountMenu";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
 import { currentPlayerName } from "../store/authStore";
+import { useAuthStore } from "../store/authStore";
+import { getMyPersistentRooms, type PersistentRoomSummary } from "../lib/persistentRooms";
 import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
@@ -76,9 +78,11 @@ export function LobbyBrowserPage() {
   const colorblindSafeColors = useSettingsStore((s) => s.colorblindSafeColors);
   const setSession = useGameStore((s) => s.setSession);
   const setExitingRoom = useGameStore((s) => s.setExitingRoom);
+  const authUser = useAuthStore((state) => state.user);
 
 
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
+  const [persistentRooms, setPersistentRooms] = useState<PersistentRoomSummary[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
@@ -97,6 +101,24 @@ export function LobbyBrowserPage() {
   useEffect(() => {
     setExitingRoom(false);
   }, [setExitingRoom]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!authUser || authUser.isAnonymous) {
+      return;
+    }
+    void getMyPersistentRooms()
+      .then((value) => {
+        if (!cancelled) setPersistentRooms(value);
+      })
+      .catch(() => {
+        if (!cancelled) setPersistentRooms([]);
+      });
+    return () => { cancelled = true; };
+  }, [authUser]);
+
+  const visiblePersistentRooms =
+    authUser && !authUser.isAnonymous ? persistentRooms : [];
 
   useEffect(() => {
     // The polling controller stops new work; this flag also prevents an
@@ -287,6 +309,18 @@ export function LobbyBrowserPage() {
           </div>
         </section>
       </div>
+
+      {visiblePersistentRooms.length > 0 && <section className="panel">
+        <h2>My persistent rooms</h2>
+        <div className="room-list">
+          {visiblePersistentRooms.map((room) => <article className="public-room-card" key={room.id}>
+            <div className="public-room-card-main"><strong>{room.name}</strong><p>{room.code} · {room.rounds} rounds · {room.drawingSeconds}s</p></div>
+            <button className="public-room-primary-action" disabled={Boolean(pendingJoin)} onClick={() => void joinRoom({ code: room.code }, false, `persistent-${room.id}`)}>
+              {pendingJoin?.key === `persistent-${room.id}` ? "Joining…" : "Open room"}
+            </button>
+          </article>)}
+        </div>
+      </section>}
 
       <section className="panel">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>

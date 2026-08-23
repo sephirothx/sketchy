@@ -16,6 +16,7 @@ from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
 from app.services.message_retention import MessageRetentionService
 from app.services.room_codes import RoomCodeService
+from app.services.persistent_rooms import PersistentRoomService
 from app.services.timers import TimerManager
 
 
@@ -54,6 +55,11 @@ def register_all_handlers(
         room_codes=(
             RoomCodeService(session_factory)
             if session_factory is not None
+            else None
+        ),
+        persistent_rooms=(
+            PersistentRoomService(session_factory, prompt_list_repo)
+            if session_factory is not None and prompt_list_repo is not None
             else None
         ),
     )

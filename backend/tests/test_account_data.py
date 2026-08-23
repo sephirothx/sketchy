@@ -29,6 +29,7 @@ from app.db.models import (
     GameRecord,
     PlayerReport,
     PlayerReportMessageEvidence,
+    PersistentRoom,
     PromptContentReport,
     ScoreEvent,
     TurnGuess,
@@ -40,6 +41,7 @@ from app.db.models import (
     PromptConcept,
     PromptList,
     RoomMessage,
+    RoomCodeReservation,
     generate_uuid,
 )
 from app.domain_values import AccountState, DataExportStatus
@@ -385,6 +387,25 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     )
     async with factory() as session:
         async with session.begin():
+            session.add(RoomCodeReservation(code="EXPR01", kind="persistent"))
+            session.add(
+                PersistentRoom(
+                    code="EXPR01",
+                    owner_user_id=UUID(owner["id"]),
+                    name="Exported room",
+                    is_public=False,
+                    max_players=8,
+                    rounds=3,
+                    drawing_seconds=90,
+                    hint_mode="checkpoints",
+                    scoring_mode="default",
+                    spectators_see_prompt=False,
+                    hide_masked_prompt=False,
+                    allowed_tools=["brush", "shapes", "fill"],
+                    color_mode="all",
+                    prompt_list_ids=[exported_list.id],
+                )
+            )
             session.add(
                 PromptContentReport(
                     id=generate_uuid(),
@@ -447,6 +468,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["blocks"][0]["blockedUserId"] == other.id
     assert artifact["promptLists"][0]["name"] == "Exported prompts"
     assert artifact["promptLists"][0]["revisions"][0]["prompts"][0]["prompt"] == "red panda"
+    assert artifact["persistentRooms"][0]["code"] == "EXPR01"
+    assert artifact["persistentRooms"][0]["promptListIds"] == [exported_list.id]
     assert artifact["promptContentReportsSubmitted"][0]["details"] == (
         "Requester-authored prompt report"
     )

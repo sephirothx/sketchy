@@ -44,6 +44,7 @@ export function CreateRoomPage() {
   const authUser = useAuthStore((state) => state.user);
   const [roomName, setRoomName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+  const [persistent, setPersistent] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
@@ -72,7 +73,7 @@ export function CreateRoomPage() {
     setError(null);
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
-        nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
+        nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, persistent, maxPlayers, rounds, drawingSeconds,
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
         spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptListSlugs,
         promptListShareCodes,
@@ -106,6 +107,15 @@ export function CreateRoomPage() {
       <div className="create-room-heading"><p>Room setup</p><h1>Create a room</h1></div>
       {error && <p className="create-room-error" role="alert">{error}</p>}
       <div className="create-room-basic-grid">
+        <Switch
+          label="Keep this room for future games"
+          hint={authUser && !authUser.isAnonymous
+            ? "The code and settings stay with your account. Quick custom prompts must be saved as a prompt list first."
+            : "Create an account to own a persistent room."}
+          checked={persistent}
+          disabled={!authUser || authUser.isAnonymous || customPrompts.analysis.usableCount > 0}
+          onChange={setPersistent}
+        />
         <div className="create-room-name-row">
           <label className="create-room-name-field">
             Room name (optional)
@@ -174,25 +184,29 @@ export function CreateRoomPage() {
           />
           {hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
           {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">Point-purchase hint modes require scoring.</p>}
-          <CustomPromptsEditor
-            value={customPrompts.value}
-            analysis={customPrompts.analysis}
-            onChange={handleCustomPromptsChange}
-            footer={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
-              <button
-                type="button"
-                className="custom-prompts-apply"
-                onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
-              >
-                Save as reusable list
-              </button>
-            ) : undefined}
-          />
+          {persistent ? (
+            <p className="setting-dependency">Persistent rooms use saved prompt lists; quick custom prompts are never stored in room configuration.</p>
+          ) : (
+            <CustomPromptsEditor
+              value={customPrompts.value}
+              analysis={customPrompts.analysis}
+              onChange={handleCustomPromptsChange}
+              footer={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
+                <button
+                  type="button"
+                  className="custom-prompts-apply"
+                  onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
+                >
+                  Save as reusable list
+                </button>
+              ) : undefined}
+            />
+          )}
           <Switch
             label="Only use custom prompts"
             hint="Add a usable custom prompt to enable this option."
             checked={customPrompts.only}
-            disabled={customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
+            disabled={persistent || customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
             onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
           />
         </div>

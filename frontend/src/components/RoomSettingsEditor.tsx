@@ -49,6 +49,7 @@ import type {
 const emptySettings: EditableRoomSettings = {
   name: "",
   isPublic: true,
+  isPersistent: false,
   maxPlayers: 8,
   rounds: 3,
   drawingSeconds: DEFAULT_DRAWING_SECONDS,
@@ -83,6 +84,7 @@ export function RoomSettingsEditor() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
   // Custom prompts do not autosave: a prompt list only means anything once the
   // host has stopped typing it, and a half-written line would be stored as a
   // prompt. The textarea and the "only" switch travel together, because the
@@ -211,6 +213,22 @@ export function RoomSettingsEditor() {
     if (isSendableRoomNumber(field, value)) saver.queue({ [field]: value }, STEPPER_SAVE_DELAY_MS);
   }
 
+  async function archivePersistentRoom() {
+    if (!window.confirm("Archive this persistent room? Its saved code will never be reused.")) return;
+    saver.flush();
+    setArchiveBusy(true);
+    try {
+      const response = await emitWithAck<AckResponse>("archive_persistent_room", {});
+      if (!response.ok) throw new Error(response.error || "Could not archive this room");
+      setSettings((current) => ({ ...current, isPersistent: false }));
+      notify("Persistent room archived. This live room will end when everyone leaves.");
+    } catch (archiveError) {
+      notify(socketRequestErrorMessage(archiveError, "archive this room"), "error");
+    } finally {
+      setArchiveBusy(false);
+    }
+  }
+
   return <section
     ref={rootRef}
     className="waiting-card room-settings-editor"
@@ -220,7 +238,7 @@ export function RoomSettingsEditor() {
     // own edit.
     onBlur={() => saver.flush()}
   >
-    <div className="room-settings-editor-heading"><p className="waiting-card-kicker">Host settings</p><h2 id="room-settings-title">Edit room settings</h2></div>
+    <div className="room-settings-editor-heading"><p className="waiting-card-kicker">{settings.isPersistent ? "Persistent room settings" : "Host settings"}</p><h2 id="room-settings-title">Edit room settings</h2></div>
     {loading ? <p>Loading settings…</p> : <div className="room-settings-fields">
       <div className="create-room-name-row">
         <label className="create-room-name-field">
@@ -289,7 +307,7 @@ export function RoomSettingsEditor() {
           }))}
         />
         {settings.hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
-        <CustomPromptsEditor
+        {settings.isPersistent ? <p className="setting-dependency">Persistent rooms use saved prompt lists instead of quick custom prompts.</p> : <CustomPromptsEditor
           value={customPrompts.value}
           analysis={customPrompts.analysis}
           onChange={(value) => dispatchCustomPrompts({ type: "change", value })}
@@ -304,12 +322,12 @@ export function RoomSettingsEditor() {
               {promptsDirty ? "Apply prompts" : "Prompts applied"}
             </button>
           }
-        />
+        />}
         <Switch
           label="Only use custom prompts"
           hint="Add a usable custom prompt to enable this option."
           checked={customPrompts.only}
-          disabled={customPrompts.analysis.usableCount === 0 || promptsError}
+          disabled={settings.isPersistent || customPrompts.analysis.usableCount === 0 || promptsError}
           onChange={setPromptsOnly}
         />
       </div></details>
@@ -318,5 +336,6 @@ export function RoomSettingsEditor() {
     <div className={`room-settings-status${status === "failed" ? " is-failed" : ""}`} aria-live="polite">
       {STATUS_TEXT[status]}
     </div>
+    {settings.isPersistent && <button type="button" className="custom-prompts-apply" disabled={archiveBusy} onClick={() => void archivePersistentRoom()}>{archiveBusy ? "Archiving…" : "Archive persistent room"}</button>}
   </section>;
 }

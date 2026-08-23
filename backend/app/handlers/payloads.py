@@ -189,6 +189,7 @@ class RoomSettingsFields(RequestModel):
 
 
 class CreateRoomPayload(RoomSettingsFields):
+    persistent: bool = False
     nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
     name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
     colorblind_safe_colors: bool = Field(

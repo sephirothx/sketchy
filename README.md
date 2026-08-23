@@ -896,6 +896,30 @@ group. Startup retires any ephemeral reservations orphaned by a restart or
 crash. Expired ephemeral reservations may be reused, while codes allocated to
 future persistent rooms are permanent and never enter the reuse pool.
 
+Registered players may choose **Keep this room for future games** during room
+creation. A **Persistent room** keeps its permanent code and typed configuration
+under that owner's account, appears under **My persistent rooms** in the lobby,
+and may be joined by anyone who has the code. Up to ten active persistent rooms
+may belong to one account. Only the registered owner becomes host and may edit
+or archive the durable configuration.
+
+Persistence stops at configuration. When an empty persistent room is opened—or
+opened again after a restart—the server creates a new in-memory room instance
+from the saved settings. Players, scores, current game/phase, timers, reconnect
+grace, canvas, recap, chat, and quick custom prompts are never restored. Durable
+configuration may reference current active built-in prompt lists or lists owned
+by the room owner using stable list IDs; the latest authorized revision is
+resolved each time and snapshotted when a game starts. A missing, deleted,
+hidden, or no-longer-authorized list blocks opening visibly instead of falling
+back to default prompts. Quick custom prompts must first be saved as a private
+prompt list.
+
+Archiving prevents a new live instance from being created and permanently
+reserves the old code. If people are still in the room, their current instance
+becomes ordinary ephemeral state and lasts until empty. Account deletion does
+the same for every room owned by that account; the private account export
+includes the saved configuration and archive state.
+
 ### Scoring
 
 - Everyone starts a game on zero points, in every scoring mode.
@@ -941,7 +965,7 @@ future persistent rooms are permanent and never enter the reuse pool.
 
 ## Key design decisions & limitations
 
-- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, explicitly saved player prompt lists, global room-code reservations, and the bounded retained-message window) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (rooms, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency; message correlation IDs do not make an active game recoverable.
+- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, explicitly saved player prompt lists, persistent-room configuration, global room-code reservations, and the bounded retained-message window) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (live room instances, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency; durable configuration and message correlation IDs do not make an active game recoverable.
 - **Single application worker**: one Uvicorn worker owns every live room,
   Socket.IO session, timer, and canvas. Startup rejects common environment-based
   multi-worker settings, deployment commands pin one worker, and the v1 release

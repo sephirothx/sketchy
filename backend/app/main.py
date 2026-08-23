@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.profiles import create_profile_router
+from app.api.persistent_rooms import create_persistent_room_router
 from app.api.prompt_lists import create_prompt_list_router
 from app.api.moderation import create_moderation_router
 from app.api.user_settings import create_user_settings_router
@@ -89,6 +90,10 @@ handler_context = register_all_handlers(
 async def _remove_account_from_live_rooms(user_id: str, *, reason: str) -> None:
     """End live seats immediately after an account loses access."""
     for room in list(room_manager.rooms.values()):
+        if room.persistent_owner_user_id == user_id:
+            room.persistent_room_id = None
+            room.persistent_owner_user_id = None
+            room.persistent_config_version = None
         player = room_manager.get_player_by_user_id(room, user_id)
         if player is None:
             continue
@@ -166,6 +171,8 @@ api.include_router(
 api.include_router(create_profile_router(user_repo, game_history_repo))
 api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))
+if handler_context.persistent_rooms is not None:
+    api.include_router(create_persistent_room_router(handler_context.persistent_rooms))
 api.include_router(
     create_user_blocks_router(async_session_factory, block_service)
 )

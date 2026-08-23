@@ -69,7 +69,6 @@ class RoomCodeService:
                 await session.execute(
                     delete(RoomCodeReservation).where(
                         RoomCodeReservation.code == code.strip().upper(),
-                        RoomCodeReservation.kind == "ephemeral",
                         RoomCodeReservation.retired_until.is_(None),
                     )
                 )

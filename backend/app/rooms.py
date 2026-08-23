@@ -277,6 +277,11 @@ class Room:
     # Durable correlation scope for short-lived messages. The public/live room
     # id remains an implementation detail and is never stored as a code.
     retention_scope_id: str = field(default_factory=lambda: str(generate_uuid7()))
+    # Durable configuration identity is separate from this fresh live instance.
+    # No player, score, game, timer, canvas, or room ID is restored with it.
+    persistent_room_id: str | None = None
+    persistent_owner_user_id: str | None = field(default=None, repr=False)
+    persistent_config_version: int | None = None
     custom_prompts: list[str] = field(default_factory=list)
     custom_prompts_only: bool = False
     drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS
@@ -461,6 +466,7 @@ class Room:
             "code": self.code,
             "name": self.name,
             "isPublic": self.is_public,
+            "isPersistent": self.persistent_room_id is not None,
             "playerCount": len(active_players),
             "spectatorCount": len(spectators),
             "maxPlayers": self.max_players,
@@ -486,6 +492,7 @@ class Room:
             "code": self.code,
             "name": self.name,
             "isPublic": self.is_public,
+            "isPersistent": self.persistent_room_id is not None,
             "maxPlayers": self.max_players,
             "rounds": self.rounds,
             "customPromptCount": len(self.custom_prompts),
@@ -563,6 +570,9 @@ class RoomManager:
         prompt_source_revision_ids: dict[str, tuple[str, ...]] | None = None,
         curated_prompts: list[str] | None = None,
         code: str | None = None,
+        persistent_room_id: str | None = None,
+        persistent_owner_user_id: str | None = None,
+        persistent_config_version: int | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
@@ -575,6 +585,9 @@ class RoomManager:
             code=final_code,
             name=final_name,
             is_public=is_public,
+            persistent_room_id=persistent_room_id,
+            persistent_owner_user_id=persistent_owner_user_id,
+            persistent_config_version=persistent_config_version,
             max_players=max_players,
             rounds=rounds,
             custom_prompts=custom_prompts or [],
@@ -648,11 +661,22 @@ class RoomManager:
                 else normalize_name_color(name_color) or generate_random_name_color()
             ),
             score=0,
-            is_host=not is_spectator and len(active_players) == 0,
+            is_host=(
+                not is_spectator
+                and (
+                    user_id == room.persistent_owner_user_id
+                    if room.persistent_owner_user_id is not None
+                    else len(active_players) == 0
+                )
+            ),
             is_spectator=is_spectator,
             colorblind_safe_colors=colorblind_safe_colors,
         )
         room.players[player_id] = player
+        if player.is_host and room.persistent_owner_user_id is not None:
+            for other in room.players.values():
+                if other.id != player.id:
+                    other.is_host = False
         return player
 
     def get_player_by_user_id(self, room: Room, user_id: object) -> Player | None:
@@ -692,6 +716,15 @@ class RoomManager:
 
     def _promote_new_host_if_needed(self, room: Room) -> None:
         if any(p.is_host for p in room.players.values()):
+            return
+        if room.persistent_owner_user_id is not None:
+            for player in room.players.values():
+                if (
+                    not player.is_spectator
+                    and player.user_id == room.persistent_owner_user_id
+                ):
+                    player.is_host = True
+                    return
             return
         for p in room.players.values():
             if not p.is_spectator:
