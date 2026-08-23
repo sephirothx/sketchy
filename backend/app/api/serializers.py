@@ -91,6 +91,8 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 "drawerUserId": r.drawer_user_id,
                 "drawerSeatId": r.drawer_seat_id,
                 "drawerDisplayName": r.drawer_display_name,
+                "drawerNameColor": r.drawer_name_color,
+                "drawerIsAnonymous": r.drawer_is_anonymous,
                 "prompt": r.prompt,
                 "promptVersionId": r.prompt_version_id,
                 "promptSourceKind": r.prompt_source_kind,
@@ -111,6 +113,8 @@ def game_detail_payload(detail: GameDetail) -> dict:
                         "userId": g.user_id,
                         "seatId": g.seat_id,
                         "displayName": g.display_name,
+                        "nameColor": g.name_color,
+                        "isAnonymous": g.is_anonymous,
                         "pointsAwarded": g.points_awarded,
                         "guessTimeSeconds": g.guess_time_seconds,
                     }

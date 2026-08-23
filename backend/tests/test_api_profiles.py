@@ -228,7 +228,11 @@ async def test_participants_see_the_turn_by_turn_detail(env):
     assert body["turns"][0]["promptSourceKind"] == "legacy_unknown"
     assert body["turns"][0]["promptOffers"] == []
     assert body["turns"][0]["drawerDisplayName"] == "Ann"
+    assert body["turns"][0]["drawerNameColor"] is None
+    assert body["turns"][0]["drawerIsAnonymous"] is True
     assert body["turns"][0]["guesses"][0]["displayName"] == "Bob"
+    assert body["turns"][0]["guesses"][0]["nameColor"] is None
+    assert body["turns"][0]["guesses"][0]["isAnonymous"] is True
     assert body["turns"][0]["guesses"][0]["pointsAwarded"] == 100
     assert body["turns"][0]["participantOutcomes"] == [
         {

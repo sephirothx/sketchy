@@ -154,6 +154,14 @@ starts even if no session cookie supplied an account. Such a player still
 counts toward the recorded player total and keeps every factual turn and
 correct guess; history never drops or coalesces the seat merely because its
 account link is null.
+Historical names, colors, and guest/registered state deliberately remain as
+other players saw them; ordinary profile edits never rewrite them. Username
+and avatar are not rendered by finished-game history, so they are not copied
+into the historical record. A linked account ID may still support a live
+profile link while presentation comes from the frozen seat. Account deletion
+replaces identifying snapshots with the neutral **Deleted player** tombstone.
+If guest identities later merge into one account, their factual seats stay
+separate rather than collapsing an already-played game.
 When drawing begins, the server freezes the eligible guesser seats. Players who
 were AFK or disconnected then, and players who join after that instant, remain
 ineligible until the next turn; their text is treated as restricted chat rather

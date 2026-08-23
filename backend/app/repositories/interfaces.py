@@ -222,6 +222,8 @@ class TurnGuessDetail:
     user_id: str | None
     seat_id: str | None
     display_name: str
+    name_color: str | None
+    is_anonymous: bool
     points_awarded: int
     guess_time_seconds: float
 
@@ -251,6 +253,8 @@ class TurnDetail:
     drawer_user_id: str | None
     drawer_seat_id: str | None
     drawer_display_name: str
+    drawer_name_color: str | None
+    drawer_is_anonymous: bool
     prompt: str
     duration_seconds: float
     prompt_version_id: str | None = None

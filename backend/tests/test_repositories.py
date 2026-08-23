@@ -170,6 +170,13 @@ async def test_game_history_repository():
         u1 = await user_repo.create_anonymous("Player1")
         u2 = await user_repo.create_anonymous("Player2")
         u3 = await user_repo.create_anonymous("Player3_NonParticipant")
+        u1 = await user_repo.update_profile(
+            u1.id, name_color="#112233", avatar_key="pencil"
+        )
+        u2 = await user_repo.update_profile(
+            u2.id, name_color="#223344", avatar_key="spark"
+        )
+        assert u1 is not None and u2 is not None
 
         now = datetime.now(timezone.utc)
         game_input = GameRecordInput(
@@ -238,7 +245,18 @@ async def test_game_history_repository():
         with pytest.raises(ValueError, match="unknown turn_id"):
             await history_repo.save_game(game_input, participants, rounds, invalid_guesses)
 
-        await user_repo.update_profile(u1.id, display_name="RenamedLater")
+        await user_repo.update_profile(
+            u1.id,
+            display_name="RenamedLater",
+            name_color="#aabbcc",
+            avatar_key="palette",
+        )
+        await user_repo.update_profile(
+            u2.id,
+            display_name="AlsoRenamed",
+            name_color="#bbccdd",
+            avatar_key="initial",
+        )
 
         # Check user games list with pagination clamping
         u1_games = await history_repo.get_user_games(u1.id, limit=999999, offset=-5)
@@ -248,6 +266,7 @@ async def test_game_history_repository():
         assert u1_games[0].participants[0].user_id == u1.id
         assert u1_games[0].participants[0].seat_id
         assert u1_games[0].participants[0].display_name == "Player1"
+        assert u1_games[0].participants[0].name_color == "#112233"
 
         # Check game detail for participant (authorized)
         detail = await history_repo.get_game_detail(game_id, requesting_user_id=u1.id)
@@ -256,8 +275,14 @@ async def test_game_history_repository():
         assert len(detail.turns) == 1
         assert detail.turns[0].prompt == "guitar"
         assert detail.turns[0].drawer_display_name == "Player1"
+        assert detail.turns[0].drawer_name_color == "#112233"
+        assert detail.turns[0].drawer_is_anonymous
+        assert detail.turns[0].drawer_user_id == u1.id
         assert len(detail.turns[0].guesses) == 1
         assert detail.turns[0].guesses[0].user_id == u2.id
+        assert detail.turns[0].guesses[0].display_name == "Player2"
+        assert detail.turns[0].guesses[0].name_color == "#223344"
+        assert detail.turns[0].guesses[0].is_anonymous
         assert detail.turns[0].guesses[0].points_awarded == 200
 
         # Check game detail for non-participant (scoped out)

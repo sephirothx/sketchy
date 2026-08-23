@@ -42,6 +42,8 @@ export interface TurnGuess {
   userId: string | null;
   seatId: string | null;
   displayName: string;
+  nameColor: string | null;
+  isAnonymous: boolean;
   pointsAwarded: number;
   guessTimeSeconds: number;
 }
@@ -65,6 +67,8 @@ export interface GameTurn {
   drawerUserId: string | null;
   drawerSeatId: string | null;
   drawerDisplayName: string;
+  drawerNameColor: string | null;
+  drawerIsAnonymous: boolean;
   prompt: string;
   durationSeconds: number;
   promptVersionId: string | null;

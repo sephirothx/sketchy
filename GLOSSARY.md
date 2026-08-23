@@ -62,6 +62,7 @@ the rotation itself are counted in *rounds*.
 | **Linked guest** | A former guest identity whose history now belongs to a registered account without rewriting past game seats. | abandoned guest, duplicate account |
 | **Data export** | A private, versioned JSON download containing one player's own account, gameplay data, and authored prompt-list revision history. It never includes other players' profile fields or message bodies. | archive, backup, dump |
 | **Deleted player** | The neutral name replacing a deleted account in retained shared game history. | removed user, anonymous, unknown |
+| **Historical presentation** | The display name, name color, and guest/registered state frozen onto a finished-game seat. Profile edits do not rewrite it; deletion replaces identifying fields with the **Deleted player** tombstone. | current profile, username, avatar |
 | **AFK** | A status a player sets on themselves, or the room votes onto them. AFK players are skipped for turns and not waited for. Always the initialism, uppercase. | away, idle, inactive, afk |
 
 ## Names

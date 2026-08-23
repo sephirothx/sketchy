@@ -199,7 +199,11 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                   <tr key={`${turn.roundNumber}-${turn.turnNumber}`}>
                     <td>{turn.roundNumber}</td>
                     <td className="profile-turn-prompt">{turn.prompt}</td>
-                    <td>{named(turn.drawerSeatId, turn.drawerDisplayName)}</td>
+                    <td>
+                      <span style={{ color: turn.drawerNameColor ?? undefined }}>
+                        {named(turn.drawerSeatId, turn.drawerDisplayName)}
+                      </span>
+                    </td>
                     <td>{formatDuration(turn.durationSeconds)}</td>
                     <td>
                       {turn.participantOutcomes.length > 0
@@ -218,7 +222,9 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                           : turn.guesses.map((g, index) => (
                               <span key={g.seatId ?? `legacy-${index}`}>
                                 {index > 0 && ", "}
-                                {named(g.seatId, g.displayName)} (correct, {g.pointsAwarded})
+                                <span style={{ color: g.nameColor ?? undefined }}>
+                                  {named(g.seatId, g.displayName)}
+                                </span>{" "}(correct, {g.pointsAwarded})
                               </span>
                             ))}
                     </td>

@@ -1336,6 +1336,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             else None
                         ),
                         display_name=guess.display_name_snapshot,
+                        name_color=guess.name_color_snapshot,
+                        is_anonymous=guess.is_anonymous_snapshot,
                         points_awarded=guess.points_awarded,
                         guess_time_seconds=guess.guess_time_seconds,
                     )
@@ -1374,6 +1376,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             else None
                         ),
                         drawer_display_name=r.drawer_display_name_snapshot,
+                        drawer_name_color=r.drawer_name_color_snapshot,
+                        drawer_is_anonymous=r.drawer_is_anonymous_snapshot,
                         prompt=r.prompt,
                         duration_seconds=r.duration_seconds,
                         prompt_version_id=(
