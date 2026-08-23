@@ -16,14 +16,17 @@ interface DrawingRecapGalleryProps {
    * gallery does not care which, because both answer in the wire format.
    */
   loadEntry: (entry: DrawingRecapMetadata) => Promise<ArrayBuffer | unknown>;
+  /** Which drawing to open on. The rest stay reachable from the controls. */
+  initialIndex?: number;
 }
 
 export function DrawingRecapGallery({
   entries,
   onClose,
   loadEntry,
+  initialIndex = 0,
 }: DrawingRecapGalleryProps) {
-  const [position, setPosition] = useState(0);
+  const [position, setPosition] = useState(initialIndex);
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const cacheRef = useRef(new Map<number, DecodedCanvasAction[]>());

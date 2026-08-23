@@ -76,7 +76,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [viewingTurn, setViewingTurn] = useState<GameTurn | null>(null);
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   const seat = game.participants.find((p) => p.userId === viewerId);
   const finishedAt = formatTimestamp(game.finishedAt);
@@ -194,28 +194,32 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
               if (outcome.eligibilityReason === "joined_late") return "joined late";
               return `not eligible (${outcome.eligibilityReason})`;
             };
-            const viewerEntries: DrawingRecapMetadata[] = viewingTurn
-              ? [
-                  {
-                    index: 0,
-                    roundNumber: viewingTurn.roundNumber,
-                    turnNumber: viewingTurn.turnNumber,
-                    drawerId: viewingTurn.drawerSeatId ?? "",
-                    drawerNickname: viewingTurn.drawerDisplayName,
-                    drawerNameColor: viewingTurn.drawerNameColor ?? undefined,
-                    prompt: viewingTurn.prompt,
-                    actionCount: viewingTurn.strokeCount,
-                    available: true,
-                  },
-                ]
-              : [];
+            // Every turn is offered, not only the ones with bytes to show: a
+            // gallery that quietly skipped them would misreport how the game
+            // went, and the viewer already renders why one is missing.
+            const viewerEntries: DrawingRecapMetadata[] = detail.turns.map(
+              (turn, index) => ({
+                index,
+                roundNumber: turn.roundNumber,
+                turnNumber: turn.turnNumber,
+                drawerId: turn.drawerSeatId ?? "",
+                drawerNickname: turn.drawerDisplayName,
+                drawerNameColor: turn.drawerNameColor ?? undefined,
+                prompt: turn.prompt,
+                actionCount: turn.strokeCount,
+                available: turn.drawingStatus === "ready",
+              }),
+            );
             return (
             <>
-            {viewingTurn && (
+            {viewingIndex !== null && (
               <DrawingRecapGallery
                 entries={viewerEntries}
-                onClose={() => setViewingTurn(null)}
-                loadEntry={() => fetchGameDrawing(game.id, viewingTurn.id)}
+                initialIndex={viewingIndex}
+                onClose={() => setViewingIndex(null)}
+                loadEntry={(entry) =>
+                  fetchGameDrawing(game.id, detail.turns[entry.index].id)
+                }
               />
             )}
             <table className="profile-turns">
@@ -231,7 +235,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {detail.turns.map((turn) => (
+                {detail.turns.map((turn, turnIndex) => (
                   <tr key={turn.id}>
                     <td>{turn.roundNumber}</td>
                     <td className="profile-turn-prompt">{turn.prompt}</td>
@@ -246,7 +250,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                         <button
                           type="button"
                           className="profile-drawing-button"
-                          onClick={() => setViewingTurn(turn)}
+                          onClick={() => setViewingIndex(turnIndex)}
                         >
                           View
                         </button>
