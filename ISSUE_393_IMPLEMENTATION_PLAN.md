@@ -80,8 +80,14 @@ update to this document and issue #393 before dependent work merges.
     and aliases, and separate immutable list revisions. Equal text does not
     automatically merge two concepts.
 13. Every drawing from every turn of a completed game is retained as versioned
-    SKCH in S3-compatible object storage, with filesystem storage for local
-    development. Drawings from abandoned games are not persisted.
+    SKCH in a PostgreSQL `bytea` column, written in the same transaction as the
+    game. Object storage was the earlier decision and was withdrawn on
+    2026-08-23 by `docs/adr/0001-store-drawings-in-postgresql.md`: the payloads
+    are 5-20 KB, the object-storage path was entirely greenfield, and the bytes
+    exist only in the memory of the process that played the game, so a staged
+    write could never be completed by a retry. The metadata keeps a nullable
+    `object_key` so the move remains a data migration. Drawings from abandoned
+    games are not persisted.
 14. Active-game state is never snapshotted or restored. Planned shutdown drains
     briefly, records abandonment, and clearly tells clients the game will end.
 15. The public launch is an explicit v1 break. HTTP routes live under
@@ -434,18 +440,28 @@ contracts, ADRs, migrations, tests, and runbooks.
   per-seat/per-turn outcomes and counts remain rebuildable history indefinitely.
   A future matcher cannot be rerun over expired strings; this is the accepted
   privacy and volume tradeoff, not an accidental missing history field.
-- Persist SKCH for completed games through transactional PostgreSQL staging and
-  idempotent content-addressed object upload. Metadata stores format version,
-  checksum, size, status, and object key. History reports `pending`, `ready`,
-  `deleted`, or `failed`.
+- Persist SKCH for completed games in the transaction that records the game.
+  Metadata stores format magic and version, checksum, size, status, and a
+  reserved object key. History reports `ready`, `unavailable`, or `deleted`;
+  `pending` and `failed` remain in the vocabulary for an object-storage era and
+  are unreachable while the write is transactional.
 - Branch ownership: the SKCH/drawing bullets in this history contract are
   implemented by #384 on `epic/343-live-rooms-deployment-formats`, where stored
   format compatibility, storage lifecycle, and deployment configuration are
   integrated. They remain release requirements for #393 but do not keep the
   #341 child-issue umbrella open after #367-#374/#386/#387/#389/#390 land.
-- Retain ordinary drawings with game history. Account deletion removes drawings
-  authored by that user after protected report evidence is copied.
-- Maintain decoder registries and golden fixtures for every stored SKCH version.
+- Retain ordinary drawings with game history; there is no separate expiry.
+  Account deletion erases the bytes of drawings authored by that user and
+  leaves the row reporting `deleted`, so an erased drawing stays
+  distinguishable from one the recap dropped and from a turn nobody drew on. A
+  drawing by an accountless drawer has no account to delete and is therefore
+  out of that predicate's reach.
+- Maintain a server-side decoder registry and golden fixtures for every stored
+  drawing format. Stored blobs are never sent to a client: retrieval decodes
+  and answers in the current wire format, which is what keeps the wire format
+  free to change without a stored migration. Registry entries are never
+  removed, and the magic at offset 0 discriminates formats, so a storage-only
+  encoding can arrive later beside rows already written.
 - Build rebuildable daily prompt-stat and user-stat projections from immutable
   facts. Ratings/seasons/achievements remain later projections, not v1 product.
 - #370 profile summaries read only the canonical account's UTC-day projection;
@@ -611,6 +627,7 @@ ADRs once they exist.
 | #383 persistent group rooms | `issue/383-persistent-group-rooms` | Complete | Registered owners may keep up to ten room identities with permanent globally reserved codes and typed configuration. Opening after empty/restart materializes a fresh in-memory instance with no restored players/game/timers/canvas. Stable active built-in/owned prompt-list IDs resolve their latest authorized revision or fail visibly; quick custom prompts are rejected. Owner-only settings/archive, lobby discovery, export, and account-deletion archive behavior are covered. Gate: 698 backend tests (one expected skip), 159 frontend tests, lint/build, one Alembic head, and all 47 browser scenarios pass; README and glossary are current. |
 | #391 room-setting presets | `issue/391-room-setting-presets` | Complete | Native UUIDv7 private preset storage, typed CRUD with optimistic concurrency, stable active built-in/owned prompt-list references, visible unavailable-reference failure, a 20-preset account cap, creation-page save/apply/update/delete controls, and account export/deletion coverage are implemented. Presets explicitly exclude codes, membership, live state, quick custom prompts, borrowed share codes, sharing, and built-in catalogue rows. Gate: 702 backend tests (one expected skip), 159 frontend tests, lint/build, one Alembic head, and all 48 browser scenarios pass; README and glossary are current. |
 | #380 planned shutdown and restart behavior | `issue/380-graceful-shutdown-drain` | Complete | v1 deliberately mitigates rather than restores process-owned state: readiness fails first, clients receive a versioned notice, new rooms/games/restarts are gated, and existing games receive a configurable bounded drain before established sockets close. Completed games use normal atomic persistence; deadline leftovers receive a UUIDv7, privacy-safe 90-day abandonment fact without partial game/canvas content. New live work is refused on the readiness flag alone, rechecked after every repository await, so admission needs no process-wide lock; a second termination signal forfeits the remaining window and its diagnostics. Gate: 722 backend tests (one expected skip), 164 frontend tests, lint/build, migration replay/model-drift checks, one Alembic head, and all 48 browser scenarios pass. README and glossary are current. |
-| #343 live rooms and formats | `epic/343-live-rooms-deployment-formats` | In progress | #381-#383 and #391 are complete; #380 and #384 remain, while #385 is consolidated under #323. |
+| #384 stored drawings | `issue/384-drawing-persistence` | Complete | Every completed turn's canvas frame is kept for as long as its game, written in the transaction that records the game because the bytes exist only in the memory of the process that played it. Storage keeps the frame verbatim; a server-side decoder registry keyed on the magic and version the blob declares - entries never removed, decoders answering in the current wire format - is what decouples the stored format from the wire format, so `canvasHistory.ts` is unchanged. Drawings are matched to turns by durable turn id, a turn the history skips takes its drawing with it, a recap-dropped turn is stored as unavailable, and account deletion erases the bytes while the row keeps saying so. Retrieval is participant-scoped and answers 404 to every refusal. Object storage was withdrawn by `docs/adr/0001-store-drawings-in-postgresql.md`. Gate: 762 backend tests (one expected skip), 164 frontend tests, lint/build, one Alembic head, and all 48 browser scenarios pass; README and glossary are current. |
+| #343 live rooms and formats | `epic/343-live-rooms-deployment-formats` | In progress | #380-#383, #384 and #391 are complete; #385 is consolidated under #323. |
 | Standalone/cross-epic integration | `epic/393-preproduction-baseline` | Not started | - |
 | Final production baseline | `epic/393-preproduction-baseline` -> `main` | Not started | - |

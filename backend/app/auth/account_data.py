@@ -34,6 +34,7 @@ from app.db.models import (
     PromptVersionAlias,
     RoomMessage,
     ScoreEvent,
+    TurnDrawing,
     TurnGuess,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -45,7 +46,12 @@ from app.db.models import (
     UserSettings,
     generate_uuid,
 )
-from app.domain_values import AccountState, DataExportStatus, UserRole
+from app.domain_values import (
+    AccountState,
+    DataExportStatus,
+    TurnDrawingStatus,
+    UserRole,
+)
 
 
 EXPORT_SCHEMA_VERSION = 1
@@ -996,6 +1002,31 @@ async def anonymize_account(
                     drawer_display_name_snapshot=DELETED_DISPLAY_NAME,
                     drawer_name_color_snapshot=None,
                     drawer_is_anonymous_snapshot=True,
+                )
+            )
+            # A drawing is authored content, so it goes rather than being
+            # anonymised like the turn around it. The row stays behind saying
+            # so, which keeps an erased drawing distinguishable from one the
+            # recap dropped and from a turn nobody drew on.
+            await session.execute(
+                update(TurnDrawing)
+                .where(
+                    TurnDrawing.turn_id.in_(
+                        select(TurnRecord.id).where(
+                            TurnRecord.drawer_user_id.in_(identity_ids)
+                        )
+                    )
+                )
+                .values(
+                    status=TurnDrawingStatus.DELETED.value,
+                    payload=None,
+                    object_key=None,
+                    checksum_sha256=None,
+                    byte_size=None,
+                    format_magic=None,
+                    format_version=None,
+                    deleted_at=deleted_at,
+                    updated_at=deleted_at,
                 )
             )
             await session.execute(

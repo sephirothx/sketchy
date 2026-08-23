@@ -32,6 +32,8 @@ from app.db.models import (
     PersistentRoom,
     PromptContentReport,
     ScoreEvent,
+    IdentityAlias,
+    TurnDrawing,
     TurnGuess,
     TurnRecord,
     User,
@@ -51,6 +53,7 @@ from app.repositories.interfaces import (
     GameRecordInput,
     PromptOfferInput,
     ScoreEventInput,
+    TurnDrawingInput,
     TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
@@ -99,6 +102,16 @@ async def register(http: AsyncClient, username: str = "Exporter") -> dict:
     )
     assert response.status_code == 200
     return response.json()
+
+
+def _skch_drawing() -> bytes:
+    fixtures = json.loads(
+        (Path(__file__).parents[2] / "fixtures" / "canvas_protocol_v1.json").read_text()
+    )
+    entry = next(
+        item for item in fixtures["histories"] if item["name"] == "representative"
+    )
+    return bytes.fromhex(entry["binary"])
 
 
 async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
@@ -250,6 +263,10 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                 scoring_version=1,
                 rule_snapshot_version=1,
             ),
+        ],
+        [
+            TurnDrawingInput(turn_id=owner_turn, payload=_skch_drawing()),
+            TurnDrawingInput(turn_id=other_turn, payload=_skch_drawing()),
         ],
     )
 
@@ -775,3 +792,75 @@ async def test_deletion_anonymizes_linked_guest_seats_without_collapsing_them(en
         assert len(seats) == 2
         assert {seat.user_id for seat in seats} == {account.id, source.id}
         assert all(seat.display_name_snapshot == "Deleted player" for seat in seats)
+
+
+async def test_deletion_erases_the_drawings_that_account_made(env):
+    """A drawing is authored content, so it goes where the turn around it stays."""
+
+    http, users, history, factory = env
+    owner = await register(http, "DrawingDeleter")
+    other = await users.create_anonymous("Other player")
+    game_id = await record_private_game(
+        history, owner_id=owner["id"], other_id=other.id
+    )
+
+    response = await http.request(
+        "DELETE", "/api/auth/account", json={"password": PASSWORD}
+    )
+    assert response.status_code == 200
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(TurnDrawing).where(TurnDrawing.game_id == UUID(game_id))
+            )
+        ).all()
+        by_drawer = {}
+        for row in rows:
+            turn = await session.get(TurnRecord, row.turn_id)
+            by_drawer[turn.drawer_user_id] = row
+
+        erased = by_drawer[UUID(owner["id"])]
+        assert erased.status == "deleted"
+        assert erased.payload is None
+        assert erased.checksum_sha256 is None
+        assert erased.deleted_at is not None
+
+        # The other player drew that one; deleting an account must not reach
+        # into somebody else's work.
+        kept = by_drawer[UUID(other.id)]
+        assert kept.status == "ready"
+        assert kept.payload is not None
+
+
+async def test_deletion_erases_drawings_made_under_a_merged_identity(env):
+    http, users, history, factory = env
+    owner = await register(http, "MergedDrawer")
+    guest = await users.create_anonymous("Guest identity")
+    game_id = await record_private_game(
+        history, owner_id=guest.id, other_id=owner["id"]
+    )
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                IdentityAlias(
+                    id=generate_uuid(),
+                    source_user_id=UUID(guest.id),
+                    target_user_id=UUID(owner["id"]),
+                )
+            )
+
+    response = await http.request(
+        "DELETE", "/api/auth/account", json={"password": PASSWORD}
+    )
+    assert response.status_code == 200
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(TurnDrawing).where(TurnDrawing.game_id == UUID(game_id))
+            )
+        ).all()
+        assert rows, "the game should still have its drawing rows"
+        assert all(row.status == "deleted" for row in rows)
+        assert all(row.payload is None for row in rows)

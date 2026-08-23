@@ -176,6 +176,16 @@
   color: #f8fafc;
 }
 
+[data-theme="dark"] .profile-drawing-button {
+  border-color: #334155;
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .profile-drawing-button:hover {
+  background: #1e293b;
+  border-color: #93c5fd;
+}
+
 [data-theme="dark"] .profile-stat-label,
 [data-theme="dark"] .profile-game-meta,
 [data-theme="dark"] .profile-game-score,

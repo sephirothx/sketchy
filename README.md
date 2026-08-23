@@ -115,6 +115,34 @@ all new writes receive the database clock automatically.
 Finished-game guesses reference the UUID of their turn explicitly. Persistence
 never infers that relationship from the positions of two independently ordered
 lists.
+
+Every drawing from a completed game is kept for as long as that game, in the
+same transaction that records it. The stored bytes are the canvas frame itself
+- the actions, not a picture of them - so a drawing can be replayed and redrawn
+at any size, and a PNG stays something the browser produces on demand rather
+than something the server keeps. `GET
+/api/games/{game_id}/turns/{turn_id}/drawing` returns one, and only to a player
+who was in that game; every refusal is a 404, so the endpoint never reveals
+whether a game exists. A turn whose bytes the recap had to drop for budget is
+recorded as unavailable rather than omitted, and deleting an account erases the
+drawings that account made while leaving the row saying so.
+
+Persisting a drawing makes its encoding a stored format, which has to stay
+readable by every future decoder rather than only by the client on the other
+end of an open connection. `app/canvas_storage.py` holds that commitment: a
+registry keyed on the magic and version the blob declares, whose entries are
+never removed and whose decoders answer in the current wire format. Clients
+therefore never see a stored format at all, and the wire format stays free to
+change without rewriting a single stored row. Because a database column has no
+integrity check of its own, an operator command decodes stored drawings in
+bounded batches and reports any that fail their checksum or name a format this
+build cannot read:
+
+```bash
+cd backend
+.venv/bin/python -m app.services.drawing_storage
+.venv/bin/python -m app.services.drawing_storage --batch-size 2000
+```
 Each live game receives its stable UUIDv7 when it starts. The finished-game
 writer reuses that ID for the history row and prompt-usage batch, and stores a
 canonical SHA-256 payload digest with the history row. Retrying the same ID and

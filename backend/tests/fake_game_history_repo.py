@@ -10,6 +10,7 @@ from app.repositories.interfaces import (
     GameRecordInput,
     GameSummary,
     ScoreEventInput,
+    TurnDrawingDetail,
     TurnDrawingInput,
     TurnGuessInput,
     TurnRecordInput,
@@ -56,6 +57,15 @@ class FakeGameHistoryRepository(GameHistoryRepository):
             )
         )
         return record_id
+
+    async def get_turn_drawing(
+        self,
+        game_id: str,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+    ) -> TurnDrawingDetail | None:
+        return None
 
     async def get_user_games(
         self, user_id: str, limit: int = 20, offset: int = 0

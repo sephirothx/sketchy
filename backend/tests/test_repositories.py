@@ -50,6 +50,7 @@ from app.repositories.interfaces import (
     PromptSeedConflictError,
     PromptUsage,
 )
+from app.services.drawing_storage import verify_stored_drawings
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -1347,5 +1348,51 @@ async def test_erasing_a_drawing_cannot_leave_its_bytes_behind():
                         .where(TurnDrawing.turn_id == UUID(turn_id))
                         .values(status="deleted")
                     )
+    finally:
+        await engine.dispose()
+
+
+async def test_the_verifier_reads_every_stored_drawing():
+    factory, engine = await create_test_db()
+    try:
+        user_repo = SqlAlchemyUserRepository(factory)
+        history_repo = SqlAlchemyGameHistoryRepository(factory)
+        await _save_game_with_drawings(
+            history_repo,
+            user_repo,
+            lambda tid: [TurnDrawingInput(turn_id=tid, payload=_skch_bytes())],
+        )
+
+        result = await verify_stored_drawings(factory)
+
+        assert result.checked == 1
+        assert result.ok
+    finally:
+        await engine.dispose()
+
+
+async def test_the_verifier_names_a_drawing_that_no_longer_matches_its_checksum():
+    """Corruption is silent until something decodes the bytes and checks."""
+
+    factory, engine = await create_test_db()
+    try:
+        user_repo = SqlAlchemyUserRepository(factory)
+        history_repo = SqlAlchemyGameHistoryRepository(factory)
+        _, turn_id, _, _ = await _save_game_with_drawings(
+            history_repo,
+            user_repo,
+            lambda tid: [TurnDrawingInput(turn_id=tid, payload=_skch_bytes())],
+        )
+        async with factory() as session:
+            async with session.begin():
+                row = await session.get(TurnDrawing, UUID(turn_id))
+                damaged = bytearray(row.payload)
+                damaged[-1] ^= 0x01
+                row.payload = bytes(damaged)
+
+        result = await verify_stored_drawings(factory)
+
+        assert result.corrupt == [turn_id]
+        assert not result.ok
     finally:
         await engine.dispose()

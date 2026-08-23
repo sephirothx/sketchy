@@ -3,16 +3,26 @@ import type { CanvasRef } from "./Canvas";
 import { CanvasSnapshot } from "./CanvasSnapshot";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
-import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { socketRequestErrorMessage } from "../lib/socket";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
-import type { DrawingRecapMetadata, DrawingRecapResponse } from "../types";
+import type { DrawingRecapMetadata } from "../types";
 
 interface DrawingRecapGalleryProps {
   entries: DrawingRecapMetadata[];
   onClose: () => void;
+  /**
+   * Fetches one drawing's canvas bytes. A live room asks its socket for a
+   * recap it still holds; a finished game asks the API for a stored one. The
+   * gallery does not care which, because both answer in the wire format.
+   */
+  loadEntry: (entry: DrawingRecapMetadata) => Promise<ArrayBuffer | unknown>;
 }
 
-export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryProps) {
+export function DrawingRecapGallery({
+  entries,
+  onClose,
+  loadEntry,
+}: DrawingRecapGalleryProps) {
   const [position, setPosition] = useState(0);
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,16 +55,9 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
     setActions(null);
     setError(null);
     try {
-      const response = await emitWithAck<DrawingRecapResponse>(
-        "get_recap_drawing",
-        { index: entry.index },
-      );
+      const canvas = await loadEntry(entry);
       if (loadGeneration !== loadGenerationRef.current) return;
-      if (!response.ok || !response.drawing) {
-        setError(response.error || "This drawing could not be loaded.");
-        return;
-      }
-      const decoded = decodeCanvasHistory(response.drawing.canvas);
+      const decoded = decodeCanvasHistory(canvas);
       if (!decoded) {
         setError("This drawing could not be decoded.");
         return;
@@ -65,7 +68,7 @@ export function DrawingRecapGallery({ entries, onClose }: DrawingRecapGalleryPro
       if (loadGeneration !== loadGenerationRef.current) return;
       setError(socketRequestErrorMessage(loadError, "load this drawing"));
     }
-  }, [entry]);
+  }, [entry, loadEntry]);
 
   useEffect(() => {
     void loadDrawing();

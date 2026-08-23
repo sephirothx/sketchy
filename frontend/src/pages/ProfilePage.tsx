@@ -4,8 +4,11 @@ import { AccountMenu, AuthDialog, type AuthMode } from "../components/AccountMen
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
+import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
+import type { DrawingRecapMetadata } from "../types";
 import {
   fetchGameDetail,
+  fetchGameDrawing,
   fetchGames,
   fetchProfile,
   formatDuration,
@@ -61,10 +64,19 @@ function PlayerName({
  * games would otherwise pull every round of every game to show a list that
  * mostly stays collapsed.
  */
+/** Why a turn has no drawing to show, in the words the state actually means. */
+function drawingNote(turn: GameTurn): string {
+  if (turn.drawingStatus === "unavailable") return "not kept";
+  if (turn.drawingStatus === "deleted") return "erased";
+  if (turn.strokeCount === 0) return "nothing drawn";
+  return "—";
+}
+
 function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [viewingTurn, setViewingTurn] = useState<GameTurn | null>(null);
 
   const seat = game.participants.find((p) => p.userId === viewerId);
   const finishedAt = formatTimestamp(game.finishedAt);
@@ -182,8 +194,30 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
               if (outcome.eligibilityReason === "joined_late") return "joined late";
               return `not eligible (${outcome.eligibilityReason})`;
             };
+            const viewerEntries: DrawingRecapMetadata[] = viewingTurn
+              ? [
+                  {
+                    index: 0,
+                    roundNumber: viewingTurn.roundNumber,
+                    turnNumber: viewingTurn.turnNumber,
+                    drawerId: viewingTurn.drawerSeatId ?? "",
+                    drawerNickname: viewingTurn.drawerDisplayName,
+                    drawerNameColor: viewingTurn.drawerNameColor ?? undefined,
+                    prompt: viewingTurn.prompt,
+                    actionCount: viewingTurn.strokeCount,
+                    available: true,
+                  },
+                ]
+              : [];
             return (
             <>
+            {viewingTurn && (
+              <DrawingRecapGallery
+                entries={viewerEntries}
+                onClose={() => setViewingTurn(null)}
+                loadEntry={() => fetchGameDrawing(game.id, viewingTurn.id)}
+              />
+            )}
             <table className="profile-turns">
               <caption className="visually-hidden">Turn by turn</caption>
               <thead>
@@ -192,12 +226,13 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                   <th scope="col">Prompt</th>
                   <th scope="col">Drawn by</th>
                   <th scope="col">Time</th>
+                  <th scope="col">Drawing</th>
                   <th scope="col">Guesser outcomes</th>
                 </tr>
               </thead>
               <tbody>
                 {detail.turns.map((turn) => (
-                  <tr key={`${turn.roundNumber}-${turn.turnNumber}`}>
+                  <tr key={turn.id}>
                     <td>{turn.roundNumber}</td>
                     <td className="profile-turn-prompt">{turn.prompt}</td>
                     <td>
@@ -206,6 +241,19 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                       </span>
                     </td>
                     <td>{formatDuration(turn.durationSeconds)}</td>
+                    <td>
+                      {turn.drawingStatus === "ready" ? (
+                        <button
+                          type="button"
+                          className="profile-drawing-button"
+                          onClick={() => setViewingTurn(turn)}
+                        >
+                          View
+                        </button>
+                      ) : (
+                        <span className="profile-note">{drawingNote(turn)}</span>
+                      )}
+                    </td>
                     <td>
                       {turn.participantOutcomes.length > 0
                         ? turn.participantOutcomes.map((outcome, index) => (

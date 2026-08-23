@@ -291,6 +291,9 @@ class ScoreEventDetail:
 class TurnDetail:
     """Detailed view of a single turn in a past game."""
 
+    # Without this a client cannot address a turn at all, which is why the
+    # stored drawing is reachable only once it is present.
+    id: str
     round_number: int
     turn_number: int
     drawer_user_id: str | None
@@ -302,6 +305,10 @@ class TurnDetail:
     duration_seconds: float
     prompt_version_id: str | None = None
     prompt_source_kind: str = "legacy_unknown"
+    stroke_count: int = 0
+    # None when no drawing row exists at all, which is every turn played
+    # before drawings were persisted.
+    drawing_status: str | None = None
     guesses: list[TurnGuessDetail] = field(default_factory=list)
     prompt_offers: list[PromptOfferDetail] = field(default_factory=list)
     participant_outcomes: list[TurnParticipantOutcomeDetail] = field(
@@ -317,6 +324,15 @@ class PromptOfferDetail:
     source_kind: str
     prompt_version_id: str | None
     source_revision_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TurnDrawingDetail:
+    """One stored drawing, ready to be handed back in wire form."""
+
+    turn_id: str
+    payload: bytes
+    checksum_sha256: str
 
 
 @dataclass(frozen=True)
@@ -617,6 +633,22 @@ class GameHistoryRepository(ABC):
         The requester is required rather than optional: this payload carries
         every prompt, guess and timing of the game, so there is no caller for
         whom an unscoped read is the right default.
+        """
+        ...
+
+    @abstractmethod
+    async def get_turn_drawing(
+        self,
+        game_id: str,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+    ) -> TurnDrawingDetail | None:
+        """Fetch one stored drawing for a player who was in that game.
+
+        Returns None for every refusal - not a participant, no such game, no
+        such turn, nothing stored - so a caller cannot accidentally tell the
+        cases apart in its response.
         """
         ...
 

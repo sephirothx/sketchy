@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { CanvasRef } from "../components/Canvas";
 import { GameEndOverlay } from "../components/GameEndOverlay";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
+import { loadRecapDrawing } from "../lib/recapDrawings";
 import { GameHighlightsPanel } from "../components/GameHighlightsPanel";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { AccountMenu } from "../components/AccountMenu";
@@ -459,6 +460,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
             <DrawingRecapGallery
               entries={drawingRecap}
               onClose={() => setRecapOpen(false)}
+              loadEntry={loadRecapDrawing}
             />
           ) : highlightsOpen ? (
             <GameHighlightsPanel

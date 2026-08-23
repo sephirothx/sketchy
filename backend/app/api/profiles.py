@@ -1,7 +1,9 @@
 """Public profile endpoints: lifetime stats and browsable game history."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Request
+import logging
+
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from app.api.serializers import (
     game_detail_payload,
@@ -10,6 +12,11 @@ from app.api.serializers import (
     user_payload,
 )
 from app.auth.rate_limit import RateLimiter, client_key
+from app.canvas_storage import (
+    CorruptStoredDrawingError,
+    UnsupportedStoredDrawingError,
+    stored_drawing_wire_payload,
+)
 from app.repositories.interfaces import GameHistoryRepository, UserRepository
 
 # The largest page the client may ask for. Deliberately below the repository's
@@ -22,6 +29,8 @@ DEFAULT_PAGE_SIZE = 20
 # projection rather than scanning lifetime game/turn/guess facts, but the
 # ceiling still makes automated account-id walking inconvenient.
 profile_limiter = RateLimiter(limit=120, window_seconds=60)
+
+logger = logging.getLogger("sketchy.api.profiles")
 
 
 def create_profile_router(
@@ -90,5 +99,45 @@ def create_profile_router(
         if detail is None:
             raise HTTPException(status_code=404, detail="No such game.")
         return game_detail_payload(detail)
+
+    @router.get("/games/{game_id}/turns/{turn_id}/drawing")
+    async def turn_drawing(game_id: str, turn_id: str, request: Request):
+        """The drawing made during one turn, for the players who were there.
+
+        Answered in the current wire format, so a client decodes a stored
+        drawing with exactly the code it already uses for a live one.
+        """
+        throttle(request)
+        requesting_user_id = getattr(request.state, "user_id", None)
+        if not requesting_user_id:
+            raise HTTPException(status_code=404, detail="No such drawing.")
+        drawing = await game_history_repo.get_turn_drawing(
+            game_id, turn_id, requesting_user_id=requesting_user_id
+        )
+        if drawing is None:
+            raise HTTPException(status_code=404, detail="No such drawing.")
+        try:
+            payload = stored_drawing_wire_payload(
+                drawing.payload, checksum=drawing.checksum_sha256 or None
+            )
+        except UnsupportedStoredDrawingError as error:
+            # A build older than the row it is reading. Answer as though the
+            # drawing is absent rather than claiming it is broken.
+            logger.error("Cannot decode stored drawing %s: %s", turn_id, error)
+            raise HTTPException(status_code=404, detail="No such drawing.") from error
+        except CorruptStoredDrawingError as error:
+            logger.error("Stored drawing %s failed its checksum", turn_id)
+            raise HTTPException(
+                status_code=500, detail="That drawing could not be read."
+            ) from error
+        return Response(
+            content=payload,
+            media_type="application/octet-stream",
+            headers={
+                # Participant-scoped bytes must never reach a shared cache.
+                "Cache-Control": "private, max-age=3600, immutable",
+                "ETag": f'"{drawing.checksum_sha256}"',
+            },
+        )
 
     return router

@@ -102,6 +102,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
         ],
         "turns": [
             {
+                "id": r.id,
                 "roundNumber": r.round_number,
                 "turnNumber": r.turn_number,
                 "drawerUserId": r.drawer_user_id,
@@ -113,6 +114,8 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 "promptVersionId": r.prompt_version_id,
                 "promptSourceKind": r.prompt_source_kind,
                 "durationSeconds": r.duration_seconds,
+                "strokeCount": r.stroke_count,
+                "drawingStatus": r.drawing_status,
                 "promptOffers": [
                     {
                         "position": offer.position,

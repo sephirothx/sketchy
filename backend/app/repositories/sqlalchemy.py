@@ -78,8 +78,9 @@ from app.repositories.interfaces import (
     InvalidProfileDataError,
     IdentityMergeError,
     TurnDetail,
-    TurnGuessDetail,
+    TurnDrawingDetail,
     TurnDrawingInput,
+    TurnGuessDetail,
     TurnGuessInput,
     TurnParticipantOutcomeDetail,
     TurnParticipantOutcomeInput,
@@ -1483,6 +1484,49 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 ) from error
         return _public_id(record_id)
 
+    async def get_turn_drawing(
+        self,
+        game_id: str,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+    ) -> TurnDrawingDetail | None:
+        db_game_id = _optional_entity_id(game_id)
+        db_turn_id = _optional_entity_id(turn_id)
+        db_requesting_user_id = _optional_entity_id(requesting_user_id)
+        if db_game_id is None or db_turn_id is None or db_requesting_user_id is None:
+            return None
+        async with self._session_factory() as session:
+            identity_ids = await _identity_ids(session, db_requesting_user_id)
+            # Authorization is part of the query rather than a check on the
+            # result, so the blob is never read for someone who may not see it.
+            # Filtering the drawing by game as well as by turn means a turn id
+            # borrowed from another game matches nothing by construction.
+            participated = (
+                select(GameParticipant.id)
+                .where(
+                    GameParticipant.game_id == db_game_id,
+                    GameParticipant.user_id.in_(identity_ids),
+                )
+                .exists()
+            )
+            row = await session.scalar(
+                select(TurnDrawing).where(
+                    TurnDrawing.turn_id == db_turn_id,
+                    TurnDrawing.game_id == db_game_id,
+                    TurnDrawing.status == TurnDrawingStatus.READY.value,
+                    TurnDrawing.payload.is_not(None),
+                    participated,
+                )
+            )
+        if row is None:
+            return None
+        return TurnDrawingDetail(
+            turn_id=_public_id(row.turn_id),
+            payload=row.payload,
+            checksum_sha256=row.checksum_sha256 or "",
+        )
+
     async def get_user_games(
         self,
         user_id: str,
@@ -1541,6 +1585,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 .options(
                     selectinload(GameRecord.participants).selectinload(GameParticipant.user),
                     selectinload(GameRecord.turns).selectinload(TurnRecord.drawer),
+                    # Status only; the blob is fetched by its own route so a
+                    # game detail never carries megabytes of canvas.
+                    selectinload(GameRecord.turns).selectinload(
+                        TurnRecord.drawing
+                    ).load_only(TurnDrawing.status),
                     selectinload(GameRecord.turns).selectinload(TurnRecord.guesses).selectinload(TurnGuess.user),
                     selectinload(GameRecord.turns).selectinload(
                         TurnRecord.participant_outcomes
@@ -1603,6 +1652,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 ]
                 turn_details.append(
                     TurnDetail(
+                        id=_public_id(r.id),
+                        stroke_count=r.stroke_count,
+                        drawing_status=(
+                            r.drawing.status if r.drawing is not None else None
+                        ),
                         round_number=r.round_number,
                         turn_number=r.turn_number,
                         drawer_user_id=(

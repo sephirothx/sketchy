@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -17,6 +19,7 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     ScoreEventInput,
+    TurnDrawingInput,
     TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
@@ -58,10 +61,13 @@ async def sign_in_as(http, session_factory, user_id: str) -> None:
     http.cookies.set(COOKIE_NAME, issued.token)
 
 
-async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
+async def record_game(
+    history, users, *, winner, loser, index: int = 0, drawing: bytes | None = None
+) -> str:
     winner_seat = str(generate_uuid())
     loser_seat = str(generate_uuid())
     turn_id = str(generate_uuid())
+    record_game.last_turn_id = turn_id
     drawer_bonus_event_id = str(generate_uuid())
     return await history.save_game(
         GameRecordInput(
@@ -160,6 +166,7 @@ async def record_game(history, users, *, winner, loser, index: int = 0) -> str:
                 corrects_event_id=drawer_bonus_event_id,
             ),
         ],
+        [TurnDrawingInput(turn_id=turn_id, payload=drawing)] if drawing else None,
     )
 
 
@@ -313,3 +320,113 @@ async def test_a_stranger_cannot_read_the_words_of_a_game_they_did_not_play(env)
 
     await sign_in_as(http, session_factory, outsider.id)
     assert (await http.get(f"/api/games/{game_id}")).status_code == 404
+
+
+def _skch() -> bytes:
+    fixtures = json.loads(
+        (Path(__file__).parents[2] / "fixtures" / "canvas_protocol_v1.json").read_text()
+    )
+    entry = next(
+        item for item in fixtures["histories"] if item["name"] == "representative"
+    )
+    return bytes.fromhex(entry["binary"])
+
+
+async def test_a_participant_receives_the_drawing_in_wire_form(env):
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _skch()
+    game_id = await record_game(
+        history, users, winner=ann.id, loser=bob.id, drawing=blob
+    )
+    await sign_in_as(http, factory, ann.id)
+
+    response = await http.get(
+        f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/octet-stream"
+    # Participant-scoped bytes must never land in a shared cache.
+    assert "private" in response.headers["cache-control"]
+    assert response.content == blob, "the client must get exactly what it decodes"
+
+
+async def test_the_game_detail_says_which_turns_have_a_drawing(env):
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    game_id = await record_game(
+        history, users, winner=ann.id, loser=bob.id, drawing=_skch()
+    )
+    await sign_in_as(http, factory, ann.id)
+
+    detail = (await http.get(f"/api/games/{game_id}")).json()
+
+    turn = detail["turns"][0]
+    assert turn["drawingStatus"] == "ready"
+    assert turn["id"] == record_game.last_turn_id
+
+
+async def test_a_stranger_is_told_the_drawing_does_not_exist(env):
+    """404 rather than 403: whether a game exists is not a stranger's business."""
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    outsider = await users.create_anonymous(display_name="Cid")
+    game_id = await record_game(
+        history, users, winner=ann.id, loser=bob.id, drawing=_skch()
+    )
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, outsider.id)
+
+    response = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
+
+    assert response.status_code == 404
+
+
+async def test_a_signed_out_visitor_gets_nothing(env):
+    http, users, history, _ = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    game_id = await record_game(
+        history, users, winner=ann.id, loser=bob.id, drawing=_skch()
+    )
+
+    response = await http.get(
+        f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    )
+
+    assert response.status_code == 404
+
+
+async def test_a_turn_from_another_game_cannot_be_borrowed(env):
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    mine = await record_game(history, users, winner=ann.id, loser=bob.id)
+    await record_game(
+        history, users, winner=bob.id, loser=ann.id, index=1, drawing=_skch()
+    )
+    other_turn = record_game.last_turn_id
+    await sign_in_as(http, factory, ann.id)
+
+    response = await http.get(f"/api/games/{mine}/turns/{other_turn}/drawing")
+
+    assert response.status_code == 404
+
+
+async def test_a_turn_whose_drawing_was_never_kept_has_none_to_fetch(env):
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id)
+    await sign_in_as(http, factory, ann.id)
+
+    response = await http.get(
+        f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    )
+
+    assert response.status_code == 404

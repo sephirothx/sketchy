@@ -1,4 +1,4 @@
-import { apiRequest } from "./api";
+import { apiBinaryRequest, apiRequest } from "./api";
 import type { AuthUser } from "../store/authStore";
 
 export interface ProfileStats {
@@ -76,6 +76,7 @@ export interface ScoreEvent {
 }
 
 export interface GameTurn {
+  id: string;
   roundNumber: number;
   turnNumber: number;
   drawerUserId: string | null;
@@ -87,6 +88,9 @@ export interface GameTurn {
   durationSeconds: number;
   promptVersionId: string | null;
   promptSourceKind: "legacy_unknown" | "curated" | "custom" | "builtin_fallback";
+  strokeCount: number;
+  /** Absent for turns played before drawings were kept. */
+  drawingStatus: "ready" | "unavailable" | "deleted" | "pending" | "failed" | null;
   promptOffers: PromptOffer[];
   guesses: TurnGuess[];
   participantOutcomes: TurnParticipantOutcome[];
@@ -169,6 +173,16 @@ export function fetchGames(userId: string, offset: number) {
 
 export function fetchGameDetail(gameId: string) {
   return apiRequest<GameDetail>(`/api/games/${encodeURIComponent(gameId)}`);
+}
+
+/** The stored drawing for one turn, in the same wire format a live one uses. */
+export async function fetchGameDrawing(
+  gameId: string,
+  turnId: string,
+): Promise<ArrayBuffer> {
+  return apiBinaryRequest(
+    `/api/games/${encodeURIComponent(gameId)}/turns/${encodeURIComponent(turnId)}/drawing`,
+  );
 }
 
 /** "12 Aug 2026, 14:05" — locale-formatted, with the raw value as a fallback. */
