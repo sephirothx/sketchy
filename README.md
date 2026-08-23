@@ -227,6 +227,27 @@ The minimum-guesser ranking floor applies independently to the selected slice.
 Pre-cutover counters migrate into facts with null time/rule dimensions rather
 than fabricated metadata: all-time unfiltered reads retain them, while bounded
 or segmented reads deliberately exclude what cannot be attributed truthfully.
+Lifetime profile summaries are likewise served from a rebuildable **Daily
+user-stat projection**, not four scans across a player's complete participant,
+turn, and guess history. A finished-game transaction atomically adds one UTC
+day's games, wins, score, turns in participated games, correct guesses, and
+drawings for each canonical account. Multiple same-day saves use database
+upserts, so concurrent games cannot overwrite one another; idempotent game
+retries do not increment twice. Guest-to-account merges rebuild the target and
+deduplicate games shared by its factual identities. Ratios and averages remain
+derived on read rather than stored.
+
+The projection is disposable: migration backfill and the maintenance command
+derive it entirely from immutable game facts. A missing or deliberately erased
+projection row reads as zero rather than silently falling back to an unbounded
+history scan; operators repair drift explicitly with a full or targeted rebuild:
+
+```bash
+cd backend
+.venv/bin/python -m app.services.user_stats_projection
+.venv/bin/python -m app.services.user_stats_projection --user <account-uuid>
+```
+
 Prompt content has a stable identity independent of its spelling. A
 **Prompt concept** may have immutable, language-specific **Prompt versions**;
 equal text never merges concepts implicitly. Versions store a canonical
@@ -720,6 +741,7 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 # Backend performance micro-benchmarks
 backend/.venv/bin/python benchmarks/backend.py
 backend/.venv/bin/python benchmarks/live_drawing.py
+backend/.venv/bin/python benchmarks/user_stats.py --games 10000 --reads 100
 
 # Near-limit canvas payload, server-memory, encoding, and decoding measurements
 backend/.venv/bin/python benchmarks/canvas_history.py --near-limit
@@ -759,6 +781,14 @@ the lobby's four-second room-list poll, it fast-forwards the page's own clock
 with Playwright's `page.clock` rather than spending the time. That keeps the
 interval a production constant instead of something bent for the tests, and it
 is the tool to reach for before making a timing value configurable.
+
+The user-stat benchmark seeds deterministic finished-game facts, rebuilds the
+daily projection, and compares the former four lifetime aggregates with the
+current repository read. On a local 10,000-game/10,000-turn SQLite run on
+2026-08-23, 100 reads measured 6.85 ms versus 0.698 ms median (9.81×); treat
+those timings as a reproducible diagnostic, not a CI threshold or a PostgreSQL
+capacity claim. The structural invariant is tested separately: profile reads
+must not query participant, turn, or guess fact tables.
 
 The canvas benchmark starts the built application on an isolated local port
 (`8765` by default), creates a real two-player game, and reports

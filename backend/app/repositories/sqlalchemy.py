@@ -9,7 +9,7 @@ import json
 import secrets
 from uuid import UUID
 
-from sqlalchemy import and_, case, distinct, func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -25,6 +25,7 @@ from app.db.models import (
     TurnPromptOfferSource,
     TurnRecord,
     User,
+    UserStatsDaily,
     UserBlock,
     AuditEvent,
     Prompt,
@@ -54,6 +55,10 @@ from app.domain_values import (
     TURN_PARTICIPANT_STATES,
 )
 from app.auth.avatars import validate_avatar_key
+from app.services.user_stats_projection import (
+    increment_user_stats_projection,
+    rebuild_user_stats_in_session,
+)
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     BundledPromptDefinition,
@@ -525,6 +530,9 @@ class SqlAlchemyUserRepository(UserRepository):
                         block.blocker_user_id = blocker_id
                         block.blocked_user_id = blocked_id
                 await session.flush()
+                await rebuild_user_stats_in_session(
+                    session, user_id=target.id
+                )
             await session.refresh(target)
             return _to_user_data(target)
 
@@ -570,53 +578,24 @@ class SqlAlchemyUserRepository(UserRepository):
         if db_user_id is None:
             return UserStats(user_id=user_id)
         async with self._session_factory() as session:
-            identity_ids = await _identity_ids(session, db_user_id)
-            canonical_id = identity_ids[0]
-            # 1. Games count, wins, and score
-            part_stmt = select(
-                func.count(distinct(GameParticipant.game_id)).label("games_played"),
-                func.count(
-                    distinct(
-                        case(
-                            (GameParticipant.final_rank == 1, GameParticipant.game_id),
-                            else_=None,
-                        )
-                    )
-                ).label("games_won"),
-                func.coalesce(func.sum(GameParticipant.final_score), 0).label("total_score"),
-            ).where(GameParticipant.user_id.in_(identity_ids))
-            part_res = (await session.execute(part_stmt)).one()
-            games_played = int(part_res.games_played or 0)
-            games_won = int(part_res.games_won or 0)
-            total_score = int(part_res.total_score or 0)
+            canonical_id = await _canonical_user_id(session, db_user_id)
+            statement = select(
+                func.coalesce(func.sum(UserStatsDaily.games_played), 0),
+                func.coalesce(func.sum(UserStatsDaily.games_won), 0),
+                func.coalesce(func.sum(UserStatsDaily.total_score), 0),
+                func.coalesce(func.sum(UserStatsDaily.turns_played), 0),
+                func.coalesce(func.sum(UserStatsDaily.prompts_guessed), 0),
+                func.coalesce(func.sum(UserStatsDaily.drawings_made), 0),
+            ).where(UserStatsDaily.user_id == canonical_id)
+            row = (await session.execute(statement)).one()
+            games_played = int(row[0] or 0)
+            games_won = int(row[1] or 0)
+            total_score = int(row[2] or 0)
+            turns_played = int(row[3] or 0)
+            prompts_guessed = int(row[4] or 0)
+            drawings_made = int(row[5] or 0)
             win_rate = (games_won / games_played) if games_played > 0 else 0.0
             average_score = (total_score / games_played) if games_played > 0 else 0.0
-
-            # 2. Total turns played across games where user participated
-            turns_stmt = (
-                select(func.count(distinct(TurnRecord.id)))
-                .select_from(TurnRecord)
-                .join(
-                    GameParticipant,
-                    and_(
-                        GameParticipant.game_id == TurnRecord.game_id,
-                        GameParticipant.user_id.in_(identity_ids),
-                    ),
-                )
-            )
-            turns_played = int((await session.execute(turns_stmt)).scalar() or 0)
-
-            # 3. Correct guesses made
-            guesses_stmt = select(func.count(TurnGuess.id)).where(
-                TurnGuess.user_id.in_(identity_ids)
-            )
-            prompts_guessed = int((await session.execute(guesses_stmt)).scalar() or 0)
-
-            # 4. Drawings made
-            drawings_stmt = select(func.count(TurnRecord.id)).where(
-                TurnRecord.drawer_user_id.in_(identity_ids)
-            )
-            drawings_made = int((await session.execute(drawings_stmt)).scalar() or 0)
 
             return UserStats(
                 user_id=_public_id(canonical_id),
@@ -1399,6 +1378,31 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             raise ValueError(
                                 "Score event ledger does not reconcile to final participant scores"
                             )
+
+                await increment_user_stats_projection(
+                    session,
+                    finished_at=game_record.finished_at,
+                    participants=[
+                        (
+                            _entity_id(participant.user_id)
+                            if participant.user_id
+                            else None,
+                            participant.final_score,
+                            participant.final_rank,
+                        )
+                        for participant in participants
+                    ],
+                    turn_drawer_ids=[
+                        _entity_id(turn.drawer_user_id)
+                        if turn.drawer_user_id
+                        else None
+                        for turn in turns
+                    ],
+                    guess_user_ids=[
+                        _entity_id(guess.user_id) if guess.user_id else None
+                        for guess in guesses
+                    ],
+                )
 
                 if referenced_user_ids:
                     await session.execute(

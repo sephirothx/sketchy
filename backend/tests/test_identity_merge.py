@@ -8,7 +8,14 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import AuditEvent, Base, IdentityAlias, User, generate_uuid
+from app.db.models import (
+    AuditEvent,
+    Base,
+    IdentityAlias,
+    User,
+    UserStatsDaily,
+    generate_uuid,
+)
 from app.domain_values import AccountState
 from app.repositories.interfaces import (
     GameParticipantInput,
@@ -120,6 +127,12 @@ async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
             assert str(alias.source_user_id) == guest.id
             assert str(alias.target_user_id) == account.id
             assert event is not None
+            projection_rows = (
+                await session.scalars(select(UserStatsDaily))
+            ).all()
+            assert len(projection_rows) == 1
+            assert projection_rows[0].user_id == UUID(account.id)
+            assert projection_rows[0].games_played == 1
 
         # Retrying the same request is idempotent and does not create a chain.
         assert (await users.merge_guest_into_account(guest.id, account.id)).id == account.id

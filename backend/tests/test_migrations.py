@@ -480,6 +480,137 @@ async def test_score_ledger_migration_does_not_invent_legacy_events(tmp_path):
         await engine.dispose()
 
 
+async def test_daily_user_stats_migration_backfills_canonical_identity_totals(
+    tmp_path,
+):
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'user-stats-migration.db'}"
+    )
+    identifiers = {
+        name: uuid.uuid4().hex
+        for name in (
+            "source",
+            "target",
+            "alias",
+            "game",
+            "source_seat",
+            "target_seat",
+            "first_turn",
+            "second_turn",
+            "outcome",
+            "guess",
+        )
+    }
+    try:
+        await _migrate(engine, alembic_command.upgrade, "b9f3e5d7a201")
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, password_hash, display_name, state) "
+                    "VALUES (:target, 'target', 'hash', 'Target', 'registered'), "
+                    "(:source, NULL, NULL, 'Source', 'merged')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO identity_aliases "
+                    "(id, source_user_id, target_user_id) "
+                    "VALUES (:alias, :source, :target)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_records "
+                    "(id, payload_hash, room_name, scoring_mode, hint_mode, "
+                    "drawing_seconds, total_rounds, player_count, started_at, finished_at) "
+                    "VALUES (:game, '', 'Projected legacy game', 'default', 'none', "
+                    "90, 1, 2, '2026-08-20 11:55:00', '2026-08-20 12:00:00')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_participants "
+                    "(id, game_id, user_id, display_name_snapshot, "
+                    "is_anonymous_snapshot, final_score, final_rank) VALUES "
+                    "(:source_seat, :game, :source, 'Source', 1, 300, 1), "
+                    "(:target_seat, :game, :target, 'Target', 0, 100, 2)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO turn_records "
+                    "(id, game_id, round_number, turn_number, drawer_user_id, "
+                    "drawer_participant_id, drawer_display_name_snapshot, "
+                    "drawer_is_anonymous_snapshot, prompt, duration_seconds) VALUES "
+                    "(:first_turn, :game, 1, 1, :source, :source_seat, "
+                    "'Source', 1, 'anchor', 20), "
+                    "(:second_turn, :game, 1, 2, :target, :target_seat, "
+                    "'Target', 0, 'bridge', 25)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO turn_participant_outcomes "
+                    "(id, turn_id, participant_id, eligible, eligibility_reason, "
+                    "outcome, terminal_state, correct_guess_time_seconds) "
+                    "VALUES (:outcome, :second_turn, :source_seat, 1, 'eligible', "
+                    "'correct', 'active', 10)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO turn_guesses "
+                    "(id, turn_id, user_id, participant_id, outcome_id, "
+                    "display_name_snapshot, is_anonymous_snapshot, "
+                    "points_awarded, guess_time_seconds) "
+                    "VALUES (:guess, :second_turn, :source, :source_seat, :outcome, "
+                    "'Source', 1, 100, 10)"
+                ),
+                identifiers,
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.connect() as connection:
+            projection = (
+                await connection.execute(
+                    text(
+                        "SELECT user_id, stat_date, games_played, games_won, "
+                        "total_score, turns_played, prompts_guessed, drawings_made "
+                        "FROM user_stats_daily"
+                    )
+                )
+            ).one()
+        assert tuple(projection) == (
+            identifiers["target"],
+            "2026-08-20",
+            1,
+            1,
+            400,
+            2,
+            1,
+            2,
+        )
+
+        await _migrate(engine, alembic_command.downgrade, "b9f3e5d7a201")
+        async with engine.connect() as connection:
+            assert await connection.scalar(
+                text("SELECT count(*) FROM game_records")
+            ) == 1
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.connect() as connection:
+            assert await connection.scalar(
+                text("SELECT games_played FROM user_stats_daily")
+            ) == 1
+    finally:
+        await engine.dispose()
+
+
 async def test_prompt_counter_migration_preserves_lifetime_totals(tmp_path):
     engine = create_db_engine(
         f"sqlite+aiosqlite:///{tmp_path / 'prompt-fact-migration.db'}"

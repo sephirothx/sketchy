@@ -1,7 +1,7 @@
 """Unit tests for SQLAlchemy models and database schema."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 import uuid
@@ -25,6 +25,7 @@ from app.db.models import (
     TurnParticipantOutcome,
     TurnRecord,
     User,
+    UserStatsDaily,
     UserSettings,
     UserBan,
     UserBlock,
@@ -231,6 +232,48 @@ async def test_retained_messages_enforce_kind_context_and_expiry():
                     key: (now if key == "expires_at" else value)
                     for key, value in common.items()
                 },
+            ),
+        )
+        for invalid_row in invalid_rows:
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(invalid_row)
+    finally:
+        await engine.dispose()
+
+
+async def test_daily_user_stats_projection_rejects_impossible_counts():
+    factory, engine = await create_test_db()
+    user_id = generate_uuid()
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=user_id, display_name="Projected"))
+                session.add(
+                    UserStatsDaily(
+                        user_id=user_id,
+                        stat_date=date(2026, 8, 23),
+                        games_played=2,
+                        games_won=1,
+                        total_score=150,
+                        turns_played=4,
+                        prompts_guessed=2,
+                        drawings_made=2,
+                    )
+                )
+
+        invalid_rows = (
+            UserStatsDaily(
+                user_id=user_id,
+                stat_date=date(2026, 8, 24),
+                games_played=1,
+                games_won=2,
+            ),
+            UserStatsDaily(
+                user_id=user_id,
+                stat_date=date(2026, 8, 25),
+                games_played=-1,
             ),
         )
         for invalid_row in invalid_rows:

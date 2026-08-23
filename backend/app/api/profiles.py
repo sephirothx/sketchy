@@ -18,9 +18,9 @@ from app.repositories.interfaces import GameHistoryRepository, UserRepository
 MAX_PAGE_SIZE = 50
 DEFAULT_PAGE_SIZE = 20
 
-# These endpoints need no session, and `get_stats` costs four queries a call,
-# so the ceiling is generous for a person browsing profiles and inconvenient
-# for anything walking the id space.
+# These endpoints need no session. Statistics now read a bounded daily
+# projection rather than scanning lifetime game/turn/guess facts, but the
+# ceiling still makes automated account-id walking inconvenient.
 profile_limiter = RateLimiter(limit=120, window_seconds=60)
 
 

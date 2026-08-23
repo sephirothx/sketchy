@@ -63,6 +63,7 @@ the rotation itself are counted in *rounds*.
 | **Data export** | A private, versioned JSON download containing one player's own account, gameplay data, authored prompt-list revision history, unexpired authored **Retained messages**, and **Message evidence** they submitted. It excludes other players' profile fields and any message body the requester did not explicitly receive and pin. | archive, backup, dump |
 | **Deleted player** | The neutral name replacing a deleted account in retained shared game history. | removed user, anonymous, unknown |
 | **Historical presentation** | The display name, name color, and guest/registered state frozen onto a finished-game seat. Profile edits do not rewrite it; deletion replaces identifying fields with the **Deleted player** tombstone. | current profile, username, avatar |
+| **Daily user-stat projection** | A disposable per-canonical-account, per-UTC-day summary of immutable finished-game facts used for bounded-cost profile statistics. Game saves update it transactionally; identity merges and the maintenance command rebuild it. It is never the source of truth. | user stats cache, lifetime counter, analytics tracking |
 | **AFK** | A status a player sets on themselves, or the room votes onto them. AFK players are skipped for turns and not waited for. Always the initialism, uppercase. | away, idle, inactive, afk |
 
 ## Names

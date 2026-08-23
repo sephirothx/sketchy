@@ -1,12 +1,13 @@
 """SQLAlchemy ORM models for Sketchy database tables."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 import uuid
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     Float,
     ForeignKey,
     Index,
@@ -223,6 +224,50 @@ class User(Base):
             if value
             else AccountState.REGISTERED.value
         )
+
+
+class UserStatsDaily(Base):
+    """Rebuildable per-account/day projection of immutable game facts."""
+
+    __tablename__ = "user_stats_daily"
+    __table_args__ = (
+        CheckConstraint(
+            "games_played >= 0 AND games_won >= 0 "
+            "AND games_won <= games_played AND turns_played >= 0 "
+            "AND prompts_guessed >= 0 "
+            "AND drawings_made >= 0",
+            name="ck_user_stats_daily_nonnegative",
+        ),
+        Index("ix_user_stats_daily_stat_date", "stat_date"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    stat_date: Mapped[date] = mapped_column(Date(), primary_key=True)
+    games_played: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    games_won: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    total_score: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    turns_played: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    prompts_guessed: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    drawings_made: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class UserSettings(Base):
