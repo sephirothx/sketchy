@@ -48,11 +48,15 @@ update to this document and issue #393 before dependent work merges.
 4. UUIDv7 generation is centralized in a locked `generate_uuid7()` wrapper.
    The supported runtime is Python 3.14 or newer, enforced at startup by
    `validate_python_runtime()` and gated by a single-version CI matrix; 3.12
-   support was withdrawn on 2026-08-23. The wrapper still calls the pinned
-   backport, and may switch to the stdlib `uuid.uuid7()` without a data
-   migration now that the minimum allows it. Tests cover version/variant bits,
-   clock rollback, concurrent generation, monotonic process-local order, and
-   uniqueness.
+   support was withdrawn on 2026-08-23. The wrapper calls the standard
+   library's `uuid.uuid7()`; the `uuid6` backport was removed the same day
+   without a data migration, since existing values remain valid v7 UUIDs. The
+   backport ordered same-millisecond values by advancing the embedded
+   timestamp, which drifted a measured 11 seconds over a 10,000-id burst,
+   while the standard library uses the RFC 9562 section 6.2 method 1
+   in-millisecond counter. `tests/test_identifiers.py` covers version/variant
+   bits, clock rollback, threaded and asyncio concurrent generation, monotonic
+   process-local order, uniqueness, and that burst timestamp truthfulness.
 5. UUIDv7 is not a credential and not the authoritative business timestamp.
    Session tokens, recovery codes, room codes, and share codes remain
    cryptographically random. Queries that require chronological truth order by

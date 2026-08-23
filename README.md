@@ -88,12 +88,18 @@ on server startup via Alembic.
 SQLite connections enforce foreign keys, use WAL mode for concurrent readers,
 and wait up to five seconds for a busy database before failing a write.
 
-Persisted entity IDs are time-ordered UUIDv7 values. SQLAlchemy stores them as
-native 16-byte `uuid` columns on PostgreSQL and dialect-compatible `CHAR(32)`
-columns on SQLite; API and Socket.IO boundaries continue to expose canonical
-UUID strings. UUID order improves index locality, but timestamps such as
-`created_at` remain the authoritative event time. Security tokens and room
-codes remain independently random and are not derived from entity IDs.
+Persisted entity IDs are time-ordered UUIDv7 values from the standard
+library's `uuid.uuid7()`, generated through a single wrapper in
+`app/identifiers.py`. It keeps a counter inside each millisecond, so a burst
+of ids stays ordered without stamping any of them into the future.
+SQLAlchemy stores them as native 16-byte `uuid` columns on PostgreSQL and
+dialect-compatible `CHAR(32)` columns on SQLite; API and Socket.IO boundaries
+continue to expose canonical UUID strings. UUID order improves index
+locality, but timestamps such as `created_at` remain the authoritative event
+time. Consecutive ids within one millisecond are guessable from each other by
+design, so they are never used as capabilities: security tokens, room codes,
+and share codes remain independently random and are not derived from entity
+IDs.
 
 All persisted timestamps require timezone-aware inputs and are normalized to
 aware UTC values when written and read. This keeps SQLite and PostgreSQL
