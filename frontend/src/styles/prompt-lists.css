@@ -214,33 +214,85 @@
   width: 100%;
 }
 
+.prompt-list-entry-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.prompt-list-manager-layout .prompt-list-entry-filters input[type="search"] {
+  flex: 1 1 200px;
+  padding: 6px 10px;
+  width: auto;
+}
+
+.prompt-list-entry-flagged {
+  align-items: center;
+  color: #b45309;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.prompt-list-manager-layout .prompt-list-entry-flagged input {
+  width: auto;
+}
+
+.prompt-list-entry-count {
+  color: #64748b;
+  font-size: 12px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Prompts are short, so they wrap as chips: a 200-prompt list is a few
+   screenfuls this way rather than 200 rows. */
 .prompt-list-entry-editor {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   list-style: none;
   margin: 0;
-  max-height: 440px;
+  max-height: 320px;
   overflow: auto;
   padding: 0 4px 0 0;
 }
 
 .prompt-list-entry-editor > li {
   align-items: center;
-  background: #f8fafc;
+  background: #f1f5f9;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  border-radius: 999px;
   display: flex;
-  gap: 8px;
-  padding: 6px 6px 6px 12px;
+  font-size: 14px;
+  gap: 2px;
+  max-width: 100%;
+  padding: 3px 3px 3px 12px;
 }
 
-.prompt-list-entry-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.prompt-list-entry-editor > li.is-flagged {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.prompt-list-entry-text { min-width: 0; overflow-wrap: anywhere; }
 
 .prompt-list-manager-card .prompt-list-entry-editor > li button {
   background: none;
-  border: 1px solid #fca5a5;
+  border: 0;
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 16px;
+  line-height: 1;
+  padding: 3px 8px;
+}
+
+.prompt-list-manager-card .prompt-list-entry-editor > li button:hover {
+  background: #fee2e2;
   color: #b91c1c;
-  padding: 4px 10px;
 }
 .prompt-list-entry-moderation {
   align-self: center;

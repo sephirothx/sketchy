@@ -1224,9 +1224,26 @@
   border-color: #334155;
 }
 
+[data-theme="dark"] .prompt-list-entry-editor > li.is-flagged {
+  background: #422006;
+  border-color: #b45309;
+}
+
 [data-theme="dark"] .prompt-list-manager-card .prompt-list-entry-editor > li button {
-  border-color: #7f1d1d;
-  color: #fca5a5;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .prompt-list-manager-card .prompt-list-entry-editor > li button:hover {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+[data-theme="dark"] .prompt-list-entry-count {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .prompt-list-entry-flagged {
+  color: #fdba74;
 }
 
 [data-theme="dark"] .prompt-list-share-code {

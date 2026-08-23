@@ -64,6 +64,8 @@ export function MyPromptListsPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [bulkInput, setBulkInput] = useState("");
+  const [promptSearch, setPromptSearch] = useState("");
+  const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
 
   useEffect(() => {
     if (!userId || isAnonymous) return;
@@ -114,6 +116,16 @@ export function MyPromptListsPage() {
     }
   }
 
+  function removePrompt(prompt: string) {
+    const key = prompt.toLocaleLowerCase();
+    setDraft((current) => ({
+      ...current,
+      prompts: current.prompts.filter(
+        (entry) => entry.prompt.toLocaleLowerCase() !== key,
+      ),
+    }));
+  }
+
   function addBulkPrompts() {
     const result = mergePromptEntries(draft.prompts, bulkInput);
     if (!result.added && !result.duplicates && !result.tooLong.length && !result.overLimit) {
@@ -126,6 +138,17 @@ export function MyPromptListsPage() {
     // dropped has to be said, or a paste quietly loses entries.
     setNotice(describePromptMerge(result));
   }
+
+  const flaggedCount = draft.prompts.filter(
+    (prompt) => prompt.conceptId && promptModeration[prompt.conceptId] !== "active",
+  ).length;
+  const promptQuery = promptSearch.trim().toLocaleLowerCase();
+  const visiblePrompts = draft.prompts.filter((prompt) => {
+    if (showFlaggedOnly && !(prompt.conceptId && promptModeration[prompt.conceptId] !== "active")) {
+      return false;
+    }
+    return !promptQuery || prompt.prompt.toLocaleLowerCase().includes(promptQuery);
+  });
 
   async function save() {
     if (busy) return;
@@ -261,13 +284,53 @@ export function MyPromptListsPage() {
             {draft.prompts.length === 0 ? (
               <p className="prompt-list-manager-empty">No prompts yet. Paste some above to get started.</p>
             ) : (
-              <ul className="prompt-list-entry-editor">
-                {draft.prompts.map((prompt, index) => <li key={prompt.conceptId ?? `new-${index}-${prompt.prompt}`}>
-                  <span className="prompt-list-entry-text">{prompt.prompt}</span>
-                  {prompt.conceptId && promptModeration[prompt.conceptId] !== "active" && <span className="prompt-list-entry-moderation">{promptModeration[prompt.conceptId]?.replace("_", " ")}</span>}
-                  <button type="button" aria-label={`Remove ${prompt.prompt}`} onClick={() => setDraft({ ...draft, prompts: draft.prompts.filter((_, position) => position !== index) })}>Remove</button>
-                </li>)}
-              </ul>
+              <>
+                <div className="prompt-list-entry-filters">
+                  <label>
+                    <span className="visually-hidden">Search prompts</span>
+                    <input
+                      type="search"
+                      value={promptSearch}
+                      placeholder="Search prompts"
+                      onChange={(event) => setPromptSearch(event.target.value)}
+                    />
+                  </label>
+                  {flaggedCount > 0 && (
+                    <label className="prompt-list-entry-flagged">
+                      <input
+                        type="checkbox"
+                        checked={showFlaggedOnly}
+                        onChange={(event) => setShowFlaggedOnly(event.target.checked)}
+                      />
+                      Needs review ({flaggedCount})
+                    </label>
+                  )}
+                  <span className="prompt-list-entry-count">
+                    {visiblePrompts.length === draft.prompts.length
+                      ? `${draft.prompts.length} prompts`
+                      : `${visiblePrompts.length} of ${draft.prompts.length}`}
+                  </span>
+                </div>
+                {visiblePrompts.length === 0 ? (
+                  <p className="prompt-list-manager-empty">Nothing matches that search.</p>
+                ) : (
+                  <ul className="prompt-list-entry-editor">
+                    {visiblePrompts.map((prompt, index) => {
+                      const flagged = prompt.conceptId && promptModeration[prompt.conceptId] !== "active";
+                      return (
+                        <li
+                          key={prompt.conceptId ?? `new-${index}-${prompt.prompt}`}
+                          className={flagged ? "is-flagged" : undefined}
+                        >
+                          <span className="prompt-list-entry-text">{prompt.prompt}</span>
+                          {flagged && <span className="prompt-list-entry-moderation">{promptModeration[prompt.conceptId!]?.replace("_", " ")}</span>}
+                          <button type="button" aria-label={`Remove ${prompt.prompt}`} onClick={() => removePrompt(prompt.prompt)}>×</button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </>
             )}
             {error && <p className="auth-error" role="alert">{error}</p>}
             {notice && <p className="prompt-list-manager-notice" role="status">{notice}</p>}
