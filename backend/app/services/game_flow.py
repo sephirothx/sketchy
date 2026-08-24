@@ -721,6 +721,43 @@ class GameFlowService:
     def _turn_ended_payload(self, room: Room, drawer_bonus: int | None = None) -> dict:
         return turn_ended_payload(room, drawer_bonus)
 
+    async def record_abandoned_game(self, room: Room) -> bool:
+        """Write down a game that stopped without ending, and clear it.
+
+        Every way a game can be lost funnels through here, which it has to:
+        the first version of this lived in `_remove_player_from_game` alone,
+        and the common case - everybody closing their tab - never reaches that.
+        The eviction path removes the last player and tears the room down
+        directly, so the game it was holding went unrecorded, which is the
+        whole thing #323 set out to fix.
+
+        Snapshotted before the room is cleared, for the same reason the
+        finished path snapshots: what follows discards the state the history is
+        made of. Returns whether anything was recorded, so a caller can tell a
+        room that held a game from one that did not.
+        """
+        game = room.game
+        if game is None:
+            return False
+        history = (
+            build_game_history(
+                room,
+                game,
+                finished_at=datetime.now(timezone.utc),
+                outcome=GameOutcome.ABANDONED.value,
+            )
+            if self._ctx.game_history_repo
+            else None
+        )
+        metrics.record(
+            RuntimeEventType.GAME_ABANDONED,
+            room_id=room.id,
+            details={"round_number": game.round_number},
+        )
+        room.game = None
+        await self._persist_game_history(room, history)
+        return True
+
     async def _persist_game_history(self, room: Room, history) -> None:
         """Write a finished game's snapshot: the only write this epic makes.
 
@@ -970,32 +1007,10 @@ class GameFlowService:
             self._timers.cancel_hint_timers(room.id)
             self._timers.cancel_restart_timer(room.id)
             room.restart_vote = None
-            # The last seat has gone: this game is over without having ended.
-            # Snapshotted here, before the room is reset, for the same reason
-            # the finished path snapshots - everything below discards the state
-            # the history is made of. Until now this branch simply threw it
-            # away, which is why the games most worth looking at, the ones that
-            # fell apart, were the only ones that left no trace at all.
-            abandoned = (
-                build_game_history(
-                    room,
-                    game,
-                    finished_at=datetime.now(timezone.utc),
-                    outcome=GameOutcome.ABANDONED.value,
-                )
-                if self._ctx.game_history_repo
-                else None
-            )
-            metrics.record(
-                RuntimeEventType.GAME_ABANDONED,
-                room_id=room.id,
-                details={"round_number": game.round_number},
-            )
             room.state = "waiting"
-            room.game = None
+            await self.record_abandoned_game(room)
             if self._ctx.shutdown is not None:
                 self._ctx.shutdown.notify_game_state_changed()
-            await self._persist_game_history(room, abandoned)
         elif was_drawer:
             await self._abandon_current_turn(room)
         else:

@@ -581,3 +581,51 @@ async def test_mixed_game_attributes_the_source_not_equal_custom_text():
     assert custom_collision_id not in usage.offers
     assert custom_collision_id not in usage.picks
     assert sum(usage.offers.values()) == 4  # two curated offers over two turns
+
+
+async def test_a_game_everyone_closes_their_tab_on_is_recorded():
+    """The way a game is actually lost: nobody leaves, they all just go.
+
+    The eviction path removes the last player and tears the room down without
+    passing through `_remove_player_from_game`, so a version of this that only
+    hooked the latter recorded nothing at all - which is the case #323 exists
+    for.
+    """
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    game.force_prompt_choice()
+    game.set_phase_deadline(game.drawing_seconds)
+    await flow._end_turn(room)
+    ctx.timers.cancel_phase_timer(room.id)
+
+    # Everyone's grace window runs out, which is what closing a tab becomes.
+    for player in list(room.player_list()):
+        room_manager.remove_player(room, player.id)
+    assert not room.connected_players()
+    await ctx.remove_room_if_empty(room.id)
+    await ctx.timers.close()
+
+    assert room_manager.get_room(room.id) is None
+    assert len(history.saved) == 1
+    written = history.saved[0]
+    assert written.record.outcome == "abandoned"
+    assert len(written.turns) == 1
+
+
+async def test_a_room_closed_without_a_game_records_nothing():
+    """An empty waiting room is not an abandoned game."""
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+
+    for player in list(room.player_list()):
+        room_manager.remove_player(room, player.id)
+    await ctx.remove_room_if_empty(room.id)
+    await ctx.timers.close()
+
+    assert history.saved == []

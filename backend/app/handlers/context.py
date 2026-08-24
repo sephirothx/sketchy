@@ -53,6 +53,11 @@ class HandlerContext:
         removed = self.room_manager.remove_room_if_empty(room_id)
         if removed is None:
             return False
+        # A room can be torn down while it still holds a game: the last player
+        # to be evicted takes the room with them, and that path never reaches
+        # `_remove_player_from_game`. This is the one place every teardown
+        # passes through, so it is where a lost game gets written down.
+        await self.game_flow.record_abandoned_game(removed)
         if self.room_codes is not None and removed.persistent_room_id is None:
             try:
                 await self.room_codes.retire_ephemeral(removed.code)
