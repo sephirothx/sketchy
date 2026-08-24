@@ -4,6 +4,7 @@ import { apiRequest } from "../lib/api";
 import { socket } from "../lib/socket";
 import {
   onSuspended,
+  reportedMessages,
   reportSuspended,
   suspensionDuration,
   type Suspension,
@@ -30,6 +31,7 @@ export function SuspensionNotice() {
       reportSuspended({
         reason: typeof body.reason === "string" ? body.reason : null,
         expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
+        messages: reportedMessages(body.messages),
       });
     }
     socket.on("account_suspended", onAccountSuspended);
@@ -73,10 +75,29 @@ export function SuspensionNotice() {
           <p className="modal-body suspension-reason">{suspension.reason}</p>
         )}
         <p className="modal-body">{suspensionDuration(suspension)}</p>
-        <p className="modal-body suspension-note">
-          You can sign out, but this account cannot be used until the
-          suspension ends.
-        </p>
+        {suspension.messages.length > 0 && (
+          <>
+            <p className="modal-body suspension-evidence-label">
+              {suspension.messages.length === 1
+                ? "The message this was about:"
+                : "The messages this was about:"}
+            </p>
+            {/* Their own words, as they were when the report was made. Scrolls
+                inside the card rather than growing it off the screen. */}
+            <ul className="suspension-evidence">
+              {suspension.messages.map((message, index) => (
+                <li key={`${message.at ?? index}-${index}`}>
+                  {message.at && (
+                    <span className="suspension-evidence-time">
+                      {new Date(message.at).toLocaleString()}
+                    </span>
+                  )}
+                  <span className="suspension-evidence-text">{message.text}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <button
           type="button"
           className="modal-button"

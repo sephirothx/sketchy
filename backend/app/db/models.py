@@ -1135,6 +1135,17 @@ class UserBan(Base):
         index=True,
     )
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The report this suspension was decided from, when it came from one. It is
+    # what lets the suspended player be shown the messages the complaint was
+    # about, rather than a reason with nothing behind it. Nullable because a
+    # suspension can be issued directly, and SET NULL because the suspension
+    # outlives the report if the report is ever removed.
+    source_report_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("player_reports.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False

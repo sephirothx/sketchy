@@ -665,11 +665,15 @@ A suspended player is told before they are signed out. Suspending revokes every
 session and ends every live seat at once, so without it the experience is a
 game that stops and a page that starts refusing things. A player mid-game hears
 it on the socket; everybody else learns from the first request that is refused,
-which now carries the reason and the end date rather than only saying no. The
-notice cannot be dismissed, because there is nothing behind it to go back to;
-its one button really signs out, which is why logout is among the few paths a
-suspended account may still reach. The account stays unusable either way - what
-signing out returns is the browser, not the account.
+which now carries the reason and the end date rather than only saying no. When the
+suspension was decided from a report, the notice also shows the messages that
+report was about - their own words, as they were when it was made, which is
+what turns a reason into something they can weigh. `user_bans.source_report_id`
+is what makes that possible, and a ban naming a report about somebody else is
+refused, so a suspension cannot be used to show one player another's messages.
+The notice cannot be dismissed, because there is nothing behind it to go back
+to; its one button really signs out, which is why logout is among the few paths
+a suspended account may still reach.
 
 Roles are service-wide privileges. A room **host** remains an ordinary
 gameplay role and is never an administrator merely because they created a

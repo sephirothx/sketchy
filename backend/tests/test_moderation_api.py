@@ -154,8 +154,8 @@ async def test_report_pins_only_messages_the_reporter_received(env):
     reporter_http = new_client()
     target_http = new_client()
     moderator_http = new_client()
-    reporter = await register(reporter_http, "EvidenceReporter")
-    target = await register(target_http, "EvidenceTarget")
+    reporter = await register(reporter_http, "EvidReporter")
+    target = await register(target_http, "EvidTarget")
     moderator = await register(moderator_http, "EvidenceMod")
     await set_role(factory, moderator["id"], UserRole.MODERATOR)
     now = datetime.now(timezone.utc)
@@ -167,7 +167,7 @@ async def test_report_pins_only_messages_the_reporter_received(env):
                 "room_instance_id": generate_uuid(),
                 "sender_user_id": UUID(target["id"]),
                 "sender_player_id": generate_uuid(),
-                "sender_display_name_snapshot": "EvidenceTarget",
+                "sender_display_name_snapshot": "EvidTarget",
                 "sender_is_anonymous_snapshot": False,
                 "is_spectator": False,
                 "message_kind": "chat",
@@ -224,7 +224,7 @@ async def test_report_pins_only_messages_the_reporter_received(env):
             "gameId": None,
             "turnId": None,
             "senderUserId": target["id"],
-            "senderDisplayName": "EvidenceTarget",
+            "senderDisplayName": "EvidTarget",
             "senderNameColor": None,
             "senderWasAnonymous": False,
             "messageKind": "chat",
@@ -671,3 +671,111 @@ async def test_a_suspended_account_can_still_sign_out(env):
     assert fresh.status_code == 200
     assert fresh.json()["id"] != target["id"]
     assert fresh.json()["isAnonymous"] is True
+
+
+async def test_a_suspension_from_a_report_shows_the_messages_it_was_about(env):
+    """A reason with nothing behind it is easy to dismiss. Their own words are
+    what make it something they can weigh."""
+    new_client, factory, _ = env
+    reporter_http, target_http, moderator_http = (
+        new_client(),
+        new_client(),
+        new_client(),
+    )
+    reporter = await register(reporter_http, "EvidReporter")
+    target = await register(target_http, "EvidTarget")
+    moderator = await register(moderator_http, "EvidMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    async with factory() as session:
+        async with session.begin():
+            now = datetime.now(timezone.utc)
+            session.add(
+                RoomMessage(
+                    id=generate_uuid(),
+                    room_instance_id=generate_uuid(),
+                    sender_user_id=UUID(target["id"]),
+                    sender_player_id=generate_uuid(),
+                    sender_display_name_snapshot="EvidTarget",
+                    sender_is_anonymous_snapshot=False,
+                    message_kind="chat",
+                    audience="room",
+                    text="the thing that was reported",
+                    audience_user_ids=[reporter["id"], target["id"]],
+                    created_at=now,
+                    expires_at=now + timedelta(hours=1),
+                )
+            )
+            message_id = (
+                await session.scalar(select(RoomMessage.id))
+            )
+
+    filed = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Look at what they said.",
+            "messageIds": [str(message_id)],
+        },
+    )
+    assert filed.status_code == 201
+
+    banned = await moderator_http.post(
+        "/api/moderation/bans",
+        json={
+            "userId": target["id"],
+            "reason": "Harassment in chat",
+            "reportId": filed.json()["id"],
+        },
+    )
+    assert banned.status_code == 201
+
+    refused = await target_http.get("/api/auth/me")
+
+    assert refused.status_code == 403
+    body = refused.json()
+    assert [line["text"] for line in body["messages"]] == [
+        "the thing that was reported"
+    ]
+    # Their own message, and nothing about who reported it.
+    assert "EvidReporter" not in str(body)
+    assert reporter["id"] not in str(body)
+
+
+async def test_a_ban_refuses_a_report_about_somebody_else(env):
+    """Otherwise a suspension could be made to show one player another
+    player's messages."""
+    new_client, factory, _ = env
+    reporter_http, target_http, other_http, moderator_http = (
+        new_client(),
+        new_client(),
+        new_client(),
+        new_client(),
+    )
+    await register(reporter_http, "MixReporter")
+    target = await register(target_http, "MixTarget")
+    other = await register(other_http, "MixOther")
+    moderator = await register(moderator_http, "MixMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    filed = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": other["id"],
+            "reason": "spam",
+            "details": "About somebody else entirely.",
+        },
+    )
+    assert filed.status_code == 201
+
+    refused = await moderator_http.post(
+        "/api/moderation/bans",
+        json={
+            "userId": target["id"],
+            "reason": "Wrong report",
+            "reportId": filed.json()["id"],
+        },
+    )
+
+    assert refused.status_code == 422

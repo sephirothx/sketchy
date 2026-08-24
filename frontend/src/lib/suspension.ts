@@ -9,10 +9,19 @@ signed out with no explanation at all.
 Both feed one notice, kept here rather than in a component so that `api.ts` can
 raise it without importing React. */
 
+export type ReportedMessage = {
+  text: string;
+  at: string | null;
+};
+
 export type Suspension = {
   reason: string | null;
   /** ISO instant, or null for a suspension with no end date. */
   expiresAt: string | null;
+  /** The messages the report behind this was about - their own words, which
+      is what makes the reason something they can weigh rather than just be
+      told. Empty when the suspension was issued without a report. */
+  messages: ReportedMessage[];
 };
 
 type Listener = (suspension: Suspension) => void;
@@ -41,7 +50,20 @@ export function suspensionFromPayload(payload: unknown): Suspension | null {
   return {
     reason: typeof body.reason === "string" ? body.reason : null,
     expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
+    messages: reportedMessages(body.messages),
   };
+}
+
+/** Keep only entries shaped like a message; a malformed one is dropped rather
+than rendered as "undefined" in front of somebody already having a bad day. */
+export function reportedMessages(value: unknown): ReportedMessage[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const row = entry as Record<string, unknown>;
+    if (typeof row.text !== "string") return [];
+    return [{ text: row.text, at: typeof row.at === "string" ? row.at : null }];
+  });
 }
 
 /** One sentence saying how long this lasts.

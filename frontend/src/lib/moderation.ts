@@ -123,6 +123,8 @@ export function reviewModerationReport(
 export function createUserBan(input: {
   userId: string;
   reason: string;
+  /** The report this was decided from, when it came from one. */
+  reportId?: string;
   expiresAt?: string;
 }): Promise<UserBan> {
   return apiRequest("/api/moderation/bans", { method: "POST", body: input });

@@ -96,6 +96,7 @@ async def _schema_differences(engine: AsyncEngine):
         ("turn_records", "drawer_participant_id"),
         ("turn_guesses", "participant_id"),
         ("turn_guesses", "outcome_id"),
+        ("user_bans", "source_report_id"),
     }
     return [
         difference
@@ -129,6 +130,7 @@ async def _sqlite_inline_reference_actions(engine: AsyncEngine) -> dict[tuple[st
         ("turn_records", "drawer_participant_id"),
         ("turn_guesses", "participant_id"),
         ("turn_guesses", "outcome_id"),
+        ("user_bans", "source_report_id"),
     }
     actions: dict[tuple[str, str], str] = {}
     async with engine.connect() as connection:
@@ -161,6 +163,8 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
             ("turn_records", "drawer_participant_id"): "SET NULL",
             ("turn_guesses", "participant_id"): "SET NULL",
             ("turn_guesses", "outcome_id"): "CASCADE",
+            # A suspension outlives the report it was decided from.
+            ("user_bans", "source_report_id"): "SET NULL",
         }
     index_definition = await _index_definition(engine)
     assert index_definition is not None

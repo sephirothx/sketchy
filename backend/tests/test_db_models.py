@@ -1225,6 +1225,9 @@ async def test_migrations_match_the_models(tmp_path):
         await engine.dispose()
 
     inline_reference_columns = {
+        # SQLite does not reflect ON DELETE for a reference added inline with
+        # ADD COLUMN. The migration replay suite asserts the PRAGMA directly.
+        ("user_bans", "source_report_id"),
         ("turn_records", "prompt_version_id"),
         ("turn_records", "drawer_participant_id"),
         ("turn_guesses", "participant_id"),

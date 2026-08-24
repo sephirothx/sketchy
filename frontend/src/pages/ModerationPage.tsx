@@ -259,6 +259,9 @@ export function ModerationPage() {
                               await createUserBan({
                                 userId: report.reportedUserId as string,
                                 reason: note[report.id],
+                                // So the suspended player can be shown what
+                                // the complaint was actually about.
+                                reportId: report.id,
                                 ...(expiresAt ? { expiresAt } : {}),
                               });
                               // Acting on a report decides it. Leaving it

@@ -154,6 +154,10 @@ class BanBody(BaseModel):
     user_id: UUID = Field(alias="userId")
     reason: str = Field(min_length=1, max_length=255)
     expires_at: datetime | None = Field(default=None, alias="expiresAt")
+    # Optional: a suspension can be issued directly. When it comes from a
+    # report, recording which one is what lets the suspended player be shown
+    # the messages it was about.
+    report_id: UUID | None = Field(default=None, alias="reportId")
 
     @field_validator("reason")
     @classmethod
@@ -899,6 +903,17 @@ def create_moderation_router(
                     raise HTTPException(
                         status_code=409, detail="That account is already suspended."
                     )
+                source_report = None
+                if body.report_id is not None:
+                    source_report = await session.get(PlayerReport, body.report_id)
+                    if (
+                        source_report is None
+                        or source_report.reported_user_id != target.id
+                    ):
+                        raise HTTPException(
+                            status_code=422,
+                            detail="That report is not about this player.",
+                        )
                 ban = UserBan(
                     id=generate_uuid(),
                     user_id=target.id,
@@ -906,6 +921,7 @@ def create_moderation_router(
                     reason=body.reason,
                     expires_at=body.expires_at,
                     created_at=now,
+                    source_report_id=source_report.id if source_report else None,
                 )
                 session.add(ban)
                 # Written here, in the transaction that creates the ban, so a
