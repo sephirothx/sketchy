@@ -50,5 +50,5 @@ Thumbs.db
 AGENTS.md
 CLAUDE.md
 
-# --- Local documentation ---
-docs/
+# --- Local ignored files ---
+.ignored/
