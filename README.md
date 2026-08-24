@@ -528,6 +528,15 @@ cd backend
   --username Operator --reason "Initial production administrator"
 ```
 
+Every entry in that log records who acted, the request it belonged to, a
+hashed client address, and what was acted on. The subject is named twice on
+purpose: `target_user_id` is a real foreign key, so a deleted account leaves
+the entry standing with its subject blanked rather than taking it along, while
+a `target_type` and `target_id` pair names whatever row the action touched -
+a prompt list, a single prompt version, a room, a configuration key. An action
+that acts on no single row, such as a bulk retention purge, records neither
+and says so by leaving both empty rather than inventing a subject.
+
 Roles are service-wide privileges. A room **host** remains an ordinary
 gameplay role and is never an administrator merely because they created a
 room.

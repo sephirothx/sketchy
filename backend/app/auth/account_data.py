@@ -48,6 +48,7 @@ from app.db.models import (
 )
 from app.domain_values import (
     AccountState,
+    AuditTargetType,
     DataExportStatus,
     TurnDrawingStatus,
     UserRole,
@@ -145,6 +146,8 @@ async def create_data_export(
                     event_type="account.export_requested",
                     actor_user_id=db_user_id,
                     target_user_id=db_user_id,
+                    target_type=AuditTargetType.USER.value,
+                    target_id=str(db_user_id),
                     details={
                         "export_id": str(job.id),
                         "schema_version": EXPORT_SCHEMA_VERSION,
@@ -1128,6 +1131,8 @@ async def anonymize_account(
                     event_type="account.deleted",
                     actor_user_id=account.id,
                     target_user_id=account.id,
+                    target_type=AuditTargetType.USER.value,
+                    target_id=str(account.id),
                     details={"identities_anonymized": len(identity_ids)},
                     created_at=deleted_at,
                 )

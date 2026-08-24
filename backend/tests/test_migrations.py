@@ -710,3 +710,89 @@ async def test_postgresql_migration_chain_round_trip():
         await _exercise_migration_chain(engine)
     finally:
         await engine.dispose()
+
+
+async def test_audit_target_migration_says_who_existing_rows_were_about(tmp_path):
+    """The pair has to describe rows written before it existed, or the ledger
+    starts with a hole exactly where its oldest entries are."""
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'audit-target-migration.db'}"
+    )
+    identifiers = {
+        name: uuid.uuid4().hex
+        for name in ("actor", "subject", "about_user", "about_nobody")
+    }
+    try:
+        await _migrate(engine, alembic_command.upgrade, "e8c2f5a91b04")
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, password_hash, display_name, state) "
+                    "VALUES (:actor, 'actor', 'hash', 'Actor', 'registered'), "
+                    "(:subject, 'subject', 'hash', 'Subject', 'registered')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO audit_events "
+                    "(id, event_type, actor_user_id, target_user_id, details) VALUES "
+                    "(:about_user, 'report.resolved', :actor, :subject, '{}'), "
+                    "(:about_nobody, 'retention.anonymous_purge', NULL, NULL, '{}')"
+                ),
+                identifiers,
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "a1c7e4b9d360")
+
+        async with engine.connect() as connection:
+            rows = dict(
+                (row.id, (row.target_type, row.target_id))
+                for row in (
+                    await connection.execute(
+                        text("SELECT id, target_type, target_id FROM audit_events")
+                    )
+                ).all()
+            )
+
+        assert rows[identifiers["about_user"]] == (
+            "user",
+            identifiers["subject"],
+        )
+        # A bulk purge acts on no single row, and inventing one would be worse
+        # than saying nothing.
+        assert rows[identifiers["about_nobody"]] == (None, None)
+    finally:
+        await engine.dispose()
+
+
+async def test_an_audit_target_cannot_be_half_recorded(tmp_path):
+    """A type with no id names nothing; an id with no type is unresolvable."""
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'audit-target-constraint.db'}"
+    )
+    try:
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.begin() as connection:
+            await connection.execute(text("PRAGMA foreign_keys=ON"))
+            for target_type, target_id in (
+                ("prompt_list", None),
+                (None, "a5f0"),
+                ("invented_kind", "a5f0"),
+            ):
+                with pytest.raises(IntegrityError):
+                    async with engine.begin() as attempt:
+                        await attempt.execute(
+                            text(
+                                "INSERT INTO audit_events "
+                                "(id, event_type, target_type, target_id, details) "
+                                "VALUES (:id, 'prompt_list.takedown', :type, :ident, '{}')"
+                            ),
+                            {
+                                "id": uuid.uuid4().hex,
+                                "type": target_type,
+                                "ident": target_id,
+                            },
+                        )
+    finally:
+        await engine.dispose()

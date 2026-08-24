@@ -203,6 +203,22 @@ class ReportStatus(StrEnum):
     DISMISSED = "dismissed"
 
 
+class AuditTargetType(StrEnum):
+    """What an audited action was performed on.
+
+    Recorded beside `target_user_id` rather than replacing it: that column is a
+    real foreign key with `ON DELETE SET NULL`, which a generic pair naming
+    rows in any table cannot be. The pair exists so that a takedown can say
+    what was taken down.
+    """
+
+    USER = "user"
+    PROMPT_LIST = "prompt_list"
+    PROMPT_VERSION = "prompt_version"
+    ROOM = "room"
+    APP_CONFIG = "app_config"
+
+
 SCORING_MODES = tuple(mode.value for mode in ScoringMode)
 PROMPT_SOURCE_KINDS = tuple(kind.value for kind in PromptSourceKind)
 PROMPT_OFFER_SOURCE_KINDS = tuple(
@@ -241,6 +257,7 @@ USER_THEMES = tuple(theme.value for theme in UserTheme)
 BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)
 REPORT_REASONS = tuple(reason.value for reason in ReportReason)
 REPORT_STATUSES = tuple(status.value for status in ReportStatus)
+AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
 
 # Keep the backend's registration/API/database fallback aligned with the
 # frontend's checked-in default shortcuts. A fresh row must be usable even when

@@ -46,6 +46,7 @@ from app.db.models import (
 from app.canvas_storage import prepare_stored_drawing
 from app.domain_values import (
     AccountState,
+    AuditTargetType,
     DRAWING_UNAVAILABLE_RECAP_BUDGET,
     GAME_PROMPT_SOURCE_MODES,
     PROMPT_OFFER_SOURCE_KINDS,
@@ -525,6 +526,8 @@ class SqlAlchemyUserRepository(UserRepository):
                         event_type="identity.guest_merged",
                         actor_user_id=target.id,
                         target_user_id=target.id,
+                        target_type=AuditTargetType.USER.value,
+                        target_id=str(target.id),
                         details={"source_user_id": str(source.id)},
                     )
                 )

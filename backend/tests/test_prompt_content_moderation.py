@@ -193,6 +193,11 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
             "prompt_content_report.resolved",
         }
         assert all(event.ip_hash and len(event.ip_hash) == 64 for event in events)
+        # The owner rides along in target_user_id, but a takedown is about the
+        # content, and until the pair existed the ledger could not say which.
+        assert {(event.target_type, event.target_id) for event in events} == {
+            ("prompt_version", reported_prompt.prompt_version_id)
+        }
 
     list_report = await reporter_http.post(
         "/api/prompt-content-reports",
@@ -222,6 +227,22 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
         assert stored_list is not None
         assert stored_list.moderation_state == "hidden"
         assert stored_list.moderated_by_user_id == UUID(moderator["id"])
+        # Same owner, same event types, different subject: a report against the
+        # whole list names the list rather than the prompt inside it.
+        list_events = list(
+            (
+                await session.scalars(
+                    select(AuditEvent).where(
+                        AuditEvent.target_type == "prompt_list"
+                    )
+                )
+            ).all()
+        )
+        assert {event.event_type for event in list_events} == {
+            "prompt_content_report.submitted",
+            "prompt_content_report.resolved",
+        }
+        assert {event.target_id for event in list_events} == {prompt_list.id}
 
 
 async def test_report_snapshots_survive_owner_deletion(env):

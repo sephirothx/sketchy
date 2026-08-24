@@ -39,6 +39,7 @@ from app.db.models import (
 )
 from app.domain_values import (
     AccountState,
+    AuditTargetType,
     PromptContentReportReason,
     PromptListVisibility,
     ReportReason,
@@ -179,6 +180,18 @@ class BanRevokeBody(BaseModel):
         if not cleaned:
             raise ValueError("reason cannot be blank")
         return cleaned
+
+
+def _content_target(prompt_list_id, prompt_version_id) -> tuple[str, str]:
+    """Name the reported content itself, not its owner.
+
+    The owner already rides along in `target_user_id`. What the ledger could
+    not say before is which list or prompt an action was about, which is the
+    only question worth asking of a takedown.
+    """
+    if prompt_version_id is not None:
+        return AuditTargetType.PROMPT_VERSION.value, str(prompt_version_id)
+    return AuditTargetType.PROMPT_LIST.value, str(prompt_list_id)
 
 
 def _report_payload(report: PlayerReport) -> dict:
@@ -423,12 +436,17 @@ def create_moderation_router(
                     details=body.details,
                 )
                 session.add(report)
+                content_target_type, content_target_id = _content_target(
+                    prompt_list.id, prompt_version.id if prompt_version else None
+                )
                 session.add(
                     AuditEvent(
                         id=generate_uuid(),
                         event_type="prompt_content_report.submitted",
                         actor_user_id=db_reporter_id,
                         target_user_id=prompt_list.owner_user_id,
+                        target_type=content_target_type,
+                        target_id=content_target_id,
                         request_id=request_id,
                         ip_hash=ip_hash,
                         details={
@@ -614,6 +632,8 @@ def create_moderation_router(
                         event_type="report.submitted",
                         actor_user_id=db_reporter_id,
                         target_user_id=target.id,
+                        target_type=AuditTargetType.USER.value,
+                        target_id=str(target.id),
                         request_id=request_id,
                         ip_hash=ip_hash,
                         details={
@@ -706,6 +726,8 @@ def create_moderation_router(
                         event_type=f"report.{body.status}",
                         actor_user_id=reviewer.id,
                         target_user_id=report.reported_user_id,
+                        target_type=AuditTargetType.USER.value,
+                        target_id=str(report.reported_user_id),
                         request_id=request_id,
                         ip_hash=ip_hash,
                         details={"report_id": str(report.id)},
@@ -780,12 +802,17 @@ def create_moderation_router(
                     else None
                 )
                 report.reviewed_at = now
+                content_target_type, content_target_id = _content_target(
+                    report.prompt_list_id, report.prompt_version_id
+                )
                 session.add(
                     AuditEvent(
                         id=generate_uuid(),
                         event_type=f"prompt_content_report.{body.status}",
                         actor_user_id=reviewer.id,
                         target_user_id=report.reported_owner_user_id,
+                        target_type=content_target_type,
+                        target_id=content_target_id,
                         request_id=request_id,
                         ip_hash=ip_hash,
                         details={

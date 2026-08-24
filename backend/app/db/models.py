@@ -506,6 +506,19 @@ class AuditEvent(Base):
     """Append-only record of security- and moderation-sensitive actions."""
 
     __tablename__ = "audit_events"
+    __table_args__ = (
+        CheckConstraint(
+            "(target_type IS NULL AND target_id IS NULL) OR "
+            "(target_type IS NOT NULL AND target_id IS NOT NULL)",
+            name="ck_audit_events_target_pair",
+        ),
+        CheckConstraint(
+            "target_type IS NULL OR target_type IN "
+            "('user', 'prompt_list', 'prompt_version', 'room', 'app_config')",
+            name="ck_audit_events_target_type",
+        ),
+        Index("ix_audit_events_target", "target_type", "target_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
@@ -523,6 +536,14 @@ class AuditEvent(Base):
         nullable=True,
         index=True,
     )
+    # What the action was performed on, when that is not a user - the takedown
+    # of a prompt list, a change to server configuration. Kept beside
+    # target_user_id rather than replacing it, because that column is a real
+    # foreign key with ON DELETE SET NULL and this pair cannot be: it names
+    # rows in whichever table the action touched. Null together for events that
+    # act on no single row, such as a bulk retention purge.
+    target_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db import async_engine, async_session_factory, init_db
 from app.db.models import AuditEvent, User, generate_uuid
-from app.domain_values import AccountState, UserRole
+from app.domain_values import AccountState, AuditTargetType, UserRole
 
 
 class AdminBootstrapError(RuntimeError):
@@ -62,6 +62,8 @@ async def bootstrap_first_admin(
                     event_type="admin.bootstrap",
                     actor_user_id=user.id,
                     target_user_id=user.id,
+                    target_type=AuditTargetType.USER.value,
+                    target_id=str(user.id),
                     details={"reason": clean_reason},
                 )
             )
