@@ -52,7 +52,14 @@ def test_the_embedded_timestamp_stays_truthful_through_a_burst():
         last = generate_uuid7()
     drift = _embedded_milliseconds(last) - time.time_ns() // 1_000_000
 
-    assert 0 <= drift <= 50, f"burst of {BURST} drifted {drift} ms from the clock"
+    # The upper bound is the property. An implementation that separates
+    # same-millisecond values by advancing the clock stamps ids into a future
+    # that never arrives, and the id is stored, so it stays wrong.
+    assert drift <= 50, f"burst of {BURST} stamped {drift} ms into the future"
+    # The lower bound only catches a clock that has stopped. It cannot be zero:
+    # the id is generated and *then* the clock is read, so a truthful stamp is
+    # behind by however much of a millisecond elapsed in between.
+    assert drift >= -50, f"burst of {BURST} stamped {-drift} ms into the past"
 
 
 def test_a_backward_clock_step_cannot_produce_a_smaller_value(monkeypatch):
