@@ -72,6 +72,10 @@ export function AdminOperationsPage() {
     events: RuntimeEventRow[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Names make the ledger readable; ids make it precise. Which one you need
+  // depends on whether you are reading it or acting on it, so it is a switch
+  // rather than a decision made for you.
+  const [showIds, setShowIds] = useState(false);
 
   const fail = useCallback((problem: unknown) => {
     setError(
@@ -283,6 +287,16 @@ export function AdminOperationsPage() {
 
       {tab === "audit" && (
         <section aria-label="Audit ledger">
+          <div className="ops-filters">
+            <label className="ops-toggle">
+              <input
+                type="checkbox"
+                checked={showIds}
+                onChange={(change) => setShowIds(change.target.checked)}
+              />
+              Show ids instead of names
+            </label>
+          </div>
           <div className="ops-table-scroll">
             <table className="ops-table">
               <thead>
@@ -304,19 +318,33 @@ export function AdminOperationsPage() {
                           <span className="ops-subject-kind">
                             {entry.targetType.replace(/_/g, " ")}
                           </span>{" "}
-                          {/* The id stays reachable on hover: the name is what
-                              makes the row readable, the id is what makes it
-                              unambiguous. */}
-                          <span title={entry.targetId ?? undefined}>
-                            {entry.targetName ?? entry.targetId}
+                          <span
+                            className={showIds ? "ops-identifier" : undefined}
+                            title={
+                              (showIds ? entry.targetName : entry.targetId) ??
+                              undefined
+                            }
+                          >
+                            {showIds
+                              ? (entry.targetId ?? "—")
+                              : (entry.targetName ?? entry.targetId ?? "—")}
                           </span>
                         </>
                       ) : (
                         "—"
                       )}
                     </td>
-                    <td title={entry.actorUserId ?? undefined}>
-                      {entry.actorName ?? (entry.actorUserId ? "Deleted player" : "system")}
+                    <td
+                      className={showIds ? "ops-identifier" : undefined}
+                      title={
+                        (showIds ? entry.actorName : entry.actorUserId) ??
+                        undefined
+                      }
+                    >
+                      {showIds
+                        ? (entry.actorUserId ?? "system")
+                        : (entry.actorName ??
+                          (entry.actorUserId ? "Deleted player" : "system"))}
                     </td>
                   </tr>
                 ))}
@@ -334,7 +362,11 @@ export function AdminOperationsPage() {
             if (click.target === click.currentTarget) setPlayer(null);
           }}
         >
-          <div className="modal-card" role="dialog" aria-modal="true">
+          <div
+            className="modal-card ops-player-dialog"
+            role="dialog"
+            aria-modal="true"
+          >
             <h3 className="modal-title">{player.displayName}</h3>
             <p className="modal-body">
               Opening this view is itself recorded in the audit ledger.

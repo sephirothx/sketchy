@@ -613,8 +613,9 @@ hashed client address, and what was acted on. The admin view renders names for
 both, resolved when the ledger is read and never written into it: the table is
 append-only, so a name stored there would be personal data that erasing an
 account could not reach. Resolving live gives the opposite - delete the account
-and the same entry reads "Deleted player" while standing exactly as it was. The
-id remains on the row for when a name is not enough. The subject is named twice on
+and the same entry reads "Deleted player" while standing exactly as it was. A
+switch on that view swaps every name for its id, because which one is wanted
+depends on whether the ledger is being read or acted on. The subject is named twice on
 purpose: `target_user_id` is a real foreign key, so a deleted account leaves
 the entry standing with its subject blanked rather than taking it along, while
 a `target_type` and `target_id` pair names whatever row the action touched -

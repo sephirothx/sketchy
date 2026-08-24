@@ -827,3 +827,40 @@
   opacity: 0.65;
   text-transform: uppercase;
 }
+
+/* An account's activity is as long as it is - a hundred rows is ordinary. The
+   card is capped and the table scrolls inside it, so the dialog cannot grow
+   past the viewport and take its own close button with it. */
+.modal-card.ops-player-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80vh, 720px);
+  max-width: 640px;
+  text-align: left;
+}
+
+.modal-card.ops-player-dialog .ops-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Header and footer stay put while the rows move under them. */
+.modal-card.ops-player-dialog .modal-title,
+.modal-card.ops-player-dialog .modal-body,
+.modal-card.ops-player-dialog .modal-dismiss {
+  flex: 0 0 auto;
+}
+
+.ops-toggle {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+}
+
+/* Ids are read a character at a time when they are read at all. */
+.ops-identifier {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
