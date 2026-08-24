@@ -28,6 +28,7 @@ from app.deployment import (
     validate_worker_topology,
 )
 from app.handlers import register_all_handlers
+from app.logging_config import configure_logging
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
 from app.repositories.sqlalchemy import (
@@ -157,6 +158,8 @@ async def lifespan(_app: FastAPI):
     mail_delivery = None
     metrics_flush = None
     try:
+        # Before anything that might have something to say.
+        configure_logging()
         validate_python_runtime()
         validate_worker_topology()
         await init_db()

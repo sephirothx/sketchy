@@ -36,6 +36,7 @@ import os
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.logging_config import configure_logging
 from app.db.models import RuntimeEvent, RuntimeStatsDaily, generate_uuid
 from app.domain_values import RuntimeEventType
 
@@ -406,6 +407,9 @@ def main() -> None:
     parser.add_argument("--purge", action="store_true")
     parser.add_argument("--days", type=int, default=None)
     args = parser.parse_args()
+    # Whoever runs this wants to see what happened, not only a count -
+    # on a deployment with no SMTP the log line is the message.
+    configure_logging()
     written, removed = asyncio.run(_run_cli(args))
     print(f"Wrote {written} observations; purged {removed} expired rows.")
 

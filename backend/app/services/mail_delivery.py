@@ -18,6 +18,7 @@ import os
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.logging_config import configure_logging
 from app.auth.mail import DeliveryResult, deliver_pending
 
 
@@ -94,6 +95,9 @@ def main() -> None:
     )
     parser.add_argument("--batch-size", type=int, default=50)
     args = parser.parse_args()
+    # Whoever runs this wants to see what happened, not only a count -
+    # on a deployment with no SMTP the log line is the message.
+    configure_logging()
     result = asyncio.run(_run(args))
     print(
         f"Attempted {result.attempted}: {result.sent} sent, "

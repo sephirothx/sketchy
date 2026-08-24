@@ -414,3 +414,32 @@ async def test_deleting_an_account_takes_its_live_links_and_queued_mail(env):
                 EmailOutboxEntry.user_id == UUID(account["id"])
             )
         ) == 0
+
+
+async def test_a_server_that_cannot_send_mail_says_what_it_would_have_sent(caplog):
+    """The zero-configuration deployment has no SMTP, and answers that by
+    logging the message. If the log goes nowhere, recovery silently does
+    nothing at all there - which is worse than failing."""
+    import logging
+
+    from app.auth.mail import ConsoleTransport, OutgoingMessage
+    from app.logging_config import configure_logging
+
+    configure_logging("info")
+    # The handler sits on the tree, not on each module's logger.
+    assert logging.getLogger("app").handlers, "the application's logs reach nobody"
+    assert logging.getLogger("app.auth.mail").isEnabledFor(logging.INFO)
+
+    with caplog.at_level(logging.INFO, logger="app.auth.mail"):
+        await ConsoleTransport().send(
+            OutgoingMessage(
+                to_address="player@example.com",
+                subject="Confirm your Sketchy email address",
+                body="Follow this link: http://test/verify-email?token=abc123",
+            )
+        )
+
+    written = caplog.text
+    assert "player@example.com" in written
+    # The link is the whole point: without it there is nothing to follow.
+    assert "verify-email?token=abc123" in written

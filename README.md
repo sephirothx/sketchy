@@ -477,6 +477,7 @@ process. These deployment settings can be tuned without code changes:
 | `SMTP_FROM` | `sketchy@localhost` | Envelope sender |
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | Where confirmation and reset links point |
 | `EMAIL_SWEEP_SECONDS` | `30` | How often the outbox is emptied |
+| `LOG_LEVEL` | `info` | Level for the application's own logs as well as uvicorn's |
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
@@ -544,7 +545,8 @@ causes it, and delivered by a sweeper. A suspension is never undone by an
 unreachable relay, and a reset message is retried with backoff and then
 recorded as failed rather than disappearing. With no `SMTP_HOST` set the
 messages are logged instead of sent, so a self-hoster can see what would have
-gone out.
+gone out - including the confirmation and reset links, which is the only way
+that flow can be completed on a deployment without mail.
 
 The address is used to reset a password, and to tell someone their account was
 suspended or their content hidden. Nothing else is ever sent to it.
