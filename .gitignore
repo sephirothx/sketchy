@@ -9,6 +9,14 @@ venv
 .mypy_cache/
 .ruff_cache/
 *.db
+# SQLite writes two sidecars beside the database in WAL mode, and a third in
+# rollback-journal mode. `*.db` matches none of them, which is how a local
+# database's write-ahead log came to be tracked: it changes on every run, so it
+# dirtied every working tree and was swept into commits by anything using
+# `git add -A`.
+*.db-shm
+*.db-wal
+*.db-journal
 *.sqlite*
 
 # --- Node / frontend ---
