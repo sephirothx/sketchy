@@ -537,6 +537,11 @@
   padding: 24px 16px 48px;
 }
 
+.ops-header .back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
 .ops-header h1 {
   font-size: 22px;
   margin: 0 0 12px;

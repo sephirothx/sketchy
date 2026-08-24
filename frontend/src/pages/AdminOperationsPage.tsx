@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { ApiError } from "../lib/api";
 import {
@@ -132,6 +133,10 @@ export function AdminOperationsPage() {
   return (
     <main className="ops-page">
       <header className="ops-header">
+        {/* These pages are reached from the account menu and have none of the
+            game's chrome, so without this there is no way out but the browser
+            button. Same affordance the other standalone pages use. */}
+        <Link to="/" className="back-link">← Back to lobby</Link>
         <h1>Server operations</h1>
         <nav className="ops-tabs" aria-label="Operator views">
           {(["overview", "events", "audit"] as Tab[]).map((name) => (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { ApiError } from "../lib/api";
 import {
@@ -77,6 +78,7 @@ export function ModerationPage() {
   if (hasResolved && !allowed) {
     return (
       <main className="ops-page">
+        <Link to="/" className="back-link">← Back to lobby</Link>
         <h1>Moderation</h1>
         <p className="ops-empty">This page is for moderators.</p>
       </main>
@@ -106,6 +108,7 @@ export function ModerationPage() {
   return (
     <main className="ops-page">
       <header className="ops-header">
+        <Link to="/" className="back-link">← Back to lobby</Link>
         <h1>Moderation</h1>
         <nav className="ops-tabs" aria-label="Report queues">
           {(["players", "content"] as Queue[]).map((name) => (

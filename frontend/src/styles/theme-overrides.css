@@ -1386,3 +1386,11 @@
 [data-theme="dark"] .account-dropdown .account-staff-entry {
   border-top-color: #334155;
 }
+
+/* #2563eb is a light-theme blue: on the dark ground it measures 3.5:1, and on
+   a panel 2.8:1, both under the 4.5:1 this text size needs. Every page with a
+   back link had this, not only the operator pages. #60a5fa measures 7.0 and
+   5.8 in those two places. */
+[data-theme="dark"] .back-link {
+  color: #60a5fa;
+}
