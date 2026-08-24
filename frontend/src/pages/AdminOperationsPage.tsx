@@ -299,11 +299,25 @@ export function AdminOperationsPage() {
                     <td>{new Date(entry.createdAt).toLocaleString()}</td>
                     <td>{entry.eventType}</td>
                     <td>
-                      {entry.targetType
-                        ? `${entry.targetType} ${entry.targetId}`
-                        : "—"}
+                      {entry.targetType ? (
+                        <>
+                          <span className="ops-subject-kind">
+                            {entry.targetType.replace(/_/g, " ")}
+                          </span>{" "}
+                          {/* The id stays reachable on hover: the name is what
+                              makes the row readable, the id is what makes it
+                              unambiguous. */}
+                          <span title={entry.targetId ?? undefined}>
+                            {entry.targetName ?? entry.targetId}
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </td>
-                    <td>{entry.actorUserId ?? "system"}</td>
+                    <td title={entry.actorUserId ?? undefined}>
+                      {entry.actorName ?? (entry.actorUserId ? "Deleted player" : "system")}
+                    </td>
                   </tr>
                 ))}
               </tbody>

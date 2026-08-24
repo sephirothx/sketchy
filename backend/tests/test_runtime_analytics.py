@@ -320,3 +320,66 @@ async def test_the_account_payload_says_which_staff_surfaces_to_offer(env):
     # The role in the payload decides what is shown; it never decides what is
     # allowed. An ordinary player asking directly still gets nothing.
     assert (await player.get("/api/admin/metrics")).status_code == 404
+
+
+async def test_the_ledger_names_its_subjects_without_storing_the_names(env):
+    """A page of UUIDs is unreadable, but a name copied into an append-only
+    table is personal data erasure cannot reach. Resolved on read, so deleting
+    an account stops the ledger naming them while the entry still stands."""
+    from sqlalchemy import func
+
+    from app.auth.account_data import DELETED_DISPLAY_NAME
+    from app.db.models import generate_uuid
+
+    new_client, factory = env
+    admin, subject = new_client(), new_client()
+    operator = await register(admin, "LedgerReader")
+    named = await register(subject, "NamedSubject")
+    await promote(factory, operator["id"])
+
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                AuditEvent(
+                    id=generate_uuid(),
+                    event_type="ban.created",
+                    actor_user_id=UUID(operator["id"]),
+                    target_user_id=UUID(named["id"]),
+                    target_type="user",
+                    target_id=named["id"],
+                    details={},
+                )
+            )
+
+    # By event type, not by position: deleting the account below writes its own
+    # entry, which would otherwise become the newest one.
+    entry = (
+        await admin.get("/api/admin/audit?eventType=ban.created")
+    ).json()["entries"][0]
+    assert entry["actorName"] == "LedgerReader"
+    assert entry["targetName"] == "NamedSubject"
+    # The row itself holds ids and nothing else - the name is never written.
+    async with factory() as session:
+        stored = await session.scalar(
+            select(AuditEvent).where(AuditEvent.event_type == "ban.created")
+        )
+        assert "NamedSubject" not in str(stored.details)
+        assert "NamedSubject" not in (stored.target_id or "")
+
+    # Erase the subject. The entry survives; the name it renders does not.
+    deleted = await subject.request(
+        "DELETE", "/api/auth/account", json={"password": PASSWORD}
+    )
+    assert deleted.status_code == 200
+
+    after = (
+        await admin.get("/api/admin/audit?eventType=ban.created")
+    ).json()["entries"][0]
+    assert after["targetName"] == DELETED_DISPLAY_NAME
+    assert after["actorName"] == "LedgerReader"
+    async with factory() as session:
+        assert await session.scalar(
+            select(func.count(AuditEvent.id)).where(
+                AuditEvent.event_type == "ban.created"
+            )
+        ) == 1

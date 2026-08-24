@@ -22,7 +22,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.audit import audit_coordinates
-from app.db.models import AuditEvent, GameRecord, User, generate_uuid
+from app.db.models import (
+    AuditEvent,
+    GameRecord,
+    PromptList,
+    PromptVersion,
+    User,
+    generate_uuid,
+)
 from app.domain_values import AuditTargetType, GameOutcome, UserRole
 from app.services.runtime_metrics import (
     daily_totals,
@@ -69,6 +76,64 @@ def _prometheus_lines() -> list[str]:
     for event_type, count in sorted(metrics.totals().items()):
         lines.append(f'sketchy_events_total{{event="{event_type}"}} {count}')
     return lines
+
+
+async def _resolve_subjects(
+    session: AsyncSession, rows: list[AuditEvent]
+) -> dict[tuple[str | None, str | None], str]:
+    """Look up a readable name for each actor and target in a page of entries.
+
+    Read here and never written into `audit_events`. That table is append-only,
+    and a name copied into it would be personal data in a place erasure cannot
+    reach - the point of resolving live is that deleting an account stops the
+    ledger naming them while the entry itself still stands. It is also why a
+    name may come back as "Deleted player": that is the truth about who that
+    account is now, which is what an administrator following a trail needs.
+
+    One query per kind of subject rather than one per row.
+    """
+    wanted: dict[str, set[str]] = {}
+    for row in rows:
+        if row.actor_user_id:
+            wanted.setdefault("user", set()).add(str(row.actor_user_id))
+        if row.target_type and row.target_id:
+            wanted.setdefault(row.target_type, set()).add(row.target_id)
+
+    resolved: dict[tuple[str | None, str | None], str] = {}
+
+    def _ids(kind: str) -> list[UUID]:
+        found = []
+        for value in wanted.get(kind, set()):
+            try:
+                found.append(UUID(value))
+            except ValueError:
+                # A target id need not be a UUID - app_config names a key.
+                continue
+        return found
+
+    if user_ids := _ids("user"):
+        for user in (
+            await session.scalars(select(User).where(User.id.in_(user_ids)))
+        ).all():
+            resolved[("user", str(user.id))] = user.display_name
+
+    if list_ids := _ids("prompt_list"):
+        for prompt_list in (
+            await session.scalars(
+                select(PromptList).where(PromptList.id.in_(list_ids))
+            )
+        ).all():
+            resolved[("prompt_list", str(prompt_list.id))] = prompt_list.name
+
+    if version_ids := _ids("prompt_version"):
+        for version in (
+            await session.scalars(
+                select(PromptVersion).where(PromptVersion.id.in_(version_ids))
+            )
+        ).all():
+            resolved[("prompt_version", str(version.id))] = version.canonical_answer
+
+    return resolved
 
 
 def create_operations_router(
@@ -245,6 +310,7 @@ def create_operations_router(
             if target_id:
                 statement = statement.where(AuditEvent.target_id == target_id)
             rows = (await session.execute(statement.limit(limit))).scalars().all()
+            names = await _resolve_subjects(session, rows)
         return {
             "entries": [
                 {
@@ -259,6 +325,10 @@ def create_operations_router(
                     ),
                     "targetType": row.target_type,
                     "targetId": row.target_id,
+                    "actorName": names.get(("user", str(row.actor_user_id)))
+                    if row.actor_user_id
+                    else None,
+                    "targetName": names.get((row.target_type, row.target_id)),
                     "details": row.details,
                 }
                 for row in rows

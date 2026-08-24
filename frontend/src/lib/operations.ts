@@ -39,6 +39,11 @@ export type AuditEntry = {
   targetUserId: string | null;
   targetType: string | null;
   targetId: string | null;
+  /** Resolved when the ledger is read, never stored in the entry - so an
+      erased account stops being named while the entry still stands. Null when
+      the subject is gone or was never a named thing. */
+  actorName: string | null;
+  targetName: string | null;
   details: Record<string, unknown>;
 };
 
