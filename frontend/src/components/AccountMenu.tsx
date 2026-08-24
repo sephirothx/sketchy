@@ -11,6 +11,7 @@ import {
   useEscapeLayer,
   useFocusTrap,
 } from "../hooks/useFocusTrap";
+import { AddEmailDialog } from "./AddEmailDialog";
 import { SessionManagerDialog } from "./SessionManagerDialog";
 import { AccountDataDialog } from "./AccountDataDialog";
 
@@ -39,6 +40,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const [accountDataOpen, setAccountDataOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -189,6 +191,16 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                 role="menuitem"
                 onClick={() => {
                   setMenuOpen(false);
+                  setEmailOpen(true);
+                }}
+              >
+                Email &amp; recovery
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
                   setSessionsOpen(true);
                 }}
               >
@@ -233,6 +245,12 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           onClose={() => setMode(null)}
           onSwitchMode={setMode}
           onSubmit={mode === "login" ? login : register}
+        />
+      )}
+      {emailOpen && (
+        <AddEmailDialog
+          onClose={() => setEmailOpen(false)}
+          onSaved={() => setEmailOpen(false)}
         />
       )}
       {sessionsOpen && (

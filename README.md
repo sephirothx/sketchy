@@ -515,6 +515,14 @@ cannot be reset - a note that can be closed and returns, with the interval kept
 on the account so it neither restarts on each new device nor disappears when
 browser storage is cleared.
 
+**Email & recovery** in the account menu is where an address is added, replaced
+or simply looked at. The weekly reminder is a prompt and nothing more; a prompt
+somebody has dismissed is not a place to go back to, so the menu entry is
+always there. The dialog opens by saying what the account already has - a
+confirmed address, one waiting to be confirmed, or, on a deployment with no
+SMTP configured, that a lost password has to be reset by whoever runs the
+server.
+
 An address is recorded only once it has been confirmed. Until then it lives in
 the confirmation token and nowhere else, so a typo cannot hand the account to
 whoever owns the address that was typed, and nobody can reserve a mailbox they

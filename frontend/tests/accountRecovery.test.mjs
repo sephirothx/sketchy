@@ -59,3 +59,17 @@ test("a server that cannot send mail says so instead of offering a link", () => 
   assert.match(message, /whoever runs it/);
   assert.doesNotMatch(message, /Add an email/);
 });
+
+test("someone who already has an address is told what it is, not asked to add one", () => {
+  // The dialog is reachable from the menu at any time, so it has to make sense
+  // when the account is already set up - "add an email" would be a lie.
+  const message = recoveryStatusMessage({
+    address: "player@example.com",
+    verified: true,
+    pendingAddress: null,
+    reminderDue: false,
+    deliveryConfigured: true,
+  });
+
+  assert.match(message, /recover this account through player@example\.com/);
+});
