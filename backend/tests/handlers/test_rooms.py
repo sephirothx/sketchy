@@ -1057,3 +1057,94 @@ async def test_editing_one_drawing_rule_leaves_the_other_alone():
 
     assert room.allowed_tools == ["brush"]
     assert room.color_mode == "black_and_white"
+
+
+class UnreachablePromptListRepo:
+    """A store that fails to answer, as opposed to answering with a refusal."""
+
+    def __init__(self):
+        self.reads = 0
+
+    async def resolve_selection(
+        self, slugs, *, requesting_user_id=None, share_codes=()
+    ):
+        self.reads += 1
+        raise RuntimeError("prompt store is unreachable")
+
+    async def record_prompt_usage(self, slugs, usage):
+        return None
+
+
+@pytest.mark.asyncio
+async def test_a_prompt_store_failure_refuses_the_room_rather_than_swapping_prompts():
+    """The room must not open quietly playing the built-in list while the host
+    is shown the lists they chose."""
+    room_manager = RoomManager()
+    repo = UnreachablePromptListRepo()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, prompt_list_repo=repo)
+    sio.get_session = AsyncMock(return_value=None)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid", {"nickname": "Host", "promptListSlugs": ["safari"]}
+    )
+
+    assert response["ok"] is False
+    assert response["field"] == "promptListSlugs"
+    assert repo.reads == 1
+    assert room_manager.rooms == {}, "a room opened on prompts nobody could read"
+
+
+@pytest.mark.asyncio
+async def test_a_prompt_store_failure_leaves_the_settings_it_could_not_read():
+    """A failed read must not strand the room on an empty curated pool, which
+    `effective_prompt_pool` reads as permission to use the built-in prompts."""
+    room_manager = RoomManager()
+    room, sio = build_settings_room(
+        room_manager,
+        UnreachablePromptListRepo(),
+        prompt_list_slugs=["safari"],
+        curated_prompts=["aardvark", "zeppelin"],
+    )
+
+    result = await sio.handlers["/"]["update_room_settings"](
+        "host-sid", {"promptListSlugs": ["savannah"]}
+    )
+
+    assert result["ok"] is False
+    assert result["field"] == "promptListSlugs"
+    assert room.prompt_list_slugs == ["safari"]
+    assert room.curated_prompts == ["aardvark", "zeppelin"]
+
+
+@pytest.mark.asyncio
+async def test_a_custom_only_room_still_opens_when_the_prompt_store_is_down():
+    """The one case where an empty curated pool is the correct outcome: the
+    room was never going to draw from a list."""
+    room_manager = RoomManager()
+    repo = UnreachablePromptListRepo()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, prompt_list_repo=repo)
+    sio.get_session = AsyncMock(return_value=None)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid",
+        {
+            "nickname": "Host",
+            "customPrompts": "hedgehog\nlighthouse",
+            "customPromptsOnly": True,
+        },
+    )
+
+    assert response["ok"] is True
+    room = room_manager.get_room(response["roomId"])
+    assert room is not None
+    assert room.curated_prompts == []
+    assert room.custom_prompts == ["hedgehog", "lighthouse"]
+    assert set(room.effective_prompt_pool()) == {"hedgehog", "lighthouse"}
