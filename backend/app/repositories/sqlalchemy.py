@@ -869,9 +869,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         + ", ".join(sorted(str(value) for value in missing))
                     )
 
-                # This column carries no CHECK constraint - rebuilding
-                # game_records on SQLite would delete every row that points at
-                # it - so the guard lives here, where the value enters.
+                # The database refuses an unknown outcome too. This one names
+                # the offending value instead of surfacing an integrity error
+                # from a constraint the caller cannot see.
                 if game_record.outcome not in GAME_OUTCOMES:
                     raise ValueError(
                         f"Unknown game outcome {game_record.outcome!r}"

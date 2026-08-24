@@ -1347,9 +1347,6 @@ class GameRecord(Base):
             GAME_PROMPT_SOURCE_MODES,
             "ck_game_records_prompt_source_mode",
         ),
-        # The one enumerated column here without a _values_check, and
-        # deliberately: adding a CHECK to SQLite means rebuilding the table,
-        # and rebuilding this table deletes data. See `outcome` below.
         Index("ix_game_records_outcome_finished_at", "outcome", "finished_at"),
     )
 
@@ -1396,18 +1393,16 @@ class GameRecord(Base):
     # finished_at nullable: every query that orders a player's history by it
     # keeps working, and a game that stopped still stopped at a knowable time.
     #
-    # No CHECK constraint, unlike every other enumerated column in this file.
-    # SQLite cannot add one to an existing table without a rebuild, and a
-    # rebuild here is destructive: the engine runs with foreign_keys=ON, where
-    # DROP TABLE performs an implicit DELETE that fires ON DELETE CASCADE, so
-    # rebuilding `game_records` empties every turn, participant, guess and
-    # score-event table pointing at it - measured, not assumed. Declaring the
-    # constraint only in the model would fail the dual-dialect drift check, and
-    # declaring it only on PostgreSQL would fail it there instead. `GameOutcome`
-    # is the only thing that writes this column, and the repository refuses an
-    # unknown value on the way in.
+    # The check rides on the column rather than sitting in __table_args__,
+    # matching where SQLite already keeps `prompt_source_mode`'s. A table-level
+    # one could only be added by rebuilding game_records, and rebuilding it
+    # cascades every child row away.
     outcome: Mapped[str] = mapped_column(
         String(16),
+        CheckConstraint(
+            "outcome IN ('finished', 'abandoned', 'shutdown')",
+            name="ck_game_records_outcome",
+        ),
         default=GameOutcome.FINISHED.value,
         server_default=text("'finished'"),
         nullable=False,

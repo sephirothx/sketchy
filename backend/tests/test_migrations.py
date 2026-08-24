@@ -796,3 +796,69 @@ async def test_an_audit_target_cannot_be_half_recorded(tmp_path):
                         )
     finally:
         await engine.dispose()
+
+
+async def test_a_migrated_sqlite_database_refuses_an_invented_outcome(tmp_path):
+    """The constraint has to exist on the dialect the default deployment uses.
+
+    It rides on the column rather than in `__table_args__`, because a
+    table-level check could only be added by rebuilding `game_records` - and a
+    rebuild empties every child table through ON DELETE CASCADE.
+    """
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'outcome.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO game_records (id, payload_hash, room_name, "
+                    "scoring_mode, hint_mode, drawing_seconds, total_rounds, "
+                    "player_count, started_at, finished_at, outcome) VALUES "
+                    "(:id, '', 'Room', 'default', 'none', 90, 1, 2, "
+                    "'2026-08-24 12:00:00', '2026-08-24 12:10:00', 'abandoned')"
+                ),
+                {"id": uuid.uuid4().hex},
+            )
+        with pytest.raises(IntegrityError):
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "INSERT INTO game_records (id, payload_hash, room_name, "
+                        "scoring_mode, hint_mode, drawing_seconds, total_rounds, "
+                        "player_count, started_at, finished_at, outcome) VALUES "
+                        "(:id, '', 'Room', 'default', 'none', 90, 1, 2, "
+                        "'2026-08-24 12:00:00', '2026-08-24 12:10:00', 'invented')"
+                    ),
+                    {"id": uuid.uuid4().hex},
+                )
+    finally:
+        await engine.dispose()
+
+
+async def test_a_migration_run_that_orphans_rows_fails_loudly(tmp_path):
+    """Migrations run with SQLite foreign keys off, so nothing complains at the
+    moment a rebuild goes wrong. This is the complaint, moved to the end."""
+    from app.db import assert_references_intact
+
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'orphan.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.begin() as connection:
+            await connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            await connection.execute(
+                text(
+                    "INSERT INTO game_participants (id, game_id, "
+                    "display_name_snapshot, is_anonymous_snapshot, final_score, "
+                    "final_rank) VALUES (:id, :missing, 'Orphan', 1, 0, 1)"
+                ),
+                {"id": uuid.uuid4().hex, "missing": uuid.uuid4().hex},
+            )
+
+        def check(sync_connection):
+            assert_references_intact(sync_connection)
+
+        async with engine.connect() as connection:
+            with pytest.raises(RuntimeError, match="dangling references"):
+                await connection.run_sync(check)
+    finally:
+        await engine.dispose()

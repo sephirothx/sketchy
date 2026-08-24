@@ -159,6 +159,23 @@ def _database_revisions_sync(
     return current, expected
 
 
+def assert_references_intact(connection: Any) -> None:
+    """Refuse to finish a SQLite migration run that broke a reference.
+
+    Migrations run with foreign keys off, because batch mode rebuilds a table
+    by copy, drop, rename and DROP TABLE fires ON DELETE CASCADE - so altering
+    a table others point at would silently empty them. Enforcement has to be
+    off for that not to fail outright, which means nothing complains at the
+    moment something goes wrong. This is the complaint, moved to the end.
+    """
+    violations = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise RuntimeError(
+            "migration left dangling references: "
+            + ", ".join(sorted({str(row[0]) for row in violations}))
+        )
+
+
 async def upgrade_database(engine: AsyncEngine | None = None) -> None:
     """Upgrade to Alembic head, serializing PostgreSQL deploys."""
     target_engine = engine or async_engine

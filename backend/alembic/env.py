@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from app.db.models import Base
-from app.db import get_database_url
+from app.db import assert_references_intact, get_database_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -52,15 +52,37 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    """Run migrations using an active synchronous connection."""
+    """Run migrations using an active synchronous connection.
+
+    SQLite runs the chain with foreign keys off. Batch mode rebuilds a table by
+    copy, drop, rename, and with enforcement on, DROP TABLE performs an
+    implicit DELETE that fires ON DELETE CASCADE - so altering any table that
+    others point at silently empties them and then hands back a table that
+    still looks correct. Measured, not assumed.
+
+    The pragma is set here rather than inside a migration because SQLite
+    ignores it once a transaction is open, and by the time a migration in the
+    middle of the chain runs, one is. Nothing is being skipped that matters:
+    migrations move schema, not application writes, and every reference is
+    checked again at the end.
+    """
+    if connection.dialect.name == "sqlite":
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
         render_as_batch=True,
     )
 
-    with context.begin_transaction():
-        context.run_migrations()
+    try:
+        with context.begin_transaction():
+            context.run_migrations()
+        if connection.dialect.name == "sqlite":
+            assert_references_intact(connection)
+    finally:
+        if connection.dialect.name == "sqlite":
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
 
 
 async def run_async_migrations() -> None:

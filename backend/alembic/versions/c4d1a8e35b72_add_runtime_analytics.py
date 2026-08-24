@@ -26,28 +26,43 @@ EVENT_TYPES = (
 )
 
 
+OUTCOMES = "'finished', 'abandoned', 'shutdown'"
+
+
 def upgrade() -> None:
-    # Added in place, never through batch_alter_table. Batch mode rebuilds by
-    # copy, drop, rename, and this engine runs SQLite with
-    # `PRAGMA foreign_keys=ON`, where DROP TABLE performs an implicit DELETE
-    # that fires ON DELETE CASCADE. Rebuilding `game_records` therefore empties
-    # every turn, participant, guess and score-event table pointing at it, and
-    # hands back a table that still looks correct. That is measured behaviour,
-    # and it is why this column carries no CHECK constraint on either dialect -
-    # see the note on `GameRecord.outcome`.
+    # Added to the table, never through a rebuild. Batch mode would rebuild
+    # game_records by copy, drop, rename, and that is destructive twice over:
+    # DROP TABLE fires ON DELETE CASCADE and empties every child table, and the
+    # rebuilt table carries SQLite's inline column CHECKs as table-level ones,
+    # which makes a later DROP COLUMN of a checked column fail. Both measured.
+    #
+    # SQLite does allow a CHECK on ADD COLUMN, so the constraint arrives with
+    # the column and sits exactly where `prompt_source_mode`'s does.
     #
     # Every game recorded until now reached its end, because a game that did
     # not never reached the writer at all. Defaulting them to 'finished' states
     # what was already true rather than guessing.
-    op.add_column(
-        "game_records",
-        sa.Column(
-            "outcome",
-            sa.String(length=16),
-            nullable=False,
-            server_default=sa.text("'finished'"),
-        ),
-    )
+    if op.get_bind().dialect.name == "sqlite":
+        op.execute(
+            sa.text(
+                "ALTER TABLE game_records ADD COLUMN outcome VARCHAR(16) "
+                "NOT NULL DEFAULT 'finished' "
+                f"CONSTRAINT ck_game_records_outcome CHECK (outcome IN ({OUTCOMES}))"
+            )
+        )
+    else:
+        op.add_column(
+            "game_records",
+            sa.Column(
+                "outcome",
+                sa.String(length=16),
+                nullable=False,
+                server_default=sa.text("'finished'"),
+            ),
+        )
+        op.create_check_constraint(
+            "ck_game_records_outcome", "game_records", f"outcome IN ({OUTCOMES})"
+        )
     op.create_index(
         "ix_game_records_outcome_finished_at",
         "game_records",
@@ -126,4 +141,9 @@ def downgrade() -> None:
     op.drop_index(
         "ix_game_records_outcome_finished_at", table_name="game_records"
     )
+    if op.get_bind().dialect.name != "sqlite":
+        op.drop_constraint(
+            "ck_game_records_outcome", "game_records", type_="check"
+        )
+    # On SQLite the constraint is part of the column and leaves with it.
     op.drop_column("game_records", "outcome")

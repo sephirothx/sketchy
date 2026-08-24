@@ -1135,6 +1135,14 @@ first. What retention costs is the ability to ask about one particular minute
 last month; the shape of the month survives. Unbounded event rows on embedded
 SQLite is a disk that fills up quietly.
 
+Migrations run with SQLite foreign keys off and finish with a
+`PRAGMA foreign_key_check`. Batch mode rebuilds a table by copy, drop, rename,
+and with enforcement on, `DROP TABLE` performs an implicit delete that fires
+`ON DELETE CASCADE` - altering a table others point at empties them and hands
+back a table that still looks correct. Suspending enforcement stops that;
+checking at the end is what keeps the suspension honest, so a migration that
+orphans rows fails loudly instead of leaving a database that only looks intact.
+
 **Games that stop are now recorded.** Persistence used to run only for a game
 that reached its end, so a room everyone walked out of left no trace at all -
 the games most worth looking at were the only invisible ones. An abandoned game
