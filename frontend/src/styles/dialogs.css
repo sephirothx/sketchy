@@ -140,3 +140,8 @@
 .suspension-reason {
   font-weight: 600;
 }
+
+.suspension-note {
+  font-size: 13px;
+  opacity: 0.8;
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { apiRequest } from "../lib/api";
 import { socket } from "../lib/socket";
 import {
   onSuspended,
@@ -17,6 +18,7 @@ to - and signing out is the only way on, which is where they were headed
 anyway. */
 export function SuspensionNotice() {
   const [suspension, setSuspension] = useState<Suspension | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => onSuspended(setSuspension), []);
 
@@ -38,6 +40,24 @@ export function SuspensionNotice() {
 
   if (!suspension) return null;
 
+  async function signOut() {
+    if (busy) return;
+    setBusy(true);
+    // Actually sign out. Navigating alone left the cookie in place, so the
+    // next page load was refused again and the notice returned for ever - the
+    // button promised an exit and moved nobody. Logout is one of the few paths
+    // a suspended account may still reach, precisely so this can work.
+    try {
+      await apiRequest("/api/auth/logout", { method: "POST" });
+    } catch {
+      // A failed logout must not strand them on a dead button; the reload
+      // below is what actually gets them off this screen either way.
+    }
+    // Hard reload rather than a route change: every store in memory belongs to
+    // the account that just went away.
+    window.location.href = "/";
+  }
+
   return (
     <div className="modal-overlay suspension-overlay">
       <div
@@ -53,16 +73,17 @@ export function SuspensionNotice() {
           <p className="modal-body suspension-reason">{suspension.reason}</p>
         )}
         <p className="modal-body">{suspensionDuration(suspension)}</p>
+        <p className="modal-body suspension-note">
+          You can sign out, but this account cannot be used until the
+          suspension ends.
+        </p>
         <button
           type="button"
           className="modal-button"
-          onClick={() => {
-            // Everything is already revoked server-side; this clears what the
-            // browser is still holding and starts them somewhere coherent.
-            window.location.href = "/";
-          }}
+          disabled={busy}
+          onClick={() => void signOut()}
         >
-          Sign out
+          {busy ? "Signing out…" : "Sign out"}
         </button>
       </div>
     </div>

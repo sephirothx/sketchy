@@ -666,7 +666,10 @@ session and ends every live seat at once, so without it the experience is a
 game that stops and a page that starts refusing things. A player mid-game hears
 it on the socket; everybody else learns from the first request that is refused,
 which now carries the reason and the end date rather than only saying no. The
-notice cannot be dismissed, because there is nothing behind it to go back to.
+notice cannot be dismissed, because there is nothing behind it to go back to;
+its one button really signs out, which is why logout is among the few paths a
+suspended account may still reach. The account stays unusable either way - what
+signing out returns is the browser, not the account.
 
 Roles are service-wide privileges. A room **host** remains an ordinary
 gameplay role and is never an administrator merely because they created a

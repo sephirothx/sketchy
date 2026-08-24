@@ -640,3 +640,34 @@ async def test_an_ordinary_refusal_is_not_mistaken_for_a_suspension(env):
 
     assert refused.status_code == 403
     assert "suspended" not in refused.json()
+
+
+async def test_a_suspended_account_can_still_sign_out(env):
+    """The notice offers one way off the screen, so that way has to work.
+
+    Signing out is one of the few paths a suspended account may reach - the
+    others being its data export and its own deletion - because the alternative
+    is a browser that can never be used again by anybody.
+    """
+    new_client, factory, _ = env
+    moderator_http, target_http = new_client(), new_client()
+    moderator = await register(moderator_http, "ExitModerator")
+    target = await register(target_http, "ExitTarget")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    banned = await moderator_http.post(
+        "/api/moderation/bans",
+        json={"userId": target["id"], "reason": "Suspended for the test"},
+    )
+    assert banned.status_code == 201
+    assert (await target_http.get("/api/auth/me")).status_code == 403
+
+    signed_out = await target_http.post("/api/auth/logout")
+
+    assert signed_out.status_code == 200
+    # And the browser is usable again afterwards: the next visitor is a guest,
+    # not the suspended account still being refused.
+    fresh = await target_http.get("/api/auth/me")
+    assert fresh.status_code == 200
+    assert fresh.json()["id"] != target["id"]
+    assert fresh.json()["isAnonymous"] is True
