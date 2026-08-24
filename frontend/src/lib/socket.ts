@@ -51,13 +51,29 @@ export function socketRequestErrorMessage(error: unknown, action: string): strin
   return `Could not ${action}. Please try again.`;
 }
 
+/** The slice of a Socket.IO client an acknowledged request actually uses.
+
+Named so a test can supply one. The connection states that matter here -
+already disconnected, dropping mid-flight, never answering - are precisely the
+ones a real socket will not hold still in. */
+export interface AckTarget {
+  readonly connected: boolean;
+  on(event: "disconnect" | "connect", listener: () => void): unknown;
+  off(event: "disconnect" | "connect", listener: () => void): unknown;
+  emit(event: string, data: unknown, ack: (response: unknown) => void): unknown;
+}
+
 /** Emit an event and await its acknowledgement without allowing callers to hang forever. */
-export function emitWithAck<T = AckResponse>(
+export function emitWithAckOn<T = AckResponse>(
+  target: AckTarget,
   event: string,
   data: unknown,
   options: { timeoutMs?: number } = {},
 ): Promise<T> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
+  // `=== false` rather than a truthiness check: hosts other than a browser
+  // define `navigator` without `onLine`, and a missing flag is not evidence of
+  // being offline.
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
     return Promise.reject(new SocketRequestError("disconnected", "Browser reports no network connection"));
   }
 
@@ -67,7 +83,8 @@ export function emitWithAck<T = AckResponse>(
 
     function cleanup() {
       clearTimeout(timeout);
-      socket.off("disconnect", onDisconnect);
+      target.off("disconnect", onDisconnect);
+      target.off("connect", onConnect);
     }
 
     function finish(callback: () => void) {
@@ -85,7 +102,49 @@ export function emitWithAck<T = AckResponse>(
       finish(() => reject(new SocketRequestError("timeout", `No acknowledgement for ${event}`)));
     }, timeoutMs);
 
-    socket.on("disconnect", onDisconnect);
-    socket.emit(event, data, (response: T) => finish(() => resolve(response)));
+    // Emitting on a disconnected socket does not fail: Socket.IO queues the
+    // packet and delivers it on reconnect, and no `disconnect` event arrives
+    // to reject against because the disconnect already happened. The timeout
+    // would then reject this promise while leaving the packet queued - the
+    // player is told the action failed and it happens anyway, seconds later.
+    // On this path that means a second room, or a game started twice.
+    //
+    // So nothing is handed to the socket until it is connected. Waiting rather
+    // than refusing keeps the first connection working, where not-yet-
+    // connected is the normal state and the queue was doing the right thing;
+    // if the timeout wins the race instead, there is no packet to deliver.
+    function send() {
+      target.on("disconnect", onDisconnect);
+      target.emit(event, data, (response: unknown) => finish(() => resolve(response as T)));
+    }
+
+    function onConnect() {
+      target.off("connect", onConnect);
+      if (!settled) send();
+    }
+
+    if (target.connected) send();
+    else target.on("connect", onConnect);
   });
+}
+
+export function emitWithAck<T = AckResponse>(
+  event: string,
+  data: unknown,
+  options: { timeoutMs?: number } = {},
+): Promise<T> {
+  return emitWithAckOn<T>(socket as unknown as AckTarget, event, data, options);
+}
+
+/** Emit an action that only makes sense right now, dropping it if the socket
+is down rather than letting Socket.IO deliver it on reconnect.
+
+A buffered packet is replayed into whatever the room has become in the
+meantime: a vote cast in a turn that has ended, a guess against a prompt nobody
+is drawing any more, a `leave_room` that evicts the player from the room they
+just rejoined. Live drawing is deliberately not routed through here - its
+frames carry a generation and sequence the server checks, and it has an
+explicit resync path, so replay is already answered there. */
+export function emitTransient(event: string, ...args: unknown[]): void {
+  socket.volatile.emit(event, ...args);
 }

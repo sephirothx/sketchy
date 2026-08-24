@@ -4,7 +4,7 @@ import { MAX_PROMPT_LENGTH } from "../lib/customPrompts";
 import { chatAnnouncement } from "../lib/chatAnnouncements";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { recordRender } from "../lib/renderDiagnostics";
-import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
+import { emitTransient, emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { useSettingsStore } from "../store/settingsStore";
@@ -242,7 +242,7 @@ export function RoomChatPanel({
 
     setError(null);
     if (inputPurpose === "guess") {
-      socket.emit("guess", { text: trimmed });
+      emitTransient("guess", { text: trimmed });
       setHistory((current) =>
         current.length === 0 || current[current.length - 1] !== trimmed
           ? [...current, trimmed]

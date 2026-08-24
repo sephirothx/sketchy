@@ -19,7 +19,7 @@ import {
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
-import { emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
+import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { SettingsIcon } from "../components/SettingsIcon";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
@@ -150,7 +150,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     exitingRoomRef.current = true;
     setExitingRoom(true);
     clearSession();
-    socket.emit("leave_room");
+    emitTransient("leave_room");
     reset();
     navigate("/");
   }
@@ -164,7 +164,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   }
 
   function handleToggleAfk() {
-    socket.emit("toggle_afk");
+    emitTransient("toggle_afk");
   }
 
   async function handleStartGame() {

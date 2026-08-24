@@ -1050,6 +1050,11 @@ includes the saved configuration and archive state.
 - If the drawer disconnects and doesn't return in time, their turn is skipped and evicted from
   the rotation.
 - If everyone disconnects, the room is cleaned up.
+- An action that expects an answer - creating a room, joining, starting, voting to restart -
+  is never handed to a socket that is not connected. It waits for the connection and is sent
+  once, or it times out having been sent at all, so a request reported as failed cannot arrive
+  later on reconnect. Actions that only make sense in the moment - a guess, a vote, leaving,
+  toggling AFK - are dropped outright rather than replayed into whatever the room has become.
 
 ## Key design decisions & limitations
 

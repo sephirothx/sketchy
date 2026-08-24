@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ModerationState, PlayerInfo } from "../types";
-import { socket } from "../lib/socket";
+import { emitTransient } from "../lib/socket";
 import { competitionRanks, placementLabel } from "../lib/standings";
 import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
@@ -161,7 +161,7 @@ export function PlayerList({
 }
 
 function votePlayer(targetPlayerId: string, action: "kick" | "afk") {
-  socket.emit("vote_player", { targetPlayerId, action });
+  emitTransient("vote_player", { targetPlayerId, action });
 }
 
 function FittedPlayerName({

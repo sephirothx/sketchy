@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { apiRequest, ApiError } from "../lib/api";
-import { socket } from "../lib/socket";
+import { emitTransient, socket } from "../lib/socket";
 import { useGameStore } from "./gameStore";
 import { useSettingsStore } from "./settingsStore";
 import {
@@ -56,7 +56,7 @@ function reconnectSocketAsNewIdentity(): void {
  */
 function releaseSeatBeforeIdentityChange(): void {
   if (useGameStore.getState().playerId && socket.connected) {
-    socket.emit("leave_room");
+    emitTransient("leave_room");
   }
   useGameStore.getState().clearSession();
 }
