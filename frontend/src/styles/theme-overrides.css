@@ -1356,3 +1356,33 @@
 [data-theme="dark"] .profile-history-filter {
   color: #cbd5e1;
 }
+
+[data-theme="dark"] .mod-report {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .mod-evidence {
+  border-left-color: #334155;
+}
+
+[data-theme="dark"] .mod-actions input {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .mod-actions button {
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .mod-actions .mod-danger {
+  border-color: #f87171;
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .account-dropdown .account-staff-entry {
+  border-top-color: #334155;
+}

@@ -15,6 +15,9 @@ export interface AuthUser {
   displayName: string;
   nameColor: string | null;
   isAnonymous: boolean;
+  /** Decides which staff entries the menu offers. Never the authorization -
+      every endpoint behind them checks the role again for itself. */
+  role: "user" | "moderator" | "admin";
   createdAt: string | null;
   lastLoginAt: string | null;
 }

@@ -33,6 +33,11 @@ def user_payload(user: UserData) -> dict:
         "displayName": user.display_name,
         "nameColor": user.name_color,
         "isAnonymous": user.is_anonymous,
+        # The client needs this to decide whether to offer the operator and
+        # moderation entries at all. It is not the authorization - every one of
+        # those endpoints checks the role again for itself - it is what stops
+        # the app showing a door that will not open.
+        "role": user.role,
         "createdAt": _timestamp(user.created_at),
         "lastLoginAt": _timestamp(user.last_login_at),
     }

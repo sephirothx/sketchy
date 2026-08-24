@@ -595,6 +595,20 @@ a prompt list, a single prompt version, a room, a configuration key. An action
 that acts on no single row, such as a bulk retention purge, records neither
 and says so by leaving both empty rather than inventing a subject.
 
+Both staff surfaces are reached from the account menu, and only appear for an
+account that holds the role: a moderator is offered **Moderation**, an
+administrator that and **Server operations**. The account payload carries the
+role so the menu knows what to offer; it is never what grants access. Every
+endpoint behind those entries checks the role again for itself and answers 404
+to anyone else, so the menu decides what is *shown* and nothing more.
+
+**Moderation** is where reports are read and acted on - player reports with
+their preserved message evidence, and prompt-content reports against a list or
+a single prompt. Resolving a content report records that it was looked at;
+hiding the list or prompt is the separate decision that acts on it, and the
+owner is told when it happens if they have a confirmed address. Every review
+takes a note, so no decision is anonymous.
+
 Roles are service-wide privileges. A room **host** remains an ordinary
 gameplay role and is never an administrator merely because they created a
 room.

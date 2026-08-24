@@ -5,6 +5,7 @@ import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { MAX_EMAIL_LENGTH, emailLooksUsable } from "../lib/accountRecovery";
+import { operatorEntries } from "../lib/operatorAccess";
 import {
   getFocusableElements,
   useEscapeLayer,
@@ -86,6 +87,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   if (!user || (user.isAnonymous && !user.displayName)) return null;
 
   const isGuest = user.isAnonymous;
+  const staffEntries = operatorEntries(user.role, { isAnonymous: isGuest });
   const shownName = isGuest ? user.displayName : (user.username ?? user.displayName);
   const opensDialogDirectly = isGuest && compact;
 
@@ -192,6 +194,23 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
               >
                 Signed-in devices
               </button>
+              {/* Shown, not enforced: each of these endpoints checks the role
+                  again for itself and answers 404 to anyone else. Hiding them
+                  is about not offering a door that will not open. */}
+              {staffEntries.map((entry) => (
+                <button
+                  key={entry.path}
+                  type="button"
+                  role="menuitem"
+                  className="account-staff-entry"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate(entry.path);
+                  }}
+                >
+                  {entry.label}
+                </button>
+              ))}
               <button
                 type="button"
                 role="menuitem"

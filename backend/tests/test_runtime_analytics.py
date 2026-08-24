@@ -301,3 +301,22 @@ async def test_an_abandoned_game_counts_turns_but_not_the_game(env):
         assert row.games_played == 0
         assert row.games_won == 0
         assert row.total_score == 0
+
+
+async def test_the_account_payload_says_which_staff_surfaces_to_offer(env):
+    """The client cannot offer a door it does not know exists - and must not
+    offer one that will not open."""
+    new_client, factory = env
+    player, operator = new_client(), new_client()
+    await register(player, "JustAPlayer")
+    account = await register(operator, "Staff")
+
+    assert (await player.get("/api/auth/me")).json()["role"] == "user"
+    assert (await operator.get("/api/auth/me")).json()["role"] == "user"
+
+    await promote(factory, account["id"])
+
+    assert (await operator.get("/api/auth/me")).json()["role"] == "admin"
+    # The role in the payload decides what is shown; it never decides what is
+    # allowed. An ordinary player asking directly still gets nothing.
+    assert (await player.get("/api/admin/metrics")).status_code == 404

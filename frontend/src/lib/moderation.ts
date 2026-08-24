@@ -116,3 +116,46 @@ export function revokeUserBan(banId: string, reason: string): Promise<UserBan> {
     body: { reason },
   });
 }
+
+export interface PromptContentReport {
+  id: string;
+  reporterUserId: string | null;
+  reportedOwnerUserId: string | null;
+  promptListId: string | null;
+  promptVersionId: string | null;
+  targetType: "list" | "prompt";
+  listName: string | null;
+  prompt: string | null;
+  reason: string;
+  details: string;
+  status: ReportStatus;
+  reviewedByUserId: string | null;
+  resolutionNote: string | null;
+  moderationState: "active" | "hidden" | null;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+}
+
+export function listPromptContentReports(status?: ReportStatus): Promise<{
+  reports: PromptContentReport[];
+}> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiRequest(`/api/moderation/prompt-content-reports${query}`);
+}
+
+/** Resolve or dismiss a content report.
+
+`moderationState` is what actually hides the reported list or prompt; a report
+resolved without it is a decision recorded and nothing acted on. */
+export function reviewPromptContentReport(
+  reportId: string,
+  status: Exclude<ReportStatus, "pending">,
+  note: string,
+  moderationState?: "active" | "hidden",
+): Promise<PromptContentReport> {
+  return apiRequest(`/api/moderation/prompt-content-reports/${reportId}`, {
+    method: "PATCH",
+    body: { status, note, ...(moderationState ? { moderationState } : {}) },
+  });
+}
