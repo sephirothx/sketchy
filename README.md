@@ -616,8 +616,8 @@ role so the menu knows what to offer; it is never what grants access. Every
 endpoint behind those entries checks the role again for itself and answers 404
 to anyone else, so the menu decides what is *shown* and nothing more.
 
-A player is reported from the player list in the room, with the flag beside
-their name. The report names their **seat**, never their account: room payloads
+A player is reported from the same menu on their row that carries the kick and
+AFK votes. The report names their **seat**, never their account: room payloads
 deliberately carry no account ids, and wanting to complain about somebody is
 not a reason to learn theirs, so the server resolves the seat against the live
 room. It also selects the evidence - the reported player's recent messages, as

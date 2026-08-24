@@ -113,9 +113,11 @@ export function PlayerList({
 
         return (
           <li key={p.playerId} className={rowClass}>
-            {canModerate && (
+            {(canModerate || canReport) && (
               <PlayerModerationMenu
                 player={p}
+                canVote={canModerate}
+                canReport={canReport}
                 requiredVotes={requiredVotes}
                 kickVotes={kickVotes}
                 afkVotes={afkVotes}
@@ -123,6 +125,9 @@ export function PlayerList({
                 hasVotedAfk={hasVotedAfk}
                 isOpen={openMenuToken === p.playerId}
                 onOpenChange={(open) => setOpenMenuToken(open ? p.playerId : null)}
+                onReport={() =>
+                  setReporting({ playerId: p.playerId, nickname: p.nickname })
+                }
               />
             )}
             <PlayerRole
@@ -142,17 +147,6 @@ export function PlayerList({
               {!p.connected && <span className="visually-hidden">Disconnected</span>}
             </span>
             {showScores && <span className="player-score">{p.score}</span>}
-            {canReport && (
-              <button
-                type="button"
-                className="player-report-button"
-                title={`Report ${p.nickname}`}
-                aria-label={`Report ${p.nickname}`}
-                onClick={() => setReporting({ playerId: p.playerId, nickname: p.nickname })}
-              >
-                <span aria-hidden="true">⚑</span>
-              </button>
-            )}
             {showVoteRow && (
               <div className="player-vote-row">
                 {showAfkChip && (
@@ -339,6 +333,8 @@ function VoteChip({
 
 function PlayerModerationMenu({
   player,
+  canVote,
+  canReport,
   requiredVotes,
   kickVotes,
   afkVotes,
@@ -346,8 +342,13 @@ function PlayerModerationMenu({
   hasVotedAfk,
   isOpen,
   onOpenChange,
+  onReport,
 }: {
   player: PlayerInfo;
+  /** Kick and AFK need a live seat and an eligible voter; reporting does not,
+      so the two are gated separately and the menu opens for either. */
+  canVote: boolean;
+  canReport: boolean;
   requiredVotes: number;
   kickVotes: string[];
   afkVotes: string[];
@@ -355,6 +356,7 @@ function PlayerModerationMenu({
   hasVotedAfk: boolean;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  onReport: () => void;
 }) {
   const menuId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -380,6 +382,11 @@ function PlayerModerationMenu({
     votePlayer(player.playerId, action);
     onOpenChange(false);
     triggerRef.current?.focus();
+  }
+
+  function handleReport() {
+    onOpenChange(false);
+    onReport();
   }
 
   function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -411,7 +418,7 @@ function PlayerModerationMenu({
         aria-expanded={isOpen}
         aria-controls={menuId}
         aria-label={`Moderation for ${player.nickname}`}
-        title="Vote AFK or kick"
+        title={canVote ? "Vote AFK or kick, or report" : "Report this player"}
         onClick={() => onOpenChange(!isOpen)}
       />
       {isOpen && (
@@ -424,7 +431,7 @@ function PlayerModerationMenu({
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
-          {!player.isAfk && (
+          {canVote && !player.isAfk && (
             <button
               type="button"
               role="menuitem"
@@ -440,20 +447,35 @@ function PlayerModerationMenu({
               </span>
             </button>
           )}
-          <button
-            type="button"
-            role="menuitem"
-            className={`player-vote-action player-vote-kick${hasVotedKick ? " is-cast" : ""}`}
-            onClick={() => handleVote("kick")}
-          >
-            <span className="player-vote-action-kind">Kick</span>
-            <span className="player-vote-action-label">
-              {hasVotedKick ? "Undo vote" : "Vote"}
-            </span>
-            <span className="player-vote-action-count">
-              {kickVotes.length}/{requiredVotes}
-            </span>
-          </button>
+          {canVote && (
+            <button
+              type="button"
+              role="menuitem"
+              className={`player-vote-action player-vote-kick${hasVotedKick ? " is-cast" : ""}`}
+              onClick={() => handleVote("kick")}
+            >
+              <span className="player-vote-action-kind">Kick</span>
+              <span className="player-vote-action-label">
+                {hasVotedKick ? "Undo vote" : "Vote"}
+              </span>
+              <span className="player-vote-action-count">
+                {kickVotes.length}/{requiredVotes}
+              </span>
+            </button>
+          )}
+          {canReport && (
+            <button
+              type="button"
+              role="menuitem"
+              className="player-vote-action player-vote-report"
+              onClick={handleReport}
+            >
+              <span className="player-vote-action-kind">Report</span>
+              {/* No count: this asks a moderator to look rather than needing a
+                  majority, so there is nothing to tally. */}
+              <span className="player-vote-action-label">To a moderator</span>
+            </button>
+          )}
         </div>
       )}
     </div>

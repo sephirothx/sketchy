@@ -242,41 +242,10 @@ button.player-vote-chip-kick:focus-visible {
   box-shadow: inset 0 0 0 1px currentColor;
 }
 
-/* Quiet until wanted: reporting is rare, and a control that shouts sits badly
-   beside the scores it has nothing to do with. */
-.player-report-button {
-  background: none;
-  border: 0;
-  border-radius: 4px;
-  color: inherit;
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  opacity: 0;
-  padding: 2px 4px;
-}
-
-.player-list li:hover .player-report-button,
-.player-list li:focus-within .player-report-button {
-  opacity: 0.55;
-}
-
-.player-report-button:hover,
-.player-report-button:focus-visible {
-  opacity: 1;
-}
-
-/* Never invisible to a keyboard or a screen reader: opacity hides it from the
-   eye, and a control nobody can reach is not a control. */
-.player-report-button:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 1px;
-}
-
-@media (hover: none) {
-  .player-report-button {
-    opacity: 0.55;
-  }
+/* Report sits with the votes and reads like them, but carries no tally: it
+   asks a moderator to look rather than needing a majority. */
+.player-vote-action.player-vote-report .player-vote-action-kind {
+  color: #b45309;
 }
 
 .report-details {

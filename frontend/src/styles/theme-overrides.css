@@ -1400,3 +1400,7 @@
   border-color: #475569;
   color: #f8fafc;
 }
+
+[data-theme="dark"] .player-vote-action.player-vote-report .player-vote-action-kind {
+  color: #fbbf24;
+}
