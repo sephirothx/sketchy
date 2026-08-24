@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   canCastModerationVote,
   eligibleModerationVotes,
+  suspensionExpiry,
+  SUSPENSION_DURATIONS,
 } from "../src/lib/moderation.ts";
 
 const moderation = {
@@ -22,5 +24,31 @@ test("displayed vote totals exclude votes outside the server population", () => 
   assert.deepEqual(
     eligibleModerationVotes(moderation, ["player", "afk-player", "spectator"]),
     ["player", "afk-player"],
+  );
+});
+
+test("a timed suspension is stored as the moment it ends", () => {
+  // The API takes an instant, not a duration: a request that took a minute to
+  // arrive must not arrive at a ban a minute shorter than the one chosen.
+  const now = new Date("2026-08-24T12:00:00.000Z");
+
+  assert.equal(suspensionExpiry("24h", now), "2026-08-25T12:00:00.000Z");
+  assert.equal(suspensionExpiry("7d", now), "2026-08-31T12:00:00.000Z");
+  assert.equal(suspensionExpiry("30d", now), "2026-09-23T12:00:00.000Z");
+});
+
+test("a permanent suspension has no end, rather than a distant one", () => {
+  // undefined means the field is left off the request entirely; a far-future
+  // date would be a lie that eventually expires.
+  assert.equal(suspensionExpiry("forever", new Date()), undefined);
+});
+
+test("an unrecognised duration does not silently become permanent", () => {
+  // It falls through to no expiry, which is the one outcome worth being sure
+  // about: the caller only ever passes a value from the list.
+  assert.equal(suspensionExpiry("not-an-option", new Date()), undefined);
+  assert.deepEqual(
+    SUSPENSION_DURATIONS.map((option) => option.value),
+    ["24h", "7d", "30d", "forever"],
   );
 });

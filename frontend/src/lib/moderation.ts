@@ -63,6 +63,9 @@ export interface PlayerReport {
 export interface UserBan {
   id: string;
   userId: string | null;
+  /** Null once the account has been anonymised - the suspension outlives the
+      name, and a moderator sees that rather than a blank. */
+  displayName: string | null;
   bannedByUserId: string | null;
   reason: string;
   expiresAt: string | null;
@@ -125,6 +128,11 @@ export function createUserBan(input: {
   return apiRequest("/api/moderation/bans", { method: "POST", body: input });
 }
 
+export function listUserBans(active?: boolean): Promise<{ bans: UserBan[] }> {
+  const query = active === undefined ? "" : `?active=${active}`;
+  return apiRequest(`/api/moderation/bans${query}`);
+}
+
 export function revokeUserBan(banId: string, reason: string): Promise<UserBan> {
   return apiRequest(`/api/moderation/bans/${banId}/revoke`, {
     method: "POST",
@@ -174,3 +182,38 @@ export function reviewPromptContentReport(
     body: { status, note, ...(moderationState ? { moderationState } : {}) },
   });
 }
+
+/** How long a suspension lasts. Permanent is deliberately not the default: most
+misbehaviour is somebody having a bad evening, and a moderator should have to
+choose forever rather than arrive at it by not choosing. */
+export const SUSPENSION_DURATIONS: { value: string; label: string; hours: number | null }[] = [
+  { value: "24h", label: "24 hours", hours: 24 },
+  { value: "7d", label: "7 days", hours: 24 * 7 },
+  { value: "30d", label: "30 days", hours: 24 * 30 },
+  { value: "forever", label: "No end date", hours: null },
+];
+
+/** The absolute moment a suspension ends, or undefined for permanent.
+
+Computed here rather than sent as a duration because the server stores an
+instant: a request that took a minute to arrive should not shorten the ban by a
+minute, and the API already takes expiresAt. */
+export function suspensionExpiry(
+  choice: string,
+  now: Date = new Date(),
+): string | undefined {
+  const option = SUSPENSION_DURATIONS.find((entry) => entry.value === choice);
+  if (!option || option.hours === null) return undefined;
+  return new Date(now.getTime() + option.hours * 3600 * 1000).toISOString();
+}
+
+
+/** Where reports are read and acted on.
+
+The API and its client have existed since #340; nothing called them, so every
+report submitted so far has been written to a queue nobody could open. This is
+the queue.
+
+Reviewing is deliberately two decisions, not one. Resolving a content report
+records that it was looked at; hiding the list or prompt is what acts on it,
+and a moderator should have to mean both. */

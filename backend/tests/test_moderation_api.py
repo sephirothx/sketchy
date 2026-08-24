@@ -468,3 +468,81 @@ async def test_role_boundaries_and_database_checks(env):
                         details="self",
                     )
                 )
+
+
+async def test_a_timed_suspension_lifts_itself_and_a_lifted_one_is_still_recorded(env):
+    """A suspension with an end date is over when it is over - nobody has to
+    remember to lift it - and lifting one keeps the record of it."""
+    new_client, factory, _ = env
+    moderator_http, target_http = new_client(), new_client()
+    moderator = await register(moderator_http, "TimedModerator")
+    target = await register(target_http, "TimedTarget")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    created = await moderator_http.post(
+        "/api/moderation/bans",
+        json={
+            "userId": target["id"],
+            "reason": "Timed out for the evening",
+            "expiresAt": expires_at.isoformat(),
+        },
+    )
+    assert created.status_code == 201
+    ban = created.json()
+    assert ban["isActive"] is True
+    # A moderator reading the list needs to know who, not a UUID.
+    assert ban["displayName"] == "TimedTarget"
+
+    listing = await moderator_http.get("/api/moderation/bans?active=true")
+    assert [entry["id"] for entry in listing.json()["bans"]] == [ban["id"]]
+
+    # Age the whole row into the past: nothing runs to expire a ban, so the
+    # question is whether reading it reports the truth. Both timestamps move,
+    # because ck_user_bans_expiry_after_creation refuses a ban that ends before
+    # it began - which is the schema being right, not an obstacle.
+    async with factory() as session:
+        async with session.begin():
+            stored = await session.get(UserBan, UUID(ban["id"]))
+            stored.created_at = datetime.now(timezone.utc) - timedelta(days=2)
+            stored.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+
+    still_active = await moderator_http.get("/api/moderation/bans?active=true")
+    assert still_active.json()["bans"] == []
+    everything = await moderator_http.get("/api/moderation/bans")
+    lapsed = everything.json()["bans"][0]
+    assert lapsed["isActive"] is False
+    # Expired, not lifted: nobody decided this, the clock did.
+    assert lapsed["revokedAt"] is None
+
+
+async def test_lifting_a_suspension_records_who_and_why(env):
+    new_client, factory, _ = env
+    moderator_http, target_http = new_client(), new_client()
+    moderator = await register(moderator_http, "LiftingModerator")
+    target = await register(target_http, "LiftedTarget")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    created = await moderator_http.post(
+        "/api/moderation/bans",
+        json={"userId": target["id"], "reason": "Suspended in error"},
+    )
+    ban_id = created.json()["id"]
+
+    lifted = await moderator_http.post(
+        f"/api/moderation/bans/{ban_id}/revoke",
+        json={"reason": "Reviewed and reversed"},
+    )
+
+    assert lifted.status_code == 200
+    body = lifted.json()
+    assert body["isActive"] is False
+    assert body["revokeReason"] == "Reviewed and reversed"
+    assert body["revokedByUserId"] == moderator["id"]
+    assert body["displayName"] == "LiftedTarget"
+    # Lifting twice is a mistake worth naming rather than a no-op.
+    again = await moderator_http.post(
+        f"/api/moderation/bans/{ban_id}/revoke",
+        json={"reason": "Again"},
+    )
+    assert again.status_code == 409

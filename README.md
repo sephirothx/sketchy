@@ -626,6 +626,16 @@ theirs" and "did you see it" true by construction rather than checks against a
 client's claims. Reporting requires an account, because a report a moderator
 cannot follow up on helps nobody.
 
+**Moderation** carries a third tab for suspensions: who is suspended, why, and
+until when. A suspension can be given an end date - 24 hours, 7 days, 30 days,
+or none - and one with an end date lifts itself, because the list reports what
+is in force rather than trusting something to have run. Permanent is
+deliberately not the default: most misbehaviour is somebody having a bad
+evening, and forever should be chosen rather than arrived at. A suspension
+lifted by hand keeps its row and records who lifted it and why, and suspending
+somebody from a report resolves that report - acting on a report is deciding
+it, and leaving it open puts it back in front of the next moderator.
+
 **Moderation** is where reports are read and acted on - player reports with
 their preserved message evidence, and prompt-content reports against a list or
 a single prompt. Resolving a content report records that it was looked at;

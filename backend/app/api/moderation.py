@@ -285,7 +285,13 @@ def _prompt_content_report_payload(report: PromptContentReport) -> dict:
     }
 
 
-def _ban_payload(ban: UserBan) -> dict:
+def _ban_payload(ban: UserBan, display_name: str | None = None) -> dict:
+    """One suspension, as a moderator needs to read it.
+
+    The display name is passed in rather than followed through the relationship
+    so that listing many does not become a query each. It is optional because
+    an anonymised account no longer has one to show.
+    """
     now = datetime.now(timezone.utc)
     effectively_active = ban.is_active and (
         ban.expires_at is None or ban.expires_at > now
@@ -293,6 +299,7 @@ def _ban_payload(ban: UserBan) -> dict:
     return {
         "id": str(ban.id),
         "userId": str(ban.user_id) if ban.user_id else None,
+        "displayName": display_name,
         "bannedByUserId": (
             str(ban.banned_by_user_id) if ban.banned_by_user_id else None
         ),
@@ -906,7 +913,7 @@ def create_moderation_router(
                     )
                 )
                 await session.flush()
-            payload = _ban_payload(ban)
+            payload = _ban_payload(ban, target.display_name)
 
         await revoke_all_sessions(session_factory, user_id=str(body.user_id), now=now)
         if on_user_banned is not None:
@@ -940,7 +947,24 @@ def create_moderation_router(
                     .offset(offset)
                 )
             ).all()
-            return {"bans": [_ban_payload(ban) for ban in bans]}
+            user_ids = {ban.user_id for ban in bans if ban.user_id}
+            names = (
+                {
+                    row.id: row.display_name
+                    for row in (
+                        await session.scalars(
+                            select(User).where(User.id.in_(user_ids))
+                        )
+                    ).all()
+                }
+                if user_ids
+                else {}
+            )
+            return {
+                "bans": [
+                    _ban_payload(ban, names.get(ban.user_id)) for ban in bans
+                ]
+            }
 
     @router.post("/moderation/bans/{ban_id}/revoke")
     async def revoke_ban(ban_id: UUID, body: BanRevokeBody, request: Request):
@@ -974,6 +998,9 @@ def create_moderation_router(
                     )
                 )
                 await session.flush()
-            return _ban_payload(ban)
+                subject = (
+                    await session.get(User, ban.user_id) if ban.user_id else None
+                )
+            return _ban_payload(ban, subject.display_name if subject else None)
 
     return router

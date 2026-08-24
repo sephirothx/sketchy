@@ -6,30 +6,27 @@ import {
   createUserBan,
   listModerationReports,
   listPromptContentReports,
+  listUserBans,
+  revokeUserBan,
   reviewModerationReport,
   reviewPromptContentReport,
   type PlayerReport,
   type PromptContentReport,
+  suspensionExpiry,
+  SUSPENSION_DURATIONS,
   type ReportStatus,
+  type UserBan,
 } from "../lib/moderation";
 import { canModerate } from "../lib/operatorAccess";
 import { useAuthStore } from "../store/authStore";
 
-type Queue = "players" | "content";
+type Queue = "players" | "content" | "bans";
 
 function formatWhen(value: string): string {
   return new Date(value).toLocaleString();
 }
 
-/** Where reports are read and acted on.
 
-The API and its client have existed since #340; nothing called them, so every
-report submitted so far has been written to a queue nobody could open. This is
-the queue.
-
-Reviewing is deliberately two decisions, not one. Resolving a content report
-records that it was looked at; hiding the list or prompt is what acts on it,
-and a moderator should have to mean both. */
 export function ModerationPage() {
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
@@ -37,8 +34,10 @@ export function ModerationPage() {
   const [status, setStatus] = useState<ReportStatus>("pending");
   const [players, setPlayers] = useState<PlayerReport[]>([]);
   const [content, setContent] = useState<PromptContentReport[]>([]);
+  const [bans, setBans] = useState<UserBan[]>([]);
   const [note, setNote] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [duration, setDuration] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -63,10 +62,19 @@ export function ModerationPage() {
           setError(null);
         })
         .catch(fail);
-    } else {
+    } else if (queue === "content") {
       void listPromptContentReports(status)
         .then((result) => {
           setContent(result.reports);
+          setError(null);
+        })
+        .catch(fail);
+    } else {
+      // Everything, not only what is in force: a suspension that has been
+      // lifted or has expired is part of the record of what was done.
+      void listUserBans()
+        .then((result) => {
+          setBans(result.bans);
           setError(null);
         })
         .catch(fail);
@@ -111,7 +119,7 @@ export function ModerationPage() {
         <Link to="/" className="back-link">← Back to lobby</Link>
         <h1>Moderation</h1>
         <nav className="ops-tabs" aria-label="Report queues">
-          {(["players", "content"] as Queue[]).map((name) => (
+          {(["players", "content", "bans"] as Queue[]).map((name) => (
             <button
               key={name}
               type="button"
@@ -119,24 +127,30 @@ export function ModerationPage() {
               aria-current={queue === name ? "page" : undefined}
               onClick={() => setQueue(name)}
             >
-              {name === "players" ? "Player reports" : "Prompt content"}
+              {name === "players"
+                ? "Player reports"
+                : name === "content"
+                  ? "Prompt content"
+                  : "Suspensions"}
             </button>
           ))}
         </nav>
       </header>
 
       <div className="ops-filters">
-        <label htmlFor="mod-status">Showing</label>
-        <select
-          id="mod-status"
-          className="settings-select"
-          value={status}
-          onChange={(change) => setStatus(change.target.value as ReportStatus)}
-        >
-          <option value="pending">Waiting for review</option>
-          <option value="resolved">Resolved</option>
-          <option value="dismissed">Dismissed</option>
-        </select>
+        {queue !== "bans" && <label htmlFor="mod-status">Showing</label>}
+        {queue !== "bans" && (
+          <select
+            id="mod-status"
+            className="settings-select"
+            value={status}
+            onChange={(change) => setStatus(change.target.value as ReportStatus)}
+          >
+            <option value="pending">Waiting for review</option>
+            <option value="resolved">Resolved</option>
+            <option value="dismissed">Dismissed</option>
+          </select>
+        )}
         <button type="button" onClick={load}>
           Refresh
         </button>
@@ -230,6 +244,7 @@ export function ModerationPage() {
                       Dismiss
                     </button>
                     {report.reportedUserId && (
+                      <>
                       <button
                         type="button"
                         className="mod-danger"
@@ -237,22 +252,111 @@ export function ModerationPage() {
                         onClick={() =>
                           act(
                             report.id,
-                            () =>
-                              createUserBan({
+                            async () => {
+                              const expiresAt = suspensionExpiry(
+                                duration[report.id] ?? "24h",
+                              );
+                              await createUserBan({
                                 userId: report.reportedUserId as string,
                                 reason: note[report.id],
-                              }),
-                            "Suspended. They are signed out everywhere, and told why if they have a confirmed address.",
+                                ...(expiresAt ? { expiresAt } : {}),
+                              });
+                              // Acting on a report decides it. Leaving it
+                              // pending puts it back in front of the next
+                              // moderator, to look at something already done.
+                              await reviewModerationReport(
+                                report.id,
+                                "resolved",
+                                note[report.id],
+                              );
+                            },
+                            "Suspended, and the report resolved. They are signed out everywhere, and told why if they have a confirmed address.",
                           )
                         }
                       >
                         Suspend account
                       </button>
+                      <select
+                        aria-label="How long the suspension lasts"
+                        className="settings-select"
+                        value={duration[report.id] ?? "24h"}
+                        onChange={(change) =>
+                          setDuration((current) => ({
+                            ...current,
+                            [report.id]: change.target.value,
+                          }))
+                        }
+                      >
+                        {SUSPENSION_DURATIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      </>
                     )}
                   </div>
                 )}
                 {report.resolutionNote && (
                   <p className="mod-resolution">{report.resolutionNote}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
+      ) : queue === "bans" ? (
+        bans.length === 0 ? (
+          <p className="ops-empty">Nobody has been suspended.</p>
+        ) : (
+          <ul className="mod-list">
+            {bans.map((ban) => (
+              <li key={ban.id} className="mod-report">
+                <div className="mod-report-head">
+                  <span className="mod-reason">
+                    {ban.displayName ?? "Deleted player"}
+                  </span>
+                  <span className="mod-when">{formatWhen(ban.createdAt)}</span>
+                </div>
+                <p className="mod-details">{ban.reason}</p>
+                <p className="mod-subject">
+                  {ban.isActive
+                    ? ban.expiresAt
+                      ? `In force until ${formatWhen(ban.expiresAt)}`
+                      : "In force, with no end date"
+                    : ban.revokedAt
+                      ? `Lifted ${formatWhen(ban.revokedAt)}`
+                      : "Expired"}
+                </p>
+                {ban.isActive && (
+                  <div className="mod-actions">
+                    <input
+                      aria-label="Reason for lifting"
+                      placeholder="Why, in one line"
+                      value={note[ban.id] ?? ""}
+                      onChange={(change) =>
+                        setNote((current) => ({
+                          ...current,
+                          [ban.id]: change.target.value,
+                        }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      disabled={busy === ban.id}
+                      onClick={() =>
+                        act(
+                          ban.id,
+                          () => revokeUserBan(ban.id, note[ban.id]),
+                          "Lifted. They can sign in again.",
+                        )
+                      }
+                    >
+                      Lift suspension
+                    </button>
+                  </div>
+                )}
+                {ban.revokeReason && (
+                  <p className="mod-resolution">{ban.revokeReason}</p>
                 )}
               </li>
             ))}
