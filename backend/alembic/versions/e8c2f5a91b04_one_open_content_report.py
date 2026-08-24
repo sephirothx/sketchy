@@ -21,16 +21,45 @@ def upgrade() -> None:
     # Existing duplicates would block the unique index, so fold them first:
     # keep each reporter's earliest open report per target and dismiss the
     # rest, which is what a moderator would have done by hand.
+    # One statement per index, because the indexes are what the fold has to
+    # match: NULL is distinct from NULL in a unique index, so a list-level
+    # report and a prompt-level one are governed by different keys.
+    #
+    # ROW_NUMBER rather than MIN(id): PostgreSQL has no MIN aggregate for uuid,
+    # and SQLite only accepts one because it keeps uuids as text. Ordering by
+    # a uuid is fine on both - it is the aggregate that does not exist.
     op.execute(
         """
         UPDATE prompt_content_reports
            SET status = 'dismissed'
-         WHERE status = 'pending'
-           AND id NOT IN (
-               SELECT MIN(id) FROM prompt_content_reports
-                WHERE status = 'pending'
-                GROUP BY reporter_user_id, prompt_list_id, prompt_version_id
-           )
+         WHERE id IN (
+             SELECT id FROM (
+                 SELECT id, ROW_NUMBER() OVER (
+                            PARTITION BY reporter_user_id, prompt_list_id
+                            ORDER BY created_at, id
+                        ) AS row_position
+                   FROM prompt_content_reports
+                  WHERE status = 'pending' AND prompt_version_id IS NULL
+             ) ranked
+             WHERE row_position > 1
+         )
+        """
+    )
+    op.execute(
+        """
+        UPDATE prompt_content_reports
+           SET status = 'dismissed'
+         WHERE id IN (
+             SELECT id FROM (
+                 SELECT id, ROW_NUMBER() OVER (
+                            PARTITION BY reporter_user_id, prompt_version_id
+                            ORDER BY created_at, id
+                        ) AS row_position
+                   FROM prompt_content_reports
+                  WHERE status = 'pending' AND prompt_version_id IS NOT NULL
+             ) ranked
+             WHERE row_position > 1
+         )
         """
     )
     op.create_index(

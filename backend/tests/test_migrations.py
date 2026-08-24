@@ -866,3 +866,73 @@ async def test_a_migration_run_that_orphans_rows_fails_loudly(tmp_path):
                 await connection.run_sync(check)
     finally:
         await engine.dispose()
+
+
+async def test_the_open_report_folds_keep_the_earliest_of_each_duplicate(tmp_path):
+    """Both dedupe migrations fold before their index can refuse the rows.
+
+    They originally did it with MIN(id), which SQLite accepts and PostgreSQL
+    has no such aggregate for, so neither migration could run there at all.
+    This exercises the fold itself; the PostgreSQL job proves the SQL is
+    portable by running the same chain.
+    """
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'folds.db'}")
+    ids = {name: uuid.uuid4().hex for name in ("reporter", "target", "other")}
+    try:
+        await _migrate(engine, alembic_command.upgrade, "c4d1a8e35b72")
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, password_hash, display_name, state) "
+                    "VALUES (:reporter, 'reporter', 'h', 'Reporter', 'registered'), "
+                    "(:target, 'target', 'h', 'Target', 'registered'), "
+                    "(:other, 'other', 'h', 'Other', 'registered')"
+                ),
+                ids,
+            )
+            # Three open reports from one person about the same player: only
+            # the earliest may survive, or the index cannot be created.
+            for index in range(3):
+                await connection.execute(
+                    text(
+                        "INSERT INTO player_reports (id, reporter_user_id, "
+                        "reported_user_id, reason, details, status, "
+                        "context_snapshot, created_at) VALUES "
+                        "(:id, :reporter, :target, 'spam', :details, 'pending', "
+                        "'{}', :created_at)"
+                    ),
+                    {
+                        "id": uuid.uuid4().hex,
+                        "reporter": ids["reporter"],
+                        "target": ids["target"],
+                        "details": f"complaint {index}",
+                        "created_at": f"2026-08-2{index + 1} 12:00:00",
+                    },
+                )
+            # A report about somebody else is a different key and must survive.
+            await connection.execute(
+                text(
+                    "INSERT INTO player_reports (id, reporter_user_id, "
+                    "reported_user_id, reason, details, status, "
+                    "context_snapshot, created_at) VALUES "
+                    "(:id, :reporter, :other, 'spam', 'about another player', "
+                    "'pending', '{}', '2026-08-24 12:00:00')"
+                ),
+                {"id": uuid.uuid4().hex, "reporter": ids["reporter"], "other": ids["other"]},
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+
+        async with engine.connect() as connection:
+            surviving = (
+                await connection.execute(
+                    text(
+                        "SELECT details FROM player_reports WHERE status = 'pending' "
+                        "ORDER BY created_at"
+                    )
+                )
+            ).scalars().all()
+        # The earliest of the three, and the one about somebody else.
+        assert surviving == ["complaint 0", "about another player"]
+    finally:
+        await engine.dispose()

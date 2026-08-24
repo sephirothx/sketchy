@@ -22,16 +22,24 @@ def upgrade() -> None:
     # reporter's earliest open report about a player and dismiss the rest,
     # which is what a moderator would have done by hand. The same fold the
     # content reports got in e8c2f5a91b04.
+    # ROW_NUMBER rather than MIN(id): PostgreSQL has no MIN aggregate for uuid.
+    # The same mistake was copied here from e8c2f5a91b04, and neither could run
+    # on PostgreSQL at all - CI is the only place that dialect is exercised.
     op.execute(
         """
         UPDATE player_reports
            SET status = 'dismissed'
-         WHERE status = 'pending'
-           AND id NOT IN (
-               SELECT MIN(id) FROM player_reports
-                WHERE status = 'pending'
-                GROUP BY reporter_user_id, reported_user_id
-           )
+         WHERE id IN (
+             SELECT id FROM (
+                 SELECT id, ROW_NUMBER() OVER (
+                            PARTITION BY reporter_user_id, reported_user_id
+                            ORDER BY created_at, id
+                        ) AS row_position
+                   FROM player_reports
+                  WHERE status = 'pending'
+             ) ranked
+             WHERE row_position > 1
+         )
         """
     )
     # An index, not a table rebuild - `game_records` taught us what a rebuild
