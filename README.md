@@ -7,6 +7,12 @@ lobby, or create a private room and share its code — no mandatory accounts req
 Terminology is fixed in [GLOSSARY.md](GLOSSARY.md): one agreed name per concept, for UI
 copy and docs alike. Read it before naming anything a player can see.
 
+This README is the narrative introduction. The precise references live in
+[`docs/`](docs/): [architecture](docs/architecture.md),
+[wire protocol](docs/wire-protocol.md), [database](docs/database.md), and
+[requirements](docs/requirements.md). Read the relevant one before changing the thing it
+describes, and update it in the same change.
+
 ## Features
 
 - Lobby with a live, polled list of public rooms, or join a private room by code.
@@ -922,6 +928,11 @@ frontend/
     lib/socket.ts socket.io-client singleton + REST base URL
     lib/drawingRules.ts The client's copy of the room's tool and color rules
     types.ts      Shared TypeScript types for all socket payloads
+docs/
+  architecture.md   Processes, layering, state ownership, lifecycle, and a module index
+  wire-protocol.md  Every Socket.IO event, the binary drawing formats, and the REST surface
+  database.md       Every table, its columns and constraints, and the flows that write them
+  requirements.md   Numbered MUST/MUST NOT requirements, non-goals, and traceability
 ```
 
 ## Getting started

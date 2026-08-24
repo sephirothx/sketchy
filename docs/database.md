@@ -1,0 +1,1005 @@
+# Database
+
+Every table Sketchy persists, what lives in it, and the flows that write and read it.
+
+Companion documents: [`architecture.md`](architecture.md) ·
+[`wire-protocol.md`](wire-protocol.md) · [`requirements.md`](requirements.md) ·
+[`../GLOSSARY.md`](../GLOSSARY.md)
+
+Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py).
+Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) (46 revisions,
+starting at `e7c9d4bc813e_initial_schema_…`).
+
+To regenerate an authoritative dump of this schema:
+
+```bash
+cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for t in Base.metadata.tables]"
+```
+
+---
+
+## 1. Engines and conventions
+
+| Concern | Rule | Source |
+| --- | --- | --- |
+| Default engine | Embedded SQLite at `./sketchy.db`, zero configuration | [`db/__init__.py:23`](../backend/app/db/__init__.py) |
+| Alternative | PostgreSQL via `DATABASE_URL` (`postgresql+asyncpg://…`) | [`db/__init__.py:47`](../backend/app/db/__init__.py) |
+| SQLite pragmas | `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000` on **every** connection | [`db/__init__.py:36`](../backend/app/db/__init__.py) |
+| SQLite migrations | Run automatically on startup | [`db/__init__.py`](../backend/app/db/__init__.py) |
+| PostgreSQL migrations | An **explicit deploy step**, protected by an advisory lock (`POSTGRES_MIGRATION_LOCK_ID`). Startup only *verifies* the revision and fails with a direct instruction if the step was missed | [`db/migrate.py`](../backend/app/db/migrate.py) |
+| Pool (PostgreSQL) | 5 persistent + 5 overflow, pre-ping, 10 s timeout, 30 min recycle; all four tunable | [`db/__init__.py:25`](../backend/app/db/__init__.py) |
+
+### Identifiers
+
+Persisted entity IDs are **time-ordered UUIDv7** from the standard library's
+`uuid.uuid7()`, generated through the single wrapper in
+[`backend/app/identifiers.py`](../backend/app/identifiers.py). It keeps a 42-bit counter
+inside each millisecond, so a burst of IDs stays ordered without stamping any of them
+into the future.
+
+- Stored as native 16-byte `uuid` on PostgreSQL, dialect-compatible `CHAR(32)` on SQLite.
+- API and Socket.IO boundaries always expose canonical UUID strings.
+- UUID order improves index locality, but `created_at` and friends remain the
+  **authoritative event time**.
+- **They are never capabilities.** Consecutive IDs within one millisecond are guessable
+  from each other by design, so session tokens, room codes, and prompt-list share codes
+  stay independently random and are never derived from an entity ID.
+
+### Timestamps
+
+Every persisted timestamp uses `UTCDateTime`
+([`backend/app/db/types.py`](../backend/app/db/types.py)): aware inputs are required and
+raise on a naive value, and reads are normalized to aware UTC. SQLite and PostgreSQL
+therefore behave identically and application code never infers a local timezone.
+
+Rows predating timestamp coverage keep a **null** write time rather than receiving a
+fabricated migration timestamp.
+
+### Enum discipline
+
+Stored scoring modes, hint modes, turn outcomes, prompt languages, catalogue locales,
+and every other closed set are **string enums backed by portable `CHECK` constraints**,
+declared once in [`backend/app/domain_values.py`](../backend/app/domain_values.py).
+Extending a set requires one coordinated code, migration, wire-contract, README, and
+glossary review.
+
+### Migration safety
+
+Migrations run with SQLite foreign keys **off** and finish with a
+`PRAGMA foreign_key_check`. Batch mode rebuilds a table by copy/drop/rename, and with
+enforcement on, `DROP TABLE` performs an implicit delete that fires `ON DELETE CASCADE`
+— altering a table others point at would silently empty them and hand back a table that
+still looks correct. Suspending enforcement stops that; checking at the end is what
+keeps the suspension honest.
+
+---
+
+## 2. Table map
+
+48 tables in eight domains.
+
+```mermaid
+erDiagram
+    users ||--o{ auth_sessions : "has devices"
+    users ||--o{ identity_aliases : "merges guests"
+    users ||--o{ user_blocks : "blocks"
+    users ||--o| user_settings : "prefers"
+    users ||--o{ user_stats_daily : "projects to"
+    users ||--o{ prompt_lists : "owns"
+    users ||--o{ persistent_rooms : "owns"
+    users ||--o{ room_presets : "owns"
+    users ||--o{ user_bans : "suspended by"
+
+    game_records ||--o{ game_participants : "seats"
+    game_records ||--o{ turn_records : "turns"
+    game_records ||--o{ game_prompt_sources : "pinned revisions"
+    game_records ||--o{ score_events : "ledger"
+    turn_records ||--o| turn_drawings : "drawing"
+    turn_records ||--o{ turn_participant_outcomes : "per seat"
+    turn_records ||--o{ turn_prompt_offers : "options"
+    turn_participant_outcomes ||--o| turn_guesses : "scoring child"
+    game_participants ||--o{ turn_participant_outcomes : "seat"
+
+    prompt_concepts ||--o{ prompt_versions : "wordings"
+    prompt_concepts ||--o{ prompt_aliases : "accepted answers"
+    prompt_versions ||--o{ prompt_version_aliases : "accepts"
+    prompt_lists ||--o{ prompt_list_revisions : "versions"
+    prompt_list_revisions ||--o{ prompt_list_revision_items : "membership"
+    prompt_list_revisions ||--o{ prompt_usage_facts : "usage"
+    prompt_lists ||--o{ prompts : "display rows"
+
+    player_reports ||--o{ player_report_message_evidence : "pins"
+    player_reports ||--o{ user_bans : "sources"
+    room_messages ||--o{ player_report_message_evidence : "copied from"
+```
+
+| Domain | Tables |
+| --- | --- |
+| **Server & rooms** | `app_config`, `room_code_reservations`, `persistent_rooms`, `room_presets`, `planned_shutdown_abandonments` |
+| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
+| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `prompt_content_reports`, `user_bans`, `user_blocks` |
+| **Messages** | `room_messages` |
+| **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_participant_outcomes`, `turn_guesses`, `score_events`, `game_prompt_sources` |
+| **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
+| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompts`, `prompt_usage_facts` |
+| **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
+
+---
+
+## 3. Server and rooms
+
+### `app_config`
+Key/value storage for server configuration and auto-generated secrets (notably the
+`IP_HASH_SECRET` fallback).
+
+`key` VARCHAR(64) PK · `value` TEXT · `created_at` · `updated_at`.
+
+### `room_code_reservations`
+The global claim on a six-character invite code. The reservation primary key makes
+allocation race-safe even though v1 runs one worker.
+
+| Column | Notes |
+| --- | --- |
+| `code` VARCHAR(6) **PK** | Uppercase alphanumeric, cryptographically random ([`services/room_codes.py`](../backend/app/services/room_codes.py)) |
+| `kind` | `ephemeral \| persistent` |
+| `created_at` | |
+| `retired_until` | Post-room cooling-off; indexed |
+
+Constraints: `ck_room_code_kind`; `ck_persistent_room_code_never_retires` — a
+`persistent` code must have a null `retired_until`.
+
+**Flow.** A code is reserved *before* it is shown to a player. When an ephemeral room
+empties, its code is retired for **30 days** (`EPHEMERAL_CODE_RETENTION`), so a stale
+invite during that window says the room ended rather than silently joining an unrelated
+group. Startup retires reservations orphaned by a restart or crash. Expired ephemeral
+reservations may be reused; persistent codes never enter the reuse pool.
+
+### `persistent_rooms`
+Owner-controlled **durable configuration**, never a live-game snapshot.
+
+`id` · `code` (unique, FK → `room_code_reservations.code` `ON DELETE RESTRICT`) ·
+`owner_user_id` (FK → `users` `RESTRICT`) · `name` · `is_public` · `max_players` ·
+`rounds` · `drawing_seconds` · `hint_mode` · `scoring_mode` · `spectators_see_prompt` ·
+`hide_masked_prompt` · `allowed_tools` (JSON) · `color_mode` · `prompt_list_ids` (JSON) ·
+`version` · `created_at` · `updated_at` · `archived_at`.
+
+`CHECK` constraints mirror the room-settings bounds exactly: `max_players` 2–16,
+`rounds` 1–10, `drawing_seconds` ∈ {15, 30, 60, 90, 120, 180, 240, 300}, and the
+hint/scoring/color-mode enums.
+
+**Flow.** Up to ten active persistent rooms per account. Opening an empty one creates a
+**new in-memory room instance** from the saved settings. Players, scores, phase, timers,
+reconnect grace, canvas, recap, chat, and quick custom prompts are never restored.
+Referenced lists resolve their latest authorized revision each time and are snapshotted
+when a game starts; a missing, deleted, hidden, or no-longer-authorized list blocks
+opening **visibly** instead of falling back to default prompts. Archiving prevents new
+instances and permanently reserves the code.
+
+### `room_presets`
+A private, named, versioned copy of typed settings for a future *ordinary* room. Same
+columns and `CHECK` set as `persistent_rooms`, minus the code, plus `name_key` with
+`uq_room_presets_owner_name (owner_user_id, name_key)`. `ON DELETE CASCADE` from
+`users`.
+
+A preset has **no room code, members, host identity, game, scores, timers, chat, or
+canvas.** Applying one fills the create form but does not enable *Keep this room for
+future games*. Borrowed Unlisted share codes and quick custom prompts are never stored;
+that content must be saved as an owned list first. ≤ 20 per account.
+
+### `planned_shutdown_abandonments`
+The privacy-safe fact that a planned drain expired with a game still live.
+
+`id` · `game_id` (unique) · `room_instance_id` · `contract_version` (`= 1`) ·
+`reason` (`drain_timeout`) · `phase` · `round_number` · `completed_turn_count` ·
+`seated_player_count` · `connected_player_count` · `spectator_count` ·
+`canvas_action_count` · `game_started_at` · `observed_at`.
+
+**It never stores room codes, room or player names, prompts, chat, or canvas contents.**
+Retained 90 days, purged at startup. A hard crash cannot run this hook — failed
+finished-history writes and crash-safe retry are a separate concern.
+
+---
+
+## 4. Accounts
+
+### `users`
+One row per player identity, guest or registered.
+
+| Column | Notes |
+| --- | --- |
+| `id` | UUIDv7 |
+| `username` VARCHAR(32) | Null for guests; case-insensitively unique via `ix_users_username_lower` |
+| `password_hash` VARCHAR(255) | Argon2id encoded hash, carrying its own algorithm and cost parameters |
+| `display_name` VARCHAR(32) | |
+| `name_color`, `avatar_key` | `avatar_key` ∈ `initial \| pencil \| palette \| spark` |
+| `state` | `anonymous \| registered \| merged \| deleted` |
+| `role` | `user \| moderator \| admin` |
+| `email`, `email_verified_at` | Nullable; normalized by trim + lowercase, enforced by `ck_users_email_normalized`; case-insensitively unique via `ix_users_email_lower` |
+| `created_at`, `updated_at`, `last_login_at`, `last_active_at` | |
+
+`ck_users_verified_email_present` forbids a verification timestamp with no address.
+
+Notable design points:
+
+- **The legacy guest boolean is gone.** "Is a guest" is derived from `state`, so it
+  cannot drift.
+- **An address is recorded only once confirmed.** Until then it lives in the
+  confirmation token and nowhere else, so a typo cannot hand the account to whoever owns
+  the typed address, and nobody can reserve a mailbox they do not control.
+- **Argon2 cost upgrades are lazy.** Every successful login compares the encoded hash to
+  the current cost parameters and replaces stale hashes atomically. No bulk migration,
+  and no redundant schema-version column.
+- `last_active_at` changes **only** when a player takes or reconnects to a non-spectator
+  room seat and when a game is persisted — deliberately not on page load, login, or an
+  ordinary profile write, because it drives retention.
+
+### `auth_sessions`
+One revocable signed-in device.
+
+`id` · `user_id` (CASCADE) · `token_hash` VARCHAR(64) **unique** · `device_label` ·
+`rotated_from_id` (self-FK, unique, `SET NULL`) · `created_at` · `last_used_at` ·
+`expires_at` · `revoked_at`.
+
+Cookies carry opaque 256-bit random tokens; **only SHA-256 hashes are stored**, so the
+database never contains a credential that can be replayed. Tokens rotate halfway
+through their one-year maximum lifetime. Socket.IO handshakes resolve the same record as
+HTTP requests, so revocation applies on the next connection without a shared signing
+secret.
+
+### `auth_tokens`
+One-shot credentials for flows that leave the app and come back.
+
+`token_hash` **PK** · `purpose` (`password_reset \| email_verify`) · `user_id`
+(CASCADE) · `email` · `expires_at` · `consumed_at` · `requested_ip_hash` ·
+`created_at`. `ck_auth_tokens_verify_address` requires an address on an
+`email_verify` token.
+
+A reset link is **checked when the page opens, not when the form is sent**, so nobody
+chooses a password only to be told the link was spent. Checking deliberately does not
+consume it, and is throttled separately from requesting a reset because it costs a
+lookup rather than somebody else's inbox.
+
+### `auth_rate_limit_buckets`
+`scope` + `key_hash` composite **PK** · `attempt_count` · `window_started_at` ·
+`window_expires_at` · `updated_at`.
+
+`key_hash` is an HMAC-SHA-256 digest of the client address under `IP_HASH_SECRET` (or
+an auto-generated `app_config` secret) — **raw IP addresses are never stored.** Buckets
+are shared, so limits survive restarts and apply once across every replica. Expired
+buckets are cleaned in bounded batches. Rotating the secret starts fresh buckets without
+exposing or re-identifying old keys.
+
+### `identity_aliases`
+`id` · `source_user_id` **unique** (FK RESTRICT) · `target_user_id` (FK RESTRICT) ·
+`created_at`, with `ck_identity_alias_distinct`.
+
+The immutable mapping from a merged guest identity to its account. Historical
+participant, drawer, and guess rows keep their original IDs and presentation, so a game
+containing both identities keeps **two factual seats** rather than violating a
+uniqueness rule or losing a player. Account history and statistics resolve the account
+plus all of its aliases; the guest's sessions are revoked during the merge.
+
+### `user_settings`
+Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE) ·
+`theme` · `sound_effects` · `confetti_effects` · `sound_effects_volume` (0.0–1.0) ·
+`brush_cursor` (`crosshair \| circle`) · `key_bindings` (JSON) ·
+`colorblind_safe_colors` · `auto_clear_chat_on_guess` · `custom_brush_presets` (JSON) ·
+`email_reminder_last_shown_at` · timestamps.
+
+Bounded at both the API and database layers: key bindings must describe the complete
+supported action set, and custom brush presets are limited to 20 entries and 16 KiB of
+JSON.
+
+**Guests keep these in browser local storage only.** Creating an account copies that
+browser's current settings to the account exactly once; logging in later makes the
+account copy authoritative on the new device.
+
+### `user_stats_daily`
+A **rebuildable, disposable** per-account/per-UTC-day projection of immutable game facts.
+
+`user_id` + `stat_date` composite **PK** · `games_played` · `games_won` ·
+`total_score` · `turns_played` · `prompts_guessed` · `drawings_made` · `updated_at`,
+with a non-negative `CHECK` that also enforces `games_won <= games_played`.
+
+**Flow.** A finished-game transaction atomically adds one day's counts for each
+canonical account. Same-day saves use database upserts, so concurrent games cannot
+overwrite one another and an idempotent retry does not increment twice. Guest-to-account
+merges rebuild the target and deduplicate games shared by its factual identities. Ratios
+and averages are derived on read, never stored.
+
+It is **never the source of truth**. A missing or deliberately erased row reads as zero
+rather than silently falling back to an unbounded history scan. Operators repair drift
+explicitly:
+
+```bash
+cd backend
+.venv/bin/python -m app.services.user_stats_projection
+.venv/bin/python -m app.services.user_stats_projection --user <account-uuid>
+```
+
+The structural invariant is tested: **profile reads must not query the participant,
+turn, or guess fact tables.**
+
+### `data_exports`
+`id` · `user_id` (CASCADE) · `status` (`pending \| processing \| ready \| failed`) ·
+`schema_version` · `artifact` (JSON) · `failure_code` · `created_at` · `started_at` ·
+`completed_at` · `expires_at`.
+
+Jobs are stored **before** work begins, so a crash leaves a retryable row:
+
+```bash
+cd backend && .venv/bin/python -m app.auth.account_data --limit 25
+```
+
+Format v1 exports expire after seven days. The document contains the owner's account
+fields, linked guest identities, session metadata, game seats, drawn turns, correct
+guesses, prompt-list revision history, unexpired authored retained messages, submitted
+evidence, blocks, presets, persistent-room configuration, and account-event metadata.
+It **never** contains password or session hashes, other players' profile fields, or any
+message body the requester did not explicitly receive and pin. The field surface is
+pinned by [`fixtures/account_data_export_v1_fields.json`](../fixtures/account_data_export_v1_fields.json).
+
+### `email_outbox`
+`id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
+`state` (`pending \| sent \| failed`) · `attempts` · `last_error` · `next_attempt_at` ·
+`created_at` · `sent_at`. `ck_email_outbox_sent_at` enforces `(state='sent') = (sent_at IS NOT NULL)`.
+
+Templates: `verify_email`, `reset_password`, `password_changed`, `account_banned`,
+`content_hidden`. **Nothing else is ever sent to a player's address.**
+
+**Flow.** Mail is queued in the **same transaction** as the action that causes it, and
+delivered by a sweeper (`EMAIL_SWEEP_SECONDS`, default 30). A suspension is therefore
+never undone by an unreachable relay, and a reset message is retried with backoff and
+then recorded as failed rather than disappearing. With no `SMTP_HOST` the messages are
+**logged instead of sent**, which is the only way the confirmation and reset flows can
+be completed on a deployment without mail.
+
+```bash
+cd backend && .venv/bin/python -m app.services.mail_delivery   # flush by hand
+```
+
+### `external_identities`, `uploaded_avatar_assets`
+**Reserved, unused in v1.** Schema for a future authenticated identity provider and a
+future moderated upload flow. No upload or provider-login API is enabled until storage
+validation, moderation, and identity-linking flows ship. Avatars today may only be a
+key from the deployment-hosted catalog — Sketchy never hotlinks arbitrary third-party
+URLs.
+
+---
+
+## 5. Moderation
+
+### `audit_events`
+Append-only record of every security- and moderation-sensitive action.
+
+`id` · `event_type` · `actor_user_id` (`SET NULL`) · `target_user_id` (`SET NULL`) ·
+`target_type` · `target_id` · `request_id` · `ip_hash` · `details` (JSON) · `created_at`.
+
+The subject is named **twice, on purpose**:
+
+- `target_user_id` is a real foreign key, so deleting an account leaves the entry
+  standing with its subject blanked rather than taking it along.
+- `target_type` + `target_id` names whatever row the action touched — a prompt list, a
+  single prompt version, a room, a configuration key. `ck_audit_events_target_pair`
+  requires both or neither, so an action on no single row (a bulk retention purge)
+  records neither and **says so by leaving both empty rather than inventing a subject**.
+
+**Names are never written into this table.** The admin view resolves them when the
+ledger is read: the table is append-only, so a stored name would be personal data that
+erasing an account could not reach. Resolving live gives the opposite — delete the
+account and the entry reads *Deleted player* while standing exactly as it was.
+
+### `player_reports`
+`id` · `reporter_user_id` / `reported_user_id` (`SET NULL`) · `game_id` / `turn_id`
+(`SET NULL`) · `reason` · `details` TEXT · `context_snapshot` (JSON) ·
+`status` (`pending \| resolved \| dismissed`) · `reviewed_by_user_id` ·
+`resolution_note` · timestamps.
+
+Reasons: `harassment`, `offensive_drawing`, `inappropriate_name`, `cheating`, `spam`.
+`ck_player_reports_not_self` forbids self-reports.
+`uq_player_reports_open_target (reporter_user_id, reported_user_id)` is a **partial
+unique index**: one reporter holds **one open report per player**. Saying it again while
+a moderator has yet to look adds no evidence and buries the queue; once decided, the
+same reporter may raise a new one, because that is a new incident.
+
+Submitted context is preserved as **versioned, reporter-supplied evidence** — it is not
+treated as a server-verified fact merely because it was stored. Review is one-way: a
+pending report receives one resolution and cannot later be silently rewritten.
+
+### `room_messages`
+Accepted player-authored chat, wrong guesses, and correct-guess text, kept **30 days**
+in an audience-aware store.
+
+| Column | Notes |
+| --- | --- |
+| `id` | UUIDv7 |
+| `room_instance_id` | Durable correlation scope; the live room ID is never stored as a code |
+| `game_id`, `turn_id` | The same UUIDv7s eventual history will use — assigned before play, so a message from an unfinished game already correlates |
+| `sender_user_id` (`SET NULL`), `sender_player_id`, `sender_seat_id` | |
+| `sender_*_snapshot` | Frozen presentation |
+| `is_spectator`, `message_kind`, `audience`, `near_miss_kind` | |
+| `audience_user_ids` (JSON) | The recipients who **actually received** the line after Blocks and prompt-visibility rules |
+| `text`, `created_at`, `expires_at` | |
+
+`message_kind` ∈ `chat \| wrong_guess \| correct_guess`; `audience` ∈
+`room \| prompt_aware`. `CHECK`s enforce that guesses carry a game and turn, that a
+turn implies a game, that a near-miss kind only appears on a wrong guess, and that
+`expires_at > created_at`.
+
+**Flow.** Ordinary chat and guesses use the Room audience; near misses, correct
+guesses, spectator chat during play, and other restricted text use the Prompt-aware
+audience. Retention is **best-effort and never delays live availability**: a successful
+write adds `retainedMessageId` to the `chat_message` payload. Expired rows are removed
+at startup and by bounded hourly cleanup during new writes.
+
+**There is intentionally no transcript or profile-history endpoint.** After 30 days the
+raw strings cannot be replayed through a new matcher; durable per-seat and per-turn
+counts still support difficulty and attempt analysis, and that bounded loss is the
+accepted privacy and storage-volume tradeoff.
+
+### `player_report_message_evidence`
+`report_id` + `position` composite **PK** · `source_message_id` (`SET NULL`) ·
+`source_message_snapshot_id` · `game_id_snapshot` · `turn_id_snapshot` ·
+`sender_user_id` (`SET NULL`) · frozen sender presentation · `message_kind` ·
+`audience` · `near_miss_kind` · `text_snapshot` · `message_created_at` · `copied_at`.
+
+A report may pin up to **20** unexpired `messageIds`, but only when the reported player
+authored them and the reporter was in each stored audience — which makes *"is this
+message theirs"* and *"did you see it"* true by construction rather than by checking a
+client's claims. The server copies those lines here before the ordinary rows expire.
+
+Account deletion erases ordinary authored messages immediately and **tombstones the
+presentation** on copied evidence; the evidence text continues under the protected
+report retention policy.
+
+### `prompt_content_reports`
+Player-authored prompt content has a separate, target-specific flow.
+
+`id` · `reporter_user_id` / `reported_owner_user_id` · `prompt_list_id` /
+`prompt_version_id` (both `SET NULL`) · `target_type` (`list \| prompt`) ·
+`list_name_snapshot` · `prompt_snapshot` · `reason` · `details` ·
+`status` · `reviewed_by_user_id` · `resolution_note` ·
+`resolution_moderation_state` · timestamps.
+
+Reasons: `inappropriate`, `hateful_or_abusive`, `sexual_content`, `violence`, `spam`,
+`other`. `ck_prompt_content_reports_target_snapshot` requires a prompt snapshot for a
+`prompt` target and forbids one for a `list` target. Two partial unique indexes give one
+open report per reporter **per list** and **per prompt version** — so a list and a
+single prompt inside it stay separately reportable.
+
+**Post-moderation:** submission preserves a bounded evidence snapshot but never hides
+content automatically. One review may dismiss the report or set the exact target Active
+or Hidden, with actor/time provenance and an append-only audit event. A dismissal
+cannot mutate content. Snapshots survive list and account deletion even after the target
+foreign keys are cleared.
+
+### `user_bans`
+`id` · `user_id` (`SET NULL`) · `banned_by_user_id` (`SET NULL`) · `reason` ·
+`source_report_id` (FK → `player_reports`, `SET NULL`) · `expires_at` · `is_active` ·
+`created_at` · `revoked_at` · `revoked_by_user_id` · `revoke_reason`.
+
+**Flow.** Creating a suspension revokes every signed-in device and removes any live room
+seat immediately. Correct-password login, authenticated HTTP requests, and Socket.IO
+handshakes all reject an active suspension. A token revoked at ban time stays
+recognizable until expiry, so its next request cannot be mistaken for a new cookieless
+guest. **Data export, account deletion, and logout remain available** through that
+ban-time credential, so moderation cannot erase privacy rights. Expired suspensions stop
+applying automatically; revocation preserves the historic record and its reason.
+
+`source_report_id` is what lets the suspension notice show the reported player their own
+words as they were when the report was made. **A ban naming a report about somebody else
+is refused**, so a suspension cannot be used to show one player another's messages.
+
+### `user_blocks`
+`id` · `blocker_user_id` · `blocked_user_id` (both CASCADE) · `created_at`, with
+`uq_user_block` and `chk_no_self_block`.
+
+Directional, available to every account including a guest. A historical guest alias
+resolves to its registered account, and login merges both incoming and outgoing blocks
+without creating duplicates or a self-block.
+
+**Blocking filters only ordinary player-authored chat, for the blocker.** Room state,
+players, scores, turns, correct-guess events, votes, and room-authored announcements are
+never hidden — so a Block never changes gameplay facts or creates a different game
+state per player. Lookups use a bounded 1024-sender LRU invalidated immediately by the
+REST mutation ([`backend/app/auth/blocks.py`](../backend/app/auth/blocks.py)), avoiding a
+database query per chat line.
+
+---
+
+## 6. Game history
+
+The finished-game write is **one transaction, keyed on the game's stable UUIDv7**,
+implemented in [`backend/app/services/game_history.py`](../backend/app/services/game_history.py)
+and [`backend/app/repositories/sqlalchemy.py`](../backend/app/repositories/sqlalchemy.py).
+
+### `game_records`
+| Column | Notes |
+| --- | --- |
+| `id` | The live game's UUIDv7, reused for the history row and the prompt-usage batch |
+| `payload_hash` | Canonical SHA-256 digest of the content. Retrying the same ID **and** content is idempotent even if collection order changed; a different payload under the same ID raises an operator-visible conflict |
+| `room_name`, `player_count`, `total_rounds`, `drawing_seconds` | |
+| `scoring_mode`, `hint_mode` | Enum-checked |
+| `scoring_version`, `score_ledger_version`, `rule_snapshot_version` | Legacy rows use `0` |
+| `rule_snapshot` (JSON) | The frozen exact rules — see below |
+| `prompt_source_mode` | `legacy_unknown \| curated \| custom \| mixed \| builtin_fallback` |
+| `started_at`, `finished_at` | Gameplay times |
+| `outcome` | `finished \| abandoned` (and shutdown-cut) |
+| `persisted_at` | The **database write time**, deliberately separate from `finished_at`, making delayed/retried-save lag measurable |
+
+**The rule snapshot** ([`backend/app/game.py:370`](../backend/app/game.py)) freezes the
+numeric default/pressure/hint parameters, the drawer-bonus algorithm, the drawing time,
+the permitted tools and colors, prompt visibility and language, and the pinned prompt-
+source revision IDs. Historical points can therefore be interpreted under the rules that
+produced them after defaults or algorithms change. Legacy rows use version `0` and an
+**empty** snapshot rather than claiming parameters that cannot be reconstructed.
+Participant-only game detail and private account export include the exact snapshot;
+public history summaries expose only its versions and typed mode/time fields.
+
+**Abandoned games are recorded.** Persistence used to run only for a game that reached
+its end, so a room everyone walked out of left no trace — the games most worth looking
+at were the only invisible ones. An abandoned game is an ordinary row with
+`outcome = 'abandoned'`; `finished_at` keeps meaning *when the game stopped*, not that
+it finished. Player history shows finished games unless `?includeAbandoned=true`. One
+that is shown carries **no placing** — not in the row and not in its standings — because
+a rank is a claim about how a game ended, and this one did not end. The scores stay,
+since points earned in the turns that were played are a fact. An abandoned game
+contributes those turns but **not** a game played, a game won, or a score.
+
+### `game_participants`
+`id` (the **participant seat**) · `game_id` (CASCADE) · `user_id` (`SET NULL`) ·
+`display_name_snapshot` · `name_color_snapshot` · `is_anonymous_snapshot` ·
+`final_score` · `final_rank` · `turns_played` · `created_at`, with
+`uq_game_participants_game_user`.
+
+- At most **one participant seat per linked account** per game; multiple accountless
+  seats remain distinct.
+- Presentation is **frozen** at save time. Ordinary profile edits never rewrite it —
+  history stays as other players saw it. Username and avatar are not rendered by
+  finished-game history, so they are not copied in.
+- A linked account ID may still support a live profile link while presentation comes
+  from the frozen seat.
+- Account deletion replaces identifying snapshots with the **Deleted player** tombstone.
+- A live player receives their seat UUIDv7 when the game starts **even if no session
+  cookie supplied an account**. Such a seat still counts toward the recorded player
+  total and keeps every factual turn and correct guess.
+- Foreign keys are `ON DELETE SET NULL`, so even a physical user-row removal cannot
+  cascade away turns, guesses, or another player's game.
+
+### `turn_records`
+`id` · `game_id` (CASCADE) · `round_number` · `turn_number` · `drawer_user_id` /
+`drawer_participant_id` (`SET NULL`) · frozen drawer presentation · `prompt` ·
+`prompt_version_id` (FK → `prompt_versions`, RESTRICT) · `prompt_source_kind` ·
+`duration_seconds` · `guesser_count` · `prompt_auto_picked` · `stroke_count` ·
+`end_reason` (`all_guessed \| timeout`) · `wrong_guess_count` · `near_miss_count` ·
+`created_at`.
+
+`uq_turn_records_game_round_turn` enforces one turn per game/round/turn number.
+`ck_turn_records_prompt_identity` enforces that `curated` turns have a version ID and
+non-curated turns do not — so curated turns are joinable **without text
+normalization**, while custom and fallback turns retain only their factual text
+snapshot. Rows from before provenance coverage use `legacy_unknown`, never a fabricated
+source.
+
+### `turn_drawings`
+`turn_id` **PK** (CASCADE) · `game_id` (CASCADE) · `status` · `format_magic` ·
+`format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `object_key` ·
+`unavailable_reason` · `failure_code` · timestamps.
+
+`status` ∈ `pending \| ready \| unavailable \| failed \| deleted`.
+`ck_turn_drawings_ready_identity` requires a `ready` row to carry a complete format
+identity, size, checksum, and either inline bytes or an object key.
+`ck_turn_drawings_erased` requires a null payload once unavailable or deleted.
+`byte_size` ≤ 8 MiB.
+
+Every drawing from a completed game is kept **for as long as that game, in the same
+transaction that records it**. The stored bytes are the canvas frame itself — the
+actions, not a picture of them — so a drawing can be replayed and redrawn at any size,
+and a PNG stays something the browser produces on demand rather than something the
+server keeps. A turn whose bytes the recap had to drop for budget is recorded as
+`unavailable` rather than **omitted**. Deleting an account erases the drawings that
+account made while leaving the row saying so.
+
+`GET /api/games/{game_id}/turns/{turn_id}/drawing` returns one, and only to a player who
+was in that game; **every refusal is a 404**, so the endpoint never reveals whether a
+game exists.
+
+Because a database column has no integrity check of its own:
+
+```bash
+cd backend && .venv/bin/python -m app.services.drawing_storage --batch-size 2000
+```
+
+### `turn_participant_outcomes`
+One row per current or late-arriving non-drawer seat, per turn.
+
+`id` · `turn_id` (CASCADE) · `participant_id` (CASCADE) · `eligible` ·
+`eligibility_reason` (`eligible \| afk \| disconnected \| joined_late`) ·
+`outcome` (`correct \| incorrect \| no_attempt \| ineligible`) ·
+`terminal_state` (`active \| afk \| disconnected \| left \| legacy_unknown`) ·
+`correct_guess_time_seconds` · `wrong_guess_count` · `near_miss_count` ·
+`hints_used` · `points_spent_on_hints` · `created_at`.
+
+`uq_turn_participant_outcomes_turn_participant` gives exactly one row per seat per turn.
+Paired `CHECK`s keep the record coherent: eligibility and its reason must agree with the
+outcome, and a correct time exists **iff** the outcome is `correct`.
+
+**When drawing begins, the server freezes the eligible guesser seats**
+([`backend/app/services/game_flow.py`](../backend/app/services/game_flow.py)). Players who
+were AFK or disconnected at that instant, and players who join afterwards, remain
+ineligible until the next turn; their text is treated as restricted chat rather than a
+guess that could reveal the prompt. Ordinary history retains these numeric facts but
+**not guess text** — text retention and evidence are governed separately (§5).
+No-scoring games record the same factual outcomes with zero awarded points and never
+invent hypothetical score awards.
+
+### `turn_guesses`
+The **optional scoring child** of a correct outcome.
+
+`id` · `turn_id` (CASCADE) · `user_id` / `participant_id` (`SET NULL`) ·
+`outcome_id` (FK → `turn_participant_outcomes`, CASCADE, **unique**) · frozen
+presentation · `points_awarded` · `guess_time_seconds` · `hints_used` ·
+`points_spent_on_hints` · `wrong_guesses_before` · `created_at`, with
+`uq_turn_guesses_turn_participant`.
+
+One correct guess per participant seat and turn, at the database layer. Finished-game
+guesses reference the UUID of their turn **explicitly** — persistence never infers that
+relationship from the positions of two independently ordered lists.
+
+### `score_events`
+The ordered, **append-only** point ledger for a scored game.
+
+`id` · `game_id` (CASCADE) · `participant_id` (CASCADE) · `turn_id` (CASCADE) ·
+`event_order` · `event_type` · `points_delta` · `scoring_version` ·
+`rule_snapshot_version` · `corrects_event_id` (self-FK, RESTRICT) · `created_at`.
+
+`event_type` ∈ `guess_award \| hint_charge \| drawer_bonus \| correction`, with
+`CHECK`s that pin the sign of each: awards and bonuses positive, hint charges negative,
+corrections either but never zero. A `correction` must name an earlier event; nothing
+else may. `uq_score_events_game_order` keeps the order unique per game.
+
+**Corrections append; prior events are never rewritten.** The history writer proves the
+gameplay events agree with the correct guesses and hint spend, then requires every
+participant's ledger sum to equal the cached final score **in the same transaction**.
+
+Legacy games explicitly use ledger version `0`, because gross awards and drawer bonuses
+cannot be reconstructed from their net totals. No-scoring games use the current version
+with an **empty** event list.
+
+### `game_prompt_sources`
+`game_id` + `prompt_list_revision_id` composite **PK** (CASCADE / RESTRICT).
+
+The exact immutable list revisions that were actually present in the game's real pool
+**after custom-prompt shadowing** — not merely the configured slugs.
+
+---
+
+## 7. Prompt provenance
+
+### `turn_prompt_offers`
+Every prompt option offered in a completed turn gets an ordered immutable row.
+
+`id` · `turn_id` (CASCADE) · `position` · `prompt_version_id` (RESTRICT, nullable) ·
+`prompt_snapshot` · `selected` · `source_kind` (`curated \| custom \| builtin_fallback`) ·
+`created_at`. `uq_turn_prompt_offers_turn_position` orders them;
+`uq_turn_prompt_offers_selected` is a partial unique index giving exactly one selected
+offer per turn.
+
+Custom and fallback options have explicit source kinds and **null curated identities**,
+so a text collision cannot inflate curated statistics or make a bad prompt untraceable.
+The turn row's selected offer, text, source kind, and version are kept identical by both
+database checks and the history writer.
+
+Exact offers are **participant-only** history and private export data. Share codes are
+never stored with them.
+
+### `turn_prompt_offer_sources`
+`offer_id` + `prompt_list_revision_id` composite **PK**. Every list revision that
+contained an offered curated prompt version.
+
+---
+
+## 8. Prompt content
+
+Prompt content has a **stable identity independent of its spelling**.
+
+### `prompt_concepts`
+`id` · `created_at`. That is the whole table: a concept is pure identity. Equal text
+never merges concepts implicitly.
+
+### `prompt_versions`
+An immutable, language-specific wording.
+
+`id` · `concept_id` (CASCADE) · `language` · `version` · `canonical_answer` ·
+`match_key` · `editorial_difficulty` (`unspecified \| easy \| medium \| hard`) ·
+`content_rating` (`everyone \| teen \| mature`) ·
+`moderation_state` (`active \| under_review \| hidden`) · `moderated_by_user_id` ·
+`moderated_at` · `created_at`, with
+`uq_prompt_version_concept_language_version`.
+
+Supported languages: `en`, `de`, `es`, `fr`, `it`, `nl`, `pt` — the initial Latin
+registry, which case-folds, collapses whitespace, and folds canonically decomposable
+accents ([`backend/app/prompt_content.py`](../backend/app/prompt_content.py)). Other
+BCP-47 tags are **rejected until their matching semantics are implemented.**
+
+### `prompt_aliases` and `prompt_version_aliases`
+`prompt_aliases`: `id` · `concept_id` (CASCADE) · `language` · `answer` · `match_key`,
+unique on `(concept_id, language, match_key)`.
+
+`prompt_version_aliases`: `prompt_version_id` + `alias_id` composite **PK**.
+
+Aliases are unique within a concept and language, and are attached **separately to each
+version**, so changing an alias later cannot rewrite how an older game matched guesses.
+
+### `prompt_tags`, `prompt_version_tags`
+Stable searchable categories (`slug` unique) and explicit per-version membership.
+Deliberately relational rather than a JSON tag blob.
+
+### `prompt_lists`
+`id` · `owner_user_id` (`SET NULL`) · `slug` **unique** · `name` · `description` ·
+`language` · `is_bundled` · `visibility` (`private \| unlisted \| public`) ·
+`share_code` VARCHAR(24) **unique** · `moderation_state` · `moderated_by_user_id` ·
+`moderated_at` · `version` · timestamps.
+
+`ck_prompt_lists_bundled_owner` forbids an owner on a bundled list;
+`ck_prompt_lists_unlisted_share_code` requires a share code for an Unlisted list.
+
+**Governance is schema-first and deny-by-default.** User-owned lists default to
+**Private**; **Unlisted** requires a unique share code; **Public** is currently reserved
+for official bundled lists and for a future moderation-approved discovery feature.
+Ownership, fork provenance, revision tags, moderation actor/time, and moderation state
+are relational fields — never JSON tags or a lossy `is_nsfw` flag. Difficulty and content
+rating stay on the exact immutable prompt version where their meaning belongs.
+
+**Share codes are bearer capabilities, not UUIDs.** They are cryptographically random,
+retained only in private in-memory room state, and **never appear in shared room,
+history, preset, or log payloads.**
+
+Limits: an account may own at most **25** lists, and a saved list may contain at most
+**500** prompts.
+
+### `prompt_list_revisions` / `_items` / `_tags`
+`prompt_list_revisions`: `id` · `prompt_list_id` (CASCADE) · `forked_from_revision_id`
+(self-FK, `SET NULL`) · `version` · `language` · `content_hash` · `created_at`, unique on
+`(prompt_list_id, version)`.
+
+`prompt_list_revision_items`: `revision_id` + `prompt_version_id` composite **PK** ·
+`position`, unique on `(revision_id, position)`. The `RESTRICT` on `prompt_version_id`
+is what stops a prompt version being deleted out from under a revision a game pinned.
+
+Editing a list uses **optimistic concurrency** and creates a new immutable revision
+instead of rewriting the revision a running or finished game pinned. The content
+language cannot change after creation. Rooms resolve, and games pin, exact revision IDs.
+
+### `prompt_list_localizations`
+`id` · `prompt_list_id` (CASCADE) · `locale` · `name` · `description`, unique on
+`(prompt_list_id, locale)`.
+
+List `name` and `description` are **authored catalogue copy**; translated copy is stored
+separately by *interface locale* and selected from `Accept-Language`, so translating the
+UI never changes a list's **content language**.
+
+### `prompts`
+The current *display* row for one prompt concept in one list.
+
+`id` · `prompt_list_id` (CASCADE) · `concept_id` (RESTRICT) · `prompt_version_id`
+(RESTRICT) · `text` · `created_at`, unique on both `(prompt_list_id, concept_id)` and
+`(prompt_list_id, text)`.
+
+**Prompt-list counts are derived from membership on read**, so adding or removing a
+prompt cannot leave a cached total out of sync. During the transition to rebuildable
+projections, this legacy counter row is linked by concept and updated in place when a
+new prompt version rewords it, preserving its existing statistics; old revisions keep
+referencing the old wording.
+
+### `prompt_usage_facts`
+Append-only per-game usage totals, **not** mutable counters on a display row.
+
+`id` · `batch_id` · `prompt_list_revision_id` (CASCADE) · `prompt_version_id`
+(RESTRICT) · `occurred_at` · `scoring_mode` · `hint_mode` · `offer_count` ·
+`pick_count` · `correct_guess_count` · `total_guesser_count` · `created_at`, unique on
+`(batch_id, prompt_list_revision_id, prompt_version_id)`.
+
+**Flow.** Each finished game appends one idempotent fact per used prompt/version and
+pinned list revision, with the authoritative occurrence time plus scoring and hint modes
+(`batch_id` is the game's UUIDv7, which is what makes a retry idempotent). Stats are
+derived by **stable prompt concept**, so a later wording revision keeps its history
+without matching on display text.
+
+The indexes support time-window and rule filters; the Prompt stats page offers all-time,
+30-day, and 90-day windows plus scoring/hint segmentation, and the minimum-guesser
+ranking floor applies independently to the selected slice. Pre-cutover counters migrated
+in with **null** time/rule dimensions rather than fabricated metadata: all-time
+unfiltered reads retain them, while bounded or segmented reads deliberately exclude what
+cannot be attributed truthfully.
+
+**Runtime attribution observes the ephemeral/persistent boundary.** Completed turns
+snapshot nullable prompt-version source IDs, and usage writes intersect those IDs with
+the game's pinned list revisions. An ephemeral prompt has a **null source even when its
+display text equals a curated prompt**, so neither its offers, picks, nor guess results
+can inflate the curated list's statistics.
+
+Facts contain **no user identifier**, so they remain reconcilable with retained,
+anonymized game outcomes: deleting an account neither invents nor silently decrements a
+server-wide gameplay observation.
+
+### Seeding
+
+Bundled lists live in
+[`backend/data/prompt_lists/`](../backend/data/prompt_lists/) and are seeded at startup
+by [`backend/app/db/seed.py`](../backend/app/db/seed.py). The checked-in shape is
+**identity-based, not text-keyed**:
+
+```json
+{"conceptId":"01a02b7b-b42d-7afc-a278-fc0ecc83b994","answer":"anchor","promptVersion":1}
+```
+
+- Equal text shares a concept **only** when the files deliberately repeat that ID.
+- Changing capitalization, punctuation, wording, aliases, or editorial metadata requires
+  the **same `conceptId` and a higher `promptVersion`**.
+- Adding, removing, or reordering membership requires a higher top-level list `version`.
+- Optional `aliases`, `difficulty`, `contentRating`, and `tags` belong to the immutable
+  prompt version.
+- **Deploying different content under an already-seen list or prompt version is a
+  startup-failing seed conflict**, not an in-place rewrite.
+
+---
+
+## 9. Runtime analytics
+
+### `runtime_events`
+One raw observation. `id` · `event_type` · `occurred_at` · `room_id` · `user_id`
+(`SET NULL`) · `value` · `details` (JSON).
+
+Types: `room.created`, `room.closed`, `player.joined`, `player.left`,
+`player.disconnected`, `player.reconnected`, `player.evicted`, `game.started`,
+`game.finished`, `game.abandoned`, `turn.ended`, `timer.overran`,
+`canvas.payload_observed`, `drawing.stored`, `recap.budget_dropped`.
+
+Observations are **buffered and written in batches**, because a database round trip per
+join would be felt as lag inside a drawing. The buffer is bounded and drops oldest when
+full, **counting what it dropped**, so a gap is visible rather than silent. It is
+flushed on the way out of a planned shutdown, so the observations describing a restart
+are not the ones lost to it.
+
+### `runtime_stats_daily`
+`stat_date` + `metric` composite **PK** · `occurrences` · `value_sum` (BIGINT) ·
+`value_max` · `updated_at`.
+
+Raw events are kept `RUNTIME_EVENT_RETENTION_DAYS` (default 30) and **rolled into these
+permanent daily totals first**. What retention costs is the ability to ask about one
+particular minute last month; the shape of the month survives. Unbounded event rows on
+embedded SQLite is a disk that fills up quietly.
+
+Live counts of rooms, players, and running games are deliberately **not** in the
+database: one worker owns all of it, so an in-process count is the true count, and it is
+meant to vanish on restart because a live count is not a historical fact.
+
+```bash
+cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
+```
+
+---
+
+## 10. Retention summary
+
+| Data | Retention | Mechanism |
+| --- | --- | --- |
+| Retained messages | 30 days | `expires_at`; startup purge + bounded hourly cleanup |
+| Pinned report evidence | Protected report policy (outlives the message) | Copied on report submission |
+| Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | Rolled up first, then purged |
+| Daily runtime roll-ups | Permanent | — |
+| Shutdown abandonments | 90 days | Purged at startup |
+| Data exports | 7 days (format v1) | `expires_at` |
+| Ephemeral room codes | 30 days retirement, then reusable | `retired_until` |
+| Persistent room codes | Permanent | Never enter the reuse pool |
+| Guests with no completed game | 30 inactive days (default) | `app.auth.retention` |
+| Guests with history | 365 inactive days (default) | `app.auth.retention`; history survives via frozen snapshots |
+| Game history, turns, outcomes, ledger, drawings, usage facts | Indefinite | — |
+
+Anonymous retention is based on `last_active_at` and is bounded to 500 accounts per run.
+It **previews by default** and records aggregate audit evidence when applied:
+
+```bash
+cd backend
+.venv/bin/python -m app.auth.retention                  # preview
+.venv/bin/python -m app.auth.retention --apply
+```
+
+`--unused-days`, `--player-days`, and `--batch-size` set an explicit deployment policy.
+A stale guest's session is removed with the account, so an old cookie provisions a new
+guest rather than resurrecting retained data.
+
+---
+
+## 11. Account deletion
+
+`DELETE /api/auth/account` requires the current password for a registered account, and
+an explicit `DELETE` confirmation in the UI. Guests may delete the automatically
+provisioned account without a password, because possession of its HttpOnly session is
+their only credential.
+
+Deletion:
+
+- revokes every linked session;
+- removes export, provider, and avatar records, and clears login and profile identity;
+- replaces frozen participant/drawer/guess names with the **Deleted player** tombstone;
+- erases ordinary authored `room_messages` immediately and tombstones the presentation
+  on copied evidence;
+- removes every block owned by or targeting the anonymized identities;
+- deletes owned prompt lists and their owned prompt concepts, rather than leaving
+  ownerless content;
+- erases the drawings that account made while leaving the row saying so;
+- does the same for every persistent room owned by that account (archive + permanent
+  code reservation).
+
+The stable anonymized row, scores, prompts, and shared game structure **remain**, so
+another player's history is never damaged. Prompt usage facts carry no user identifier
+and are untouched.
+
+---
+
+## 12. Recalculable competitive foundation
+
+Finished-game **facts** — not profile counters — are the source for any future rating,
+season, achievement, or competitive-standings work. The durable foundation is: game
+event times and exact rule versions, factual participant seats with canonical identity
+aliases, frozen eligibility and per-turn outcomes, prompt provenance, and the
+append-only score-event ledger. Derived rows such as `user_stats_daily` may be deleted
+and rebuilt without changing any of it.
+
+**This is deliberately a foundation, not a feature.** Sketchy v1 has no rating
+algorithm, season identity, achievement definitions, competitive-mode eligibility
+policy, or server-wide standings. Those require a later product decision and a versioned
+projection of the retained facts; they must not be introduced as mutable counters or
+inferred by rewriting finished games. Legacy facts with unknown rule/provenance versions
+stay explicitly unknown so a future projection can exclude or classify them under its
+own declared policy rather than treating invented metadata as truth.
+
+---
+
+## 13. Operating the database
+
+### Local PostgreSQL checks
+
+```bash
+cd backend
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  .venv/bin/python -m app.db.migrate
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  .venv/bin/pytest -q tests/test_migrations.py tests/test_repositories.py
+```
+
+> The repository suite **deletes application rows** from `TEST_DATABASE_URL`. Never
+> point it at a development or production database.
+
+CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete migration
+chain **down and up** on both PostgreSQL and SQLite, checks schema drift and the
+hand-written username index, then runs the repository suite against the migrated schema.
+
+### Production deploy order
+
+```bash
+cd backend
+export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
+.venv/bin/python -m app.db.migrate          # BEFORE starting or replacing any replica
+HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
+```
+
+### Adding a table or column
+
+1. Edit [`backend/app/db/models.py`](../backend/app/db/models.py).
+2. Generate a migration; make sure it is reversible and that SQLite batch mode is used
+   where a table is rebuilt.
+3. Add or extend the `CHECK` constraint if the column is an enum, and declare the enum in
+   [`domain_values.py`](../backend/app/domain_values.py).
+4. Run `pytest tests/test_migrations.py tests/test_db_models.py` — locally on SQLite and,
+   for anything non-trivial, against PostgreSQL.
+5. **Update this document**, plus [`architecture.md`](architecture.md) if the state
+   ownership changed and [`requirements.md`](requirements.md) if a stated guarantee moved.
+
+### Pre-v1 note
+
+The UUID change **rewrote** the pre-v1 initial migration rather than converting old text
+keys. Databases created before that baseline must be rebuilt; preserve no production
+data on a preproduction schema.
