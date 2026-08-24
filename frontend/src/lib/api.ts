@@ -1,3 +1,4 @@
+import { reportSuspended, suspensionFromPayload } from "./suspension.ts";
 const DEFAULT_TIMEOUT_MS = 8000;
 const BINARY_TIMEOUT_MS = 20000;
 
@@ -63,6 +64,11 @@ export async function apiRequest<T>(
     const payload = text ? JSON.parse(text) : null;
 
     if (!response.ok) {
+      // A suspension is raised here rather than left to each caller: it can
+      // refuse any request, and the player is owed the reason wherever they
+      // happened to be when it landed.
+      const suspension = suspensionFromPayload(payload);
+      if (suspension) reportSuspended(suspension);
       const detail =
         (payload && typeof payload.detail === "string" && payload.detail)
         || `Request failed with ${response.status}`;

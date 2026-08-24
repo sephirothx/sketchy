@@ -126,3 +126,17 @@
 .modal-overlay.report-player-overlay {
   z-index: 1250;
 }
+
+/* Above everything, including the drawer at 1200 and the report dialog at
+   1250: there is nothing behind this worth reaching. */
+.modal-overlay.suspension-overlay {
+  z-index: 1300;
+}
+
+.suspension-card {
+  text-align: left;
+}
+
+.suspension-reason {
+  font-weight: 600;
+}

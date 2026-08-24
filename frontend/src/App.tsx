@@ -17,6 +17,7 @@ import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
 import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
+import { SuspensionNotice } from "./components/SuspensionNotice";
 import { useAuthStore } from "./store/authStore";
 import { socket } from "./lib/socket";
 import { parseShutdownNotice, shutdownSecondsRemaining } from "./lib/shutdownNotice";
@@ -96,6 +97,7 @@ function App() {
       )}
       <ConnectionStatusBanner />
       <EmailRecoveryReminder />
+      <SuspensionNotice />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LobbyBrowserPage />} />

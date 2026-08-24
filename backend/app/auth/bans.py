@@ -41,3 +41,32 @@ async def is_user_banned(
         return False
     async with session_factory() as session:
         return await active_ban_for_user(session, db_user_id, now=now) is not None
+
+
+async def suspension_payload(
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: str,
+    *,
+    now: datetime | None = None,
+) -> dict:
+    """What a suspended account is told about its own suspension.
+
+    Shared by the HTTP refusal and the socket eviction so the two cannot drift
+    into telling somebody different things about the same ban.
+    """
+    body: dict = {
+        "detail": "This account is suspended.",
+        "suspended": True,
+        "reason": None,
+        "expiresAt": None,
+    }
+    try:
+        target = UUID(user_id)
+    except ValueError:
+        return body
+    async with session_factory() as session:
+        ban = await active_ban_for_user(session, target, now=now)
+    if ban is not None:
+        body["reason"] = ban.reason
+        body["expiresAt"] = ban.expires_at.isoformat() if ban.expires_at else None
+    return body

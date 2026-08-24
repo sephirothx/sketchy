@@ -17,6 +17,7 @@ from app.api.moderation import create_moderation_router
 from app.api.operations import create_operations_router
 from app.api.user_settings import create_user_settings_router
 from app.api.user_blocks import create_user_blocks_router
+from app.auth.bans import suspension_payload
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
@@ -104,8 +105,16 @@ handler_context = register_all_handlers(
 )
 
 
-async def _remove_account_from_live_rooms(user_id: str, *, reason: str) -> None:
-    """End live seats immediately after an account loses access."""
+async def _remove_account_from_live_rooms(
+    user_id: str, *, reason: str, suspension: dict | None = None
+) -> None:
+    """End live seats immediately after an account loses access.
+
+    `suspension` carries what to tell them, when there is something to tell.
+    A player mid-game learns from the socket rather than from their next
+    request failing, which is the difference between being told and finding
+    out.
+    """
     for room in list(room_manager.rooms.values()):
         if room.persistent_owner_user_id == user_id:
             room.persistent_room_id = None
@@ -121,11 +130,16 @@ async def _remove_account_from_live_rooms(user_id: str, *, reason: str) -> None:
         if room.game and room.state == "playing":
             await handler_context.game_flow._remove_player_from_game(room, player_id)
         if player_sid:
-            await sio.emit(
-                "session_superseded",
-                {"reason": reason},
-                to=player_sid,
-            )
+            if suspension is not None:
+                # Sent before the disconnect, so it arrives: a socket closed
+                # first delivers nothing.
+                await sio.emit("account_suspended", suspension, to=player_sid)
+            else:
+                await sio.emit(
+                    "session_superseded",
+                    {"reason": reason},
+                    to=player_sid,
+                )
             await sio.leave_room(player_sid, room.id)
             await sio.disconnect(player_sid)
         if room.connected_players():
@@ -146,7 +160,9 @@ async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
 
 async def remove_banned_account_from_live_rooms(user_id: str) -> None:
     await _remove_account_from_live_rooms(
-        user_id, reason="Your account was suspended."
+        user_id,
+        reason="Your account was suspended.",
+        suspension=await suspension_payload(async_session_factory, user_id),
     )
 
 

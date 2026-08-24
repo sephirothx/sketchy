@@ -598,3 +598,45 @@ async def test_the_same_player_cannot_be_reported_twice_while_it_waits(env):
 
     third = await reporter_http.post("/api/reports", json=body)
     assert third.status_code == 201
+
+
+async def test_a_suspended_account_is_told_why_and_for_how_long(env):
+    """Being signed out with no explanation is the experience this replaces."""
+    new_client, factory, _ = env
+    moderator_http, target_http = new_client(), new_client()
+    moderator = await register(moderator_http, "TellingModerator")
+    target = await register(target_http, "TellingTarget")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    created = await moderator_http.post(
+        "/api/moderation/bans",
+        json={
+            "userId": target["id"],
+            "reason": "Harassment in chat",
+            "expiresAt": expires_at.isoformat(),
+        },
+    )
+    assert created.status_code == 201
+
+    refused = await target_http.get("/api/auth/me")
+
+    assert refused.status_code == 403
+    body = refused.json()
+    assert body["suspended"] is True
+    assert body["reason"] == "Harassment in chat"
+    assert body["expiresAt"] is not None
+    assert body["detail"] == "This account is suspended."
+
+
+async def test_an_ordinary_refusal_is_not_mistaken_for_a_suspension(env):
+    """The client raises a blocking notice on this flag, so nothing else may
+    carry it."""
+    new_client, factory, _ = env
+    player_http = new_client()
+    await register(player_http, "OrdinaryRefusal")
+
+    refused = await player_http.get("/api/moderation/reports")
+
+    assert refused.status_code == 403
+    assert "suspended" not in refused.json()

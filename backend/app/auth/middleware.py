@@ -6,6 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.auth.bans import suspension_payload
 from app.auth.sessions import COOKIE_NAME, SESSION_TTL, resolve_session_status
 
 COOKIE_MAX_AGE = int(SESSION_TTL.total_seconds())
@@ -79,8 +80,16 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             and request.url.path != "/api/health"
             and not privacy_escape_hatch
         ):
+            # Say why, and until when. A player told only that they are
+            # suspended has been told the one thing they already worked out
+            # from being unable to do anything. The extra lookup happens on
+            # this path alone, which a suspended account reaches and nobody
+            # else does.
             return JSONResponse(
-                {"detail": "This account is suspended."}, status_code=403
+                await suspension_payload(
+                    self._session_factory, resolution.banned_user_id
+                ),
+                status_code=403,
             )
         auth_session = resolution.session
         request.state.auth_session = auth_session

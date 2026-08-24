@@ -661,6 +661,13 @@ hiding the list or prompt is the separate decision that acts on it, and the
 owner is told when it happens if they have a confirmed address. Every review
 takes a note, so no decision is anonymous.
 
+A suspended player is told before they are signed out. Suspending revokes every
+session and ends every live seat at once, so without it the experience is a
+game that stops and a page that starts refusing things. A player mid-game hears
+it on the socket; everybody else learns from the first request that is refused,
+which now carries the reason and the end date rather than only saying no. The
+notice cannot be dismissed, because there is nothing behind it to go back to.
+
 Roles are service-wide privileges. A room **host** remains an ordinary
 gameplay role and is never an administrator merely because they created a
 room.
