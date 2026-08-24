@@ -120,15 +120,20 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
         </span>
         {seat && (
           <span className="profile-game-result">
-            <span
-              className={
-                seat.finalRank === 1
-                  ? "profile-game-rank is-winner"
-                  : "profile-game-rank"
-              }
-            >
-              #{seat.finalRank}
-            </span>
+            {/* No placing in a game that never finished. The points are a fact
+                about turns that were played; a rank is a claim about how it
+                ended, and this one did not end. */}
+            {game.outcome === "finished" && (
+              <span
+                className={
+                  seat.finalRank === 1
+                    ? "profile-game-rank is-winner"
+                    : "profile-game-rank"
+                }
+              >
+                #{seat.finalRank}
+              </span>
+            )}
             <span className="profile-game-score">{seat.finalScore} pts</span>
           </span>
         )}
@@ -145,10 +150,18 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
             {` · ${game.hintMode} hints · ${game.drawingSeconds} seconds`}
             {` · ${game.promptSourceMode.replaceAll("_", " ")} prompts`}
           </p>
+          {game.outcome !== "finished" && (
+            <p className="profile-note">
+              This game did not finish, so these are the scores as they stood
+              when it stopped rather than a final placing.
+            </p>
+          )}
           <ol className="profile-standings">
             {game.participants.map((p) => (
               <li key={p.seatId}>
-                <span className="profile-standing-rank">#{p.finalRank}</span>
+                {game.outcome === "finished" && (
+                  <span className="profile-standing-rank">#{p.finalRank}</span>
+                )}
                 {p.userId ? <Link to={`/profile/${p.userId}`}>
                   <PlayerName
                     name={p.displayName}

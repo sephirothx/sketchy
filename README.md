@@ -1205,10 +1205,13 @@ that reached its end, so a room everyone walked out of left no trace at all -
 the games most worth looking at were the only invisible ones. An abandoned game
 is written as an ordinary `game_records` row with `outcome = 'abandoned'`;
 `finished_at` keeps meaning when the game ended, not that it finished. Player
-history shows finished games unless `?includeAbandoned=true` is asked for, and
-an abandoned game contributes the turns actually drawn and guessed but not a
-game played, a game won, or a score - counting it would let a room that keeps
-emptying inflate everyone's totals and drift the average score upward.
+history shows finished games unless `?includeAbandoned=true` is asked for. One
+that is shown carries no placing - not in the row and not in its standings -
+because a rank is a claim about how a game ended, and this one did not end; the
+scores stay, since points earned in the turns that were played are a fact. An
+abandoned game contributes those turns but not a game played, a game won, or a
+score - counting it would let a room that keeps emptying inflate everyone's
+totals and drift the average score upward.
 
 Operators read this two ways. `GET /metrics` returns Prometheus text behind a
 bearer token and is disabled entirely until `METRICS_TOKEN` is set. The
