@@ -21,12 +21,12 @@ from app.auth.rate_limit import (
 from app.auth.audit import audit_coordinates
 from app.auth.bans import active_ban_filter, active_ban_for_user
 from app.auth.mail import queue_email
+from app.services.player_reports import record_player_report
 from app.auth.sessions import revoke_all_sessions
 from app.db.models import (
     AuditEvent,
     GameRecord,
     PlayerReport,
-    PlayerReportMessageEvidence,
     PromptContentReport,
     PromptList,
     PromptListRevision,
@@ -589,61 +589,22 @@ def create_moderation_router(
                             TurnRecord, next(iter(selected_turn_ids))
                         )
                 game_id = game.id if game is not None else (turn.game_id if turn else None)
-                report = PlayerReport(
-                    id=generate_uuid(),
+                # Everything above this line is the router proving what a
+                # client told it. The writing is shared with the socket path,
+                # which has nothing to prove because it resolved the target and
+                # picked the evidence itself.
+                report = record_player_report(
+                    session,
                     reporter_user_id=db_reporter_id,
                     reported_user_id=target.id,
                     game_id=game_id,
                     turn_id=turn.id if turn else None,
                     reason=body.reason.value,
                     details=body.details,
-                    context_snapshot={
-                        "schemaVersion": 1,
-                        "submitted": body.context_snapshot,
-                    },
-                )
-                session.add(report)
-                session.add_all(
-                    PlayerReportMessageEvidence(
-                        report_id=report.id,
-                        position=position,
-                        source_message_id=message.id,
-                        source_message_snapshot_id=message.id,
-                        game_id_snapshot=message.game_id,
-                        turn_id_snapshot=message.turn_id,
-                        sender_user_id=message.sender_user_id,
-                        sender_display_name_snapshot=(
-                            message.sender_display_name_snapshot
-                        ),
-                        sender_name_color_snapshot=(
-                            message.sender_name_color_snapshot
-                        ),
-                        sender_is_anonymous_snapshot=(
-                            message.sender_is_anonymous_snapshot
-                        ),
-                        message_kind=message.message_kind,
-                        audience=message.audience,
-                        near_miss_kind=message.near_miss_kind,
-                        text_snapshot=message.text,
-                        message_created_at=message.created_at,
-                    )
-                    for position, message in enumerate(retained_messages)
-                )
-                session.add(
-                    AuditEvent(
-                        id=generate_uuid(),
-                        event_type="report.submitted",
-                        actor_user_id=db_reporter_id,
-                        target_user_id=target.id,
-                        target_type=AuditTargetType.USER.value,
-                        target_id=str(target.id),
-                        request_id=request_id,
-                        ip_hash=ip_hash,
-                        details={
-                            "report_id": str(report.id),
-                            "reason": body.reason.value,
-                        },
-                    )
+                    messages=list(retained_messages),
+                    context_snapshot=body.context_snapshot,
+                    request_id=request_id,
+                    ip_hash=ip_hash,
                 )
                 await session.flush()
             return {

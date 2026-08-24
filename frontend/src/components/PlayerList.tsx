@@ -2,6 +2,8 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ModerationState, PlayerInfo } from "../types";
 import { emitTransient } from "../lib/socket";
+import { ReportPlayerDialog } from "./ReportPlayerDialog";
+import { useAuthStore } from "../store/authStore";
 import { competitionRanks, placementLabel } from "../lib/standings";
 import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
@@ -54,6 +56,12 @@ export function PlayerList({
   const ranks = competitionRanks(sorted.map((player) => player.score));
   const currentPlayerCanVote = canCastModerationVote(moderation, myPlayerId);
   const [openMenuToken, setOpenMenuToken] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<{ playerId: string; nickname: string } | null>(null);
+  // A guest has no account for a moderator to follow up with, so the server
+  // refuses their report; offering the control would be a dead end.
+  const canRequestReport = useAuthStore(
+    (state) => Boolean(state.user && !state.user.isAnonymous),
+  );
   const listRef = useRef<HTMLUListElement>(null);
   const nameFitKey = sorted.map((player) => `${player.playerId}:${player.nickname}`).join("\0");
 
@@ -81,6 +89,11 @@ export function PlayerList({
         const canModerate = Boolean(
           allowVoting && currentPlayerCanVote && !isMe && p.connected,
         );
+        // Unlike a kick vote, this needs no majority and no eligibility: it
+        // asks a moderator to look, rather than doing anything to anyone. It
+        // stays available for a disconnected player, because leaving is the
+        // usual next thing to happen after the behaviour worth reporting.
+        const canReport = Boolean(canRequestReport && !isMe);
         const requiredVotes = moderation.requiredVotes;
         const kickVotes = eligibleModerationVotes(moderation, p.kickVotes);
         const afkVotes = eligibleModerationVotes(moderation, p.afkVotes);
@@ -129,6 +142,17 @@ export function PlayerList({
               {!p.connected && <span className="visually-hidden">Disconnected</span>}
             </span>
             {showScores && <span className="player-score">{p.score}</span>}
+            {canReport && (
+              <button
+                type="button"
+                className="player-report-button"
+                title={`Report ${p.nickname}`}
+                aria-label={`Report ${p.nickname}`}
+                onClick={() => setReporting({ playerId: p.playerId, nickname: p.nickname })}
+              >
+                <span aria-hidden="true">⚑</span>
+              </button>
+            )}
             {showVoteRow && (
               <div className="player-vote-row">
                 {showAfkChip && (
@@ -156,6 +180,13 @@ export function PlayerList({
           </li>
         );
       })}
+      {reporting && (
+        <ReportPlayerDialog
+          targetPlayerId={reporting.playerId}
+          nickname={reporting.nickname}
+          onClose={() => setReporting(null)}
+        />
+      )}
     </ul>
   );
 }

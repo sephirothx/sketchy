@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import suppress
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -302,3 +303,188 @@ async def test_afk_toggle_mid_game_still_advances_to_the_next_turn():
     assert not _emitted(sio, "game_ended")
 
     await _drain_phase_timer(ctx.timers, room.id)
+
+
+@pytest.mark.asyncio
+async def test_reporting_names_a_seat_and_never_an_account():
+    """The room tells nobody another player's account id. A complaint is not a
+    reason to start, so the seat is resolved server-side."""
+    from uuid import UUID, uuid4
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.db.models import (
+        AuditEvent,
+        Base,
+        PlayerReport,
+        PlayerReportMessageEvidence,
+        RoomMessage,
+        User,
+        generate_uuid,
+    )
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    reporter_id, target_id = uuid4(), uuid4()
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(
+        room, "Reporter", user_id=str(reporter_id), is_anonymous=False
+    )
+    target = room_manager.add_player(
+        room, "Target", user_id=str(target_id), is_anonymous=False
+    )
+    reporter.sid, target.sid = "reporter-sid", "target-sid"
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    [
+                        User(
+                            id=reporter_id,
+                            username="Reporter",
+                            password_hash="hash",
+                            display_name="Reporter",
+                            state="registered",
+                        ),
+                        User(
+                            id=target_id,
+                            username="Target",
+                            password_hash="hash",
+                            display_name="Target",
+                            state="registered",
+                        ),
+                    ]
+                )
+                now = datetime.now(timezone.utc)
+                session.add_all(
+                    [
+                        RoomMessage(
+                            id=generate_uuid(),
+                            room_instance_id=UUID(room.retention_scope_id),
+                            sender_user_id=target_id,
+                            sender_player_id=UUID(target.id),
+                            sender_display_name_snapshot="Target",
+                            sender_is_anonymous_snapshot=False,
+                            message_kind="chat",
+                            audience="room",
+                            text="something worth reporting",
+                            audience_user_ids=[str(reporter_id), str(target_id)],
+                            created_at=now,
+                            expires_at=now + timedelta(hours=1),
+                        ),
+                        # Not shown to the reporter, so not theirs to submit.
+                        RoomMessage(
+                            id=generate_uuid(),
+                            room_instance_id=UUID(room.retention_scope_id),
+                            sender_user_id=target_id,
+                            sender_player_id=UUID(target.id),
+                            sender_display_name_snapshot="Target",
+                            sender_is_anonymous_snapshot=False,
+                            message_kind="chat",
+                            audience="prompt_aware",
+                            text="never delivered to the reporter",
+                            audience_user_ids=[str(target_id)],
+                            created_at=now,
+                            expires_at=now + timedelta(hours=1),
+                        ),
+                    ]
+                )
+
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager)
+        ctx.session_factory = factory
+        sio.get_session = AsyncMock(
+            return_value={"room_id": room.id, "player_id": reporter.id}
+        )
+        sio.emit = AsyncMock()
+
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {
+                "targetPlayerId": target.id,
+                "reason": "harassment",
+                "details": "Said the thing above.",
+            },
+        )
+
+        assert result["ok"] is True
+        # Only the message the reporter actually received.
+        assert result["evidenceCount"] == 1
+
+        async with factory() as session:
+            report = await session.scalar(select(PlayerReport))
+            assert report.reporter_user_id == reporter_id
+            assert report.reported_user_id == target_id
+            assert report.reason == "harassment"
+            evidence = (
+                await session.scalars(select(PlayerReportMessageEvidence))
+            ).all()
+            assert [line.text_snapshot for line in evidence] == [
+                "something worth reporting"
+            ]
+            event = await session.scalar(
+                select(AuditEvent).where(AuditEvent.event_type == "report.submitted")
+            )
+            assert event.target_id == str(target_id)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_report_cannot_be_used_to_discover_who_is_in_a_room():
+    """An unknown seat and your own seat answer identically."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(
+        room, "Reporter", user_id="00000000-0000-4000-8000-000000000001", is_anonymous=False
+    )
+    reporter.sid = "reporter-sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": reporter.id}
+    )
+    sio.emit = AsyncMock()
+
+    body = {"reason": "spam", "details": "x"}
+    unknown = await sio.handlers["/"]["report_player"](
+        "reporter-sid", {**body, "targetPlayerId": "not-a-seat"}
+    )
+    myself = await sio.handlers["/"]["report_player"](
+        "reporter-sid", {**body, "targetPlayerId": reporter.id}
+    )
+
+    assert unknown == myself
+    assert unknown["ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_guest_is_told_to_claim_an_account_first():
+    """There would be nobody for a moderator to follow up with."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    guest = room_manager.add_player(room, "Guest")
+    other = room_manager.add_player(room, "Other")
+    guest.sid = "guest-sid"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": guest.id}
+    )
+    sio.emit = AsyncMock()
+
+    result = await sio.handlers["/"]["report_player"](
+        "guest-sid",
+        {"targetPlayerId": other.id, "reason": "spam", "details": "x"},
+    )
+
+    assert result["ok"] is False
+    assert "account" in result["error"]

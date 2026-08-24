@@ -2,15 +2,25 @@
 from __future__ import annotations
 
 from functools import partial
+import logging
+from uuid import UUID
 
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     PayloadError,
+    ReportPlayerPayload,
     ToggleAfkPayload,
     VotePayload,
     parse_payload,
 )
 from app.rooms import majority_of
+from app.services.player_reports import (
+    evidence_from_live_room,
+    record_player_report,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 async def toggle_afk(ctx: HandlerContext, sid, data=None):
@@ -99,6 +109,83 @@ async def vote_player(ctx: HandlerContext, sid, data):
     return {"ok": True, "action": action, "executed": False}
 
 
+async def report_player(ctx: HandlerContext, sid, data):
+    """File a report about somebody in this room.
+
+    Addressed by seat. The room never tells anyone another player's account id,
+    and filing a complaint is not a reason to start: the seat is resolved here,
+    against state the server already holds.
+
+    Evidence is gathered here too, rather than accepted from the reporter. That
+    is what makes the checks the REST path performs by hand - is this message
+    theirs, did you actually receive it - true by construction.
+    """
+    try:
+        payload = parse_payload(ReportPlayerPayload, data)
+    except PayloadError as error:
+        return error.acknowledgement()
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return {"ok": False, "error": "Not in this room"}
+    room, reporter = current
+
+    # Who they are first, because that is advice they can act on, and it is
+    # true whatever the server can do.
+    if not reporter.user_id or reporter.is_anonymous:
+        return {
+            "ok": False,
+            "error": "Create an account before reporting, so a moderator can follow up.",
+        }
+    if ctx.session_factory is None:
+        return {"ok": False, "error": "Reporting is unavailable on this server."}
+
+    target = room.players.get(payload.target_player_id)
+    if target is None or target.id == reporter.id:
+        # The same answer for "no such seat" and "that is you": a report is not
+        # a way to find out who is in a room you cannot see.
+        return {"ok": False, "error": "No such player in this room."}
+    if not target.user_id:
+        return {"ok": False, "error": "That player cannot be reported."}
+
+    async with ctx.session_factory() as session:
+        async with session.begin():
+            messages = await evidence_from_live_room(
+                session,
+                room_instance_id=UUID(room.retention_scope_id),
+                reported_user_id=UUID(target.user_id),
+                reporter_user_id=UUID(reporter.user_id),
+            )
+            report = record_player_report(
+                session,
+                reporter_user_id=UUID(reporter.user_id),
+                reported_user_id=UUID(target.user_id),
+                # The live room's game has no history row until it is
+                # persisted, so the report points at the turn and game only
+                # once the evidence itself names them.
+                game_id=None,
+                turn_id=None,
+                reason=payload.reason,
+                details=payload.details,
+                messages=messages,
+                context_snapshot={
+                    "source": "room",
+                    "room_code": room.code,
+                    "reported_display_name": target.nickname,
+                },
+            )
+            await session.flush()
+            report_id = str(report.id)
+
+    logger.info(
+        "player report %s filed in room %s for %s",
+        report_id,
+        room.id,
+        payload.reason,
+    )
+    return {"ok": True, "id": report_id, "evidenceCount": len(messages)}
+
+
 def register(ctx: HandlerContext) -> None:
     ctx.sio.on("toggle_afk", handler=partial(toggle_afk, ctx))
     ctx.sio.on("vote_player", handler=partial(vote_player, ctx))
+    ctx.sio.on("report_player", handler=partial(report_player, ctx))

@@ -1394,3 +1394,9 @@
 [data-theme="dark"] .back-link {
   color: #60a5fa;
 }
+
+[data-theme="dark"] .report-details {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}

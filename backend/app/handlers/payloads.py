@@ -363,6 +363,27 @@ class VotePayload(RequestModel):
     action: Literal["kick", "afk"]
 
 
+class ReportPlayerPayload(RequestModel):
+    """A report addressed by room seat, never by account.
+
+    The room's wire payload deliberately carries no account ids, so a client
+    could not name one even if it wanted to - and should not learn one to file
+    a complaint. The server resolves the seat against the live room.
+    """
+
+    target_player_id: str = Field(
+        alias="targetPlayerId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH
+    )
+    reason: Literal[
+        "harassment",
+        "offensive_drawing",
+        "inappropriate_name",
+        "cheating",
+        "spam",
+    ]
+    details: str = Field(min_length=1, max_length=1000)
+
+
 class RestartVotePayload(RequestModel):
     vote: bool
 

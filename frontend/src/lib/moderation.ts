@@ -1,4 +1,5 @@
 import { apiRequest } from "./api.ts";
+import { emitWithAck } from "./socket.ts";
 import type { ModerationState } from "../types";
 
 export function canCastModerationVote(
@@ -70,6 +71,20 @@ export interface UserBan {
   revokedAt: string | null;
   revokedByUserId: string | null;
   revokeReason: string | null;
+}
+
+/** Report somebody in the room you are both in.
+
+Addressed by room seat, not by account: the room's payloads deliberately carry
+no account ids, and filing a complaint is not a reason to learn one. The server
+resolves the seat and gathers the chat evidence itself, so nothing here has to
+be trusted. */
+export function reportPlayerInRoom(input: {
+  targetPlayerId: string;
+  reason: ReportReason;
+  details: string;
+}): Promise<{ ok: boolean; id?: string; evidenceCount?: number; error?: string }> {
+  return emitWithAck("report_player", input);
 }
 
 export function submitPlayerReport(input: {
