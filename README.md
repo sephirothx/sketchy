@@ -10,7 +10,7 @@ copy and docs alike. Read it before naming anything a player can see.
 ## Features
 
 - Lobby with a live, polled list of public rooms, or join a private room by code.
-- Prompt lists selectable during room creation, combined with optional custom prompts. Standard and Extended English ship with the game; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, keep them Private, or make them Unlisted with a share code. The picker and stats catalogue show each official list's content language; every room resolves exactly one language and cannot combine lists with different matching rules. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned.
+- Prompt lists selectable during room creation, combined with optional custom prompts. Standard and Extended English ship with the game; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped, keep them Private, or make them Unlisted with a share code. The picker and stats catalogue show each official list's content language; every room resolves exactly one language and cannot combine lists with different matching rules. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
 - Drawing rules — two room settings the host sets at creation and edits while waiting.
@@ -371,7 +371,10 @@ User-owned lists and their prompt stats never enter the public official
 catalogue. A player who resolves an Unlisted list can privately report the
 whole list or one exact immutable prompt version from the picker. Reports use
 post-moderation: submission preserves a bounded evidence snapshot but does not
-hide content automatically; one moderator review may dismiss the report or set
+hide content automatically. One reporter may hold one open report per target,
+so reporting the same list twice is refused while the first is unread, while
+the list and a single prompt inside it stay separately reportable and a
+resolved report frees the target to be raised again; one moderator review may dismiss the report or set
 the exact target Active or Hidden, with actor/time provenance and an append-only
 audit event. Hidden prompts are filtered from future selection, and a list with
 no usable prompts fails visibly. Waiting rooms re-authorize the list and every
@@ -574,8 +577,10 @@ colorblind-safe preference remains private account/browser data. While an
 opted-in player (not a spectator) is seated in a room that uses another color
 mode, only the host receives an unattributed **Colorblind-safe suggestion**.
 The host can switch the room to the colorblind-safe palette or dismiss the
-suggestion for that live room. It disappears when the last opted-in player
-leaves, never changes room settings automatically, and the preference and
+suggestion for that live room. It belongs to the waiting room, where the
+palette can still be changed, so an unanswered one clears when a game starts
+and returns afterwards; a dismissed one stays gone. It disappears when the
+last opted-in player leaves, never changes room settings automatically, and the preference and
 dismissal never appear in player, room-state, room-list, invite-preview, or
 session payloads. Registered preferences are read from server-side settings;
 guest preferences stay local and are supplied only to the live seat.
