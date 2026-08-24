@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   emailLooksUsable,
   recoveryStatusMessage,
+  shouldShowRecoveryReminder,
 } from "../src/lib/accountRecovery.ts";
 
 test("an address is accepted unless it certainly cannot work", () => {
@@ -72,4 +73,51 @@ test("someone who already has an address is told what it is, not asked to add on
   });
 
   assert.match(message, /recover this account through player@example\.com/);
+});
+
+const due = {
+  address: null,
+  verified: false,
+  pendingAddress: null,
+  reminderDue: true,
+  deliveryConfigured: true,
+};
+
+test("the reminder stays out of a game", () => {
+  // It covered the drawing tools: the room lays itself out to the viewport
+  // rather than flowing beneath a banner.
+  assert.equal(
+    shouldShowRecoveryReminder({ registered: true, inRoom: false, dismissed: false, state: due }),
+    true,
+  );
+  assert.equal(
+    shouldShowRecoveryReminder({ registered: true, inRoom: true, dismissed: false, state: due }),
+    false,
+  );
+});
+
+test("a guest is never asked for a recovery address", () => {
+  assert.equal(
+    shouldShowRecoveryReminder({ registered: false, inRoom: false, dismissed: false, state: due }),
+    false,
+  );
+});
+
+test("nothing is shown before the account's state is known", () => {
+  assert.equal(
+    shouldShowRecoveryReminder({ registered: true, inRoom: false, dismissed: false, state: null }),
+    false,
+  );
+});
+
+test("an account that is already set up is left alone", () => {
+  assert.equal(
+    shouldShowRecoveryReminder({
+      registered: true,
+      inRoom: false,
+      dismissed: false,
+      state: { ...due, reminderDue: false, verified: true },
+    }),
+    false,
+  );
 });

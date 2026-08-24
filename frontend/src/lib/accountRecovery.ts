@@ -40,6 +40,29 @@ export function recoveryStatusMessage(state: EmailState): string {
   return "Add an email address so you can get back in if you forget your password.";
 }
 
+/** Whether the standing "no way back in" note belongs on screen right now.
+
+A rule rather than a condition buried in the component, because the interesting
+part is what it refuses. It is a note about account hygiene: it can wait, and
+anything that can wait must not land on top of a game - the room lays itself
+out to the viewport rather than flowing beneath a banner, so it covered the
+drawing tools. Being in a room suppresses it without counting as having seen
+it, so it returns to the lobby rather than being spent. */
+export function shouldShowRecoveryReminder({
+  registered,
+  inRoom,
+  dismissed,
+  state,
+}: {
+  registered: boolean;
+  inRoom: boolean;
+  dismissed: boolean;
+  state: EmailState | null;
+}): boolean {
+  if (!registered || inRoom || dismissed) return false;
+  return Boolean(state?.reminderDue);
+}
+
 export function readEmailState(): Promise<EmailState> {
   return apiRequest<EmailState>("/api/auth/email");
 }

@@ -513,7 +513,13 @@ SMTP configured, which includes the zero-configuration default this project
 documents. An account without one is reminded weekly that a forgotten password
 cannot be reset - a note that can be closed and returns, with the interval kept
 on the account so it neither restarts on each new device nor disappears when
-browser storage is cleared.
+browser storage is cleared. It stays out of rooms entirely: a room lays itself
+out to the viewport rather than flowing beneath a banner, so the note landed on
+the drawing tools, and a note about account hygiene can wait until somebody is
+not mid-game. Being in a room suppresses it without spending it - it returns to
+the lobby rather than counting as seen. The deploy banner deliberately does not
+behave this way, because a game about to be ended under you is worth
+interrupting for.
 
 **Email & recovery** in the account menu is where an address is added, replaced
 or simply looked at. The weekly reminder is a prompt and nothing more; a prompt
