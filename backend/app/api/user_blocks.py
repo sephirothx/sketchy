@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.audit import audit_coordinates
 from app.auth.blocks import BlockService
+from app.domain_values import AuditTargetType
 from app.db.models import (
     AuditEvent,
     IdentityAlias,
@@ -127,6 +128,8 @@ def create_user_blocks_router(
                             event_type="block.created",
                             actor_user_id=current_id,
                             target_user_id=target.id,
+                            target_type=AuditTargetType.USER.value,
+                            target_id=str(target.id),
                             request_id=request_id,
                             ip_hash=ip_hash,
                             details={"block_id": str(block.id)},
@@ -183,6 +186,8 @@ def create_user_blocks_router(
                         event_type="block.deleted",
                         actor_user_id=current_id,
                         target_user_id=target_id,
+                        target_type=AuditTargetType.USER.value,
+                        target_id=str(target_id),
                         request_id=request_id,
                         ip_hash=ip_hash,
                         details={"block_id": str(block_id)},

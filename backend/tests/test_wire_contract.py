@@ -310,3 +310,43 @@ def test_player_facing_copy_uses_current_vocabulary():
     }
     stale = sorted(phrase for phrase in retired_phrases if phrase in text)
     assert not stale, f"player-facing copy still uses retired vocabulary: {stale}"
+
+
+# A suspension lifted, a block made or removed: three writers named a user in
+# `target_user_id` and left the ledger's Subject column empty, because the pair
+# was added to `audit_events` after they were written and nothing made them
+# say so. Reading the source is how that class of omission gets caught, since
+# each one only shows up in the one screen nobody looks at until they need it.
+def test_every_audit_event_about_somebody_names_them_as_its_subject(trees):
+    """`target_user_id` is a foreign key that a deletion blanks; the generic
+    pair is what the ledger renders. An entry with one and not the other is an
+    action against a person that the ledger cannot show."""
+    missing: list[str] = []
+    for tree in trees:
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = node.func
+            if not (isinstance(name, ast.Name) and name.id == "AuditEvent"):
+                continue
+            supplied = {kw.arg for kw in node.keywords}
+            if "target_user_id" not in supplied:
+                # A bulk action - a retention purge - acts on no single row and
+                # correctly names nobody.
+                continue
+            if "target_type" in supplied and "target_id" in supplied:
+                continue
+            event = next(
+                (
+                    ast.unparse(kw.value)
+                    for kw in node.keywords
+                    if kw.arg == "event_type"
+                ),
+                "<unknown>",
+            )
+            missing.append(event)
+
+    assert not missing, (
+        "these audit events name a user in target_user_id but leave the "
+        f"ledger's subject empty: {sorted(missing)}"
+    )

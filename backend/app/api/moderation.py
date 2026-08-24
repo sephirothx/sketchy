@@ -1040,6 +1040,8 @@ def create_moderation_router(
                         event_type="ban.revoked",
                         actor_user_id=reviewer.id,
                         target_user_id=ban.user_id,
+                        target_type=AuditTargetType.USER.value,
+                        target_id=str(ban.user_id) if ban.user_id else None,
                         request_id=request_id,
                         ip_hash=ip_hash,
                         details={"ban_id": str(ban.id), "reason": body.reason},

@@ -383,3 +383,47 @@ async def test_the_ledger_names_its_subjects_without_storing_the_names(env):
                 AuditEvent.event_type == "ban.created"
             )
         ) == 1
+
+
+async def test_an_id_written_without_dashes_still_finds_its_name(env):
+    """Casting a UUID to text drops the dashes, so a backfilled entry spells
+    the same account differently from one written by code. Both have to
+    resolve, or half the ledger renders as raw ids."""
+    from app.db.models import generate_uuid
+
+    new_client, factory = env
+    admin, subject = new_client(), new_client()
+    operator = await register(admin, "SpellingAdmin")
+    named = await register(subject, "SpellingSubj")
+    await promote(factory, operator["id"])
+
+    dashed = named["id"]
+    bare = dashed.replace("-", "")
+    assert bare != dashed
+
+    async with factory() as session:
+        async with session.begin():
+            session.add_all(
+                AuditEvent(
+                    id=generate_uuid(),
+                    event_type=event_type,
+                    actor_user_id=UUID(operator["id"]),
+                    target_user_id=UUID(dashed),
+                    target_type="user",
+                    target_id=spelling,
+                    details={},
+                )
+                for event_type, spelling in (
+                    ("ban.created", dashed),
+                    ("ban.revoked", bare),
+                )
+            )
+
+    entries = (await admin.get("/api/admin/audit")).json()["entries"]
+    by_type = {entry["eventType"]: entry for entry in entries}
+
+    assert by_type["ban.created"]["targetName"] == "SpellingSubj"
+    assert by_type["ban.revoked"]["targetName"] == "SpellingSubj"
+    # Each is answered in the spelling it was stored in, so the id column keeps
+    # showing what is actually on the row.
+    assert by_type["ban.revoked"]["targetId"] == bare

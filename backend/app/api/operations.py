@@ -101,21 +101,31 @@ async def _resolve_subjects(
 
     resolved: dict[tuple[str | None, str | None], str] = {}
 
-    def _ids(kind: str) -> list[UUID]:
-        found = []
+    def _ids(kind: str) -> dict[UUID, list[str]]:
+        """Every spelling each id arrived in, against the id itself.
+
+        The same account can appear as `01a0-...` from code and as bare hex
+        from a backfill, because casting a UUID to text drops the dashes. Both
+        have to find the same row, and each has to be answered in the spelling
+        it was asked in - a name keyed only one way leaves the other rendering
+        as a raw id.
+        """
+        found: dict[UUID, list[str]] = {}
         for value in wanted.get(kind, set()):
             try:
-                found.append(UUID(value))
+                parsed = UUID(value)
             except ValueError:
                 # A target id need not be a UUID - app_config names a key.
                 continue
+            found.setdefault(parsed, []).append(value)
         return found
 
     if user_ids := _ids("user"):
         for user in (
             await session.scalars(select(User).where(User.id.in_(user_ids)))
         ).all():
-            resolved[("user", str(user.id))] = user.display_name
+            for spelling in user_ids.get(user.id, []):
+                resolved[("user", spelling)] = user.display_name
 
     if list_ids := _ids("prompt_list"):
         for prompt_list in (
@@ -123,7 +133,8 @@ async def _resolve_subjects(
                 select(PromptList).where(PromptList.id.in_(list_ids))
             )
         ).all():
-            resolved[("prompt_list", str(prompt_list.id))] = prompt_list.name
+            for spelling in list_ids.get(prompt_list.id, []):
+                resolved[("prompt_list", spelling)] = prompt_list.name
 
     if version_ids := _ids("prompt_version"):
         for version in (
@@ -131,7 +142,8 @@ async def _resolve_subjects(
                 select(PromptVersion).where(PromptVersion.id.in_(version_ids))
             )
         ).all():
-            resolved[("prompt_version", str(version.id))] = version.canonical_answer
+            for spelling in version_ids.get(version.id, []):
+                resolved[("prompt_version", spelling)] = version.canonical_answer
 
     return resolved
 
