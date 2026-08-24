@@ -27,7 +27,7 @@ interface AuthStore {
   fetchMe: () => Promise<AuthUser | null>;
   setDisplayName: (displayName: string) => Promise<AuthUser>;
   setNameColor: (nameColor: string) => Promise<AuthUser>;
-  register: (username: string, password: string) => Promise<AuthUser>;
+  register: (username: string, password: string, email?: string) => Promise<AuthUser>;
   login: (username: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
@@ -167,10 +167,15 @@ export const useAuthStore = create<AuthStore>((set) => ({
     return user;
   },
 
-  register: async (username, password) => {
+  register: async (username, password, email) => {
     const user = await apiRequest<AuthUser>("/api/auth/register", {
       method: "POST",
-      body: { username, password, settings: currentSettingsPayload() },
+      body: {
+        username,
+        password,
+        settings: currentSettingsPayload(),
+        ...(email ? { email } : {}),
+      },
     });
     set({ user, hasResolved: true });
     reconcileNameColor(user);

@@ -5,6 +5,7 @@ import os
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
+from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -49,7 +50,20 @@ from app.auth.password import (
     validate_password,
     verify_password,
 )
+from app.auth.audit import audit_coordinates
 from app.auth.bans import is_user_banned
+from app.auth.email import EmailAddressError, MAX_EMAIL_LENGTH
+from app.auth.mail import mail_is_configured
+from app.auth.recovery import (
+    EmailAlreadyInUse,
+    RecoveryError,
+    confirm_email,
+    email_state,
+    mark_reminder_shown,
+    request_email_verification,
+    request_password_reset,
+    reset_password,
+)
 from app.api.serializers import user_payload
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
@@ -95,6 +109,35 @@ class CredentialsBody(BaseModel):
 
 class RegistrationBody(CredentialsBody):
     settings: UserSettingsSeed = Field(default_factory=UserSettingsSeed)
+    # Optional, and stays optional. Requiring it would break registration on
+    # every deployment with no SMTP configured, which includes the documented
+    # zero-configuration default.
+    email: str | None = Field(default=None, max_length=MAX_EMAIL_LENGTH)
+
+
+class EmailBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(max_length=MAX_EMAIL_LENGTH)
+
+
+class TokenBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(max_length=256)
+
+
+class ForgotPasswordBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    identifier: str = Field(max_length=MAX_EMAIL_LENGTH)
+
+
+class ResetPasswordBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(max_length=256)
+    password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
 class DisplayNameBody(BaseModel):
@@ -142,6 +185,20 @@ def create_auth_router(
         scope="account_lookup",
         limit=_limit("AUTH_LOOKUP_LIMIT", 60),
         window_seconds=60,
+    )
+    # Mailing costs somebody else's inbox, so both of these are tighter than
+    # the flows that only cost a database round trip.
+    reset_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="password_reset",
+        limit=_limit("AUTH_RESET_LIMIT", 5),
+        window_seconds=3600,
+    )
+    verify_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="email_verify",
+        limit=_limit("AUTH_VERIFY_LIMIT", 10),
+        window_seconds=3600,
     )
 
     def device_label(request: Request) -> str:
@@ -352,6 +409,20 @@ def create_auth_router(
         )
         await revoke_current(request)
         await issue_cookie(response, request, claimed.id)
+        if body.email:
+            # Offered, not required, and never fatal: an address that cannot be
+            # accepted must not undo an account that has just been claimed.
+            request_id, ip_hash = await audit_coordinates(request, session_factory)
+            try:
+                await request_email_verification(
+                    session_factory,
+                    user_id=UUID(claimed.id),
+                    email=body.email,
+                    ip_hash=ip_hash,
+                    request_id=request_id,
+                )
+            except (EmailAddressError, EmailAlreadyInUse, RecoveryError):
+                logger.info("Registration email not accepted for %s", claimed.id)
         return user_payload(refreshed or claimed)
 
     @router.post("/login")
@@ -559,6 +630,117 @@ def create_auth_router(
             "identitiesAnonymized": result.identities_anonymized,
             "sessionsRevoked": result.sessions_revoked,
         }
+
+    @router.get("/email")
+    async def read_email(request: Request):
+        """What this account knows about its own way back in."""
+        user = await require_user(request)
+        state = await email_state(session_factory, user_id=UUID(user.id))
+        return {
+            "address": state.address,
+            "verified": state.verified,
+            "pendingAddress": state.pending_address,
+            "reminderDue": state.reminder_due,
+            "deliveryConfigured": mail_is_configured(),
+        }
+
+    @router.put("/email")
+    async def set_email(body: EmailBody, request: Request):
+        """Ask to use an address. It is recorded only once it is proved."""
+        user = await require_user(request)
+        await throttle(verify_limiter, request)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        try:
+            address = await request_email_verification(
+                session_factory,
+                user_id=UUID(user.id),
+                email=body.email,
+                ip_hash=ip_hash,
+                request_id=request_id,
+            )
+        except EmailAddressError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        except EmailAlreadyInUse as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        except RecoveryError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        return {"ok": True, "pendingAddress": address}
+
+    @router.post("/email/verify")
+    async def verify_email(body: TokenBody, request: Request):
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        try:
+            address = await confirm_email(
+                session_factory,
+                token=body.token,
+                ip_hash=ip_hash,
+                request_id=request_id,
+            )
+        except EmailAlreadyInUse as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        if address is None:
+            raise HTTPException(
+                status_code=400,
+                detail="That confirmation link has expired or already been used.",
+            )
+        return {"ok": True, "address": address}
+
+    @router.post("/email/reminder-seen")
+    async def acknowledge_email_reminder(request: Request):
+        """Restart the clock, so the note returns rather than repeats."""
+        user = await require_user(request)
+        await mark_reminder_shown(session_factory, user_id=UUID(user.id))
+        return {"ok": True}
+
+    @router.post("/password/forgot")
+    async def forgot_password(body: ForgotPasswordBody, request: Request):
+        """Mail a reset link, and say nothing about whether there was one to mail.
+
+        The same answer either way: this response is not a place to find out
+        which usernames and addresses are real.
+        """
+        await throttle(reset_limiter, request)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        await request_password_reset(
+            session_factory,
+            identifier=body.identifier,
+            ip_hash=ip_hash,
+            request_id=request_id,
+        )
+        return {
+            "ok": True,
+            "detail": (
+                "If that account exists and has a confirmed email address, "
+                "a reset link is on its way."
+            ),
+        }
+
+    @router.post("/password/reset")
+    async def perform_password_reset(
+        body: ResetPasswordBody, request: Request, response: Response
+    ):
+        try:
+            password = validate_password(body.password)
+        except PasswordPolicyError as error:
+            raise HTTPException(status_code=400, detail=PASSWORD_RULE_MESSAGE) from error
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        user_id = await reset_password(
+            session_factory,
+            token=body.token,
+            password_hash=await hash_password(password),
+            ip_hash=ip_hash,
+            request_id=request_id,
+        )
+        if user_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="That reset link has expired or already been used.",
+            )
+        # Every session was revoked, including one held by whoever is standing
+        # here. Signing them back in is the point of having reset it.
+        clear_session_cookie(response, secure=is_secure_request(request))
+        await issue_cookie(response, request, str(user_id))
+        return {"ok": True}
 
     @router.post("/logout")
     async def logout(request: Request, response: Response):

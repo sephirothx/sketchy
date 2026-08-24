@@ -58,6 +58,8 @@ the rotation itself are counted in *rounds*.
 | **Host** | The player who created the room and can start the game and change room settings. | owner, admin, leader |
 | **Guest** | Someone playing under an unclaimed account. Shown in grey italics. | anonymous player, unregistered user |
 | **Administrator** | A trusted service-wide operator. This is an account role, never the **host** of a room. | admin (for a room host), owner |
+| **Recovery address** | The confirmed email address an account can be recovered through. An address that has been offered but not confirmed is not one, and cannot be sent a reset link. | email, contact address, backup email |
+| **Outbox** | The queue of messages written when an action happens and delivered afterwards, so a mail server being down never undoes the action that owed the message. | mail queue, send buffer |
 | **Audit event** | One entry in the append-only record of a security- or moderation-sensitive action: who acted, what was acted on, and the request it belonged to. Never edited, never deleted. | audit log entry, admin log, activity record |
 | **Audit target** | What an audit event was performed on, named as a kind and an identifier - a user, a prompt list, a prompt version, a room, a configuration key. An action on no single row records no target rather than an invented one. | subject, object, affected record |
 | **Avatar** | The deployment-hosted visual representing an account. The generated initial is the default. | profile picture, external avatar URL |

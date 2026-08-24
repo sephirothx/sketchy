@@ -20,6 +20,7 @@ from app.auth.rate_limit import (
 )
 from app.auth.audit import audit_coordinates
 from app.auth.bans import active_ban_filter, active_ban_for_user
+from app.auth.mail import queue_email
 from app.auth.sessions import revoke_all_sessions
 from app.db.models import (
     AuditEvent,
@@ -40,6 +41,8 @@ from app.db.models import (
 from app.domain_values import (
     AccountState,
     AuditTargetType,
+    EmailTemplate,
+    PromptContentModerationState,
     PromptContentReportReason,
     PromptListVisibility,
     ReportReason,
@@ -792,6 +795,31 @@ def create_moderation_router(
                     target.moderation_state = body.moderation_state
                     target.moderated_by_user_id = reviewer.id
                     target.moderated_at = now
+                    # Telling somebody their content was hidden is the least
+                    # the review owes them, and it is the second use the
+                    # address was collected for.
+                    if body.moderation_state == PromptContentModerationState.HIDDEN.value:
+                        owner = (
+                            await session.get(User, report.reported_owner_user_id)
+                            if report.reported_owner_user_id
+                            else None
+                        )
+                        if owner and owner.email and owner.email_verified_at:
+                            queue_email(
+                                session,
+                                to_address=owner.email,
+                                template=EmailTemplate.CONTENT_HIDDEN,
+                                payload={
+                                    "displayName": owner.display_name,
+                                    "what": (
+                                        "A prompt you shared"
+                                        if report.prompt_version_id
+                                        else "A prompt list you shared"
+                                    ),
+                                },
+                                user_id=owner.id,
+                                now=now,
+                            )
 
                 report.status = body.status
                 report.reviewed_by_user_id = reviewer.id
@@ -880,12 +908,29 @@ def create_moderation_router(
                     created_at=now,
                 )
                 session.add(ban)
+                # Written here, in the transaction that creates the ban, so a
+                # mail server that is down cannot undo a suspension and a
+                # suspension cannot be issued without the notice being owed.
+                if target.email and target.email_verified_at is not None:
+                    queue_email(
+                        session,
+                        to_address=target.email,
+                        template=EmailTemplate.ACCOUNT_BANNED,
+                        payload={
+                            "displayName": target.display_name,
+                            "reason": body.reason,
+                        },
+                        user_id=target.id,
+                        now=now,
+                    )
                 session.add(
                     AuditEvent(
                         id=generate_uuid(),
                         event_type="ban.created",
                         actor_user_id=reviewer.id,
                         target_user_id=target.id,
+                        target_type=AuditTargetType.USER.value,
+                        target_id=str(target.id),
                         request_id=request_id,
                         ip_hash=ip_hash,
                         details={

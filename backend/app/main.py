@@ -27,6 +27,7 @@ from app.deployment import (
     validate_worker_topology,
 )
 from app.handlers import register_all_handlers
+from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -151,6 +152,7 @@ async def lifespan(_app: FastAPI):
     shutdown_coordinator.begin_startup(
         drain_seconds=shutdown_drain_seconds()
     )
+    mail_delivery = None
     try:
         validate_python_runtime()
         validate_worker_topology()
@@ -160,9 +162,13 @@ async def lifespan(_app: FastAPI):
         await purge_expired_room_messages(async_session_factory)
         await purge_expired_shutdown_abandonments(async_session_factory)
         await seed_prompt_lists(prompt_list_repo)
+        # One worker owns everything (#382), so the outbox needs no scheduler
+        # and no second process that somebody has to remember to start.
+        mail_delivery = start_delivery_loop(async_session_factory)
         shutdown_coordinator.mark_ready()
         yield
     finally:
+        await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
         await handler_context.timers.close()
         await async_engine.dispose()

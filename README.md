@@ -470,6 +470,13 @@ process. These deployment settings can be tuned without code changes:
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
 | `DB_POOL_RECYCLE_SECONDS` | `1800` | Maximum age before a connection is replaced |
 | `SHUTDOWN_DRAIN_SECONDS` | `30` | Planned-deploy game drain window, 0-300 seconds |
+| `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent |
+| `SMTP_PORT` | `587` | Relay port |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Relay credentials, if it wants them |
+| `SMTP_STARTTLS` | `1` | Upgrade the connection before sending |
+| `SMTP_FROM` | `sketchy@localhost` | Envelope sender |
+| `PUBLIC_BASE_URL` | `http://localhost:8000` | Where confirmation and reset links point |
+| `EMAIL_SWEEP_SECONDS` | `30` | How often the outbox is emptied |
 
 CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete
 migration chain down and up on PostgreSQL and SQLite, checks schema drift and
@@ -494,6 +501,54 @@ Every visitor is given an account automatically on their first page load, and
 it is remembered by an HttpOnly `sketchy_session` cookie. Guests play under a
 name of their choosing; setting a username and password later claims that same
 account, so stats collected as a guest carry over.
+
+#### Recovery
+
+Claiming an account can offer an email address. It is optional, and stays
+optional: requiring one would break registration on every deployment with no
+SMTP configured, which includes the zero-configuration default this project
+documents. An account without one is reminded weekly that a forgotten password
+cannot be reset - a note that can be closed and returns, with the interval kept
+on the account so it neither restarts on each new device nor disappears when
+browser storage is cleared.
+
+An address is recorded only once it has been confirmed. Until then it lives in
+the confirmation token and nowhere else, so a typo cannot hand the account to
+whoever owns the address that was typed, and nobody can reserve a mailbox they
+do not control. Only a confirmed address can be sent a reset link.
+
+`POST /api/auth/password/forgot` answers identically whether or not the account
+exists: the response is not a place to learn which usernames are real. A
+completed reset revokes every session on the account, including one held by
+whoever forced the recovery, and signs the person performing it back in.
+
+Mail is queued in `email_outbox` in the same transaction as the action that
+causes it, and delivered by a sweeper. A suspension is never undone by an
+unreachable relay, and a reset message is retried with backoff and then
+recorded as failed rather than disappearing. With no `SMTP_HOST` set the
+messages are logged instead of sent, so a self-hoster can see what would have
+gone out.
+
+The address is used to reset a password, and to tell someone their account was
+suspended or their content hidden. Nothing else is ever sent to it.
+
+Deployments that cannot send mail reset a password from the server instead.
+This is deliberately not an API - there is no authentication that would make a
+remote password reset safe - and it records the reason in the audit log:
+
+```bash
+cd backend
+.venv/bin/python -m app.auth.password_reset \
+  --username Forgetful --reason "Asked in person, identity confirmed"
+```
+
+Queued mail can also be flushed by hand, for cron-driven deployments or to see
+what is stuck:
+
+```bash
+cd backend
+.venv/bin/python -m app.services.mail_delivery
+```
 
 Anonymous retention is based on `last_active_at`, which changes when a player
 successfully takes or reconnects to a non-spectator room seat and when a game
@@ -645,6 +700,8 @@ your players share one address:
 | `AUTH_LOGIN_LIMIT` | 10 per 5 minutes | `POST /api/auth/login` |
 | `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
+| `AUTH_RESET_LIMIT` | 5 per hour | `POST /api/auth/password/forgot` |
+| `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 
 Set the same high-entropy `IP_HASH_SECRET` on every deployment that shares the
 database if you manage secrets externally. Rotating it starts fresh buckets

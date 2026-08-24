@@ -9,10 +9,12 @@ import { GameRoomPage } from "./pages/GameRoomPage";
 import { PromptStatsPage } from "./pages/PromptStatsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { MyPromptListsPage } from "./pages/MyPromptListsPage";
+import { AccountRecoveryPage } from "./pages/AccountRecoveryPage";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
+import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { useAuthStore } from "./store/authStore";
 import { socket } from "./lib/socket";
 import { parseShutdownNotice, shutdownSecondsRemaining } from "./lib/shutdownNotice";
@@ -91,6 +93,7 @@ function App() {
         </div>
       )}
       <ConnectionStatusBanner />
+      <EmailRecoveryReminder />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LobbyBrowserPage />} />
@@ -101,6 +104,9 @@ function App() {
           <Route path="/my-prompt-lists" element={<MyPromptListsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/:userId" element={<ProfilePage />} />
+          <Route path="/forgot-password" element={<AccountRecoveryPage mode="forgot" />} />
+          <Route path="/reset-password" element={<AccountRecoveryPage mode="reset" />} />
+          <Route path="/verify-email" element={<AccountRecoveryPage mode="verify" />} />
         </Routes>
         <SettingsModal />
         <ConfettiCanvas />

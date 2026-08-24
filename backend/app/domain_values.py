@@ -203,6 +203,32 @@ class ReportStatus(StrEnum):
     DISMISSED = "dismissed"
 
 
+class AuthTokenPurpose(StrEnum):
+    """Why a one-shot token exists.
+
+    One table rather than one per kind: the shape and the lifecycle are
+    identical - issued, mailed, consumed once or expired - so a third purpose
+    is a new value here rather than a migration.
+    """
+
+    PASSWORD_RESET = "password_reset"
+    EMAIL_VERIFY = "email_verify"
+
+
+class EmailOutboxState(StrEnum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+
+
+class EmailTemplate(StrEnum):
+    VERIFY_EMAIL = "verify_email"
+    RESET_PASSWORD = "reset_password"
+    PASSWORD_CHANGED = "password_changed"
+    ACCOUNT_BANNED = "account_banned"
+    CONTENT_HIDDEN = "content_hidden"
+
+
 class AuditTargetType(StrEnum):
     """What an audited action was performed on.
 
@@ -258,6 +284,9 @@ BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)
 REPORT_REASONS = tuple(reason.value for reason in ReportReason)
 REPORT_STATUSES = tuple(status.value for status in ReportStatus)
 AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
+AUTH_TOKEN_PURPOSES = tuple(purpose.value for purpose in AuthTokenPurpose)
+EMAIL_OUTBOX_STATES = tuple(state.value for state in EmailOutboxState)
+EMAIL_TEMPLATES = tuple(template.value for template in EmailTemplate)
 
 # Keep the backend's registration/API/database fallback aligned with the
 # frontend's checked-in default shortcuts. A fresh row must be usable even when

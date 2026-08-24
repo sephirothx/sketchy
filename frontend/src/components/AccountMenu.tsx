@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
+import { MAX_EMAIL_LENGTH, emailLooksUsable } from "../lib/accountRecovery";
 import {
   getFocusableElements,
   useEscapeLayer,
@@ -236,13 +237,14 @@ export function AuthDialog({
   suggestedUsername?: string;
   onClose: () => void;
   onSwitchMode: (mode: AuthMode) => void;
-  onSubmit: (username: string, password: string) => Promise<unknown>;
+  onSubmit: (username: string, password: string, email?: string) => Promise<unknown>;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const usernameRef = useRef<HTMLInputElement | null>(null);
   const titleId = useId();
   const [username, setUsername] = useState(suggestedUsername ?? "");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -262,11 +264,17 @@ export function AuthDialog({
         setError("Password must be at least 8 characters.");
         return;
       }
+      // Optional, so an empty field is fine; a filled-in one that cannot work
+      // is worth catching before the account is created around it.
+      if (email.trim() && !emailLooksUsable(email)) {
+        setError("That does not look like an email address.");
+        return;
+      }
     }
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(username.trim(), password);
+      await onSubmit(username.trim(), password, email.trim() || undefined);
       onClose();
     } catch (submitError) {
       setError(
@@ -340,12 +348,48 @@ export function AuthDialog({
             required
           />
 
+          {isClaim && (
+            <>
+              <label htmlFor={`${titleId}-email`}>
+                Email <span className="auth-optional">optional</span>
+              </label>
+              {/* The only way back into an account whose password is lost. Not
+                  required, because a deployment with no mail server would then
+                  be one nobody could register on at all. */}
+              <input
+                id={`${titleId}-email`}
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setError(null);
+                }}
+                maxLength={MAX_EMAIL_LENGTH}
+                autoComplete="email"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+              <p className="auth-hint">
+                Lets you reset your password later. Used for nothing else.
+              </p>
+            </>
+          )}
+
           {error && <p className="auth-error" role="alert">{error}</p>}
 
           <button type="submit" className="modal-button" disabled={busy}>
             {busy ? "Please wait…" : isClaim ? "Create account" : "Log in"}
           </button>
         </form>
+
+        {!isClaim && (
+          <p className="auth-switch">
+            <Link className="auth-link" to="/forgot-password" onClick={onClose}>
+              Forgot your password?
+            </Link>
+          </p>
+        )}
 
         <p className="auth-switch">
           {isClaim ? "Already registered? " : "New here? "}

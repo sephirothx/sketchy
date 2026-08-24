@@ -458,3 +458,76 @@
     justify-content: flex-start;
   }
 }
+
+.auth-optional {
+  color: #64748b;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.auth-hint {
+  color: #64748b;
+  font-size: 12px;
+  margin: 0;
+}
+
+/* Standing note, not an alarm: it can be closed and comes back in a week. */
+.email-reminder-banner {
+  align-items: center;
+  background: #eff6ff;
+  border-bottom: 1px solid #3b82f6;
+  color: #1e3a8a;
+  display: flex;
+  font-size: 14px;
+  gap: 12px;
+  justify-content: center;
+  padding: 8px 16px;
+  position: sticky;
+  text-align: center;
+  top: 0;
+  z-index: 1140;
+}
+
+.email-reminder-banner button {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 2px 10px;
+}
+
+.email-reminder-banner .email-reminder-dismiss {
+  border: 0;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.recovery-page {
+  display: flex;
+  justify-content: center;
+  padding: 48px 16px;
+}
+
+.recovery-card {
+  background: var(--panel-bg, #fff);
+  border: 1px solid var(--panel-border, #cbd5e1);
+  border-radius: 12px;
+  color: var(--panel-text, #0f172a);
+  max-width: 420px;
+  padding: 24px;
+  width: 100%;
+}
+
+.recovery-card h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.recovery-body {
+  font-size: 14px;
+  margin: 0 0 12px;
+}

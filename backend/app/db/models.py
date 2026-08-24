@@ -29,6 +29,9 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from app.auth.avatars import BUILT_IN_AVATAR_KEYS
 from app.db.types import UTCDateTime
 from app.domain_values import (
+    AUTH_TOKEN_PURPOSES,
+    EMAIL_OUTBOX_STATES,
+    EMAIL_TEMPLATES,
     ACCOUNT_STATES,
     BRUSH_CURSOR_STYLES,
     DATA_EXPORT_STATUSES,
@@ -494,12 +497,107 @@ class UserSettings(Base):
     custom_brush_presets: Mapped[list] = mapped_column(
         JSON, default=list, server_default=text("'[]'"), nullable=False
     )
+    # When the account was last told it has no way back in. Stored per account
+    # rather than in the browser so the reminder does not restart on every new
+    # device, and does not vanish because one was cleared.
+    email_reminder_last_shown_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class AuthToken(Base):
+    """A one-shot credential for a flow that leaves the app and comes back.
+
+    Only the hash is stored, for the same reason a password is: the row is a
+    way to check a token somebody presents, not a way to recover one. Both
+    purposes share the table because both are issued, mailed, consumed once,
+    and expire - see `AuthTokenPurpose`.
+    """
+
+    __tablename__ = "auth_tokens"
+    __table_args__ = (
+        _values_check("purpose", AUTH_TOKEN_PURPOSES, "ck_auth_tokens_purpose"),
+        CheckConstraint(
+            "purpose <> 'email_verify' OR email IS NOT NULL",
+            name="ck_auth_tokens_verify_address",
+        ),
+        Index("ix_auth_tokens_user_purpose", "user_id", "purpose"),
+        Index("ix_auth_tokens_expires_at", "expires_at"),
+    )
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The address being proved, for a verification token. It is deliberately
+    # not written to users.email until it is proved: an unverified address
+    # there would let one account reserve another person's mailbox, and would
+    # make a typo a way of handing the account to a stranger.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    requested_ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+
+class EmailOutboxEntry(Base):
+    """A message queued for delivery, written in the transaction that caused it.
+
+    Mail is not sent inline. A ban that could not notify its subject is still a
+    ban, and a reset mail that failed because the relay blinked is the one
+    message a player will certainly retry. Both are answered by writing the
+    intent down first and letting a sweeper carry it out.
+    """
+
+    __tablename__ = "email_outbox"
+    __table_args__ = (
+        _values_check("state", EMAIL_OUTBOX_STATES, "ck_email_outbox_state"),
+        _values_check("template", EMAIL_TEMPLATES, "ck_email_outbox_template"),
+        CheckConstraint(
+            "(state = 'sent') = (sent_at IS NOT NULL)",
+            name="ck_email_outbox_sent_at",
+        ),
+        CheckConstraint("attempts >= 0", name="ck_email_outbox_attempts"),
+        Index("ix_email_outbox_ready", "state", "next_attempt_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    # Denormalized on purpose: the address a message was sent to is a fact
+    # about the message, and it must survive the account changing its mind.
+    to_address: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Nullable and SET NULL so erasing an account does not erase the record
+    # that something was sent, only the link back to who it was sent to.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    template: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    last_error: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    next_attempt_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class AuditEvent(Base):

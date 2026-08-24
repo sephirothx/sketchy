@@ -16,7 +16,9 @@ from app.db import async_engine, async_session_factory, init_db
 from app.db.models import (
     AuditEvent,
     AuthSession,
+    AuthToken,
     DataExport,
+    EmailOutboxEntry,
     ExternalIdentity,
     GameParticipant,
     GameRecord,
@@ -48,6 +50,7 @@ from app.db.models import (
 )
 from app.domain_values import (
     AccountState,
+    EmailOutboxState,
     AuditTargetType,
     DataExportStatus,
     TurnDrawingStatus,
@@ -59,6 +62,9 @@ EXPORT_SCHEMA_VERSION = 1
 EXPORT_TTL = timedelta(days=7)
 STALE_PROCESSING_AFTER = timedelta(minutes=15)
 DELETED_DISPLAY_NAME = "Deleted player"
+# Not an address anyone owns, and not empty, so the not-null column keeps
+# saying a message went somewhere without saying where.
+DELETED_EMAIL_ADDRESS = "deleted@invalid"
 DEFAULT_EXPORT_BATCH_SIZE = 25
 
 logger = logging.getLogger(__name__)
@@ -1106,6 +1112,27 @@ async def anonymize_account(
                         UserBlock.blocked_user_id.in_(identity_ids),
                     )
                 )
+            )
+            # A live reset link is a way into an account that no longer
+            # exists, and both tables hold an address the erasure is supposed
+            # to remove. Queued messages go with them: a verification mail
+            # delivered after deletion would be addressed to somebody whose
+            # account is gone. Messages already sent keep their row, with the
+            # link back to the account dropped by ON DELETE SET NULL - that a
+            # message was sent is a fact about the message.
+            await session.execute(
+                delete(AuthToken).where(AuthToken.user_id.in_(identity_ids))
+            )
+            await session.execute(
+                delete(EmailOutboxEntry).where(
+                    EmailOutboxEntry.user_id.in_(identity_ids),
+                    EmailOutboxEntry.state == EmailOutboxState.PENDING.value,
+                )
+            )
+            await session.execute(
+                update(EmailOutboxEntry)
+                .where(EmailOutboxEntry.user_id.in_(identity_ids))
+                .values(to_address=DELETED_EMAIL_ADDRESS, user_id=None)
             )
 
             for identity in (
