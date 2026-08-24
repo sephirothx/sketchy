@@ -513,10 +513,9 @@
 }
 
 .recovery-card {
-  background: var(--panel-bg, #fff);
-  border: 1px solid var(--panel-border, #cbd5e1);
+  background: #fff;
+  border: 1px solid #dfe1e6;
   border-radius: 12px;
-  color: var(--panel-text, #0f172a);
   max-width: 420px;
   padding: 24px;
   width: 100%;
@@ -544,7 +543,7 @@
 }
 
 .ops-tabs {
-  border-bottom: 1px solid var(--panel-border, #cbd5e1);
+  border-bottom: 1px solid #dfe1e6;
   display: flex;
   gap: 4px;
   margin-bottom: 20px;
@@ -573,8 +572,8 @@
 }
 
 .ops-tile {
-  background: var(--panel-bg, #fff);
-  border: 1px solid var(--panel-border, #cbd5e1);
+  background: #fff;
+  border: 1px solid #dfe1e6;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -614,8 +613,8 @@
 }
 
 .ops-trend-card {
-  background: var(--panel-bg, #fff);
-  border: 1px solid var(--panel-border, #cbd5e1);
+  background: #fff;
+  border: 1px solid #dfe1e6;
   border-radius: 10px;
   padding: 12px 14px;
 }
@@ -661,8 +660,13 @@
 }
 
 .ops-filters input {
-  border: 1px solid var(--panel-border, #cbd5e1);
+  /* Explicit, not inherited: with no colour set the browser renders form
+     controls in the operating system's scheme, so a light page gets a dark
+     grey box. The same reason .auth-form input states both. */
+  background: #fff;
+  border: 1px solid #c7cad1;
   border-radius: 6px;
+  color: #0f172a;
   padding: 6px 8px;
 }
 
@@ -680,7 +684,7 @@
 
 .ops-table th,
 .ops-table td {
-  border-bottom: 1px solid var(--panel-border, #e2e8f0);
+  border-bottom: 1px solid #e5e7eb;
   padding: 6px 8px;
   text-align: left;
 }

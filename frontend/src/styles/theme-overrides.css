@@ -1310,3 +1310,49 @@
 [data-theme="dark"] .server-shutdown-banner.is-restarted button:hover {
   background: #312e81;
 }
+
+/* Operator page and account-recovery surfaces. Same treatment as .panel: the
+   card is #1e293b on the #0f172a body, fields drop back to the body colour. */
+[data-theme="dark"] .ops-tile,
+[data-theme="dark"] .ops-trend-card,
+[data-theme="dark"] .recovery-card {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .ops-tabs {
+  border-bottom-color: #334155;
+}
+
+[data-theme="dark"] .ops-filters input {
+  background: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .ops-table th,
+[data-theme="dark"] .ops-table td {
+  border-bottom-color: #334155;
+}
+
+/* Severity has to stay separate from the accent, and stay legible on the dark
+   ground rather than keeping a border tuned for white. */
+[data-theme="dark"] .ops-tile.is-warning {
+  border-color: #ea580c;
+}
+
+[data-theme="dark"] .email-reminder-banner {
+  background: #172554;
+  border-bottom-color: #3b82f6;
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .auth-optional,
+[data-theme="dark"] .auth-hint {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .profile-history-filter {
+  color: #cbd5e1;
+}
