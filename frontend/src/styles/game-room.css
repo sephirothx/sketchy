@@ -510,14 +510,17 @@
 }
 
 .waiting-room { margin: 0; padding: 0 0 32px; width: 100%; }
-.waiting-room-intro, .waiting-card-heading, .waiting-start-card { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+.waiting-room-intro, .waiting-card-heading { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
 .waiting-room-intro { margin-bottom: 16px; min-height: 72px; }
 .waiting-room-eyebrow, .waiting-card-kicker { color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 5px; text-transform: uppercase; }
 .waiting-room-intro h1, .waiting-card h2 { color: #1e293b; margin: 0; }
 .waiting-room-intro h1 { font-size: 28px; }
-.waiting-room-subtitle, .waiting-start-hint { color: #64748b; margin: 6px 0 0; }
-.waiting-room-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-.waiting-room-actions button { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 7px; color: #334155; font-weight: 700; padding: 9px 12px; }
+.waiting-room-subtitle { color: #64748b; margin: 6px 0 0; }
+.waiting-room-actions { align-items: center; display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+/* Direct children only: the Start button inside .waiting-start-inline keeps
+   its own primary styling. */
+.waiting-room-actions > button { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 7px; color: #334155; font-weight: 700; padding: 9px 12px; }
+.waiting-start-inline { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
 .waiting-invite-button { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; color: #1d4ed8; font-weight: 700; padding: 10px 13px; white-space: nowrap; }
 .waiting-room-layout { align-items: start; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 300px; margin-top: 20px; }
 .waiting-room-main { min-width: 0; }
@@ -602,8 +605,6 @@
 .custom-prompt-full-text-tooltip { background: #0f172a; border: 1px solid #334155; border-radius: 7px; box-shadow: 0 8px 24px rgb(15 23 42 / 28%); box-sizing: border-box; color: #f8fafc; font-size: 13px; font-weight: 600; line-height: 1.35; max-width: calc(100vw - 16px); overflow-wrap: anywhere; padding: 7px 9px; pointer-events: none; position: fixed; width: max-content; z-index: 1000; }
 .waiting-custom-prompts-empty { background: #fff; border: 1px dashed #cbd5e1; border-radius: 8px; margin-top: 6px !important; padding: 16px; text-align: center; }
 .waiting-custom-prompts-content .waiting-custom-prompts-error { color: #b91c1c; }
-.waiting-start-card { margin-top: 16px; }
-.waiting-host-actions { display: flex; flex: 0 0 auto; gap: 8px; }
 .waiting-settings-button { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; color: #1d4ed8; font-weight: 700; padding: 10px 13px; }
 .waiting-start-error { color: #dc2626; margin: 8px 0 0; }
 .waiting-start-button { background: #16a34a; border: 0; border-radius: 8px; color: #fff; flex: 0 0 auto; font-size: 15px; font-weight: 700; padding: 12px 18px; }

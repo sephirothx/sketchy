@@ -83,7 +83,11 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             ) >= 16
             await advanced_summary.click()
             assert await host_page.is_disabled('.waiting-start-button')
-            assert await host_page.is_visible('text=Spectators, AFK, and disconnected players do not count.')
+            # The eligibility explanation lives in the disabled button's
+            # tooltip rather than as visible text.
+            assert (
+                await host_page.get_attribute('.waiting-start-button', 'title')
+            ) == "Need 1 more active player. Spectators, AFK, and disconnected players do not count."
 
             code_text = await host_page.inner_text('.room-copy-button')
             code = code_text.split('Code:')[1].strip()
@@ -111,7 +115,8 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
 
             await host_page.wait_for_selector('text=LobbyPlayer')
             await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
-            assert await host_page.is_visible('text=2 active players are ready to play.')
+            # Once startable, the button needs no explanation.
+            assert await host_page.get_attribute('.waiting-start-button', 'title') is None
 
             # The host revises settings inline before the game and everyone sees
             # the update - with no Save button to forget (#325).

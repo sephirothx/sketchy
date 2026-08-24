@@ -136,20 +136,44 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             {props.isPublic ? "Public room" : "Private room"}
           </p>
           <h1>{props.name}</h1>
-          <p className="waiting-room-subtitle">
-            {rematch
-              ? "Game over. Ready for a rematch."
-              : "Get everyone ready before the first round."}
-          </p>
+          {!isHost && (
+            <p className="waiting-room-subtitle">
+              {host ? (
+                <>
+                  {rematch ? "Game over. " : ""}
+                  <span className={playerNameClass(host.isAnonymous)} style={playerNameStyle(host.nameColor, host.isAnonymous)}>{host.nickname}</span>
+                  {" "}will start {rematch ? "the rematch" : "the game"}.
+                </>
+              ) : (
+                "Waiting for a host."
+              )}
+            </p>
+          )}
         </div>
-        {finalScores && (
+        {(isHost || finalScores) && (
           <div className="waiting-room-actions">
-            {props.highlightCount > 0 && (
+            {isHost && (
+              <div className="waiting-start-inline" aria-live="polite">
+                <button
+                  type="button"
+                  className="waiting-start-button"
+                  disabled={!canStart || props.startBusy}
+                  title={canStart
+                    ? undefined
+                    : `Need ${needsPlayers} more active player${needsPlayers === 1 ? "" : "s"}. Spectators, AFK, and disconnected players do not count.`}
+                  onClick={props.onStart}
+                >
+                  {props.startBusy ? "Starting…" : rematch ? "Rematch" : "Start game"}
+                </button>
+                {props.startError && <p className="waiting-start-error">{props.startError}</p>}
+              </div>
+            )}
+            {finalScores && props.highlightCount > 0 && (
               <button type="button" onClick={props.onViewHighlights}>
                 View highlights
               </button>
             )}
-            {props.drawingCount > 0 && (
+            {finalScores && props.drawingCount > 0 && (
               <button type="button" onClick={props.onViewDrawings}>
                 View drawings
               </button>
@@ -206,45 +230,6 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           )}
         </section>
       )}
-
-      <section className="waiting-card waiting-start-card" aria-live="polite">
-        {isHost ? (
-          <>
-            <div>
-              <p className="waiting-card-kicker">Host controls</p>
-              <h2>{rematch ? "Ready for a rematch?" : "Start when everyone is ready"}</h2>
-              <p className="waiting-start-hint">
-                {canStart
-                  ? `${eligiblePlayers.length} active players are ready to play.`
-                  : `Need ${needsPlayers} more active player${needsPlayers === 1 ? "" : "s"}. Spectators, AFK, and disconnected players do not count.`}
-              </p>
-              {props.startError && <p className="waiting-start-error">{props.startError}</p>}
-            </div>
-            <div className="waiting-host-actions">
-              <button
-                type="button"
-                className="waiting-start-button"
-                disabled={!canStart || props.startBusy}
-                onClick={props.onStart}
-              >
-                {props.startBusy ? "Starting…" : rematch ? "Rematch" : "Start game"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <div>
-            <p className="waiting-card-kicker">Waiting for host</p>
-            <h2>
-              {host
-                ? <><span className={playerNameClass(host.isAnonymous)} style={playerNameStyle(host.nameColor, host.isAnonymous)}>{host.nickname}</span> will start {rematch ? "the rematch" : "the game"}</>
-                : "Waiting for a host"}
-            </h2>
-            <p className="waiting-start-hint">
-              You can invite friends or mark yourself AFK while you wait.
-            </p>
-          </div>
-        )}
-      </section>
 
     </main>
   );

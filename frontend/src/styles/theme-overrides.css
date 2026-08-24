@@ -545,7 +545,6 @@
 [data-theme="dark"] .room-player-occupancy,
 [data-theme="dark"] .room-chat-drawer-note,
 [data-theme="dark"] .waiting-room-subtitle,
-[data-theme="dark"] .waiting-start-hint,
 [data-theme="dark"] .waiting-rules-list,
 [data-theme="dark"] .waiting-spectators h3 {
   color: #94a3b8;
@@ -616,7 +615,7 @@
   border-color: #334155;
 }
 
-[data-theme="dark"] .waiting-room-actions button {
+[data-theme="dark"] .waiting-room-actions > button {
   background: #334155;
   border-color: #475569;
   color: #e2e8f0;
@@ -1141,10 +1140,14 @@
 }
 
 @media (max-width: 600px) {
-  .waiting-room-intro,
-  .waiting-start-card {
+  .waiting-room-intro {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .waiting-start-inline {
+    align-items: stretch;
+    width: 100%;
   }
 
   .waiting-invite-button,
