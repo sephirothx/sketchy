@@ -886,7 +886,8 @@
   }
 
   .game-room.game-room-playing .round-info,
-  .game-room.game-room-playing .prompt-display {
+  .game-room.game-room-playing .prompt-display,
+  .game-room.game-room-playing .timer-bar {
     flex: 0 0 auto;
   }
 
@@ -1194,10 +1195,8 @@
 
 .round-info {
   display: flex;
-  flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
-  row-gap: 3px;
   width: 100%;
   font-weight: 600;
 }
@@ -1514,6 +1513,7 @@
 
   .game-room.game-room-playing .round-info,
   .game-room.game-room-playing .prompt-display,
+  .game-room.game-room-playing .timer-bar,
   .game-room.game-room-playing .canvas-wrapper {
     width: var(--canvas-cap);
     max-width: var(--canvas-cap);

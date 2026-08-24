@@ -5,7 +5,7 @@ import { GameAnnouncer } from "./GameAnnouncer";
 import { RoomChatPanel } from "./RoomChatPanel";
 import { RoomPlayersPanel } from "./RoomPlayersPanel";
 import { TurnResultsOverlay } from "./TurnResultsOverlay";
-import { Timer } from "./Timer";
+import { Timer, TimerBar } from "./Timer";
 import { Toolbar } from "./Toolbar";
 import { WaitingRoomPanel } from "./WaitingRoomPanel";
 import { PromptDisplay } from "./PromptDisplay";
@@ -242,6 +242,9 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         hintSpend={hintSpend}
         maxHintSpend={maxHintSpend}
       />
+      {phase !== "turn_results" && (
+        <TimerBar totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
+      )}
       <Canvas
         ref={canvasRef}
         isDrawer={canDrawNow}
