@@ -546,3 +546,55 @@ async def test_lifting_a_suspension_records_who_and_why(env):
         json={"reason": "Again"},
     )
     assert again.status_code == 409
+
+
+async def test_the_same_player_cannot_be_reported_twice_while_it_waits(env):
+    """The REST path carries the rule too, and the index carries it under a
+    race that both requests pass the check."""
+    new_client, factory, _ = env
+    reporter_http, target_http = new_client(), new_client()
+    await register(reporter_http, "DoubleReporter")
+    target = await register(target_http, "DoubleTarget")
+
+    body = {
+        "reportedUserId": target["id"],
+        "reason": "harassment",
+        "details": "Said the thing.",
+    }
+    first = await reporter_http.post("/api/reports", json=body)
+    second = await reporter_http.post("/api/reports", json=body)
+
+    assert first.status_code == 201
+    assert second.status_code == 409
+    assert "already reported" in second.json()["detail"]
+
+    # The index is what decides, not the check - proved by inserting straight
+    # past the endpoint, the way two simultaneous requests would.
+    async with factory() as session:
+        with pytest.raises(IntegrityError):
+            async with session.begin():
+                session.add(
+                    PlayerReport(
+                        id=generate_uuid(),
+                        reporter_user_id=UUID(
+                            (await reporter_http.get("/api/auth/me")).json()["id"]
+                        ),
+                        reported_user_id=UUID(target["id"]),
+                        reason=ReportReason.SPAM.value,
+                        details="A racing duplicate.",
+                        context_snapshot={},
+                    )
+                )
+
+    # Reviewed, so the same reporter may raise a new one.
+    moderator_http = new_client()
+    moderator = await register(moderator_http, "DoubleModerator")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    reviewed = await moderator_http.patch(
+        f"/api/moderation/reports/{first.json()['id']}",
+        json={"status": "dismissed", "note": "Not actionable"},
+    )
+    assert reviewed.status_code == 200
+
+    third = await reporter_http.post("/api/reports", json=body)
+    assert third.status_code == 201

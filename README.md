@@ -638,7 +638,11 @@ room. It also selects the evidence - the reported player's recent messages, as
 the reporter actually received them - which is what makes "is this message
 theirs" and "did you see it" true by construction rather than checks against a
 client's claims. Reporting requires an account, because a report a moderator
-cannot follow up on helps nobody.
+cannot follow up on helps nobody. One reporter holds one open report per
+player, the same rule content reports carry: saying it again while a moderator
+has yet to look adds no evidence and buries the queue, and once the report is
+decided the same reporter may raise a new one, because that is a new incident
+rather than the same complaint repeated.
 
 **Moderation** carries a third tab for suspensions: who is suspended, why, and
 until when. A suspension can be given an end date - 24 hours, 7 days, 30 days,

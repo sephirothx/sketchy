@@ -595,6 +595,26 @@ def create_moderation_router(
                         turn = await session.get(
                             TurnRecord, next(iter(selected_turn_ids))
                         )
+                # The rate limiter bounds how many reports one client may
+                # send; this bounds how many times the same person may be
+                # reported by the same reporter, which is the noise a queue
+                # actually drowns in. Same rule as content reports.
+                already_open = await session.scalar(
+                    select(PlayerReport.id).where(
+                        PlayerReport.reporter_user_id == db_reporter_id,
+                        PlayerReport.reported_user_id == target.id,
+                        PlayerReport.status == ReportStatus.PENDING.value,
+                    )
+                )
+                if already_open is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "You have already reported this player, and a "
+                            "moderator has not reviewed it yet."
+                        ),
+                    )
+
                 game_id = game.id if game is not None else (turn.game_id if turn else None)
                 # Everything above this line is the router proving what a
                 # client told it. The writing is shared with the socket path,
@@ -613,7 +633,19 @@ def create_moderation_router(
                     request_id=request_id,
                     ip_hash=ip_hash,
                 )
-                await session.flush()
+                try:
+                    await session.flush()
+                except IntegrityError as error:
+                    # Two submissions in the same instant both passed the check
+                    # above; the partial unique index is what really decides,
+                    # and the loser is told what a slower duplicate is told.
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "You have already reported this player, and a "
+                            "moderator has not reviewed it yet."
+                        ),
+                    ) from error
             return {
                 "id": str(report.id),
                 "status": report.status,

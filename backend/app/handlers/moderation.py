@@ -13,6 +13,11 @@ from app.handlers.payloads import (
     VotePayload,
     parse_payload,
 )
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+
+from app.db.models import PlayerReport
+from app.domain_values import ReportStatus
 from app.rooms import majority_of
 from app.services.player_reports import (
     evidence_from_live_room,
@@ -149,6 +154,24 @@ async def report_player(ctx: HandlerContext, sid, data):
 
     async with ctx.session_factory() as session:
         async with session.begin():
+            # The same rule the REST path and content reports carry: saying it
+            # again while a moderator has yet to look adds no evidence and
+            # buries the queue.
+            already_open = await session.scalar(
+                select(PlayerReport.id).where(
+                    PlayerReport.reporter_user_id == UUID(reporter.user_id),
+                    PlayerReport.reported_user_id == UUID(target.user_id),
+                    PlayerReport.status == ReportStatus.PENDING.value,
+                )
+            )
+            if already_open is not None:
+                return {
+                    "ok": False,
+                    "error": (
+                        "You have already reported this player. A moderator "
+                        "has not looked at it yet."
+                    ),
+                }
             messages = await evidence_from_live_room(
                 session,
                 room_instance_id=UUID(room.retention_scope_id),
@@ -173,7 +196,18 @@ async def report_player(ctx: HandlerContext, sid, data):
                     "reported_display_name": target.nickname,
                 },
             )
-            await session.flush()
+            try:
+                await session.flush()
+            except IntegrityError:
+                # Two clicks in the same instant both passed the check above;
+                # the partial unique index is what really decides.
+                return {
+                    "ok": False,
+                    "error": (
+                        "You have already reported this player. A moderator "
+                        "has not looked at it yet."
+                    ),
+                }
             report_id = str(report.id)
 
     logger.info(

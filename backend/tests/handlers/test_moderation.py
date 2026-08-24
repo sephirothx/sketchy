@@ -437,6 +437,88 @@ async def test_reporting_names_a_seat_and_never_an_account():
 
 
 @pytest.mark.asyncio
+async def test_the_same_player_cannot_be_reported_twice_while_it_waits():
+    """Saying it again adds no evidence and buries the queue. Once a moderator
+    has decided, the same reporter may raise a new one - that is a new
+    incident rather than the same complaint repeated."""
+    from uuid import uuid4
+
+    from sqlalchemy import func, select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.db.models import Base, PlayerReport, User
+    from app.domain_values import ReportStatus
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    reporter_id, target_id = uuid4(), uuid4()
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(
+        room, "Reporter", user_id=str(reporter_id), is_anonymous=False
+    )
+    target = room_manager.add_player(
+        room, "Target", user_id=str(target_id), is_anonymous=False
+    )
+    reporter.sid = "reporter-sid"
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    User(
+                        id=user_id,
+                        username=name,
+                        password_hash="hash",
+                        display_name=name,
+                        state="registered",
+                    )
+                    for user_id, name in (
+                        (reporter_id, "Reporter"),
+                        (target_id, "Target"),
+                    )
+                )
+
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager)
+        ctx.session_factory = factory
+        sio.get_session = AsyncMock(
+            return_value={"room_id": room.id, "player_id": reporter.id}
+        )
+        sio.emit = AsyncMock()
+
+        body = {
+            "targetPlayerId": target.id,
+            "reason": "harassment",
+            "details": "Said the thing.",
+        }
+        first = await sio.handlers["/"]["report_player"]("reporter-sid", body)
+        second = await sio.handlers["/"]["report_player"]("reporter-sid", body)
+
+        assert first["ok"] is True
+        assert second["ok"] is False
+        assert "already reported" in second["error"]
+        async with factory() as session:
+            assert await session.scalar(select(func.count(PlayerReport.id))) == 1
+
+        # Reviewed, so the next complaint is a new incident.
+        async with factory() as session:
+            async with session.begin():
+                report = await session.scalar(select(PlayerReport))
+                report.status = ReportStatus.DISMISSED.value
+
+        third = await sio.handlers["/"]["report_player"]("reporter-sid", body)
+        assert third["ok"] is True
+        async with factory() as session:
+            assert await session.scalar(select(func.count(PlayerReport.id))) == 2
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_a_report_cannot_be_used_to_discover_who_is_in_a_room():
     """An unknown seat and your own seat answer identically."""
     room_manager = RoomManager()

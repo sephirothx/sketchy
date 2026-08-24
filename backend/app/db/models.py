@@ -736,6 +736,19 @@ class PlayerReport(Base):
             "OR reporter_user_id != reported_user_id",
             name="ck_player_reports_not_self",
         ),
+        # One open report per reporter per player, the same rule content
+        # reports carry. Saying it again while a moderator has yet to look
+        # adds no evidence and buries the queue; once the report is resolved
+        # or dismissed the same reporter may raise a new one, because that is
+        # a new incident rather than the same complaint repeated.
+        Index(
+            "uq_player_reports_open_target",
+            "reporter_user_id",
+            "reported_user_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+            sqlite_where=text("status = 'pending'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
