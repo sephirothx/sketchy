@@ -59,6 +59,7 @@ from app.auth.recovery import (
     RecoveryError,
     confirm_email,
     email_state,
+    password_reset_link_is_usable,
     mark_reminder_shown,
     request_email_verification,
     request_password_reset,
@@ -192,6 +193,14 @@ def create_auth_router(
         session_factory,
         scope="password_reset",
         limit=_limit("AUTH_RESET_LIMIT", 5),
+        window_seconds=3600,
+    )
+    # Looser than requesting a reset: this costs a lookup rather than somebody
+    # else's inbox, and one page load with a reload or two must not exhaust it.
+    reset_check_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="password_reset_check",
+        limit=_limit("AUTH_RESET_CHECK_LIMIT", 30),
         window_seconds=3600,
     )
     verify_limiter = PersistentRateLimiter(
@@ -714,6 +723,20 @@ def create_auth_router(
                 "a reset link is on its way."
             ),
         }
+
+    @router.post("/password/reset/check")
+    async def check_reset_link(body: TokenBody, request: Request):
+        """Is this link still good? Asked when the page opens, so somebody is
+        not told the link is dead only after choosing a password.
+
+        Deliberately does not consume it: the person has not set a password
+        yet. Throttled like a reset request because it is the same flow being
+        walked, even though a 32-byte token makes guessing pointless.
+        """
+        await throttle(reset_check_limiter, request)
+        return {"valid": await password_reset_link_is_usable(
+            session_factory, token=body.token
+        )}
 
     @router.post("/password/reset")
     async def perform_password_reset(

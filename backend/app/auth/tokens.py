@@ -113,6 +113,38 @@ async def consume_token(
     return record
 
 
+async def token_is_usable(
+    session: AsyncSession,
+    *,
+    token: str,
+    purpose: AuthTokenPurpose,
+    now: datetime | None = None,
+) -> bool:
+    """Would this token be accepted, without accepting it?
+
+    Deliberately separate from `consume_token`, which deletes the row it looked
+    up. A page that checks a link on arrival must not be the thing that spends
+    it - the person has not chosen a password yet.
+
+    This answers no faster than yes for a token that never existed, which is
+    not a leak worth avoiding: the token is 32 random bytes, so anyone able to
+    tell them apart could simply present one.
+    """
+    checked_at = now or datetime.now(timezone.utc)
+    record = await session.scalar(
+        select(AuthToken).where(
+            AuthToken.token_hash == hash_token(token),
+            AuthToken.purpose == purpose.value,
+        )
+    )
+    if record is None or record.consumed_at is not None:
+        return False
+    expires_at = record.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at > checked_at
+
+
 async def purge_expired_tokens(
     session: AsyncSession, *, now: datetime | None = None
 ) -> int:

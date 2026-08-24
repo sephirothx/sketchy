@@ -443,3 +443,62 @@ async def test_a_server_that_cannot_send_mail_says_what_it_would_have_sent(caplo
     assert "player@example.com" in written
     # The link is the whole point: without it there is nothing to follow.
     assert "verify-email?token=abc123" in written
+
+
+async def test_a_spent_link_is_known_to_be_spent_before_a_password_is_chosen(env):
+    """Being told a link is dead after choosing a password is being asked to do
+    the work twice."""
+    new_client, factory = env
+    http = new_client()
+    await register(http, "SecondClick", email="second@example.com")
+    await verify_via_email(http, factory)
+    await http.post("/api/auth/password/forgot", json={"identifier": "SecondClick"})
+    token = token_in(await drain(factory))
+
+    good = await http.post("/api/auth/password/reset/check", json={"token": token})
+    assert good.json() == {"valid": True}
+    # Checking must not spend it: the person has not set a password yet.
+    assert (
+        await http.post("/api/auth/password/reset/check", json={"token": token})
+    ).json() == {"valid": True}
+
+    used = await http.post(
+        "/api/auth/password/reset", json={"token": token, "password": NEW_PASSWORD}
+    )
+    assert used.status_code == 200
+
+    assert (
+        await http.post("/api/auth/password/reset/check", json={"token": token})
+    ).json() == {"valid": False}
+    assert (
+        await http.post(
+            "/api/auth/password/reset/check", json={"token": "never-existed"}
+        )
+    ).json() == {"valid": False}
+
+
+async def test_an_expired_link_is_known_to_be_expired_before_it_is_used(env):
+    new_client, factory = env
+    http = new_client()
+    await register(http, "SlowClicker", email="slow-click@example.com")
+    await verify_via_email(http, factory)
+    await http.post("/api/auth/password/forgot", json={"identifier": "SlowClicker"})
+    token = token_in(await drain(factory))
+
+    async with factory() as session:
+        async with session.begin():
+            record = await session.scalar(
+                select(AuthToken).where(
+                    AuthToken.purpose == AuthTokenPurpose.PASSWORD_RESET.value
+                )
+            )
+            record.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+
+    checked = await http.post(
+        "/api/auth/password/reset/check", json={"token": token}
+    )
+    assert checked.json() == {"valid": False}
+    # And it is still there to be refused, rather than having been swallowed by
+    # the check.
+    async with factory() as session:
+        assert await session.scalar(select(func.count(AuthToken.token_hash))) == 1

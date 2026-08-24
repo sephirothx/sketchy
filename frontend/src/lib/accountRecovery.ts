@@ -86,6 +86,16 @@ export function requestPasswordReset(identifier: string): Promise<{ detail: stri
   });
 }
 
+/** Whether a reset link still works, asked before the form is offered.
+
+Does not spend the link: the person has not chosen a password yet. */
+export function passwordResetLinkIsUsable(token: string): Promise<{ valid: boolean }> {
+  return apiRequest("/api/auth/password/reset/check", {
+    method: "POST",
+    body: { token },
+  });
+}
+
 export function completePasswordReset(
   token: string,
   password: string,

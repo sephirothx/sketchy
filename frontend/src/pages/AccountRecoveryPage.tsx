@@ -5,6 +5,7 @@ import { ApiError } from "../lib/api";
 import {
   completePasswordReset,
   confirmEmailToken,
+  passwordResetLinkIsUsable,
   requestPasswordReset,
 } from "../lib/accountRecovery";
 import { useAuthStore } from "../store/authStore";
@@ -27,6 +28,14 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
   const [busy, setBusy] = useState(mode === "verify" && token !== "");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // null while the answer is still coming. A reset link is checked when the
+  // page opens rather than when the form is sent, so nobody chooses a password
+  // only to be told the link was already spent.
+  // A link with no token at all is answered here rather than in the effect,
+  // where a synchronous state write would be a cascading render.
+  const [linkUsable, setLinkUsable] = useState<boolean | null>(
+    mode === "reset" ? (token ? null : false) : true,
+  );
 
   useEffect(() => {
     if (mode !== "verify" || !token) return;
@@ -53,6 +62,23 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       cancelled = true;
     };
   }, [mode, token, fetchMe]);
+
+  useEffect(() => {
+    if (mode !== "reset" || !token) return;
+    let cancelled = false;
+    void passwordResetLinkIsUsable(token)
+      .then(({ valid }) => {
+        if (!cancelled) setLinkUsable(valid);
+      })
+      // A check that could not be made is not a link that is broken; let the
+      // form be tried, where the answer is authoritative anyway.
+      .catch(() => {
+        if (!cancelled) setLinkUsable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, token]);
 
   async function submitForgot(event: React.FormEvent) {
     event.preventDefault();
@@ -101,7 +127,11 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     mode === "forgot"
       ? "Reset your password"
       : mode === "reset"
-        ? "Choose a new password"
+        ? // Nothing is being chosen when the link is dead, and a heading that
+          // says otherwise is the page arguing with its own message.
+          linkUsable === false
+          ? "That link no longer works"
+          : "Choose a new password"
         : "Confirming your email";
 
   return (
@@ -145,6 +175,18 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
               {busy ? "Please wait…" : "Send a reset link"}
             </button>
           </form>
+        ) : mode === "reset" && linkUsable === false ? (
+          <>
+            <p className="recovery-body">
+              That reset link has expired or has already been used. Reset links
+              work once and last an hour.
+            </p>
+            <Link className="modal-button" to="/forgot-password">
+              Send a new one
+            </Link>
+          </>
+        ) : mode === "reset" && linkUsable === null ? (
+          <p className="recovery-body">Checking that link…</p>
         ) : mode === "reset" ? (
           <form onSubmit={submitReset} className="auth-form">
             <p className="recovery-body">

@@ -30,7 +30,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.auth.email import EmailAddressError, normalize_email
 from app.auth.mail import queue_email
 from app.auth.sessions import revoke_all_sessions
-from app.auth.tokens import AuthTokenPurpose, consume_token, issue_token
+from app.auth.tokens import (
+    AuthTokenPurpose,
+    consume_token,
+    issue_token,
+    token_is_usable,
+)
 from app.db.models import AuditEvent, User, UserSettings, generate_uuid
 from app.domain_values import AccountState, AuditTargetType, EmailTemplate
 
@@ -297,6 +302,26 @@ async def request_password_reset(
                 )
             )
             return True
+
+
+async def password_reset_link_is_usable(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    token: str,
+    now: datetime | None = None,
+) -> bool:
+    """Whether a reset link would work, so a page can say so before asking.
+
+    Being told a link is dead after choosing a password is being asked to do
+    the work twice.
+    """
+    async with session_factory() as session:
+        return await token_is_usable(
+            session,
+            token=token,
+            purpose=AuthTokenPurpose.PASSWORD_RESET,
+            now=now,
+        )
 
 
 async def reset_password(

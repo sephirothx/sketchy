@@ -535,6 +535,12 @@ the confirmation token and nowhere else, so a typo cannot hand the account to
 whoever owns the address that was typed, and nobody can reserve a mailbox they
 do not control. Only a confirmed address can be sent a reset link.
 
+A reset link is checked when the page opens, not when the form is sent, so
+nobody chooses a password only to be told the link was already spent. Checking
+deliberately does not consume it - the person has not chosen anything yet - and
+is throttled separately from requesting a reset, since it costs a lookup rather
+than somebody else's inbox.
+
 `POST /api/auth/password/forgot` answers identically whether or not the account
 exists: the response is not a place to learn which usernames are real. A
 completed reset revokes every session on the account, including one held by
@@ -754,6 +760,7 @@ your players share one address:
 | `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
 | `AUTH_RESET_LIMIT` | 5 per hour | `POST /api/auth/password/forgot` |
+| `AUTH_RESET_CHECK_LIMIT` | 30 per hour | `POST /api/auth/password/reset/check` |
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 
 Set the same high-entropy `IP_HASH_SECRET` on every deployment that shares the
