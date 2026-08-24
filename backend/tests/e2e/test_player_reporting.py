@@ -41,6 +41,13 @@ async def test_a_player_reports_another_from_the_room_menu():
             await player_page.click('button:has-text("Join by code")')
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
 
+            # In a game, not a waiting room: the game layout is the stacking
+            # context the dialog has to escape.
+            await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
+            await host_page.click(".waiting-start-button")
+            await host_page.wait_for_selector(".game-layout")
+            await player_page.wait_for_selector(".game-layout")
+
             row = host_page.locator(".player-list li", has_text="ReportedPlayer")
             await row.wait_for()
             # One line per player. Reporting shares the menu the votes already
@@ -50,15 +57,41 @@ async def test_a_player_reports_another_from_the_room_menu():
             await row.locator(".player-moderation-trigger").click()
             menu = host_page.locator(".player-vote-menu")
             await menu.wait_for(state="visible")
-            # Only Report here: kick and AFK votes are a thing you do during a
-            # game, and this room has not started one. Rendered uppercase by
-            # the stylesheet the votes already use.
+            # Report sits with the votes rather than on a row of its own.
+            # Rendered uppercase by the stylesheet the votes already use.
             kinds = await menu.locator(".player-vote-action-kind").all_inner_texts()
-            assert kinds == ["REPORT"]
+            assert kinds[-1] == "REPORT"
+            assert "KICK" in kinds
 
             await menu.get_by_role("menuitem", name="Report").click()
             dialog = host_page.locator(".modal-card").filter(has_text="Report")
             await dialog.wait_for(state="visible")
+
+            # It drew beneath the game once: the player list is deep inside the
+            # game layout, and a dialog rendered in place is trapped in that
+            # stacking context. Portalled out, so its parent is the body and
+            # nothing in the game can be painted over it.
+            assert await host_page.evaluate(
+                """() => {
+                    const overlay = document.querySelector('.report-player-overlay');
+                    return overlay?.parentElement === document.body;
+                }"""
+            )
+            # The point of the z-index, checked where it matters: whatever the
+            # browser would hand a click at the middle of the dialog has to be
+            # the dialog.
+            assert await host_page.evaluate(
+                """() => {
+                    const card = document.querySelector('.report-player-overlay .modal-card');
+                    const box = card.getBoundingClientRect();
+                    const hit = document.elementFromPoint(
+                        box.left + box.width / 2,
+                        box.top + box.height / 2,
+                    );
+                    return card.contains(hit);
+                }"""
+            )
+
             await dialog.locator("textarea").fill("Said something worth reviewing.")
             await dialog.get_by_role("button", name="Send report").click()
 

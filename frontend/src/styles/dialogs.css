@@ -119,3 +119,10 @@
 
 .confirmation-danger-button:hover { background: #b91c1c; border-color: #b91c1c; }
 .confirmation-dialog-actions button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+/* This one dialog is opened from inside the mobile players drawer, which is
+   itself at 1200 - the highest layer the game has. Matching it would leave the
+   two ordered by which happens to come later in the DOM, so it clears it. */
+.modal-overlay.report-player-overlay {
+  z-index: 1250;
+}

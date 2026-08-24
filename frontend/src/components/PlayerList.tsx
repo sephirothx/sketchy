@@ -174,6 +174,9 @@ export function PlayerList({
           </li>
         );
       })}
+      {/* Rendered here for the state it reads, but portalled to the body: a
+          list item is not a place to put a dialog, in the markup or in the
+          stacking order. */}
       {reporting && (
         <ReportPlayerDialog
           targetPlayerId={reporting.playerId}

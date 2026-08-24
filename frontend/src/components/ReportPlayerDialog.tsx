@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { reportPlayerInRoom, type ReportReason } from "../lib/moderation";
@@ -65,9 +66,13 @@ export function ReportPlayerDialog({
     }
   }
 
-  return (
+  // Portalled to the body, like the app's other floating layer. The player
+  // list sits deep inside the game layout, and a dialog rendered in place is
+  // trapped in that stacking context - it drew beneath the game. It was also a
+  // div directly inside a <ul>, which is not somewhere a div may go.
+  return createPortal(
     <div
-      className="modal-overlay"
+      className="modal-overlay report-player-overlay"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -151,6 +156,7 @@ export function ReportPlayerDialog({
           {sent === null ? "Cancel" : "Close"}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
