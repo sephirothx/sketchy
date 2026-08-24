@@ -416,3 +416,32 @@
 .prompt-stats-table tbody tr.is-unrated td {
   color: #94a3b8;
 }
+
+.profile-history-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.profile-history-filter {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+  opacity: 0.85;
+}
+
+/* A game that stopped is labelled rather than hidden once it is shown, so the
+   odd scores in it are explained instead of merely odd. */
+.profile-game-outcome {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  margin-left: 8px;
+  padding: 0 6px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}

@@ -111,6 +111,11 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
           <span className="profile-game-room">{game.roomName}</span>
           <span className="profile-game-meta">
             {finishedAt} · {game.totalRounds} rounds · {game.playerCount} players
+            {game.outcome !== "finished" && (
+              <span className="profile-game-outcome">
+                {game.outcome === "abandoned" ? "abandoned" : "cut short"}
+              </span>
+            )}
           </span>
         </span>
         {seat && (
@@ -369,6 +374,10 @@ function ProfileView({ userId }: { userId: string }) {
   const [games, setGames] = useState<GameSummary[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Off by default: a history made mostly of rooms that collapsed is not what
+  // anyone came looking for. Reachable, because a game somebody remembers
+  // falling apart should still be findable.
+  const [includeAbandoned, setIncludeAbandoned] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const register = useAuthStore((s) => s.register);
@@ -380,7 +389,7 @@ function ProfileView({ userId }: { userId: string }) {
       try {
         const [profile, page] = await Promise.all([
           fetchProfile(userId),
-          fetchGames(userId, 0),
+          fetchGames(userId, 0, includeAbandoned),
         ]);
         if (cancelled) return;
         setSubject(profile.user);
@@ -399,13 +408,13 @@ function ProfileView({ userId }: { userId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, includeAbandoned]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return;
     setLoadingMore(true);
     try {
-      const page = await fetchGames(userId, games.length);
+      const page = await fetchGames(userId, games.length, includeAbandoned);
       setGames((current) => [...current, ...page.games]);
       setHasMore(page.hasMore);
     } catch {
@@ -413,7 +422,7 @@ function ProfileView({ userId }: { userId: string }) {
     } finally {
       setLoadingMore(false);
     }
-  }, [userId, games.length, loadingMore]);
+  }, [userId, games.length, includeAbandoned, loadingMore]);
 
   const shownName = subject
     ? (subject.isAnonymous ? subject.displayName : subject.username ?? subject.displayName)
@@ -489,7 +498,17 @@ function ProfileView({ userId }: { userId: string }) {
           </section>
 
           <section className="panel">
-            <h2>Game history</h2>
+            <div className="profile-history-head">
+              <h2>Game history</h2>
+              <label className="profile-history-filter">
+                <input
+                  type="checkbox"
+                  checked={includeAbandoned}
+                  onChange={(change) => setIncludeAbandoned(change.target.checked)}
+                />
+                Include games that fell apart
+              </label>
+            </div>
             {games.length === 0 ? (
               <p className="profile-note">
                 {isOwnProfile

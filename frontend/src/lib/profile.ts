@@ -35,7 +35,9 @@ export interface GameSummary {
   totalRounds: number;
   playerCount: number;
   startedAt: string | null;
+  /** When the game stopped - not a promise that it reached an end. */
   finishedAt: string | null;
+  outcome: "finished" | "abandoned" | "shutdown";
   participants: GameParticipant[];
 }
 
@@ -164,10 +166,15 @@ export function fetchProfile(userId: string) {
   );
 }
 
-export function fetchGames(userId: string, offset: number) {
+export function fetchGames(
+  userId: string,
+  offset: number,
+  includeAbandoned = false,
+) {
   return apiRequest<{ games: GameSummary[]; hasMore: boolean }>(
     `/api/users/${encodeURIComponent(userId)}/games`
-      + `?limit=${HISTORY_PAGE_SIZE}&offset=${offset}`,
+      + `?limit=${HISTORY_PAGE_SIZE}&offset=${offset}`
+      + (includeAbandoned ? "&includeAbandoned=true" : ""),
   );
 }
 
