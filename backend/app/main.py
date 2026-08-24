@@ -14,6 +14,7 @@ from app.api.persistent_rooms import create_persistent_room_router
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
 from app.api.moderation import create_moderation_router
+from app.api.operations import create_operations_router
 from app.api.user_settings import create_user_settings_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.blocks import BlockService
@@ -28,6 +29,7 @@ from app.deployment import (
 )
 from app.handlers import register_all_handlers
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
+from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -153,6 +155,7 @@ async def lifespan(_app: FastAPI):
         drain_seconds=shutdown_drain_seconds()
     )
     mail_delivery = None
+    metrics_flush = None
     try:
         validate_python_runtime()
         validate_worker_topology()
@@ -165,9 +168,13 @@ async def lifespan(_app: FastAPI):
         # One worker owns everything (#382), so the outbox needs no scheduler
         # and no second process that somebody has to remember to start.
         mail_delivery = start_delivery_loop(async_session_factory)
+        metrics_flush = start_metrics_loop(async_session_factory)
         shutdown_coordinator.mark_ready()
         yield
     finally:
+        # Flushed on the way out, so the observations describing a planned
+        # restart are not the ones lost to it.
+        await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
         await handler_context.timers.close()
@@ -194,6 +201,7 @@ api.include_router(
         on_identity_merged=block_service.clear,
     )
 )
+api.include_router(create_operations_router(async_session_factory))
 api.include_router(create_profile_router(user_repo, game_history_repo))
 api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))

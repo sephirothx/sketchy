@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 from datetime import datetime, timezone
 
@@ -13,6 +14,8 @@ from app.game import (
     Phase,
 )
 from app.domain_values import (
+    GameOutcome,
+    RuntimeEventType,
     TurnEligibilityReason,
     TurnParticipantState,
 )
@@ -27,6 +30,7 @@ from app.handlers.payloads import (
 from app.rooms import DrawingRecapEntry, Player, Room, resolve_hint_mode
 from app.services.game_highlights import build_game_highlights
 from app.services.game_history import build_game_history
+from app.services.runtime_metrics import metrics
 from app.services.prompt_usage import tally_prompt_usage
 from app.prompt_content import prompt_match_key
 from app.presenters import (
@@ -39,6 +43,10 @@ from app.prompts import parse_custom_prompt_list
 from app.repositories.interfaces import PromptListSelectionError
 
 logger = logging.getLogger("sketchy.game_flow")
+
+# Below this, lateness is scheduler jitter rather than a symptom. Recording
+# every few-millisecond wobble would bury the overruns that matter.
+TIMER_OVERRUN_REPORT_MS = 250
 
 RECONNECT_GRACE_SECONDS = 30
 # Long enough for a healthy write on a loaded server, short enough that a hung
@@ -242,10 +250,22 @@ class GameFlowService:
     def schedule_phase_timer(self, room: Room, seconds: float) -> None:
         async def _runner() -> None:
             task = asyncio.current_task()
+            scheduled_at = time.monotonic()
             try:
                 await asyncio.sleep(seconds)
             except asyncio.CancelledError:
                 return
+            # How late the loop actually was. A single worker owns every room,
+            # so this is the first thing that degrades under load and the last
+            # thing anyone could previously see.
+            late_ms = int((time.monotonic() - scheduled_at - seconds) * 1000)
+            if late_ms >= TIMER_OVERRUN_REPORT_MS:
+                metrics.record(
+                    RuntimeEventType.TIMER_OVERRAN,
+                    room_id=room.id,
+                    value=late_ms,
+                    details={"phase": room.state},
+                )
             # Deregister ourselves before running the timeout callback. The
             # callback (e.g. self._end_turn) may itself cancel the phase timer,
             # and without this, that call would cancel *this* still-running
@@ -796,6 +816,12 @@ class GameFlowService:
                 if self._ctx.game_history_repo
                 else None
             )
+            metrics.record(
+                RuntimeEventType.GAME_FINISHED,
+                room_id=room.id,
+                value=max(0, int((finished_at - game.started_at).total_seconds())),
+                details={"total_rounds": game.rounds_total},
+            )
             # Snapshotted for the same reason: the room is an editable
             self._timers.cancel_restart_timer(room.id)
             room.restart_vote = None
@@ -944,10 +970,32 @@ class GameFlowService:
             self._timers.cancel_hint_timers(room.id)
             self._timers.cancel_restart_timer(room.id)
             room.restart_vote = None
+            # The last seat has gone: this game is over without having ended.
+            # Snapshotted here, before the room is reset, for the same reason
+            # the finished path snapshots - everything below discards the state
+            # the history is made of. Until now this branch simply threw it
+            # away, which is why the games most worth looking at, the ones that
+            # fell apart, were the only ones that left no trace at all.
+            abandoned = (
+                build_game_history(
+                    room,
+                    game,
+                    finished_at=datetime.now(timezone.utc),
+                    outcome=GameOutcome.ABANDONED.value,
+                )
+                if self._ctx.game_history_repo
+                else None
+            )
+            metrics.record(
+                RuntimeEventType.GAME_ABANDONED,
+                room_id=room.id,
+                details={"round_number": game.round_number},
+            )
             room.state = "waiting"
             room.game = None
             if self._ctx.shutdown is not None:
                 self._ctx.shutdown.notify_game_state_changed()
+            await self._persist_game_history(room, abandoned)
         elif was_drawer:
             await self._abandon_current_turn(room)
         else:

@@ -531,3 +531,176 @@
   font-size: 14px;
   margin: 0 0 12px;
 }
+
+.ops-page {
+  margin: 0 auto;
+  max-width: 1100px;
+  padding: 24px 16px 48px;
+}
+
+.ops-header h1 {
+  font-size: 22px;
+  margin: 0 0 12px;
+}
+
+.ops-tabs {
+  border-bottom: 1px solid var(--panel-border, #cbd5e1);
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.ops-tabs button {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 12px;
+}
+
+.ops-tabs button.is-active {
+  border-bottom-color: currentColor;
+  font-weight: 700;
+}
+
+.ops-tiles {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin-bottom: 24px;
+}
+
+.ops-tile {
+  background: var(--panel-bg, #fff);
+  border: 1px solid var(--panel-border, #cbd5e1);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+}
+
+/* Severity is a separate signal from the accent, so a number worth acting on
+   reads at a glance rather than having to be compared. */
+.ops-tile.is-warning {
+  border-color: #f97316;
+}
+
+.ops-tile-label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+
+.ops-tile-value {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.ops-tile-note {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.ops-trends {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin-bottom: 24px;
+}
+
+.ops-trend-card {
+  background: var(--panel-bg, #fff);
+  border: 1px solid var(--panel-border, #cbd5e1);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.ops-trend-card h2 {
+  font-size: 13px;
+  margin: 0 0 6px;
+  opacity: 0.8;
+}
+
+.ops-trend-head {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+}
+
+.ops-trend-value {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.ops-trend-window {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.ops-sparkline {
+  display: block;
+  height: auto;
+  margin-top: 6px;
+  max-width: 100%;
+  opacity: 0.75;
+  width: 100%;
+}
+
+.ops-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ops-filters input {
+  border: 1px solid var(--panel-border, #cbd5e1);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+/* Wide content scrolls inside its own container so the page never does. */
+.ops-table-scroll {
+  overflow-x: auto;
+}
+
+.ops-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 560px;
+  width: 100%;
+}
+
+.ops-table th,
+.ops-table td {
+  border-bottom: 1px solid var(--panel-border, #e2e8f0);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.ops-table .ops-number {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ops-empty {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.ops-recorder h2 {
+  font-size: 14px;
+  margin: 0 0 4px;
+}
+
+.ops-recorder p {
+  font-size: 13px;
+  margin: 0;
+}

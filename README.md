@@ -477,6 +477,9 @@ process. These deployment settings can be tuned without code changes:
 | `SMTP_FROM` | `sketchy@localhost` | Envelope sender |
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | Where confirmation and reset links point |
 | `EMAIL_SWEEP_SECONDS` | `30` | How often the outbox is emptied |
+| `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
+| `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
+| `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
 
 CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete
 migration chain down and up on PostgreSQL and SQLite, checks schema drift and
@@ -1107,6 +1110,57 @@ includes the saved configuration and archive state.
 - Players can join any room (including full rooms) as a spectator. Spectators do not draw or earn scores.
 - By default, spectators see the masked prompt like active guessers, but room creators can enable **Allow spectators to see the prompt**.
 - Spectator chat messages are restricted to the drawer, spectators, and players who have already guessed, keeping active guessers spoiler-free.
+
+### Runtime analytics
+
+Nothing durable recorded how the server behaved. `RoomManager` had the natural
+instrumentation points - `create_room`, `add_player`, `remove_player`,
+`remove_room_if_empty` - and counted nothing at any of them, so peak
+concurrency, room lifetime, reconnect rate, timer overruns and real drawing
+sizes were unknowable, and the release load target was unmeasurable.
+
+Two things are now recorded, answering two different questions. Live counts of
+rooms, players and running games live in memory: one worker owns all of it
+(#382), so an in-process count is the true count, and it is meant to vanish on
+restart because a live count is not a historical fact. Observations - joins,
+disconnects, evictions after the reconnect grace window, games started,
+finished and abandoned, timer overruns past 250ms, stored drawing sizes,
+drawings dropped by the recap budget - are buffered and written in batches,
+because a database round trip per join would be felt as lag in a drawing. The
+buffer is bounded and drops oldest when full, counting what it dropped, so a
+gap is visible rather than silent.
+
+Raw observations are kept for 30 days and rolled into permanent daily totals
+first. What retention costs is the ability to ask about one particular minute
+last month; the shape of the month survives. Unbounded event rows on embedded
+SQLite is a disk that fills up quietly.
+
+**Games that stop are now recorded.** Persistence used to run only for a game
+that reached its end, so a room everyone walked out of left no trace at all -
+the games most worth looking at were the only invisible ones. An abandoned game
+is written as an ordinary `game_records` row with `outcome = 'abandoned'`;
+`finished_at` keeps meaning when the game ended, not that it finished. Player
+history shows finished games unless `?includeAbandoned=true` is asked for, and
+an abandoned game contributes the turns actually drawn and guessed but not a
+game played, a game won, or a score - counting it would let a room that keeps
+emptying inflate everyone's totals and drift the average score upward.
+
+Operators read this two ways. `GET /metrics` returns Prometheus text behind a
+bearer token and is disabled entirely until `METRICS_TOKEN` is set. The
+in-app page at `/admin/operations` needs the administrator role and carries
+live counts, trends over the retained window, the raw activity table, and the
+audit ledger as its own tab. Its per-player view answers "which account keeps
+disconnecting", and because that is a surveillance surface on the game's own
+players, every use writes an audit event naming both who looked and who was
+looked at.
+
+The running server flushes and purges on its own. For cron-driven deployments,
+or to see what is stuck:
+
+```bash
+cd backend
+.venv/bin/python -m app.services.runtime_metrics --purge
+```
 
 ### Reconnection & disconnection
 

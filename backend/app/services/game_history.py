@@ -9,7 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.domain_values import DRAWING_UNAVAILABLE_RECAP_BUDGET
+from app.domain_values import (
+    DRAWING_UNAVAILABLE_RECAP_BUDGET,
+    GameOutcome,
+    RuntimeEventType,
+)
+from app.services.runtime_metrics import metrics
 from app.game import (
     CompletedTurnStats,
     Game,
@@ -245,6 +250,18 @@ def _drawings(room: Room, turn_ids: set[str]) -> list[TurnDrawingInput]:
     for entry in room.last_game_drawings:
         if entry.turn_id not in turn_ids:
             continue
+        # Whether the recap budget is big enough for real drawings, and how
+        # big real drawings actually are, were both guesses until now.
+        if entry.is_available:
+            metrics.record(
+                RuntimeEventType.DRAWING_STORED,
+                room_id=room.id,
+                value=len(entry.canvas_history or b""),
+            )
+        else:
+            metrics.record(
+                RuntimeEventType.RECAP_BUDGET_DROPPED, room_id=room.id
+            )
         drawings.append(
             TurnDrawingInput(
                 turn_id=entry.turn_id,
@@ -264,8 +281,15 @@ def build_game_history(
     game: Game,
     *,
     finished_at: datetime,
+    outcome: str = GameOutcome.FINISHED.value,
 ) -> GameHistoryWrite | None:
-    """Assemble the rows for a completed game, or None if it is not worth recording."""
+    """Assemble the rows for a game that has stopped, finished or not.
+
+    `finished_at` is when it stopped; `outcome` says whether it reached an end.
+    A game nobody stayed for is still made of turns that were drawn and guesses
+    that were made, and discarding it is why the games most worth looking at
+    were the ones that left no trace.
+    """
     seats = _resolve_seats(room, game)
     _count_turns_played(seats, game)
     participants = _participants(seats)
@@ -424,6 +448,7 @@ def build_game_history(
             rule_snapshot=rule_snapshot,
             prompt_source_mode=game.prompt_source_mode(),
             prompt_source_revision_ids=game.prompt_source_revision_ids,
+            outcome=outcome,
         ),
         participants=participants,
         turns=turns,

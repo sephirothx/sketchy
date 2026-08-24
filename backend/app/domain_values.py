@@ -203,6 +203,45 @@ class ReportStatus(StrEnum):
     DISMISSED = "dismissed"
 
 
+class RuntimeEventType(StrEnum):
+    """What the server records about its own behaviour.
+
+    Every one of these was invisible before: `RoomManager` had the natural
+    hooks and counted nothing, so peak concurrency, reconnect rate, timer
+    overruns and observed payload sizes could only be guessed at.
+    """
+
+    ROOM_CREATED = "room.created"
+    ROOM_CLOSED = "room.closed"
+    PLAYER_JOINED = "player.joined"
+    PLAYER_LEFT = "player.left"
+    PLAYER_DISCONNECTED = "player.disconnected"
+    PLAYER_RECONNECTED = "player.reconnected"
+    PLAYER_EVICTED = "player.evicted"
+    GAME_STARTED = "game.started"
+    GAME_FINISHED = "game.finished"
+    GAME_ABANDONED = "game.abandoned"
+    TURN_ENDED = "turn.ended"
+    TIMER_OVERRAN = "timer.overran"
+    CANVAS_PAYLOAD_OBSERVED = "canvas.payload_observed"
+    DRAWING_STORED = "drawing.stored"
+    RECAP_BUDGET_DROPPED = "recap.budget_dropped"
+
+
+class GameOutcome(StrEnum):
+    """How a game stopped.
+
+    `finished_at` keeps meaning when the game ended; this says whether it
+    reached an end or merely stopped. Games that stop were invisible before -
+    `_persist_game_history` only ran for finished ones - so the games a
+    maintainer most wants to see left no trace at all.
+    """
+
+    FINISHED = "finished"
+    ABANDONED = "abandoned"
+    SHUTDOWN = "shutdown"
+
+
 class AuthTokenPurpose(StrEnum):
     """Why a one-shot token exists.
 
@@ -284,6 +323,8 @@ BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)
 REPORT_REASONS = tuple(reason.value for reason in ReportReason)
 REPORT_STATUSES = tuple(status.value for status in ReportStatus)
 AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
+GAME_OUTCOMES = tuple(outcome.value for outcome in GameOutcome)
+RUNTIME_EVENT_TYPES = tuple(event.value for event in RuntimeEventType)
 AUTH_TOKEN_PURPOSES = tuple(purpose.value for purpose in AuthTokenPurpose)
 EMAIL_OUTBOX_STATES = tuple(state.value for state in EmailOutboxState)
 EMAIL_TEMPLATES = tuple(template.value for template in EmailTemplate)

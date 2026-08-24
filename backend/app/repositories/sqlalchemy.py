@@ -47,6 +47,8 @@ from app.canvas_storage import prepare_stored_drawing
 from app.domain_values import (
     AccountState,
     AuditTargetType,
+    GAME_OUTCOMES,
+    GameOutcome,
     DRAWING_UNAVAILABLE_RECAP_BUDGET,
     GAME_PROMPT_SOURCE_MODES,
     PROMPT_OFFER_SOURCE_KINDS,
@@ -225,6 +227,7 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
         player_count=game.player_count,
         started_at=game.started_at,
         finished_at=game.finished_at,
+        outcome=game.outcome,
         participants=[
             GameParticipantSummary(
                 seat_id=_public_id(p.id),
@@ -866,6 +869,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         + ", ".join(sorted(str(value) for value in missing))
                     )
 
+                # This column carries no CHECK constraint - rebuilding
+                # game_records on SQLite would delete every row that points at
+                # it - so the guard lives here, where the value enters.
+                if game_record.outcome not in GAME_OUTCOMES:
+                    raise ValueError(
+                        f"Unknown game outcome {game_record.outcome!r}"
+                    )
                 game_db = GameRecord(
                     id=record_id,
                     payload_hash=payload_hash,
@@ -882,6 +892,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     player_count=game_record.player_count,
                     started_at=game_record.started_at,
                     finished_at=game_record.finished_at,
+                    outcome=game_record.outcome,
                 )
                 session.add(game_db)
                 session.add_all(
@@ -1442,6 +1453,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 await increment_user_stats_projection(
                     session,
                     finished_at=game_record.finished_at,
+                    counts_as_played=(
+                        game_record.outcome == GameOutcome.FINISHED.value
+                    ),
                     participants=[
                         (
                             _entity_id(participant.user_id)
@@ -1535,6 +1549,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         user_id: str,
         limit: int = DEFAULT_PAGINATION_LIMIT,
         offset: int = 0,
+        *,
+        include_abandoned: bool = False,
     ) -> list[GameSummary]:
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
@@ -1553,7 +1569,14 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
 
             stmt = (
                 select(GameRecord)
-                .where(GameRecord.id.in_(user_games_subq))
+                .where(
+                    GameRecord.id.in_(user_games_subq),
+                    *(
+                        ()
+                        if include_abandoned
+                        else (GameRecord.outcome == GameOutcome.FINISHED.value,)
+                    ),
+                )
                 .options(
                     selectinload(GameRecord.participants).selectinload(GameParticipant.user)
                 )

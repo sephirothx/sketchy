@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.domain_values import GameOutcome
 from app.db.models import (
     GameParticipant,
     GameRecord,
@@ -66,8 +67,16 @@ async def increment_user_stats_projection(
     participants: list[tuple[UUID | None, int, int]],
     turn_drawer_ids: list[UUID | None],
     guess_user_ids: list[UUID | None],
+    counts_as_played: bool = True,
 ) -> None:
-    """Atomically add one newly persisted game's facts to its daily rows."""
+    """Atomically add one newly persisted game's facts to its daily rows.
+
+    An abandoned game contributes the turns that were actually drawn and
+    guessed, but not a game played, not a game won, and not a score. The turns
+    happened; the game did not, and counting it would let a room that empties
+    repeatedly inflate everyone's totals - and would distort the average score,
+    which divides by games played.
+    """
     user_ids = {
         user_id
         for user_id, _, _ in participants
@@ -99,9 +108,15 @@ async def increment_user_stats_projection(
         {
             "user_id": user_id,
             "stat_date": stat_date,
-            "games_played": 1,
-            "games_won": int(any(rank == 1 for _, rank in standings)),
-            "total_score": sum(score for score, _ in standings),
+            "games_played": 1 if counts_as_played else 0,
+            "games_won": (
+                int(any(rank == 1 for _, rank in standings))
+                if counts_as_played
+                else 0
+            ),
+            "total_score": (
+                sum(score for score, _ in standings) if counts_as_played else 0
+            ),
             # Preserve the established profile contract: this is the count of
             # turns in games the identity participated in, once per game even
             # when two later-merged identities occupied distinct seats.
@@ -154,6 +169,7 @@ async def rebuild_user_stats_in_session(
             GameParticipant.final_rank,
             GameParticipant.final_score,
             GameRecord.finished_at,
+            GameRecord.outcome,
         )
         .join(GameRecord, GameRecord.id == GameParticipant.game_id)
         .where(GameParticipant.user_id.is_not(None))
@@ -165,7 +181,7 @@ async def rebuild_user_stats_in_session(
 
     totals: dict[tuple[UUID, date], _DailyTotals] = defaultdict(_DailyTotals)
     game_users: dict[UUID, set[UUID]] = defaultdict(set)
-    for source_id, game_id, rank, score, finished_at in (
+    for source_id, game_id, rank, score, finished_at, outcome in (
         await session.execute(participant_statement)
     ).all():
         canonical_id = aliases.get(source_id, source_id)
@@ -173,10 +189,15 @@ async def rebuild_user_stats_in_session(
             continue
         day = _utc_date(finished_at)
         daily = totals[(canonical_id, day)]
-        daily.games.add(game_id)
-        if rank == 1:
-            daily.wins.add(game_id)
-        daily.total_score += score
+        # A game that stopped is still a seat somebody sat in, so their turns
+        # and guesses count. The game, the win and the score do not - the same
+        # rule the incremental path applies, so a rebuild reproduces it rather
+        # than quietly correcting it upward.
+        if outcome == GameOutcome.FINISHED.value:
+            daily.games.add(game_id)
+            if rank == 1:
+                daily.wins.add(game_id)
+            daily.total_score += score
         game_users[game_id].add(canonical_id)
 
     if game_users:

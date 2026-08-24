@@ -67,13 +67,22 @@ def create_profile_router(
         request: Request,
         limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
         offset: int = Query(default=0, ge=0),
+        include_abandoned: bool = Query(default=False, alias="includeAbandoned"),
     ):
-        """A page of finished games this player took part in, newest first."""
+        """A page of games this player took part in, newest first.
+
+        Games that stopped without ending are left out unless asked for: a
+        history made mostly of rooms that collapsed is not what anyone came
+        looking for, but a game somebody remembers should still be findable.
+        """
         throttle(request)
         # One extra row answers "is there another page?" without a second COUNT
         # query, and without the client inferring it from a full-looking page.
         games = await game_history_repo.get_user_games(
-            user_id, limit=limit + 1, offset=offset
+            user_id,
+            limit=limit + 1,
+            offset=offset,
+            include_abandoned=include_abandoned,
         )
         has_more = len(games) > limit
         return {

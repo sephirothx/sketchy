@@ -11,7 +11,10 @@ from app.auth.sessions import (
     resolve_session_status,
     session_token_from_cookie_header,
 )
+from app.domain_values import RuntimeEventType
 from app.handlers.context import HandlerContext
+from app.rooms import _metrics_user_id as metrics_user_id
+from app.services.runtime_metrics import metrics
 
 logger = logging.getLogger("sketchy.handlers.connection")
 RECONNECT_GRACE_SECONDS = 30
@@ -60,6 +63,11 @@ async def disconnect(ctx: HandlerContext, sid):
         return
     player.connected = False
     player.sid = None
+    metrics.record(
+        RuntimeEventType.PLAYER_DISCONNECTED,
+        room_id=room.id,
+        user_id=metrics_user_id(player.user_id),
+    )
     for p in room.players.values():
         p.kick_votes.discard(token)
         p.afk_votes.discard(token)
@@ -77,6 +85,14 @@ async def disconnect(ctx: HandlerContext, sid):
         still_present = room.players.get(token)
         if not still_present or still_present.connected:
             return
+        # The grace window ran out: this is the disconnect that became a
+        # departure, which is the number worth separating from the rest.
+        metrics.record(
+            RuntimeEventType.PLAYER_EVICTED,
+            room_id=room.id,
+            user_id=metrics_user_id(still_present.user_id),
+            value=int(RECONNECT_GRACE_SECONDS),
+        )
         ctx.room_manager.remove_player(room, token)
         await ctx.sio.emit("player_left", {"playerId": token}, room=room.id)
         if not room.connected_players():

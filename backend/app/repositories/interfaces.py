@@ -101,6 +101,9 @@ class GameRecordInput:
     rule_snapshot: dict[str, object] = field(default_factory=dict)
     prompt_source_mode: str = "legacy_unknown"
     prompt_source_revision_ids: tuple[str, ...] = ()
+    # How the game ended. Defaulted so every existing caller keeps meaning what
+    # it meant: reaching the writer used to be proof a game had finished.
+    outcome: str = "finished"
 
 
 @dataclass(frozen=True)
@@ -240,6 +243,7 @@ class GameSummary:
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
     prompt_source_mode: str = "legacy_unknown"
+    outcome: str = "finished"
 
 
 @dataclass(frozen=True)
@@ -618,8 +622,16 @@ class GameHistoryRepository(ABC):
         user_id: str,
         limit: int = 20,
         offset: int = 0,
+        *,
+        include_abandoned: bool = False,
     ) -> list[GameSummary]:
-        """Fetch clamped paginated summary of games where a user participated."""
+        """Fetch clamped paginated summary of games where a user participated.
+
+        Games that stopped without ending are excluded by default: a history
+        made mostly of collapsed rooms is not the history anyone asked for.
+        They are reachable rather than hidden, so a player who remembers a game
+        that fell apart can still find it.
+        """
         ...
 
     @abstractmethod

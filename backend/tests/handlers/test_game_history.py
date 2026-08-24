@@ -155,7 +155,7 @@ async def test_restart_discards_the_turns_played_so_far():
     assert len(history.saved[0].turns) == 2
 
 
-async def test_abandoned_game_is_never_persisted():
+async def test_a_game_everyone_walks_out_of_is_still_recorded():
     room_manager, room, players = build_room(rounds=2)
     history = FakeGameHistoryRepository()
     ctx = build_context(room_manager, history)
@@ -174,7 +174,16 @@ async def test_abandoned_game_is_never_persisted():
     await ctx.timers.close()
 
     assert room.game is None
-    assert history.saved == []
+    # This used to be thrown away. `_persist_game_history` ran only for a game
+    # that finished, so the games a maintainer most wants to look at - the ones
+    # that fell apart - were the only ones leaving no trace at all.
+    assert len(history.saved) == 1
+    written = history.saved[0]
+    assert written.record.outcome == "abandoned"
+    # Only the turn that was actually played, and it still ended at a knowable
+    # time: finished_at means when the game stopped, not that it finished.
+    assert len(written.turns) == 1
+    assert written.record.finished_at is not None
 
 
 async def test_one_account_and_one_accountless_seat_are_recorded():

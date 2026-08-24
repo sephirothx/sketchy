@@ -6,6 +6,7 @@ from functools import partial
 
 from app.game import Phase
 from app.handlers.context import HandlerContext
+from app.services.runtime_metrics import metrics
 from app.handlers.payloads import (
     CreateRoomPayload,
     JoinRoomPayload,
@@ -24,12 +25,14 @@ from app.handlers.identity import (
     resolve_identity,
 )
 from app.presenters import editable_room_settings_payload, session_payload
+from app.domain_values import RuntimeEventType
 from app.services.game_flow import RoomPromptResolutionError
 from app.services.persistent_rooms import (
     PersistentRoomError,
     PersistentRoomUnavailable,
 )
 from app.rooms import (
+    _metrics_user_id as metrics_user_id,
     ANONYMOUS_NAME_COLOR,
     RoomFullError,
     generate_random_room_name,
@@ -376,6 +379,11 @@ async def join_room(ctx: HandlerContext, sid, data):
                 player.name_color = stored or name_color
         # _join_socket_room notifies and disconnects any socket that was
         # holding this seat before handing it to the new one.
+        metrics.record(
+            RuntimeEventType.PLAYER_RECONNECTED,
+            room_id=room.id,
+            user_id=metrics_user_id(player.user_id),
+        )
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         await _record_player_activity(ctx, player)
         return session_payload(room, player)

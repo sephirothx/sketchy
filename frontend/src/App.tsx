@@ -10,6 +10,7 @@ import { PromptStatsPage } from "./pages/PromptStatsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { MyPromptListsPage } from "./pages/MyPromptListsPage";
 import { AccountRecoveryPage } from "./pages/AccountRecoveryPage";
+import { AdminOperationsPage } from "./pages/AdminOperationsPage";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
@@ -107,6 +108,7 @@ function App() {
           <Route path="/forgot-password" element={<AccountRecoveryPage mode="forgot" />} />
           <Route path="/reset-password" element={<AccountRecoveryPage mode="reset" />} />
           <Route path="/verify-email" element={<AccountRecoveryPage mode="verify" />} />
+          <Route path="/admin/operations" element={<AdminOperationsPage />} />
         </Routes>
         <SettingsModal />
         <ConfettiCanvas />

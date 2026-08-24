@@ -5,6 +5,7 @@ from datetime import date, datetime
 import uuid
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -29,6 +30,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from app.auth.avatars import BUILT_IN_AVATAR_KEYS
 from app.db.types import UTCDateTime
 from app.domain_values import (
+    GameOutcome,
+    RUNTIME_EVENT_TYPES,
     AUTH_TOKEN_PURPOSES,
     EMAIL_OUTBOX_STATES,
     EMAIL_TEMPLATES,
@@ -506,6 +509,76 @@ class UserSettings(Base):
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class RuntimeEvent(Base):
+    """One thing the server observed about itself.
+
+    Kept for a bounded window and rolled into `runtime_stats_daily`, which is
+    kept for ever. Raw rows answer "what happened last Tuesday at four"; the
+    aggregates answer "is this getting worse", and only the second question is
+    worth unbounded storage on an embedded database.
+
+    `user_id` is nullable and `ON DELETE SET NULL`: an observation stays true
+    after the account that caused it is erased, but stops naming anyone.
+    """
+
+    __tablename__ = "runtime_events"
+    __table_args__ = (
+        _values_check("event_type", RUNTIME_EVENT_TYPES, "ck_runtime_events_type"),
+        Index("ix_runtime_events_occurred_at", "occurred_at"),
+        Index("ix_runtime_events_type_occurred", "event_type", "occurred_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    # The live room id, which is process-local and has no table to point at.
+    room_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # One number per event, whatever that event measures: bytes for a payload,
+    # milliseconds for an overrun, seconds for a room's lifetime. Kept separate
+    # from `details` so it can be summed and averaged without parsing JSON.
+    value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class RuntimeStatsDaily(Base):
+    """Permanent daily roll-up of the raw event stream.
+
+    Shaped after `UserStatsDaily`: one row per day per metric, summed and
+    counted on write so the raw rows behind it can be discarded.
+    """
+
+    __tablename__ = "runtime_stats_daily"
+    __table_args__ = (
+        CheckConstraint(
+            "occurrences >= 0 AND value_sum >= 0", name="ck_runtime_stats_nonnegative"
+        ),
+        Index("ix_runtime_stats_daily_stat_date", "stat_date"),
+    )
+
+    stat_date: Mapped[date] = mapped_column(Date(), primary_key=True)
+    metric: Mapped[str] = mapped_column(String(32), primary_key=True)
+    occurrences: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    value_sum: Mapped[int] = mapped_column(
+        BigInteger, default=0, server_default=text("0"), nullable=False
+    )
+    value_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -1274,6 +1347,10 @@ class GameRecord(Base):
             GAME_PROMPT_SOURCE_MODES,
             "ck_game_records_prompt_source_mode",
         ),
+        # The one enumerated column here without a _values_check, and
+        # deliberately: adding a CHECK to SQLite means rebuilding the table,
+        # and rebuilding this table deletes data. See `outcome` below.
+        Index("ix_game_records_outcome_finished_at", "outcome", "finished_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1314,6 +1391,26 @@ class GameRecord(Base):
     # which without this orders the whole matching set on each request.
     finished_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, index=True
+    )
+    # How it ended, not whether it did. Deliberately not expressed by making
+    # finished_at nullable: every query that orders a player's history by it
+    # keeps working, and a game that stopped still stopped at a knowable time.
+    #
+    # No CHECK constraint, unlike every other enumerated column in this file.
+    # SQLite cannot add one to an existing table without a rebuild, and a
+    # rebuild here is destructive: the engine runs with foreign_keys=ON, where
+    # DROP TABLE performs an implicit DELETE that fires ON DELETE CASCADE, so
+    # rebuilding `game_records` empties every turn, participant, guess and
+    # score-event table pointing at it - measured, not assumed. Declaring the
+    # constraint only in the model would fail the dual-dialect drift check, and
+    # declaring it only on PostgreSQL would fail it there instead. `GameOutcome`
+    # is the only thing that writes this column, and the repository refuses an
+    # unknown value on the way in.
+    outcome: Mapped[str] = mapped_column(
+        String(16),
+        default=GameOutcome.FINISHED.value,
+        server_default=text("'finished'"),
+        nullable=False,
     )
     # Deliberately distinct from game event time. This supports save-lag and
     # retry diagnosis; legacy rows remain null rather than receiving a false

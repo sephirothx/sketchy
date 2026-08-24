@@ -6,7 +6,9 @@ import random
 import re
 import secrets
 import string
+import time
 import uuid
+from uuid import UUID
 from dataclasses import dataclass, field, replace
 from typing import Literal, Optional
 
@@ -16,6 +18,8 @@ from app.drawing_rules import (
 )
 from app.game import Game
 from app.identifiers import generate_uuid7
+from app.domain_values import RuntimeEventType
+from app.services.runtime_metrics import metrics
 from app.prompts import PROMPTS
 from app.prompt_content import prompt_match_key
 
@@ -140,6 +144,17 @@ def generate_random_room_name() -> str:
     adj = random.choice(ROOM_NAME_ADJECTIVES)
     noun = random.choice(ROOM_NAME_NOUNS)
     return f"{adj} {noun}"
+
+
+
+def _metrics_user_id(user_id: object) -> UUID | None:
+    """Only a real account id is worth recording; a guest token is not one."""
+    if not isinstance(user_id, str) or not user_id:
+        return None
+    try:
+        return UUID(user_id)
+    except ValueError:
+        return None
 
 
 class RoomFullError(Exception):
@@ -281,6 +296,9 @@ class Room:
     # Durable correlation scope for short-lived messages. The public/live room
     # id remains an implementation detail and is never stored as a code.
     retention_scope_id: str = field(default_factory=lambda: str(generate_uuid7()))
+    # Wall clock, only ever used to measure how long the room lasted. Rooms do
+    # not survive the process, so this needs no durable representation.
+    created_at: float = field(default_factory=time.time, repr=False)
     # Durable configuration identity is separate from this fresh live instance.
     # No player, score, game, timer, canvas, or room ID is restored with it.
     persistent_room_id: str | None = None
@@ -613,6 +631,8 @@ class RoomManager:
             curated_prompts=list(curated_prompts or []),
         )
         self.rooms[room_id] = room
+        metrics.record(RuntimeEventType.ROOM_CREATED, room_id=room_id)
+        self._observe()
         return room
 
     def _generate_unique_code(self) -> str:
@@ -681,6 +701,13 @@ class RoomManager:
             for other in room.players.values():
                 if other.id != player.id:
                     other.is_host = False
+        metrics.record(
+            RuntimeEventType.PLAYER_JOINED,
+            room_id=room.id,
+            user_id=_metrics_user_id(user_id),
+            details={"spectator": is_spectator},
+        )
+        self._observe()
         return player
 
     def get_player_by_user_id(self, room: Room, user_id: object) -> Player | None:
@@ -717,6 +744,13 @@ class RoomManager:
             p.kick_votes.discard(player_id)
             p.afk_votes.discard(player_id)
         self._promote_new_host_if_needed(room)
+        if departing is not None:
+            metrics.record(
+                RuntimeEventType.PLAYER_LEFT,
+                room_id=room.id,
+                user_id=_metrics_user_id(departing.user_id),
+            )
+        self._observe()
 
     def _promote_new_host_if_needed(self, room: Room) -> None:
         if any(p.is_host for p in room.players.values()):
@@ -743,5 +777,28 @@ class RoomManager:
         room = self.rooms.get(room_id)
         if room and not room.connected_players():
             del self.rooms[room_id]
+            # How long the room existed, in seconds. Recorded as the event's
+            # value so it can be summed and maxed without parsing anything.
+            metrics.record(
+                RuntimeEventType.ROOM_CLOSED,
+                room_id=room_id,
+                value=max(0, int(time.time() - room.created_at)),
+            )
+            self._observe()
             return room
         return None
+
+    def _observe(self) -> None:
+        """Tell the recorder what is live, from the object that knows.
+
+        Passed rather than accumulated: a gauge that adds and subtracts drifts
+        the first time an event is missed and then lies for the life of the
+        process.
+        """
+        metrics.observe(
+            rooms=len(self.rooms),
+            players=sum(len(room.players) for room in self.rooms.values()),
+            active_games=sum(
+                1 for room in self.rooms.values() if room.game is not None
+            ),
+        )
