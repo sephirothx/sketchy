@@ -19,6 +19,7 @@ import {
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
+import { copyText } from "../lib/clipboard";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { SettingsIcon } from "../components/SettingsIcon";
@@ -34,6 +35,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const openSettings = useSettingsStore((s) => s.openSettings);
 
   const canvasRef = useRef<CanvasRef | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const inviteCopiedResetRef = useRef<number | null>(null);
   const exitingRoomRef = useRef(false);
   const playersDrawerRef = useRef<HTMLElement | null>(null);
   const playersDrawerCloseRef = useRef<HTMLButtonElement | null>(null);
@@ -101,12 +104,21 @@ export function ActiveGameRoom({ code }: { code: string }) {
     };
   }, []);
 
+  useEffect(() => () => {
+    if (inviteCopiedResetRef.current != null) {
+      window.clearTimeout(inviteCopiedResetRef.current);
+    }
+  }, []);
+
   async function handleCopyLink() {
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
-      await navigator.clipboard.writeText(window.location.href);
+    if (await copyText(window.location.href)) {
       notify("Invite link copied.", "success", 2500);
-    } catch {
+      setInviteCopied(true);
+      if (inviteCopiedResetRef.current != null) {
+        window.clearTimeout(inviteCopiedResetRef.current);
+      }
+      inviteCopiedResetRef.current = window.setTimeout(() => setInviteCopied(false), 1800);
+    } else {
       notify("Couldn’t copy the link. Copy it from the address bar.", "error");
     }
   }
@@ -297,6 +309,18 @@ export function ActiveGameRoom({ code }: { code: string }) {
             onClick={() => void handleCopyLink()}
             title="Click to copy room invite link"
           >
+            <span className="room-copy-icon" aria-hidden="true">
+              {inviteCopied ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="12" height="12" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              )}
+            </span>
             <span>Code: {code}</span>
           </button>
           {roomView === "playing" && isMobile && (

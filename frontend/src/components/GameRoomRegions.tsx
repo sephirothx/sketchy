@@ -96,6 +96,8 @@ export function ConnectedWaitingRoomPanel({
   startError,
 }: ConnectedWaitingRoomPanelProps) {
   const name = useGameStore((state) => state.name);
+  const code = useGameStore((state) => state.code);
+  const maxPlayers = useGameStore((state) => state.maxPlayers);
   const isPublic = useGameStore((state) => state.isPublic);
   const rounds = useGameStore((state) => state.rounds);
   const drawingSeconds = useGameStore((state) => state.drawingSeconds);
@@ -115,6 +117,8 @@ export function ConnectedWaitingRoomPanel({
   return (
     <WaitingRoomPanel
       name={name}
+      code={code}
+      maxPlayers={maxPlayers}
       isPublic={isPublic}
       rounds={rounds}
       drawingSeconds={drawingSeconds}

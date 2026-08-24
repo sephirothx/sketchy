@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
-import { splitMaskedPrompt } from "../lib/maskedPrompt";
+import { maskedPromptWords } from "../lib/maskedPrompt";
 import type { AckResponse, HintMode } from "../types";
 
 interface PromptDisplayProps {
@@ -19,66 +19,73 @@ interface PromptDisplayProps {
   maxHintSpend?: number;
 }
 
-// tightly spaced blanks per word, followed by each word's letter count (in
-// order) at the very end. A prompt can be several words long, which is why
-// there is a run of blanks and a count per word rather than one of each.
-// Digits only ever appear in that trailing count list, so splitting on the
-// first digit cleanly separates the two parts.
-function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
-  const { blanks, counts } = splitMaskedPrompt(masked);
-  let blanksNode: ReactNode = blanks;
+interface BuyableProps {
+  canAfford: boolean;
+  cost: number;
+  busy: boolean;
+  onBuy: (slot: number) => void;
+}
 
-  if (buyableProps) {
-    const nodes: ReactNode[] = [];
-    let buffer = "";
-    let slot = -1;
-    const flush = () => {
-      if (buffer) {
-        nodes.push(buffer);
-        buffer = "";
-      }
-    };
-    for (const ch of blanks) {
-      const isSlotChar = ch === "_" || /[a-zA-Z0-9]/.test(ch);
-      if (isSlotChar) slot += 1;
-      if (ch === "_") {
-        flush();
-        const currentSlot = slot;
-        nodes.push(
-          <button
-            key={nodes.length}
-            type="button"
-            className="hint-blank"
-            disabled={!buyableProps.canAfford || buyableProps.busy}
-            title={`Buy this letter for ${buyableProps.cost} points`}
-            onClick={() => buyableProps.onBuy(currentSlot)}
-          >
-            _
-          </button>,
-        );
-      } else {
-        buffer += ch;
-      }
-    }
-    flush();
-    blanksNode = nodes;
+// The masked prompt renders as letter tiles: one box per letter with revealed
+// hints filled in, grouped per word, each word keeping its letter-run counts
+// as a superscript so the length reads at a glance without counting boxes.
+// A masked string that doesn't parse (see maskedPromptWords) falls back to
+// the raw blanks-and-counts text so guessers never lose the prompt entirely.
+function renderMaskedPrompt(masked: string, buyableProps?: BuyableProps): ReactNode {
+  const words = maskedPromptWords(masked);
+  if (!words) {
+    return <span className="prompt-blanks-text">{masked}</span>;
   }
 
-  if (counts.length === 0) {
-    return <span className="prompt-blanks-text">{blanksNode}</span>;
-  }
-
-  const totalLength = counts.reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
-  const isLong = totalLength > 10 || blanks.length > 15;
+  const totalSlots = words.reduce(
+    (sum, word) => sum + word.tiles.filter((tile) => tile.kind === "slot").length,
+    0,
+  );
+  const isLong = totalSlots > 14;
 
   return (
-    <span className={`masked-container ${isLong ? "is-long" : ""}`}>
-      <span className="prompt-lengths">
-        {counts.map((count, index) => (
-          <sup key={index}>{count}</sup>
-        ))}
+    <span className={`masked-tiles${isLong ? " is-long" : ""}`}>
+      {words.map((word, wordIndex) => (
+        <span className="masked-word" key={wordIndex}>
+          {word.tiles.map((tile, tileIndex) => {
+            if (tile.kind === "literal") {
+              return (
+                <span className="masked-literal" aria-hidden="true" key={tileIndex}>
+                  {tile.char}
+                </span>
+              );
+            }
+            if (tile.char !== null) {
+              return (
+                <span className="masked-tile is-revealed" key={tileIndex}>
+                  {tile.char}
+                </span>
+              );
+            }
+            if (buyableProps && tile.slot !== null) {
+              const currentSlot = tile.slot;
+              return (
+                <button
+                  key={tileIndex}
+                  type="button"
+                  className="masked-tile hint-blank"
+                  disabled={!buyableProps.canAfford || buyableProps.busy}
+                  title={`Buy this letter for ${buyableProps.cost} points`}
+                  aria-label={`Buy letter ${currentSlot + 1} for ${buyableProps.cost} points`}
+                  onClick={() => buyableProps.onBuy(currentSlot)}
+                />
+              );
+            }
+            return <span className="masked-tile" aria-hidden="true" key={tileIndex} />;
+          })}
+          <sup className="masked-word-count" aria-hidden="true">
+            {word.counts.join(" ")}
+          </sup>
+        </span>
+      ))}
+      <span className="visually-hidden">
+        {`Masked prompt: ${words.map((word) => `${word.counts.join(" and ")} letters`).join(", ")}`}
       </span>
-      <span className="prompt-blanks-text">{blanksNode}</span>
     </span>
   );
 }

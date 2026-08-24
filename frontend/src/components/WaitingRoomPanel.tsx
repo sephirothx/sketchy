@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from "react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
+import { copyText } from "../lib/clipboard";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { describeDrawingRules } from "../lib/drawingRules";
+import { useToast } from "../lib/toast";
 import type {
   ColorMode,
   DrawingToolGroup,
@@ -13,6 +16,8 @@ import type {
 
 interface WaitingRoomPanelProps {
   name: string;
+  code: string | null;
+  maxPlayers: number;
   isPublic: boolean;
   rounds: number;
   drawingSeconds: number;
@@ -46,6 +51,71 @@ function hintLabel(mode: HintMode, hidden: boolean) {
     wheel: "Wheel of Fortune",
     none: "No hints",
   })[mode];
+}
+
+function InviteCard({
+  code,
+  playersHere,
+  maxPlayers,
+}: {
+  code: string;
+  playersHere: number;
+  maxPlayers: number;
+}) {
+  const { notify } = useToast();
+  const [copied, setCopied] = useState<"link" | "code" | null>(null);
+  const copyResetRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (copyResetRef.current != null) window.clearTimeout(copyResetRef.current);
+  }, []);
+
+  async function copy(kind: "link" | "code") {
+    const text = kind === "link" ? `${window.location.origin}/room/${code}` : code;
+    if (await copyText(text)) {
+      notify(kind === "link" ? "Invite link copied." : "Room code copied.", "success", 2500);
+      setCopied(kind);
+      if (copyResetRef.current != null) window.clearTimeout(copyResetRef.current);
+      copyResetRef.current = window.setTimeout(() => setCopied(null), 1800);
+    } else {
+      notify("Couldn’t copy. Share the code from the top of the page instead.", "error");
+    }
+  }
+
+  return (
+    <section className="waiting-card waiting-invite-card" aria-labelledby="waiting-invite-title">
+      <div>
+        <p className="waiting-card-kicker">
+          {playersHere} of {maxPlayers} players here
+        </p>
+        <h2 id="waiting-invite-title">Invite friends</h2>
+        <p className="waiting-invite-hint">
+          Share the invite link or the room code — anyone with it can join.
+        </p>
+      </div>
+      <div className="waiting-invite-actions">
+        <span className="waiting-invite-code" aria-label={`Room code ${code}`}>
+          {code}
+        </span>
+        <div className="waiting-invite-buttons">
+          <button
+            type="button"
+            className="waiting-invite-link-button"
+            onClick={() => void copy("link")}
+          >
+            {copied === "link" ? "Copied!" : "Copy invite link"}
+          </button>
+          <button
+            type="button"
+            className="waiting-invite-code-button"
+            onClick={() => void copy("code")}
+          >
+            {copied === "code" ? "Copied!" : "Copy code"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
@@ -87,6 +157,14 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           </div>
         )}
       </section>
+
+      {props.code && (
+        <InviteCard
+          code={props.code}
+          playersHere={activePlayers.length}
+          maxPlayers={props.maxPlayers}
+        />
+      )}
 
       {isHost ? (
         <RoomSettingsEditor />

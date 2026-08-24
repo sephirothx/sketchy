@@ -253,7 +253,27 @@
   border-color: #475569;
 }
 
+[data-theme="dark"] .masked-tile {
+  background: #1e293b;
+  border-color: #64748b;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .masked-tile.is-revealed {
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .masked-literal {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .timer-bar {
+  background: #334155;
+}
+
 [data-theme="dark"] .hint-blank {
+  border-color: #60a5fa;
   color: #60a5fa;
 }
 
@@ -262,6 +282,7 @@
 }
 
 [data-theme="dark"] .hint-blank:disabled {
+  border-color: #64748b;
   color: inherit;
 }
 
@@ -281,7 +302,7 @@
   color: #64748b;
 }
 
-[data-theme="dark"] .prompt-lengths sup {
+[data-theme="dark"] .masked-word-count {
   color: #94a3b8;
 }
 
@@ -487,6 +508,28 @@
 [data-theme="dark"] .waiting-card {
   background: #1e293b;
   border-color: #334155;
+}
+
+[data-theme="dark"] .waiting-invite-card {
+  border-color: #4055a8;
+}
+
+[data-theme="dark"] .waiting-invite-hint {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .waiting-invite-code {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .waiting-invite-code-button {
+  background: #1e293b;
+  border-color: #4055a8;
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .waiting-invite-code-button:hover {
+  background: #1e3a8a;
 }
 
 [data-theme="dark"] .waiting-room-intro h1,

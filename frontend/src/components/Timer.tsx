@@ -8,6 +8,7 @@ interface TimerProps {
 
 export function Timer({ totalSeconds, startedAt }: TimerProps) {
   const [remaining, setRemaining] = useState(totalSeconds);
+  const [fraction, setFraction] = useState(1);
   const [announcement, setAnnouncement] = useState("");
   const prevRemainingRef = useRef<number>(totalSeconds);
 
@@ -27,6 +28,9 @@ export function Timer({ totalSeconds, startedAt }: TimerProps) {
         prevRemainingRef.current = nextVal;
       }
       setRemaining(nextVal);
+      setFraction(
+        totalSeconds > 0 ? Math.min(1, Math.max(0, 1 - elapsed / totalSeconds)) : 0,
+      );
     };
     compute();
     const interval = setInterval(compute, 250);
@@ -35,14 +39,29 @@ export function Timer({ totalSeconds, startedAt }: TimerProps) {
 
   if (totalSeconds <= 0) return null;
 
+  // Continuous green -> amber -> red as time depletes, so urgency reads from
+  // the bar all turn long instead of only in the final red ten seconds.
+  const barHue = Math.round(120 * fraction);
+
   return (
-    <div className={`timer${remaining <= 10 ? " urgent" : ""}`}>
-      {remaining}s
-      {announcement && (
-        <span className="visually-hidden" role="status" aria-live="polite" data-testid="timer-announcer">
-          {announcement}
-        </span>
-      )}
-    </div>
+    <>
+      <div className={`timer${remaining <= 10 ? " urgent" : ""}`}>
+        {remaining}s
+        {announcement && (
+          <span className="visually-hidden" role="status" aria-live="polite" data-testid="timer-announcer">
+            {announcement}
+          </span>
+        )}
+      </div>
+      <div className="timer-bar" aria-hidden="true">
+        <div
+          className="timer-bar-fill"
+          style={{
+            width: `${fraction * 100}%`,
+            background: `hsl(${barHue} 70% 42%)`,
+          }}
+        />
+      </div>
+    </>
   );
 }

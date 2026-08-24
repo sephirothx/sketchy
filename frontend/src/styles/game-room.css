@@ -200,6 +200,12 @@
   transition: all 0.15s ease;
 }
 
+.room-copy-icon {
+  align-items: center;
+  color: #64748b;
+  display: inline-flex;
+}
+
 .room-copy-button:hover {
   background: #f8fafc;
   border-color: #94a3b8;
@@ -238,6 +244,12 @@
   .room-copy-button {
     padding: 6px 8px;
     font-size: 13px;
+  }
+
+  /* The mobile header is already tight; the copy affordance still reads from
+     the button styling and the invite card covers discovery. */
+  .room-copy-icon {
+    display: none;
   }
 }
 
@@ -512,6 +524,50 @@
 .waiting-room-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
 .waiting-card { background: #fff; border: 1px solid #dfe1e6; border-radius: 12px; padding: 20px; }
 .waiting-card h2 { font-size: 19px; }
+
+/* Invite card: the waiting room's primary action. */
+.waiting-invite-card {
+  align-items: center;
+  border-color: #c7d2fe;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.waiting-invite-hint { color: #64748b; font-size: 14px; margin: 6px 0 0; }
+.waiting-invite-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.waiting-invite-code {
+  color: #1e293b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+.waiting-invite-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.waiting-invite-link-button {
+  background: #4c6ef5;
+  border: 1px solid #4c6ef5;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 700;
+  padding: 9px 16px;
+}
+.waiting-invite-link-button:hover { background: #4263eb; }
+.waiting-invite-code-button {
+  background: #fff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  color: #4c6ef5;
+  font-weight: 700;
+  padding: 9px 16px;
+}
+.waiting-invite-code-button:hover { background: #edf1ff; }
 .waiting-ready-count { background: #f1f5f9; border-radius: 999px; color: #64748b; font-size: 13px; font-weight: 700; padding: 6px 9px; }
 .waiting-ready-count.is-ready { background: #dcfce7; color: #15803d; }
 .waiting-spectators { border-top: 1px solid #dfe1e6; margin-top: 8px; padding-top: 14px; }
@@ -750,6 +806,29 @@
     font-size: 13px;
     padding: 2px 4px;
     margin-bottom: 2px;
+  }
+
+  /* While the guess input is focused (density mode), the depleting bar
+     carries the countdown by itself: the "Round x/y" text and the numeric
+     timer are dropped to give their row back to the canvas. Both stay
+     visible in normal play. The timer keeps announcing ("10 seconds
+     remaining") through the visually-hidden pattern - display:none would
+     silence its aria-live region. */
+  .game-room.guess-focused .round-info > span:first-child {
+    display: none;
+  }
+
+  .game-room.guess-focused .timer {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
   }
 
   /*
@@ -1115,7 +1194,10 @@
 
 .round-info {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  align-items: baseline;
+  row-gap: 3px;
   width: 100%;
   font-weight: 600;
 }
@@ -1126,6 +1208,26 @@
 
 .timer.urgent {
   color: #e03131;
+}
+
+/* Depleting turn-time bar under the round/timer row. The fill's width and
+   green -> amber -> red color come inline from the Timer component. */
+.timer-bar {
+  background: #e2e8f0;
+  border-radius: 3px;
+  height: 5px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.timer-bar-fill {
+  border-radius: 3px;
+  height: 100%;
+  transition: width 250ms linear, background-color 250ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-bar-fill { transition: none; }
 }
 
 .prompt-display {
@@ -1165,42 +1267,80 @@
   align-items: center;
 }
 
-.masked-container {
-  display: inline-flex;
-  align-items: baseline;
-  max-width: 100%;
-}
-
-.masked-container .prompt-blanks-text {
-  order: 1;
+.prompt-blanks-text {
   white-space: pre;
   letter-spacing: clamp(1px, 0.4vw, 3px);
 }
 
-.masked-container .prompt-lengths {
-  order: 2;
+/* The masked prompt as letter tiles: one box per letter, revealed hints
+   filled in, words kept together, and each word's letter-run counts as a
+   superscript so length still reads at a glance without counting boxes. */
+.masked-tiles {
+  --tile-size: clamp(20px, 3.2vw, 28px);
   display: inline-flex;
-  gap: 6px;
-  margin-left: 8px;
-  vertical-align: super;
-  letter-spacing: normal;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  column-gap: 14px;
+  row-gap: 6px;
+  max-width: 100%;
 }
 
-.masked-container.is-long {
-  flex-direction: column;
+.masked-tiles.is-long {
+  --tile-size: clamp(15px, 2.4vw, 21px);
+}
+
+.masked-word {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.masked-tile {
+  box-sizing: border-box;
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  width: var(--tile-size);
+  height: calc(var(--tile-size) * 1.25);
+  background: #fff;
+  border: 1.5px solid #94a3b8;
+  border-radius: 5px;
+  font-size: calc(var(--tile-size) * 0.72);
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
 }
 
-.masked-container.is-long .prompt-lengths {
-  order: 1;
-  margin-left: 0;
-  margin-bottom: 2px;
+.masked-tile.is-revealed {
+  border-color: #4c6ef5;
+  color: #4c6ef5;
+  animation: masked-tile-reveal 220ms ease-out;
+}
+
+@keyframes masked-tile-reveal {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .masked-tile.is-revealed { animation: none; }
+}
+
+.masked-literal {
+  align-self: center;
+  font-size: calc(var(--tile-size) * 0.72);
+  font-weight: 700;
+}
+
+.masked-word-count {
+  color: #868e96;
   font-size: 13px;
-}
-
-.masked-container.is-long .prompt-blanks-text {
-  order: 2;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1;
+  margin-left: 1px;
+  align-self: flex-start;
 }
 
 /* One compact line above the blanks: what the next hint costs (or that the
@@ -1234,15 +1374,13 @@
 
 /* A blank the player can buy: still reads as part of the word, so it keeps the
    word's face and only picks up a tappable tint. */
+/* A buyable tile keeps the tile look and adds button affordances. */
 .hint-blank {
-  background: none;
-  border: 0;
-  border-radius: 3px;
+  border-color: #4c6ef5;
+  border-style: dashed;
   color: #4c6ef5;
   cursor: pointer;
   font: inherit;
-  letter-spacing: inherit;
-  padding: 0;
 }
 
 .hint-blank:hover:not(:disabled) {
@@ -1250,6 +1388,8 @@
 }
 
 .hint-blank:disabled {
+  border-color: #94a3b8;
+  border-style: solid;
   color: inherit;
   cursor: default;
 }
@@ -1309,11 +1449,6 @@
   opacity: 0.7;
 }
 
-.prompt-lengths sup {
-  font-size: 13px;
-  font-weight: 600;
-  color: #868e96;
-}
 
 .prompt-hidden {
   font-size: 1.5rem;
@@ -1352,6 +1487,41 @@
   border: 1px solid #c7cad1;
   border-radius: 8px;
   overflow: hidden;
+}
+
+/* Desktop: let the canvas claim the viewport instead of stopping at 800px.
+   Width is capped by the height still free after the header, HUD, and (for
+   the drawer) the toolbar, so the page never scrolls during play; the 640px
+   floor keeps short windows from shrinking the canvas below today's size. */
+@media (min-width: 901px) {
+  /* Applied to every room view, not just playing, so the players/chat
+     regions keep identical geometry across the waiting -> playing
+     transition (see test_multi_browser_game's region-stability checks).
+     The waiting room's own content keeps its designed column width below;
+     the extra room exists for the canvas. */
+  .game-room {
+    max-width: 1400px;
+  }
+
+  .room-shell-waiting .waiting-room {
+    margin-inline: auto;
+    max-width: 636px;
+  }
+
+  .game-room.game-room-playing .canvas-area {
+    --canvas-cap: min(100%, max(640px, calc((100dvh - 340px) * 4 / 3)));
+  }
+
+  .game-room.game-room-playing .round-info,
+  .game-room.game-room-playing .prompt-display,
+  .game-room.game-room-playing .canvas-wrapper {
+    width: var(--canvas-cap);
+    max-width: var(--canvas-cap);
+  }
+
+  .game-room.game-room-playing .canvas-stack {
+    max-width: none;
+  }
 }
 
 .drawing-canvas {
