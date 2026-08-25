@@ -11,7 +11,8 @@ This README is the narrative introduction. The precise references live in
 [`docs/`](docs/): [architecture](docs/architecture.md),
 [wire protocol](docs/wire-protocol.md), [database](docs/database.md), and
 [requirements](docs/requirements.md). Read the relevant one before changing the thing it
-describes, and update it in the same change.
+describes, and update it in the same change. [`docs/ui-mockups/`](docs/ui-mockups/) holds
+the same rule for the interface: an artboard per screen, matched to the shipped styles.
 
 ## Features
 

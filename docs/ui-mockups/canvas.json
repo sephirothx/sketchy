@@ -1,0 +1,30 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Lobby", "x": 0, "y": 0, "w": 960, "h": 1180 },
+    { "file": "CreateRoom.dc.html", "title": "Create room", "x": 1040, "y": 0, "w": 760, "h": 1300 },
+    { "file": "AccountRecovery.dc.html", "title": "Account recovery", "x": 1880, "y": 0, "w": 560, "h": 440 },
+
+    { "file": "WaitingRoom.dc.html", "title": "Waiting room (host)", "x": 0, "y": 1460, "w": 1200, "h": 1120 },
+    { "file": "Drawing.dc.html", "title": "Drawing — the drawer", "x": 1280, "y": 1460, "w": 1200, "h": 940 },
+    { "file": "Guessing.dc.html", "title": "Drawing — a guesser", "x": 2560, "y": 1460, "w": 1200, "h": 940 },
+
+    { "file": "TurnResults.dc.html", "title": "Turn results", "x": 0, "y": 2740, "w": 1200, "h": 940 },
+    { "file": "GameOver.dc.html", "title": "Game over", "x": 1280, "y": 2740, "w": 1200, "h": 900 },
+    { "file": "Highlights.dc.html", "title": "Highlights", "x": 2560, "y": 2740, "w": 1200, "h": 900 },
+
+    { "file": "PromptStats.dc.html", "title": "Prompt stats", "x": 0, "y": 3840, "w": 900, "h": 900 },
+    { "file": "MyPromptLists.dc.html", "title": "My prompt lists", "x": 980, "y": 3840, "w": 1000, "h": 1000 },
+    { "file": "Profile.dc.html", "title": "Profile", "x": 2060, "y": 3840, "w": 900, "h": 1140 },
+
+    { "file": "AdminOps.dc.html", "title": "Server operations", "x": 0, "y": 5140, "w": 1100, "h": 800 },
+    { "file": "Moderation.dc.html", "title": "Moderation", "x": 1180, "y": 5140, "w": 1100, "h": 800 }
+  ],
+  "annotations": [
+    { "id": "row-entry", "x": 0, "y": -110, "w": 420, "text": "GETTING IN\nLobby, room setup, password recovery. Frame width is the page's real max-width, with its padding inside it — content sits at max-width minus 2× padding, as it ships." },
+    { "id": "row-room", "x": 0, "y": 1350, "w": 420, "text": "IN THE ROOM\nThe 220 / 1fr / 280 room shell. One story across all six: room BQ7F2K, five players, round 2, Marta draws lighthouse." },
+    { "id": "row-results", "x": 0, "y": 2630, "w": 420, "text": "AFTER THE TURN\nTurn results overlays the canvas area; game over and highlights replace it inside the same shell. Scores continue the round-2 turn." },
+    { "id": "row-library", "x": 0, "y": 3730, "w": 420, "text": "LIBRARY AND PROFILE\nStandalone pages reached from the lobby header and the account menu. Profile's history row is the same game." },
+    { "id": "row-operator", "x": 0, "y": 5030, "w": 420, "text": "OPERATOR PAGES\nAdministrator and moderator views. Same page shell, tab nav, no game chrome, unstyled native controls where the app ships none." }
+  ],
+  "launch": { "view": "canvas" }
+}
