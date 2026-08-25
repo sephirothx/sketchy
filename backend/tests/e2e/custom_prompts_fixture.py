@@ -16,7 +16,10 @@ def maximum_custom_prompts() -> list[str]:
         elif index % 3 == 1:
             words.append(f"medium{token}")
         elif index == 2:
-            words.append("skeleton in a closet")
+            # Long enough to always truncate inside a virtual-grid cell (the
+            # bundled Nunito Sans makes text metrics deterministic), while the
+            # single-result search view still shows it in full.
+            words.append("skeleton in a closet somewhere")
         else:
             words.append(f"long-custom-{'W' * 17}{token}")
     return words

@@ -1,9 +1,129 @@
+/* Design tokens. The values are the redesign palette from
+ * docs/ui-redesign/tools/ui.mjs (PALETTES): a warm paper light theme and a
+ * slate dark theme whose tinted surfaces are alpha washes of their accent so
+ * they blend with any ground. `data-theme` on <html> is always resolved to
+ * "light" or "dark" before paint (index.html + settingsStore), so light
+ * lives on :root and dark overrides below.
+ *
+ * Per-player colors are NOT tokens: accounts carry arbitrary name colors, so
+ * player name/avatar rendering derives display colors from each player's
+ * nameColor at runtime (lib/playerName.ts). */
 :root {
   color-scheme: light;
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+
+  --font-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Nunito Sans", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-body);
+
+  /* surfaces */
+  --paper: #faf6ef;
+  --well: #faf6ef;
+  --card: #ffffff;
+  --field: #ffffff;
+  --track: #f1ebe0;
+  --scrim: rgba(30, 27, 22, 0.5);
+
+  /* text */
+  --ink: #292520;
+  --muted: #6f6759;
+  --faint: #a29883;
+
+  /* lines */
+  --line: #e7dfd2;
+  --line-strong: #d3c8b4;
+
+  /* avatars */
+  --avatar-ink: #ffffff;
+  --guest-avatar: #5b6472;
+  --guest-bg: #f0eadd;
+
+  /* crayon indigo — routine actions */
+  --primary: #5157d8;
+  --primary-soft: #eeeffb;
+  --primary-ink: #3b41b5;
+  --primary-edge: #3b41b5;
+  --primary-edge-soft: #c9ccf4;
+
+  /* marker orange — game moments, timers, celebration */
+  --warm: #e8703a;
+  --warm-soft: #fbeadf;
+  --warm-ink: #b5541f;
+  --warm-edge: #c1521f;
+
+  /* semantic */
+  --success: #2f9e44;
+  --success-soft: #e7f5ea;
+  --success-ink: #1f7a33;
+  --warning: #b45309;
+  --warning-soft: #fdf1dc;
+  --warning-edge: #ebc98a;
+  --danger: #c92a2a;
+  --danger-soft: #fbecec;
+  --gold: #8a6d0b;
+  --silver: #5a6472;
+  --bronze: #8a5a2e;
+
+  /* shape and depth */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgba(20, 16, 10, 0.06);
+  --shadow-raised: 0 10px 30px rgba(20, 16, 10, 0.14);
+
+  /* visual-viewport vars written by useVisualViewportCssVars */
   --vv-height: 100dvh;
   --vv-width: 100%;
   --vv-offset-top: 0px;
   --vv-offset-left: 0px;
   --app-height: 100dvh;
+}
+
+/* Dark: the shipped slate ground (#0f172a / #1e293b / #334155 / #475569 and
+ * the slate text ramp); tinted surfaces are alpha washes; inputs recess to
+ * the page ground; inset wells are translucent recesses. */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #0f172a;
+  --well: rgba(2, 6, 23, 0.35);
+  --card: #1e293b;
+  --field: #0f172a;
+  --track: rgba(2, 6, 23, 0.45);
+  --scrim: rgba(2, 6, 23, 0.6);
+
+  --ink: #f8fafc;
+  --muted: #94a3b8;
+  --faint: #64748b;
+
+  --line: #334155;
+  --line-strong: #475569;
+
+  --avatar-ink: #132036;
+  --guest-avatar: #c3cbd8;
+  --guest-bg: rgba(148, 163, 184, 0.18);
+
+  --primary: #666ce4;
+  --primary-soft: rgba(102, 108, 228, 0.17);
+  --primary-ink: #c7cbfa;
+  --primary-edge: #3b41b5;
+  --primary-edge-soft: rgba(102, 108, 228, 0.5);
+
+  --warm: #ee7e48;
+  --warm-soft: rgba(238, 126, 72, 0.15);
+  --warm-ink: #fdba74;
+  --warm-edge: #9a3412;
+
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.13);
+  --success-ink: #86efac;
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.13);
+  --warning-edge: rgba(251, 191, 36, 0.4);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --gold: #f5ce62;
+  --silver: #b9c4d4;
+  --bronze: #dfa878;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-raised: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
