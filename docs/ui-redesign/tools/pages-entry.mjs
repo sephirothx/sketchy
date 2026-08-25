@@ -139,7 +139,7 @@ const settingCard = (svg, label, value, unit, hint) => `
 
 const listChip = (name, count, on) => {
   const pill = count === '' ? '' : on
-    ? `<span style="background: #fff; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: ${T.primary}">${count}</span>`
+    ? `<span style="background: ${T.card}; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: ${T.primary}">${count}</span>`
     : `<span style="background: ${T.paper}; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: ${T.faint}">${count}</span>`;
   return on
     ? `<button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.primarySoft}; border: 1.5px solid ${T.primary}; border-radius: 999px; padding: 9px 15px; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; color: ${T.primaryInk}; min-height: 42px">${icon.check(12)}${name}${pill}</button>`
@@ -220,7 +220,7 @@ export const CreateRoomPage = `
 lighthouse
 bow and arrow</textarea>
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
-              <span style="font-size: 13px; font-weight: 800; color: #1F7A33">3 usable prompts</span>
+              <span style="font-size: 13px; font-weight: 800; color: ${T.successInk}">3 usable prompts</span>
               <div style="display: flex; align-items: center; gap: 10px">
                 ${switchCtl('Only use these', false)}
                 ${btn.ghost('Save as a reusable list')}
@@ -293,5 +293,115 @@ export const AccountRecoveryPage = `
     </label>
     ${btn.primary('Send a reset link', { big: true, style: 'width: 100%' })}
     ${btn.ghost('Back to the lobby', { iconL: icon.back(14), style: 'justify-self: center' })}
+  </div>
+</div>`;
+
+// ------------------------------------------------------------------ Settings
+// The settings modal, drawn over a dimmed lobby. Everything here follows a
+// registered account across devices (R-SET-01); guests keep it in this
+// browser only.
+const settingsRow = (label, control, hint = '') => `
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px">
+  <div style="display: grid; gap: 2px">
+    <span style="font-size: 14px; font-weight: 800; color: ${T.ink}">${label}</span>
+    ${hint ? `<span style="font-size: 12px; font-weight: 700; color: ${T.faint}">${hint}</span>` : ''}
+  </div>
+  ${control}
+</div>`;
+
+const bareSwitch = (on) => `
+<span role="switch" aria-checked="${on}" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: ${on ? T.primary : T.lineStrong}; flex: none; cursor: pointer">
+  <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(${on ? '18px' : '0'})"></span>
+</span>`;
+
+const volumeSlider = `
+<span style="display: inline-flex; align-items: center; gap: 10px; width: 190px">
+  <span aria-label="Volume, 70%" role="slider" aria-valuenow="70" style="position: relative; flex: 1; height: 8px; border-radius: 999px; background: ${T.track}; cursor: pointer">
+    <span style="position: absolute; inset: 0 30% 0 0; border-radius: 999px; background: ${T.primary}"></span>
+    <span style="position: absolute; left: 70%; top: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; border-radius: 50%; background: ${T.card}; border: 1.5px solid ${T.lineStrong}; box-shadow: ${T.shadow}"></span>
+  </span>
+  <span style="font-size: 12.5px; font-weight: 800; color: ${T.muted}; font-variant-numeric: tabular-nums; width: 34px; text-align: right">70%</span>
+</span>`;
+
+const keyChip = (key) =>
+  `<button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid ${T.lineStrong}; border-bottom-width: 3px; background: ${T.card}; color: ${T.ink}; font-family: ${T.body}; font-size: 12.5px; font-weight: 800">${key}</button>`;
+
+const shortcutRow = (svg, label, key) => `
+<div style="display: flex; align-items: center; gap: 9px; min-height: 38px">
+  <span style="display: inline-flex; color: ${T.faint}">${svg}</span>
+  <span style="font-size: 13px; font-weight: 700; color: ${T.muted}">${label}</span>
+  <span style="margin-left: auto">${keyChip(key)}</span>
+</div>`;
+
+const brushPreset = (color, sizeLabel, dot) => `
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 8px 14px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.muted}; min-height: 40px">
+  <span style="width: ${dot}px; height: ${dot}px; border-radius: 50%; background: ${color}; border: 1px solid rgba(0, 0, 0, 0.15); flex: none"></span>${sizeLabel}
+</button>`;
+
+const settingsDivider = `<div style="border-top: 1.5px solid ${T.line}; margin: 6px 0 2px"></div>`;
+
+export const SettingsPage = `
+<div style="width: 960px; min-height: 1060px; position: relative; overflow: hidden">
+  <div aria-hidden="true" style="position: absolute; inset: 0; padding: 26px 24px; opacity: 0.4; filter: blur(2px)">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 26px">${wordmark(34)}<span style="width: 260px; height: 44px; border-radius: 999px; background: ${T.card}; border: 1.5px solid ${T.line}"></span></div>
+    <div style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; margin-bottom: 18px">
+      <div style="height: 170px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}"></div>
+      <div style="height: 170px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}"></div>
+    </div>
+    <div style="height: 620px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}"></div>
+  </div>
+
+  <div style="position: absolute; inset: 0; background: rgba(22, 20, 16, 0.45); display: flex; align-items: flex-start; justify-content: center; padding: 44px 20px">
+    <section role="dialog" aria-label="Settings" style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 18px; box-shadow: ${T.shadowRaised}; width: min(660px, 100%); padding: 24px 28px 26px; display: grid; gap: 14px">
+      <header style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+        <div>
+          ${sectionLabel('Your preferences')}
+          <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 24px; color: ${T.ink}; margin-top: 3px">Settings</h1>
+        </div>
+        <button type="button" aria-label="Close settings" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: transparent; border: 0; border-radius: ${T.radiusSm}; color: ${T.muted}">${icon.x(17)}</button>
+      </header>
+
+      ${settingsRow('Theme', segmented(['Light', 'Dark', 'System'], 2, { w: 74 }))}
+      ${settingsRow('Colorblind-safe colors', bareSwitch(false), 'Hosts of rooms you join get a quiet suggestion to switch the palette. Never shown with your name.')}
+
+      ${settingsDivider}
+      ${settingsRow('Sound', bareSwitch(true))}
+      ${settingsRow('Volume', volumeSlider)}
+      ${settingsRow('Confetti', bareSwitch(true), 'Celebrations on correct guesses and podiums.')}
+
+      ${settingsDivider}
+      ${settingsRow('Brush outline cursor', bareSwitch(true), 'Show the brush size under your pointer while drawing.')}
+      <div style="display: grid; gap: 8px">
+        <span style="font-size: 14px; font-weight: 800; color: ${T.ink}">Brush presets <span style="font-weight: 700; color: ${T.faint}">· 3 of 20</span></span>
+        <div style="display: flex; flex-wrap: wrap; gap: 7px">
+          ${brushPreset('#000000', 'Ink · 4px', 8)}
+          ${brushPreset('#ED1C24', 'Marker · 12px', 13)}
+          ${brushPreset('#7AC9E8', 'Sky wash · 24px', 17)}
+          <button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1.5px dashed ${T.lineStrong}; border-radius: 999px; padding: 8px 14px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.muted}; min-height: 40px">${icon.plus(12)}Save current brush</button>
+        </div>
+      </div>
+      <div style="display: grid; gap: 6px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px">
+          <span style="font-size: 14px; font-weight: 800; color: ${T.ink}">Keyboard shortcuts</span>
+          ${btn.ghost('Reset to defaults', { style: 'min-height: 34px; padding: 4px 8px; font-size: 12.5px' })}
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 8px 16px">
+          ${shortcutRow(icon.pencil(15), 'Brush', 'P')}
+          ${shortcutRow(icon.rect(15), 'Rectangle', 'R')}
+          ${shortcutRow(icon.fill(15), 'Fill', 'F')}
+          ${shortcutRow(icon.triangle(15), 'Triangle', 'T')}
+          ${shortcutRow(icon.eraser(15), 'Eraser', 'E')}
+          ${shortcutRow(icon.circle(15), 'Ellipse', 'C')}
+        </div>
+      </div>
+
+      ${settingsDivider}
+      ${settingsRow('Clear the guess box after each guess', bareSwitch(true), 'Off keeps your last guess in the box for quick edits.')}
+
+      <footer style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1.5px solid ${T.line}; padding-top: 16px; margin-top: 2px">
+        <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: ${T.faint}">${avatar(P.marta, 24)}Signed in as Marta — settings follow you across devices.</span>
+        ${btn.primary('Done')}
+      </footer>
+    </section>
   </div>
 </div>`;

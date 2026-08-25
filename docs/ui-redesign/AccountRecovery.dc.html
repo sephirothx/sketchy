@@ -10,40 +10,41 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #FAF6EF;
-      color: #292520;
-      font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
-    }
+    body { margin: 0; }
+
+    [data-theme="light"] { --paper: #FAF6EF; --card: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #16181D; --card: #1F222A; --ink: #E9EBF1; --muted: #9CA3B2; --faint: #6E7584; --line: #2C303B; --lineStrong: #414755; --track: #262A33; --guestBg: #2B2F3A; --primary: #666CE4; --primarySoft: #292D52; --primaryInk: #C3C6FA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: #3B2C22; --warmInk: #F3A878; --warmEdge: #A5461A; --success: #4FBF67; --successSoft: #20342B; --successInk: #7FD794; --warning: #E0A64F; --warningSoft: #352E1C; --warningEdge: #63522E; --danger: #E37070; --dangerSoft: #3B2429; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }
     h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
-    a { color: #5157D8; text-decoration: none; font-weight: 700; }
-    a:hover { color: #3B41B5; }
     button { cursor: pointer; }
     summary { cursor: pointer; }
   </style>
 </helmet>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
 
 <div style="width: 560px; min-height: 500px; display: flex; justify-content: center; padding: 56px 16px">
-  <div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; box-shadow: 0 10px 30px rgba(41, 37, 32, 0.10); max-width: 420px; padding: 30px; width: 100%; display: grid; gap: 14px">
+  <div style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(20, 16, 10, 0.14); max-width: 420px; padding: 30px; width: 100%; display: grid; gap: 14px">
     <span style="display: inline-flex; flex-direction: column; gap: 1px; width: fit-content">
-    <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 24px; letter-spacing: 0.01em; color: #292520; line-height: 1">Sketchy</span>
-    <svg width="62" height="8" viewBox="0 0 62 8" fill="none" aria-hidden="true" style="display: block"><path d="M2 5 C 8.680000000000001 1, 13.64 7, 22.32 4 C 31 1, 38.44 7, 47.12 4 C 53.32 2, 58.279999999999994 5, 60 3" stroke="#E8703A" stroke-width="2.5" stroke-linecap="round"/></svg>
+    <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 24px; letter-spacing: 0.01em; color: var(--ink); line-height: 1">Sketchy</span>
+    <svg width="62" height="8" viewBox="0 0 62 8" fill="none" aria-hidden="true" style="display: block"><path d="M2 5 C 8.680000000000001 1, 13.64 7, 22.32 4 C 31 1, 38.44 7, 47.12 4 C 53.32 2, 58.279999999999994 5, 60 3" stroke-width="2.5" stroke-linecap="round" style="stroke: var(--warm)"/></svg>
   </span>
-    <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 22px; color: #292520; margin-top: 6px">Reset your password</h1>
-    <p style="font-size: 14px; color: #6F6759; line-height: 1.55">Enter your username or your confirmed email address. If the account can be recovered, a link is on its way.</p>
-    <label style="display: grid; gap: 6px; font-size: 13.5px; font-weight: 800; color: #292520">Username or email
-      <input type="text" style="background: #FFFFFF; border: 1.5px solid #D3C8B4; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; color: #292520; min-height: 42px; width: 100%">
+    <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 22px; color: var(--ink); margin-top: 6px">Reset your password</h1>
+    <p style="font-size: 14px; color: var(--muted); line-height: 1.55">Enter your username or your confirmed email address. If the account can be recovered, a link is on its way.</p>
+    <label style="display: grid; gap: 6px; font-size: 13.5px; font-weight: 800; color: var(--ink)">Username or email
+      <input type="text" style="background: var(--card); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; color: var(--ink); min-height: 42px; width: 100%">
     </label>
-    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #5157D8; color: #fff; border: 0; border-radius: 10px; padding: 13px 22px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 16px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 #3B41B5; width: 100%">Send a reset link</button>
-    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: #6F6759; border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; justify-self: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to the lobby</button>
+    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; padding: 13px 22px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 16px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--primaryEdge); width: 100%">Send a reset link</button>
+    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; justify-self: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to the lobby</button>
   </div>
 </div>
+</div>
 </x-dc>
-<script data-dc-script data-props='{"$preview": {"width": 560, "height": 500}}'>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 560, "height": 500}}'>
 class Component extends DCLogic {
   renderVals() {
-    return {};
+    return { theme: this.props.theme ?? 'light' };
   }
 }
 </script>

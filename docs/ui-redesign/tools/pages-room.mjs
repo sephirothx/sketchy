@@ -103,7 +103,7 @@ export const PromptChoicePage = roomPage(roomHeader({ inGame: true }) + roomGrid
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
     ${statusStrip({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(11, 11 / 15, T.warm) })}
     ${canvasFrame(
-      `<div style="position: absolute; inset: 0; background: repeating-linear-gradient(45deg, #FDFBF7 0 14px, #FAF6EF 14px 28px)"></div>`,
+      `<div style="position: absolute; inset: 0; background: repeating-linear-gradient(45deg, ${T.card} 0 14px, ${T.paper} 14px 28px)"></div>`,
       `<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(41, 37, 32, 0.45)">
         <div style="background: ${T.card}; border-radius: 16px; box-shadow: ${T.shadowRaised}; padding: 28px 32px; text-align: center; max-width: 92%">
           ${sectionLabel('Your turn')}
@@ -268,7 +268,7 @@ export const GuessingPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
     ],
     inputHTML: chat.input({
       placeholder: 'Type your guess…', value: 'lighth', accent: true,
-      above: `<div style="display: flex; align-items: center; gap: 7px; background: ${T.warmSoft}; border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 800; color: #B5541F"><span style="display: inline-flex">${icon.zap(13)}</span>“light house” is very close — only you can see this.</div>`,
+      above: `<div style="display: flex; align-items: center; gap: 7px; background: ${T.warmSoft}; border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 800; color: ${T.warmInk}"><span style="display: inline-flex">${icon.zap(13)}</span>“light house” is very close — only you can see this.</div>`,
     }),
   }),
 ), { minHeight: 1000 });
@@ -281,7 +281,7 @@ const resultRow = (p, { rank, delta, total, movement = null, drawer = false, you
   <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14.5px">
     ${pname(p)}
     ${you ? `<span style="color: ${T.faint}; font-size: 11px; font-weight: 800">you</span>` : ''}
-    ${drawer ? `<span title="Drew this turn" style="display: inline-flex; align-items: center; gap: 4px; color: #B5541F; font-size: 11.5px; font-weight: 800">${icon.pencil(12)}drew</span>` : ''}
+    ${drawer ? `<span title="Drew this turn" style="display: inline-flex; align-items: center; gap: 4px; color: ${T.warmInk}; font-size: 11.5px; font-weight: 800">${icon.pencil(12)}drew</span>` : ''}
   </span>
   ${movement === 'up' ? `<span style="color: ${T.success}; font-size: 12px; font-weight: 800">▲1</span>` : movement === 'down' ? `<span style="color: ${T.danger}; font-size: 12px; font-weight: 800">▼1</span>` : ''}
   <span style="margin-left: auto; min-width: 48px; text-align: right; font-weight: 800; font-size: 13.5px; color: ${T.success}">${delta}</span>
@@ -310,7 +310,7 @@ export const TurnResultsPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
         <div style="background: ${T.card}; border-radius: 16px; box-shadow: ${T.shadowRaised}; padding: 22px 26px; width: min(430px, 92%)">
           <p style="text-align: center; color: ${T.faint}; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase">The prompt was</p>
           <p style="text-align: center; font-family: ${T.display}; font-weight: 600; font-size: 30px; color: ${T.ink}; margin: 3px 0 10px">lighthouse</p>
-          <p style="display: flex; align-items: center; justify-content: center; gap: 7px; background: ${T.warmSoft}; border-radius: 10px; color: #B5541F; padding: 9px 12px; font-size: 14px; font-weight: 800; margin-bottom: 12px">${icon.pencil(14)}All 3 guessed your drawing · +120 for you</p>
+          <p style="display: flex; align-items: center; justify-content: center; gap: 7px; background: ${T.warmSoft}; border-radius: 10px; color: ${T.warmInk}; padding: 9px 12px; font-size: 14px; font-weight: 800; margin-bottom: 12px">${icon.pencil(14)}All 3 guessed your drawing · +120 for you</p>
           <ul style="list-style: none; margin: 0; padding: 0; display: grid; gap: 1px">
             ${resultRow(P.bruno, { rank: 1, delta: '+161', total: 981 })}
             ${resultRow(P.yuki, { rank: 2, delta: '+141', total: 846 })}
@@ -362,10 +362,10 @@ const podiumCol = (p, place, score, h, color) => `
 </div>`;
 
 const confettiDots = `<svg width="360" height="44" viewBox="0 0 360 44" fill="none" aria-hidden="true" style="display: block; margin: 0 auto">
-  <circle cx="24" cy="26" r="4" fill="${T.warm}"/><rect x="70" y="10" width="8" height="8" rx="2" fill="${T.primary}" transform="rotate(18 74 14)"/>
-  <circle cx="126" cy="14" r="3.5" fill="${T.success}"/><rect x="168" y="22" width="9" height="9" rx="2" fill="${T.warm}" transform="rotate(-14 172 26)"/>
-  <circle cx="228" cy="10" r="4" fill="${T.primary}"/><rect x="272" y="16" width="8" height="8" rx="2" fill="${T.success}" transform="rotate(24 276 20)"/>
-  <circle cx="330" cy="24" r="3.5" fill="${T.warm}"/>
+  <circle cx="24" cy="26" r="4" style="fill: ${T.warm}"/><rect x="70" y="10" width="8" height="8" rx="2" style="fill: ${T.primary}" transform="rotate(18 74 14)"/>
+  <circle cx="126" cy="14" r="3.5" style="fill: ${T.success}"/><rect x="168" y="22" width="9" height="9" rx="2" style="fill: ${T.warm}" transform="rotate(-14 172 26)"/>
+  <circle cx="228" cy="10" r="4" style="fill: ${T.primary}"/><rect x="272" y="16" width="8" height="8" rx="2" style="fill: ${T.success}" transform="rotate(24 276 20)"/>
+  <circle cx="330" cy="24" r="3.5" style="fill: ${T.warm}"/>
 </svg>`;
 
 export const GameOverPage = roomPage(roomHeader() + roomGrid(
@@ -415,7 +415,7 @@ export const GameOverPage = roomPage(roomHeader() + roomGrid(
 // --------------------------------------------------------------- Highlights
 const highlightCard = (svg, label, who, stat, sub) => `
 <div style="background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 18px; display: flex; flex-direction: column; gap: 10px">
-  <span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: ${T.warmSoft}; color: #B5541F">${svg}</span>
+  <span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: ${T.warmSoft}; color: ${T.warmInk}">${svg}</span>
   ${sectionLabel(label)}
   <div style="display: flex; align-items: center; gap: 8px; font-size: 15.5px">${who}</div>
   <div style="display: flex; align-items: baseline; gap: 8px">

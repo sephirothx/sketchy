@@ -98,7 +98,7 @@ const sysLine = (text) =>
   `<div style="display: flex; align-items: baseline; gap: 7px; color: ${T.faint}; font-size: 13px"><span style="flex: none; width: 4px; height: 4px; border-radius: 50%; background: ${T.lineStrong}; align-self: center"></span><span style="overflow-wrap: anywhere">${text}</span></div>`;
 
 const guessedLine = (p, pts) =>
-  `<div style="display: flex; align-items: center; gap: 7px; background: ${T.successSoft}; border-radius: 8px; padding: 4px 8px; margin: 1px 0; font-size: 13.5px; color: #1F7A33; font-weight: 700"><span style="display: inline-flex; color: ${T.success}">${icon.check(13)}</span><span>${p.name} guessed it!${pts ? ` <span style="font-variant-numeric: tabular-nums">+${pts}</span>` : ''}</span></div>`;
+  `<div style="display: flex; align-items: center; gap: 7px; background: ${T.successSoft}; border-radius: 8px; padding: 4px 8px; margin: 1px 0; font-size: 13.5px; color: ${T.successInk}; font-weight: 700"><span style="display: inline-flex; color: ${T.success}">${icon.check(13)}</span><span>${p.name} guessed it!${pts ? ` <span style="font-variant-numeric: tabular-nums">+${pts}</span>` : ''}</span></div>`;
 
 const chatMsg = (p, text) =>
   `<div style="font-size: 14px; overflow-wrap: anywhere">${pname(p, '; font-size: 13.5px')}<span style="color: ${T.muted}"> ${text}</span></div>`;

@@ -1,40 +1,93 @@
 // Shared design tokens, icons and small components for the redesign canvas.
 // Every artboard is generated from these so the system stays consistent.
+//
+// Colors are CSS custom properties with a light and a dark value, switched by
+// a data-theme attribute on the artboard root. `T.<token>` interpolates as
+// `var(--<token>)`, so every component is theme-aware for free.
+
+export const PALETTES = {
+  light: {
+    paper: '#FAF6EF',        // warm page background
+    card: '#FFFFFF',
+    ink: '#292520',          // warm near-black
+    muted: '#6F6759',
+    faint: '#A29883',
+    line: '#E7DFD2',
+    lineStrong: '#D3C8B4',
+    track: '#F1EBE0',        // segmented-control well
+    guestBg: '#F0EADD',      // guest avatar fill
+    primary: '#5157D8',      // crayon indigo
+    primarySoft: '#EEEFFB',
+    primaryInk: '#3B41B5',   // text on primarySoft
+    primaryEdge: '#3B41B5',  // primary button bottom edge
+    warm: '#E8703A',         // marker orange — energy, timers, celebration
+    warmSoft: '#FBEADF',
+    warmInk: '#B5541F',
+    warmEdge: '#C1521F',
+    success: '#2F9E44',
+    successSoft: '#E7F5EA',
+    successInk: '#1F7A33',
+    warning: '#B45309',
+    warningSoft: '#FDF1DC',
+    warningEdge: '#EBC98A',
+    danger: '#C92A2A',
+    dangerSoft: '#FBECEC',
+    // player name text (avatars keep the fixed account color)
+    pcMarta: '#0F766E', pcBruno: '#C2410C', pcYuki: '#7E22CE', pcInes: '#0369A1', pcSparrow: '#8A8272',
+  },
+  dark: {
+    paper: '#16181D',        // cool near-black, blue bias
+    card: '#1F222A',
+    ink: '#E9EBF1',
+    muted: '#9CA3B2',
+    faint: '#6E7584',
+    line: '#2C303B',
+    lineStrong: '#414755',
+    track: '#262A33',
+    guestBg: '#2B2F3A',
+    primary: '#666CE4',
+    primarySoft: '#292D52',
+    primaryInk: '#C3C6FA',
+    primaryEdge: '#3B41B5',
+    warm: '#EE7E48',
+    warmSoft: '#3B2C22',
+    warmInk: '#F3A878',
+    warmEdge: '#A5461A',
+    success: '#4FBF67',
+    successSoft: '#20342B',
+    successInk: '#7FD794',
+    warning: '#E0A64F',
+    warningSoft: '#352E1C',
+    warningEdge: '#63522E',
+    danger: '#E37070',
+    dangerSoft: '#3B2429',
+    pcMarta: '#2BB3A0', pcBruno: '#F08A54', pcYuki: '#BF87ED', pcInes: '#4FA8E0', pcSparrow: '#A0A5B2',
+  },
+};
+
+const varTokens = Object.fromEntries(Object.keys(PALETTES.light).map((k) => [k, `var(--${k})`]));
 
 export const T = {
-  paper: '#FAF6EF',        // warm page background
-  card: '#FFFFFF',
-  ink: '#292520',          // warm near-black
-  muted: '#6F6759',
-  faint: '#A29883',
-  line: '#E7DFD2',
-  lineStrong: '#D3C8B4',
-  primary: '#5157D8',      // crayon indigo
-  primarySoft: '#EEEFFB',
-  primaryInk: '#3B41B5',
-  warm: '#E8703A',         // marker orange — energy, timers, celebration
-  warmSoft: '#FBEADF',
-  success: '#2F9E44',
-  successSoft: '#E7F5EA',
-  warning: '#B45309',
-  warningSoft: '#FDF1DC',
-  danger: '#C92A2A',
-  dangerSoft: '#FBECEC',
+  ...varTokens,
   display: "'Fredoka', 'Trebuchet MS', system-ui, sans-serif",
   body: "'Nunito Sans', 'Segoe UI', system-ui, sans-serif",
   radius: '14px',
   radiusSm: '10px',
-  shadow: '0 1px 2px rgba(41, 37, 32, 0.06)',
-  shadowRaised: '0 10px 30px rgba(41, 37, 32, 0.10)',
+  shadow: '0 1px 2px rgba(20, 16, 10, 0.06)',
+  shadowRaised: '0 10px 30px rgba(20, 16, 10, 0.14)',
 };
 
-// Player identity — same story colors as the shipped mockups.
+export const cssVars = (theme) =>
+  Object.entries(PALETTES[theme]).map(([k, v]) => `--${k}: ${v};`).join(' ');
+
+// Player identity — avatar keeps the fixed account color from the shipped
+// mockups; name text uses a theme-adjusted token so it stays legible on dark.
 export const P = {
-  marta:   { name: 'Marta',      color: '#0F766E', guest: false },
-  bruno:   { name: 'Bruno',      color: '#C2410C', guest: false },
-  yuki:    { name: 'Yuki',       color: '#7E22CE', guest: false },
-  ines:    { name: 'Ines',       color: '#0369A1', guest: false },
-  sparrow: { name: 'Sparrow-14', color: '#8A8272', guest: true },
+  marta:   { name: 'Marta',      color: '#0F766E', text: 'var(--pcMarta)',   guest: false },
+  bruno:   { name: 'Bruno',      color: '#C2410C', text: 'var(--pcBruno)',   guest: false },
+  yuki:    { name: 'Yuki',       color: '#7E22CE', text: 'var(--pcYuki)',    guest: false },
+  ines:    { name: 'Ines',       color: '#0369A1', text: 'var(--pcInes)',    guest: false },
+  sparrow: { name: 'Sparrow-14', color: '#8A8272', text: 'var(--pcSparrow)', guest: true },
 };
 
 const stroke = (paths, size = 16, sw = 2) =>
@@ -83,8 +136,8 @@ export const icon = {
     const c = 2 * Math.PI * r;
     return `<span style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; flex: none">
       <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true" style="position: absolute; inset: 0; transform: rotate(-90deg)">
-        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${T.line}" stroke-width="5"/>
-        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(c * frac).toFixed(1)} ${c.toFixed(1)}"/>
+        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="5" style="stroke: ${T.line}"/>
+        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(c * frac).toFixed(1)} ${c.toFixed(1)}" style="stroke: ${color}"/>
       </svg>
       <span style="position: relative; font-family: ${T.display}; font-weight: 600; font-size: ${size >= 52 ? 18 : 15}px; color: ${color}; font-variant-numeric: tabular-nums">${seconds}</span>
     </span>`;
@@ -93,7 +146,7 @@ export const icon = {
 
 // A small squiggle underline used under the wordmark and section moments.
 export const squiggle = (w = 96, color = T.warm) =>
-  `<svg width="${w}" height="8" viewBox="0 0 ${w} 8" fill="none" aria-hidden="true" style="display: block"><path d="M2 5 C ${w * 0.14} 1, ${w * 0.22} 7, ${w * 0.36} 4 C ${w * 0.5} 1, ${w * 0.62} 7, ${w * 0.76} 4 C ${w * 0.86} 2, ${w * 0.94} 5, ${w - 2} 3" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+  `<svg width="${w}" height="8" viewBox="0 0 ${w} 8" fill="none" aria-hidden="true" style="display: block"><path d="M2 5 C ${w * 0.14} 1, ${w * 0.22} 7, ${w * 0.36} 4 C ${w * 0.5} 1, ${w * 0.62} 7, ${w * 0.76} 4 C ${w * 0.86} 2, ${w * 0.94} 5, ${w - 2} 3" stroke-width="2.5" stroke-linecap="round" style="stroke: ${color}"/></svg>`;
 
 export const wordmark = (size = 30) =>
   `<span style="display: inline-flex; flex-direction: column; gap: 1px; width: fit-content">
@@ -104,21 +157,21 @@ export const wordmark = (size = 30) =>
 export const avatar = (p, size = 28) => {
   const fz = Math.round(size * 0.48);
   if (p.guest) {
-    return `<span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; border-radius: 50%; background: #F0EADD; border: 1.5px dashed ${T.lineStrong}; color: ${T.muted}; font-weight: 800; font-size: ${fz}px; flex: none">${p.name[0]}</span>`;
+    return `<span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; border-radius: 50%; background: ${T.guestBg}; border: 1.5px dashed ${T.lineStrong}; color: ${T.muted}; font-weight: 800; font-size: ${fz}px; flex: none">${p.name[0]}</span>`;
   }
   return `<span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; border-radius: 50%; background: ${p.color}; color: #fff; font-weight: 800; font-size: ${fz}px; flex: none">${p.name[0]}</span>`;
 };
 
 export const pname = (p, extra = '') =>
   p.guest
-    ? `<span style="color: ${T.muted}; font-style: italic; font-weight: 700${extra}">${p.name}</span>`
-    : `<span style="color: ${p.color}; font-weight: 800${extra}">${p.name}</span>`;
+    ? `<span style="color: ${p.text}; font-style: italic; font-weight: 700${extra}">${p.name}</span>`
+    : `<span style="color: ${p.text}; font-weight: 800${extra}">${p.name}</span>`;
 
 export const btn = {
   primary: (label, opts = {}) =>
-    `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.primary}; color: #fff; border: 0; border-radius: ${T.radiusSm}; padding: ${opts.big ? '13px 22px' : '11px 18px'}; font-family: ${T.body}; font-size: ${opts.big ? 16 : 14.5}px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 ${T.primaryInk}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
+    `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.primary}; color: #fff; border: 0; border-radius: ${T.radiusSm}; padding: ${opts.big ? '13px 22px' : '11px 18px'}; font-family: ${T.body}; font-size: ${opts.big ? 16 : 14.5}px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 ${T.primaryEdge}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   warm: (label, opts = {}) =>
-    `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.warm}; color: #fff; border: 0; border-radius: ${T.radiusSm}; padding: ${opts.big ? '13px 22px' : '11px 18px'}; font-family: ${T.body}; font-size: ${opts.big ? 16 : 14.5}px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 #C1521F${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
+    `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.warm}; color: #fff; border: 0; border-radius: ${T.radiusSm}; padding: ${opts.big ? '13px 22px' : '11px 18px'}; font-family: ${T.body}; font-size: ${opts.big ? 16 : 14.5}px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 ${T.warmEdge}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   secondary: (label, opts = {}) =>
     `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.card}; color: ${T.ink}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 16px; font-family: ${T.body}; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: ${T.shadow}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   ghost: (label, opts = {}) =>
@@ -133,10 +186,10 @@ export const chip = (label, kind = 'neutral') => {
   const k = {
     neutral: [T.paper, T.muted, T.line],
     primary: [T.primarySoft, T.primaryInk, 'transparent'],
-    success: [T.successSoft, '#1F7A33', 'transparent'],
+    success: [T.successSoft, T.successInk, 'transparent'],
     warning: [T.warningSoft, T.warning, 'transparent'],
     danger: [T.dangerSoft, T.danger, 'transparent'],
-    warm: [T.warmSoft, '#B5541F', 'transparent'],
+    warm: [T.warmSoft, T.warmInk, 'transparent'],
   }[kind];
   return `<span style="display: inline-flex; align-items: center; gap: 5px; background: ${k[0]}; color: ${k[1]}; border: 1px solid ${k[2]}; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">${label}</span>`;
 };
@@ -149,9 +202,9 @@ export const sectionLabel = (text) =>
 
 export const segmented = (options, activeIdx, opts = {}) => {
   const w = opts.w ? `width: ${opts.w}px; ` : '';
-  return `<div style="display: inline-flex; gap: 3px; background: #F1EBE0; border-radius: 999px; padding: 4px; width: fit-content">
+  return `<div style="display: inline-flex; gap: 3px; background: ${T.track}; border-radius: 999px; padding: 4px; width: fit-content">
     ${options.map((o, i) => i === activeIdx
-      ? `<button type="button" aria-pressed="true" style="${w}display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: ${T.card}; border: 0; border-radius: 999px; color: ${T.ink}; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; padding: 8px 16px; box-shadow: 0 1px 3px rgba(41, 37, 32, 0.14); white-space: nowrap">${o}</button>`
+      ? `<button type="button" aria-pressed="true" style="${w}display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: ${T.card}; border: 0; border-radius: 999px; color: ${T.ink}; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; padding: 8px 16px; box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14); white-space: nowrap">${o}</button>`
       : `<button type="button" aria-pressed="false" style="${w}display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: ${T.muted}; font-family: ${T.body}; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">${o}</button>`
     ).join('')}
   </div>`;
@@ -160,8 +213,8 @@ export const segmented = (options, activeIdx, opts = {}) => {
 // An on/off toggle switch with its label; `hint` renders muted after the label.
 export const switchCtl = (label, on, hint = '') => `
 <label style="display: inline-flex; align-items: center; gap: 10px; cursor: pointer">
-  <span role="switch" aria-checked="${on}" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: ${on ? T.primary : '#D8CFC0'}; flex: none">
-    <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.25); transform: translateX(${on ? '18px' : '0'})"></span>
+  <span role="switch" aria-checked="${on}" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: ${on ? T.primary : T.lineStrong}; flex: none">
+    <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(${on ? '18px' : '0'})"></span>
   </span>
   <span style="font-size: 13.5px; font-weight: 800; color: ${T.ink}">${label}${hint ? ` <span style="font-weight: 600; color: ${T.faint}">${hint}</span>` : ''}</span>
 </label>`;
@@ -172,7 +225,16 @@ export const selectBox = (label) =>
 export const input = (opts = {}) =>
   `<input type="text" ${opts.value ? `value="${opts.value}" ` : ''}${opts.placeholder ? `placeholder="${opts.placeholder}" ` : ''}style="background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 14.5px; color: ${T.ink}; min-height: 42px; width: 100%${opts.style ? '; ' + opts.style : ''}">`;
 
-// Wrap an artboard body in the Design Component skeleton.
+// Theme-scoped style rules shared by the artboards and the explorer.
+export const themeStyles = `
+    [data-theme="light"] { ${cssVars('light')} }
+    [data-theme="dark"] { ${cssVars('dark')} }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }`;
+
+// Wrap an artboard body in the Design Component skeleton. Every artboard
+// carries a light/dark theme tweak, switched by data-theme on the root.
 export const dcWrap = (body, { width, height }) => `<!doctype html>
 <html>
 <head>
@@ -185,25 +247,21 @@ export const dcWrap = (body, { width, height }) => `<!doctype html>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: ${T.paper};
-      color: ${T.ink};
-      font-family: ${T.body};
-    }
+    body { margin: 0; }
+${themeStyles}
     h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
-    a { color: ${T.primary}; text-decoration: none; font-weight: 700; }
-    a:hover { color: ${T.primaryInk}; }
     button { cursor: pointer; }
     summary { cursor: pointer; }
   </style>
 </helmet>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: ${T.paper}; color: ${T.ink}; font-family: ${T.body}">
 ${body}
+</div>
 </x-dc>
-<script data-dc-script data-props='{"$preview": {"width": ${width}, "height": ${height}}}'>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": ${width}, "height": ${height}}}'>
 class Component extends DCLogic {
   renderVals() {
-    return {};
+    return { theme: this.props.theme ?? 'light' };
   }
 }
 </script>

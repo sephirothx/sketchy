@@ -80,7 +80,7 @@ const listNav = (name, meta, active, badge = '') => `
 </button>`;
 
 const promptChip = (text, review = false) => review
-  ? `<li style="display: flex; align-items: center; gap: 4px; background: ${T.warningSoft}; border: 1px solid #EBC98A; border-radius: 999px; padding: 4px 4px 4px 13px; font-size: 13.5px; max-width: 100%">
+  ? `<li style="display: flex; align-items: center; gap: 4px; background: ${T.warningSoft}; border: 1px solid ${T.warningEdge}; border-radius: 999px; padding: 4px 4px 4px 13px; font-size: 13.5px; max-width: 100%">
       <span style="overflow-wrap: anywhere; color: ${T.ink}">${text}</span>
       ${chip('under review', 'warning')}
       <button type="button" aria-label="Remove ${text}" style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: none; border: 0; border-radius: 999px; color: ${T.faint}">${icon.x(13)}</button>
@@ -152,7 +152,7 @@ export const MyPromptListsPage = `
               <span style="display: inline-flex; color: ${T.faint}">${icon.search(14)}</span>
               <input type="search" placeholder="Search prompts" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-family: ${T.body}; font-size: 13.5px; color: ${T.ink}">
             </div>
-            <button type="button" aria-pressed="false" style="background: ${T.card}; border: 1.5px solid #EBC98A; border-radius: 999px; padding: 8px 14px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.warning}">Needs review · 1</button>
+            <button type="button" aria-pressed="false" style="background: ${T.card}; border: 1.5px solid ${T.warningEdge}; border-radius: 999px; padding: 8px 14px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.warning}">Needs review · 1</button>
           </div>
           <ul style="display: flex; flex-wrap: wrap; gap: 7px; list-style: none; margin: 0; max-height: 300px; overflow: auto; padding: 0">
             ${promptChip('the good stapler')}
@@ -305,7 +305,7 @@ const adminTabs = (tabs, active) => `
 const liveStat = (label, value, sub, alert = false) => `
 <div style="background: ${T.card}; border: 1.5px solid ${alert ? T.warm : T.line}; border-radius: ${T.radius}; display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; box-shadow: ${T.shadow}">
   <span style="font-size: 11.5px; letter-spacing: 0.06em; color: ${T.faint}; font-weight: 800; text-transform: uppercase">${label}</span>
-  <span style="font-family: ${T.display}; font-weight: 600; font-size: 30px; font-variant-numeric: tabular-nums; color: ${alert ? '#B5541F' : T.ink}">${value}</span>
+  <span style="font-family: ${T.display}; font-weight: 600; font-size: 30px; font-variant-numeric: tabular-nums; color: ${alert ? T.warmInk : T.ink}">${value}</span>
   <span style="font-size: 12px; color: ${T.faint}; font-weight: 700">${sub}</span>
 </div>`;
 
@@ -317,7 +317,7 @@ const trendCard = (label, value, points, alert = false) => `
     <span style="font-size: 12px; color: ${T.faint}; font-weight: 700">today</span>
   </div>
   <svg viewBox="0 0 160 36" role="img" aria-label="${label} over the retained window" style="display: block; height: auto; margin-top: 8px; max-width: 100%; width: 100%">
-    <polyline points="${points}" fill="none" stroke="${alert ? T.warm : T.primary}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+    <polyline points="${points}" fill="none" style="stroke: ${alert ? T.warm : T.primary}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
   </svg>
 </div>`;
 

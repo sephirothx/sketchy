@@ -3,9 +3,15 @@
 A UI/UX review of every shipped Sketchy screen, and the reasoning behind the
 redesigned mockups that answer it.
 
-- **The redesigned mockups** — 15 artboards on one canvas:
+- **The redesigned mockups** — 16 artboards on one canvas, each with a
+  light/dark theme tweak:
   <https://claude.ai/code/artifact/1c717d8a-994f-4cfe-9a66-8308f4218958>
   (source in this directory; regenerate with `node tools/build.mjs`).
+- **The clickable explorer** — navigate the mockups like the real app, step
+  through a whole game with ◀ ▶, outline the wired controls with Hotspots,
+  and toggle dark mode:
+  <https://claude.ai/code/artifact/992e6b17-17f8-41cf-bdf1-33a05ab91e95>
+  (regenerate with `node tools/build-explorer.mjs`).
 - **The as-shipped mockups** they respond to: [`../ui-mockups/`](../ui-mockups/).
 - Both canvases tell the same story (room *Coffee break doodles*, code
   `BQ7F2K`, round 2, Marta drawing *lighthouse*), so every screen can be
@@ -136,6 +142,18 @@ Player identity is upgraded from colored text to **avatar chips** (colored
 disc + initial) used identically in the player list, chat, results, podium and
 history. Guests keep their mandated grey (R-ACCT-05) but become visually
 first-class: a dashed-border chip instead of apologetic italic-only text.
+
+Every color is a **CSS custom property with a light and a dark value**,
+switched by one `data-theme` attribute — so the whole system carries a dark
+theme for free. The dark ground is a cool gray-blue rather than a darkened
+version of the warm paper — night mode reads as a different room, not a
+dimmed one — while the crayon/marker accents carry the identity across both
+(the drawing canvas deliberately stays white paper in both). Avatar discs keep the fixed account color while player *name text*
+uses a theme-adjusted token, so dark-leaning account colors stay legible on
+the dark ground. On the canvas, every artboard has a `theme` tweak chip; the
+explorer has a Dark toggle. This also retires the shipped approach of a
+separate 35k dark override stylesheet — the mockups and the app could share
+one token sheet.
 
 ---
 
@@ -311,6 +329,29 @@ Same form, on brand: wordmark, one primary action, quiet back link — the
 first screen a locked-out player sees no longer looks like a different
 product.
 
+### Settings (`Settings`) — new screen
+
+The settings modal was on the shipped canvas's "not covered" list; this
+canvas mocks it, drawn as the modal it is, over a dimmed lobby. It covers
+exactly the R-SET-01 set — nothing invented:
+
+- **Theme** as a Light/Dark/System segmented control (the dark option is the
+  token swap this redesign ships), and the **colorblind-safe preference**
+  with its guarantee written where the choice is made: "hosts of rooms you
+  join get a quiet suggestion — never shown with your name" (R-CB-01).
+- **Sound, volume, confetti** as switches and a slider; **brush cursor** and
+  **guess-box clearing** as switches with one-line consequences.
+- **Brush presets** as chips with a live count against the 20-preset cap
+  (R-SET-02) and a "save current brush" affordance, plus **keyboard
+  shortcuts** as a two-column grid of editable key caps covering the
+  complete tool set, with a reset.
+- A footer states the sync rule in one line — *"Signed in as Marta —
+  settings follow you across devices"* — which flips to a local-only notice
+  for guests (R-SET-03).
+
+In the explorer, every Settings gear (lobby and in-room) opens it; *Done*
+returns to the lobby.
+
 ---
 
 ## 4. Worth fixing regardless of any redesign
@@ -342,8 +383,8 @@ Findings that are app defects or requirement mismatches on their own:
 - Player colors, the story, all copy facts, and the server-driven truth of
   every number shown — the redesign adds no data the backend doesn't already
   have.
-- Light theme only and desktop widths only, matching the existing canvas's
-  documented deviations.
+- Desktop widths only, matching the existing canvas's documented deviation.
+  (The light-only deviation is gone: dark ships as a token swap, above.)
 
 ## Sources
 
