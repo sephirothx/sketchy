@@ -1,7 +1,7 @@
 // In-room artboards: one game, one story — waiting, choosing, drawing,
 // guessing, turn results, game over, highlights.
 import { T, P, icon, avatar, pname, btn, chip, card, sectionLabel, segmented } from './ui.mjs';
-import { ROOM, roomHeader, roomGrid, roomPage, playersPanel, playerRow, chat, statusStrip, canvasFrame, lighthouseSVG, restartFooter } from './shell.mjs';
+import { ROOM, roomHeader, headerStatus, roomGrid, roomPage, playersPanel, playerRow, chat, canvasFrame, lighthouseSVG } from './shell.mjs';
 
 // ------------------------------------------------------------- Waiting room
 const waitingPlayers = playersPanel({
@@ -79,10 +79,9 @@ export const WaitingRoomPage = roomPage(roomHeader() + roomGrid(
 ), { minHeight: 1000 });
 
 // ------------------------------------------------------ Prompt choice (new)
-const promptOption = (word, diffLabel, diffKind, hot) => `
-<button type="button" style="display: flex; flex-direction: column; align-items: center; gap: 9px; background: ${hot ? T.primarySoft : T.card}; border: 1.5px solid ${hot ? T.primary : T.lineStrong}; border-radius: ${T.radius}; padding: 18px 14px; min-width: 140px; font-family: ${T.body}; box-shadow: ${T.shadow}">
+const promptOption = (word) => `
+<button type="button" style="display: flex; align-items: center; justify-content: center; background: ${T.well}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radius}; padding: 20px 18px; min-width: 150px; font-family: ${T.body}; box-shadow: 0 3px 0 ${T.lineStrong}">
   <span style="font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}">${word}</span>
-  ${chip(diffLabel, diffKind)}
 </button>`;
 
 const inGamePlayersChoosing = playersPanel({
@@ -94,30 +93,27 @@ const inGamePlayersChoosing = playersPanel({
     playerRow(P.ines, { score: 310, afk: true }),
     playerRow(P.sparrow, { score: 180 }),
   ],
-  footer: restartFooter,
 });
 
-export const PromptChoicePage = roomPage(roomHeader({ inGame: true }) + roomGrid(
+export const PromptChoicePage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(11, 11 / 15, T.warm, 40) }) }) + roomGrid(
   inGamePlayersChoosing,
   `
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
-    ${statusStrip({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(11, 11 / 15, T.warm) })}
     ${canvasFrame(
       `<div style="position: absolute; inset: 0; background: repeating-linear-gradient(45deg, ${T.card} 0 14px, ${T.paper} 14px 28px)"></div>`,
       `<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: ${T.scrim}">
         <div style="background: ${T.card}; border-radius: 16px; box-shadow: ${T.shadowRaised}; padding: 28px 32px; text-align: center; max-width: 92%">
           ${sectionLabel('Your turn')}
           <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}; margin: 6px 0 4px">Pick something to draw</h2>
-          <p style="color: ${T.muted}; font-size: 13.5px; margin-bottom: 18px">Difficulty comes from how this server actually guesses. Auto-picks when time runs out.</p>
+          <p style="color: ${T.muted}; font-size: 13.5px; margin-bottom: 18px">Auto-picks when time runs out.</p>
           <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap">
-            ${promptOption('lighthouse', 'Usually guessed', 'success', true)}
-            ${promptOption('roller coaster', 'Often missed', 'warning', false)}
-            ${promptOption('windmill', 'Even odds', 'primary', false)}
+            ${promptOption('lighthouse')}
+            ${promptOption('roller coaster')}
+            ${promptOption('windmill')}
           </div>
         </div>
       </div>`
     )}
-    <p style="color: ${T.faint}; font-size: 13px">Everyone else sees “Marta is choosing a prompt…”</p>
   </main>`,
   chat.panel({
     heading: 'Chat',
@@ -182,19 +178,13 @@ const inGamePlayersDrawing = playersPanel({
     playerRow(P.ines, { score: 310, afk: true }),
     playerRow(P.sparrow, { score: 180, guessed: '1:06' }),
   ],
-  footer: restartFooter,
 });
 
-export const DrawingPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
+export const DrawingPage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(21, 21 / 90, T.warm, 40) }) }) + roomGrid(
   inGamePlayersDrawing,
   `
-  <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
-    ${statusStrip({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(21, 21 / 90, T.warm) })}
-    <div style="display: flex; align-items: baseline; gap: 10px">
-      <span style="font-size: 13px; font-weight: 800; color: ${T.faint}; text-transform: uppercase; letter-spacing: 0.07em">You're drawing</span>
-      <span style="font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}">lighthouse</span>
-      ${chip('2 of 3 guessed it', 'success')}
-    </div>
+  <main style="display: flex; flex-direction: column; gap: 10px; align-items: center">
+    <span style="font-family: ${T.display}; font-weight: 600; font-size: 27px; color: ${T.ink}; line-height: 1.2">lighthouse</span>
     ${canvasFrame(lighthouseSVG)}
     ${toolbar}
   </main>`,
@@ -240,14 +230,12 @@ const guessingPlayers = playersPanel({
     playerRow(P.ines, { score: 310, afk: true }),
     playerRow(P.sparrow, { score: 180, guessed: '1:06' }),
   ],
-  footer: restartFooter,
 });
 
-export const GuessingPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
+export const GuessingPage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(15, 15 / 90, T.warm, 40) }) }) + roomGrid(
   guessingPlayers,
   `
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
-    ${statusStrip({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(15, 15 / 90, T.warm) })}
     <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
       <div style="display: flex; align-items: flex-start" aria-label="Masked prompt, 10 letters">
         ${maskedTiles}
@@ -268,8 +256,9 @@ export const GuessingPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
       chat.chatMsg(P.yuki, 'watchtower'),
     ],
     inputHTML: chat.input({
-      placeholder: 'Type your guess…', value: 'lighthou', count: 8, accent: true,
-      above: chat.notice('“light house” is very close — try it as one word. Only you can see this.'),
+      placeholder: 'Type your guess…', value: 'lighthou', accent: true,
+      hints: [{ n: 8, state: 'typing' }],
+      above: chat.notice('“light house” is very close!'),
     }),
   }),
 ), { minHeight: 1000 });
@@ -298,14 +287,12 @@ const turnResultsPlayers = playersPanel({
     playerRow(P.sparrow, { score: 333 }),
     playerRow(P.ines, { score: 310, afk: true }),
   ],
-  footer: restartFooter,
 });
 
-export const TurnResultsPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
+export const TurnResultsPage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4' }) }) + roomGrid(
   turnResultsPlayers,
   `
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
-    ${statusStrip({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: '' })}
     ${canvasFrame(lighthouseSVG,
       `<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: ${T.scrim}">
         <div style="background: ${T.card}; border-radius: 16px; box-shadow: ${T.shadowRaised}; padding: 22px 26px; width: min(430px, 92%)">
@@ -396,9 +383,12 @@ export const GameOverPage = roomPage(roomHeader() + roomGrid(
       <div style="display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap">
         ${btn.secondary('Highlights', { iconL: icon.trophy(15) })}
         ${btn.secondary('Drawings', { iconL: icon.brush(15) })}
-        ${btn.primary('Back to waiting room', { big: true })}
+        <button type="button" aria-label="Continue to the waiting room, 7 seconds left" style="display: inline-flex; align-items: center; gap: 11px; background: ${T.primary}; color: #fff; border: 0; border-radius: 999px; padding: 11px 26px 11px 13px; font-family: ${T.display}; font-weight: 600; font-size: 18px; min-height: 52px; box-shadow: 0 4px 0 ${T.primaryEdge}">
+          ${icon.timerRing(7, 0.85, '#fff', 28, 'rgba(255, 255, 255, 0.35)')}
+          Continue
+        </button>
       </div>
-      <p style="color: ${T.faint}; font-size: 12.5px; font-weight: 700; margin-top: 12px">Heading back automatically in 7s · <a href="#">stay here</a></p>
+      <p style="color: ${T.faint}; font-size: 12.5px; font-weight: 700; margin-top: 12px"><a href="#">Stay here</a></p>
     </section>
   </main>`,
   chat.panel({

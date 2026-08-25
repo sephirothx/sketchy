@@ -39,7 +39,7 @@ const backBar = (label = 'Back to lobby') => `
 
 // ---------------------------------------------------------------- Main lobby
 const codeCells = ['B', 'Q', '7', 'F', '', '']
-  .map((c, i) => `<span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 48px; border: 1.5px solid ${c ? T.lineStrong : T.line}; border-radius: 10px; background: ${T.card}; font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}${i === 4 ? `; border-color: ${T.primary}; box-shadow: 0 0 0 3px ${T.primarySoft}` : ''}">${c}</span>`)
+  .map((c, i) => `<span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 48px; border: 1.5px solid ${c ? T.lineStrong : T.line}; border-radius: 10px; background: ${T.field}; font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}${i === 4 ? `; border-color: ${T.primary}; box-shadow: 0 0 0 3px ${T.primarySoft}` : ''}">${c}</span>`)
   .join('');
 
 const roomCard = ({ name, status, statusKind, lang, meta, fillFrac, tags, actions }) => `
@@ -170,17 +170,32 @@ const optionCard = (title, desc, on, extra = '') => `
   <span style="font-size: 12.5px; color: ${T.muted}; line-height: 1.45; font-weight: 600">${desc}</span>
 </button>`;
 
-const formSection = (title, hint, inner) => `
-<section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}">
-  <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px">
+// A form section card. `collapsed` renders it as a closed disclosure whose
+// header row summarizes the current values, so the long tail of settings
+// stays out of the way until the host asks for it.
+const formSection = (title, hint, inner, { collapsed = false } = {}) => {
+  const header = `
     <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}">${title}</h2>
-    ${hint ? `<span style="font-size: 12.5px; color: ${T.faint}; font-weight: 700">${hint}</span>` : ''}
-  </div>
+    ${hint ? `<span style="font-size: 12.5px; color: ${T.faint}; font-weight: 700">${hint}</span>` : ''}`;
+  if (!collapsed) {
+    return `
+<section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}">
+  <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px">${header}</div>
   ${inner}
 </section>`;
+  }
+  return `
+<details style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; box-shadow: ${T.shadow}">
+  <summary class="plain" style="display: flex; align-items: baseline; gap: 10px; padding: 20px 22px; cursor: pointer; list-style: none">
+    ${header}
+    <span style="margin-left: auto; align-self: center; display: inline-flex; color: ${T.faint}">${icon.chevR(16)}</span>
+  </summary>
+  <div style="padding: 0 22px 20px">${inner}</div>
+</details>`;
+};
 
 export const CreateRoomPage = `
-<div style="width: 780px; min-height: 1720px; margin: 0 auto; padding: 26px 24px 48px">
+<div style="width: 780px; min-height: 1100px; margin: 0 auto; padding: 26px 24px 48px">
   ${backBar()}
   <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 18px">
     <div>
@@ -220,7 +235,7 @@ export const CreateRoomPage = `
         </div>
       </div>`)}
 
-    ${formSection('Prompts', 'English · resolved from your lists', `
+    ${formSection('Prompts', 'English · Standard English · 432 prompts', `
       <div style="display: grid; gap: 14px">
         <div style="display: flex; flex-wrap: wrap; gap: 8px">
           ${listChip('Standard English', 432, true)}
@@ -234,7 +249,7 @@ export const CreateRoomPage = `
         <details style="border-top: 1.5px solid ${T.line}; padding-top: 14px">
           <summary style="font-size: 14px; font-weight: 800; color: ${T.muted}">Custom prompts for this game <span style="color: ${T.faint}; font-weight: 700">· 3 added</span></summary>
           <div style="display: grid; gap: 8px; margin-top: 12px">
-            <textarea style="border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; font-family: ${T.body}; font-size: 14px; padding: 10px 12px; height: 110px; resize: none; width: 100%; color: ${T.ink}">roller coaster
+            <textarea style="background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; font-family: ${T.body}; font-size: 14px; padding: 10px 12px; height: 110px; resize: none; width: 100%; color: ${T.ink}">roller coaster
 lighthouse
 bow and arrow</textarea>
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
@@ -246,9 +261,9 @@ bow and arrow</textarea>
             </div>
           </div>
         </details>
-      </div>`)}
+      </div>`, { collapsed: true })}
 
-    ${formSection('Drawing', '', `
+    ${formSection('Drawing', 'Brush, Fill, Shapes · All colors', `
       <div style="display: grid; gap: 16px">
         <div style="display: grid; gap: 8px">
           <span style="font-size: 14.5px; font-weight: 800; color: ${T.ink}">Allowed tools</span>
@@ -262,9 +277,9 @@ bow and arrow</textarea>
           <span style="font-size: 14.5px; font-weight: 800; color: ${T.ink}">Colors</span>
           ${segmented(['All colors', 'Palette only', 'Colorblind-safe', 'Black and white'], 0)}
         </div>
-      </div>`)}
+      </div>`, { collapsed: true })}
 
-    ${formSection('Scoring and hints', '', `
+    ${formSection('Scoring and hints', 'Default scoring · Timed hints', `
       <div style="display: grid; gap: 16px">
         <div style="display: grid; gap: 8px">
           <span style="font-size: 14.5px; font-weight: 800; color: ${T.ink}">Scoring</span>
@@ -287,7 +302,7 @@ bow and arrow</textarea>
           ${switchCtl('Spectators can see the prompt', true)}
           ${switchCtl('Hide blanks', false, '(turns hints off)')}
         </div>
-      </div>`)}
+      </div>`, { collapsed: true })}
   </div>
 
   <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; box-shadow: ${T.shadowRaised}; padding: 14px 18px; margin-top: 16px">

@@ -189,7 +189,11 @@ one token sheet.
 ### Create a room (`CreateRoom`)
 
 - **Four labeled sections** — Basics, Prompts, Drawing, Scoring & hints —
-  replace the single column, so the host can stop reading after Basics.
+  replace the single column. Only Basics opens by default: the other three
+  are **collapsed disclosures whose headers summarize their current values**
+  ("English · Standard English · 432 prompts", "Brush, Fill, Shapes · All
+  colors", "Default scoring · Timed hints"), so the defaults-are-fine host
+  sees a short form and still knows exactly what they're getting.
 - Basics itself explains its consequences: visibility is an iconed
   Public/Private segmented control with a caption saying what the active
   choice means ("Listed in the lobby — anyone can wander in"), a dice button
@@ -226,20 +230,20 @@ one token sheet.
 The choosing phase (R-GAME-01, R-GAME-03) had no mockup at all, yet it is the
 drawer's highest-pressure moment. The redesign gives it one:
 
-- Three **prompt cards** with a 15s ring countdown and an explicit "auto-picks
-  when time runs out" caption (the auto-pick rule, surfaced instead of sprung).
-- Each card carries a **difficulty chip derived from prompt stats**
-  ("Usually guessed" / "Often missed"). The server already computes this
-  (R-STAT-01); showing it at pick time turns a dead stats page into a live
-  gameplay aid and makes the pick an informed risk/reward decision.
+- Three plain **prompt cards** — just the words, nothing competing with the
+  decision — under a 15s ring countdown and an explicit "auto-picks when time
+  runs out" caption (the auto-pick rule of R-GAME-03, surfaced instead of
+  sprung).
 
 ### Drawing — drawer view (`Drawing`)
 
-- **Ring timer** with numeric center, turning orange as time runs low — the
-  clock finally looks like the main mechanic (§1.4).
-- Status strip: **Round 2 of 3 · Turn 1 of 4**, and the prompt is presented as
-  *"You're drawing: lighthouse"* with a live **"2 of 3 guessed it"** chip —
-  the drawer's bonus (R-SCORE-08) gets a running indicator.
+- **One lean header row carries everything**: room name and code on the left,
+  **Round 2 of 3 · Turn 1 of 4 and the ring timer** (orange as time runs low,
+  §1.4) in the center, and compact controls on the right — restart vote, AFK,
+  save, settings, with the destructive *Leave* separated at the far edge.
+- **Above the canvas: only the prompt.** No "You're drawing" label, no
+  guessed-count chip — the pencil status and the per-player *Got it* lines
+  already say both, and the canvas gets the reclaimed space.
 - **Every player row carries a live status line** under the name — *✓ Got it ·
   1:03* on a green-tinted row, *Drawing* on an indigo one, *AFK* in amber —
   so the sidebar is the turn's scoreboard at a glance (§1.4). Correct guesses
@@ -249,9 +253,6 @@ drawer's highest-pressure moment. The redesign gives it one:
 - Toolbar: 44px targets, tools/size/palette/undo groups separated, **Clear
   restyled as quietly destructive** and separated from Undo — the two most
   opposite actions on the screen no longer look like twins.
-- Header: *Leave* is isolated behind a divider at the far edge; *Vote to
-  restart* moves under the player list, with the other social/vote actions,
-  instead of masquerading as a personal header control.
 
 ### Guessing — guesser view (`Guessing`)
 
@@ -261,12 +262,13 @@ drawer's highest-pressure moment. The redesign gives it one:
   ("Next free letter in 9s" for this room's timed-hints mode). Purchase and
   wheel modes get the same slot for their buy-a-letter affordances — the
   hidden mechanic of §1.5 now has a home on screen.
-- **The guess box is visually a guess box** — accented border, a live count of
-  letters typed inside the field, a chevron send — not a generic chat field
-  that happens to score points.
-- **Near-miss feedback attaches to the input** ("'light house' is very close —
-  try it as one word. Only you can see this.") instead of impersonating a chat
-  line, making its private-to-you nature (R-GUESS-03) visible and actionable.
+- **The guess box is visually a guess box** — accented border, chevron send —
+  with the shipped GUI's **live per-word letter counts kept above the field**
+  under its existing rules: grey while a word is being typed, green when its
+  length matches the masked word, red when it can't — hidden when the room
+  hides the masked prompt.
+- **Near-miss feedback attaches to the input**, kept terse — *"'light house'
+  is very close!"* — instead of impersonating a chat line (R-GUESS-03).
 - The artboard is honestly drawn **from Yuki's seat**, still guessing while
   two players have answered; the shipped mockup showed a guesser screen with
   the drawer's sidebar, which no player can see.
@@ -284,9 +286,11 @@ the unexplained pause, telling players both what happens next and when.
 
 - **A real podium** — the game's one celebration moment gets height, medal
   colors and the winner's crown, instead of a fifth identical list.
-- **One primary action** (*Back to waiting room*); highlights and drawings are
-  secondary. The auto-continue becomes an honest caption — *"Heading back
-  automatically in 7s · stay here"* — restoring player control (§1.3).
+- **One primary action** — a pill **Continue** button that carries the
+  auto-advance countdown *inside itself* as a ring around the remaining
+  seconds; highlights and drawings are secondary, and a quiet *Stay here*
+  link keeps the auto-continue escapable (§1.3). The countdown is part of
+  the button it will press, not a caption to hunt for.
 
 ### Highlights (`Highlights`)
 

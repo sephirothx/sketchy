@@ -10,6 +10,7 @@ export const PALETTES = {
     paper: '#FAF6EF',        // warm page background
     well: '#FAF6EF',         // inset surface inside cards (same as paper in light)
     card: '#FFFFFF',
+    field: '#FFFFFF',      // text inputs (recessed to the page ground in dark)
     ink: '#292520',          // warm near-black
     muted: '#6F6759',
     faint: '#A29883',
@@ -50,6 +51,7 @@ export const PALETTES = {
     paper: '#0F172A',
     well: 'rgba(2, 6, 23, 0.35)',
     card: '#1E293B',
+    field: '#0F172A',      // shipped dark input background (theme-overrides.css)
     ink: '#F8FAFC',
     muted: '#94A3B8',
     faint: '#64748B',
@@ -150,15 +152,17 @@ export const icon = {
   globe: (s) => stroke('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.3 4 5.5 4 9s-1.5 6.7-4 9c-2.5-2.3-4-5.5-4-9s1.5-6.7 4-9Z"/>', s),
   lock: (s) => stroke('<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', s),
   dice: (s) => stroke('<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.2" cy="8.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="8.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="8.2" cy="15.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="15.8" r="1.1" fill="currentColor" stroke="none"/>', s),
-  timerRing: (seconds, frac, color, size = 52) => {
+  timerRing: (seconds, frac, color, size = 52, track = T.line) => {
     const r = (size - 6) / 2;
     const c = 2 * Math.PI * r;
+    const sw = size <= 32 ? 3 : 5;
+    const fz = size >= 52 ? 18 : size >= 40 ? 15 : 12;
     return `<span style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; flex: none">
       <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true" style="position: absolute; inset: 0; transform: rotate(-90deg)">
-        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="5" style="stroke: ${T.line}"/>
-        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(c * frac).toFixed(1)} ${c.toFixed(1)}" style="stroke: ${color}"/>
+        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${sw}" style="stroke: ${track}"/>
+        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${(c * frac).toFixed(1)} ${c.toFixed(1)}" style="stroke: ${color}"/>
       </svg>
-      <span style="position: relative; font-family: ${T.display}; font-weight: 600; font-size: ${size >= 52 ? 18 : 15}px; color: ${color}; font-variant-numeric: tabular-nums">${seconds}</span>
+      <span style="position: relative; font-family: ${T.display}; font-weight: 600; font-size: ${fz}px; color: ${color}; font-variant-numeric: tabular-nums">${seconds}</span>
     </span>`;
   },
 };
@@ -203,8 +207,8 @@ export const btn = {
     `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: ${T.muted}; border: 0; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 14px; font-weight: 800; min-height: 44px${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   dangerGhost: (label, opts = {}) =>
     `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: ${T.danger}; border: 0; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 14px; font-weight: 800; min-height: 44px${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
-  iconOnly: (svg, label) =>
-    `<button type="button" aria-label="${label}" title="${label}" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: ${T.card}; color: ${T.muted}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; box-shadow: ${T.shadow}">${svg}</button>`,
+  iconOnly: (svg, label, size = 44) =>
+    `<button type="button" aria-label="${label}" title="${label}" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; background: ${T.card}; color: ${T.muted}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; box-shadow: ${T.shadow}">${svg}</button>`,
 };
 
 export const chip = (label, kind = 'neutral') => {
@@ -245,10 +249,10 @@ export const switchCtl = (label, on, hint = '') => `
 </label>`;
 
 export const selectBox = (label) =>
-  `<span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 9px 12px; font-size: 14px; font-weight: 700; color: ${T.ink}; min-height: 42px">${label}<span style="color: ${T.faint}; display: inline-flex">${icon.chevD(14)}</span></span>`;
+  `<span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 9px 12px; font-size: 14px; font-weight: 700; color: ${T.ink}; min-height: 42px">${label}<span style="color: ${T.faint}; display: inline-flex">${icon.chevD(14)}</span></span>`;
 
 export const input = (opts = {}) =>
-  `<input type="text" ${opts.value ? `value="${opts.value}" ` : ''}${opts.placeholder ? `placeholder="${opts.placeholder}" ` : ''}style="background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 14.5px; color: ${T.ink}; min-height: 42px; width: 100%${opts.style ? '; ' + opts.style : ''}">`;
+  `<input type="text" ${opts.value ? `value="${opts.value}" ` : ''}${opts.placeholder ? `placeholder="${opts.placeholder}" ` : ''}style="background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 14.5px; color: ${T.ink}; min-height: 42px; width: 100%${opts.style ? '; ' + opts.style : ''}">`;
 
 // Theme-scoped style rules shared by the artboards and the explorer.
 export const themeStyles = `
@@ -277,6 +281,8 @@ ${themeStyles}
     h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
     button { cursor: pointer; }
     summary { cursor: pointer; }
+    summary.plain { list-style: none; }
+    summary.plain::-webkit-details-marker { display: none; }
   </style>
 </helmet>
 <div data-theme="{{theme}}" style="min-height: 100vh; background: ${T.paper}; color: ${T.ink}; font-family: ${T.body}">

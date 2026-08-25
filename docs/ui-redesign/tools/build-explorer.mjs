@@ -26,7 +26,7 @@ const ROUTES = {
   Drawing: [['Settings', 'Settings'], ['Leave', 'Main']],
   Guessing: [['Send', 'TurnResults'], ['Settings', 'Settings'], ['Leave', 'Main']],
   TurnResults: [['Settings', 'Settings'], ['Leave', 'Main']],
-  GameOver: [['Highlights', 'Highlights'], ['Back to waiting room', 'WaitingRoom'], ['Settings', 'Settings'], ['Leave', 'Main']],
+  GameOver: [['Highlights', 'Highlights'], ['Continue', 'WaitingRoom'], ['Stay here', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
   Highlights: [['Back to results', 'GameOver'], ['Close highlights', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
   PromptStats: [['Back to lobby', 'Main'], ['Marta', 'Profile']],
   MyPromptLists: [['Back to lobby', 'Main'], ['Marta', 'Profile']],

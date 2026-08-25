@@ -8,7 +8,7 @@ import { PromptStatsPage, MyPromptListsPage, ProfilePage, AdminOpsPage, Moderati
 export const SCREENS = [
   // Row 1 — getting in
   { name: 'Main', page: MainPage, w: 960, h: 1240, x: 0, y: 0, title: 'Lobby', group: 'Getting in' },
-  { name: 'CreateRoom', page: CreateRoomPage, w: 780, h: 1720, x: 1050, y: 0, title: 'Create a room', group: 'Getting in' },
+  { name: 'CreateRoom', page: CreateRoomPage, w: 780, h: 1100, x: 1050, y: 0, title: 'Create a room', group: 'Getting in' },
   { name: 'AccountRecovery', page: AccountRecoveryPage, w: 560, h: 500, x: 1920, y: 0, title: 'Reset password', group: 'Getting in' },
   { name: 'Settings', page: SettingsPage, w: 960, h: 1060, x: 1920, y: 600, title: 'Settings (new)', group: 'Getting in' },
   // Row 2 — in the room

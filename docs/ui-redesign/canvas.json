@@ -13,7 +13,7 @@
       "x": 1050,
       "y": 0,
       "w": 780,
-      "h": 1720,
+      "h": 1100,
       "title": "Create a room"
     },
     {
@@ -142,7 +142,7 @@
       "x": 0,
       "y": 1610,
       "w": 460,
-      "text": "IN THE ROOM — same story as the shipped canvas (room BQ7F2K, round 2, Marta draws lighthouse). Waiting room leads with the invite, settings collapse to a summary. NEW: the prompt-choice moment, with difficulty pulled from prompt stats. In-turn: ring timer with urgency color, letter-tile masked prompt, per-player status lines (Got it · time / Drawing / AFK), got-it event cards and dashed post-guess chat in the feed, near-miss attached to the guess box (Guessing is Yuki’s seat), 44px tool targets, destructive actions separated."
+      "text": "IN THE ROOM — same story as the shipped canvas (room BQ7F2K, round 2, Marta draws lighthouse). Waiting room leads with the invite, settings collapse to a summary. NEW: the prompt-choice moment with its 15s auto-pick countdown. In-turn: ring timer with urgency color, letter-tile masked prompt, per-player status lines (Got it · time / Drawing / AFK), got-it event cards and dashed post-guess chat in the feed, near-miss attached to the guess box (Guessing is Yuki’s seat), 44px tool targets, destructive actions separated."
     },
     {
       "id": "note-after-turn",

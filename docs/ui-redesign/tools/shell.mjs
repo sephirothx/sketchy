@@ -31,26 +31,30 @@ export const lighthouseSVG = `<svg viewBox="0 0 800 600" style="display: block; 
 const panelHeading = (text, size = 15) =>
   `<h2 style="font-family: ${T.body}; font-weight: 800; font-size: ${size}px; letter-spacing: 0.2em; text-transform: uppercase; color: ${T.ink}">${text}</h2>`;
 
-// Room header. Grouped identity on the left, self-state in the middle-right,
-// the one destructive action visually separated on the far right.
-export const roomHeader = ({ inGame = false } = {}) => `
-<header style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px">
-  <div style="display: flex; align-items: center; gap: 14px; min-width: 0">
-    <span style="font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.primary}">Sketchy</span>
-    <span style="width: 1.5px; height: 22px; background: ${T.line}"></span>
+// Room header, one lean row: room identity left, live game status center,
+// self controls right — the destructive Leave separated at the far edge.
+export const roomHeader = ({ inGame = false, status = '' } = {}) => `
+<header style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; min-height: 44px">
+  <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
     <span style="font-weight: 800; font-size: 16px; color: ${T.ink}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">${ROOM.name}</span>
-    <button type="button" title="Copy invite link" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 7px 13px; font-family: ${T.body}; font-size: 13px; font-weight: 800; color: ${T.muted}; letter-spacing: 0.08em">
-      ${ROOM.code}<span style="display: inline-flex; color: ${T.faint}">${icon.copy(14)}</span>
+    <button type="button" title="Copy invite link" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 6px 12px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.muted}; letter-spacing: 0.08em">
+      ${ROOM.code}<span style="display: inline-flex; color: ${T.faint}">${icon.copy(13)}</span>
     </button>
   </div>
-  <div style="display: flex; align-items: center; gap: 8px; flex: none">
-    <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 9px 15px; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; color: ${T.muted}; min-height: 44px">${icon.moon(15)}AFK</button>
-    ${inGame ? btn.iconOnly(icon.download(18), 'Save drawing as PNG') : ''}
-    ${btn.iconOnly(icon.gear(18), 'Settings')}
-    <span style="width: 1.5px; height: 24px; background: ${T.line}; margin: 0 4px"></span>
-    ${btn.dangerGhost('Leave', { iconL: icon.leave(15) })}
+  ${status ? `<div style="display: flex; align-items: center; gap: 10px; flex: none">${status}</div>` : ''}
+  <div style="display: flex; align-items: center; gap: 7px; flex: none">
+    ${inGame ? btn.iconOnly(icon.rounds(16), 'Vote to restart', 38) : ''}
+    <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 6px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 7px 13px; font-family: ${T.body}; font-size: 13px; font-weight: 800; color: ${T.muted}; min-height: 38px">${icon.moon(14)}AFK</button>
+    ${inGame ? btn.iconOnly(icon.download(16), 'Save drawing as PNG', 38) : ''}
+    ${btn.iconOnly(icon.gear(16), 'Settings', 38)}
+    <span style="width: 1.5px; height: 22px; background: ${T.line}; margin: 0 3px"></span>
+    ${btn.dangerGhost('Leave', { iconL: icon.leave(14), style: 'min-height: 38px; padding: 7px 10px; font-size: 13px' })}
   </div>
 </header>`;
+
+// The game status shown in the header's center slot.
+export const headerStatus = ({ round = 'Round 2 of 3', turn = 'Turn 1 of 4', timer = '' }) =>
+  `${chip(round, 'primary')}<span style="color: ${T.faint}; font-size: 12.5px; font-weight: 800">${turn}</span>${timer}`;
 
 // Players sidebar.
 export const playersPanel = ({ heading = 'Players', count = '5/8', spectators = 2, rows, footer = '', ready = null }) => `
@@ -149,18 +153,26 @@ export const chat = {
     ${inputHTML}
   </div>
 </aside>`,
-  // `count` renders inside the field's right edge (letters typed so far).
-  input: ({ placeholder = 'Type a message…', value = '', count = null, accent = false, above = '' } = {}) => `
-<form style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; flex: none; border-top: 1.5px solid ${T.line}; padding-top: 12px">
+  // `hints` renders the shipped GUI's live per-word letter counts above the
+  // field: grey while a word is being typed, green when its length matches
+  // the masked prompt's word, red when it can no longer match.
+  input: ({ placeholder = 'Type a message…', value = '', hints = null, accent = false, above = '' } = {}) => {
+    const hintColor = { typing: T.faint, correct: T.success, wrong: T.danger };
+    const hintRow = hints
+      ? `<div aria-label="Letters typed per word" style="display: flex; align-items: center; gap: 8px; min-height: 15px; padding: 0 6px">${hints.map((h) => `<sup style="font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; color: ${hintColor[h.state]}">${h.n}</sup>`).join('')}</div>`
+      : '';
+    return `
+<form style="display: flex; flex-direction: column; gap: 7px; margin-top: 10px; flex: none; border-top: 1.5px solid ${T.line}; padding-top: 12px">
   ${above}
+  ${hintRow}
   <div style="display: flex; align-items: center; gap: 7px">
-    <div style="flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border: 1.5px solid ${accent ? T.primary : T.lineStrong}; border-radius: ${T.radiusSm}; background: ${T.card}">
+    <div style="flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border: 1.5px solid ${accent ? T.primary : T.lineStrong}; border-radius: ${T.radiusSm}; background: ${T.field}">
       <input type="text" ${value ? `value="${value}" ` : ''}placeholder="${placeholder}" style="flex: 1; min-width: 0; border: none; outline: none; padding: 0; font-family: ${T.body}; font-size: 14.5px; background: transparent; color: ${T.ink}">
-      ${count !== null ? `<span aria-label="${count} letters typed" style="color: ${T.faint}; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; flex: none">${count}</span>` : ''}
     </div>
     <button type="submit" aria-label="Send" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: ${T.primary}; color: #fff; border: 0; border-radius: ${T.radiusSm}; box-shadow: 0 2px 0 ${T.primaryEdge}; flex: none">${icon.chevR(17)}</button>
   </div>
-</form>`,
+</form>`;
+  },
 };
 
 // Standard three-column room grid.
@@ -174,20 +186,8 @@ export const roomGrid = (left, center, right) => `
 export const roomPage = (inner, { width = 1240, minHeight = 980 } = {}) =>
   `<div style="width: ${width}px; min-height: ${minHeight}px; margin: 0 auto; padding: 18px 20px 28px">${inner}</div>`;
 
-// Turn status strip above the canvas: progress on the left, timer on the right.
-export const statusStrip = ({ round = 'Round 2 of 3', turn = 'Turn 1 of 4', timer = '' }) => `
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%">
-  <div style="display: flex; align-items: center; gap: 8px">
-    ${chip(round, 'primary')}
-    <span style="color: ${T.faint}; font-size: 12.5px; font-weight: 800">${turn}</span>
-  </div>
-  ${timer}
-</div>`;
-
 export const canvasFrame = (inner, overlay = '') => `
 <div style="position: relative; width: 100%; max-width: 820px; aspect-ratio: 4 / 3; background: #fff; border: 1.5px solid ${T.lineStrong}; border-radius: 12px; overflow: hidden; box-shadow: ${T.shadow}">
   ${inner}
   ${overlay}
 </div>`;
-
-export const restartFooter = `<div style="border-top: 1.5px solid ${T.line}; margin-top: 10px; padding-top: 8px">${btn.ghost('Vote to restart', { iconL: icon.rounds(14), style: 'width: 100%; min-height: 36px; padding: 6px 10px; font-size: 12.5px' })}</div>`;

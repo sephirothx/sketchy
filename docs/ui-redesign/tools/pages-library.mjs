@@ -134,7 +134,7 @@ export const MyPromptListsPage = `
 
         <div style="border-top: 1.5px solid ${T.line}; display: grid; gap: 10px; padding-top: 16px">
           <span style="font-size: 13.5px; font-weight: 800; color: ${T.ink}">Add prompts</span>
-          <textarea placeholder="One prompt per line, or separated by commas" style="border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; font-family: ${T.body}; font-size: 14px; padding: 10px 12px; height: 100px; resize: vertical; width: 100%; color: ${T.ink}"></textarea>
+          <textarea placeholder="One prompt per line, or separated by commas" style="background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; font-family: ${T.body}; font-size: 14px; padding: 10px 12px; height: 100px; resize: vertical; width: 100%; color: ${T.ink}"></textarea>
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
             <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: ${T.muted}">
               <span aria-hidden="true" style="display: inline-block; width: 90px; height: 7px; border-radius: 999px; background: ${T.line}; overflow: hidden"><span style="display: block; width: 13%; height: 100%; background: ${T.primary}"></span></span>
@@ -377,7 +377,7 @@ const evidenceBlock = (lines) => `
 
 const actionBar = `
 <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap">
-  <input aria-label="Resolution note" placeholder="Why, in one line (required to decide)" style="flex: 1 1 260px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 13.5px; color: ${T.ink}; min-height: 42px">
+  <input aria-label="Resolution note" placeholder="Why, in one line (required to decide)" style="flex: 1 1 260px; background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 13.5px; color: ${T.ink}; min-height: 42px">
   ${btn.ghost('Dismiss')}
   ${btn.secondary('Resolve')}
   <span style="display: inline-flex; align-items: center; gap: 6px">
