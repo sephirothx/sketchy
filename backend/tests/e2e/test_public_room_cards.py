@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -34,7 +34,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await host.get_by_role("button", name="No scoring").click()
             await host.click('button:has-text("Create room")')
             await host.wait_for_selector('[data-testid="waiting-room"]')
-            code = (await host.inner_text('.room-copy-button')).split("Code:")[1].strip()
+            code = await room_code(host)
 
             await visitor.goto(BASE_URL)
             await use_guest_name(visitor, "CardVisitor")

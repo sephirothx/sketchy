@@ -61,3 +61,18 @@ async def register_account(page, username: str, password: str = "a-good-password
     # The unclaimed dot disappearing is the signal, and it works whether the
     # chip is showing its name or collapsed to the avatar inside a room.
     await page.wait_for_function("() => !document.querySelector('.identity-unclaimed')")
+
+
+async def room_code(page) -> str:
+    """The current room's code, read from the header's copy control.
+
+    Prefers the stable data-room-code attribute so the helper survives header
+    redesigns; falls back to parsing the visible "Code: XXXXXX" label.
+    """
+    button = page.locator(".room-copy-button").first
+    await button.wait_for()
+    attr = await button.get_attribute("data-room-code")
+    if attr:
+        return attr.strip()
+    text = await button.inner_text()
+    return text.split("Code:")[1].strip()

@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -18,8 +18,7 @@ async def _create_room(host, name: str) -> str:
     await host.get_by_role("button", name="Private").click()
     await host.get_by_role("button", name="Create room").click()
     await host.get_by_test_id("waiting-room").wait_for()
-    code_text = await host.locator(".room-copy-button").inner_text()
-    return code_text.split("Code:")[1].strip()
+    return await room_code(host)
 
 
 async def _join_invite(page, code: str, name: str, *, spectator: bool = False):

@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 from playwright.async_api import Page, async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -41,8 +41,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await host.click('button:has-text("Create room")')
             await host.locator('[data-testid="waiting-room"]').wait_for()
 
-            code_text = await host.locator(".room-copy-button").inner_text()
-            code = code_text.split("Code:")[1].strip()
+            code = await room_code(host)
 
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "HintGuest")

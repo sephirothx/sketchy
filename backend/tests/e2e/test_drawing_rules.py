@@ -1,7 +1,7 @@
 """The host's tool and color rules, from the lobby through to the canvas."""
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -31,8 +31,7 @@ async def test_the_rules_the_host_sets_reach_the_lobby_and_then_the_toolbar():
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
-            code_text = await host_page.inner_text('.room-copy-button')
-            code = code_text.split('Code:')[1].strip()
+            code = await room_code(host_page)
 
             # Everyone else reads them off the waiting-room rules.
             await player_page.goto(BASE_URL)

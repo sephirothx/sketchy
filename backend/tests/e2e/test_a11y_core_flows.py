@@ -2,7 +2,7 @@ import pytest
 from playwright.async_api import Page, async_playwright
 
 from tests.e2e.a11y import assert_no_axe_violations
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -36,8 +36,7 @@ async def _create_waiting_room(page: Page, nickname="A11yHost", *, rounds=None):
             current -= 1
     await page.click('button:has-text("Create room")')
     await page.wait_for_selector('[data-testid="waiting-room"]')
-    code_text = await page.inner_text(".room-copy-button")
-    return code_text.split("Code:")[1].strip()
+    return await room_code(page)
 
 
 async def _join_by_code(page: Page, code: str, nickname: str):
@@ -115,8 +114,7 @@ async def test_create_room_and_invite_axe():
         await page.wait_for_selector('[data-testid="waiting-room"]')
         await assert_no_axe_violations(page, "host waiting room")
 
-        code_text = await page.inner_text(".room-copy-button")
-        code = code_text.split("Code:")[1].strip()
+        code = await room_code(page)
     finally:
         await _close(playwright, browser, context)
 

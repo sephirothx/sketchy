@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -33,8 +33,7 @@ async def test_player_afk_and_disconnect_scenario():
             await page1.click('button:has-text("Create room")')
 
             await page1.wait_for_selector('.room-copy-button')
-            room_code_text = await page1.inner_text('.room-copy-button')
-            code = room_code_text.split("Code:")[1].strip()
+            code = await room_code(page1)
 
             # Step 2: Player joins room via Join by code
             await page2.goto(BASE_URL)

@@ -294,6 +294,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           <button
             type="button"
             className="room-copy-button"
+            data-room-code={code}
             onClick={() => void handleCopyLink()}
             title="Click to copy room invite link"
           >

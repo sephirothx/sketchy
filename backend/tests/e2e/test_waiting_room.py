@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -85,8 +85,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             assert await host_page.is_disabled('.waiting-start-button')
             assert await host_page.is_visible('text=Spectators, AFK, and disconnected players do not count.')
 
-            code_text = await host_page.inner_text('.room-copy-button')
-            code = code_text.split('Code:')[1].strip()
+            code = await room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "LobbyPlayer")
             room_code_input = player_page.locator('input[placeholder="ABC123"]')
