@@ -300,7 +300,7 @@ export function RoomSettingsEditor() {
         options={COLOR_MODE_OPTIONS}
       />
       <details><summary>Advanced settings</summary><div className="room-settings-advanced">
-        <Switch label="Allow spectators to see the prompt" checked={settings.spectatorsSeePrompt} onChange={(spectatorsSeePrompt) => update({ spectatorsSeePrompt })} />
+        <Switch label="Spectators can see the prompt" checked={settings.spectatorsSeePrompt} onChange={(spectatorsSeePrompt) => update({ spectatorsSeePrompt })} />
         <Switch
           label="Hide blanks"
           checked={settings.hideMaskedPrompt}

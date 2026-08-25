@@ -150,6 +150,7 @@ async def test_a_colorblind_host_starts_a_room_on_colorblind_safe_colors():
             await use_guest_name(page, "SafeCreator")
             await page.get_by_role("button", name="Create room").click()
 
+            await page.click('summary:has-text("Drawing")')
             colors = page.get_by_role("group", name="Colors")
             await expect(
                 colors.get_by_role("button", name="Colorblind-safe")

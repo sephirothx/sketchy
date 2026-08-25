@@ -70,6 +70,7 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
 
             # Room setup offers the stats from the chip itself, not as a link row.
             await page.goto(f"{BASE_URL}/create")
+            await page.click('summary:has-text("Prompts")')
             info = page.get_by_role("link", name="How English — Standard prompts play")
             await info.wait_for()
             assert await info.get_attribute("href") == "/prompt-lists/english_standard"

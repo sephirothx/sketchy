@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { apiRequest } from "../lib/api";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import { listOwnedPromptLists, resolveSharedPromptList } from "../lib/promptLists";
@@ -6,6 +6,7 @@ import { addSharedPromptSelection } from "../lib/promptListDrafts";
 import { useAuthStore } from "../store/authStore";
 import type { PromptLanguage, PromptListSummary, SharedPromptList } from "../types";
 import { PromptContentReportDialog } from "./PromptContentReportDialog";
+import { AlertIcon, CheckIcon, InfoIcon, PlusIcon } from "./icons";
 
 interface PromptListPickerProps {
   selectedSlugs: string[];
@@ -13,6 +14,8 @@ interface PromptListPickerProps {
   shareCodes?: string[];
   onShareCodesChange?: (codes: string[]) => void;
   disabled?: boolean;
+  /** Reports the loaded lists so the host page can summarize the selection. */
+  onListsLoaded?: (lists: PromptListSummary[]) => void;
 }
 
 export function PromptListPicker({
@@ -21,6 +24,7 @@ export function PromptListPicker({
   shareCodes = [],
   onShareCodesChange,
   disabled = false,
+  onListsLoaded,
 }: PromptListPickerProps) {
   const user = useAuthStore((state) => state.user);
   const userId = user?.id;
@@ -34,6 +38,15 @@ export function PromptListPicker({
   const [sharedAccess, setSharedAccess] = useState<Record<string, { code: string; list: SharedPromptList }>>({});
   const [reportingSlug, setReportingSlug] = useState<string | null>(null);
   const [reportNotice, setReportNotice] = useState<string | null>(null);
+  const onListsLoadedRef = useRef(onListsLoaded);
+
+  useEffect(() => {
+    onListsLoadedRef.current = onListsLoaded;
+  }, [onListsLoaded]);
+
+  useEffect(() => {
+    onListsLoadedRef.current?.(promptLists);
+  }, [promptLists]);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,7 +193,7 @@ export function PromptListPicker({
                 onClick={() => handleToggle(wl.slug)}
               >
                 <span className="toggle-chip-status" aria-hidden="true">
-                  {isSelected ? "✓" : "+"}
+                  {isSelected ? <CheckIcon size={12} /> : <PlusIcon size={12} />}
                 </span>
                 <span className="toggle-chip-name">{wl.name}</span>
                 <span className="prompt-list-chip-count">{wl.promptCount}</span>
@@ -196,7 +209,7 @@ export function PromptListPicker({
                 title={`How ${wl.name} prompts play`}
                 aria-label={`How ${wl.name} prompts play`}
               >
-                <span aria-hidden="true">i</span>
+                <span aria-hidden="true"><InfoIcon size={13} /></span>
               </a>}
               {sharedAccess[wl.slug] && <button
                 type="button"
@@ -205,7 +218,7 @@ export function PromptListPicker({
                 aria-label={`Report ${wl.name}`}
                 title={`Report ${wl.name}`}
                 onClick={() => setReportingSlug(wl.slug)}
-              >!</button>}
+              ><AlertIcon size={13} /></button>}
             </span>
           );
         })}

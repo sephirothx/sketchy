@@ -56,6 +56,7 @@ async def test_registered_owner_can_manage_and_share_a_prompt_list():
             await use_guest_name(recipient, "SharedListGuest")
             await recipient.get_by_role("button", name="Create room").click()
             await recipient.wait_for_url("**/create")
+            await recipient.click('summary:has-text("Prompts")')
             await recipient.get_by_label("Add an unlisted list by code").fill(share_code)
             await recipient.locator(".prompt-list-share-form").get_by_role(
                 "button", name="Add"

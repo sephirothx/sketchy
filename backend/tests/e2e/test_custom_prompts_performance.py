@@ -29,7 +29,7 @@ async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded(
             await use_guest_name(host, "MaximumHost")
             await host.get_by_role("button", name="Create room", exact=True).click()
             await host.wait_for_selector(".create-room-page")
-            await host.get_by_text("Advanced settings", exact=False).click()
+            await host.click('summary:has-text("Prompts")')
 
             started = perf_counter()
             await set_textarea_value(host, "#custom-prompts", raw)

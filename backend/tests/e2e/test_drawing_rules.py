@@ -26,6 +26,7 @@ async def test_the_rules_the_host_sets_reach_the_lobby_and_then_the_toolbar():
             # Private: this room is reached by code, and a public one would sit
             # in the lobby list every other test is reading.
             await host_page.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
+            await host_page.click('summary:has-text("Drawing")')
             await host_page.click('fieldset:has(legend:text-is("Allowed tools")) button:has-text("Fill")')
             await host_page.click('fieldset:has(legend:text-is("Colors")) button:has-text("Black and white")')
             await host_page.click('button:has-text("Create room")')
