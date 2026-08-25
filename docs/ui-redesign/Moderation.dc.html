@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #FAF6EF;
+      color: #292520;
+      font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
+    }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    a { color: #5157D8; text-decoration: none; font-weight: 700; }
+    a:hover { color: #3B41B5; }
+    button { cursor: pointer; }
+    summary { cursor: pointer; }
+  </style>
+</helmet>
+
+<div style="width: 1100px; min-height: 880px; margin: 0 auto; padding: 26px 24px 48px">
+  
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: #6F6759; border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; padding-left: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to lobby</button>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid #E7DFD2; background: #FFFFFF; border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #0F766E; color: #fff; font-weight: 800; font-size: 14px; flex: none">M</span>
+    <span style="font-weight: 800; font-size: 14px; color: #292520">Marta</span>
+  </button>
+</div>
+  <header>
+    <p style="color: #A29883; font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Moderators and administrators</p>
+    <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 26px; color: #292520; margin: 4px 0 14px">Moderation</h1>
+    
+<nav style="border-bottom: 1.5px solid #E7DFD2; display: flex; gap: 4px; margin-bottom: 22px">
+  <button type="button" style="background: none; border: 0; border-bottom: 2.5px solid #5157D8; color: #292520; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; padding: 10px 14px">Player reports</button><button type="button" style="background: none; border: 0; border-bottom: 2.5px solid transparent; color: #6F6759; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 700; padding: 10px 14px">Prompt content</button><button type="button" style="background: none; border: 0; border-bottom: 2.5px solid transparent; color: #6F6759; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 700; padding: 10px 14px">Suspensions</button>
+</nav>
+  </header>
+
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px">
+    <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: #FFFFFF; border: 1.5px solid #D3C8B4; border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: #292520; min-height: 42px">Waiting for review · 2<span style="color: #A29883; display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: #6F6759; border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></svg>Refresh</button>
+  </div>
+
+  <ul style="display: grid; gap: 12px; list-style: none; margin: 0; padding: 0">
+    
+<li style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <div style="display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 8px">
+    <span style="display: inline-flex; align-items: center; gap: 5px; background: #FBECEC; color: #C92A2A; border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Harassment</span>
+    <span style="font-size: 12.5px; font-variant-numeric: tabular-nums; color: #A29883; font-weight: 700">25 Aug 2026, 09:41</span>
+  </div>
+  <p style="font-size: 14.5px; color: #292520; font-weight: 600">Kept naming other players in chat after being asked to stop.</p>
+  
+<div style="background: #FAF6EF; border: 1px solid #E7DFD2; border-radius: 10px; margin-top: 12px; padding: 12px 14px">
+  <p style="color: #A29883; font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Pinned messages — as the reporter received them</p>
+  <ul style="list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 5px; font-size: 13.5px">
+    <li style="color: #6F6759"><strong style="color: #292520; font-weight: 800">Nightjar-88:</strong> nobody wants you in this room</li><li style="color: #6F6759"><strong style="color: #292520; font-weight: 800">Nightjar-88:</strong> leave already</li><li style="color: #6F6759"><strong style="color: #292520; font-weight: 800">Nightjar-88:</strong> stop drawing, you are ruining it <em style="color: #A29883"> — author no longer in the room</em></li>
+  </ul>
+</div>
+  
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap">
+  <input aria-label="Resolution note" placeholder="Why, in one line (required to decide)" style="flex: 1 1 260px; background: #FFFFFF; border: 1.5px solid #D3C8B4; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; color: #292520; min-height: 42px">
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: #6F6759; border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px">Dismiss</button>
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #FFFFFF; color: #292520; border: 1.5px solid #D3C8B4; border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">Resolve</button>
+  <span style="display: inline-flex; align-items: center; gap: 6px">
+    <button type="button" style="display: inline-flex; align-items: center; gap: 7px; background: #FFFFFF; border: 1.5px solid #C92A2A; border-radius: 10px 0 0 10px; color: #C92A2A; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; padding: 10px 14px; min-height: 42px">Suspend</button><button type="button" style="display: inline-flex; align-items: center; gap: 5px; background: #FBECEC; border: 1.5px solid #C92A2A; border-left: 0; border-radius: 0 10px 10px 0; color: #C92A2A; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; padding: 10px 10px; min-height: 42px">7 days <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></button>
+  </span>
+</div>
+</li>
+    
+<li style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <div style="display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 8px">
+    <span style="display: inline-flex; align-items: center; gap: 5px; background: #FDF1DC; color: #B45309; border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Offensive drawing</span>
+    <span style="font-size: 12.5px; font-variant-numeric: tabular-nums; color: #A29883; font-weight: 700">24 Aug 2026, 22:18</span>
+  </div>
+  <p style="font-size: 14.5px; color: #292520; font-weight: 600">Drew something unrelated to the prompt, twice in a row.</p>
+  
+  
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap">
+  <input aria-label="Resolution note" placeholder="Why, in one line (required to decide)" style="flex: 1 1 260px; background: #FFFFFF; border: 1.5px solid #D3C8B4; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; color: #292520; min-height: 42px">
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: #6F6759; border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px">Dismiss</button>
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #FFFFFF; color: #292520; border: 1.5px solid #D3C8B4; border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">Resolve</button>
+  <span style="display: inline-flex; align-items: center; gap: 6px">
+    <button type="button" style="display: inline-flex; align-items: center; gap: 7px; background: #FFFFFF; border: 1.5px solid #C92A2A; border-radius: 10px 0 0 10px; color: #C92A2A; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; padding: 10px 14px; min-height: 42px">Suspend</button><button type="button" style="display: inline-flex; align-items: center; gap: 5px; background: #FBECEC; border: 1.5px solid #C92A2A; border-left: 0; border-radius: 0 10px 10px 0; color: #C92A2A; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; padding: 10px 10px; min-height: 42px">7 days <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></button>
+  </span>
+</div>
+</li>
+    
+<li style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <div style="display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 8px">
+    <span style="display: inline-flex; align-items: center; gap: 5px; background: #FAF6EF; color: #6F6759; border: 1px solid #E7DFD2; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Spam</span>
+    <span style="font-size: 12.5px; font-variant-numeric: tabular-nums; color: #A29883; font-weight: 700">24 Aug 2026, 15:02</span>
+  </div>
+  <p style="font-size: 14.5px; color: #292520; font-weight: 600">Pasted the same link into four different rooms.</p>
+  <p style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 10px; color: #6F6759; font-weight: 700"><span style="display: inline-flex; align-items: center; gap: 5px; background: #E7F5EA; color: #1F7A33; border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Resolved</span> Suspended 7 days — third report this week.</p>
+  
+</li>
+  </ul>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview": {"width": 1100, "height": 880}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

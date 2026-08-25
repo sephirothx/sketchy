@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #FAF6EF;
+      color: #292520;
+      font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
+    }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    a { color: #5157D8; text-decoration: none; font-weight: 700; }
+    a:hover { color: #3B41B5; }
+    button { cursor: pointer; }
+    summary { cursor: pointer; }
+  </style>
+</helmet>
+
+<div style="width: 1100px; min-height: 840px; margin: 0 auto; padding: 26px 24px 48px">
+  
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: #6F6759; border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; padding-left: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to lobby</button>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid #E7DFD2; background: #FFFFFF; border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #0F766E; color: #fff; font-weight: 800; font-size: 14px; flex: none">M</span>
+    <span style="font-weight: 800; font-size: 14px; color: #292520">Marta</span>
+  </button>
+</div>
+  <header>
+    <p style="color: #A29883; font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Administrators only</p>
+    <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 26px; color: #292520; margin: 4px 0 14px">Server operations</h1>
+    
+<nav style="border-bottom: 1.5px solid #E7DFD2; display: flex; gap: 4px; margin-bottom: 22px">
+  <button type="button" style="background: none; border: 0; border-bottom: 2.5px solid #5157D8; color: #292520; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; padding: 10px 14px">Overview</button><button type="button" style="background: none; border: 0; border-bottom: 2.5px solid transparent; color: #6F6759; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 700; padding: 10px 14px">Activity</button><button type="button" style="background: none; border: 0; border-bottom: 2.5px solid transparent; color: #6F6759; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 700; padding: 10px 14px">Audit ledger</button>
+</nav>
+  </header>
+
+  <section style="display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); margin-bottom: 20px">
+    
+<div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <span style="font-size: 11.5px; letter-spacing: 0.06em; color: #A29883; font-weight: 800; text-transform: uppercase">Rooms</span>
+  <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 30px; font-variant-numeric: tabular-nums; color: #292520">17</span>
+  <span style="font-size: 12px; color: #A29883; font-weight: 700">peak 41 · resets on restart</span>
+</div>
+    
+<div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <span style="font-size: 11.5px; letter-spacing: 0.06em; color: #A29883; font-weight: 800; text-transform: uppercase">Players</span>
+  <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 30px; font-variant-numeric: tabular-nums; color: #292520">94</span>
+  <span style="font-size: 12px; color: #A29883; font-weight: 700">peak 233</span>
+</div>
+    
+<div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <span style="font-size: 11.5px; letter-spacing: 0.06em; color: #A29883; font-weight: 800; text-transform: uppercase">Games running</span>
+  <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 30px; font-variant-numeric: tabular-nums; color: #292520">11</span>
+  <span style="font-size: 12px; color: #A29883; font-weight: 700">peak 26</span>
+</div>
+    
+<div style="background: #FFFFFF; border: 1.5px solid #E8703A; border-radius: 14px; display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <span style="font-size: 11.5px; letter-spacing: 0.06em; color: #A29883; font-weight: 800; text-transform: uppercase">Abandoned</span>
+  <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 30px; font-variant-numeric: tabular-nums; color: #B5541F">28%</span>
+  <span style="font-size: 12px; color: #A29883; font-weight: 700">142 of 507 this window</span>
+</div>
+  </section>
+
+  <section style="display: grid; gap: 12px; grid-template-columns: repeat(5, 1fr); margin-bottom: 20px">
+    
+<div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <h2 style="font-size: 12.5px; margin-bottom: 6px; color: #6F6759; font-weight: 800">Rooms opened</h2>
+  <div style="display: flex; align-items: baseline; gap: 6px">
+    <span style="font-size: 21px; font-variant-numeric: tabular-nums; font-weight: 800; color: #292520">38</span>
+    <span style="font-size: 12px; color: #A29883; font-weight: 700">today</span>
+  </div>
+  <svg viewBox="0 0 160 36" role="img" aria-label="Rooms opened over the retained window" style="display: block; height: auto; margin-top: 8px; max-width: 100%; width: 100%">
+    <polyline points="0,28 20,24 40,30 60,18 80,20 100,12 120,16 140,8 160,10" fill="none" stroke="#5157D8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  </svg>
+</div>
+    
+<div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <h2 style="font-size: 12.5px; margin-bottom: 6px; color: #6F6759; font-weight: 800">Games finished</h2>
+  <div style="display: flex; align-items: baseline; gap: 6px">
+    <span style="font-size: 21px; font-variant-numeric: tabular-nums; font-weight: 800; color: #292520">21</span>
+    <span style="font-size: 12px; color: #A29883; font-weight: 700">today</span>
+  </div>
+  <svg viewBox="0 0 160 36" role="img" aria-label="Games finished over the retained window" style="display: block; height: auto; margin-top: 8px; max-width: 100%; width: 100%">
+    <polyline points="0,30 20,26 40,22 60,24 80,16 100,18 120,12 140,14 160,11" fill="none" stroke="#5157D8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  </svg>
+</div>
+    
+<div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <h2 style="font-size: 12.5px; margin-bottom: 6px; color: #6F6759; font-weight: 800">Games abandoned</h2>
+  <div style="display: flex; align-items: baseline; gap: 6px">
+    <span style="font-size: 21px; font-variant-numeric: tabular-nums; font-weight: 800; color: #292520">9</span>
+    <span style="font-size: 12px; color: #A29883; font-weight: 700">today</span>
+  </div>
+  <svg viewBox="0 0 160 36" role="img" aria-label="Games abandoned over the retained window" style="display: block; height: auto; margin-top: 8px; max-width: 100%; width: 100%">
+    <polyline points="0,20 20,26 40,18 60,28 80,22 100,26 120,20 140,24 160,19" fill="none" stroke="#E8703A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  </svg>
+</div>
+    
+<div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <h2 style="font-size: 12.5px; margin-bottom: 6px; color: #6F6759; font-weight: 800">Disconnects</h2>
+  <div style="display: flex; align-items: baseline; gap: 6px">
+    <span style="font-size: 21px; font-variant-numeric: tabular-nums; font-weight: 800; color: #292520">147</span>
+    <span style="font-size: 12px; color: #A29883; font-weight: 700">today</span>
+  </div>
+  <svg viewBox="0 0 160 36" role="img" aria-label="Disconnects over the retained window" style="display: block; height: auto; margin-top: 8px; max-width: 100%; width: 100%">
+    <polyline points="0,24 20,14 40,20 60,10 80,18 100,8 120,14 140,6 160,12" fill="none" stroke="#5157D8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  </svg>
+</div>
+    
+<div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <h2 style="font-size: 12.5px; margin-bottom: 6px; color: #6F6759; font-weight: 800">Timer overruns</h2>
+  <div style="display: flex; align-items: baseline; gap: 6px">
+    <span style="font-size: 21px; font-variant-numeric: tabular-nums; font-weight: 800; color: #292520">0</span>
+    <span style="font-size: 12px; color: #A29883; font-weight: 700">today</span>
+  </div>
+  <svg viewBox="0 0 160 36" role="img" aria-label="Timer overruns over the retained window" style="display: block; height: auto; margin-top: 8px; max-width: 100%; width: 100%">
+    <polyline points="0,34 20,34 40,30 60,34 80,34 100,32 120,34 140,34 160,34" fill="none" stroke="#5157D8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  </svg>
+</div>
+  </section>
+
+  <section style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06); display: flex; align-items: center; gap: 14px">
+    <span style="display: inline-flex; align-items: center; gap: 5px; background: #E7F5EA; color: #1F7A33; border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Recorder healthy</span>
+    <p style="font-size: 13.5px; color: #6F6759; font-weight: 700">184,291 observations stored · 12 waiting to be written · nothing dropped</p>
+  </section>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview": {"width": 1100, "height": 840}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

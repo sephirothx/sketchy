@@ -1,0 +1,208 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #FAF6EF;
+      color: #292520;
+      font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
+    }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    a { color: #5157D8; text-decoration: none; font-weight: 700; }
+    a:hover { color: #3B41B5; }
+    button { cursor: pointer; }
+    summary { cursor: pointer; }
+  </style>
+</helmet>
+<div style="width: 1240px; min-height: 1000px; margin: 0 auto; padding: 18px 20px 28px">
+<header style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px">
+  <div style="display: flex; align-items: center; gap: 14px; min-width: 0">
+    <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 20px; color: #5157D8">Sketchy</span>
+    <span style="width: 1.5px; height: 22px; background: #E7DFD2"></span>
+    <span style="font-weight: 800; font-size: 16px; color: #292520; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Coffee break doodles</span>
+    <button type="button" title="Copy invite link" style="display: inline-flex; align-items: center; gap: 7px; background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 999px; padding: 7px 13px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; color: #6F6759; letter-spacing: 0.08em">
+      BQ7F2K<span style="display: inline-flex; color: #A29883"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></span>
+    </button>
+  </div>
+  <div style="display: flex; align-items: center; gap: 8px; flex: none">
+    <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 7px; background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 999px; padding: 9px 15px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; color: #6F6759; min-height: 44px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>Step away</button>
+    <button type="button" aria-label="Save drawing as PNG" title="Save drawing as PNG" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: #FFFFFF; color: #6F6759; border: 1.5px solid #E7DFD2; border-radius: 10px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg></button>
+    <button type="button" aria-label="Settings" title="Settings" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: #FFFFFF; color: #6F6759; border: 1.5px solid #E7DFD2; border-radius: 10px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg></button>
+    <span style="width: 1.5px; height: 24px; background: #E7DFD2; margin: 0 4px"></span>
+    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: #C92A2A; border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>Leave</button>
+  </div>
+</header>
+<div style="display: grid; grid-template-columns: 236px minmax(0, 1fr) 292px; gap: 16px; align-items: start">
+  
+<aside style="display: flex; flex-direction: column; gap: 12px">
+  <div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 14px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px">
+      <div style="display: flex; align-items: baseline; gap: 8px">
+        <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: #292520">Players</h2>
+        <span style="color: #A29883; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums">5/8</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px">
+        
+        <span title="2 spectating" style="display: inline-flex; align-items: center; gap: 4px; color: #A29883; font-size: 12.5px; font-weight: 800"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>2</span>
+      </div>
+    </div>
+    <ul style="list-style: none; margin: 0; padding: 0; display: grid; gap: 2px">
+      <li style="display: flex; align-items: center; gap: 9px; padding: 7px 6px; border-radius: 10px">
+    <span style="display: inline-flex; justify-content: center; width: 20px; color: #A29883; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums">1</span>
+    <span style="position: relative; display: inline-flex; flex: none"><span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #C2410C; color: #fff; font-weight: 800; font-size: 14px; flex: none">B</span></span>
+    <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px">
+      <span style="color: #C2410C; font-weight: 800">Bruno</span>
+      <span style="color: #A29883; font-size: 11px; font-weight: 800">you</span>
+      
+      
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 14px; color: #292520">820</span>
+  </li>
+<li style="display: flex; align-items: center; gap: 9px; padding: 7px 6px; border-radius: 10px">
+    <span style="display: inline-flex; justify-content: center; width: 20px; color: #A29883; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums">2</span>
+    <span style="position: relative; display: inline-flex; flex: none"><span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #7E22CE; color: #fff; font-weight: 800; font-size: 14px; flex: none">Y</span></span>
+    <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px">
+      <span style="color: #7E22CE; font-weight: 800">Yuki</span>
+      
+      
+      
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 14px; color: #292520">705</span>
+  </li>
+<li style="display: flex; align-items: center; gap: 9px; padding: 7px 6px; border-radius: 10px">
+    <span style="display: inline-flex; justify-content: center; width: 20px; color: #A29883; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums">3</span>
+    <span style="position: relative; display: inline-flex; flex: none"><span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #0F766E; color: #fff; font-weight: 800; font-size: 14px; flex: none">M</span><span title="Drawing now" style="position: absolute; right: -5px; bottom: -5px; display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; background: #E8703A; color: #fff; border: 2px solid #FFFFFF"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span></span>
+    <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px">
+      <span style="color: #0F766E; font-weight: 800">Marta</span>
+      
+      
+      
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 14px; color: #292520">640</span>
+  </li>
+<li style="display: flex; align-items: center; gap: 9px; padding: 7px 6px; border-radius: 10px; opacity: 0.55">
+    <span style="display: inline-flex; justify-content: center; width: 20px; color: #A29883; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums">4</span>
+    <span style="position: relative; display: inline-flex; flex: none"><span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #0369A1; color: #fff; font-weight: 800; font-size: 14px; flex: none">I</span></span>
+    <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px">
+      <span style="color: #0369A1; font-weight: 800">Ines</span>
+      
+      
+      <span title="Stepped away" style="display: inline-flex; color: #A29883"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></span>
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 14px; color: #292520">310</span>
+  </li>
+<li style="display: flex; align-items: center; gap: 9px; padding: 7px 6px; border-radius: 10px">
+    <span style="display: inline-flex; justify-content: center; width: 20px; color: #A29883; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums">5</span>
+    <span style="position: relative; display: inline-flex; flex: none"><span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #F0EADD; border: 1.5px dashed #D3C8B4; color: #6F6759; font-weight: 800; font-size: 14px; flex: none">S</span></span>
+    <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px">
+      <span style="color: #6F6759; font-style: italic; font-weight: 700">Sparrow-14</span>
+      
+      
+      
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 14px; color: #292520">180</span>
+  </li>
+    </ul>
+    <div style="border-top: 1.5px solid #E7DFD2; margin-top: 10px; padding-top: 8px"><button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: #6F6759; border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; width: 100%; min-height: 36px; padding: 6px 10px; font-size: 12.5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></svg>Vote to restart</button></div>
+  </div>
+</aside>
+  <div style="min-width: 0">
+  <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
+    
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <span style="display: inline-flex; align-items: center; gap: 5px; background: #EEEFFB; color: #3B41B5; border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Round 2 of 3</span>
+    <span style="color: #A29883; font-size: 12.5px; font-weight: 800">Turn 1 of 4</span>
+  </div>
+  <span style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; flex: none">
+      <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true" style="position: absolute; inset: 0; transform: rotate(-90deg)">
+        <circle cx="26" cy="26" r="23" fill="none" stroke="#E7DFD2" stroke-width="5"/>
+        <circle cx="26" cy="26" r="23" fill="none" stroke="#292520" stroke-width="5" stroke-linecap="round" stroke-dasharray="45.0 144.5"/>
+      </svg>
+      <span style="position: relative; font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: #292520; font-variant-numeric: tabular-nums">28</span>
+    </span>
+</div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+      <div style="display: flex; align-items: flex-start" aria-label="Masked prompt, 10 letters">
+        
+  <span style="display: inline-flex; align-items: flex-start; gap: 4px">
+    <span style="display: inline-flex; gap: 4px"><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #EEEFFB; border: 1.5px solid #5157D8; font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 21px; color: #3B41B5; padding-bottom: 4px">l</span><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #FFFFFF; border: 1.5px solid #D3C8B4; padding-bottom: 6px"><span style="width: 14px; height: 2.5px; border-radius: 2px; background: #D3C8B4"></span></span><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #FFFFFF; border: 1.5px solid #D3C8B4; padding-bottom: 6px"><span style="width: 14px; height: 2.5px; border-radius: 2px; background: #D3C8B4"></span></span><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #EEEFFB; border: 1.5px solid #5157D8; font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 21px; color: #3B41B5; padding-bottom: 4px">h</span><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #FFFFFF; border: 1.5px solid #D3C8B4; padding-bottom: 6px"><span style="width: 14px; height: 2.5px; border-radius: 2px; background: #D3C8B4"></span></span><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #FFFFFF; border: 1.5px solid #D3C8B4; padding-bottom: 6px"><span style="width: 14px; height: 2.5px; border-radius: 2px; background: #D3C8B4"></span></span><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #FFFFFF; border: 1.5px solid #D3C8B4; padding-bottom: 6px"><span style="width: 14px; height: 2.5px; border-radius: 2px; background: #D3C8B4"></span></span><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #EEEFFB; border: 1.5px solid #5157D8; font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 21px; color: #3B41B5; padding-bottom: 4px">u</span><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #FFFFFF; border: 1.5px solid #D3C8B4; padding-bottom: 6px"><span style="width: 14px; height: 2.5px; border-radius: 2px; background: #D3C8B4"></span></span><span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: #FFFFFF; border: 1.5px solid #D3C8B4; padding-bottom: 6px"><span style="width: 14px; height: 2.5px; border-radius: 2px; background: #D3C8B4"></span></span></span>
+    <span aria-label="10 letters" style="font-size: 12px; font-weight: 800; color: #A29883; font-variant-numeric: tabular-nums; line-height: 1; margin-top: -1px">10</span>
+  </span>
+      </div>
+      <span style="display: inline-flex; align-items: center; gap: 5px; background: #FBEADF; color: #B5541F; border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2Z"/></svg> Next free letter in 9s</span>
+    </div>
+    
+<div style="position: relative; width: 100%; max-width: 820px; aspect-ratio: 4 / 3; background: #fff; border: 1.5px solid #D3C8B4; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06)">
+  <svg viewBox="0 0 800 600" style="display: block; width: 100%; height: 100%" xmlns="http://www.w3.org/2000/svg">
+  <path d="M40 470 C 150 452, 250 462, 330 470 L 330 600 L 40 600 Z" fill="#7ac9e8" opacity="0.35"/>
+  <path d="M470 468 C 570 458, 690 470, 770 462 L 770 600 L 470 600 Z" fill="#7ac9e8" opacity="0.35"/>
+  <path d="M300 480 C 340 455, 380 448, 420 450 C 470 452, 510 462, 540 480 Z" fill="#c69c6d"/>
+  <path d="M356 470 L 372 250 L 452 250 L 468 470 Z" fill="#ffffff" stroke="#000000" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M362 400 L 462 400 L 466 448 L 358 448 Z" fill="#ed1c24"/>
+  <path d="M368 300 L 456 300 L 459 342 L 365 342 Z" fill="#ed1c24"/>
+  <rect x="360" y="228" width="104" height="22" rx="4" fill="#4c4c4c" stroke="#000000" stroke-width="5"/>
+  <rect x="378" y="180" width="68" height="50" fill="#fff200" stroke="#000000" stroke-width="6"/>
+  <path d="M374 180 L 450 180 L 412 142 Z" fill="#22b14c" stroke="#000000" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M412 130 L 412 116" stroke="#000000" stroke-width="6" stroke-linecap="round"/>
+  <path d="M446 196 L 610 150" stroke="#fff200" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M446 212 L 620 214" stroke="#fff200" stroke-width="10" stroke-linecap="round" opacity="0.55"/>
+  <path d="M378 202 L 214 158" stroke="#fff200" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M40 500 C 90 490, 140 508, 190 498 C 240 488, 280 504, 320 496" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M480 508 C 530 498, 580 516, 630 506 C 680 496, 720 512, 764 504" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M60 552 C 120 542, 190 560, 250 550" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M540 556 C 600 546, 670 564, 740 554" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M120 96 C 140 76, 180 78, 192 96 C 220 92, 236 112, 220 126 L 128 126 C 108 122, 106 104, 120 96 Z" fill="#c1c1c1" opacity="0.6"/>
+  <path d="M600 74 C 620 54, 660 56, 672 74 C 700 70, 716 90, 700 104 L 608 104 C 588 100, 586 82, 600 74 Z" fill="#c1c1c1" opacity="0.6"/>
+</svg>
+  
+</div>
+  </main></div>
+  
+<aside style="display: flex; flex-direction: column; gap: 12px">
+  <div style="background: #FFFFFF; border: 1.5px solid #E7DFD2; border-radius: 14px; padding: 14px; box-shadow: 0 1px 2px rgba(41, 37, 32, 0.06); display: flex; flex-direction: column; height: 560px">
+    <div style="margin-bottom: 10px; flex: none">
+      <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: #292520">Guess and chat</h2>
+    </div>
+    <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px">
+      <div style="display: flex; align-items: baseline; gap: 7px; color: #A29883; font-size: 13px"><span style="flex: none; width: 4px; height: 4px; border-radius: 50%; background: #D3C8B4; align-self: center"></span><span style="overflow-wrap: anywhere">Marta is drawing: 10 letters</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: #C2410C; font-weight: 800; font-size: 13.5px">Bruno</span><span style="color: #6F6759"> tower?</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: #7E22CE; font-weight: 800; font-size: 13.5px">Yuki</span><span style="color: #6F6759"> rocket</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: #C2410C; font-weight: 800; font-size: 13.5px">Bruno</span><span style="color: #6F6759"> a candle</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: #6F6759; font-style: italic; font-weight: 700; font-size: 13.5px">Sparrow-14</span><span style="color: #6F6759"> chimney</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: #7E22CE; font-weight: 800; font-size: 13.5px">Yuki</span><span style="color: #6F6759"> watchtower</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: #C2410C; font-weight: 800; font-size: 13.5px">Bruno</span><span style="color: #6F6759"> light house</span></div>
+    </div>
+    
+<form style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; flex: none">
+  <div style="display: flex; align-items: center; gap: 7px; background: #FBEADF; border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 800; color: #B5541F"><span style="display: inline-flex"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg></span>“light house” is very close — only you can see this.</div>
+  <div style="display: flex; align-items: center; gap: 7px">
+    <div style="flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border: 1.5px solid #5157D8; border-radius: 10px; background: #FFFFFF; box-shadow: 0 0 0 3px #EEEFFB">
+      <span style="display: inline-flex; color: #5157D8"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>
+      <input type="text" value="lighth" placeholder="Type your guess…" style="flex: 1; min-width: 0; border: none; outline: none; padding: 0; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; background: transparent; color: #292520">
+    </div>
+    <button type="submit" aria-label="Send" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: #5157D8; color: #fff; border: 0; border-radius: 10px; box-shadow: 0 2px 0 #3B41B5"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m22 2-11 11"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg></button>
+  </div>
+</form>
+  </div>
+</aside>
+</div></div>
+</x-dc>
+<script data-dc-script data-props='{"$preview": {"width": 1240, "height": 1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
