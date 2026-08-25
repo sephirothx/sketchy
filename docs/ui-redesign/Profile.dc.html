@@ -12,8 +12,8 @@
     * { box-sizing: border-box; }
     body { margin: 0; }
 
-    [data-theme="light"] { --paper: #FAF6EF; --card: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
-    [data-theme="dark"] { --paper: #16181D; --card: #1F222A; --ink: #E9EBF1; --muted: #9CA3B2; --faint: #6E7584; --line: #2C303B; --lineStrong: #414755; --track: #262A33; --guestBg: #2B2F3A; --primary: #666CE4; --primarySoft: #292D52; --primaryInk: #C3C6FA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: #3B2C22; --warmInk: #F3A878; --warmEdge: #A5461A; --success: #4FBF67; --successSoft: #20342B; --successInk: #7FD794; --warning: #E0A64F; --warningSoft: #352E1C; --warningEdge: #63522E; --danger: #E37070; --dangerSoft: #3B2429; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
     [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
     [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
     [data-theme] a:hover { color: var(--primaryInk); }
@@ -29,12 +29,12 @@
 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
   <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; padding-left: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to lobby</button>
   <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
-    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #0F766E; color: #fff; font-weight: 800; font-size: 14px; flex: none">M</span>
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 14px; flex: none">M</span>
     <span style="font-weight: 800; font-size: 14px; color: var(--ink)">Marta</span>
   </button>
 </div>
   <header style="display: flex; align-items: center; gap: 18px; margin-bottom: 20px">
-    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: #0F766E; color: #fff; font-weight: 800; font-size: 31px; flex: none">M</span>
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 31px; flex: none">M</span>
     <div>
       <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 28px"><span style="color: var(--pcMarta); font-weight: 800">Marta</span></h1>
       <p style="font-size: 13.5px; color: var(--muted); font-weight: 700; margin-top: 4px">Registered player · joined 12 Mar 2026</p>
@@ -87,7 +87,7 @@
       <li style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); overflow: hidden">
         
 <button type="button" style="display: flex; align-items: center; gap: 14px; width: 100%; background: transparent; border: none; padding: 14px 16px; text-align: left; color: inherit; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
-  <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 40px; border-radius: 12px; background: #F5E4D4; color: #8A5A2E; font-weight: 800; font-size: 14px">#3</span>
+  <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 40px; border-radius: 12px; background: rgba(176, 112, 60, 0.16); color: var(--bronze); font-weight: 800; font-size: 14px">#3</span>
   <span style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0">
     <span style="font-weight: 800; font-size: 15px; color: var(--ink)">Coffee break doodles</span>
     <span style="font-size: 12.5px; color: var(--muted); font-weight: 700">24 Aug 2026, 18:42 · 3 rounds · 5 players</span>
@@ -95,35 +95,35 @@
   <span style="font-size: 13.5px; color: var(--muted); font-weight: 800; font-variant-numeric: tabular-nums">980 pts</span>
   <span aria-hidden="true" style="display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span>
 </button>
-        <div style="border-top: 1.5px solid var(--line); padding: 14px 16px; background: var(--paper)">
+        <div style="border-top: 1.5px solid var(--line); padding: 14px 16px; background: var(--well)">
           <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px">
-            <span style="display: inline-flex; align-items: center; gap: 5px; background: var(--paper); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Default scoring v3</span><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--paper); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Timed hints</span><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--paper); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">90s draws</span><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--paper); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Curated prompts</span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; background: var(--well); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Default scoring v3</span><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--well); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Timed hints</span><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--well); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">90s draws</span><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--well); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Curated prompts</span>
           </div>
           <ol style="list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 3px; font-size: 13.5px">
             
             <li style="display: flex; align-items: center; gap: 9px">
               <span style="color: var(--faint); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2em">#1</span>
-              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #C2410C; color: #fff; font-weight: 800; font-size: 11px; flex: none">B</span><span style="color: var(--pcBruno); font-weight: 800">Bruno</span>
+              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--avBruno); color: var(--avatarInk); font-weight: 800; font-size: 11px; flex: none">B</span><span style="color: var(--pcBruno); font-weight: 800">Bruno</span>
               <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--muted)">1420</span>
             </li>
             <li style="display: flex; align-items: center; gap: 9px">
               <span style="color: var(--faint); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2em">#2</span>
-              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #7E22CE; color: #fff; font-weight: 800; font-size: 11px; flex: none">Y</span><span style="color: var(--pcYuki); font-weight: 800">Yuki</span>
+              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--avYuki); color: var(--avatarInk); font-weight: 800; font-size: 11px; flex: none">Y</span><span style="color: var(--pcYuki); font-weight: 800">Yuki</span>
               <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--muted)">1180</span>
             </li>
             <li style="display: flex; align-items: center; gap: 9px; background: var(--primarySoft); border-radius: 8px; padding: 3px 6px; margin: 0 -6px">
               <span style="color: var(--faint); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2em">#3</span>
-              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #0F766E; color: #fff; font-weight: 800; font-size: 11px; flex: none">M</span><span style="color: var(--pcMarta); font-weight: 800">Marta</span>
+              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 11px; flex: none">M</span><span style="color: var(--pcMarta); font-weight: 800">Marta</span>
               <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--muted)">980</span>
             </li>
             <li style="display: flex; align-items: center; gap: 9px">
               <span style="color: var(--faint); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2em">#4</span>
-              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--guestBg); border: 1.5px dashed var(--lineStrong); color: var(--muted); font-weight: 800; font-size: 11px; flex: none">S</span><span style="color: var(--pcSparrow); font-style: italic; font-weight: 700">Sparrow-14</span>
+              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--avGuest); color: var(--avatarInk); font-weight: 800; font-size: 11px; flex: none">S</span><span style="color: var(--pcSparrow); font-style: italic; font-weight: 700">Sparrow-14</span>
               <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--muted)">520</span>
             </li>
             <li style="display: flex; align-items: center; gap: 9px">
               <span style="color: var(--faint); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2em">#5</span>
-              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #0369A1; color: #fff; font-weight: 800; font-size: 11px; flex: none">I</span><span style="color: var(--pcInes); font-weight: 800">Ines</span>
+              <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--avInes); color: var(--avatarInk); font-weight: 800; font-size: 11px; flex: none">I</span><span style="color: var(--pcInes); font-weight: 800">Ines</span>
               <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--muted)">310</span>
             </li>
           </ol>
@@ -159,7 +159,7 @@
       <li style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); overflow: hidden">
         
 <button type="button" style="display: flex; align-items: center; gap: 14px; width: 100%; background: transparent; border: none; padding: 14px 16px; text-align: left; color: inherit; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
-  <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 40px; border-radius: 12px; background: #FBF0D3; color: #8a6d0b; font-weight: 800; font-size: 14px">#1</span>
+  <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 40px; border-radius: 12px; background: rgba(227, 160, 8, 0.16); color: var(--gold); font-weight: 800; font-size: 14px">#1</span>
   <span style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0">
     <span style="font-weight: 800; font-size: 15px; color: var(--ink)">Slow and steady</span>
     <span style="font-size: 12.5px; color: var(--muted); font-weight: 700">23 Aug 2026, 21:07 · 4 rounds · 6 players</span>
@@ -171,7 +171,7 @@
       <li style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); overflow: hidden">
         
 <button type="button" style="display: flex; align-items: center; gap: 14px; width: 100%; background: transparent; border: none; padding: 14px 16px; text-align: left; color: inherit; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
-  <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 40px; border-radius: 12px; background: var(--paper); color: var(--muted); font-weight: 800; font-size: 14px">—</span>
+  <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 40px; border-radius: 12px; background: var(--well); color: var(--muted); font-weight: 800; font-size: 14px">—</span>
   <span style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0">
     <span style="font-weight: 800; font-size: 15px; color: var(--ink)">Chaos hour</span>
     <span style="font-size: 12.5px; color: var(--muted); font-weight: 700">21 Aug 2026, 19:30 · 5 rounds · 8 players · <span style="color: var(--warning)">cut short</span></span>

@@ -145,9 +145,11 @@ first-class: a dashed-border chip instead of apologetic italic-only text.
 
 Every color is a **CSS custom property with a light and a dark value**,
 switched by one `data-theme` attribute — so the whole system carries a dark
-theme for free. The dark ground is a cool gray-blue rather than a darkened
-version of the warm paper — night mode reads as a different room, not a
-dimmed one — while the crayon/marker accents carry the identity across both
+theme for free. The dark values reuse the shipped app's own dark palette
+(`theme-overrides.css`): slate ground `#0f172a`, `#1e293b` surfaces,
+`#334155`/`#475569` borders, slate text, and its semantic accents — so
+night mode matches what today's players already know, while the
+crayon/marker accents carry the redesign's identity across both themes
 (the drawing canvas deliberately stays white paper in both). Avatar discs keep the fixed account color while player *name text*
 uses a theme-adjusted token, so dark-leaning account colors stay legible on
 the dark ground. On the canvas, every artboard has a `theme` tweak chip; the
@@ -161,19 +163,27 @@ one token sheet.
 
 ### Lobby (`Main`)
 
-- **Wordmark + header nav.** The product gets a face, and *Prompt stats* /
-  *My lists* / settings / profile become one consistent nav — which also
-  deletes the default-blue link bug by design (§1.8).
+- **Wordmark + a single account button.** The header carries only the
+  player's name; Profile, Prompt stats, My prompt lists, Settings and Sign
+  out all live in its dropdown (drawn open on the artboard). One entry point
+  instead of four header controls — and the default-blue link bug is deleted
+  by design (§1.8).
+- **Prompt language as a flag on every room card** (drawn as inline SVG, so
+  it renders identically on every OS), with a matching **language filter**
+  beside the search — the room's one resolved language (R-PROMPT-02) becomes
+  scannable before joining.
 - **"Start a game" is the single hero action**; *Quick start with defaults*
   serves the returning group that never changes settings.
 - **Segmented 6-character code input** replaces the free text field —
   it matches the shape of the thing being typed, shows progress, and makes
   paste-vs-type equally obvious.
 - Room cards get **capacity meters** (a glance answers "can we fit?"), iconed
-  metadata, and one primary action each; a full room's only button is
-  *Spectate*, an in-progress room's join is demoted to secondary. The status
-  chip shows *round progress* ("Round 2 of 3") instead of a bare "In
-  progress" — how long a wait joining implies.
+  metadata, and **one consistent action grammar**: *Join* is always the blue
+  primary, *Join in progress* is always marker-orange (a different commitment
+  — you land mid-game), and *Spectate* is always the outlined button with the
+  eye icon. A full room's only button is *Spectate*. The status chip shows
+  *round progress* ("Round 2 of 3") instead of a bare "In progress" — how
+  long a wait joining implies.
 - Filters become toggle chips on a light search well (§1.8 fixed).
 
 ### Create a room (`CreateRoom`)
@@ -209,10 +219,7 @@ one token sheet.
   the host. Guests now see a sensible screen: who's here, how to invite, what
   the rules are. The full editor already has a home (the create form).
 - **Start game is marker-orange** — the one "game moment" button on the
-  screen — with an honest readiness line ("Ines has stepped away and will sit
-  out").
-- AFK is renamed **"Step away"** everywhere: self-describing, sentence-case,
-  and no longer jargon (R-UX-02 spirit).
+  screen — with an honest readiness line ("Ines is AFK and will sit out").
 
 ### Prompt choice (`PromptChoice`) — new screen
 
@@ -231,10 +238,14 @@ drawer's highest-pressure moment. The redesign gives it one:
 - **Ring timer** with numeric center, turning orange as time runs low — the
   clock finally looks like the main mechanic (§1.4).
 - Status strip: **Round 2 of 3 · Turn 1 of 4**, and the prompt is presented as
-  *"You're drawing: lighthouse"* with a live **"2 of 4 guessed it"** chip —
+  *"You're drawing: lighthouse"* with a live **"2 of 3 guessed it"** chip —
   the drawer's bonus (R-SCORE-08) gets a running indicator.
-- **Guessed players get a green check badge and row tint** in the player list
-  the moment they answer (§1.4).
+- **Every player row carries a live status line** under the name — *✓ Got it ·
+  1:03* on a green-tinted row, *Drawing* on an indigo one, *AFK* in amber —
+  so the sidebar is the turn's scoreboard at a glance (§1.4). Correct guesses
+  also land in the feed as **event cards** (left accent, guess time, +points),
+  and **post-guess chat is marked with a dashed rule** — the drawer sees it;
+  active guessers never receive it (R-SPEC-04).
 - Toolbar: 44px targets, tools/size/palette/undo groups separated, **Clear
   restyled as quietly destructive** and separated from Undo — the two most
   opposite actions on the screen no longer look like twins.
@@ -250,13 +261,15 @@ drawer's highest-pressure moment. The redesign gives it one:
   ("Next free letter in 9s" for this room's timed-hints mode). Purchase and
   wheel modes get the same slot for their buy-a-letter affordances — the
   hidden mechanic of §1.5 now has a home on screen.
-- **The guess box is visually a guess box** — accented border, pencil glyph —
-  not a generic chat field that happens to score points.
+- **The guess box is visually a guess box** — accented border, a live count of
+  letters typed inside the field, a chevron send — not a generic chat field
+  that happens to score points.
 - **Near-miss feedback attaches to the input** ("'light house' is very close —
-  only you can see this") instead of impersonating a chat line, making its
-  private-to-you nature (R-GUESS-03) visible instead of implied.
-- The artboard is honestly drawn **from Bruno's seat**; the shipped mockup
-  showed a guesser screen with the drawer's sidebar, which no player can see.
+  try it as one word. Only you can see this.") instead of impersonating a chat
+  line, making its private-to-you nature (R-GUESS-03) visible and actionable.
+- The artboard is honestly drawn **from Yuki's seat**, still guessing while
+  two players have answered; the shipped mockup showed a guesser screen with
+  the drawer's sidebar, which no player can see.
 
 ### Turn results (`TurnResults`)
 

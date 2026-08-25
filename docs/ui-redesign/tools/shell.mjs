@@ -27,6 +27,10 @@ export const lighthouseSVG = `<svg viewBox="0 0 800 600" style="display: block; 
   <path d="M600 74 C 620 54, 660 56, 672 74 C 700 70, 716 90, 700 104 L 608 104 C 588 100, 586 82, 600 74 Z" fill="#c1c1c1" opacity="0.6"/>
 </svg>`;
 
+// Tracked-uppercase panel heading shared by the sidebars.
+const panelHeading = (text, size = 15) =>
+  `<h2 style="font-family: ${T.body}; font-weight: 800; font-size: ${size}px; letter-spacing: 0.2em; text-transform: uppercase; color: ${T.ink}">${text}</h2>`;
+
 // Room header. Grouped identity on the left, self-state in the middle-right,
 // the one destructive action visually separated on the far right.
 export const roomHeader = ({ inGame = false } = {}) => `
@@ -40,7 +44,7 @@ export const roomHeader = ({ inGame = false } = {}) => `
     </button>
   </div>
   <div style="display: flex; align-items: center; gap: 8px; flex: none">
-    <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 9px 15px; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; color: ${T.muted}; min-height: 44px">${icon.moon(15)}Step away</button>
+    <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 9px 15px; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; color: ${T.muted}; min-height: 44px">${icon.moon(15)}AFK</button>
     ${inGame ? btn.iconOnly(icon.download(18), 'Save drawing as PNG') : ''}
     ${btn.iconOnly(icon.gear(18), 'Settings')}
     <span style="width: 1.5px; height: 24px; background: ${T.line}; margin: 0 4px"></span>
@@ -48,13 +52,13 @@ export const roomHeader = ({ inGame = false } = {}) => `
   </div>
 </header>`;
 
-// Players sidebar. `state`: per-key { score, drawing, afk, guessed, rank, medal }
+// Players sidebar.
 export const playersPanel = ({ heading = 'Players', count = '5/8', spectators = 2, rows, footer = '', ready = null }) => `
 <aside style="display: flex; flex-direction: column; gap: 12px">
-  <div style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px; box-shadow: ${T.shadow}">
-    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px">
+  <div style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px 12px; box-shadow: ${T.shadow}">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; padding: 0 4px">
       <div style="display: flex; align-items: baseline; gap: 8px">
-        <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}">${heading}</h2>
+        ${panelHeading(heading)}
         <span style="color: ${T.faint}; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums">${count}</span>
       </div>
       <div style="display: flex; align-items: center; gap: 6px">
@@ -62,77 +66,106 @@ export const playersPanel = ({ heading = 'Players', count = '5/8', spectators = 
         <span title="${spectators} spectating" style="display: inline-flex; align-items: center; gap: 4px; color: ${T.faint}; font-size: 12.5px; font-weight: 800">${icon.eye(14)}${spectators}</span>
       </div>
     </div>
-    <ul style="list-style: none; margin: 0; padding: 0; display: grid; gap: 2px">
+    <ul style="list-style: none; margin: 0; padding: 0; display: grid; gap: 5px">
       ${rows.join('\n')}
     </ul>
     ${footer}
   </div>
 </aside>`;
 
-export const playerRow = (p, { score = null, drawing = false, afk = false, guessed = false, host = false, you = false, rank = null, medal = null } = {}) => {
-  const badge = drawing
-    ? `<span title="Drawing now" style="position: absolute; right: -5px; bottom: -5px; display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; background: ${T.warm}; color: #fff; border: 2px solid ${T.card}">${icon.pencil(9)}</span>`
+// One player row: name on top, live status underneath, score on the right.
+// `guessed` is the guess time ("1:03") when the player has answered this turn.
+export const playerRow = (p, { score = null, drawing = false, afk = false, guessed = null, host = false, you = false, rank = null, medal = null } = {}) => {
+  const status = drawing
+    ? `<span style="display: inline-flex; align-items: center; gap: 5px; color: ${T.primary}; font-size: 12.5px; font-weight: 800">${icon.pencil(12)}Drawing</span>`
     : guessed
-      ? `<span title="Guessed it" style="position: absolute; right: -5px; bottom: -5px; display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; background: ${T.success}; color: #fff; border: 2px solid ${T.card}">${icon.check(9)}</span>`
-      : '';
+      ? `<span style="display: inline-flex; align-items: center; gap: 5px; color: ${T.successInk}; font-size: 12.5px; font-weight: 800">${icon.check(12)}Got it · <span style="font-variant-numeric: tabular-nums">${guessed}</span></span>`
+      : afk
+        ? `<span style="display: inline-flex; align-items: center; gap: 5px; color: ${T.warning}; font-size: 12.5px; font-weight: 800">${icon.moon(12)}AFK</span>`
+        : '';
   const medals = { 1: '#E3A008', 2: '#9AA1AC', 3: '#B0703C' };
   const lead = medal
-    ? `<span aria-label="Rank ${medal}" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; color: ${medals[medal]}">${icon.medal(16)}</span>`
+    ? `<span aria-label="Rank ${medal}" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; color: ${medals[medal]}; flex: none">${icon.medal(16)}</span>`
     : rank
-      ? `<span style="display: inline-flex; justify-content: center; width: 20px; color: ${T.faint}; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums">${rank}</span>`
-      : `<span style="width: 20px"></span>`;
-  return `<li style="display: flex; align-items: center; gap: 9px; padding: 7px 6px; border-radius: 10px${guessed ? `; background: ${T.successSoft}` : ''}${afk ? '; opacity: 0.55' : ''}">
+      ? `<span style="display: inline-flex; justify-content: center; width: 20px; color: ${T.faint}; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; flex: none">${rank}</span>`
+      : '';
+  const surface = guessed
+    ? `background: ${T.successSoft}; border: 1.5px solid transparent`
+    : drawing
+      ? `background: ${T.primarySoft}; border: 1.5px solid ${T.primaryEdgeSoft}`
+      : 'border: 1.5px solid transparent';
+  return `<li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; ${surface}${afk ? '; opacity: 0.6' : ''}">
     ${lead}
-    <span style="position: relative; display: inline-flex; flex: none">${avatar(p, 30)}${badge}</span>
-    <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px">
-      ${pname(p)}
-      ${you ? `<span style="color: ${T.faint}; font-size: 11px; font-weight: 800">you</span>` : ''}
-      ${host ? `<span title="Host" style="color: ${T.warning}; flex: 0 0 auto; font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase">host</span>` : ''}
-      ${afk ? `<span title="Stepped away" style="display: inline-flex; color: ${T.faint}">${icon.moon(13)}</span>` : ''}
+    ${avatar(p, 38)}
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        ${pname(p)}
+        ${you ? `<span style="color: ${T.faint}; font-size: 12px; font-weight: 700">you</span>` : ''}
+        ${host ? `<span title="Host" style="display: inline-flex; color: ${T.muted}; flex: none">${icon.crown(14)}</span>` : ''}
+      </span>
+      ${status}
     </span>
-    ${score === null ? '' : `<span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 14px; color: ${T.ink}">${score}</span>`}
+    ${score === null ? '' : `<span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 19px; color: ${T.ink}; flex: none">${score}</span>`}
   </li>`;
 };
 
 const sysLine = (text) =>
   `<div style="display: flex; align-items: baseline; gap: 7px; color: ${T.faint}; font-size: 13px"><span style="flex: none; width: 4px; height: 4px; border-radius: 50%; background: ${T.lineStrong}; align-self: center"></span><span style="overflow-wrap: anywhere">${text}</span></div>`;
 
-const guessedLine = (p, pts) =>
-  `<div style="display: flex; align-items: center; gap: 7px; background: ${T.successSoft}; border-radius: 8px; padding: 4px 8px; margin: 1px 0; font-size: 13.5px; color: ${T.successInk}; font-weight: 700"><span style="display: inline-flex; color: ${T.success}">${icon.check(13)}</span><span>${p.name} guessed it!${pts ? ` <span style="font-variant-numeric: tabular-nums">+${pts}</span>` : ''}</span></div>`;
+// A correct-guess event: soft green card with a left accent, time, and points.
+const guessedLine = (p, pts, time) =>
+  `<div style="display: flex; align-items: center; gap: 8px; background: ${T.successSoft}; border-left: 3px solid ${T.success}; border-radius: 8px; padding: 8px 11px; margin: 2px 0; font-size: 13.5px">
+    <span style="display: inline-flex; color: ${T.success}; flex: none">${icon.check(13)}</span>
+    <span style="min-width: 0; overflow: hidden; white-space: nowrap">${pname(p)} <strong style="color: ${T.successInk}; font-weight: 800">got it</strong>${time ? ` <span style="color: ${T.faint}; font-weight: 700">· ${time}</span>` : ''}</span>
+    ${pts ? `<strong style="margin-left: auto; color: ${T.successInk}; font-weight: 800; font-variant-numeric: tabular-nums; flex: none">+${pts}</strong>` : ''}
+  </div>`;
 
 const chatMsg = (p, text) =>
   `<div style="font-size: 14px; overflow-wrap: anywhere">${pname(p, '; font-size: 13.5px')}<span style="color: ${T.muted}"> ${text}</span></div>`;
 
+// Post-guess chat is restricted to the drawer, spectators and players who
+// already guessed (R-SPEC-04); the dashed rule marks it for those who see it.
+const restrictedMsg = (p, text) =>
+  `<div title="Visible only to the drawer, spectators, and players who already guessed" style="border-left: 3px dashed ${T.lineStrong}; padding-left: 9px; margin: 1px 0">${chatMsg(p, text)}</div>`;
+
+// An attention notice above the guess box (near miss, hint prompts).
+const notice = (text) =>
+  `<div style="display: flex; align-items: flex-start; gap: 9px; background: ${T.warningSoft}; border: 1px solid ${T.warningEdge}; border-radius: 10px; padding: 10px 12px; color: ${T.warning}; font-size: 13px; font-weight: 800; line-height: 1.45">
+    <span style="display: inline-flex; margin-top: 1px; flex: none">${icon.alertCircle(15)}</span>
+    <span>${text}</span>
+  </div>`;
+
 export const chat = {
-  sysLine, guessedLine, chatMsg,
+  sysLine, guessedLine, chatMsg, restrictedMsg, notice,
   panel: ({ heading = 'Chat', lines, inputHTML }) => `
 <aside style="display: flex; flex-direction: column; gap: 12px">
   <div style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px; box-shadow: ${T.shadow}; display: flex; flex-direction: column; height: 560px">
-    <div style="margin-bottom: 10px; flex: none">
-      <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}">${heading}</h2>
+    <div style="margin-bottom: 12px; flex: none">
+      ${panelHeading(heading, 14)}
     </div>
-    <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px">
+    <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px">
       ${lines.join('\n')}
     </div>
     ${inputHTML}
   </div>
 </aside>`,
-  input: ({ placeholder = 'Type a message…', value = '', accent = false, above = '' } = {}) => `
-<form style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; flex: none">
+  // `count` renders inside the field's right edge (letters typed so far).
+  input: ({ placeholder = 'Type a message…', value = '', count = null, accent = false, above = '' } = {}) => `
+<form style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; flex: none; border-top: 1.5px solid ${T.line}; padding-top: 12px">
   ${above}
   <div style="display: flex; align-items: center; gap: 7px">
-    <div style="flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border: 1.5px solid ${accent ? T.primary : T.lineStrong}; border-radius: ${T.radiusSm}; background: ${T.card}${accent ? `; box-shadow: 0 0 0 3px ${T.primarySoft}` : ''}">
-      ${accent ? `<span style="display: inline-flex; color: ${T.primary}">${icon.pencil(15)}</span>` : ''}
+    <div style="flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border: 1.5px solid ${accent ? T.primary : T.lineStrong}; border-radius: ${T.radiusSm}; background: ${T.card}">
       <input type="text" ${value ? `value="${value}" ` : ''}placeholder="${placeholder}" style="flex: 1; min-width: 0; border: none; outline: none; padding: 0; font-family: ${T.body}; font-size: 14.5px; background: transparent; color: ${T.ink}">
+      ${count !== null ? `<span aria-label="${count} letters typed" style="color: ${T.faint}; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; flex: none">${count}</span>` : ''}
     </div>
-    <button type="submit" aria-label="Send" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: ${T.primary}; color: #fff; border: 0; border-radius: ${T.radiusSm}; box-shadow: 0 2px 0 ${T.primaryInk}">${icon.send(17)}</button>
+    <button type="submit" aria-label="Send" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: ${T.primary}; color: #fff; border: 0; border-radius: ${T.radiusSm}; box-shadow: 0 2px 0 ${T.primaryEdge}; flex: none">${icon.chevR(17)}</button>
   </div>
 </form>`,
 };
 
 // Standard three-column room grid.
 export const roomGrid = (left, center, right) => `
-<div style="display: grid; grid-template-columns: 236px minmax(0, 1fr) 292px; gap: 16px; align-items: start">
+<div style="display: grid; grid-template-columns: 252px minmax(0, 1fr) 292px; gap: 16px; align-items: start">
   ${left}
   <div style="min-width: 0">${center}</div>
   ${right}

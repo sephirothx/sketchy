@@ -43,7 +43,7 @@ export const PromptStatsPage = `
     ${selectBox('All time')}
     ${selectBox('All scoring')}
     ${selectBox('All hints')}
-    <div style="flex: 1 1 180px; display: flex; align-items: center; gap: 9px; background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 9px 13px; min-height: 42px">
+    <div style="flex: 1 1 180px; display: flex; align-items: center; gap: 9px; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 9px 13px; min-height: 42px">
       <span style="display: inline-flex; color: ${T.faint}">${icon.search(15)}</span>
       <input type="search" placeholder="Find a prompt" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-family: ${T.body}; font-size: 14px; color: ${T.ink}">
     </div>
@@ -85,7 +85,7 @@ const promptChip = (text, review = false) => review
       ${chip('under review', 'warning')}
       <button type="button" aria-label="Remove ${text}" style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: none; border: 0; border-radius: 999px; color: ${T.faint}">${icon.x(13)}</button>
     </li>`
-  : `<li style="display: flex; align-items: center; gap: 4px; background: ${T.paper}; border: 1px solid ${T.line}; border-radius: 999px; padding: 4px 4px 4px 13px; font-size: 13.5px; max-width: 100%">
+  : `<li style="display: flex; align-items: center; gap: 4px; background: ${T.well}; border: 1px solid ${T.line}; border-radius: 999px; padding: 4px 4px 4px 13px; font-size: 13.5px; max-width: 100%">
       <span style="overflow-wrap: anywhere; color: ${T.ink}">${text}</span>
       <button type="button" aria-label="Remove ${text}" style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: none; border: 0; border-radius: 999px; color: ${T.faint}">${icon.x(13)}</button>
     </li>`;
@@ -148,7 +148,7 @@ export const MyPromptListsPage = `
         <div style="border-top: 1.5px solid ${T.line}; display: grid; gap: 12px; padding-top: 16px">
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
             <h3 style="font-size: 13.5px; font-weight: 800; color: ${T.ink}">In this list</h3>
-            <div style="flex: 1 1 200px; display: flex; align-items: center; gap: 8px; background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 8px 12px">
+            <div style="flex: 1 1 200px; display: flex; align-items: center; gap: 8px; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 8px 12px">
               <span style="display: inline-flex; color: ${T.faint}">${icon.search(14)}</span>
               <input type="search" placeholder="Search prompts" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-family: ${T.body}; font-size: 13.5px; color: ${T.ink}">
             </div>
@@ -186,8 +186,12 @@ const smallStat = (value, label) => `
 <span style="display: inline-flex; align-items: baseline; gap: 7px; font-size: 13px; color: ${T.muted}; font-weight: 700"><strong style="color: ${T.ink}; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 15px">${value}</strong>${label}</span>`;
 
 const placeBadge = (place) => {
-  const styles = { 1: ['#FBF0D3', '#8a6d0b'], 2: ['#EDEFF2', '#5A6472'], 3: ['#F5E4D4', '#8A5A2E'] };
-  const s = styles[place] ?? [T.paper, T.muted];
+  const styles = {
+    1: ['rgba(227, 160, 8, 0.16)', T.gold],
+    2: ['rgba(122, 134, 154, 0.16)', T.silver],
+    3: ['rgba(176, 112, 60, 0.16)', T.bronze],
+  };
+  const s = styles[place] ?? [T.well, T.muted];
   return `<span style="display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 40px; border-radius: 12px; background: ${s[0]}; color: ${s[1]}; font-weight: 800; font-size: 14px">${place ? '#' + place : '—'}</span>`;
 };
 
@@ -240,7 +244,7 @@ export const ProfilePage = `
     <ul style="list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px">
       <li style="border: 1.5px solid ${T.line}; border-radius: ${T.radius}; background: ${T.card}; overflow: hidden">
         ${historyHead('Coffee break doodles', '24 Aug 2026, 18:42 · 3 rounds · 5 players', 3, '980 pts', true)}
-        <div style="border-top: 1.5px solid ${T.line}; padding: 14px 16px; background: ${T.paper}">
+        <div style="border-top: 1.5px solid ${T.line}; padding: 14px 16px; background: ${T.well}">
           <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px">
             ${chip('Default scoring v3')}${chip('Timed hints')}${chip('90s draws')}${chip('Curated prompts')}
           </div>
@@ -364,7 +368,7 @@ const reportCard = (reason, reasonKind, when, body, evidence, actions) => `
 </li>`;
 
 const evidenceBlock = (lines) => `
-<div style="background: ${T.paper}; border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; margin-top: 12px; padding: 12px 14px">
+<div style="background: ${T.well}; border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; margin-top: 12px; padding: 12px 14px">
   ${sectionLabel('Pinned messages — as the reporter received them')}
   <ul style="list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 5px; font-size: 13.5px">
     ${lines.map((l) => `<li style="color: ${T.muted}"><strong style="color: ${T.ink}; font-weight: 800">Nightjar-88:</strong> ${l}</li>`).join('')}

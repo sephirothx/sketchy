@@ -8,6 +8,7 @@
 export const PALETTES = {
   light: {
     paper: '#FAF6EF',        // warm page background
+    well: '#FAF6EF',         // inset surface inside cards (same as paper in light)
     card: '#FFFFFF',
     ink: '#292520',          // warm near-black
     muted: '#6F6759',
@@ -16,6 +17,10 @@ export const PALETTES = {
     lineStrong: '#D3C8B4',
     track: '#F1EBE0',        // segmented-control well
     guestBg: '#F0EADD',      // guest avatar fill
+    avatarInk: '#FFFFFF',    // avatar initial
+    avMarta: '#0F766E', avBruno: '#C2410C', avYuki: '#7E22CE', avInes: '#0369A1', avGuest: '#5B6472',
+    primaryEdgeSoft: '#C9CCF4',
+    scrim: 'rgba(30, 27, 22, 0.5)',
     primary: '#5157D8',      // crayon indigo
     primarySoft: '#EEEFFB',
     primaryInk: '#3B41B5',   // text on primarySoft
@@ -32,35 +37,47 @@ export const PALETTES = {
     warningEdge: '#EBC98A',
     danger: '#C92A2A',
     dangerSoft: '#FBECEC',
+    gold: '#8A6D0B', silver: '#5A6472', bronze: '#8A5A2E',
     // player name text (avatars keep the fixed account color)
     pcMarta: '#0F766E', pcBruno: '#C2410C', pcYuki: '#7E22CE', pcInes: '#0369A1', pcSparrow: '#8A8272',
   },
+  // Dark grounds, borders and text reuse the shipped app's dark theme
+  // (theme-overrides.css): slate #0f172a ground, #1e293b surfaces,
+  // #334155/#475569 borders, #f8fafc/#94a3b8/#64748b text. Tint surfaces are
+  // ALPHA washes of their accent so they blend into the slate instead of
+  // reading as foreign opaque patches; insets recess with a translucent well.
   dark: {
-    paper: '#16181D',        // cool near-black, blue bias
-    card: '#1F222A',
-    ink: '#E9EBF1',
-    muted: '#9CA3B2',
-    faint: '#6E7584',
-    line: '#2C303B',
-    lineStrong: '#414755',
-    track: '#262A33',
-    guestBg: '#2B2F3A',
+    paper: '#0F172A',
+    well: 'rgba(2, 6, 23, 0.35)',
+    card: '#1E293B',
+    ink: '#F8FAFC',
+    muted: '#94A3B8',
+    faint: '#64748B',
+    line: '#334155',
+    lineStrong: '#475569',
+    track: 'rgba(2, 6, 23, 0.45)',
+    guestBg: 'rgba(148, 163, 184, 0.18)',
+    avatarInk: '#132036',    // dark initial on pastel avatar
+    avMarta: '#5EE0C2', avBruno: '#F5B26B', avYuki: '#D9B8F5', avInes: '#82AACB', avGuest: '#C3CBD8',
+    primaryEdgeSoft: 'rgba(102, 108, 228, 0.5)',
+    scrim: 'rgba(2, 6, 23, 0.6)',
     primary: '#666CE4',
-    primarySoft: '#292D52',
-    primaryInk: '#C3C6FA',
+    primarySoft: 'rgba(102, 108, 228, 0.17)',
+    primaryInk: '#C7CBFA',
     primaryEdge: '#3B41B5',
     warm: '#EE7E48',
-    warmSoft: '#3B2C22',
-    warmInk: '#F3A878',
-    warmEdge: '#A5461A',
-    success: '#4FBF67',
-    successSoft: '#20342B',
-    successInk: '#7FD794',
-    warning: '#E0A64F',
-    warningSoft: '#352E1C',
-    warningEdge: '#63522E',
-    danger: '#E37070',
-    dangerSoft: '#3B2429',
+    warmSoft: 'rgba(238, 126, 72, 0.15)',
+    warmInk: '#FDBA74',
+    warmEdge: '#9A3412',
+    success: '#4ADE80',
+    successSoft: 'rgba(74, 222, 128, 0.13)',
+    successInk: '#86EFAC',
+    warning: '#FBBF24',
+    warningSoft: 'rgba(251, 191, 36, 0.13)',
+    warningEdge: 'rgba(251, 191, 36, 0.4)',
+    danger: '#F87171',
+    dangerSoft: 'rgba(248, 113, 113, 0.14)',
+    gold: '#F5CE62', silver: '#B9C4D4', bronze: '#DFA878',
     pcMarta: '#2BB3A0', pcBruno: '#F08A54', pcYuki: '#BF87ED', pcInes: '#4FA8E0', pcSparrow: '#A0A5B2',
   },
 };
@@ -83,11 +100,11 @@ export const cssVars = (theme) =>
 // Player identity — avatar keeps the fixed account color from the shipped
 // mockups; name text uses a theme-adjusted token so it stays legible on dark.
 export const P = {
-  marta:   { name: 'Marta',      color: '#0F766E', text: 'var(--pcMarta)',   guest: false },
-  bruno:   { name: 'Bruno',      color: '#C2410C', text: 'var(--pcBruno)',   guest: false },
-  yuki:    { name: 'Yuki',       color: '#7E22CE', text: 'var(--pcYuki)',    guest: false },
-  ines:    { name: 'Ines',       color: '#0369A1', text: 'var(--pcInes)',    guest: false },
-  sparrow: { name: 'Sparrow-14', color: '#8A8272', text: 'var(--pcSparrow)', guest: true },
+  marta:   { name: 'Marta',      av: 'var(--avMarta)', text: 'var(--pcMarta)',   guest: false },
+  bruno:   { name: 'Bruno',      av: 'var(--avBruno)', text: 'var(--pcBruno)',   guest: false },
+  yuki:    { name: 'Yuki',       av: 'var(--avYuki)',  text: 'var(--pcYuki)',    guest: false },
+  ines:    { name: 'Ines',       av: 'var(--avInes)',  text: 'var(--pcInes)',    guest: false },
+  sparrow: { name: 'Sparrow-14', av: 'var(--avGuest)', text: 'var(--pcSparrow)', guest: true },
 };
 
 const stroke = (paths, size = 16, sw = 2) =>
@@ -102,6 +119,7 @@ export const icon = {
   crown: (s) => stroke('<path d="M3 17h18l-1-9-4.5 3.5L12 6l-3.5 5.5L4 8l-1 9Z"/><path d="M4 21h16"/>', s),
   check: (s) => stroke('<path d="M4 12.5 9.5 18 20 6.5"/>', s, 2.6),
   clock: (s) => stroke('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>', s),
+  user: (s) => stroke('<circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>', s),
   users: (s) => stroke('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5a3.5 3.5 0 0 1 0 6.7"/><path d="M17.5 14.4a6.5 6.5 0 0 1 4 5.6"/>', s),
   rounds: (s) => stroke('<path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/>', s),
   gear: (s) => stroke('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/>', s),
@@ -123,6 +141,7 @@ export const icon = {
   circle: (s) => stroke('<circle cx="12" cy="12" r="9"/>', s),
   undo: (s) => stroke('<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>', s),
   trash: (s) => stroke('<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>', s),
+  alertCircle: (s) => stroke('<circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5h.01"/>', s),
   alert: (s) => stroke('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>', s),
   chevD: (s) => stroke('<path d="m6 9 6 6 6-6"/>', s),
   chevR: (s) => stroke('<path d="m9 6 6 6-6 6"/>', s),
@@ -144,6 +163,15 @@ export const icon = {
   },
 };
 
+// Prompt-language flags, drawn inline so they render identically everywhere.
+const flagWrap = (inner) =>
+  `<svg width="18" height="13" viewBox="0 0 18 13" aria-hidden="true" style="flex: none; border-radius: 2.5px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15)">${inner}</svg>`;
+export const flag = {
+  en: flagWrap('<rect width="18" height="13" fill="#012169"/><path d="M0 0 18 13M18 0 0 13" stroke="#fff" stroke-width="2.6"/><path d="M0 0 18 13M18 0 0 13" stroke="#C8102E" stroke-width="1.1"/><path d="M9 0v13M0 6.5h18" stroke="#fff" stroke-width="4"/><path d="M9 0v13M0 6.5h18" stroke="#C8102E" stroke-width="2.2"/>'),
+  it: flagWrap('<rect width="6" height="13" fill="#009246"/><rect x="6" width="6" height="13" fill="#fff"/><rect x="12" width="6" height="13" fill="#CE2B37"/>'),
+  de: flagWrap('<rect width="18" height="4.33" fill="#111"/><rect y="4.33" width="18" height="4.34" fill="#DD0000"/><rect y="8.67" width="18" height="4.33" fill="#FFCE00"/>'),
+};
+
 // A small squiggle underline used under the wordmark and section moments.
 export const squiggle = (w = 96, color = T.warm) =>
   `<svg width="${w}" height="8" viewBox="0 0 ${w} 8" fill="none" aria-hidden="true" style="display: block"><path d="M2 5 C ${w * 0.14} 1, ${w * 0.22} 7, ${w * 0.36} 4 C ${w * 0.5} 1, ${w * 0.62} 7, ${w * 0.76} 4 C ${w * 0.86} 2, ${w * 0.94} 5, ${w - 2} 3" stroke-width="2.5" stroke-linecap="round" style="stroke: ${color}"/></svg>`;
@@ -156,10 +184,7 @@ export const wordmark = (size = 30) =>
 
 export const avatar = (p, size = 28) => {
   const fz = Math.round(size * 0.48);
-  if (p.guest) {
-    return `<span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; border-radius: 50%; background: ${T.guestBg}; border: 1.5px dashed ${T.lineStrong}; color: ${T.muted}; font-weight: 800; font-size: ${fz}px; flex: none">${p.name[0]}</span>`;
-  }
-  return `<span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; border-radius: 50%; background: ${p.color}; color: #fff; font-weight: 800; font-size: ${fz}px; flex: none">${p.name[0]}</span>`;
+  return `<span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px; border-radius: 50%; background: ${p.av}; color: ${T.avatarInk}; font-weight: 800; font-size: ${fz}px; flex: none">${p.name[0]}</span>`;
 };
 
 export const pname = (p, extra = '') =>
@@ -184,7 +209,7 @@ export const btn = {
 
 export const chip = (label, kind = 'neutral') => {
   const k = {
-    neutral: [T.paper, T.muted, T.line],
+    neutral: [T.well, T.muted, T.line],
     primary: [T.primarySoft, T.primaryInk, 'transparent'],
     success: [T.successSoft, T.successInk, 'transparent'],
     warning: [T.warningSoft, T.warning, 'transparent'],

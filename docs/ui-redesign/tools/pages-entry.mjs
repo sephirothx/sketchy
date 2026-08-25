@@ -1,19 +1,31 @@
 // Entry screens: lobby, room creation, account recovery.
-import { T, P, icon, avatar, btn, chip, card, sectionLabel, segmented, selectBox, switchCtl, input, wordmark, squiggle } from './ui.mjs';
+import { T, P, icon, flag, avatar, btn, chip, card, sectionLabel, segmented, selectBox, switchCtl, input, wordmark, squiggle } from './ui.mjs';
 
+const menuItem = (svg, label, danger = false) => `
+<button type="button" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 10px 12px; font-family: ${T.body}; font-size: 14px; font-weight: 700; color: ${danger ? T.danger : T.ink}; min-height: 40px">
+  <span style="display: inline-flex; color: ${danger ? T.danger : T.faint}">${svg}</span>${label}
+</button>`;
+
+// The lobby header carries only the account button; every navigation option
+// lives in its menu, drawn open here so the design documents its contents.
 const appHeader = `
 <header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 26px">
   ${wordmark(34)}
-  <nav style="display: flex; align-items: center; gap: 6px">
-    <a href="#" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: ${T.radiusSm}; color: ${T.muted}; font-size: 14px">${icon.zap(15)}Prompt stats</a>
-    <a href="#" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: ${T.radiusSm}; color: ${T.muted}; font-size: 14px">${icon.bulb(15)}My lists</a>
-    ${btn.iconOnly(icon.gear(18), 'Settings')}
-    <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid ${T.line}; background: ${T.card}; border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: ${T.body}; box-shadow: ${T.shadow}">
+  <div style="position: relative">
+    <button type="button" aria-expanded="true" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid ${T.line}; background: ${T.card}; border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: ${T.body}; box-shadow: ${T.shadow}">
       ${avatar(P.marta, 30)}
       <span style="font-weight: 800; font-size: 14px; color: ${T.ink}">Marta</span>
       <span style="display: inline-flex; color: ${T.faint}">${icon.chevD(14)}</span>
     </button>
-  </nav>
+    <div role="menu" style="position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 12px; box-shadow: ${T.shadowRaised}; padding: 6px; width: 216px; display: grid; gap: 1px">
+      ${menuItem(icon.user(16), 'Profile')}
+      ${menuItem(icon.zap(16), 'Prompt stats')}
+      ${menuItem(icon.bulb(16), 'My prompt lists')}
+      ${menuItem(icon.gear(16), 'Settings')}
+      <div style="border-top: 1.5px solid ${T.line}; margin: 4px 6px"></div>
+      ${menuItem(icon.leave(16), 'Sign out', true)}
+    </div>
+  </div>
 </header>`;
 
 const backBar = (label = 'Back to lobby') => `
@@ -30,7 +42,7 @@ const codeCells = ['B', 'Q', '7', 'F', '', '']
   .map((c, i) => `<span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 48px; border: 1.5px solid ${c ? T.lineStrong : T.line}; border-radius: 10px; background: ${T.card}; font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}${i === 4 ? `; border-color: ${T.primary}; box-shadow: 0 0 0 3px ${T.primarySoft}` : ''}">${c}</span>`)
   .join('');
 
-const roomCard = ({ name, status, statusKind, meta, fillFrac, tags, actions }) => `
+const roomCard = ({ name, status, statusKind, lang, meta, fillFrac, tags, actions }) => `
 <article style="display: flex; align-items: center; gap: 18px; justify-content: space-between; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
   <div style="min-width: 0; display: grid; gap: 8px">
     <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 9px">
@@ -38,6 +50,7 @@ const roomCard = ({ name, status, statusKind, meta, fillFrac, tags, actions }) =
       ${chip(status, statusKind)}
     </div>
     <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 5px 16px; color: ${T.muted}; font-size: 13px; font-weight: 700">
+      <span title="Prompt language: ${lang.label}" style="display: inline-flex; align-items: center; gap: 7px">${flag[lang.code]}${lang.label}</span>
       <span style="display: inline-flex; align-items: center; gap: 6px">${icon.users(14)}${meta.players}
         <span aria-hidden="true" style="display: inline-block; width: 44px; height: 5px; border-radius: 999px; background: ${T.line}; overflow: hidden"><span style="display: block; width: ${Math.round(fillFrac * 100)}%; height: 100%; background: ${fillFrac >= 1 ? T.warm : T.primary}"></span></span>
       </span>
@@ -71,7 +84,7 @@ export const MainPage = `
       <div style="display: flex; gap: 6px" aria-label="Room code">${codeCells}</div>
       <div style="display: flex; align-items: center; gap: 10px; margin-top: auto">
         ${btn.primary('Join')}
-        ${btn.ghost('Spectate instead', { iconL: icon.eye(14) })}
+        ${btn.secondary('Spectate instead', { iconL: icon.eye(14) })}
       </div>
     </section>
   </div>
@@ -83,10 +96,11 @@ export const MainPage = `
     </div>
 
     <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px">
-      <div style="flex: 1 1 240px; display: flex; align-items: center; gap: 9px; background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 10px 13px; min-height: 44px">
+      <div style="flex: 1 1 240px; display: flex; align-items: center; gap: 9px; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 10px 13px; min-height: 44px">
         <span style="display: inline-flex; color: ${T.faint}">${icon.search(15)}</span>
         <input type="search" placeholder="Search rooms by name or code" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-family: ${T.body}; font-size: 14px; color: ${T.ink}">
       </div>
+      ${selectBox('All languages')}
       <button type="button" aria-pressed="false" style="background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: 999px; padding: 9px 15px; font-family: ${T.body}; font-size: 13px; font-weight: 800; color: ${T.muted}; min-height: 42px">Hide full</button>
       <button type="button" aria-pressed="false" style="background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: 999px; padding: 9px 15px; font-family: ${T.body}; font-size: 13px; font-weight: 800; color: ${T.muted}; min-height: 42px">Hide in progress</button>
     </div>
@@ -94,24 +108,28 @@ export const MainPage = `
     <div style="display: grid; gap: 12px">
       ${roomCard({
         name: 'Coffee break doodles', status: 'Waiting', statusKind: 'success', fillFrac: 5 / 8,
+        lang: { code: 'en', label: 'English' },
         meta: { players: '5/8', rounds: '3 rounds', time: '90s', spectators: '2' },
         tags: ['Timed hints', 'Spectators see prompt'],
-        actions: btn.primary('Join') + btn.ghost('Spectate'),
+        actions: btn.primary('Join') + btn.secondary('Spectate', { iconL: icon.eye(14) }),
       })}
       ${roomCard({
         name: 'Slow and steady', status: 'Waiting', statusKind: 'success', fillFrac: 2 / 6,
+        lang: { code: 'it', label: 'Italian' },
         meta: { players: '2/6', rounds: '4 rounds', time: '180s' },
         tags: ['No scoring', '42 custom prompts'],
-        actions: btn.primary('Join') + btn.ghost('Spectate'),
+        actions: btn.primary('Join') + btn.secondary('Spectate', { iconL: icon.eye(14) }),
       })}
       ${roomCard({
         name: 'After-work sketch club', status: 'Round 2 of 3', statusKind: 'warning', fillFrac: 5 / 10,
+        lang: { code: 'de', label: 'German' },
         meta: { players: '5/10', rounds: '3 rounds', time: '120s', spectators: '1' },
         tags: ['Hidden prompt', 'Colorblind-safe'],
-        actions: btn.secondary('Join in progress') + btn.ghost('Spectate'),
+        actions: btn.warm('Join in progress') + btn.secondary('Spectate', { iconL: icon.eye(14) }),
       })}
       ${roomCard({
         name: 'Chaos hour', status: 'In progress', statusKind: 'warning', fillFrac: 1,
+        lang: { code: 'en', label: 'English' },
         meta: { players: '8/8 · full', rounds: '5 rounds', time: '60s' },
         tags: ['Pressure', 'Wheel of Fortune', 'Brush only'],
         actions: btn.secondary('Spectate', { iconL: icon.eye(14) }),
@@ -127,7 +145,7 @@ const stepBtn = (glyph, label) =>
   `<button type="button" aria-label="${label}" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid ${T.lineStrong}; background: ${T.card}; color: ${T.ink}; font-family: ${T.body}; font-size: 19px; font-weight: 700; box-shadow: ${T.shadow}; flex: none">${glyph}</button>`;
 
 const settingCard = (svg, label, value, unit, hint) => `
-<div style="display: flex; flex-direction: column; align-items: center; gap: 11px; background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 15px 12px 12px; text-align: center">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 11px; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 15px 12px 12px; text-align: center">
   <span style="display: inline-flex; align-items: center; gap: 7px; color: ${T.muted}; font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase">${svg}${label}</span>
   <div style="display: flex; align-items: center; gap: 10px">
     ${stepBtn('−', `Decrease ${label}`)}
@@ -140,7 +158,7 @@ const settingCard = (svg, label, value, unit, hint) => `
 const listChip = (name, count, on) => {
   const pill = count === '' ? '' : on
     ? `<span style="background: ${T.card}; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: ${T.primary}">${count}</span>`
-    : `<span style="background: ${T.paper}; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: ${T.faint}">${count}</span>`;
+    : `<span style="background: ${T.well}; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: ${T.faint}">${count}</span>`;
   return on
     ? `<button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.primarySoft}; border: 1.5px solid ${T.primary}; border-radius: 999px; padding: 9px 15px; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; color: ${T.primaryInk}; min-height: 42px">${icon.check(12)}${name}${pill}</button>`
     : `<button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: 999px; padding: 9px 15px; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; color: ${T.muted}; min-height: 42px">${icon.plus(12)}${name}${pill}</button>`;
@@ -334,7 +352,7 @@ const shortcutRow = (svg, label, key) => `
 </div>`;
 
 const brushPreset = (color, sizeLabel, dot) => `
-<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 8px 14px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.muted}; min-height: 40px">
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 8px 14px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.muted}; min-height: 40px">
   <span style="width: ${dot}px; height: ${dot}px; border-radius: 50%; background: ${color}; border: 1px solid rgba(0, 0, 0, 0.15); flex: none"></span>${sizeLabel}
 </button>`;
 
@@ -351,7 +369,7 @@ export const SettingsPage = `
     <div style="height: 620px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}"></div>
   </div>
 
-  <div style="position: absolute; inset: 0; background: rgba(22, 20, 16, 0.45); display: flex; align-items: flex-start; justify-content: center; padding: 44px 20px">
+  <div style="position: absolute; inset: 0; background: ${T.scrim}; display: flex; align-items: flex-start; justify-content: center; padding: 44px 20px">
     <section role="dialog" aria-label="Settings" style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 18px; box-shadow: ${T.shadowRaised}; width: min(660px, 100%); padding: 24px 28px 26px; display: grid; gap: 14px">
       <header style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
         <div>
@@ -385,7 +403,7 @@ export const SettingsPage = `
           <span style="font-size: 14px; font-weight: 800; color: ${T.ink}">Keyboard shortcuts</span>
           ${btn.ghost('Reset to defaults', { style: 'min-height: 34px; padding: 4px 8px; font-size: 12.5px' })}
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 8px 16px">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 8px 16px">
           ${shortcutRow(icon.pencil(15), 'Brush', 'P')}
           ${shortcutRow(icon.rect(15), 'Rectangle', 'R')}
           ${shortcutRow(icon.fill(15), 'Fill', 'F')}

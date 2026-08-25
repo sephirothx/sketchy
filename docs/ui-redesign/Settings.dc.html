@@ -12,8 +12,8 @@
     * { box-sizing: border-box; }
     body { margin: 0; }
 
-    [data-theme="light"] { --paper: #FAF6EF; --card: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
-    [data-theme="dark"] { --paper: #16181D; --card: #1F222A; --ink: #E9EBF1; --muted: #9CA3B2; --faint: #6E7584; --line: #2C303B; --lineStrong: #414755; --track: #262A33; --guestBg: #2B2F3A; --primary: #666CE4; --primarySoft: #292D52; --primaryInk: #C3C6FA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: #3B2C22; --warmInk: #F3A878; --warmEdge: #A5461A; --success: #4FBF67; --successSoft: #20342B; --successInk: #7FD794; --warning: #E0A64F; --warningSoft: #352E1C; --warningEdge: #63522E; --danger: #E37070; --dangerSoft: #3B2429; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
     [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
     [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
     [data-theme] a:hover { color: var(--primaryInk); }
@@ -37,7 +37,7 @@
     <div style="height: 620px; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px"></div>
   </div>
 
-  <div style="position: absolute; inset: 0; background: rgba(22, 20, 16, 0.45); display: flex; align-items: flex-start; justify-content: center; padding: 44px 20px">
+  <div style="position: absolute; inset: 0; background: var(--scrim); display: flex; align-items: flex-start; justify-content: center; padding: 44px 20px">
     <section role="dialog" aria-label="Settings" style="background: var(--card); border: 1.5px solid var(--line); border-radius: 18px; box-shadow: 0 10px 30px rgba(20, 16, 10, 0.14); width: min(660px, 100%); padding: 24px 28px 26px; display: grid; gap: 14px">
       <header style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
         <div>
@@ -124,15 +124,15 @@
         <span style="font-size: 14px; font-weight: 800; color: var(--ink)">Brush presets <span style="font-weight: 700; color: var(--faint)">· 3 of 20</span></span>
         <div style="display: flex; flex-wrap: wrap; gap: 7px">
           
-<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: var(--paper); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px">
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: var(--well); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px">
   <span style="width: 8px; height: 8px; border-radius: 50%; background: #000000; border: 1px solid rgba(0, 0, 0, 0.15); flex: none"></span>Ink · 4px
 </button>
           
-<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: var(--paper); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px">
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: var(--well); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px">
   <span style="width: 13px; height: 13px; border-radius: 50%; background: #ED1C24; border: 1px solid rgba(0, 0, 0, 0.15); flex: none"></span>Marker · 12px
 </button>
           
-<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: var(--paper); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px">
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: var(--well); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px">
   <span style="width: 17px; height: 17px; border-radius: 50%; background: #7AC9E8; border: 1px solid rgba(0, 0, 0, 0.15); flex: none"></span>Sky wash · 24px
 </button>
           <button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1.5px dashed var(--lineStrong); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Save current brush</button>
@@ -143,7 +143,7 @@
           <span style="font-size: 14px; font-weight: 800; color: var(--ink)">Keyboard shortcuts</span>
           <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; min-height: 34px; padding: 4px 8px; font-size: 12.5px">Reset to defaults</button>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; background: var(--paper); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 16px">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; background: var(--well); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 16px">
           
 <div style="display: flex; align-items: center; gap: 9px; min-height: 38px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>
@@ -197,7 +197,7 @@
 </div>
 
       <footer style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1.5px solid var(--line); padding-top: 16px; margin-top: 2px">
-        <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--faint)"><span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: #0F766E; color: #fff; font-weight: 800; font-size: 12px; flex: none">M</span>Signed in as Marta — settings follow you across devices.</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--faint)"><span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 12px; flex: none">M</span>Signed in as Marta — settings follow you across devices.</span>
         <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; padding: 11px 18px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--primaryEdge)">Done</button>
       </footer>
     </section>

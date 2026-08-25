@@ -24,13 +24,13 @@ const waitingChat = chat.panel({
     chat.sysLine('Yuki joined the room'),
     chat.chatMsg(P.yuki, 'hi all'),
     chat.sysLine('Sparrow-14 joined the room'),
-    chat.sysLine('Ines was marked as stepped away by vote'),
+    chat.sysLine('Ines was marked AFK by vote'),
   ],
   inputHTML: chat.input({}),
 });
 
 const settingChip = (label, value) =>
-  `<span style="display: inline-flex; align-items: center; gap: 6px; background: ${T.paper}; border: 1px solid ${T.line}; border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: ${T.muted}">${label}<strong style="color: ${T.ink}; font-weight: 800">${value}</strong></span>`;
+  `<span style="display: inline-flex; align-items: center; gap: 6px; background: ${T.well}; border: 1px solid ${T.line}; border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: ${T.muted}">${label}<strong style="color: ${T.ink}; font-weight: 800">${value}</strong></span>`;
 
 export const WaitingRoomPage = roomPage(roomHeader() + roomGrid(
   waitingPlayers,
@@ -41,7 +41,7 @@ export const WaitingRoomPage = roomPage(roomHeader() + roomGrid(
       <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 28px; color: ${T.ink}; margin-top: 5px">${ROOM.name}</h1>
       <p style="color: ${T.muted}; font-size: 14px; margin-top: 6px">Send friends the code or the link — they can join mid-lobby.</p>
       <div style="display: flex; align-items: center; justify-content: center; gap: 5px; margin: 18px 0 14px" aria-label="Room code ${ROOM.code}">
-        ${ROOM.code.split('').map((c) => `<span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid ${T.lineStrong}; border-radius: 12px; background: ${T.paper}; font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}">${c}</span>`).join('')}
+        ${ROOM.code.split('').map((c) => `<span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid ${T.lineStrong}; border-radius: 12px; background: ${T.well}; font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}">${c}</span>`).join('')}
       </div>
       <div style="display: flex; align-items: center; justify-content: center; gap: 10px">
         ${btn.primary('Copy invite link', { iconL: icon.link(15) })}
@@ -70,7 +70,7 @@ export const WaitingRoomPage = roomPage(roomHeader() + roomGrid(
     <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}; display: flex; align-items: center; justify-content: space-between; gap: 16px">
       <div>
         <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}">Ready when you are</h2>
-        <p style="color: ${T.muted}; font-size: 13.5px; margin-top: 4px">4 players are ready. Ines has stepped away and will sit out until she's back.</p>
+        <p style="color: ${T.muted}; font-size: 13.5px; margin-top: 4px">4 players are ready. Ines is AFK and will sit out until she's back.</p>
       </div>
       ${btn.warm('Start game', { big: true })}
     </section>
@@ -88,11 +88,11 @@ const promptOption = (word, diffLabel, diffKind, hot) => `
 const inGamePlayersChoosing = playersPanel({
   heading: 'Players', count: '5/8', spectators: 2,
   rows: [
-    playerRow(P.bruno, { score: 820, rank: 1 }),
-    playerRow(P.yuki, { score: 705, rank: 2 }),
-    playerRow(P.marta, { score: 640, rank: 3, you: true, drawing: true }),
-    playerRow(P.ines, { score: 310, rank: 4, afk: true }),
-    playerRow(P.sparrow, { score: 180, rank: 5 }),
+    playerRow(P.bruno, { score: 820 }),
+    playerRow(P.yuki, { score: 705 }),
+    playerRow(P.marta, { score: 640, you: true, host: true, drawing: true }),
+    playerRow(P.ines, { score: 310, afk: true }),
+    playerRow(P.sparrow, { score: 180 }),
   ],
   footer: restartFooter,
 });
@@ -104,7 +104,7 @@ export const PromptChoicePage = roomPage(roomHeader({ inGame: true }) + roomGrid
     ${statusStrip({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(11, 11 / 15, T.warm) })}
     ${canvasFrame(
       `<div style="position: absolute; inset: 0; background: repeating-linear-gradient(45deg, ${T.card} 0 14px, ${T.paper} 14px 28px)"></div>`,
-      `<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(41, 37, 32, 0.45)">
+      `<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: ${T.scrim}">
         <div style="background: ${T.card}; border-radius: 16px; box-shadow: ${T.shadowRaised}; padding: 28px 32px; text-align: center; max-width: 92%">
           ${sectionLabel('Your turn')}
           <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}; margin: 6px 0 4px">Pick something to draw</h2>
@@ -176,11 +176,11 @@ const toolbar = `
 const inGamePlayersDrawing = playersPanel({
   heading: 'Players', count: '5/8', spectators: 2,
   rows: [
-    playerRow(P.bruno, { score: 820, rank: 1, guessed: true }),
-    playerRow(P.yuki, { score: 705, rank: 2 }),
-    playerRow(P.marta, { score: 640, rank: 3, you: true, drawing: true }),
-    playerRow(P.ines, { score: 310, rank: 4, afk: true }),
-    playerRow(P.sparrow, { score: 180, rank: 5, guessed: true }),
+    playerRow(P.bruno, { score: 820, guessed: '1:03' }),
+    playerRow(P.yuki, { score: 705 }),
+    playerRow(P.marta, { score: 640, you: true, host: true, drawing: true }),
+    playerRow(P.ines, { score: 310, afk: true }),
+    playerRow(P.sparrow, { score: 180, guessed: '1:06' }),
   ],
   footer: restartFooter,
 });
@@ -206,16 +206,17 @@ export const DrawingPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
       chat.chatMsg(P.yuki, 'rocket'),
       chat.chatMsg(P.bruno, 'a candle'),
       chat.chatMsg(P.sparrow, 'chimney'),
+      chat.guessedLine(P.bruno, 161, '1:03'),
+      chat.guessedLine(P.sparrow, 153, '1:06'),
+      chat.restrictedMsg(P.bruno, 'the light gave it away'),
       chat.chatMsg(P.yuki, 'watchtower'),
-      chat.guessedLine(P.bruno, null),
-      chat.guessedLine(P.sparrow, null),
     ],
     inputHTML: `<p style="color: ${T.faint}; font-size: 12.5px; margin-top: 10px; flex: none">You're drawing — watch the guesses come in.</p>`,
   }),
 ), { minHeight: 1080 });
 
 // ----------------------------------------------------------------- Guessing
-// Viewed from Bruno's seat, moments after his near miss.
+// Viewed from Yuki's seat, moments after her near miss.
 const tile = (ch, revealed) => revealed
   ? `<span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: ${T.primarySoft}; border: 1.5px solid ${T.primary}; font-family: ${T.display}; font-weight: 600; font-size: 21px; color: ${T.primaryInk}; padding-bottom: 4px">${ch}</span>`
   : `<span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}; padding-bottom: 6px"><span style="width: 14px; height: 2.5px; border-radius: 2px; background: ${T.lineStrong}"></span></span>`;
@@ -233,11 +234,11 @@ const maskedTiles = maskedWords([['l', '', '', 'h', '', '', '', 'u', '', '']]);
 const guessingPlayers = playersPanel({
   heading: 'Players', count: '5/8', spectators: 2,
   rows: [
-    playerRow(P.bruno, { score: 820, rank: 1, you: true }),
-    playerRow(P.yuki, { score: 705, rank: 2 }),
-    playerRow(P.marta, { score: 640, rank: 3, drawing: true }),
-    playerRow(P.ines, { score: 310, rank: 4, afk: true }),
-    playerRow(P.sparrow, { score: 180, rank: 5 }),
+    playerRow(P.bruno, { score: 820, guessed: '1:03' }),
+    playerRow(P.yuki, { score: 705, you: true }),
+    playerRow(P.marta, { score: 640, host: true, drawing: true }),
+    playerRow(P.ines, { score: 310, afk: true }),
+    playerRow(P.sparrow, { score: 180, guessed: '1:06' }),
   ],
   footer: restartFooter,
 });
@@ -246,7 +247,7 @@ export const GuessingPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
   guessingPlayers,
   `
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
-    ${statusStrip({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(28, 28 / 90, T.ink) })}
+    ${statusStrip({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(15, 15 / 90, T.warm) })}
     <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
       <div style="display: flex; align-items: flex-start" aria-label="Masked prompt, 10 letters">
         ${maskedTiles}
@@ -261,14 +262,14 @@ export const GuessingPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
       chat.sysLine('Marta is drawing: 10 letters'),
       chat.chatMsg(P.bruno, 'tower?'),
       chat.chatMsg(P.yuki, 'rocket'),
-      chat.chatMsg(P.bruno, 'a candle'),
       chat.chatMsg(P.sparrow, 'chimney'),
+      chat.guessedLine(P.bruno, 161, '1:03'),
+      chat.guessedLine(P.sparrow, 153, '1:06'),
       chat.chatMsg(P.yuki, 'watchtower'),
-      chat.chatMsg(P.bruno, 'light house'),
     ],
     inputHTML: chat.input({
-      placeholder: 'Type your guess…', value: 'lighth', accent: true,
-      above: `<div style="display: flex; align-items: center; gap: 7px; background: ${T.warmSoft}; border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 800; color: ${T.warmInk}"><span style="display: inline-flex">${icon.zap(13)}</span>“light house” is very close — only you can see this.</div>`,
+      placeholder: 'Type your guess…', value: 'lighthou', count: 8, accent: true,
+      above: chat.notice('“light house” is very close — try it as one word. Only you can see this.'),
     }),
   }),
 ), { minHeight: 1000 });
@@ -291,11 +292,11 @@ const resultRow = (p, { rank, delta, total, movement = null, drawer = false, you
 const turnResultsPlayers = playersPanel({
   heading: 'Players', count: '5/8', spectators: 2,
   rows: [
-    playerRow(P.bruno, { score: 981, rank: 1 }),
-    playerRow(P.yuki, { score: 846, rank: 2 }),
-    playerRow(P.marta, { score: 760, rank: 3, you: true }),
-    playerRow(P.sparrow, { score: 333, rank: 4 }),
-    playerRow(P.ines, { score: 310, rank: 5, afk: true }),
+    playerRow(P.bruno, { score: 981 }),
+    playerRow(P.yuki, { score: 846 }),
+    playerRow(P.marta, { score: 760, you: true, host: true }),
+    playerRow(P.sparrow, { score: 333 }),
+    playerRow(P.ines, { score: 310, afk: true }),
   ],
   footer: restartFooter,
 });
@@ -306,7 +307,7 @@ export const TurnResultsPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
     ${statusStrip({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: '' })}
     ${canvasFrame(lighthouseSVG,
-      `<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(41, 37, 32, 0.5)">
+      `<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: ${T.scrim}">
         <div style="background: ${T.card}; border-radius: 16px; box-shadow: ${T.shadowRaised}; padding: 22px 26px; width: min(430px, 92%)">
           <p style="text-align: center; color: ${T.faint}; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase">The prompt was</p>
           <p style="text-align: center; font-family: ${T.display}; font-weight: 600; font-size: 30px; color: ${T.ink}; margin: 3px 0 10px">lighthouse</p>
@@ -330,9 +331,9 @@ export const TurnResultsPage = roomPage(roomHeader({ inGame: true }) + roomGrid(
     heading: 'Guess and chat',
     lines: [
       chat.chatMsg(P.yuki, 'watchtower'),
-      chat.guessedLine(P.bruno, 161),
-      chat.guessedLine(P.sparrow, 153),
-      chat.guessedLine(P.yuki, 141),
+      chat.guessedLine(P.bruno, 161, '1:03'),
+      chat.guessedLine(P.sparrow, 153, '1:06'),
+      chat.guessedLine(P.yuki, 141, '1:12'),
       chat.sysLine('The prompt was “lighthouse”'),
     ],
     inputHTML: chat.input({}),
@@ -345,7 +346,7 @@ const finalPlayers = playersPanel({
   rows: [
     playerRow(P.bruno, { score: 1420, medal: 1 }),
     playerRow(P.yuki, { score: 1180, medal: 2 }),
-    playerRow(P.marta, { score: 980, medal: 3, you: true }),
+    playerRow(P.marta, { score: 980, medal: 3, you: true, host: true }),
     playerRow(P.sparrow, { score: 520, rank: 4 }),
     playerRow(P.ines, { score: 310, rank: 5, afk: true }),
   ],
@@ -414,7 +415,7 @@ export const GameOverPage = roomPage(roomHeader() + roomGrid(
 
 // --------------------------------------------------------------- Highlights
 const highlightCard = (svg, label, who, stat, sub) => `
-<div style="background: ${T.paper}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<div style="background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 18px; display: flex; flex-direction: column; gap: 10px">
   <span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: ${T.warmSoft}; color: ${T.warmInk}">${svg}</span>
   ${sectionLabel(label)}
   <div style="display: flex; align-items: center; gap: 8px; font-size: 15.5px">${who}</div>

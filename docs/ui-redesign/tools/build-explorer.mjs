@@ -16,7 +16,7 @@ const ROUTES = {
   Main: [
     ['Create a room', 'CreateRoom'], ['Quick start', 'WaitingRoom'],
     ['Join in progress', 'Guessing'], ['Join', 'WaitingRoom'], ['Spectate', 'WaitingRoom'],
-    ['Prompt stats', 'PromptStats'], ['My lists', 'MyPromptLists'], ['Settings', 'Settings'], ['Marta', 'Profile'],
+    ['Prompt stats', 'PromptStats'], ['My prompt lists', 'MyPromptLists'], ['Profile', 'Profile'], ['Settings', 'Settings'], ['Marta', 'Profile'],
   ],
   Settings: [['Done', 'Main'], ['Close settings', 'Main']],
   CreateRoom: [['Back to lobby', 'Main'], ['Create room', 'WaitingRoom'], ['Marta', 'Profile']],
