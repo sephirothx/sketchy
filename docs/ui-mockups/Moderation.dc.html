@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f2f3f7;
+      color: #1c1d21;
+      font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+    }
+    h1, h2, h3, p, ul { margin: 0; }
+    a { color: #4c6ef5; text-decoration: none; }
+    a:hover { color: #3b5bdb; }
+  </style>
+</helmet>
+<div style="width: 1100px; min-height: 800px; margin: 0 auto; padding: 24px 16px 48px">
+  <div>
+
+    <header>
+      <a href="#" style="display: inline-block; margin-bottom: 10px; background: transparent; border: 0; color: #2563eb; font-size: 14px; font-weight: 700; padding: 0">← Back to lobby</a>
+      <h1 style="font-size: 22px; margin: 0 0 12px; font-weight: 700">Moderation</h1>
+      <nav style="border-bottom: 1px solid #dfe1e6; display: flex; gap: 4px; margin-bottom: 20px">
+        <button type="button" style="background: none; border: 0; border-bottom: 2px solid currentColor; color: inherit; font: inherit; padding: 8px 12px; font-weight: 700">Player reports</button>
+        <button type="button" style="background: none; border: 0; border-bottom: 2px solid transparent; color: inherit; font: inherit; padding: 8px 12px">Prompt content</button>
+        <button type="button" style="background: none; border: 0; border-bottom: 2px solid transparent; color: inherit; font: inherit; padding: 8px 12px">Suspensions</button>
+      </nav>
+    </header>
+
+    <div style="align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px">
+      <label style="font-weight: 600">Showing</label>
+      <select style="width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; background: #fff; color: #0f172a">
+        <option>Waiting for review</option>
+        <option>Resolved</option>
+        <option>Dismissed</option>
+      </select>
+      <button type="button" style="font-family: inherit; font-size: 13.333px; border: 1px solid #767676; border-radius: 3px; padding: 1px 7px; background: #efefef; color: #000">Refresh</button>
+    </div>
+
+    <ul style="display: flex; flex-direction: column; gap: 12px; list-style: none; margin: 0; padding: 0">
+
+      <li style="background: #fff; border: 1px solid #dfe1e6; border-radius: 10px; padding: 14px 16px">
+        <div style="align-items: baseline; display: flex; gap: 10px; justify-content: space-between">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase">harassment</span>
+          <span style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7">25 Aug 2026, 09:41</span>
+        </div>
+        <p style="margin: 6px 0 0">Kept naming other players in chat after being asked to stop.</p>
+        <ul style="border-left: 2px solid #dfe1e6; font-size: 13px; list-style: none; margin: 10px 0 0; padding: 0 0 0 12px">
+          <li><strong>Nightjar-88:</strong> nobody wants you in this room</li>
+          <li><strong>Nightjar-88:</strong> leave already</li>
+          <li><strong>Nightjar-88:</strong> stop drawing, you are ruining it <em> — original no longer in the room</em></li>
+        </ul>
+        <div style="align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px">
+          <input aria-label="Resolution note" placeholder="Why, in one line" style="background: #fff; border: 1px solid #c7cad1; border-radius: 6px; color: #0f172a; flex: 1 1 220px; padding: 6px 8px; font: inherit">
+          <button type="button" style="background: none; border: 1px solid #c7cad1; border-radius: 6px; font: inherit; padding: 6px 12px">Resolve</button>
+          <button type="button" style="background: none; border: 1px solid #c7cad1; border-radius: 6px; font: inherit; padding: 6px 12px">Dismiss</button>
+          <button type="button" style="background: none; border: 1px solid #b91c1c; border-radius: 6px; color: #b91c1c; font: inherit; font-weight: 600; padding: 6px 12px">Suspend account</button>
+          <select style="width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; background: #fff; color: #0f172a">
+            <option>24 hours</option>
+            <option>7 days</option>
+            <option>30 days</option>
+            <option>No end date</option>
+          </select>
+        </div>
+      </li>
+
+      <li style="background: #fff; border: 1px solid #dfe1e6; border-radius: 10px; padding: 14px 16px">
+        <div style="align-items: baseline; display: flex; gap: 10px; justify-content: space-between">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase">offensive drawing</span>
+          <span style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7">24 Aug 2026, 22:18</span>
+        </div>
+        <p style="margin: 6px 0 0">Drew something unrelated to the prompt, twice in a row.</p>
+        <div style="align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px">
+          <input aria-label="Resolution note" placeholder="Why, in one line" style="background: #fff; border: 1px solid #c7cad1; border-radius: 6px; color: #0f172a; flex: 1 1 220px; padding: 6px 8px; font: inherit">
+          <button type="button" style="background: none; border: 1px solid #c7cad1; border-radius: 6px; font: inherit; padding: 6px 12px">Resolve</button>
+          <button type="button" style="background: none; border: 1px solid #c7cad1; border-radius: 6px; font: inherit; padding: 6px 12px">Dismiss</button>
+          <button type="button" style="background: none; border: 1px solid #b91c1c; border-radius: 6px; color: #b91c1c; font: inherit; font-weight: 600; padding: 6px 12px">Suspend</button>
+          <select style="width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; background: #fff; color: #0f172a">
+            <option>24 hours</option>
+            <option>7 days</option>
+            <option>30 days</option>
+            <option>No end date</option>
+          </select>
+        </div>
+      </li>
+
+      <li style="background: #fff; border: 1px solid #dfe1e6; border-radius: 10px; padding: 14px 16px">
+        <div style="align-items: baseline; display: flex; gap: 10px; justify-content: space-between">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase">spam</span>
+          <span style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7">24 Aug 2026, 15:02</span>
+        </div>
+        <p style="margin: 6px 0 0">Pasted the same link into four different rooms.</p>
+        <p style="font-size: 13px; margin: 10px 0 0; opacity: 0.8">Resolved — suspended 7 days, third report this week.</p>
+      </li>
+
+    </ul>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview": {"width": 1100, "height": 800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f2f3f7;
+      color: #1c1d21;
+      font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+    }
+    h1, h2, h3, p, ul, ol, fieldset, legend { margin: 0; }
+    a { color: #4c6ef5; text-decoration: none; }
+    a:hover { color: #3b5bdb; }
+    summary { cursor: pointer; }
+  </style>
+</helmet>
+<div style="width: 760px; min-height: 1300px; margin: 0 auto; padding: 28px 16px 64px">
+  <div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px">
+      <button type="button" style="background: transparent; border: 0; color: #2563eb; font-size: 14px; font-weight: 700; margin-bottom: 16px; padding: 0; font-family: inherit">← Back to lobby</button>
+      <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1px solid #cbd5e1; background: transparent; color: inherit; border-radius: 999px; padding: 4px 12px 4px 4px; min-height: 36px; font: inherit">
+        <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #0f766e; color: #fff; font-weight: 700; font-size: 14px; flex: none">M</span>
+        <span style="font-weight: 600; font-size: 14px">Marta</span>
+      </button>
+    </div>
+
+    <section style="background: #fff; border: 1px solid #dfe1e6; border-radius: 12px; padding: 24px">
+      <div>
+        <p style="color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 4px; text-transform: uppercase">Room setup</p>
+        <h1 style="color: #1e293b; margin: 0; font-size: 32px; font-weight: 700">Create a room</h1>
+      </div>
+
+      <div style="align-items: center; display: flex; flex-wrap: wrap; font-size: 13px; gap: 12px; margin-top: 14px">
+        <select style="border: 1px solid #c7cad1; border-radius: 6px; font: inherit; max-width: 220px; padding: 6px 8px; background: #fff; color: #1c1d21">
+          <option>Start from a preset…</option>
+        </select>
+        <button type="button" style="border: none; background: none; padding: 0; color: #4f46e5; font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline">Save these settings</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px">
+
+        <label style="grid-column: 1 / -1; align-items: center; color: #1e293b; display: flex; font-size: 15px; font-weight: 700; gap: 12px; width: fit-content">
+          <span style="align-items: center; display: inline-flex; flex: 0 0 16.5rem; gap: 6px; line-height: 1.3; width: 16.5rem">
+            Keep this room for future games
+            <span style="align-items: center; background: #cbd5e1; border: 0; border-radius: 999px; color: #334155; display: inline-flex; font-size: 11px; font-weight: 800; height: 16px; justify-content: center; line-height: 1; width: 16px; flex: 0 0 auto">?</span>
+          </span>
+          <span style="background: #e3e3e3; border: 2px solid #747775; border-radius: 16px; display: inline-flex; flex: 0 0 auto; height: 32px; padding: 2px; width: 52px">
+            <span style="background: #747775; border-radius: 50%; display: block; height: 24px; width: 24px"></span>
+          </span>
+        </label>
+
+        <div style="grid-column: 1 / -1; align-items: end; display: flex; gap: 12px; min-width: 0">
+          <label style="flex: 0 1 280px; max-width: 280px; min-width: 0; width: 100%; display: flex; flex-direction: column; font-size: 15px; font-weight: 700; gap: 5px">
+            Room name (optional)
+            <input type="search" placeholder="Leave blank for a random name!" style="border: 1px solid #c7cad1; border-radius: 6px; font: inherit; font-weight: 400; padding: 9px 10px; width: 100%">
+          </label>
+          <div style="flex: 0 0 auto">
+            <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 88px; padding: 3px; position: relative; width: fit-content">
+              <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 3px; pointer-events: none; position: absolute; top: 3px; width: 88px; z-index: 0"></span>
+              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; position: relative; text-align: center; z-index: 1">Public</button>
+              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; position: relative; text-align: center; z-index: 1">Private</button>
+            </div>
+          </div>
+        </div>
+
+        <label style="grid-column: 1 / -1; align-items: center; display: flex; flex-direction: row; font-size: 15px; font-weight: 700; gap: 12px; justify-content: flex-start; width: fit-content">
+          <span style="box-sizing: border-box; flex: 0 0 12.5rem; width: 12.5rem">Max players</span>
+          <div style="align-items: center; background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); display: grid; flex: 0 0 auto; grid-template-columns: 44px minmax(48px, 1fr) 44px; height: 44px; width: 140px">
+            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">−</button>
+            <input type="text" value="8" style="background: transparent; border: 0; color: #0f172a; font: inherit; font-size: 16px; font-weight: 600; height: 100%; min-width: 0; padding: 0; text-align: center; width: 100%">
+            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">+</button>
+          </div>
+        </label>
+
+        <label style="grid-column: 1 / -1; align-items: center; display: flex; flex-direction: row; font-size: 15px; font-weight: 700; gap: 12px; justify-content: flex-start; width: fit-content">
+          <span style="box-sizing: border-box; flex: 0 0 12.5rem; width: 12.5rem">Rounds</span>
+          <div style="align-items: center; background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); display: grid; flex: 0 0 auto; grid-template-columns: 44px minmax(48px, 1fr) 44px; height: 44px; width: 140px">
+            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">−</button>
+            <input type="text" value="3" style="background: transparent; border: 0; color: #0f172a; font: inherit; font-size: 16px; font-weight: 600; height: 100%; min-width: 0; padding: 0; text-align: center; width: 100%">
+            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">+</button>
+          </div>
+        </label>
+
+        <label style="grid-column: 1 / -1; align-items: center; display: flex; flex-direction: row; font-size: 15px; font-weight: 700; gap: 12px; justify-content: flex-start; width: fit-content">
+          <span style="box-sizing: border-box; flex: 0 0 12.5rem; width: 12.5rem">Drawing time (seconds)</span>
+          <div style="align-items: center; background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); display: grid; flex: 0 0 auto; grid-template-columns: 44px minmax(48px, 1fr) 44px; height: 44px; width: 140px">
+            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">−</button>
+            <input type="text" value="90" style="background: transparent; border: 0; color: #0f172a; font: inherit; font-size: 16px; font-weight: 600; height: 100%; min-width: 0; padding: 0; text-align: center; width: 100%">
+            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">+</button>
+          </div>
+        </label>
+
+        <fieldset style="grid-column: 1 / -1; border: 0; padding: 0; min-width: 0; margin-top: 6px">
+          <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Prompt lists</legend>
+          <div style="align-items: center; color: #64748b; display: flex; font-size: 13px; gap: 8px; margin: 2px 0 7px">
+            <label style="font-weight: 650">Prompt language</label>
+            <output style="color: #334155; font-weight: 750">English</output>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px">
+            <span style="align-items: center; display: inline-flex; gap: 2px">
+              <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
+                <span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span>
+                <span style="white-space: nowrap">Standard English</span>
+                <span style="background: #eff6ff; border-radius: 999px; color: #2563eb; font-size: 11px; font-weight: 600; padding: 1px 6px">432</span>
+              </button>
+              <a href="#" style="align-items: center; color: #64748b; display: inline-flex; height: 24px; justify-content: center; width: 24px">
+                <span aria-hidden="true" style="align-items: center; border: 1px solid #cbd5e1; border-radius: 999px; display: inline-flex; font-family: Georgia, 'Times New Roman', serif; font-size: 11px; font-style: italic; font-weight: 700; height: 18px; justify-content: center; line-height: 1; width: 18px">i</span>
+              </a>
+            </span>
+            <span style="align-items: center; display: inline-flex; gap: 2px">
+              <button type="button" style="align-items: center; background: #e8edf5; border: 1px solid transparent; border-radius: 999px; color: #475569; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
+                <span aria-hidden="true" style="color: #64748b; font-size: 12px; font-weight: 800">+</span>
+                <span style="white-space: nowrap">Extended English</span>
+                <span style="background: rgba(100, 116, 139, 0.12); border-radius: 999px; color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px">1284</span>
+              </button>
+              <a href="#" style="align-items: center; color: #64748b; display: inline-flex; height: 24px; justify-content: center; width: 24px">
+                <span aria-hidden="true" style="align-items: center; border: 1px solid #cbd5e1; border-radius: 999px; display: inline-flex; font-family: Georgia, 'Times New Roman', serif; font-size: 11px; font-style: italic; font-weight: 700; height: 18px; justify-content: center; line-height: 1; width: 18px">i</span>
+              </a>
+            </span>
+            <button type="button" style="align-items: center; background: #e8edf5; border: 1px solid transparent; border-radius: 999px; color: #475569; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
+              <span aria-hidden="true" style="color: #64748b; font-size: 12px; font-weight: 800">+</span>
+              <span style="white-space: nowrap">Studio in-jokes</span>
+              <span style="background: rgba(100, 116, 139, 0.12); border-radius: 999px; color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px">64</span>
+            </button>
+          </div>
+          <div style="border-top: 1px solid #e2e8f0; display: grid; gap: 6px; margin-top: 12px; padding-top: 12px">
+            <label style="color: #475569; font-size: 13px; font-weight: 700">Add an unlisted list by code</label>
+            <div style="display: flex; gap: 8px">
+              <input style="border: 1px solid #cbd5e1; border-radius: 6px; flex: 0 1 240px; min-width: 0; padding: 8px 10px; font: inherit">
+              <button type="button" style="background: #4c6ef5; border: 0; border-radius: 6px; color: #fff; font-size: 15px; font-weight: 600; padding: 10px 16px; font-family: inherit; opacity: .55">Add</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset style="grid-column: 1 / -1; border: 0; padding: 0; min-width: 0">
+          <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Allowed tools</legend>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px">
+            <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
+              <span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span>
+              <span style="white-space: nowrap">Brush</span>
+            </button>
+            <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
+              <span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span>
+              <span style="white-space: nowrap">Fill</span>
+            </button>
+            <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
+              <span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span>
+              <span style="white-space: nowrap">Shapes</span>
+            </button>
+          </div>
+        </fieldset>
+
+        <fieldset style="grid-column: 1 / -1; border: 0; padding: 0; min-width: 0">
+          <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Colors</legend>
+          <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 135px; padding: 3px; position: relative; width: max-content; max-width: 100%">
+            <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 3px; pointer-events: none; position: absolute; top: 3px; width: 135px; z-index: 0"></span>
+            <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; min-width: 0; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">All colors</button>
+            <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; min-width: 0; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Palette only</button>
+            <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; min-width: 0; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Colorblind-safe</button>
+            <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; min-width: 0; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Black and white</button>
+          </div>
+        </fieldset>
+
+      </div>
+
+      <details open style="border-top: 1px solid #e2e8f0; margin-top: 24px; padding-top: 18px">
+        <summary style="color: #334155; cursor: pointer; font-weight: 800">Advanced settings <span style="color: #64748b; font-size: 13px; font-weight: 400; margin-left: 8px">Spectators, scoring, hints, and custom prompts</span></summary>
+        <div style="display: grid; gap: 14px; margin-top: 18px">
+
+          <label style="align-items: center; color: #1e293b; display: flex; font-size: 15px; font-weight: 700; gap: 12px; width: fit-content">
+            <span style="align-items: center; display: inline-flex; flex: 0 0 16.5rem; gap: 6px; line-height: 1.3; width: 16.5rem">Allow spectators to see the prompt</span>
+            <span style="background: #2563eb; border: 2px solid #2563eb; border-radius: 16px; display: inline-flex; flex: 0 0 auto; height: 32px; padding: 2px; width: 52px">
+              <span style="background: #fff; border-radius: 50%; display: block; height: 24px; width: 24px; transform: translateX(20px)"></span>
+            </span>
+          </label>
+
+          <label style="align-items: center; color: #1e293b; display: flex; font-size: 15px; font-weight: 700; gap: 12px; width: fit-content">
+            <span style="align-items: center; display: inline-flex; flex: 0 0 16.5rem; gap: 6px; line-height: 1.3; width: 16.5rem">Hide blanks</span>
+            <span style="background: #e3e3e3; border: 2px solid #747775; border-radius: 16px; display: inline-flex; flex: 0 0 auto; height: 32px; padding: 2px; width: 52px">
+              <span style="background: #747775; border-radius: 50%; display: block; height: 24px; width: 24px"></span>
+            </span>
+          </label>
+
+          <fieldset style="border: 0; padding: 0; min-width: 0">
+            <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Scoring</legend>
+            <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 98px; padding: 3px; position: relative; width: max-content">
+              <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 103px; pointer-events: none; position: absolute; top: 3px; width: 98px; z-index: 0"></span>
+              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">No scoring</button>
+              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Default</button>
+              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Pressure</button>
+            </div>
+          </fieldset>
+
+          <fieldset style="border: 0; padding: 0; min-width: 0">
+            <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Hints</legend>
+            <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 144px; padding: 3px; position: relative; width: max-content">
+              <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 149px; pointer-events: none; position: absolute; top: 3px; width: 144px; z-index: 0"></span>
+              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">No hints</button>
+              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Timed hints</button>
+              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Buy letters</button>
+              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Wheel of Fortune</button>
+            </div>
+          </fieldset>
+
+          <div style="border-top: 1px solid #e2e8f0; padding-top: 16px">
+            <label style="display: flex; flex-direction: column; font-size: 15px; font-weight: 700; gap: 5px">
+              Custom prompts (optional)
+              <textarea style="border: 1px solid #c7cad1; border-radius: 6px; font: inherit; font-weight: 400; padding: 9px 10px; box-sizing: border-box; display: block; height: 150px; resize: none; width: 100%">roller coaster
+lighthouse
+bow and arrow</textarea>
+            </label>
+            <div style="color: #475569; display: flex; flex-wrap: wrap; font-size: 13px; gap: 4px 12px; margin-top: 7px">
+              <strong style="color: #15803d">3 usable custom prompts</strong>
+            </div>
+            <button type="button" style="background: #2563eb; border: 0; border-radius: 8px; color: #fff; font-size: 14px; font-weight: 700; margin-top: 10px; padding: 10px 14px; font-family: inherit">Save as reusable list</button>
+          </div>
+
+          <label style="align-items: center; color: #1e293b; display: flex; font-size: 15px; font-weight: 700; gap: 12px; width: fit-content">
+            <span style="align-items: center; display: inline-flex; flex: 0 0 16.5rem; gap: 6px; line-height: 1.3; width: 16.5rem">
+              Only use custom prompts
+              <span style="align-items: center; background: #cbd5e1; border: 0; border-radius: 999px; color: #334155; display: inline-flex; font-size: 11px; font-weight: 800; height: 16px; justify-content: center; line-height: 1; width: 16px; flex: 0 0 auto">?</span>
+            </span>
+            <span style="background: #e3e3e3; border: 2px solid #747775; border-radius: 16px; display: inline-flex; flex: 0 0 auto; height: 32px; padding: 2px; width: 52px">
+              <span style="background: #747775; border-radius: 50%; display: block; height: 24px; width: 24px"></span>
+            </span>
+          </label>
+
+        </div>
+      </details>
+
+      <button type="button" style="background: #4c6ef5; border: 0; border-radius: 7px; color: #fff; font-size: 15px; font-weight: 800; margin-top: 24px; padding: 11px 18px; font-family: inherit">Create room</button>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview": {"width": 760, "height": 1300}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
