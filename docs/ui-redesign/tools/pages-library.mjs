@@ -1,5 +1,5 @@
 // Library, profile and operator artboards.
-import { T, P, icon, avatar, pname, btn, chip, sectionLabel, segmented, selectBox, input } from './ui.mjs';
+import { T, P, icon, avatar, pname, btn, chip, sectionLabel, segmented, selectBox, input, wordmark } from './ui.mjs';
 
 const backBar = (label = 'Back to lobby') => `
 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
@@ -298,117 +298,186 @@ export const ProfilePage = `
 </div>`;
 
 // ----------------------------------------------------------------- AdminOps
-const adminTabs = (tabs, active) => `
-<nav style="border-bottom: 1.5px solid ${T.line}; display: flex; gap: 4px; margin-bottom: 22px">
-  ${tabs.map((t, i) => i === active
-    ? `<button type="button" style="background: none; border: 0; border-bottom: 2.5px solid ${T.primary}; color: ${T.ink}; font-family: ${T.body}; font-size: 14px; font-weight: 800; padding: 10px 14px">${t}</button>`
-    : `<button type="button" style="background: none; border: 0; border-bottom: 2.5px solid transparent; color: ${T.muted}; font-family: ${T.body}; font-size: 14px; font-weight: 700; padding: 10px 14px">${t}</button>`
-  ).join('')}
-</nav>`;
-
-const liveStat = (label, value, sub, alert = false) => `
-<div style="background: ${T.card}; border: 1.5px solid ${alert ? T.warm : T.line}; border-radius: ${T.radius}; display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; box-shadow: ${T.shadow}">
+const metricCard = (label, value, sub, alert = false) => `
+<section style="background: ${T.card}; border: 1.5px solid ${alert ? T.warm : T.line}; border-radius: ${T.radius}; display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; box-shadow: ${T.shadow}">
   <span style="font-size: 11.5px; letter-spacing: 0.06em; color: ${T.faint}; font-weight: 800; text-transform: uppercase">${label}</span>
   <span style="font-family: ${T.display}; font-weight: 600; font-size: 30px; font-variant-numeric: tabular-nums; color: ${alert ? T.warmInk : T.ink}">${value}</span>
   <span style="font-size: 12px; color: ${T.faint}; font-weight: 700">${sub}</span>
+</section>`;
+
+const healthRow = (label, value) => `
+<div style="display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid ${T.line}; font-size: 13.5px">
+  <span style="width: 9px; height: 9px; border-radius: 50%; background: ${T.success}; flex: none"></span>
+  <strong style="color: ${T.ink}; font-weight: 800">${label}</strong>
+  <span style="margin-left: auto; color: ${T.muted}; font-weight: 700; font-variant-numeric: tabular-nums">${value}</span>
 </div>`;
 
-const trendCard = (label, value, points, alert = false) => `
-<div style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px 16px; box-shadow: ${T.shadow}">
-  <h2 style="font-size: 12.5px; margin-bottom: 6px; color: ${T.muted}; font-weight: 800">${label}</h2>
-  <div style="display: flex; align-items: baseline; gap: 6px">
-    <span style="font-size: 21px; font-variant-numeric: tabular-nums; font-weight: 800; color: ${T.ink}">${value}</span>
-    <span style="font-size: 12px; color: ${T.faint}; font-weight: 700">today</span>
-  </div>
-  <svg viewBox="0 0 160 36" role="img" aria-label="${label} over the retained window" style="display: block; height: auto; margin-top: 8px; max-width: 100%; width: 100%">
-    <polyline points="${points}" fill="none" style="stroke: ${alert ? T.warm : T.primary}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
-  </svg>
+const auditRow = (time, body, tag, tagKind) => `
+<div style="display: flex; align-items: center; gap: 14px; padding: 11px 2px; border-bottom: 1px solid ${T.line}; font-size: 13.5px">
+  <time style="color: ${T.faint}; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; width: 74px">${time}</time>
+  <span style="color: ${T.muted}; font-weight: 600; min-width: 0">${body}</span>
+  <span style="margin-left: auto; flex: none">${chip(tag, tagKind)}</span>
 </div>`;
+
+const opsBars = [42, 55, 38, 61, 70, 52, 78, 64, 58, 84, 76, 66]
+  .map((h) => `<span style="flex: 1; height: ${h}%; border-radius: 5px 5px 0 0; background: ${T.primary}; opacity: 0.85"></span>`).join('');
 
 export const AdminOpsPage = `
-<div style="width: 1100px; min-height: 840px; margin: 0 auto; padding: 26px 24px 48px">
+<div style="width: 1100px; min-height: 1180px; margin: 0 auto; padding: 24px 24px 40px">
   ${backBar()}
-  <header>
-    ${sectionLabel('Administrators only')}
-    <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}; margin: 4px 0 14px">Server operations</h1>
-    ${adminTabs(['Overview', 'Activity', 'Audit ledger'], 0)}
+  <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 16px">
+    <div>
+      ${sectionLabel('Administrators only')}
+      <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}; margin-top: 4px">Server operations</h1>
+    </div>
+    ${btn.secondary('Refresh', { iconL: icon.rounds(15) })}
   </header>
 
-  <section style="display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); margin-bottom: 20px">
-    ${liveStat('Rooms', '17', 'peak 41 · resets on restart')}
-    ${liveStat('Players', '94', 'peak 233')}
-    ${liveStat('Games running', '11', 'peak 26')}
-    ${liveStat('Abandoned', '28%', '142 of 507 this window', true)}
-  </section>
+  <div style="display: flex; align-items: center; gap: 10px; background: ${T.successSoft}; border: 1px solid transparent; border-radius: ${T.radiusSm}; padding: 11px 14px; margin-bottom: 14px; font-size: 13.5px">
+    <span style="width: 9px; height: 9px; border-radius: 50%; background: ${T.success}; flex: none"></span>
+    <strong style="color: ${T.successInk}; font-weight: 800">All systems operational</strong>
+    <span style="color: ${T.muted}; font-weight: 700">Single worker · accepting rooms · checked 18s ago</span>
+  </div>
 
-  <section style="display: grid; gap: 12px; grid-template-columns: repeat(5, 1fr); margin-bottom: 20px">
-    ${trendCard('Rooms opened', '38', '0,28 20,24 40,30 60,18 80,20 100,12 120,16 140,8 160,10')}
-    ${trendCard('Games finished', '21', '0,30 20,26 40,22 60,24 80,16 100,18 120,12 140,14 160,11')}
-    ${trendCard('Games abandoned', '9', '0,20 20,26 40,18 60,28 80,22 100,26 120,20 140,24 160,19', true)}
-    ${trendCard('Disconnects', '147', '0,24 20,14 40,20 60,10 80,18 100,8 120,14 140,6 160,12')}
-    ${trendCard('Timer overruns', '0', '0,34 20,34 40,30 60,34 80,34 100,32 120,34 140,34 160,34')}
-  </section>
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px">
+    ${metricCard('Players online', '94', 'peak 233 · resets on restart')}
+    ${metricCard('Live rooms', '17', 'peak 41')}
+    ${metricCard('Games running', '11', '38 rooms opened today')}
+    ${metricCard('Abandoned', '28%', '142 of 507 this window', true)}
+  </div>
 
-  <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}; display: flex; align-items: center; gap: 14px">
-    ${chip('Recorder healthy', 'success')}
-    <p style="font-size: 13.5px; color: ${T.muted}; font-weight: 700">184,291 observations stored · 12 waiting to be written · nothing dropped</p>
+  <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; margin-bottom: 14px">
+    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px">
+        <div>
+          <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17px; color: ${T.ink}">Rooms opened</h2>
+          <p style="font-size: 12.5px; color: ${T.faint}; font-weight: 700; margin-top: 2px">Last 12 hours · 38 today</p>
+        </div>
+        ${selectBox('Hourly')}
+      </div>
+      <div aria-label="Rooms opened by hour" style="display: flex; align-items: flex-end; gap: 7px; height: 150px; border-bottom: 1.5px solid ${T.lineStrong}; padding: 0 2px">${opsBars}</div>
+      <div style="display: flex; justify-content: space-between; margin-top: 7px; font-size: 11.5px; font-weight: 700; color: ${T.faint}"><span>06:00</span><span>12:00</span><span>18:00</span></div>
+    </section>
+
+    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px">
+        <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17px; color: ${T.ink}">Recorder health</h2>
+        ${chip('Healthy', 'success')}
+      </div>
+      ${healthRow('Observations stored', '184,291')}
+      ${healthRow('Waiting to write', '12')}
+      ${healthRow('Dropped this window', '0')}
+      ${healthRow('Daily roll-up', 'ran 02:00')}
+      ${healthRow('Stored-drawing checks', '0 failures')}
+      <h3 style="font-size: 13px; font-weight: 800; color: ${T.ink}; margin-top: 14px">Attention</h3>
+      <p style="font-size: 12.5px; color: ${T.muted}; font-weight: 600; line-height: 1.5; margin-top: 5px">Abandoned games sit at 28% this window — 9 today. Nothing else needs an operator.</p>
+    </section>
+  </div>
+
+  <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px">
+      <div>
+        <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17px; color: ${T.ink}">Audit ledger</h2>
+        <p style="font-size: 12.5px; color: ${T.faint}; font-weight: 700; margin-top: 2px">Recent operator and automated actions · append-only</p>
+      </div>
+      ${btn.ghost('View all')}
+    </div>
+    ${auditRow('09:41', '<strong style="color: var(--ink)">A moderator</strong> suspended an account for 7 days, from a report', 'Moderation', 'danger')}
+    ${auditRow('02:00', '<strong style="color: var(--ink)">Retention</strong> previewed stale-guest cleanup — 0 accounts affected', 'Success', 'success')}
+    ${auditRow('Yesterday', '<strong style="color: var(--ink)">An administrator</strong> opened the per-player operations view', 'Logged', 'neutral')}
   </section>
 </div>`;
 
 // --------------------------------------------------------------- Moderation
-const reportCard = (reason, reasonKind, when, body, evidence, actions) => `
-<li style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 18px 20px; box-shadow: ${T.shadow}">
-  <div style="display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 8px">
-    ${chip(reason, reasonKind)}
-    <span style="font-size: 12.5px; font-variant-numeric: tabular-nums; color: ${T.faint}; font-weight: 700">${when}</span>
-  </div>
-  <p style="font-size: 14.5px; color: ${T.ink}; font-weight: 600">${body}</p>
-  ${evidence}
-  ${actions}
-</li>`;
-
-const evidenceBlock = (lines) => `
-<div style="background: ${T.well}; border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; margin-top: 12px; padding: 12px 14px">
-  ${sectionLabel('Pinned messages — as the reporter received them')}
-  <ul style="list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 5px; font-size: 13.5px">
-    ${lines.map((l) => `<li style="color: ${T.muted}"><strong style="color: ${T.ink}; font-weight: 800">Nightjar-88:</strong> ${l}</li>`).join('')}
-  </ul>
-</div>`;
-
-const actionBar = `
-<div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap">
-  <input aria-label="Resolution note" placeholder="Why, in one line (required to decide)" style="flex: 1 1 260px; background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 13.5px; color: ${T.ink}; min-height: 42px">
-  ${btn.ghost('Dismiss')}
-  ${btn.secondary('Resolve')}
-  <span style="display: inline-flex; align-items: center; gap: 6px">
-    <button type="button" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.danger}; border-radius: ${T.radiusSm} 0 0 ${T.radiusSm}; color: ${T.danger}; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; padding: 10px 14px; min-height: 42px">Suspend</button><button type="button" style="display: inline-flex; align-items: center; gap: 5px; background: ${T.dangerSoft}; border: 1.5px solid ${T.danger}; border-left: 0; border-radius: 0 ${T.radiusSm} ${T.radiusSm} 0; color: ${T.danger}; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; padding: 10px 10px; min-height: 42px">7 days ${icon.chevD(12)}</button>
+const queueItem = (reason, snippet, age, current = false, hot = false) => `
+<button type="button" style="display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: ${current ? T.primarySoft : 'transparent'}; border: 1.5px solid ${current ? T.primary : 'transparent'}; border-radius: ${T.radiusSm}; padding: 11px 12px; font-family: ${T.body}">
+  <span style="width: 9px; height: 9px; border-radius: 50%; background: ${hot ? T.danger : T.warning}; flex: none; margin-top: 5px"></span>
+  <span style="display: grid; gap: 2px; min-width: 0">
+    <strong style="font-size: 13.5px; font-weight: 800; color: ${current ? T.primaryInk : T.ink}">${reason}</strong>
+    <span style="font-size: 12px; color: ${T.muted}; font-weight: 600; line-height: 1.4">${snippet}</span>
   </span>
+  <time style="margin-left: auto; font-size: 11.5px; color: ${T.faint}; font-weight: 700; flex: none">${age}</time>
+</button>`;
+
+const filterPill = (label, on = false) => on
+  ? `<button type="button" aria-pressed="true" style="background: ${T.primarySoft}; border: 1.5px solid ${T.primary}; border-radius: 999px; padding: 6px 12px; font-family: ${T.body}; font-size: 12px; font-weight: 800; color: ${T.primaryInk}">${label}</button>`
+  : `<button type="button" aria-pressed="false" style="background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: 999px; padding: 6px 12px; font-family: ${T.body}; font-size: 12px; font-weight: 800; color: ${T.muted}">${label}</button>`;
+
+const contextRow = (label, value) => `
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid ${T.line}; font-size: 13px">
+  <span style="color: ${T.faint}; font-weight: 700">${label}</span>
+  <strong style="color: ${T.ink}; font-weight: 800; text-align: right">${value}</strong>
 </div>`;
 
 export const ModerationPage = `
-<div style="width: 1100px; min-height: 880px; margin: 0 auto; padding: 26px 24px 48px">
+<div style="width: 1160px; min-height: 1040px; margin: 0 auto; padding: 24px 24px 40px">
   ${backBar()}
-  <header>
-    ${sectionLabel('Moderators and administrators')}
-    <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}; margin: 4px 0 14px">Moderation</h1>
-    ${adminTabs(['Player reports', 'Prompt content', 'Suspensions'], 0)}
-  </header>
+  <div style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: start">
 
-  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px">
-    ${selectBox('Waiting for review · 2')}
-    ${btn.ghost('Refresh', { iconL: icon.rounds(14) })}
+    <aside style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px; box-shadow: ${T.shadow}; display: grid; gap: 10px; align-content: start">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+        <div>
+          ${sectionLabel('Moderation')}
+          <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}; margin-top: 3px">Review queue</h2>
+        </div>
+        ${chip('4 open', 'danger')}
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px">
+        ${filterPill('All open', true)}
+        ${filterPill('Player reports')}
+        ${filterPill('Prompt content')}
+      </div>
+      <div style="display: grid; gap: 4px">
+        ${queueItem('Harassment', 'Kept naming other players in chat after being asked to stop.', '4m', true, true)}
+        ${queueItem('Offensive drawing', 'Drew something unrelated to the prompt, twice in a row.', '1h')}
+        ${queueItem('Spam', 'Pasted the same link into four different rooms.', '2h')}
+        ${queueItem('Prompt content', 'A custom prompt reported as targeting a player.', '5h')}
+      </div>
+    </aside>
+
+    <main style="display: grid; gap: 12px">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px">
+        <div>
+          ${sectionLabel('Player report · #2841')}
+          <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 24px; color: ${T.ink}; margin-top: 4px">Harassment in room chat</h1>
+          <p style="font-size: 13px; color: ${T.muted}; font-weight: 700; margin-top: 4px">Reported from Coffee break doodles · today 09:41</p>
+        </div>
+        ${chip('Harassment', 'danger')}
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px">
+        <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
+          <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}; margin-bottom: 10px">Reported evidence</h2>
+          <blockquote style="background: ${T.well}; border: 1px solid ${T.line}; border-left: 3px solid ${T.danger}; border-radius: ${T.radiusSm}; margin: 0; padding: 12px 14px; display: grid; gap: 5px; font-size: 13.5px; color: ${T.muted}">
+            <span><strong style="color: ${T.ink}; font-weight: 800">Nightjar-88:</strong> nobody wants you in this room</span>
+            <span><strong style="color: ${T.ink}; font-weight: 800">Nightjar-88:</strong> leave already</span>
+            <span><strong style="color: ${T.ink}; font-weight: 800">Nightjar-88:</strong> stop drawing, you are ruining it <em style="color: ${T.faint}">— author no longer in the room</em></span>
+          </blockquote>
+          <p style="font-size: 12.5px; color: ${T.faint}; font-weight: 700; margin-top: 10px">Pinned by the server exactly as the reporter received them — up to 20 messages.</p>
+        </section>
+
+        <aside style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
+          <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}; margin-bottom: 6px">Account context</h2>
+          ${contextRow('Account', 'Registered')}
+          ${contextRow('Age', '7 months')}
+          ${contextRow('Prior reports', '2 this week')}
+          ${contextRow('Active suspension', 'None')}
+        </aside>
+      </div>
+
+      <label style="display: grid; gap: 6px; font-size: 13.5px; font-weight: 800; color: ${T.ink}">Resolution note
+        <textarea placeholder="Why, in one line — required to decide" style="background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; font-family: ${T.body}; font-size: 13.5px; padding: 10px 12px; height: 72px; resize: vertical; width: 100%; color: ${T.ink}"></textarea>
+        <span style="font-size: 12px; color: ${T.faint}; font-weight: 700">Kept in the append-only audit ledger. A suspension from here also resolves this report.</span>
+      </label>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+        ${btn.ghost('Back to operations', { iconL: icon.back(14) })}
+        <div style="display: flex; align-items: center; gap: 8px">
+          ${btn.ghost('Dismiss')}
+          ${btn.secondary('Resolve')}
+          <button type="button" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.danger}; border-radius: ${T.radiusSm}; color: ${T.danger}; font-family: ${T.body}; font-size: 14px; font-weight: 800; padding: 10px 16px; min-height: 44px">Suspend…</button>
+        </div>
+      </div>
+    </main>
   </div>
-
-  <ul style="display: grid; gap: 12px; list-style: none; margin: 0; padding: 0">
-    ${reportCard('Harassment', 'danger', '25 Aug 2026, 09:41',
-      'Kept naming other players in chat after being asked to stop.',
-      evidenceBlock(['nobody wants you in this room', 'leave already', `stop drawing, you are ruining it <em style="color: ${T.faint}"> — author no longer in the room</em>`]),
-      actionBar)}
-    ${reportCard('Offensive drawing', 'warning', '24 Aug 2026, 22:18',
-      'Drew something unrelated to the prompt, twice in a row.',
-      '', actionBar)}
-    ${reportCard('Spam', 'neutral', '24 Aug 2026, 15:02',
-      'Pasted the same link into four different rooms.',
-      `<p style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 10px; color: ${T.muted}; font-weight: 700">${chip('Resolved', 'success')} Suspended 7 days — third report this week.</p>`, '')}
-  </ul>
 </div>`;

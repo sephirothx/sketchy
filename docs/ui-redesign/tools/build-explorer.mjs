@@ -18,7 +18,7 @@ const ROUTES = {
     ['Join in progress', 'Guessing'], ['Join', 'WaitingRoom'], ['Spectate', 'WaitingRoom'],
     ['Prompt stats', 'PromptStats'], ['My prompt lists', 'MyPromptLists'], ['Profile', 'Profile'], ['Settings', 'Settings'], ['Marta', 'Profile'],
   ],
-  Settings: [['Done', 'Main'], ['Close settings', 'Main']],
+  Settings: [['Done', 'Main'], ['Back to lobby', 'Main'], ['Manage account', 'Profile']],
   CreateRoom: [['Back to lobby', 'Main'], ['Create room', 'WaitingRoom'], ['Marta', 'Profile']],
   AccountRecovery: [['Back to the lobby', 'Main'], ['Send a reset link', 'Main']],
   WaitingRoom: [['Start game', 'PromptChoice'], ['Edit settings', 'CreateRoom'], ['Settings', 'Settings'], ['Leave', 'Main']],
@@ -32,7 +32,7 @@ const ROUTES = {
   MyPromptLists: [['Back to lobby', 'Main'], ['Marta', 'Profile']],
   Profile: [['Back to lobby', 'Main']],
   AdminOps: [['Back to lobby', 'Main']],
-  Moderation: [['Back to lobby', 'Main']],
+  Moderation: [['Back to operations', 'AdminOps'], ['Back to lobby', 'Main']],
 };
 
 // The happy path a game actually follows, for the ◀ ▶ flow stepper.
@@ -190,6 +190,8 @@ ${SCREENS.map((s) => `<template id="tpl-${s.name}">${s.page}</template>`).join('
     current = name;
     root.innerHTML = '';
     root.appendChild(document.getElementById('tpl-' + name).content.cloneNode(true));
+    const tw = root.querySelector('[data-tab]');
+    if (tw) tw.setAttribute('data-tab', 'general');
     crumb.textContent = META[name].title;
     for (const b of rail.querySelectorAll('button')) b.setAttribute('aria-current', String(b.dataset.screen === name));
     const i = FLOW.indexOf(name);
@@ -202,6 +204,14 @@ ${SCREENS.map((s) => `<template id="tpl-${s.name}">${s.page}</template>`).join('
   }
 
   root.addEventListener('click', (e) => {
+    const tabBtn = e.target.closest('[data-pref-tab]');
+    if (tabBtn && root.contains(tabBtn)) {
+      e.preventDefault();
+      const tw = root.querySelector('[data-tab]');
+      if (tw) tw.setAttribute('data-tab', tabBtn.dataset.prefTab);
+      for (const b of root.querySelectorAll('[data-pref-tab]')) b.setAttribute('aria-current', String(b === tabBtn));
+      return;
+    }
     const el = e.target.closest('button, a, [role="switch"]');
     if (!el || !root.contains(el)) return;
     e.preventDefault();

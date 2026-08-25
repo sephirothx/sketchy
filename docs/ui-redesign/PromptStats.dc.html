@@ -17,6 +17,12 @@
     [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
     [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
     [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }
     h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
     button { cursor: pointer; }
     summary { cursor: pointer; }
@@ -149,7 +155,8 @@
 <script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 920, "height": 980}}'>
 class Component extends DCLogic {
   renderVals() {
-    return { theme: this.props.theme ?? 'light' };
+    const defaults = { theme: 'light' };
+    return Object.assign({}, defaults, this.props);
   }
 }
 </script>

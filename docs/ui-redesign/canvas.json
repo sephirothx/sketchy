@@ -20,16 +20,16 @@
       "file": "AccountRecovery.dc.html",
       "x": 1920,
       "y": 0,
-      "w": 560,
-      "h": 500,
+      "w": 880,
+      "h": 560,
       "title": "Reset password"
     },
     {
       "file": "Settings.dc.html",
-      "x": 1920,
-      "y": 600,
-      "w": 960,
-      "h": 1060,
+      "x": 2900,
+      "y": 0,
+      "w": 1080,
+      "h": 900,
       "title": "Settings (new)"
     },
     {
@@ -117,15 +117,15 @@
       "x": 0,
       "y": 5620,
       "w": 1100,
-      "h": 840,
+      "h": 1180,
       "title": "Server operations"
     },
     {
       "file": "Moderation.dc.html",
       "x": 1190,
       "y": 5620,
-      "w": 1100,
-      "h": 880,
+      "w": 1160,
+      "h": 1040,
       "title": "Moderation"
     }
   ],
@@ -163,7 +163,7 @@
       "x": 0,
       "y": 5450,
       "w": 460,
-      "text": "OPERATOR PAGES — same layout logic, fixed broken native controls, evidence blocks labeled with their server-side guarantee, and the suspend action fused with its duration so the two cannot be triggered separately."
+      "text": "OPERATOR PAGES — one admin workspace with a side rail. Server ops: status banner, metric cards, hourly chart, recorder health, append-only audit ledger. Moderation: queue/case master-detail with server-pinned evidence, account context, a required resolution note, and Suspend… opening the duration step."
     }
   ],
   "launch": {

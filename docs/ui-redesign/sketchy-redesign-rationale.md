@@ -329,42 +329,60 @@ parentheses.
 
 ### Server operations / Moderation (`AdminOps`, `Moderation`)
 
-Kept deliberately utilitarian, but on the same tokens:
+Both are full-width operator pages, reached from the lobby like every other
+page; Moderation cross-links back to operations from its action row.
 
-- Live counts note "resets on restart" (the R-OBS-01 property, stated where
-  an operator will read it); the recorder line gains a health chip and
-  "nothing dropped" (surfacing R-OBS-03's drop counter when it's zero, too).
-- Report reasons become **severity-tinted chips**; pinned evidence sits in a
-  labeled quote block — *"as the reporter received them"* — wording the
-  server-side guarantee of R-MOD-03.
-- **Suspend and its duration fuse into one split button** (§1.8): the chosen
-  duration is visibly part of the action. Broken full-width selects are gone.
+- **Server operations** leads with a status banner ("All systems operational
+  · single worker · accepting rooms" — R-PLAT-05 stated where an operator
+  reads it), four metric cards (live counts note "resets on restart" per
+  R-OBS-01; the abandonment rate is the one flagged card), an **hourly
+  rooms-opened bar chart** with real axis labels, a **recorder health list**
+  (stored, waiting, dropped-this-window — surfacing R-OBS-03's drop counter
+  even at zero — daily roll-up, and R-HIST-19's stored-drawing checks) with a
+  short "Attention" verdict, and the **append-only audit ledger** as timed
+  rows (a suspension, a retention preview, a logged use of the per-player
+  view — R-AUDIT-05).
+- **Moderation** becomes a **queue / case master-detail**: an open-reports
+  queue with filter pills on the left; the selected case on the right with
+  the pinned evidence in a quote block (*"pinned by the server exactly as
+  the reporter received them — up to 20 messages"*, R-MOD-03/04), an
+  **account-context card** (registered, age, prior reports, active
+  suspension), the required resolution note ("kept in the append-only audit
+  ledger; a suspension from here also resolves this report", R-BAN-06), and
+  a clean action row — Dismiss, Resolve, **Suspend…** whose ellipsis opens
+  the duration step (R-BAN-05) instead of a permanently-visible dropdown.
 
 ### Reset password (`AccountRecovery`)
 
-Same form, on brand: wordmark, one primary action, quiet back link — the
-first screen a locked-out player sees no longer looks like a different
-product.
+A **split auth layout**: a friendly indigo art panel ("Even the best
+guessers forget sometimes.") beside the form — wordmark, one field, one
+primary action, quiet back link. The copy stays honest to R-AUTH-09: the
+response never reveals whether the account exists.
 
 ### Settings (`Settings`) — new screen
 
-The settings modal was on the shipped canvas's "not covered" list; this
-canvas mocks it, drawn as the modal it is, over a dimmed lobby. It covers
-exactly the R-SET-01 set — nothing invented:
+The settings surface was on the shipped canvas's "not covered" list; this
+canvas gives it a **full page**: a category rail (General / Game /
+Shortcuts, with the signed-in player pinned on top) beside two-column
+preference groups — each group's purpose on the left, its rows on the
+right. The categories are **real, separated tabs**: the pane shows one at a
+time (a `tab` tweak switches them on the canvas; the rail switches them
+live in the explorer). It covers exactly the R-SET-01 set, nothing
+invented:
 
-- **Theme** as a Light/Dark/System segmented control (the dark option is the
-  token swap this redesign ships), and the **colorblind-safe preference**
-  with its guarantee written where the choice is made: "hosts of rooms you
-  join get a quiet suggestion — never shown with your name" (R-CB-01).
-- **Sound, volume, confetti** as switches and a slider; **brush cursor** and
-  **guess-box clearing** as switches with one-line consequences.
-- **Brush presets** as chips with a live count against the 20-preset cap
-  (R-SET-02) and a "save current brush" affordance, plus **keyboard
-  shortcuts** as a two-column grid of editable key caps covering the
-  complete tool set, with a reset.
-- A footer states the sync rule in one line — *"Signed in as Marta —
-  settings follow you across devices"* — which flips to a local-only notice
-  for guests (R-SET-03).
+- **You**: username with a *Manage account* action, and the **account name
+  color** with live preview swatches ("guests stay grey", R-ACCT-05).
+- **Appearance**: theme as three **preview cards** (Light / Dark / System
+  with the current resolution), and the **colorblind-safe preference** with
+  its guarantee written where the choice is made (R-CB-01).
+- **Audio / Game**: sound, volume, confetti, brush cursor
+  (crosshair/outline), guess-box clearing, and **brush presets** against
+  the 20-preset cap (R-SET-02).
+- **Keyboard shortcuts** as a grid of editable key caps showing **both the
+  main and the secondary key** per action (P·1 … C·6, plus brush size and
+  undo), with a reset.
+- The footer states the honest sync rule — *"changes apply immediately, on
+  every device you're signed in on"* (local-only for guests, R-SET-03).
 
 In the explorer, every Settings gear (lobby and in-room) opens it; *Done*
 returns to the lobby.

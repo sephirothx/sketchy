@@ -143,7 +143,7 @@ const toolbar = `
 <div style="width: fit-content; max-width: 100%; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 16px; padding: 10px 14px; box-shadow: ${T.shadowRaised}">
   <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center">
     <div style="display: flex; align-items: center; gap: 4px">
-      ${toolBtn(icon.pencil(19), 'Brush', 'P', true)}
+      ${toolBtn(icon.brush(19), 'Brush', 'P', true)}
       ${toolBtn(icon.fill(19), 'Fill', 'F')}
       ${toolBtn(icon.eraser(19), 'Eraser', 'E')}
       ${toolBtn(icon.rect(19), 'Rectangle', 'R')}

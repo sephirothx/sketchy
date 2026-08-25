@@ -145,7 +145,9 @@ export const icon = {
   trash: (s) => stroke('<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>', s),
   alertCircle: (s) => stroke('<circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5h.01"/>', s),
   alert: (s) => stroke('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>', s),
+  keyboard: (s) => stroke('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01"/><path d="M10 10h.01"/><path d="M14 10h.01"/><path d="M18 10h.01"/><path d="M6 14h.01"/><path d="M18 14h.01"/><path d="M9 14h6"/>', s),
   chevD: (s) => stroke('<path d="m6 9 6 6 6-6"/>', s),
+  chevU: (s) => stroke('<path d="m6 15 6-6 6 6"/>', s),
   chevR: (s) => stroke('<path d="m9 6 6 6-6 6"/>', s),
   back: (s) => stroke('<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>', s),
   medal: (s) => stroke('<circle cx="12" cy="15" r="5"/><path d="m8.5 10.5-3-7.5"/><path d="m15.5 10.5 3-7.5"/><path d="m9 3 3 6 3-6"/>', s),
@@ -260,11 +262,17 @@ export const themeStyles = `
     [data-theme="dark"] { ${cssVars('dark')} }
     [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
     [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
-    [data-theme] a:hover { color: var(--primaryInk); }`;
+    [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }`;
 
 // Wrap an artboard body in the Design Component skeleton. Every artboard
 // carries a light/dark theme tweak, switched by data-theme on the root.
-export const dcWrap = (body, { width, height }) => `<!doctype html>
+export const dcWrap = (body, { width, height, extraProps = {} }) => `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -289,10 +297,11 @@ ${themeStyles}
 ${body}
 </div>
 </x-dc>
-<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": ${width}, "height": ${height}}}'>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}${Object.entries(extraProps).map(([k, v]) => `, "${k}": ${JSON.stringify(v)}`).join('')}, "$preview": {"width": ${width}, "height": ${height}}}'>
 class Component extends DCLogic {
   renderVals() {
-    return { theme: this.props.theme ?? 'light' };
+    const defaults = { theme: 'light'${Object.entries(extraProps).map(([k, v]) => `, ${k}: ${JSON.stringify(v.default)}`).join('')} };
+    return Object.assign({}, defaults, this.props);
   }
 }
 </script>

@@ -9,8 +9,8 @@ export const SCREENS = [
   // Row 1 — getting in
   { name: 'Main', page: MainPage, w: 960, h: 1240, x: 0, y: 0, title: 'Lobby', group: 'Getting in' },
   { name: 'CreateRoom', page: CreateRoomPage, w: 780, h: 1100, x: 1050, y: 0, title: 'Create a room', group: 'Getting in' },
-  { name: 'AccountRecovery', page: AccountRecoveryPage, w: 560, h: 500, x: 1920, y: 0, title: 'Reset password', group: 'Getting in' },
-  { name: 'Settings', page: SettingsPage, w: 960, h: 1060, x: 1920, y: 600, title: 'Settings (new)', group: 'Getting in' },
+  { name: 'AccountRecovery', page: AccountRecoveryPage, w: 880, h: 560, x: 1920, y: 0, title: 'Reset password', group: 'Getting in' },
+  { name: 'Settings', page: SettingsPage, w: 1080, h: 900, x: 2900, y: 0, title: 'Settings (new)', group: 'Getting in', extraProps: { tab: { editor: 'enum', options: ['general', 'game', 'shortcuts'], default: 'general' } } },
   // Row 2 — in the room
   { name: 'WaitingRoom', page: WaitingRoomPage, w: 1240, h: 1000, x: 0, y: 1780, title: 'Waiting room', group: 'In the room' },
   { name: 'PromptChoice', page: PromptChoicePage, w: 1240, h: 1000, x: 1330, y: 1780, title: 'Prompt choice (new)', group: 'In the room' },
@@ -25,6 +25,6 @@ export const SCREENS = [
   { name: 'MyPromptLists', page: MyPromptListsPage, w: 1020, h: 1080, x: 1010, y: 4180, title: 'My prompt lists', group: 'Library and profile' },
   { name: 'Profile', page: ProfilePage, w: 920, h: 1220, x: 2120, y: 4180, title: 'Profile', group: 'Library and profile' },
   // Row 5 — operator pages
-  { name: 'AdminOps', page: AdminOpsPage, w: 1100, h: 840, x: 0, y: 5620, title: 'Server operations', group: 'Operator pages' },
-  { name: 'Moderation', page: ModerationPage, w: 1100, h: 880, x: 1190, y: 5620, title: 'Moderation', group: 'Operator pages' },
+  { name: 'AdminOps', page: AdminOpsPage, w: 1100, h: 1180, x: 0, y: 5620, title: 'Server operations', group: 'Operator pages' },
+  { name: 'Moderation', page: ModerationPage, w: 1160, h: 1040, x: 1190, y: 5620, title: 'Moderation', group: 'Operator pages' },
 ];
