@@ -2,39 +2,37 @@
 .lobby-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 26px;
 }
 
 .header-settings-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
   padding: 7px 13px;
   font-size: 14px;
-  font-weight: 600;
-  color: #334155;
+  font-weight: 700;
+  color: var(--muted);
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow);
   transition: all 0.15s ease;
 }
 
 .header-settings-button:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
-  color: #0f172a;
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
 
 .header-settings-button svg {
-  color: #475569;
   transition: transform 0.2s ease;
 }
 
 .header-settings-button:hover svg {
-  color: #0f172a;
   transform: rotate(30deg);
 }
 

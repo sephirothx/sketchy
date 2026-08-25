@@ -482,12 +482,6 @@
   }
 }
 
-.lobby-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
 /* Toggle chips: a set of independent on/off choices. Shared by the
    prompt list picker and the room's allowed tools. */
 .prompt-list-picker-group {

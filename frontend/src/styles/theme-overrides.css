@@ -6,54 +6,6 @@
   color-scheme: dark;
 }
 
-[data-theme="dark"] body {
-  background: #0f172a;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .invite-brand,
-[data-theme="dark"] .invite-card h1 {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .invite-card {
-  border-color: #334155;
-  background: #1e293b;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3);
-}
-
-[data-theme="dark"] .invite-room-facts > div {
-  border-color: #334155;
-  background: #0f172a;
-}
-
-[data-theme="dark"] .invite-room-facts dd,
-[data-theme="dark"] .invite-join-form label {
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .invite-join-form {
-  border-top-color: #334155;
-}
-
-[data-theme="dark"] .invite-join-form input {
-  border-color: #475569;
-  background: #0f172a;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .invite-secondary-button {
-  border-color: #475569;
-  background: #0f172a;
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .invite-secondary-button:hover:not(:disabled) {
-  border-color: #64748b;
-  background: #334155;
-}
-
-[data-theme="dark"] .field-hint,
 [data-theme="dark"] .room-meta,
 [data-theme="dark"] .room-code,
 [data-theme="dark"] .settings-description {
@@ -77,7 +29,6 @@
   }
 }
 
-[data-theme="dark"] .panel,
 [data-theme="dark"] .sidebar-box,
 [data-theme="dark"] .game-end-panel {
   background: #1e293b;
@@ -130,11 +81,6 @@
 [data-theme="dark"] .room-settings-status { color: #94a3b8; }
 [data-theme="dark"] .room-settings-status.is-failed { color: #fca5a5; }
 
-[data-theme="dark"] .panel input[type="text"],
-[data-theme="dark"] .panel input[type="search"],
-[data-theme="dark"] .panel input[type="number"],
-[data-theme="dark"] .panel input:not([type]),
-[data-theme="dark"] .panel select,
 [data-theme="dark"] .settings-select {
   background: #0f172a;
   border-color: #475569;
@@ -147,19 +93,6 @@
   border-color: #475569;
   color: #f8fafc;
 }
-
-[data-theme="dark"] .public-room-card {
-  background: #0f172a;
-  border-color: #334155;
-}
-
-[data-theme="dark"] .public-room-title-row h3 { color: #f8fafc; }
-[data-theme="dark"] .public-room-facts,
-[data-theme="dark"] .public-room-rules { color: #94a3b8; }
-[data-theme="dark"] .public-room-secondary-action { border-color: #64748b; color: #cbd5e1; }
-[data-theme="dark"] .room-state-waiting { background: #064e3b; color: #a7f3d0; }
-[data-theme="dark"] .room-state-playing { background: #78350f; color: #fde68a; }
-[data-theme="dark"] .public-room-badges span { background: #312e81; color: #c7d2fe; }
 
 /* Profile page. The tiles and game rows nest inside a .panel, so they take the
    same darker fill as .public-room-card does; the expanded round detail goes a
@@ -219,7 +152,6 @@
 }
 
 [data-theme="dark"] .room-copy-button,
-[data-theme="dark"] .header-settings-button,
 [data-theme="dark"] .save-image-button {
   background: #1e293b;
   color: #f8fafc;
@@ -228,18 +160,9 @@
 }
 
 [data-theme="dark"] .room-copy-button:hover,
-[data-theme="dark"] .header-settings-button:hover,
 [data-theme="dark"] .save-image-button:hover {
   background: #334155;
   border-color: #64748b;
-  color: #ffffff;
-}
-
-[data-theme="dark"] .header-settings-button svg {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .header-settings-button:hover svg {
   color: #ffffff;
 }
 
@@ -439,15 +362,6 @@
   color: #e2e8f0;
 }
 
-[data-theme="dark"] .app-toast { background: #1e3a8a; border-color: #3b82f6; color: #dbeafe; }
-[data-theme="dark"] .app-toast.success { background: #064e3b; border-color: #059669; color: #a7f3d0; }
-[data-theme="dark"] .app-toast.warning { background: #78350f; border-color: #d97706; color: #fef3c7; }
-[data-theme="dark"] .app-toast.error { background: #451a1a; border-color: #dc2626; color: #fecaca; }
-[data-theme="dark"] .lobby-action-error,
-[data-theme="dark"] .room-list-error { background: #451a1a; border-color: #dc2626; color: #fecaca; }
-[data-theme="dark"] .room-list-warning { background: #78350f; border-color: #d97706; color: #fef3c7; }
-[data-theme="dark"] .room-list-error button,
-[data-theme="dark"] .room-list-warning button { background: #0f172a; }
 
 [data-theme="dark"] .brush-size-trigger.active {
   background: #1e3a8a;
@@ -902,45 +816,9 @@
   color: #f8fafc;
 }
 
-[data-theme="dark"] .auth-error {
-  color: #fca5a5;
-}
-
-[data-theme="dark"] .auth-link {
-  color: #a5b4fc;
-}
-
-[data-theme="dark"] .identity-chip,
-[data-theme="dark"] .first-run-login,
-[data-theme="dark"] .first-run-guest-submit,
 [data-theme="dark"] .settings-account-action {
   border-color: #475569;
   color: #f8fafc;
-}
-
-[data-theme="light"] .identity-chip.is-compact .identity-unclaimed {
-  box-shadow: 0 0 0 2px #ffffff;
-}
-
-[data-theme="dark"] .first-run {
-  border-color: #334155;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-[data-theme="dark"] .first-run-divider::before,
-[data-theme="dark"] .first-run-divider::after {
-  background: #334155;
-}
-
-[data-theme="dark"] .first-run-guest-row input {
-  border-color: #475569;
-  background: #0f172a;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .account-dropdown {
-  background: #1e293b;
-  border-color: #334155;
 }
 
 [data-theme="dark"] .modal-card {
@@ -1083,11 +961,6 @@
   background: #334155;
   color: #f8fafc;
   border-color: #64748b;
-}
-
-[data-theme="dark"] .version-badge {
-  background: rgba(30, 41, 59, 0.9);
-  color: #64748b;
 }
 
 @media (max-width: 900px) {
@@ -1293,24 +1166,6 @@
   color: #86efac;
 }
 
-/* Deployment banners: the connection banner beside them has no dark rules
-   either, but these carry light backgrounds that would glare in a dark app. */
-[data-theme="dark"] .server-shutdown-banner {
-  background: #431407;
-  border-bottom-color: #ea580c;
-  color: #fed7aa;
-}
-
-[data-theme="dark"] .server-shutdown-banner.is-restarted {
-  background: #1e1b4b;
-  border-bottom-color: #6366f1;
-  color: #c7d2fe;
-}
-
-[data-theme="dark"] .server-shutdown-banner.is-restarted button:hover {
-  background: #312e81;
-}
-
 /* Operator page and account-recovery surfaces. Same treatment as .panel: the
    card is #1e293b on the #0f172a body, fields drop back to the body colour. */
 [data-theme="dark"] .ops-tile,
@@ -1342,17 +1197,6 @@
   border-color: #ea580c;
 }
 
-[data-theme="dark"] .email-reminder-banner {
-  background: #172554;
-  border-bottom-color: #3b82f6;
-  color: #bfdbfe;
-}
-
-[data-theme="dark"] .auth-optional,
-[data-theme="dark"] .auth-hint {
-  color: #94a3b8;
-}
-
 [data-theme="dark"] .profile-history-filter {
   color: #cbd5e1;
 }
@@ -1381,10 +1225,6 @@
 [data-theme="dark"] .mod-actions .mod-danger {
   border-color: #f87171;
   color: #fca5a5;
-}
-
-[data-theme="dark"] .account-dropdown .account-staff-entry {
-  border-top-color: #334155;
 }
 
 /* #2563eb is a light-theme blue: on the dark ground it measures 3.5:1, and on

@@ -1,4 +1,7 @@
 import { describeDrawingRules } from "../lib/drawingRules";
+import { promptLanguageLabel } from "../lib/promptLanguages";
+import { Chip } from "./ui/Chip";
+import { ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from "./icons";
 import type { RoomSummary } from "../types";
 
 interface PublicRoomCardProps {
@@ -8,6 +11,8 @@ interface PublicRoomCardProps {
   onJoin: (asSpectator: boolean) => void;
 }
 
+/* The tag chips carry every rule that differs from the defaults, so a card
+   needs no expandable settings list. */
 function exceptionalRules(room: RoomSummary) {
   const rules: string[] = [];
   if (room.scoringMode === "none") rules.push("No scoring");
@@ -25,50 +30,84 @@ function exceptionalRules(room: RoomSummary) {
   return rules;
 }
 
-function hintDescription(room: RoomSummary) {
-  if (room.hideMaskedPrompt) return "Prompt details are hidden and hints are off";
-  if (room.hintMode === "checkpoints") return "Letters are revealed as the turn runs down";
-  if (room.hintMode === "purchase") return "Players can buy letter positions";
-  if (room.hintMode === "wheel") return "Players can buy letters (Wheel of Fortune)";
-  return "No hints";
-}
-
 export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCardProps) {
   const full = room.isFull || room.playerCount >= room.maxPlayers;
-  const primaryLabel = full ? "Spectate" : room.state === "playing" ? "Join in progress" : "Join";
-  const badges = exceptionalRules(room);
+  const primaryLabel = room.state === "playing" ? "Join in progress" : "Join";
+  const tags = exceptionalRules(room);
+  const languageLabel = promptLanguageLabel(room.promptLanguage);
+  const fillFraction = room.maxPlayers > 0 ? room.playerCount / room.maxPlayers : 0;
 
   return (
     <article className="public-room-card" data-testid="public-room-card">
       <div className="public-room-card-main">
         <div className="public-room-title-row">
           <h3>{room.name}</h3>
-          <span className={`room-state-badge room-state-${room.state}`}>
+          <Chip
+            kind={room.state === "playing" ? "warning" : "success"}
+            className={`room-state-badge room-state-${room.state}`}
+          >
             {room.state === "playing" ? "In progress" : "Waiting"}
-          </span>
+          </Chip>
         </div>
         <p className="public-room-facts">
-          <span>{room.playerCount}/{room.maxPlayers} players</span>
-          <span>{room.rounds} {room.rounds === 1 ? "round" : "rounds"}</span>
-          <span>{room.drawingSeconds}s draws</span>
-          {room.spectatorCount > 0 && <span>{room.spectatorCount} spectating</span>}
+          <span title={`Prompt language: ${languageLabel}`}>
+            <Flag language={room.promptLanguage} />
+            {languageLabel}
+          </span>
+          <span title="Players">
+            <UsersIcon size={14} />
+            {room.playerCount}/{room.maxPlayers}
+            <span className="public-room-capacity" aria-hidden="true">
+              <span
+                className={full ? "is-full" : undefined}
+                style={{ width: `${Math.round(Math.min(1, fillFraction) * 100)}%` }}
+              />
+            </span>
+          </span>
+          <span title="Rounds">
+            <RoundsIcon size={14} />
+            {room.rounds} {room.rounds === 1 ? "round" : "rounds"}
+          </span>
+          <span title="Drawing time">
+            <ClockIcon size={14} />
+            {room.drawingSeconds}s
+          </span>
+          {room.spectatorCount > 0 && (
+            <span title="Spectators">
+              <EyeIcon size={14} />
+              {room.spectatorCount}
+            </span>
+          )}
           {full && <strong>Full</strong>}
         </p>
-        {badges.length > 0 && <div className="public-room-badges">{badges.map((badge) => <span key={badge}>{badge}</span>)}</div>}
-        <details className="public-room-rules">
-          <summary>View room settings</summary>
-          <ul>
-            <li>{room.scoringMode === "none" ? "No points are kept" : room.scoringMode === "pressure" ? "Points drain faster once someone guesses" : "Points for fast, correct guesses"}</li>
-            <li>{hintDescription(room)}</li>
-            <li>{room.customPromptCount > 0 ? (room.customPromptsOnly ? `${room.customPromptCount} custom prompts only` : `${room.customPromptCount} custom prompts plus the default list`) : "Built-in prompt list"}</li>
-            <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators see the masked prompt"}</li>
-            <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? "Every tool and color"}</li>
-          </ul>
-        </details>
+        {tags.length > 0 && (
+          <div className="public-room-badges">
+            {tags.map((tag) => (
+              <Chip key={tag}>{tag}</Chip>
+            ))}
+          </div>
+        )}
       </div>
       <div className="public-room-actions">
-        <button type="button" className="public-room-primary-action" disabled={busy} onClick={() => onJoin(full)}>{pendingMode === (full ? "spectate" : "join") ? (full ? "Joining as spectator…" : "Joining…") : primaryLabel}</button>
-        {!full && <button type="button" className="public-room-secondary-action" disabled={busy} onClick={() => onJoin(true)}>{pendingMode === "spectate" ? "Joining as spectator…" : "Spectate"}</button>}
+        {!full && (
+          <button
+            type="button"
+            className={`btn ${room.state === "playing" ? "btn-warm" : "btn-primary"} public-room-primary-action`}
+            disabled={busy}
+            onClick={() => onJoin(false)}
+          >
+            {pendingMode === "join" ? "Joining…" : primaryLabel}
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn btn-secondary public-room-secondary-action"
+          disabled={busy}
+          onClick={() => onJoin(true)}
+        >
+          <EyeIcon size={14} />
+          {pendingMode === "spectate" ? "Joining as spectator…" : "Spectate"}
+        </button>
       </div>
     </article>
   );

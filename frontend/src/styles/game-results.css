@@ -117,8 +117,8 @@
   right: 8px;
   bottom: 6px;
   font-size: 11px;
-  color: #adb5bd;
-  background: rgba(255, 255, 255, 0.7);
+  color: var(--faint);
+  background: color-mix(in srgb, var(--card) 75%, transparent);
   padding: 1px 6px;
   border-radius: 4px;
   pointer-events: none;

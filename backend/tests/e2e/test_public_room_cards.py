@@ -41,7 +41,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             card = visitor.locator('[data-testid="public-room-card"]', has_text="Room cards")
             await card.wait_for()
             room_search = visitor.locator(
-                'input[placeholder="🔍 Search rooms by name or code..."]'
+                'input[placeholder="Search rooms by name or code"]'
             )
             await assert_input_contract(room_search, {
                 "type": "search",
@@ -53,14 +53,12 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await room_search.fill("Room cards")
             await card.wait_for()
             assert await card.get_by_text("Waiting", exact=True).is_visible()
-            assert await card.get_by_text("1/3 players", exact=True).is_visible()
+            assert await card.get_by_text("1/3", exact=True).is_visible()
             assert await card.get_by_text("2 rounds", exact=True).is_visible()
-            assert await card.get_by_text("90s draws", exact=True).is_visible()
+            assert await card.get_by_text("90s", exact=True).is_visible()
             assert await card.get_by_text("No scoring", exact=True).is_visible()
             assert await card.get_by_text("Custom prompts only", exact=True).is_visible()
             assert await card.get_by_role("button", name="Join", exact=True).is_visible()
-            await card.get_by_text("View room settings", exact=True).click()
-            assert await card.get_by_text("2 custom prompts only", exact=True).is_visible()
 
             await player.goto(BASE_URL)
             await use_guest_name(player, "CardPlayer")

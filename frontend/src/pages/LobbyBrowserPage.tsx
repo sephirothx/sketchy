@@ -1,10 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
-import { SettingsIcon } from "../components/SettingsIcon";
-import { AccountMenu } from "../components/AccountMenu";
+import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
 import { currentPlayerName } from "../store/authStore";
 import { useAuthStore } from "../store/authStore";
@@ -13,17 +12,21 @@ import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "../components/ui/ModalShell";
+import { Button } from "../components/ui/Button";
+import { AlertCircleIcon, ChevronDownIcon, EyeIcon, PlusIcon, SearchIcon } from "../components/icons";
+import { promptLanguageLabel } from "../lib/promptLanguages";
 import type { AckResponse, RoomSummary } from "../types";
 
 const POLL_INTERVAL_MS = 4000;
 const ROOM_FETCH_TIMEOUT_MS = 6000;
+const ROOM_CODE_LENGTH = 6;
 
 type RoomListStatus = "loading" | "loaded" | "error";
 type PendingJoin = { key: string; mode: "join" | "spectate" };
 
 function normalizeRoomCodeInput(value: string): string {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, ROOM_CODE_LENGTH);
 }
 
 function RemovedFromRoomDialog({
@@ -33,47 +36,84 @@ function RemovedFromRoomDialog({
   message: string;
   onDismiss: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const okButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
 
-  useFocusTrap(dialogRef, {
-    onEscape: onDismiss,
-    initialFocusRef: okButtonRef,
-  });
+  return (
+    <ModalShell
+      labelledBy={titleId}
+      describedBy={descriptionId}
+      onDismiss={onDismiss}
+      initialFocusRef={okButtonRef}
+    >
+      <div className="modal-icon is-danger" aria-hidden="true">
+        <AlertCircleIcon size={22} />
+      </div>
+      <h3 id={titleId} className="modal-title">Removed from room</h3>
+      <p id={descriptionId} className="modal-body">{message}</p>
+      <button ref={okButtonRef} type="button" className="modal-button" onClick={onDismiss}>
+        OK
+      </button>
+    </ModalShell>
+  );
+}
+
+/* One labeled input rendered as the mockup's six code cells: the real field
+   stretches invisibly across the row, and the cells underneath mirror its
+   value, so focus, paste, and autofill all behave like a plain text box. */
+function RoomCodeInput({
+  value,
+  onChange,
+  onSubmit,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  const fieldId = useId();
+  const activeIndex = Math.min(value.length, ROOM_CODE_LENGTH - 1);
 
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onDismiss();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        tabIndex={-1}
-      >
-        <div className="modal-icon" aria-hidden="true">🚫</div>
-        <h3 id={titleId} className="modal-title">Removed from room</h3>
-        <p id={descriptionId} className="modal-body">{message}</p>
-        <button ref={okButtonRef} type="button" className="modal-button" onClick={onDismiss}>
-          OK
-        </button>
-      </div>
-    </div>
+    <label className="room-code-label" htmlFor={fieldId}>
+      Room code
+      <span className="room-code-cells">
+        {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
+        <input
+          id={fieldId}
+          className="room-code-field"
+          type="search"
+          inputMode="text"
+          value={value}
+          onChange={(e) => onChange(normalizeRoomCodeInput(e.target.value))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSubmit();
+          }}
+          maxLength={ROOM_CODE_LENGTH}
+          placeholder="ABC123"
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          autoCorrect="off"
+          enterKeyHint="go"
+        />
+        {Array.from({ length: ROOM_CODE_LENGTH }, (_, i) => (
+          <span
+            key={i}
+            aria-hidden="true"
+            className={`room-code-cell${value[i] ? " is-filled" : ""}${i === activeIndex ? " is-active" : ""}`}
+          >
+            {value[i] ?? ""}
+          </span>
+        ))}
+      </span>
+    </label>
   );
 }
 
 export function LobbyBrowserPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const openSettings = useSettingsStore((s) => s.openSettings);
   const nameColor = useSettingsStore((s) => s.nameColor);
   const colorblindSafeColors = useSettingsStore((s) => s.colorblindSafeColors);
   const setSession = useGameStore((s) => s.setSession);
@@ -94,6 +134,7 @@ export function LobbyBrowserPage() {
   const hasLoadedRoomsRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [languageFilter, setLanguageFilter] = useState("all");
   const [hideFullRooms, setHideFullRooms] = useState(false);
   const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
 
@@ -176,12 +217,19 @@ export function LobbyBrowserPage() {
     setRoomListRetry((value) => value + 1);
   }
 
+  const roomLanguages = [...new Set(rooms.map((room) => room.promptLanguage))].sort((a, b) =>
+    promptLanguageLabel(a).localeCompare(promptLanguageLabel(b)),
+  );
+
   const filteredRooms = rooms.filter((room) => {
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       const nameMatch = room.name.toLowerCase().includes(q);
       const codeMatch = room.code?.toLowerCase().includes(q);
       if (!nameMatch && !codeMatch) return false;
+    }
+    if (languageFilter !== "all" && room.promptLanguage !== languageFilter) {
+      return false;
     }
     if (hideFullRooms && room.playerCount >= room.maxPlayers) {
       return false;
@@ -237,28 +285,7 @@ export function LobbyBrowserPage() {
 
   return (
     <div className="lobby-page">
-      <div className="lobby-header">
-        <div>
-          <h1>Sketchy</h1>
-        </div>
-        <div className="lobby-header-actions">
-          <AccountMenu />
-          <Link className="header-action-link" to="/prompt-lists">
-            <span aria-hidden="true">📊</span>
-            <span className="header-action-label">Prompt stats</span>
-          </Link>
-          <button
-            type="button"
-            className="header-settings-button"
-            onClick={openSettings}
-            title="Player settings"
-            aria-label="Player settings"
-          >
-            <SettingsIcon size={16} />
-            <span className="header-action-label">Settings</span>
-          </button>
-        </div>
-      </div>
+      <AppHeader />
 
       {criticalError && (
         <RemovedFromRoomDialog
@@ -274,38 +301,35 @@ export function LobbyBrowserPage() {
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
 
       <div className="lobby-columns">
-        <section className="panel">
-          <h2>Create a room</h2>
-          <p className="create-room-lobby-copy">Choose the basics first, then add optional room settings only when you need them.</p>
-          <button type="button" onClick={handleOpenCreateRoom}>Create room</button>
+        <section className="panel lobby-entry-panel">
+          <h2>Start a game</h2>
+          <p className="create-room-lobby-copy">Pick the basics, invite your friends, draw. Settings can change any time before the first round.</p>
+          <div className="lobby-entry-actions">
+            <Button variant="primary" big iconLeft={<PlusIcon size={16} />} onClick={handleOpenCreateRoom}>
+              Create room
+            </Button>
+          </div>
         </section>
 
-        <section className="panel">
-          <h2>Join a private room</h2>
-          <label>
-            Room code
-            {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
-            <input
-              type="search"
-              inputMode="text"
-              value={joinCode}
-              onChange={(e) => setJoinCode(normalizeRoomCodeInput(e.target.value))}
-              maxLength={6}
-              placeholder="ABC123"
-              autoComplete="off"
-              autoCapitalize="characters"
-              spellCheck={false}
-              autoCorrect="off"
-              enterKeyHint="go"
-            />
-          </label>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button disabled={Boolean(pendingJoin)} onClick={() => handleJoinByCode(false)}>
+        <section className="panel lobby-entry-panel">
+          <h2>Join with a code</h2>
+          <RoomCodeInput
+            value={joinCode}
+            onChange={setJoinCode}
+            onSubmit={() => void handleJoinByCode(false)}
+          />
+          <div className="lobby-entry-actions">
+            <Button variant="primary" disabled={Boolean(pendingJoin)} onClick={() => void handleJoinByCode(false)}>
               {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? "Joining…" : "Join by code"}
-            </button>
-            <button disabled={Boolean(pendingJoin)} onClick={() => handleJoinByCode(true)}>
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={Boolean(pendingJoin)}
+              iconLeft={<EyeIcon size={14} />}
+              onClick={() => void handleJoinByCode(true)}
+            >
               {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate" ? "Joining as spectator…" : "Spectate"}
-            </button>
+            </Button>
           </div>
         </section>
       </div>
@@ -314,8 +338,8 @@ export function LobbyBrowserPage() {
         <h2>My persistent rooms</h2>
         <div className="room-list">
           {visiblePersistentRooms.map((room) => <article className="public-room-card" key={room.id}>
-            <div className="public-room-card-main"><strong>{room.name}</strong><p>{room.code} · {room.rounds} rounds · {room.drawingSeconds}s</p></div>
-            <button className="public-room-primary-action" disabled={Boolean(pendingJoin)} onClick={() => void joinRoom({ code: room.code }, false, `persistent-${room.id}`)}>
+            <div className="public-room-card-main"><strong>{room.name}</strong><p className="public-room-facts">{room.code} · {room.rounds} rounds · {room.drawingSeconds}s</p></div>
+            <button className="btn btn-primary public-room-primary-action" disabled={Boolean(pendingJoin)} onClick={() => void joinRoom({ code: room.code }, false, `persistent-${room.id}`)}>
               {pendingJoin?.key === `persistent-${room.id}` ? "Joining…" : "Open room"}
             </button>
           </article>)}
@@ -323,39 +347,56 @@ export function LobbyBrowserPage() {
       </section>}
 
       <section className="panel">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+        <div className="lobby-rooms-heading">
           <h2>Public rooms</h2>
-          <span style={{ fontSize: "0.85rem", color: "var(--text-muted, #94a3b8)" }}>
-            {roomListStatus === "loading" ? "Loading…" : rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length} rooms` : "0 rooms"}
+          <span className="lobby-rooms-count">
+            {roomListStatus === "loading" ? "Loading…" : rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length}` : "0 rooms"}
           </span>
         </div>
 
         {roomListStatus === "loaded" && rooms.length > 0 && (
           <div className="lobby-filter-bar">
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="🔍 Search rooms by name or code..."
-              autoComplete="off"
-              enterKeyHint="search"
-            />
-            <label className="checkbox-label">
+            <span className="lobby-room-search">
+              <SearchIcon size={15} />
               <input
-                type="checkbox"
-                checked={hideFullRooms}
-                onChange={(e) => setHideFullRooms(e.target.checked)}
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search rooms by name or code"
+                aria-label="Search rooms by name or code"
+                autoComplete="off"
+                enterKeyHint="search"
               />
-              Hide full rooms
-            </label>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={hideInProgressRooms}
-                onChange={(e) => setHideInProgressRooms(e.target.checked)}
-              />
-              Hide in-progress rooms
-            </label>
+            </span>
+            <span className="lobby-language-filter">
+              <select
+                aria-label="Filter by prompt language"
+                value={languageFilter}
+                onChange={(e) => setLanguageFilter(e.target.value)}
+              >
+                <option value="all">All languages</option>
+                {roomLanguages.map((language) => (
+                  <option key={language} value={language}>{promptLanguageLabel(language)}</option>
+                ))}
+              </select>
+              <ChevronDownIcon size={14} />
+            </span>
+            <button
+              type="button"
+              className="lobby-filter-toggle"
+              aria-pressed={hideFullRooms}
+              onClick={() => setHideFullRooms((v) => !v)}
+            >
+              Hide full
+            </button>
+            <button
+              type="button"
+              className="lobby-filter-toggle"
+              aria-pressed={hideInProgressRooms}
+              onClick={() => setHideInProgressRooms((v) => !v)}
+            >
+              Hide in progress
+            </button>
           </div>
         )}
 
@@ -368,7 +409,7 @@ export function LobbyBrowserPage() {
         ) : rooms.length === 0 ? (
           <p>No public rooms yet. Create one!</p>
         ) : filteredRooms.length === 0 ? (
-          <p style={{ color: "var(--text-muted, #94a3b8)", fontStyle: "italic" }}>
+          <p className="lobby-no-matches">
             No public rooms match your search criteria.
           </p>
         ) : (
