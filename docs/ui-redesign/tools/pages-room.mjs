@@ -95,7 +95,7 @@ const inGamePlayersChoosing = playersPanel({
   ],
 });
 
-export const PromptChoicePage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(11, 11 / 15, T.warm, 40) }) }) + roomGrid(
+export const PromptChoicePage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(11, 11 / 15, T.success, 40) }) }) + roomGrid(
   inGamePlayersChoosing,
   `
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
@@ -208,8 +208,8 @@ export const DrawingPage = roomPage(roomHeader({ inGame: true, status: headerSta
 // ----------------------------------------------------------------- Guessing
 // Viewed from Yuki's seat, moments after her near miss.
 const tile = (ch, revealed) => revealed
-  ? `<span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: ${T.primarySoft}; border: 1.5px solid ${T.primary}; font-family: ${T.display}; font-weight: 600; font-size: 21px; color: ${T.primaryInk}; padding-bottom: 4px">${ch}</span>`
-  : `<span style="display: inline-flex; align-items: flex-end; justify-content: center; width: 30px; height: 40px; border-radius: 8px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}; padding-bottom: 6px"><span style="width: 14px; height: 2.5px; border-radius: 2px; background: ${T.lineStrong}"></span></span>`;
+  ? `<span style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 34px; border-radius: 7px; background: ${T.primarySoft}; border: 1.5px solid ${T.primary}; font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.primaryInk}">${ch}</span>`
+  : `<span style="display: inline-flex; width: 26px; height: 34px; border-radius: 7px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}"></span>`;
 
 // One group per word, each with its letter count as a superscript numeral
 // (a multi-word prompt like "bow and arrow" renders three groups: ³ ³ ⁵).

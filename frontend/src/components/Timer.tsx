@@ -5,10 +5,18 @@ import { TimerRing } from "./icons";
 interface TimerProps {
   totalSeconds: number;
   startedAt: number;
-  /** Compact text-only rendering for tight mobile chrome. */
-  variant?: "ring" | "text";
+  /** Ring for the header, compact text for tight chrome, or the depleting
+      bar mobile shows while guessing. */
+  variant?: "ring" | "text" | "bar";
   /** Another Timer instance owns the tick sound and announcements. */
   silent?: boolean;
+}
+
+/** Green while there is time, amber as it runs down, red for the last 10s. */
+function timerColor(remaining: number, totalSeconds: number): string {
+  if (remaining <= 10) return "var(--danger)";
+  if (totalSeconds > 0 && remaining / totalSeconds <= 0.35) return "var(--warm)";
+  return "var(--success)";
 }
 
 export function Timer({ totalSeconds, startedAt, variant = "ring", silent = false }: TimerProps) {
@@ -43,16 +51,20 @@ export function Timer({ totalSeconds, startedAt, variant = "ring", silent = fals
   if (totalSeconds <= 0) return null;
 
   const urgent = remaining <= 10;
+  const color = timerColor(remaining, totalSeconds);
+  const fraction = totalSeconds > 0 ? remaining / totalSeconds : 0;
 
   return (
-    <div className={`timer${urgent ? " urgent" : ""}`}>
+    <div className={`timer${urgent ? " urgent" : ""}${variant === "bar" ? " timer-bar" : ""}`}>
       {variant === "ring" ? (
-        <TimerRing
-          seconds={remaining}
-          fraction={totalSeconds > 0 ? remaining / totalSeconds : 0}
-          color={urgent ? "var(--danger)" : "var(--warm)"}
-          size={40}
-        />
+        <TimerRing seconds={remaining} fraction={fraction} color={color} size={40} />
+      ) : variant === "bar" ? (
+        <span className="timer-bar-track" aria-hidden="true">
+          <span
+            className="timer-bar-fill"
+            style={{ width: `${Math.max(0, Math.min(1, fraction)) * 100}%`, background: color }}
+          />
+        </span>
       ) : (
         <>{remaining}s</>
       )}

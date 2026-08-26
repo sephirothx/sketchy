@@ -34,15 +34,15 @@ const panelHeading = (text, size = 15) =>
 // Room header, one lean row: room identity left, live game status center,
 // self controls right — the destructive Leave separated at the far edge.
 export const roomHeader = ({ inGame = false, status = '' } = {}) => `
-<header style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; min-height: 44px">
+<header style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; margin-bottom: 14px; min-height: 44px">
   <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
     <span style="font-weight: 800; font-size: 16px; color: ${T.ink}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">${ROOM.name}</span>
     <button type="button" title="Copy invite link" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 6px 12px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.muted}; letter-spacing: 0.08em">
       ${ROOM.code}<span style="display: inline-flex; color: ${T.faint}">${icon.copy(13)}</span>
     </button>
   </div>
-  ${status ? `<div style="display: flex; align-items: center; gap: 10px; flex: none">${status}</div>` : ''}
-  <div style="display: flex; align-items: center; gap: 7px; flex: none">
+  ${status ? `<div style="display: flex; align-items: center; gap: 10px; flex: none">${status}</div>` : '<span></span>'}
+  <div style="display: flex; align-items: center; gap: 7px; flex: none; justify-self: end">
     ${inGame ? btn.iconOnly(icon.rounds(16), 'Vote to restart', 38) : ''}
     <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 6px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 7px 13px; font-family: ${T.body}; font-size: 13px; font-weight: 800; color: ${T.muted}; min-height: 38px">${icon.moon(14)}AFK</button>
     ${inGame ? btn.iconOnly(icon.download(16), 'Save drawing as PNG', 38) : ''}

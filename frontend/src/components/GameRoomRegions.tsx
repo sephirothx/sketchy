@@ -238,6 +238,14 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           )}
         </div>
       )}
+      {/* Guess-focused mode swaps the round/timer line for this depleting
+          bar; it stays mounted (hidden by CSS otherwise) and silent so the
+          visible timer keeps the tick sound and announcements. */}
+      {isMobile && phase === "drawing" && (
+        <div className="guess-timer-bar">
+          <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} variant="bar" silent />
+        </div>
+      )}
       <PromptDisplay
         isDrawer={amDrawer}
         myPrompt={myPrompt}

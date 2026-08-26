@@ -54,16 +54,10 @@ function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean;
                       disabled={!buyableProps.canAfford || buyableProps.busy}
                       title={`Buy this letter for ${buyableProps.cost} points`}
                       onClick={() => buyableProps.onBuy(currentSlot)}
-                    >
-                      <span className="masked-tile-dash" aria-hidden="true" />
-                    </button>
+                    />
                   );
                 }
-                return (
-                  <span key={charIndex} className="masked-tile">
-                    <span className="masked-tile-dash" aria-hidden="true" />
-                  </span>
-                );
+                return <span key={charIndex} className="masked-tile" />;
               }
               if (!isSlotChar) {
                 return (
