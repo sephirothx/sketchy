@@ -909,3 +909,53 @@ async def test_warning_role_boundaries_match_suspensions(env):
             },
         )
     ).status_code == 422
+
+
+async def test_the_queue_shows_the_reported_players_standing(env):
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "StandingReporter")
+    target = await register(target_http, "StandingTarget")
+    moderator = await register(moderator_http, "StandingMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    first = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "First incident.",
+        },
+    )
+    await moderator_http.patch(
+        f"/api/moderation/reports/{first.json()['id']}",
+        json={"status": "dismissed", "note": "Not actionable."},
+    )
+    await moderator_http.post(
+        "/api/moderation/warnings",
+        json={"userId": target["id"], "reason": "A first warning."},
+    )
+    second = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Second incident.",
+        },
+    )
+    assert second.status_code == 201
+
+    listing = await moderator_http.get(
+        "/api/moderation/reports", params={"status": "pending"}
+    )
+    report = listing.json()["reports"][0]
+    player = report["reportedPlayer"]
+    assert player["displayName"] == "StandingTarget"
+    assert player["registered"] is True
+    assert player["createdAt"] is not None
+    # The open report itself is not "prior"; the dismissed one is.
+    assert player["priorReports"] == 1
+    assert player["priorWarnings"] == 1
+    assert player["activeSuspension"] is False

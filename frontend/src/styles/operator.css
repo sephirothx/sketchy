@@ -563,6 +563,39 @@
   margin-bottom: 10px;
 }
 
+.mod-case-columns {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.6fr 1fr;
+}
+
+@media (max-width: 1000px) {
+  .mod-case-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mod-context-row {
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  font-size: 13px;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 2px;
+}
+
+.mod-context-row span {
+  color: var(--faint);
+  font-weight: 700;
+}
+
+.mod-context-row strong {
+  color: var(--ink);
+  font-weight: 800;
+  text-align: right;
+}
+
 .mod-evidence {
   background: var(--well);
   border: 1px solid var(--line);

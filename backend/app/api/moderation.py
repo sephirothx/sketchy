@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -203,8 +203,72 @@ def _content_target(prompt_list_id, prompt_version_id) -> tuple[str, str]:
     return AuditTargetType.PROMPT_LIST.value, str(prompt_list_id)
 
 
-def _report_payload(report: PlayerReport) -> dict:
+async def _reported_player_context(
+    session: AsyncSession, reports: list[PlayerReport]
+) -> dict[UUID, dict]:
+    """Who each report is about, as a moderator weighs it.
+
+    Standing, not identity: account age, how often this player has come up
+    before, and whether a suspension is already in force. Computed for the
+    page in three grouped queries rather than per report.
+    """
+    user_ids = {r.reported_user_id for r in reports if r.reported_user_id}
+    if not user_ids:
+        return {}
+    users = (
+        await session.scalars(select(User).where(User.id.in_(user_ids)))
+    ).all()
+    report_totals = dict(
+        (
+            await session.execute(
+                select(PlayerReport.reported_user_id, func.count())
+                .where(PlayerReport.reported_user_id.in_(user_ids))
+                .group_by(PlayerReport.reported_user_id)
+            )
+        ).all()
+    )
+    warning_totals = dict(
+        (
+            await session.execute(
+                select(UserWarning.user_id, func.count())
+                .where(UserWarning.user_id.in_(user_ids))
+                .group_by(UserWarning.user_id)
+            )
+        ).all()
+    )
+    now = datetime.now(timezone.utc)
+    suspended = set(
+        (
+            await session.scalars(
+                select(UserBan.user_id).where(
+                    UserBan.user_id.in_(user_ids), *active_ban_filter(now)
+                )
+            )
+        ).all()
+    )
     return {
+        user.id: {
+            "displayName": user.display_name,
+            "registered": user.state == AccountState.REGISTERED.value,
+            "createdAt": user.created_at.isoformat(),
+            # This report itself is not "prior".
+            "priorReports": max(0, report_totals.get(user.id, 0) - 1),
+            "priorWarnings": warning_totals.get(user.id, 0),
+            "activeSuspension": user.id in suspended,
+        }
+        for user in users
+    }
+
+
+def _report_payload(
+    report: PlayerReport, player_context: dict[UUID, dict] | None = None
+) -> dict:
+    return {
+        "reportedPlayer": (
+            (player_context or {}).get(report.reported_user_id)
+            if report.reported_user_id
+            else None
+        ),
         "id": str(report.id),
         "reporterUserId": (
             str(report.reporter_user_id) if report.reporter_user_id else None
@@ -697,7 +761,12 @@ def create_moderation_router(
                     .offset(offset)
                 )
             ).all()
-            return {"reports": [_report_payload(report) for report in reports]}
+            player_context = await _reported_player_context(session, list(reports))
+            return {
+                "reports": [
+                    _report_payload(report, player_context) for report in reports
+                ]
+            }
 
     @router.get("/moderation/prompt-content-reports")
     async def list_prompt_content_reports(

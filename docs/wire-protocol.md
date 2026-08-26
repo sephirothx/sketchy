@@ -673,7 +673,7 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | --- | --- | --- | --- |
 | `POST` | `/api/reports` | any signed-in | ≤ 2000 chars detail, ≤ 32 768 bytes context, ≤ 20 **unique** `messageIds`. One open report per reporter/target |
 | `POST` | `/api/prompt-content-reports` | any signed-in | Targets a list or an exact `promptVersionId`. Official content and self-reports rejected |
-| `GET` | `/api/moderation/reports` | moderator+ | The queue |
+| `GET` | `/api/moderation/reports` | moderator+ | The queue; each report carries `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension) |
 | `PATCH` | `/api/moderation/reports/{report_id}` | moderator+ | Review is one-way |
 | `GET` | `/api/moderation/prompt-content-reports` | moderator+ | The queue |
 | `PATCH` | `/api/moderation/prompt-content-reports/{report_id}` | moderator+ | A resolution chooses Active or Hidden; a dismissal cannot mutate content |

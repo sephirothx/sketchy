@@ -426,8 +426,6 @@ backend follow-up:
   than "Round 2 of 3" for the same reason.
 - **"Next free letter in 9s"** — the timed-hints countdown chip needs the
   hint checkpoint schedule; letter tiles ship without it.
-- **Moderation account-context card** — prior-report counts and account age
-  are not exposed by the moderation API.
 
 ## 4b. Where the implementation deviates from the artboards
 

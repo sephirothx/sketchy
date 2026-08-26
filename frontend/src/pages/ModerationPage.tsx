@@ -59,6 +59,19 @@ function humanize(value: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/** Account age in the coarsest sensible unit, for the context card. */
+function accountAge(createdAt: string): string {
+  const days = Math.max(0, Math.floor((Date.now() - Date.parse(createdAt)) / 86400000));
+  if (days < 1) return "Today";
+  if (days < 31) return `${days} day${days === 1 ? "" : "s"}`;
+  if (days < 365) {
+    const months = Math.floor(days / 30);
+    return `${months} month${months === 1 ? "" : "s"}`;
+  }
+  const years = Math.floor(days / 365);
+  return `${years} year${years === 1 ? "" : "s"}`;
+}
+
 export function ModerationPage() {
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
@@ -332,39 +345,86 @@ export function ModerationPage() {
                   </SectionLabel>
                   <h1>{humanize(playerCase.reason)}</h1>
                   <p className="mod-case-meta">
-                    Reported {formatWhen(playerCase.createdAt)}
+                    {playerCase.reportedPlayer
+                      ? `About ${playerCase.reportedPlayer.displayName} · reported ${formatWhen(playerCase.createdAt)}`
+                      : `Reported ${formatWhen(playerCase.createdAt)}`}
                   </p>
                 </div>
                 <Chip kind="danger">{humanize(playerCase.reason)}</Chip>
               </div>
 
-              <section className="ops-card" aria-label="Reported evidence">
-                <h2>Reported evidence</h2>
-                {playerCase.details && (
-                  <p className="mod-case-details">{playerCase.details}</p>
-                )}
-                {playerCase.messageEvidence.length > 0 && (
-                  <>
-                    <blockquote className="mod-evidence">
-                      {playerCase.messageEvidence.map((line) => (
-                        <span key={line.sourceMessageId}>
-                          <strong>{line.senderDisplayName}:</strong> {line.text}
-                          {/* The snapshot is the evidence. The live message may
-                              have been deleted since, which is the point of
-                              keeping one. */}
-                          {!line.sourceAvailable && (
-                            <em> — original no longer in the room</em>
-                          )}
-                        </span>
-                      ))}
-                    </blockquote>
-                    <p className="mod-evidence-caption">
-                      Pinned by the server exactly as the reporter received them
-                      — up to 20 messages.
+              <div className="mod-case-columns">
+                <section className="ops-card" aria-label="Reported evidence">
+                  <h2>Reported evidence</h2>
+                  {playerCase.details && (
+                    <p className="mod-case-details">{playerCase.details}</p>
+                  )}
+                  {playerCase.messageEvidence.length > 0 && (
+                    <>
+                      <blockquote className="mod-evidence">
+                        {playerCase.messageEvidence.map((line) => (
+                          <span key={line.sourceMessageId}>
+                            <strong>{line.senderDisplayName}:</strong> {line.text}
+                            {/* The snapshot is the evidence. The live message
+                                may have been deleted since, which is the point
+                                of keeping one. */}
+                            {!line.sourceAvailable && (
+                              <em> — original no longer in the room</em>
+                            )}
+                          </span>
+                        ))}
+                      </blockquote>
+                      <p className="mod-evidence-caption">
+                        Pinned by the server exactly as the reporter received
+                        them — up to 20 messages.
+                      </p>
+                    </>
+                  )}
+                </section>
+                <aside className="ops-card" aria-label="Account context">
+                  <h2>Account context</h2>
+                  {playerCase.reportedPlayer ? (
+                    <>
+                      <div className="mod-context-row">
+                        <span>Player</span>
+                        <strong>{playerCase.reportedPlayer.displayName}</strong>
+                      </div>
+                      <div className="mod-context-row">
+                        <span>Account</span>
+                        <strong>
+                          {playerCase.reportedPlayer.registered
+                            ? "Registered"
+                            : "Guest"}
+                        </strong>
+                      </div>
+                      <div className="mod-context-row">
+                        <span>Age</span>
+                        <strong>{accountAge(playerCase.reportedPlayer.createdAt)}</strong>
+                      </div>
+                      <div className="mod-context-row">
+                        <span>Prior reports</span>
+                        <strong>{playerCase.reportedPlayer.priorReports}</strong>
+                      </div>
+                      <div className="mod-context-row">
+                        <span>Warnings</span>
+                        <strong>{playerCase.reportedPlayer.priorWarnings}</strong>
+                      </div>
+                      <div className="mod-context-row">
+                        <span>Active suspension</span>
+                        <strong>
+                          {playerCase.reportedPlayer.activeSuspension
+                            ? "In force"
+                            : "None"}
+                        </strong>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mod-case-details">
+                      The account behind this report no longer exists.
                     </p>
-                  </>
-                )}
-              </section>
+                  )}
+                </aside>
+              </div>
 
               {playerCase.status === "pending" ? (
                 <>
@@ -372,7 +432,7 @@ export function ModerationPage() {
                   <div className="mod-actions">
                     <button
                       type="button"
-                      className="btn btn-ghost"
+                      className="btn btn-success"
                       disabled={busy === playerCase.id}
                       onClick={() =>
                         act(
@@ -549,7 +609,7 @@ export function ModerationPage() {
                   <div className="mod-actions">
                     <button
                       type="button"
-                      className="btn btn-ghost"
+                      className="btn btn-success"
                       disabled={busy === contentCase.id}
                       onClick={() =>
                         act(

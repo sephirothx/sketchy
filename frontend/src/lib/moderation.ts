@@ -42,10 +42,22 @@ export interface PlayerReportMessageEvidence {
   copiedAt: string;
 }
 
+/** The reported player's standing, as a moderator weighs the case. */
+export interface ReportedPlayerContext {
+  displayName: string;
+  registered: boolean;
+  createdAt: string;
+  priorReports: number;
+  priorWarnings: number;
+  activeSuspension: boolean;
+}
+
 export interface PlayerReport {
   id: string;
   reporterUserId: string | null;
   reportedUserId: string | null;
+  /** Null when the account is gone. */
+  reportedPlayer: ReportedPlayerContext | null;
   gameId: string | null;
   turnId: string | null;
   reason: ReportReason;
