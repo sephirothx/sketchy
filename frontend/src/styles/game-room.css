@@ -1317,13 +1317,12 @@
   font-weight: 600;
   font-size: clamp(14px, 2.1vw, 18px);
   line-height: 1;
-  /* Letter-tile convention (Wordle, Scrabble): show glyphs in uppercase so
-     every tile carries the same cap-height band - no per-letter ascender or
-     descender asymmetry to fight. No vertical nudge: Fredoka 600's line
-     metrics (ascent 0.97em, descent 0.24em, cap height 0.70em) leave the
-     centered line box's cap band within half a pixel of the tile's middle
-     in both Chromium and Firefox (measured across A-Z and digits). */
-  text-transform: uppercase;
+  /* Lowercase glyphs, anchored on the midpoint between Fredoka 600's cap
+     band (0.70em) and x band (0.50em): p = ((ascent - descent) -
+     (cap + x-height)/2) * 1em = (0.73 - 0.60)em. Splits the residual error
+     evenly - x-height letters sit ~1px low, capitals/ascenders ~1px high
+     (measured across a-z/A-Z/digits in Chromium and Firefox). */
+  padding-bottom: 0.13em;
   color: var(--ink);
 }
 
