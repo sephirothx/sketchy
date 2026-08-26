@@ -1,5 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
+from tests.e2e.lobby_helpers import close_room_settings, open_room_settings
 from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
 
@@ -42,6 +43,7 @@ async def test_players_approve_restart_without_losing_room_context():
             # Settings save themselves, so a value the room refuses has to snap
             # back to what the room holds and say why - three players seated is
             # exactly what makes a max of two impossible.
+            await open_room_settings(host_page)
             await host_page.fill(
                 '.room-settings-editor label:has-text("Max players") input', "2"
             )
@@ -56,6 +58,7 @@ async def test_players_approve_restart_without_losing_room_context():
             await player_page.click(".waiting-chat-form button")
             await host_page.wait_for_selector("text=Keep this message")
 
+            await close_room_settings(host_page)
             await host_page.click('button:has-text("Start game")')
             await host_page.wait_for_selector(".game-layout")
             await player_page.wait_for_selector(".game-layout")

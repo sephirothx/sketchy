@@ -3,7 +3,7 @@
 import pytest
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.lobby_helpers import open_room_settings, register_account, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -59,8 +59,9 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
 
             await page.locator(".create-room-submit").click()
             await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_room_settings(page)
+            await page.get_by_text("Host settings").wait_for()
             assert await page.get_by_role("spinbutton", name="Max players").input_value() == "12"
             assert await page.get_by_role("spinbutton", name="Rounds").input_value() == "5"
-            await page.get_by_text("Host settings").wait_for()
         finally:
             await browser.close()

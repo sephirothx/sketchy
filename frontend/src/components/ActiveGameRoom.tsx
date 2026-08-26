@@ -21,7 +21,16 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
-import { SettingsIcon } from "../components/SettingsIcon";
+import {
+  CopyIcon,
+  DownloadIcon,
+  GearIcon,
+  LeaveIcon,
+  MoonIcon,
+  RoundsIcon,
+  UsersIcon,
+  XIcon,
+} from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { recordRender } from "../lib/renderDiagnostics";
@@ -45,6 +54,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const reset = useGameStore((s) => s.reset);
 
   const roomState = useGameStore((s) => s.roomState);
+  const roomName = useGameStore((s) => s.name);
   const phase = useGameStore((s) => s.phase);
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
@@ -291,6 +301,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       )}
       <header className="game-header">
         <div className="game-header-start">
+          {roomName && <span className="game-header-room-name">{roomName}</span>}
           <button
             type="button"
             className="room-copy-button"
@@ -298,26 +309,19 @@ export function ActiveGameRoom({ code }: { code: string }) {
             onClick={() => void handleCopyLink()}
             title="Click to copy room invite link"
           >
-            <span>Code: {code}</span>
+            <span>{code}</span>
+            <CopyIcon size={13} />
           </button>
           {roomView === "playing" && isMobile && (
             <button
               type="button"
-              className="game-header-players-button"
+              className="btn btn-icon btn-compact game-header-players-button"
               onClick={() => setPlayersDrawerOpen(true)}
               aria-label="View players"
               title="View players"
               data-testid="open-players-drawer"
             >
-              <span className="header-action-icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-              </span>
-              <span className="header-action-label">Players</span>
+              <UsersIcon size={16} />
             </button>
           )}
         </div>
@@ -325,7 +329,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           {roomView === "playing" && canProposeRestart && !restartVote && (
             <button
               type="button"
-              className="game-header-restart-button"
+              className="btn btn-icon btn-compact game-header-restart-button"
               disabled={restartBusy || restartCooldownSeconds > 0}
               onClick={() => void handleProposeRestart()}
               aria-label={restartCooldownSeconds > 0
@@ -335,65 +339,56 @@ export function ActiveGameRoom({ code }: { code: string }) {
                 ? `Restart vote available in ${restartCooldownSeconds}s`
                 : "Propose a vote to restart the game"}
             >
-              <span className="header-action-icon" aria-hidden="true">↻</span>
-              <span className="header-action-label">
-                {restartCooldownSeconds > 0 ? `Restart · ${restartCooldownSeconds}s` : "Restart"}
-              </span>
+              <RoundsIcon size={16} />
+              {restartCooldownSeconds > 0 && (
+                <span className="game-header-restart-count" aria-hidden="true">
+                  {restartCooldownSeconds}
+                </span>
+              )}
             </button>
           )}
           <AccountMenu compact />
           <button
             type="button"
-            className="game-header-afk-button"
-            style={{ background: isAfk ? "#f59e0b" : undefined, color: isAfk ? "#fff" : undefined }}
+            className={`game-header-afk-button${isAfk ? " is-afk" : ""}`}
+            aria-pressed={isAfk}
             onClick={handleToggleAfk}
             aria-label={isAfk ? "Back from AFK" : "Go AFK"}
             title={isAfk ? "Back from AFK" : "Go AFK"}
           >
-            <span className="header-action-icon" aria-hidden="true">{isAfk ? "💤" : "AFK"}</span>
-            <span className="header-action-label">{isAfk ? "AFK 💤" : "AFK"}</span>
-          </button>
-          <button
-            type="button"
-            className="game-header-leave-button"
-            onClick={handleLeave}
-            aria-label="Leave room"
-            title="Leave room"
-          >
-            <span className="header-action-icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-            </span>
-            <span className="header-action-label">Leave</span>
+            <MoonIcon size={14} />
+            <span className="header-action-label">AFK</span>
           </button>
           {roomView === "playing" && (
             <button
               type="button"
-              className="save-image-button game-header-save-button"
+              className="btn btn-icon btn-compact save-image-button game-header-save-button"
               onClick={() => canvasRef.current?.saveImage()}
               aria-label="Save image"
               title="Save drawn image to file"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              <span className="header-action-label">Save</span>
+              <DownloadIcon size={16} />
             </button>
           )}
           <button
             type="button"
-            className="header-settings-button"
+            className="btn btn-icon btn-compact header-settings-button"
             onClick={openSettings}
             title="Player settings"
             aria-label="Player settings"
           >
-            <SettingsIcon size={16} />
-            <span className="header-action-label">Settings</span>
+            <GearIcon size={16} />
+          </button>
+          <span className="game-header-divider" aria-hidden="true" />
+          <button
+            type="button"
+            className="btn btn-danger-ghost btn-compact game-header-leave-button"
+            onClick={handleLeave}
+            aria-label="Leave room"
+            title="Leave room"
+          >
+            <LeaveIcon size={14} />
+            <span className="header-action-label">Leave</span>
           </button>
         </div>
       </header>
@@ -440,7 +435,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
                 onClick={() => setPlayersDrawerOpen(false)}
                 aria-label="Close players"
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
             <div className="players-drawer-body sidebar-box">

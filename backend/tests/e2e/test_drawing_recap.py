@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 from playwright.async_api import Page, async_playwright
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import close_room_settings, open_room_settings, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -48,6 +48,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await guest.click('button:has-text("Join by code")')
             await guest.locator('[data-testid="waiting-room"]').wait_for()
 
+            await open_room_settings(host)
             await host.locator(".room-settings-editor details").click()
             await host.locator("#custom-prompts").fill("apple\ntree")
             await host.get_by_label("Only use custom prompts").check()
@@ -60,6 +61,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             # the game does, or the host plays the value they just replaced.
             # This whole test is one round long, so it would never end.
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
+            await close_room_settings(host)
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, guest]

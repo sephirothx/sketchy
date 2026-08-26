@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import open_room_settings, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -78,6 +78,7 @@ async def test_only_host_sees_suggestion_and_acceptance_switches_room_colors():
             # The host's own form has to move with the room. The palette is the
             # one setting the room can change without this form asking, and a
             # form still offering the old one would disagree with the game.
+            await open_room_settings(host)
             host_colors = host.get_by_role("group", name="Colors").get_by_role(
                 "button", name="Colorblind-safe"
             )

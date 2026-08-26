@@ -49,8 +49,8 @@ async def test_player_afk_and_disconnect_scenario():
             # Step 4: Player toggles AFK in Browser 2
             await page2.click(".game-header-afk-button")
 
-            # Verify AFK button text toggled to AFK 💤
-            await page2.wait_for_selector('.game-header-afk-button:has-text("AFK 💤")')
+            # Verify the AFK pill reflects the pressed state
+            await page2.wait_for_selector('.game-header-afk-button[aria-pressed="true"]')
 
             # Step 5: Player closes Browser 2 context
             await context2.close()

@@ -15,6 +15,10 @@
   color: #6b7280;
 }
 
+[data-theme="dark"] .colored-player-name.is-guest {
+  color: #94a3b8;
+}
+
 /* Groups the account control with Settings so the header stays one row. */
 .lobby-header-actions {
   display: flex;

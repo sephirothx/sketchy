@@ -7,22 +7,7 @@
   margin-bottom: 26px;
 }
 
-.header-settings-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 7px 13px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--muted);
-  cursor: pointer;
-  box-shadow: var(--shadow);
-  transition: all 0.15s ease;
-}
-
+/* Sizing comes from .btn.btn-icon; this adds only the hover flourish. */
 .header-settings-button:hover {
   border-color: var(--line-strong);
   color: var(--ink);

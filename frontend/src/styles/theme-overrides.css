@@ -29,20 +29,6 @@
   }
 }
 
-[data-theme="dark"] .sidebar-box,
-[data-theme="dark"] .game-end-panel {
-  background: #1e293b;
-  border-color: #334155;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .room-settings-fields input[type="text"],
-[data-theme="dark"] .room-settings-fields input[type="search"],
-[data-theme="dark"] .room-settings-fields select,
-[data-theme="dark"] .room-settings-fields textarea { background: #0f172a; border-color: #475569; color: #f8fafc; }
-[data-theme="dark"] .room-settings-status { color: #94a3b8; }
-[data-theme="dark"] .room-settings-status.is-failed { color: #fca5a5; }
-
 [data-theme="dark"] .settings-select {
   background: #0f172a;
   border-color: #475569;
@@ -111,21 +97,6 @@
 [data-theme="dark"] .profile-score-events th,
 [data-theme="dark"] .profile-score-events td {
   border-bottom-color: #334155;
-}
-
-[data-theme="dark"] .room-copy-button,
-[data-theme="dark"] .save-image-button {
-  background: #1e293b;
-  color: #f8fafc;
-  border-color: #475569;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-}
-
-[data-theme="dark"] .room-copy-button:hover,
-[data-theme="dark"] .save-image-button:hover {
-  background: #334155;
-  border-color: #64748b;
-  color: #ffffff;
 }
 
 [data-theme="dark"] .canvas-stack {
@@ -218,65 +189,6 @@
   border-color: #64748b;
 }
 
-[data-theme="dark"] .game-header-afk-button {
-  background: #1e293b;
-  border-color: #475569;
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .game-header-players-button {
-  background: #1e293b;
-  border-color: #475569;
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .game-header-players-button:hover {
-  background: #334155;
-  border-color: #64748b;
-}
-
-[data-theme="dark"] .players-drawer {
-  background: #0f172a;
-  border-color: #334155;
-}
-
-[data-theme="dark"] .players-drawer-header {
-  border-color: #334155;
-}
-
-[data-theme="dark"] .players-drawer-header h2 {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .players-drawer-close {
-  background: #1e293b;
-  border-color: #475569;
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .game-header-leave-button {
-  background: #451a1a;
-  border-color: #b91c1c;
-  color: #fecaca;
-}
-
-[data-theme="dark"] .game-header-leave-button:hover {
-  background: #7f1d1d;
-  border-color: #ef4444;
-  color: #fff;
-}
-
-[data-theme="dark"] .game-header-restart-button {
-  background: #422006;
-  border-color: #d97706;
-  color: #fde68a;
-}
-
-[data-theme="dark"] .game-header-restart-button:hover:not(:disabled) {
-  background: #78350f;
-  border-color: #f59e0b;
-}
-
 [data-theme="dark"] .restart-vote-banner {
   background: #1e293b;
   border-color: #475569;
@@ -360,103 +272,6 @@
   border-color: #64748b;
 }
 
-[data-theme="dark"] .waiting-card {
-  background: #1e293b;
-  border-color: #334155;
-}
-
-[data-theme="dark"] .waiting-room-intro h1,
-[data-theme="dark"] .waiting-card h2,
-[data-theme="dark"] .room-panel-heading h2,
-[data-theme="dark"] .game-end-podium h1 {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .waiting-room-eyebrow,
-[data-theme="dark"] .waiting-card-kicker,
-[data-theme="dark"] .room-panel-kicker,
-[data-theme="dark"] .room-player-occupancy,
-[data-theme="dark"] .room-chat-drawer-note,
-[data-theme="dark"] .waiting-room-subtitle,
-[data-theme="dark"] .waiting-start-hint,
-[data-theme="dark"] .waiting-rules-list,
-[data-theme="dark"] .waiting-spectators h3 {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .waiting-invite-button {
-  background: #172554;
-  border-color: #2563eb;
-  color: #bfdbfe;
-}
-
-[data-theme="dark"] .waiting-custom-prompts {
-  border-color: #334155;
-}
-
-[data-theme="dark"] .waiting-custom-prompts > summary {
-  color: #93c5fd;
-}
-
-[data-theme="dark"] .waiting-custom-prompts-content p {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .waiting-custom-prompts-content,
-[data-theme="dark"] .waiting-custom-prompts-list,
-[data-theme="dark"] .waiting-custom-prompts-empty {
-  background: #0f172a;
-  border-color: #334155;
-}
-
-[data-theme="dark"] .waiting-custom-prompts-heading strong {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .waiting-custom-prompts-heading > span {
-  background: #172554;
-  color: #bfdbfe;
-}
-
-[data-theme="dark"] .waiting-custom-prompts-search {
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .waiting-custom-prompts-search input,
-[data-theme="dark"] .waiting-custom-prompts-filters button {
-  background: #1e293b;
-  border-color: #475569;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .waiting-custom-prompts-filters button[aria-pressed="true"] {
-  background: #2563eb;
-  border-color: #60a5fa;
-}
-
-[data-theme="dark"] .waiting-custom-prompts-list span {
-  background: #172554;
-  border-color: #1e3a8a;
-  color: #bfdbfe;
-}
-
-[data-theme="dark"] .waiting-custom-prompts-content .waiting-custom-prompts-error {
-  color: #fca5a5;
-}
-
-[data-theme="dark"] .waiting-roster-list li,
-[data-theme="dark"] .waiting-spectators {
-  border-color: #334155;
-}
-
-[data-theme="dark"] .waiting-room-actions button {
-  background: #334155;
-  border-color: #475569;
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .waiting-roster-list li { color: #e2e8f0; }
-
 [data-theme="dark"] .game-end-podium {
   background: #1e293b;
   border-color: #334155;
@@ -532,82 +347,7 @@
   color: #94a3b8;
 }
 
-[data-theme="dark"] .room-spectator-indicator {
-  background: #0f172a;
-  border-color: #475569;
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .room-spectator-tooltip {
-  background: #1e293b;
-  border-color: #475569;
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .room-spectator-tooltip::before {
-  background: #1e293b;
-  border-color: #475569;
-}
-
-[data-theme="dark"] .spectator-promotion {
-  border-color: #334155;
-}
-
-[data-theme="dark"] .spectator-promotion > p:first-child {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .spectator-promotion-error {
-  color: #fca5a5;
-}
-
 /* Chat & Messages in dark mode */
-[data-theme="dark"] .chat-message.system {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .chat-message.correct {
-  color: #4ade80;
-}
-
-[data-theme="dark"] .chat-message.close-hint {
-  color: #fbbf24;
-}
-
-[data-theme="dark"] .guess-focus-flash-close {
-  background: #431407;
-  border-color: #c2410c;
-  color: #fdba74;
-}
-
-[data-theme="dark"] .guess-focus-flash-miss {
-  background: #1e293b;
-  border-color: #475569;
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .guess-focus-flash-info,
-[data-theme="dark"] .guess-focus-flash-error {
-  background: #451a1a;
-  border-color: #b91c1c;
-  color: #fecaca;
-}
-
-[data-theme="dark"] .chat-message.restricted {
-  color: #cbd5e1;
-  background: #334155;
-}
-
-[data-theme="dark"] .chat-input-box {
-  background: #0f172a;
-  border-color: #475569;
-}
-
-[data-theme="dark"] .chat-input-box input {
-  color: #f8fafc;
-  background: transparent;
-}
-
 [data-theme="dark"] select:disabled,
 [data-theme="dark"] input:disabled,
 [data-theme="dark"] textarea:disabled,
@@ -635,18 +375,6 @@
   -webkit-text-fill-color: #f8fafc !important;
   -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
   transition: background-color 5000s ease-in-out 0s;
-}
-
-[data-theme="dark"] .guess-hint-typing {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .guess-hint-correct {
-  color: #4ade80;
-}
-
-[data-theme="dark"] .guess-hint-wrong {
-  color: #f87171;
 }
 
 /* Overlays & Modals in dark mode */
@@ -726,52 +454,11 @@
   color: #f87171;
 }
 
-[data-theme="dark"] .player-you-mark {
-  color: #64748b;
-}
-
-[data-theme="dark"] .player-row.is-moderatable:hover,
-[data-theme="dark"] .player-row:has(.player-moderation-trigger[aria-expanded="true"]) {
-  background: #334155;
-}
-
-[data-theme="dark"] .player-role {
-  color: #c4b5fd;
-}
-
-[data-theme="dark"] .player-role-afk {
-  color: #fbbf24;
-}
-
-[data-theme="dark"] .player-vote-chip-afk {
-  background: #422006;
-  color: #fcd34d;
-}
-
-[data-theme="dark"] .player-vote-chip-kick {
-  background: #450a0a;
-  color: #fca5a5;
-}
-
-[data-theme="dark"] button.player-vote-chip-afk:hover,
-[data-theme="dark"] button.player-vote-chip-afk:focus-visible {
-  background: #78350f;
-}
-
-[data-theme="dark"] button.player-vote-chip-kick:hover,
-[data-theme="dark"] button.player-vote-chip-kick:focus-visible {
-  background: #7f1d1d;
-}
-
 [data-theme="dark"] .modal-overlay {
   background: rgba(0, 0, 0, 0.7);
 }
 
 /* 5.71:1 on the dark panel, 6.96:1 on the page background. */
-[data-theme="dark"] .colored-player-name.is-guest {
-  color: #94a3b8;
-}
-
 [data-theme="dark"] .auth-form input {
   border-color: #475569;
   background: #0f172a;
@@ -933,27 +620,9 @@
 }
 
 @media (max-width: 600px) {
-  .waiting-room-intro,
-  .waiting-start-card {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .waiting-invite-button,
-  .waiting-start-button,
-  .custom-prompts-apply { width: 100%; }
-  .waiting-card { padding: 16px; }
-  .room-settings-fields { grid-template-columns: 1fr; }
-  .waiting-room-actions { justify-content: flex-start; width: 100%; }
   .drawing-recap-card { border-radius: 12px; padding: 14px; }
   .drawing-recap-header { align-items: stretch; flex-direction: column; }
   .drawing-recap-header-actions { align-self: stretch; flex-wrap: wrap; }
-}
-
-@media (max-width: 900px) {
-  .waiting-room-layout { grid-template-columns: 1fr; }
-  .waiting-room-chat-column { position: static; }
-  .waiting-chat { height: 300px; }
 }
 
 [data-theme="dark"] .prompt-stats-header h1 {
@@ -1201,8 +870,4 @@
   background: #0f172a;
   border-color: #475569;
   color: #f8fafc;
-}
-
-[data-theme="dark"] .player-vote-action.player-vote-report .player-vote-action-kind {
-  color: #fbbf24;
 }

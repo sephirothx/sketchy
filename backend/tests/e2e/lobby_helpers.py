@@ -76,3 +76,15 @@ async def room_code(page) -> str:
         return attr.strip()
     text = await button.inner_text()
     return text.split("Code:")[1].strip()
+
+
+async def open_room_settings(page) -> None:
+    """Open the host's room-settings editor, which lives in a modal."""
+    await page.get_by_role("button", name="Edit settings").click()
+    await page.wait_for_selector(".room-settings-editor")
+
+
+async def close_room_settings(page) -> None:
+    """Close the room-settings modal (Escape) and wait for it to unmount."""
+    await page.keyboard.press("Escape")
+    await page.locator(".room-settings-editor").wait_for(state="detached")

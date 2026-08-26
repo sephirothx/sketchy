@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 from playwright.async_api import Page, async_playwright
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import close_room_settings, open_room_settings, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -47,12 +47,14 @@ async def test_highlights_open_from_game_over_and_again_from_the_waiting_room():
             await guest.click('button:has-text("Join by code")')
             await guest.locator('[data-testid="waiting-room"]').wait_for()
 
+            await open_room_settings(host)
             await host.locator(".room-settings-editor details").click()
             await host.locator("#custom-prompts").fill("apple\ntree")
             await host.get_by_label("Only use custom prompts").check()
             # Settings save themselves; the guest seeing them is the signal.
             await guest.get_by_text("Custom prompts only (2)").wait_for()
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
+            await close_room_settings(host)
             await host.get_by_role("button", name="Start game").click()
 
             # Both players guess every turn, so the game has something to say.

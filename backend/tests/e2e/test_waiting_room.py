@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import open_room_settings, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -31,6 +31,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             assert await host_page.get_by_label("1 of 8 players").is_visible()
             assert await host_page.locator(".player-row.is-self").get_by_text("LobbyHost").is_visible()
             assert await host_page.get_by_label("Host", exact=True).is_visible()
+            await open_room_settings(host_page)
             await host_page.wait_for_selector('.room-settings-editor')
             await assert_input_contract(
                 host_page.locator('.room-settings-editor label:has-text("Room name") input'),
@@ -104,8 +105,8 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             await player_page.click('button:has-text("Join by code")')
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
             assert not await player_page.evaluate("window.__inviteLoaderSeen")
-            assert await player_page.is_visible('text=How this game will play')
-            assert await player_page.is_visible('text=2 rounds each · 90s to draw')
+            assert await player_page.is_visible('.waiting-setting-chip:has-text("Rounds 2")')
+            assert await player_page.is_visible('.waiting-setting-chip:has-text("Drawing time 90s")')
             assert not await player_page.is_visible('.room-settings-editor')
 
             await host_page.wait_for_selector('text=LobbyPlayer')
@@ -115,7 +116,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             # The host revises settings inline before the game and everyone sees
             # the update - with no Save button to forget (#325).
             await host_page.fill('.room-settings-editor label:has-text("Rounds") input', "4")
-            await player_page.wait_for_selector('text=4 rounds each · 90s to draw')
+            await player_page.wait_for_selector('.waiting-setting-chip:has-text("Rounds 4")')
 
             # ...and the lobby chat is not narrating every one of those saves.
             assert not await player_page.is_visible('text=The host updated the room settings.')

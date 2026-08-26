@@ -538,6 +538,9 @@ details.form-section > .form-section-body {
   font-size: 13.5px;
   font-weight: 800;
   gap: 10px;
+  /* Anchors the visually-hidden checkbox inside the label, so scrolling the
+     control into view (keyboard users, test drivers) lands on the switch. */
+  position: relative;
   user-select: none;
   width: fit-content;
 }

@@ -4,6 +4,7 @@ import { recordRender } from "../lib/renderDiagnostics";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../types";
 import { PlayerList } from "./PlayerList";
+import { EyeIcon } from "./icons";
 
 interface RoomPlayersPanelProps {
   mode: "waiting" | "playing" | "game-end";
@@ -92,7 +93,7 @@ export function RoomPlayersPanel({
               aria-label={`${spectators.length} spectator${spectators.length === 1 ? "" : "s"}`}
               aria-describedby="room-spectator-tooltip"
             >
-              <span className="room-spectator-icon" aria-hidden="true">👀</span>
+              <span className="room-spectator-icon" aria-hidden="true"><EyeIcon size={14} /></span>
               <span className="room-spectator-count">{spectators.length}</span>
               <div
                 id="room-spectator-tooltip"

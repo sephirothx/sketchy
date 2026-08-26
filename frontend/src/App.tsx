@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import "./App.css";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
@@ -22,6 +22,16 @@ import { useAuthStore } from "./store/authStore";
 import { socket } from "./lib/socket";
 import { parseShutdownNotice, shutdownSecondsRemaining } from "./lib/shutdownNotice";
 import type { ServerShutdownNotice } from "./types";
+
+/* The router keeps the window scroll across navigations, so submitting a form
+   at the bottom of one page would open the next one part-way down. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
 
 function App() {
   useGameSocketListeners();
@@ -99,6 +109,7 @@ function App() {
       <EmailRecoveryReminder />
       <SuspensionNotice />
       <BrowserRouter>
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<LobbyBrowserPage />} />
           <Route path="/create" element={<CreateRoomPage />} />

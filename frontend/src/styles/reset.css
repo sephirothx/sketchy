@@ -2,6 +2,12 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Reserve the scrollbar's lane so centered layouts do not shift sideways
+     when a view crosses the one-screen threshold (waiting room vs. game). */
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   background: var(--paper);
