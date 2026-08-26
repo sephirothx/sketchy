@@ -1,21 +1,21 @@
-# UI mockups
+# UI mockups (historical snapshot)
 
-Every screen Sketchy has, drawn to match the shipped interface, on one pan/zoom
-canvas. This is the surface to argue about layout and copy on before writing
-React — and the reference for what a screen looks like today.
+> **Retired.** These artboards are a historical snapshot of the interface as of
+> `0e48d50` (2026-08-25), before the UI redesign shipped. They are no longer
+> kept in sync with the app and must not be updated. The living reference is
+> [`../ui-redesign/`](../ui-redesign/): its artboards are the design source of
+> truth, and the keep-in-sync rule below now applies to that directory instead.
+
+Every screen Sketchy had, drawn to match the then-shipped interface, on one
+pan/zoom canvas.
 
 Companion documents: [`../architecture.md`](../architecture.md) ·
 [`../requirements.md`](../requirements.md) ·
 [`../../GLOSSARY.md`](../../GLOSSARY.md)
 
-> **The rule that governs this document.** Every colour, size, padding and
-> radius in these artboards is a *copy* of a value in
-> [`frontend/src/styles/`](../../frontend/src/styles/). Nothing checks that the
-> copy is still right — a restyle in the app leaves the mockup silently wrong,
-> and a mockup that is wrong while claiming to be faithful is worse than no
-> mockup at all. **When you change a component's appearance, update the artboard
-> that shows it in the same change.** When you cannot, say so in the artboard's
-> annotation rather than leaving it to be discovered.
+> The keep-in-sync rule that used to govern this document has moved to
+> [`../ui-redesign/`](../ui-redesign/): when you change a component's
+> appearance, update the redesign artboard that shows it in the same change.
 
 Snapshot of the interface as of `0e48d50`, 2026-08-25.
 
@@ -115,14 +115,10 @@ Everything else is meant to match the app exactly. These do not:
 
 ## 6. Two things the mockups surfaced
 
-Both are in the app, not the artboards, and neither is fixed:
+Both were in the app, not the artboards, and both were fixed by the redesign:
 
-- **The lobby's "Prompt stats" link renders in the browser's default link
-  blue.** `.header-action-link` ([`profile.css:398`](../../frontend/src/styles/profile.css))
-  sets layout and `text-decoration: none` but no colour, and there is no global
-  `a { color }` rule — so it does not match the two header buttons beside it.
-  `Main.dc.html` draws it as it ships.
-- **`.waiting-invite-button` is dead CSS.** It is defined in
-  [`game-room.css:508`](../../frontend/src/styles/game-room.css) but nothing in
-  `frontend/src` renders it; `WaitingRoomPanel.tsx` only puts "View highlights"
-  and "View drawings" in that slot. No artboard shows an invite button.
+- ~~The lobby's "Prompt stats" link rendered in the browser's default link
+  blue.~~ The link itself was retired: Prompt stats moved into the account
+  menu, and `.header-action-link` no longer exists.
+- ~~`.waiting-invite-button` was dead CSS.~~ Deleted when the waiting room was
+  rebuilt around the invite-first card.

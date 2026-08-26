@@ -40,6 +40,7 @@ and conversation.
 | **Game over** | The final screen: full standings, and the way through to the highlights and the drawing recap. | game end screen, results screen |
 | **Highlights** | The short list of superlatives from the last game — hardest prompt, fastest guess, best drawer, quickest on average. Shown on a screen of their own, reached from the game over screen or the waiting room, rather than crowded onto either. Each is dropped when the game gives it nothing to say, so the list is often shorter than four. Never derived from points, so it reads the same in a no-scoring game. | awards, MVP, trophies, achievements |
 | **Rematch** | Starting a new game with the players already in the room. | replay, new game |
+| **Continue** | The game-over screen's primary action: return to the waiting room, with the auto-continue countdown shown inside the button. **Stay here** cancels that countdown and keeps the results up. | back to waiting room, done, dismiss |
 
 The rule of thumb: **rounds contain turns**. Anything a single drawer does, is
 awarded, or is limited to belongs to a *turn*. Only the room's configured length and

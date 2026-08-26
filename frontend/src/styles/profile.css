@@ -394,13 +394,6 @@
   border-color: var(--primary);
 }
 
-/* Matches the header buttons beside it without claiming to be one. */
-.header-action-link {
-  align-items: center;
-  display: inline-flex;
-  gap: 6px;
-  text-decoration: none;
-}
 
 .prompt-stats-control {
   align-items: center;

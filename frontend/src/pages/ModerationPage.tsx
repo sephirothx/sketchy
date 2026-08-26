@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { SectionLabel } from "../components/ui/Card";
 
@@ -88,7 +87,7 @@ export function ModerationPage() {
   if (hasResolved && !allowed) {
     return (
       <main className="ops-page">
-        <Link to="/" className="back-link">← Back to lobby</Link>
+        <AppHeader backLabel="Back to lobby" />
         <h1>Moderation</h1>
         <p className="ops-empty">This page is for moderators.</p>
       </main>

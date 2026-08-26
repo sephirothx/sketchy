@@ -72,3 +72,20 @@ select:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .invite-loading-spinner {
+    animation: none;
+  }
+  .choosing-prompt-dots span { animation: none; opacity: .65; }
+  .room-shell-main-transition { animation: none; }
+  .room-spectator-tooltip { transition: none; }
+  /* Also opacity: rows are introduced from transparent on the first turn,
+     and resetting only the transform would leave them invisible here. */
+  .turn-results-score-row {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    transition-delay: 0ms !important;
+  }
+}

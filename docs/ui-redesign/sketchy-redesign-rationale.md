@@ -391,23 +391,61 @@ returns to the lobby.
 
 ## 4. Worth fixing regardless of any redesign
 
-Findings that are app defects or requirement mismatches on their own:
+Findings that were app defects or requirement mismatches on their own. All of
+them shipped with the redesign implementation:
 
-1. `.header-action-link` has no color — the lobby *Prompt stats* link is
-   browser-blue (already in the mockups README §6).
-2. `.waiting-invite-button` is dead CSS; the waiting room ships without an
-   invite affordance (README §6).
-3. **Drawing time UI contradicts R-ROOM-04** — a stepper for a fixed preset
-   list.
-4. Moderation's `width: 100%` selects inside flex rows break the action-row
-   layout.
-5. Emoji-as-icons render inconsistently across platforms and can't follow a
-   theme (dark mode ships today; the emoji don't adapt).
-6. The turn-results overlay's content exceeds what `TURN_RESULTS_SECONDS = 5`
-   allows anyone to read — either the overlay slims down (this proposal) or
-   the constant grows.
-7. No screen exists for the choosing phase in the mockup suite; it's a real
-   phase (R-GAME-01) and should be covered by the reference canvas.
+1. ~~`.header-action-link` has no color.~~ The lobby *Prompt stats* link moved
+   into the account menu; the rule is gone.
+2. ~~`.waiting-invite-button` is dead CSS.~~ Deleted; the waiting room is now
+   built around the invite-first card.
+3. ~~Drawing time UI contradicts R-ROOM-04.~~ The stepper card snaps to the
+   preset list and says so in its caption.
+4. ~~Moderation's `width: 100%` selects break the action row.~~ Restyled with
+   the shared field recipes.
+5. ~~Emoji-as-icons.~~ Every UI glyph is now an SVG from the shared icon set;
+   emoji remain only where they are player content.
+6. ~~Turn-results overlay content vs `TURN_RESULTS_SECONDS`.~~ The overlay
+   slimmed to one readable card with a next-turn progress bar.
+7. ~~No choosing-phase screen existed.~~ The reference canvas covers it
+   (PromptChoice artboard) and the app matches.
+
+### Frontend-only degradations (backend follow-ups)
+
+The implementation is frontend-only, so four mockup elements that need data
+the client does not receive were deliberately degraded. Each becomes a small
+backend follow-up:
+
+- **"Turn 1 of 4"** — the header shows only "Round 2 of 3"; the turn index
+  within a round is not in any payload.
+- **Lobby round-progress chip** — public room cards say "In progress" rather
+  than "Round 2 of 3" for the same reason.
+- **"Next free letter in 9s"** — the timed-hints countdown chip needs the
+  hint checkpoint schedule; letter tiles ship without it.
+- **Moderation account-context card** — prior-report counts and account age
+  are not exposed by the moderation API.
+
+## 4b. Where the implementation deviates from the artboards
+
+Small, deliberate divergences between the shipped React frontend and these
+artboards, kept for stability or clarity rather than drift:
+
+- **Lobby button copy** — the lobby CTA stays "Create room" (matching the
+  create page's submit) and the code card's action stays "Join by code";
+  the artboards say "Create a room" / "Join".
+- **"Quick start with defaults"** — not implemented; the create page opens
+  with the same defaults one click away.
+- **The name-roll dice** — random room names remain a server behavior
+  (leave the field blank); no client-side dice button.
+- **Settings is a modal, not a page** — as decided at planning; the modal
+  carries the artboard's separated tabs, theme cards, and shortcut chips.
+  The Brush presets and clear-guess-box rows are omitted by decision.
+- **Waiting-room settings chips** — chip values reuse the app's established
+  copy ("Custom prompts only (2)", "2 custom prompts + curated lists")
+  rather than the artboards' shortened variants.
+- **Prompt-stats chart & ops hourly bars** — the operations dashboard keeps
+  its daily sparklines; hourly buckets are not recorded.
+- **Identity chip stays in the room header** — the artboards drop it, but
+  it is the only in-room path to claiming an account and account menus.
 
 ## 5. What was deliberately kept
 

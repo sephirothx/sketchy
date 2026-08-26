@@ -18,6 +18,7 @@ import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
 import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { SuspensionNotice } from "./components/SuspensionNotice";
+import { XIcon } from "./components/icons";
 import { useAuthStore } from "./store/authStore";
 import { socket } from "./lib/socket";
 import { parseShutdownNotice, shutdownSecondsRemaining } from "./lib/shutdownNotice";
@@ -102,7 +103,7 @@ function App() {
       {restarted && (
         <div className="server-shutdown-banner is-restarted" role="status" aria-live="polite">
           <span>The server was updated and is back. Any game in progress ended.</span>
-          <button type="button" aria-label="Dismiss" onClick={() => setRestarted(false)}>×</button>
+          <button type="button" aria-label="Dismiss" onClick={() => setRestarted(false)}><XIcon size={14} /></button>
         </div>
       )}
       <ConnectionStatusBanner />

@@ -225,8 +225,8 @@
 
 .restart-vote-banner {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
+  background: var(--well);
+  border: 1px solid var(--line-strong);
   border-radius: 10px;
   display: grid;
   gap: 12px;
@@ -237,8 +237,8 @@
 
 .colorblind-safe-suggestion {
   align-items: center;
-  background: #eff6ff;
-  border: 1px solid #60a5fa;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-edge-soft);
   border-radius: 10px;
   display: flex;
   gap: 16px;
@@ -254,12 +254,12 @@
 }
 
 .colorblind-safe-suggestion-copy strong {
-  color: #1e3a8a;
+  color: var(--primary-ink);
   font-size: 14px;
 }
 
 .colorblind-safe-suggestion-copy span {
-  color: #475569;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -271,9 +271,9 @@
 
 .colorblind-safe-suggestion-actions button {
   background: #fff;
-  border: 1px solid #94a3b8;
+  border: 1px solid var(--faint);
   border-radius: 7px;
-  color: #334155;
+  color: var(--ink);
   font: inherit;
   font-size: 12px;
   font-weight: 800;
@@ -282,8 +282,8 @@
 }
 
 .colorblind-safe-suggestion-actions button.primary {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: var(--primary);
+  border-color: var(--primary);
   color: #fff;
 }
 
@@ -293,7 +293,7 @@
 }
 
 .colorblind-safe-suggestion-actions button:focus-visible {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--primary-edge-soft);
   outline-offset: 2px;
 }
 
@@ -373,13 +373,13 @@
 }
 
 .restart-vote-copy strong {
-  color: #1e293b;
+  color: var(--ink);
   font-size: 14px;
 }
 
 .restart-vote-copy > span,
 .restart-vote-spectator-note {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -402,9 +402,9 @@
   min-width: 18px;
 }
 
-.restart-vote-tile.yes { background: #16a34a; }
-.restart-vote-tile.no { background: #dc2626; }
-.restart-vote-tile.pending { background: #cbd5e1; }
+.restart-vote-tile.yes { background: var(--success); }
+.restart-vote-tile.no { background: var(--danger); }
+.restart-vote-tile.pending { background: var(--line-strong); }
 
 .restart-vote-actions {
   display: flex;
@@ -413,9 +413,9 @@
 
 .restart-vote-actions button {
   background: #fff;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   border-radius: 7px;
-  color: #334155;
+  color: var(--ink);
   font: inherit;
   font-size: 12px;
   font-weight: 800;
@@ -425,21 +425,21 @@
 
 .restart-vote-actions button.yes:hover:not(:disabled),
 .restart-vote-actions button.yes.selected {
-  background: #dcfce7;
-  border-color: #22c55e;
-  color: #166534;
+  background: var(--success-soft);
+  border-color: var(--success);
+  color: var(--success-ink);
 }
 
 .restart-vote-actions button.no:hover:not(:disabled),
 .restart-vote-actions button.no.selected {
-  background: #fee2e2;
-  border-color: #ef4444;
-  color: #991b1b;
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .restart-vote-actions button:focus-visible,
 .game-header-restart-button:focus-visible {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--primary-edge-soft);
   outline-offset: 2px;
 }
 
