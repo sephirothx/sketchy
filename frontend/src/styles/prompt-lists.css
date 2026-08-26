@@ -18,14 +18,17 @@
 }
 
 .prompt-list-share-form input {
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
   flex: 0 1 240px;
   min-width: 0;
   padding: 8px 10px;
 }
 
-.prompt-list-share-form button,
 .prompt-list-manager-card button:not(.btn) {
   background: var(--primary);
   border: 0;
@@ -72,8 +75,7 @@
 }
 .prompt-content-report-dialog textarea { min-height: 100px; resize: vertical; }
 
-.prompt-list-manager-card button:not(.btn):disabled,
-.prompt-list-share-form button:disabled {
+.prompt-list-manager-card button:not(.btn):disabled {
   cursor: not-allowed;
   opacity: .55;
 }

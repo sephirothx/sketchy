@@ -225,7 +225,7 @@ export function PromptListPicker({
       </div>
       <form className="prompt-list-share-form" onSubmit={(event) => void addSharedList(event)}>
         <label htmlFor="prompt-list-share-code">Add an unlisted list by code</label>
-        <div><input id="prompt-list-share-code" value={shareCode} disabled={disabled || resolvingShare} maxLength={24} autoComplete="off" onChange={(event) => setShareCode(event.target.value)} /><button type="submit" disabled={disabled || resolvingShare || !shareCode.trim()}>{resolvingShare ? "Adding…" : "Add"}</button></div>
+        <div><input id="prompt-list-share-code" value={shareCode} disabled={disabled || resolvingShare} maxLength={24} autoComplete="off" onChange={(event) => setShareCode(event.target.value)} /><button type="submit" className="btn btn-primary btn-compact" disabled={disabled || resolvingShare || !shareCode.trim()}>{resolvingShare ? "Adding…" : "Add"}</button></div>
         {shareError && <p className="prompt-list-fallback-note" role="alert">{shareError}</p>}
       </form>
       {reportNotice && <p className="prompt-list-manager-notice" role="status">{reportNotice}</p>}
