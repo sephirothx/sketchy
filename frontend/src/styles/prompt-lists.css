@@ -29,17 +29,6 @@
   padding: 8px 10px;
 }
 
-.prompt-list-manager-card button:not(.btn) {
-  background: var(--primary);
-  border: 0;
-  border-radius: 6px;
-  color: var(--card);
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 600;
-  padding: 10px 16px;
-}
-
 .prompt-list-chip-report {
   align-items: center;
   background: var(--card);
@@ -65,20 +54,17 @@
 .prompt-content-report-dialog label { color: var(--ink); font-size: 14px; font-weight: 700; }
 .prompt-content-report-dialog select,
 .prompt-content-report-dialog textarea {
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   box-sizing: border-box;
+  color: var(--ink);
   font: inherit;
   font-weight: 400;
   padding: 9px 10px;
   width: 100%;
 }
 .prompt-content-report-dialog textarea { min-height: 100px; resize: vertical; }
-
-.prompt-list-manager-card button:not(.btn):disabled {
-  cursor: not-allowed;
-  opacity: .55;
-}
 
 .prompt-list-manager-page {
   margin: 0 auto;
@@ -127,10 +113,14 @@
 .prompt-list-manager-card .prompt-list-manager-layout aside button {
   background: var(--well);
   border: 1px solid var(--line);
+  border-radius: 6px;
   color: var(--ink);
   display: flex;
   flex-direction: column;
+  font-size: 15px;
+  font-weight: 600;
   gap: 3px;
+  padding: 10px 16px;
   text-align: left;
 }
 
@@ -157,9 +147,11 @@
 .prompt-list-manager-layout input,
 .prompt-list-manager-layout select,
 .prompt-list-manager-layout textarea {
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   box-sizing: border-box;
+  color: var(--ink);
   font: inherit;
   font-size: 15px;
   font-weight: normal;
@@ -329,13 +321,6 @@
   margin: 0;
   padding: 10px 12px;
 }
-.prompt-list-manager-card .prompt-list-entry-editor button,
-.prompt-list-manager-card .danger-button {
-  background: var(--card);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-}
-
 /* Reads as one of the page's fields: a recessed well holding a value, with
    its label beside it rather than above. */
 .prompt-list-share-code {

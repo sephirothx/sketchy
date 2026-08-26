@@ -262,7 +262,7 @@ export function MyPromptListsPage() {
             </div>
             {draft.visibility === "unlisted" && shareCode && <div className="prompt-list-share-code">
               <span>Share code</span><code>{shareCode}</code>
-              <button type="button" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError("Could not copy the share code."))}>Copy</button>
+              <button type="button" className="btn btn-secondary btn-compact" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError("Could not copy the share code."))}>Copy</button>
             </div>}
             <div className="prompt-list-bulk-add">
               <label htmlFor="prompt-bulk-input">Add prompts</label>
@@ -279,6 +279,7 @@ export function MyPromptListsPage() {
                 </p>
                 <button
                   type="button"
+                  className="btn btn-primary btn-compact"
                   disabled={!bulkInput.trim() || draft.prompts.length >= MAX_LIST_PROMPTS}
                   onClick={addBulkPrompts}
                 >
@@ -343,7 +344,7 @@ export function MyPromptListsPage() {
             {error && <p className="auth-error" role="alert">{error}</p>}
             {notice && <p className="prompt-list-manager-notice" role="status">{notice}</p>}
             <div className="prompt-list-manager-actions">
-              {selectedId && <button type="button" className="btn btn-danger-ghost danger-button" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />Delete list…</button>}
+              {selectedId && <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />Delete list…</button>}
               <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Save list"}</button>
             </div>
           </form>
