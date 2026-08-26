@@ -3,6 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Kept in sync with the resolved theme by the script below: the theme is
+         user-overridable, so a prefers-color-scheme media attribute here would
+         show dark chrome to someone who forced light. -->
+    <meta name="theme-color" content="#faf6ef" />
+    <meta name="description" content="Draw, guess and play with friends." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Sketchy" />
+    <meta property="og:title" content="Sketchy" />
+    <meta property="og:description" content="Draw, guess and play with friends." />
+    <!-- Root-relative on purpose. Slack, Discord and iMessage resolve it against
+         the page they just fetched, and this app has no canonical origin to
+         hard-code. og:url is omitted for the same reason. -->
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>Sketchy</title>
     <script>
@@ -16,6 +34,8 @@
               : "light";
         document.documentElement.dataset.theme = theme;
         document.documentElement.style.colorScheme = theme;
+        var tc = document.querySelector('meta[name="theme-color"]');
+        if (tc) tc.content = theme === "dark" ? "#0f172a" : "#faf6ef";
       } catch (e) {}
     </script>
   </head>

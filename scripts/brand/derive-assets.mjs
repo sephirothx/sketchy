@@ -13,8 +13,9 @@
 // themes. Geometry is copied through untouched.
 //
 // Run:  node scripts/brand/derive-assets.mjs
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -120,3 +121,214 @@ console.log(`  ferrule   ${found.ferrule.map((d) => d.length).join(", ")} chars`
 console.log(`  gradient  ${x1},${y1} -> ${x2},${y2}`);
 console.log("wrote frontend/src/components/brandArt.ts");
 console.log("wrote docs/ui-mockups/tools/brandArt.mjs");
+
+/* ---------------------------------------------------------------- app icon */
+// scripts/brand/sketchy-icon-source.svg is the authored square mark. It is
+// rewritten rather than re-authored: every path, transform and gradient is
+// passed through untouched and only the paint is lifted into a <style> block,
+// so the file can respond to prefers-color-scheme.
+//
+// A file-based icon gets no CSS context — <link rel="icon"> and <img> render
+// it in an isolated document, so var() and currentColor do not resolve. Hence
+// literal colours plus an internal media query rather than theme tokens.
+//
+// The dark values are derived from the light ones by preserving each element's
+// authored contrast relationship, not by eye:
+//
+//   element   light                  ratio   dark                   ratio
+//   S         #1a1a1a on paper       16.16   #f8fafc on slate       17.06
+//   handle    #784421 on paper        7.36   #d29b6a on slate        7.34
+//   ferrule   #999999 on handle       2.78   #7a5636 on handle       2.69
+//   swoosh    #ff7f2a unchanged — 2.34 on paper, 7.07 on slate
+//
+// Without this the mark is unreadable on a dark tab bar: the authored S sits
+// at 1.03:1 against #0f172a.
+// Home-screen icons sit on a dark ground on purpose. iOS draws no border or
+// shadow, so the icon's own ground is its silhouette — a paper-white tile
+// dissolves into a light wallpaper, and the orange only carries 2.34:1 on
+// paper against 7.07:1 here.
+//
+// This is --paper's dark value from theme.css. Repeated as a literal because a
+// rasterised PNG has no CSS context; if the dark ground ever changes, change it
+// here too.
+const ICON_GROUND = "#0f172a";
+
+const iconSource = readFileSync(join(here, "sketchy-icon-source.svg"), "utf8");
+
+const PAINT = [
+  [/style="fill:#999999"/g, 'class="fer"', 2],
+  [/style="fill:#784421;fill-opacity:1"/g, 'class="handle"', 1],
+  [/style="fill:#ff7f2a"/g, 'class="swoosh"', 1],
+  [/style="fill:url\(#linearGradient1\);fill-opacity:1"/g, 'class="letter"', 1],
+  [/style="stop-color:#1a1a1a;stop-opacity:1;"/g, 'class="stopA"', 1],
+  [/style="stop-color:#ff7f2a;stop-opacity:1;"/g, 'class="stopB"', 1],
+];
+
+let icon = iconSource;
+for (const [re, cls, expected] of PAINT) {
+  const hits = (icon.match(re) || []).length;
+  if (hits !== expected) {
+    throw new Error(`icon: expected ${expected} match for ${re}, found ${hits} — re-export changed the paint`);
+  }
+  icon = icon.replace(re, cls);
+}
+
+// Square the canvas: the art is 403.69 x 371.57, so pad the short axis rather
+// than cropping. Favicon and apple-touch slots are square.
+const ICON_W = 403.69119, ICON_H = 371.5726;
+const yOff = ((ICON_W - ICON_H) / 2).toFixed(2);
+
+// The favicon carries the dark treatment on its own rounded tile rather than
+// adapting to prefers-color-scheme. A dark tile is a legible object on light
+// AND dark browser chrome, whereas a transparent mark needs the ground to
+// cooperate — and it keeps the favicon identical to the home-screen icon.
+// Handle #d29b6a, bands #94a3b8 — the site's dark --brand-ferrule, so the icon
+// and the in-app wordmark use the literal same value.
+//
+// Noted deliberately: #94a3b8 on #d29b6a is 1.05:1, so the bands read as a
+// soft tonal break in the handle rather than as distinct stripes. That is the
+// intended look — do not "fix" the contrast here without asking.
+const ICON_STYLE = `<style>
+    .letter{fill:url(#linearGradient1)}
+    .swoosh{fill:#ff7f2a}
+    .handle{fill:#d29b6a}
+    .fer{fill:#94a3b8}
+    .stopA{stop-color:#f8fafc}
+    .stopB{stop-color:#ff7f2a}
+  </style>`;
+
+// Tile: the mark is inset so it does not touch the corners, and the radius is
+// the design system's proportion (--radius on a 48px control), so the favicon
+// reads as the same family as the app's own surfaces.
+const FAVICON_INSET = 0.08;
+const favPad = ICON_W * FAVICON_INSET;
+const favBox = ICON_W + favPad * 2;
+const favTile = `<rect x="${(-favPad).toFixed(2)}" y="${(-favPad - Number(yOff)).toFixed(2)}"`
+  + ` width="${favBox.toFixed(2)}" height="${favBox.toFixed(2)}"`
+  + ` rx="${(favBox * 0.30).toFixed(2)}" fill="${ICON_GROUND}"/>`;
+
+icon = icon
+  .replace(/<\?xml[^>]*\?>\s*/, "")
+  .replace(/\s+(?:inkscape|sodipodi):[\w-]+="[^"]*"/g, "")
+  .replace(/\s+xmlns:(?:inkscape|sodipodi)="[^"]*"/g, "")
+  .replace(/<sodipodi:namedview[\s\S]*?\/>/g, "")
+  .replace(/\s+xml:space="preserve"/g, "")
+  .replace(/width="[\d.]+"\s*height="[\d.]+"\s*viewBox="[^"]*"/,
+           `width="${favBox.toFixed(0)}" height="${favBox.toFixed(0)}"`
+           + ` viewBox="${(-favPad).toFixed(2)} ${(-favPad - Number(yOff)).toFixed(2)} ${favBox.toFixed(2)} ${favBox.toFixed(2)}"`)
+  .replace("<defs", `${ICON_STYLE}<defs`)
+  .replace(/(<g\b[^>]*>)/, `${favTile}$1`)
+  .replace(/\n\s*\n/g, "\n");
+
+writeFileSync(join(repo, "frontend", "public", "favicon.svg"), icon.trim() + "\n");
+console.log(`wrote frontend/public/favicon.svg (${icon.length} bytes)`);
+
+/* ------------------------------------------------------- raster icon sources */
+// PNGs cannot carry a media query, and iOS ignores alpha on apple-touch-icon
+// (it composites onto black), so the raster variants are baked opaque on the
+// light ground with the authored colours. These are intermediates: they are
+// written to scripts/brand/raster/ and rasterised by render-rasters.sh.
+const BAKED_PAINT = `<style>
+    .letter{fill:url(#linearGradient1)}
+    .swoosh{fill:#ff7f2a}
+    .handle{fill:#d29b6a}
+    .fer{fill:#94a3b8}
+    .stopA{stop-color:#f8fafc}
+    .stopB{stop-color:#ff7f2a}
+  </style>`;
+
+// `icon` still carries the themed <style>; swap it for the baked one and add
+// an opaque ground. `inset` is the fraction of the tile left as margin.
+function rasterIcon(inset) {
+  const side = ICON_W;
+  const pad = side * inset;
+  const box = side + pad * 2;
+  return icon
+    .replace(/<style>[\s\S]*?<\/style>/, BAKED_PAINT)
+    .replace(/viewBox="[^"]*"/, `viewBox="${-pad.toFixed(2)} ${(-pad - Number(yOff)).toFixed(2)} ${box.toFixed(2)} ${box.toFixed(2)}"`)
+    .replace(/(<svg[^>]*>)/, `$1<rect x="${-pad.toFixed(2)}" y="${(-pad - Number(yOff)).toFixed(2)}" width="${box.toFixed(2)}" height="${box.toFixed(2)}" fill="${ICON_GROUND}"/>`);
+}
+
+mkdirSync(join(here, "raster"), { recursive: true });
+writeFileSync(join(here, "raster", "icon-square.svg"), rasterIcon(0.10));
+// Maskable icons are cropped to an inner circle by the OS; keep the mark well
+// inside the 80% safe zone.
+writeFileSync(join(here, "raster", "icon-maskable.svg"), rasterIcon(0.28));
+
+// The social card is a composition, not a resize: the full lockup on a ground,
+// at a size a 1200x630 crop can actually hold.
+//
+// The tagline is converted to outlines rather than set as live text. sharp's
+// SVG rasteriser has no access to the app's webfonts, so a <text> element
+// would silently fall back to a system face — the PNG would not match the app.
+// Fredoka is already a dependency; opentype.js reads its .woff directly.
+const OG_BG = "#0f172a", OG_INK = "#f8fafc", OG_WARM = "#ee7e48", OG_FER = "#94a3b8";
+const TAGLINE = "DRAW · GUESS · LAUGH WITH FRIENDS";
+const TAGLINE_SIZE = 40;
+
+// This script lives outside frontend/, so Node will not find its node_modules
+// by walking up. Anchor resolution at the frontend package instead of adding a
+// second package.json here for one dev dependency.
+const frontendRequire = createRequire(join(repo, "frontend", "package.json"));
+const opentype = frontendRequire("opentype.js");
+
+const fredokaFile = join(repo, "frontend", "node_modules", "@fontsource", "fredoka", "files", "fredoka-latin-600-normal.woff");
+const fredokaBuf = readFileSync(fredokaFile);
+const fredoka = opentype.parse(
+  fredokaBuf.buffer.slice(fredokaBuf.byteOffset, fredokaBuf.byteOffset + fredokaBuf.byteLength),
+);
+const taglinePath = fredoka.getPath(TAGLINE, 0, 0, TAGLINE_SIZE);
+
+// opentype.js 2.x's toPathData() emits literal NaN for this string at every
+// decimal precision, even though every command coordinate is finite — verified
+// by scanning path.commands. Renderers abort a path at the first NaN, which
+// silently truncated the tagline to "DRA". Serialise the commands directly.
+const n = (v) => {
+  if (!Number.isFinite(v)) throw new Error(`non-finite coordinate in tagline path: ${v}`);
+  return Number(v.toFixed(2));
+};
+const toPathData = (path) =>
+  path.commands
+    .map((c) => {
+      switch (c.type) {
+        case "M": return `M${n(c.x)} ${n(c.y)}`;
+        case "L": return `L${n(c.x)} ${n(c.y)}`;
+        case "C": return `C${n(c.x1)} ${n(c.y1)} ${n(c.x2)} ${n(c.y2)} ${n(c.x)} ${n(c.y)}`;
+        case "Q": return `Q${n(c.x1)} ${n(c.y1)} ${n(c.x)} ${n(c.y)}`;
+        case "Z": return "Z";
+        default: throw new Error(`unhandled path command: ${c.type}`);
+      }
+    })
+    .join("");
+
+const taglineData = toPathData(taglinePath);
+if (taglineData.includes("NaN")) throw new Error("tagline path still contains NaN");
+const tb = taglinePath.getBoundingBox();
+const taglineW = tb.x2 - tb.x1;
+
+const lockW = 720, lockH = Math.round(lockW / Number(aspect));
+const gap = 54;
+const blockH = lockH + gap + (tb.y2 - tb.y1);
+const lockY = (630 - blockH) / 2;
+
+writeFileSync(
+  join(here, "raster", "og-image.svg"),
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="${OG_BG}"/>
+  <g transform="translate(${((1200 - lockW) / 2).toFixed(1)} ${lockY.toFixed(1)})">
+    <svg width="${lockW}" height="${lockH}" viewBox="${viewBox}">
+      <defs><linearGradient id="og" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">
+        <stop offset="0" stop-color="${OG_INK}"/><stop offset="1" stop-color="${OG_WARM}"/>
+      </linearGradient></defs>
+      <path d="${found.swoosh[0]}" fill="${OG_WARM}"/>
+      <path d="${found.lettering[0]}" fill="url(#og)"/>
+${found.ferrule.map((d) => `      <path d="${d}" fill="${OG_FER}"/>`).join("\n")}
+    </svg>
+  </g>
+  <g transform="translate(${(600 - taglineW / 2 - tb.x1).toFixed(1)} ${(lockY + lockH + gap - tb.y1).toFixed(1)})">
+    <path d="${taglineData}" fill="${OG_WARM}"/>
+  </g>
+</svg>
+`,
+);
+console.log("wrote scripts/brand/raster/{icon-square,icon-maskable,og-image}.svg");
