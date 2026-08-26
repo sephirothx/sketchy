@@ -40,7 +40,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  color: #fff;
+  color: var(--card);
   font-size: 24px;
   font-weight: 700;
   flex: none;
@@ -74,8 +74,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--well);
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px;
 }
@@ -83,14 +83,14 @@
 .profile-stat-value {
   font-size: 22px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ink);
 }
 
 .profile-stat-label {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .profile-games {
@@ -102,9 +102,9 @@
 }
 
 .profile-game {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--well);
   overflow: hidden;
 }
 
@@ -133,12 +133,12 @@
 
 .profile-game-room {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ink);
 }
 
 .profile-game-meta {
   font-size: 12px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .profile-game-result {
@@ -150,27 +150,27 @@
 
 .profile-game-rank {
   font-weight: 700;
-  color: #475569;
+  color: var(--muted);
 }
 
 .profile-game-rank.is-winner {
-  color: #15803d;
+  color: var(--success-ink);
 }
 
 .profile-game-score {
   font-size: 13px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .profile-game-chevron {
   flex: none;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .profile-game-body {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--line);
   padding: 12px 14px;
-  background: #fff;
+  background: var(--card);
 }
 
 .profile-standings {
@@ -195,7 +195,7 @@
 }
 
 .profile-standing-rank {
-  color: #64748b;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   min-width: 2.2em;
 }
@@ -203,7 +203,7 @@
 .profile-standing-score {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
-  color: #475569;
+  color: var(--muted);
 }
 
 /* The round table is the one element that cannot shrink to a phone: it scrolls
@@ -223,13 +223,13 @@
 .profile-score-events td {
   padding: 6px 10px;
   text-align: left;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
 .profile-turns th,
 .profile-score-events th {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -237,14 +237,14 @@
 
 .profile-turn-prompt {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ink);
 }
 
 .profile-drawing-button {
   background: none;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   border-radius: 6px;
-  color: #1d4ed8;
+  color: var(--primary-ink);
   cursor: pointer;
   font: inherit;
   font-weight: 600;
@@ -252,8 +252,8 @@
 }
 
 .profile-drawing-button:hover {
-  background: #eff6ff;
-  border-color: #1d4ed8;
+  background: var(--primary-soft);
+  border-color: var(--primary-ink);
 }
 
 /* Prompt stats: how a list's prompts have actually played. */
@@ -264,13 +264,13 @@
 }
 
 .prompt-stats-header h1 {
-  color: #1e293b;
+  color: var(--ink);
   font-size: 24px;
   margin: 16px 0 4px;
 }
 
 .prompt-stats-intro {
-  color: #475569;
+  color: var(--muted);
   margin: 0 0 16px;
 }
 
@@ -283,18 +283,18 @@
 }
 
 .prompt-stats-controls label {
-  color: #475569;
+  color: var(--muted);
   font-weight: 700;
 }
 
 .prompt-stats-note {
-  color: #475569;
+  color: var(--muted);
   line-height: 1.5;
   margin: 12px 0 0;
 }
 
 .prompt-stats-note.is-error {
-  color: #b91c1c;
+  color: var(--danger);
 }
 
 /* The table is the one thing here wide enough to push the page sideways. */
@@ -309,7 +309,7 @@
 }
 
 .prompt-stats-table caption {
-  color: #64748b;
+  color: var(--muted);
   font-size: 13px;
   padding-bottom: 8px;
   text-align: left;
@@ -317,13 +317,13 @@
 
 .prompt-stats-table th,
 .prompt-stats-table td {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--line);
   padding: 9px 10px;
   text-align: right;
 }
 
 .prompt-stats-table thead th {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -336,16 +336,16 @@
 }
 
 .prompt-stats-table tbody th {
-  color: #1e293b;
+  color: var(--ink);
   font-weight: 700;
 }
 
 .prompt-stats-table tbody td {
-  color: #334155;
+  color: var(--ink);
 }
 
 .prompt-list-stats-links {
-  color: #64748b;
+  color: var(--muted);
   font-size: 13px;
   margin: 8px 0 0;
 }
@@ -361,7 +361,7 @@
    it fails WCAG 2.2 target-size, which the axe suite enforces. */
 .prompt-list-chip-info {
   align-items: center;
-  color: #64748b;
+  color: var(--muted);
   display: inline-flex;
   height: 24px;
   justify-content: center;
@@ -371,7 +371,7 @@
 
 .prompt-list-chip-info > span {
   align-items: center;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
   display: inline-flex;
   font-family: Georgia, "Times New Roman", serif;
@@ -386,12 +386,12 @@
 
 .prompt-list-chip-info:hover,
 .prompt-list-chip-info:focus-visible {
-  color: #4c6ef5;
+  color: var(--primary);
 }
 
 .prompt-list-chip-info:hover > span,
 .prompt-list-chip-info:focus-visible > span {
-  border-color: #4c6ef5;
+  border-color: var(--primary);
 }
 
 /* Matches the header buttons beside it without claiming to be one. */
@@ -414,7 +414,7 @@
 
 .prompt-stats-table tbody tr.is-unrated th,
 .prompt-stats-table tbody tr.is-unrated td {
-  color: #94a3b8;
+  color: var(--faint);
 }
 
 .profile-history-head {
@@ -425,11 +425,15 @@
   justify-content: space-between;
 }
 
-.profile-history-filter {
+.profile-history-filter,
+.panel .profile-history-filter {
   align-items: center;
   display: flex;
+  flex-direction: row;
   font-size: 13px;
+  font-weight: 700;
   gap: 6px;
+  margin-bottom: 0;
   opacity: 0.85;
 }
 
@@ -444,4 +448,55 @@
   padding: 0 6px;
   text-transform: uppercase;
   vertical-align: middle;
+}
+
+
+/* Placement badge leading each history row. */
+.profile-game-place {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--well);
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 14px;
+  flex: none;
+}
+
+.profile-game-place.is-place-1 { background: color-mix(in srgb, var(--gold) 16%, transparent); color: var(--gold); }
+.profile-game-place.is-place-2 { background: color-mix(in srgb, var(--silver) 16%, transparent); color: var(--silver); }
+.profile-game-place.is-place-3 { background: color-mix(in srgb, var(--bronze) 16%, transparent); color: var(--bronze); }
+
+/* The quieter second row of statistics. */
+.profile-stats-small {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  padding: 6px 4px 0;
+}
+
+.profile-stats-small .profile-stat {
+  background: none;
+  border: 0;
+  padding: 0;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.profile-stats-small .profile-stat-value {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.profile-stats-small .profile-stat-label {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
 }

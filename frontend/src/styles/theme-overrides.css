@@ -26,60 +26,7 @@
 /* Profile page. The tiles and game rows nest inside a .panel, so they take the
    same darker fill as .public-room-card does; the expanded round detail goes a
    step lighter to read as a layer above the row it opened from. */
-[data-theme="dark"] .profile-stat,
-[data-theme="dark"] .profile-game {
-  background: #0f172a;
-  border-color: #334155;
-}
-
-[data-theme="dark"] .profile-game-body {
-  background: #1e293b;
-  border-top-color: #334155;
-}
-
-[data-theme="dark"] .profile-stat-value,
-[data-theme="dark"] .profile-game-room,
-[data-theme="dark"] .profile-turn-prompt {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .profile-drawing-button {
-  border-color: #334155;
-  color: #93c5fd;
-}
-
-[data-theme="dark"] .profile-drawing-button:hover {
-  background: #1e293b;
-  border-color: #93c5fd;
-}
-
-[data-theme="dark"] .profile-stat-label,
-[data-theme="dark"] .profile-game-meta,
-[data-theme="dark"] .profile-game-score,
-[data-theme="dark"] .profile-game-chevron,
-[data-theme="dark"] .profile-standing-rank,
-[data-theme="dark"] .profile-turns th,
-[data-theme="dark"] .profile-score-events th {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .profile-game-rank,
-[data-theme="dark"] .profile-standing-score {
-  color: #cbd5e1;
-}
-
 /* #15803d is only 2.2:1 on this surface; #4ade80 clears 8:1. */
-[data-theme="dark"] .profile-game-rank.is-winner {
-  color: #4ade80;
-}
-
-[data-theme="dark"] .profile-turns th,
-[data-theme="dark"] .profile-turns td,
-[data-theme="dark"] .profile-score-events th,
-[data-theme="dark"] .profile-score-events td {
-  border-bottom-color: #334155;
-}
-
 /* Toolbar in dark mode */
 [data-theme="dark"] .restart-vote-banner {
   background: #1e293b;
@@ -207,177 +154,9 @@
   .drawing-recap-header-actions { align-self: stretch; flex-wrap: wrap; }
 }
 
-[data-theme="dark"] .prompt-stats-header h1 {
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .prompt-stats-intro,
-[data-theme="dark"] .prompt-stats-note,
-[data-theme="dark"] .prompt-stats-controls label {
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .prompt-stats-note.is-error {
-  color: #fca5a5;
-}
-
-[data-theme="dark"] .prompt-stats-table th,
-[data-theme="dark"] .prompt-stats-table td {
-  border-color: #334155;
-}
-
-[data-theme="dark"] .prompt-stats-table caption,
-[data-theme="dark"] .prompt-stats-table thead th,
-[data-theme="dark"] .prompt-list-stats-links {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .prompt-stats-table tbody th {
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .prompt-stats-table tbody td {
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .prompt-list-chip-info {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .prompt-list-chip-info > span {
-  border-color: #475569;
-}
-
-[data-theme="dark"] .prompt-list-chip-info:hover,
-[data-theme="dark"] .prompt-list-chip-info:focus-visible {
-  color: #a5b4fc;
-}
-
-[data-theme="dark"] .prompt-list-chip-info:hover > span,
-[data-theme="dark"] .prompt-list-chip-info:focus-visible > span {
-  border-color: #818cf8;
-}
-
-[data-theme="dark"] .prompt-stats-table tbody tr.is-unrated th,
-[data-theme="dark"] .prompt-stats-table tbody tr.is-unrated td {
-  color: #64748b;
-}
-
 /* --- Reusable prompt lists -------------------------------------------------
    This page shipped with only its light styles, so in dark mode it rendered a
    white card with barely-visible headings. */
-
-[data-theme="dark"] .prompt-list-manager-card {
-  background: #1e293b;
-  border-color: #334155;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .prompt-list-manager-heading h1,
-[data-theme="dark"] .prompt-list-entry-text {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .prompt-list-manager-empty,
-[data-theme="dark"] .prompt-list-manager-layout aside span {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .prompt-list-manager-layout form > label,
-[data-theme="dark"] .prompt-list-manager-meta label,
-[data-theme="dark"] .prompt-list-bulk-add label {
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .prompt-list-manager-layout input,
-[data-theme="dark"] .prompt-list-manager-layout select,
-[data-theme="dark"] .prompt-list-manager-layout textarea {
-  background: #0f172a;
-  border-color: #475569;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .prompt-list-manager-card .prompt-list-manager-layout aside button {
-  background: #0f172a;
-  border-color: #334155;
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .prompt-list-manager-card .prompt-list-manager-layout aside button.is-selected {
-  background: #312e81;
-  border-color: #818cf8;
-}
-
-[data-theme="dark"] .prompt-list-entry-editor > li {
-  background: #0f172a;
-  border-color: #334155;
-}
-
-[data-theme="dark"] .prompt-list-entry-editor > li.is-flagged {
-  background: #422006;
-  border-color: #b45309;
-}
-
-[data-theme="dark"] .prompt-list-manager-card .prompt-list-entry-editor > li button {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .prompt-list-manager-card .prompt-list-entry-editor > li button:hover {
-  background: #7f1d1d;
-  color: #fecaca;
-}
-
-[data-theme="dark"] .prompt-list-entry-count,
-[data-theme="dark"] .prompt-list-bulk-summary {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .prompt-list-bulk-add,
-[data-theme="dark"] .prompt-list-collection {
-  border-top-color: #334155;
-}
-
-[data-theme="dark"] .prompt-list-entry-filters h3 {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .prompt-list-entry-flagged {
-  color: #fdba74;
-}
-
-[data-theme="dark"] .prompt-list-share-code {
-  background: #0f172a;
-  border-color: #475569;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .prompt-list-share-code > span {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .prompt-list-share-form {
-  border-top-color: #334155;
-}
-
-[data-theme="dark"] .prompt-list-share-form label {
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .prompt-list-share-form input {
-  background: #0f172a;
-  border-color: #475569;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .prompt-list-moderation-warning {
-  background: #422006;
-  border-color: #b45309;
-  color: #fed7aa;
-}
-
-[data-theme="dark"] .prompt-list-manager-notice {
-  color: #86efac;
-}
 
 /* Operator page and account-recovery surfaces. Same treatment as .panel: the
    card is #1e293b on the #0f172a body, fields drop back to the body colour. */
@@ -410,10 +189,6 @@
   border-color: #ea580c;
 }
 
-[data-theme="dark"] .profile-history-filter {
-  color: #cbd5e1;
-}
-
 [data-theme="dark"] .mod-report {
   background: #1e293b;
   border-color: #334155;
@@ -444,10 +219,6 @@
    a panel 2.8:1, both under the 4.5:1 this text size needs. Every page with a
    back link had this, not only the operator pages. #60a5fa measures 7.0 and
    5.8 in those two places. */
-[data-theme="dark"] .back-link {
-  color: #60a5fa;
-}
-
 [data-theme="dark"] .report-details {
   background: #0f172a;
   border-color: #475569;

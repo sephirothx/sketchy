@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AccountMenu } from "../components/AccountMenu";
+import { AppHeader } from "../components/AppHeader";
+import { SectionLabel } from "../components/ui/Card";
 import { ApiError, apiRequest } from "../lib/api";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import {
@@ -152,14 +153,10 @@ export function PromptStatsPage() {
 
   return (
     <div className="prompt-stats-page">
-      <div className="profile-top-bar">
-        <button type="button" className="back-link" onClick={() => navigate("/")}>
-          ← Back to lobby
-        </button>
-        <AccountMenu />
-      </div>
+      <AppHeader backLabel="Back to lobby" />
 
       <header className="prompt-stats-header">
+        <SectionLabel>Server-wide</SectionLabel>
         <h1>Prompt stats</h1>
         <p className="prompt-stats-intro">
           Every prompt in the list, and how it has actually played across finished
@@ -256,7 +253,19 @@ export function PromptStatsPage() {
               {rows.map((row) => (
                 <tr key={row.text} className={row.isRated ? "" : "is-unrated"}>
                   <th scope="row">{row.text}</th>
-                  <td>{row.band}</td>
+                  <td>
+                    <span className="prompt-stats-band">
+                      <span>{row.band}</span>
+                      {row.isRated && (
+                        <span className="prompt-stats-meter" aria-hidden="true">
+                          <span
+                            className={`band-${row.correctGuessRatio >= 0.6 ? "high" : row.correctGuessRatio >= 0.35 ? "mid" : "low"}`}
+                            style={{ width: `${Math.round(row.correctGuessRatio * 100)}%` }}
+                          />
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td>{row.guessedLabel}</td>
                   <td>{row.pickedLabel}</td>
                   <td>{row.drawnLabel}</td>
