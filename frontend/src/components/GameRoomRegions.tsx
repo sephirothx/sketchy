@@ -278,6 +278,8 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           myPlayerId={playerId}
           showScores={scoringMode !== "none"}
           myBreakdown={lastGuessBreakdown}
+          nextTurnSeconds={phaseSeconds}
+          nextTurnStartedAt={phaseStartedAt}
         />
       )}
       {canDrawNow && (

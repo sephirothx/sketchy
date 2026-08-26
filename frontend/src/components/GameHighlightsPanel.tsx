@@ -1,12 +1,22 @@
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { presentHighlights } from "../lib/gameHighlights";
+import { AlertIcon, BackIcon, BrushIcon, ClockIcon, XIcon, ZapIcon } from "./icons";
+import { SectionLabel } from "./ui/Card";
 import type { GameHighlight } from "../types";
+import type { ReactNode } from "react";
 
 interface GameHighlightsPanelProps {
   highlights: GameHighlight[];
   onClose: () => void;
 }
+
+const KIND_ICONS: Record<GameHighlight["kind"], ReactNode> = {
+  hardest_prompt: <AlertIcon size={19} />,
+  fastest_guess: <ZapIcon size={19} />,
+  best_drawer: <BrushIcon size={19} />,
+  quickest_average: <ClockIcon size={19} />,
+};
 
 /**
  * The finished game's highlights, on a screen of their own.
@@ -25,7 +35,7 @@ export function GameHighlightsPanel({ highlights, onClose }: GameHighlightsPanel
       <section className="game-highlights-card">
         <header className="game-highlights-header">
           <div>
-            <p className="game-highlights-kicker">Last game</p>
+            <SectionLabel className="game-highlights-kicker">Last game</SectionLabel>
             <h1 id="game-highlights-title">Highlights</h1>
           </div>
           <button
@@ -34,7 +44,7 @@ export function GameHighlightsPanel({ highlights, onClose }: GameHighlightsPanel
             onClick={onClose}
             aria-label="Close highlights"
           >
-            ✕
+            <XIcon size={17} />
           </button>
         </header>
 
@@ -47,6 +57,9 @@ export function GameHighlightsPanel({ highlights, onClose }: GameHighlightsPanel
           <ul className="game-highlights-list">
             {presented.map((highlight) => (
               <li key={highlight.kind} className="game-highlights-item">
+                <span className="game-highlights-icon" aria-hidden="true">
+                  {KIND_ICONS[highlight.kind]}
+                </span>
                 <p className="game-highlights-label">{highlight.label}</p>
                 <p className="game-highlights-subject">
                   {highlight.name ? (
@@ -73,7 +86,8 @@ export function GameHighlightsPanel({ highlights, onClose }: GameHighlightsPanel
         )}
 
         <div className="game-highlights-actions">
-          <button type="button" onClick={onClose}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <BackIcon size={15} />
             Back
           </button>
         </div>

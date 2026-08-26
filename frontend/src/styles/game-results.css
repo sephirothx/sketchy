@@ -1,12 +1,14 @@
-.drawer-bonus { color: #a16207; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.drawer-bonus { align-items: center; color: var(--warm-ink); display: inline-flex; font-size: 12px; font-weight: 800; gap: 3px; white-space: nowrap; }
 /* Sits with the nickname, not at the end of the row: it says which name is
    yours, so it belongs to the name. Quiet enough not to compete with the
    score, matching how the game over standings mark the same thing. */
-.turn-results-score-you { color: #64748b; font-size: 12px; font-weight: 600; }
+.turn-results-score-you { color: var(--faint); font-size: 12px; font-weight: 600; }
+
+.turn-results-drew { align-items: center; color: var(--warm-ink); display: inline-flex; font-size: 11.5px; font-weight: 800; gap: 4px; margin-left: 6px; }
 
 .turn-results-guesses-heading {
   margin: 0 0 6px;
-  color: #495057;
+  color: var(--ink);
 }
 
 .turn-results-guesses-list {
@@ -19,7 +21,7 @@
 }
 
 .turn-results-guesses-list li::marker {
-  color: #868e96;
+  color: var(--faint);
   font-weight: 600;
 }
 
@@ -29,14 +31,14 @@
 
 .turn-results-guesses-list time {
   float: right;
-  color: #495057;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
 .turn-results-no-guesses {
   margin: 0 0 14px;
-  color: #868e96;
+  color: var(--faint);
   font-style: italic;
 }
 
@@ -58,8 +60,9 @@
 
 .turn-results-score-rank {
   width: 24px;
-  color: #868e96;
-  font-weight: 600;
+  color: var(--faint);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .turn-results-score-name {
@@ -77,11 +80,11 @@
 }
 
 .turn-results-score-change.rank-up {
-  color: #2f9e44;
+  color: var(--success);
 }
 
 .turn-results-score-change.rank-down {
-  color: #e03131;
+  color: var(--danger);
 }
 
 @keyframes rank-change-pop {
@@ -98,18 +101,58 @@
 .turn-results-score-delta {
   min-width: 36px;
   text-align: right;
-  color: #868e96;
-  font-weight: 600;
+  color: var(--faint);
+  font-weight: 800;
 }
 
 .turn-results-score-delta.positive {
-  color: #2f9e44;
+  color: var(--success-ink);
 }
 
 .turn-results-score-total {
   min-width: 40px;
   text-align: right;
-  font-weight: 700;
+  color: var(--ink);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Countdown to the next turn along the card's bottom edge. */
+.turn-results-progress {
+  margin-top: 14px;
+}
+
+.turn-results-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--faint);
+  margin-bottom: 5px;
+}
+
+.turn-results-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.turn-results-progress-track span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--primary);
+  animation: turn-results-drain linear forwards;
+}
+
+@keyframes turn-results-drain {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-results-progress-track span { animation: none; }
 }
 
 .version-badge {
