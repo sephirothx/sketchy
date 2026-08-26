@@ -6,12 +6,6 @@
   color-scheme: dark;
 }
 
-[data-theme="dark"] .room-meta,
-[data-theme="dark"] .room-code,
-[data-theme="dark"] .settings-description {
-  color: #94a3b8;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .invite-loading-spinner {
     animation: none;
@@ -27,19 +21,6 @@
     transition: none !important;
     transition-delay: 0ms !important;
   }
-}
-
-[data-theme="dark"] .settings-select {
-  background: #0f172a;
-  border-color: #475569;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .name-color-controls input[type="color"],
-[data-theme="dark"] .name-color-randomize {
-  background: #0f172a;
-  border-color: #475569;
-  color: #f8fafc;
 }
 
 /* Profile page. The tiles and game rows nest inside a .panel, so they take the
@@ -149,20 +130,6 @@
 
 
 /* Chat & Messages in dark mode */
-[data-theme="dark"] select:disabled,
-[data-theme="dark"] input:disabled,
-[data-theme="dark"] textarea:disabled,
-[data-theme="dark"] .panel select:disabled,
-[data-theme="dark"] .panel input:disabled,
-[data-theme="dark"] .settings-select:disabled {
-  background-color: #0b1120 !important;
-  color: #64748b !important;
-  border-color: #1e293b !important;
-  opacity: 0.5;
-  cursor: not-allowed;
-  box-shadow: none !important;
-}
-
 [data-theme="dark"] input::placeholder,
 [data-theme="dark"] textarea::placeholder {
   color: #64748b;
@@ -187,11 +154,6 @@
 [data-theme="dark"] .auth-form input {
   border-color: #475569;
   background: #0f172a;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .settings-account-action {
-  border-color: #475569;
   color: #f8fafc;
 }
 
@@ -221,99 +183,6 @@
   color: #e2e8f0;
 }
 
-[data-theme="dark"] .settings-modal-header {
-  border-bottom-color: #334155;
-}
-
-[data-theme="dark"] .settings-modal-header h3 {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .close-icon-button {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .close-icon-button:hover {
-  background: #334155;
-  color: #ffffff;
-}
-
-[data-theme="dark"] .settings-tabs {
-  border-bottom-color: #334155;
-}
-
-[data-theme="dark"] .settings-tab-button {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .settings-tab-button:hover {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .settings-tab-button.active {
-  color: #60a5fa;
-  border-bottom-color: #60a5fa;
-}
-
-[data-theme="dark"] .settings-section h4,
-[data-theme="dark"] .settings-label,
-[data-theme="dark"] .settings-labeled-field,
-[data-theme="dark"] .segmented-control-label,
-[data-theme="dark"] .settings-labeled-field-label {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .settings-fields-heading {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .settings-fields > .settings-fields-heading:not(:first-child) {
-  border-top-color: #334155;
-}
-
-[data-theme="dark"] .settings-volume-control {
-  --volume-track: #334155;
-}
-
-[data-theme="dark"] .settings-volume-value {
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .keybinding-row {
-  background: #0f172a;
-  border-color: #334155;
-}
-
-[data-theme="dark"] .keybinding-label {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .kbd-badge {
-  background: #1e293b;
-  border-color: #475569;
-  border-bottom-color: #64748b;
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .kbd-badge:hover {
-  background: #334155;
-  border-color: #94a3b8;
-}
-
-[data-theme="dark"] .kbd-badge.rebinding {
-  background: #1e3a8a;
-  border-color: #3b82f6;
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .kbd-badge.secondary {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .settings-modal-footer {
-  border-top-color: #334155;
-}
-
 [data-theme="dark"] .modal-button.secondary {
   background: #334155;
   border-color: #475569;
@@ -323,18 +192,6 @@
 [data-theme="dark"] .modal-button.secondary:hover {
   background: #475569;
   color: #ffffff;
-}
-
-[data-theme="dark"] .reset-defaults-button {
-  background: #0f172a;
-  border-color: #475569;
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .reset-defaults-button:hover {
-  background: #334155;
-  color: #f8fafc;
-  border-color: #64748b;
 }
 
 @media (max-width: 900px) {

@@ -161,9 +161,6 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
             await dialog.get_by_role("tab", name="Game").click()
             cursor = dialog.get_by_role("group", name="Brush cursor style")
             await cursor.get_by_role("button", name="Outline").click()
-            await dialog.get_by_role(
-                "switch", name="Clear guesses after sending"
-            ).uncheck()
             await dialog.get_by_role("button", name="Save").click()
             await dialog.wait_for(state="hidden")
 
@@ -193,7 +190,9 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                     "theme": "dark",
                     "cursor": "circle",
                     "colors": "true",
-                    "clearGuess": "false",
+                    # The clear-guess-box behavior kept its stored key but
+                    # lost its settings row; the default passes through.
+                    "clearGuess": "true",
                 }
 
                 await fresh_page.click("button.header-settings-button")
@@ -203,9 +202,10 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                     "switch", name="Prefer colorblind-safe colors"
                 ).is_checked()
                 await fresh_dialog.get_by_role("tab", name="Game").click()
-                assert not await fresh_dialog.get_by_role(
-                    "switch", name="Clear guesses after sending"
-                ).is_checked()
+                cursor_synced = fresh_dialog.get_by_role("group", name="Brush cursor style")
+                assert await cursor_synced.get_by_role(
+                    "button", name="Outline"
+                ).get_attribute("aria-pressed") == "true"
             finally:
                 await fresh_device.close()
         finally:
