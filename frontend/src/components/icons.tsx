@@ -1,4 +1,4 @@
-/* The redesign's stroke icon set (docs/ui-redesign/tools/ui.mjs), as React
+/* The redesign's stroke icon set (docs/ui-mockups/tools/ui.mjs), as React
  * components. All icons are 24×24 stroke drawings on currentColor and are
  * decorative by default (aria-hidden) — interactive elements carry their own
  * accessible names. */

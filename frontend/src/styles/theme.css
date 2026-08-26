@@ -1,5 +1,5 @@
 /* Design tokens. The values are the redesign palette from
- * docs/ui-redesign/tools/ui.mjs (PALETTES): a warm paper light theme and a
+ * docs/ui-mockups/tools/ui.mjs (PALETTES): a warm paper light theme and a
  * slate dark theme whose tinted surfaces are alpha washes of their accent so
  * they blend with any ground. `data-theme` on <html> is always resolved to
  * "light" or "dark" before paint (index.html + settingsStore), so light

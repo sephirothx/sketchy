@@ -1,5 +1,5 @@
 // Generates every redesign artboard plus canvas.json.
-// Run from docs/ui-redesign:  node tools/build.mjs
+// Run from docs/ui-mockups:  node tools/build.mjs
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

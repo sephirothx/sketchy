@@ -57,5 +57,5 @@ CLAUDE.md
 # The seeded canvas is ~2.3MB of generated editor code around the tracked
 # artboards. Rebuild it with the command in docs/ui-mockups/README.md.
 docs/ui-mockups/sketchy-views.html
-docs/ui-redesign/sketchy-redesign.html
-docs/ui-redesign/sketchy-explorer.html
+docs/ui-mockups/sketchy-redesign.html
+docs/ui-mockups/sketchy-explorer.html

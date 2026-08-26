@@ -1,4 +1,4 @@
-/* Players sidebar rows, per docs/ui-redesign (playerRow in tools/shell.mjs):
+/* Players sidebar rows, per docs/ui-mockups (playerRow in tools/shell.mjs):
    avatar, name + live status on two lines, score on the right. */
 .player-list {
   display: grid;

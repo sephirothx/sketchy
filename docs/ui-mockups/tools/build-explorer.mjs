@@ -1,7 +1,7 @@
 // Generates the clickable mockup explorer: every screen embedded in one
 // self-contained page, with wired navigation between screens, a game-flow
 // stepper, hotspot highlighting, and the light/dark theme toggle.
-// Run from docs/ui-redesign:  node tools/build-explorer.mjs
+// Run from docs/ui-mockups:  node tools/build-explorer.mjs
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

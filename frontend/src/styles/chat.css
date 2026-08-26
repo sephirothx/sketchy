@@ -1,4 +1,4 @@
-/* Guess / chat, per docs/ui-redesign (chat recipes in tools/shell.mjs). */
+/* Guess / chat, per docs/ui-mockups (chat recipes in tools/shell.mjs). */
 .guess-chat {
   display: flex;
   flex-direction: column;

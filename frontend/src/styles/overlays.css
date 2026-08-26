@@ -1,4 +1,4 @@
-/* Turn results, game over, and highlights, per docs/ui-redesign
+/* Turn results, game over, and highlights, per docs/ui-mockups
    (TurnResultsPage/GameOverPage/HighlightsPage in tools/pages-room.mjs). */
 .turn-results-overlay {
   position: absolute;

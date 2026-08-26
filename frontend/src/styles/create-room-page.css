@@ -1,4 +1,4 @@
-/* Create-room page, per docs/ui-redesign (CreateRoomPage in
+/* Create-room page, per docs/ui-mockups (CreateRoomPage in
    tools/pages-entry.mjs). The control recipes here (segmented, steppers,
    chips, switches) are shared with the waiting room's settings editor. */
 .create-room-page { margin: 0 auto; max-width: 780px; padding: 26px 16px 64px; }
