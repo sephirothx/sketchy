@@ -13,3 +13,43 @@ export function splitMaskedPrompt(masked: string): { blanks: string; counts: str
   const counts = masked.slice(digitIndex).trim().split(/\s+/);
   return { blanks, counts };
 }
+
+/** A run of letter slots, or the punctuation between two runs. */
+export type MaskedSegment =
+  | { kind: "tiles"; chars: string[] }
+  | { kind: "glyph"; text: string };
+
+/** A slot the mask can hide: a blank, or a revealed letter or digit. The
+Unicode classes mirror the server's `str.isalnum` masking, so an accented
+letter revealed in "città" stays a tile rather than becoming punctuation. */
+export function isSlotChar(ch: string): boolean {
+  return ch === "_" || /[\p{L}\p{N}]/u.test(ch);
+}
+
+/** The blanks, grouped the way the trailing counts were counted.
+
+The server counts letters per **alphanumeric run**, with punctuation as a
+boundary: "spider-man" reports "6 3", not "10". So each whitespace word is
+split into alternating tile runs and glyph segments, and the tile runs -
+across all words, in order - correspond 1:1 with the counts. Grouping by
+whitespace alone renders "____-___" as one group and drops a count. */
+export function maskedWords(blanks: string): MaskedSegment[][] {
+  return blanks
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0)
+    .map((word) => {
+      const segments: MaskedSegment[] = [];
+      for (const ch of word) {
+        const last = segments[segments.length - 1];
+        if (isSlotChar(ch)) {
+          if (last?.kind === "tiles") last.chars.push(ch);
+          else segments.push({ kind: "tiles", chars: [ch] });
+        } else {
+          if (last?.kind === "glyph") last.text += ch;
+          else segments.push({ kind: "glyph", text: ch });
+        }
+      }
+      return segments;
+    });
+}

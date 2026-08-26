@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { canCastRestartVote, restartVoteCounts, secondsUntil } from "../lib/restartVote";
+import { CheckIcon, XIcon } from "./icons";
 import type { RestartVoter } from "../lib/restartVote";
 import type { RestartVoteState } from "../types";
 
@@ -41,7 +42,7 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
           {vote.status === "approved"
             ? (
                 <>
-                  <span className="restart-approved-check" aria-hidden="true">✓</span>
+                  <span className="restart-approved-check" aria-hidden="true"><CheckIcon size={15} /></span>
                   Restart approved!
                 </>
               )
@@ -64,7 +65,7 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
             className={`restart-vote-tile ${castVote ? "yes" : "no"}`}
             aria-hidden="true"
           >
-            {castVote ? "✓" : "×"}
+            {castVote ? <CheckIcon size={12} /> : <XIcon size={12} />}
           </span>
         ))}
         {Array.from({ length: counts.pending }, (_, index) => (

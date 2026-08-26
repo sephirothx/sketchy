@@ -15,6 +15,10 @@
   color: #6b7280;
 }
 
+[data-theme="dark"] .colored-player-name.is-guest {
+  color: #94a3b8;
+}
+
 /* Groups the account control with Settings so the header stays one row. */
 .lobby-header-actions {
   display: flex;
@@ -33,32 +37,56 @@
 
 .account-dropdown {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 20;
-  min-width: 160px;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
-  padding: 4px;
+  width: 216px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-raised);
+  padding: 6px;
+  display: grid;
+  gap: 1px;
 }
 
 .account-dropdown button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   text-align: left;
   border: none;
   background: transparent;
-  color: inherit;
-  padding: 8px 12px;
-  border-radius: 6px;
+  color: var(--ink);
+  padding: 10px 12px;
+  border-radius: 9px;
   font-size: 14px;
+  font-weight: 700;
+  min-height: 40px;
   cursor: pointer;
 }
 
 .account-dropdown button:hover {
-  background: rgba(127, 127, 127, 0.12);
+  background: var(--well);
+}
+
+.account-dropdown .menu-item-icon {
+  display: inline-flex;
+  color: var(--faint);
+}
+
+.account-dropdown .menu-item-danger {
+  color: var(--danger);
+}
+
+.account-dropdown .menu-item-danger .menu-item-icon {
+  color: var(--danger);
+}
+
+.account-menu-divider {
+  border-top: 1.5px solid var(--line);
+  margin: 4px 6px;
 }
 
 .auth-form {
@@ -75,14 +103,14 @@
 }
 
 .auth-form input {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour. */
-  background: #fff;
+  background: var(--field);
   /* Explicit, not `inherit`: the dialog sets a light text color for its own
      dark surface, which on a white field would be unreadable. */
-  color: #0f172a;
+  color: var(--ink);
 }
 
 .auth-form .modal-button {
@@ -90,7 +118,7 @@
 }
 
 .auth-error {
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 13px;
   margin: 2px 0 0;
 }
@@ -104,9 +132,9 @@
   border: none;
   background: none;
   padding: 0;
-  color: #4f46e5;
+  color: var(--primary);
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: underline;
   cursor: pointer;
 }
@@ -121,60 +149,64 @@
   cursor: pointer;
 }
 
-/* Keeps "Back to lobby" and the account control on one row. */
-.create-room-top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
 
 /* The identity chip: avatar, name, and a dot when the name is unclaimed. */
 .identity-chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #cbd5e1;
-  background: transparent;
+  border: 1.5px solid var(--line);
+  background: var(--card);
   color: inherit;
   border-radius: 999px;
-  padding: 4px 12px 4px 4px;
+  padding: 5px 14px 5px 5px;
   cursor: pointer;
-  min-height: 36px;
+  min-height: 44px;
   max-width: 100%;
+  box-shadow: var(--shadow);
 }
 
 .identity-chip:hover {
-  background: rgba(127, 127, 127, 0.12);
+  border-color: var(--line-strong);
 }
 
 .identity-chip.is-compact {
   padding: 4px;
   gap: 0;
+  min-height: 36px;
 }
 
 .identity-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  color: #fff;
-  font-weight: 700;
+  color: var(--avatar-ink);
+  font-weight: 800;
   font-size: 14px;
   flex: none;
 }
 
+.identity-chip.is-compact .identity-avatar {
+  width: 28px;
+  height: 28px;
+}
+
 .identity-name {
-  font-weight: 600;
+  font-weight: 800;
   font-size: 14px;
+  color: var(--ink);
   max-width: 12ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.identity-chevron {
+  display: inline-flex;
+  color: var(--faint);
 }
 
 /*
@@ -199,7 +231,7 @@
   position: absolute;
   top: 2px;
   right: 2px;
-  box-shadow: 0 0 0 2px #0f172a;
+  box-shadow: 0 0 0 2px var(--card);
 }
 
 .session-manager {
@@ -219,7 +251,7 @@
 
 .session-list li {
   align-items: center;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   border-radius: 10px;
   display: flex;
   gap: 12px;
@@ -228,27 +260,27 @@
 }
 
 .session-list li > span { display: grid; gap: 3px; }
-.session-list small { color: #64748b; }
-.session-current { color: #047857; font-size: 12px; font-weight: 700; }
+.session-list small { color: var(--muted); }
+.session-current { color: var(--success-ink); font-size: 12px; font-weight: 700; }
 .session-list button, .session-actions button {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   cursor: pointer;
   padding: 8px 12px;
 }
 .session-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.session-revoke-all { background: #dc2626; border-color: #dc2626 !important; color: #fff; }
+.session-revoke-all { background: var(--danger); border-color: var(--danger) !important; color: var(--card); }
 .session-list button:disabled, .session-actions button:disabled { cursor: wait; opacity: 0.6; }
 
 .account-data-dialog { max-width: 620px; text-align: left; }
-.account-data-section { border-top: 1px solid #cbd5e1; margin-top: 18px; padding-top: 16px; }
+.account-data-section { border-top: 1px solid var(--line-strong); margin-top: 18px; padding-top: 16px; }
 .account-data-section h4 { margin: 0; }
 .account-data-heading-row { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
 .account-data-heading-row button,
 .account-export-list a,
 .account-danger-zone button,
 .account-data-actions button {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   color: inherit;
   cursor: pointer;
@@ -258,38 +290,42 @@
 }
 .account-data-heading-row button, .account-data-actions button { background: transparent; }
 .account-export-list { display: grid; gap: 8px; list-style: none; margin: 12px 0; padding: 0; }
-.account-export-list li { align-items: center; border: 1px solid #cbd5e1; border-radius: 10px; display: flex; gap: 12px; justify-content: space-between; padding: 12px; }
+.account-export-list li { align-items: center; border: 1px solid var(--line-strong); border-radius: 10px; display: flex; gap: 12px; justify-content: space-between; padding: 12px; }
 .account-export-list li > span { display: grid; gap: 3px; min-width: 0; }
-.account-export-list small, .account-data-note, .account-data-empty { color: #64748b; font-size: 13px; }
-.account-export-list a { background: #4f46e5; border-color: #4f46e5; color: #fff; text-decoration: none; }
-.account-danger-zone { border-color: #fecaca; }
+.account-export-list small, .account-data-note, .account-data-empty { color: var(--muted); font-size: 13px; }
+.account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--card); text-decoration: none; }
+.account-danger-zone { border-color: var(--danger-soft); }
 .account-danger-zone > p { font-size: 14px; line-height: 1.5; }
-.account-delete-start, .account-delete-confirm { background: #dc2626; border-color: #dc2626 !important; color: #fff !important; }
+.account-delete-start, .account-delete-confirm { background: var(--danger); border-color: var(--danger) !important; color: var(--card) !important; }
 .account-delete-form { display: grid; gap: 12px; }
 .account-delete-form label { display: grid; font-size: 13px; font-weight: 700; gap: 5px; }
-.account-delete-form input { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; color: #0f172a; font-size: 16px; padding: 9px 11px; }
+.account-delete-form input { background: var(--card); border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); font-size: 16px; padding: 9px 11px; }
 .account-delete-actions, .account-data-actions { display: flex; gap: 10px; justify-content: flex-end; }
 .account-data-actions { margin-top: 18px; }
 .account-danger-zone button:disabled, .account-data-heading-row button:disabled { cursor: wait; opacity: .6; }
 
 /* First-run block: account primary, guest secondary. */
 .first-run {
-  border: 1px solid #cbd5e1;
-  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 16px;
-  background: rgba(127, 127, 127, 0.04);
+  background: var(--card);
+  box-shadow: var(--shadow);
 }
 
 .first-run-heading {
   margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-weight: 600;
   font-size: 18px;
+  color: var(--ink);
 }
 
 .first-run-copy {
   margin: 0 0 14px;
   font-size: 14px;
-  opacity: 0.8;
+  color: var(--muted);
 }
 
 .first-run-actions {
@@ -300,14 +336,15 @@
 
 .first-run-signup {
   border: none;
-  background: #4f46e5;
-  color: #fff;
-  border-radius: 10px;
+  background: var(--primary);
+  color: var(--card);
+  border-radius: var(--radius-sm);
   padding: 11px 20px;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   min-height: 44px;
+  box-shadow: 0 2px 0 var(--primary-edge);
 }
 
 .first-run-signup:hover {
@@ -315,15 +352,16 @@
 }
 
 .first-run-login {
-  border: 1px solid #cbd5e1;
-  background: transparent;
-  color: inherit;
-  border-radius: 10px;
+  border: 1.5px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
   padding: 11px 20px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 800;
   cursor: pointer;
   min-height: 44px;
+  box-shadow: var(--shadow);
 }
 
 .first-run-divider {
@@ -332,7 +370,7 @@
   gap: 12px;
   margin: 18px 0 14px;
   font-size: 13px;
-  opacity: 0.6;
+  color: var(--faint);
 }
 
 .first-run-divider::before,
@@ -340,13 +378,13 @@
   content: "";
   flex: 1;
   height: 1px;
-  background: #cbd5e1;
+  background: var(--line);
 }
 
 .first-run-guest-label {
   display: block;
   font-size: 13px;
-  opacity: 0.8;
+  color: var(--muted);
   margin-bottom: 6px;
 }
 
@@ -359,24 +397,24 @@
 .first-run-guest-row input {
   flex: 1 1 12rem;
   min-width: 0;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   padding: 9px 12px;
   /* 16px keeps iOS from zooming the viewport on focus. */
   font-size: 16px;
-  background: #fff;
-  color: #0f172a;
+  background: var(--field);
+  color: var(--ink);
 }
 
 /* Deliberately plain: easy to use, clearly not the headline action. */
 .first-run-guest-submit {
-  border: 1px solid #cbd5e1;
+  border: 1.5px solid var(--line-strong);
   background: transparent;
-  color: inherit;
-  border-radius: 8px;
+  color: var(--ink);
+  border-radius: var(--radius-sm);
   padding: 9px 16px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   min-height: 40px;
 }
@@ -394,7 +432,7 @@
 }
 
 .settings-account-action {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   background: transparent;
   color: inherit;
   border-radius: 8px;
@@ -432,8 +470,8 @@
 
 .game-end-claim-action {
   border: none;
-  background: #4f46e5;
-  color: #fff;
+  background: var(--primary);
+  color: var(--card);
   border-radius: 8px;
   padding: 9px 16px;
   font-weight: 700;
@@ -460,13 +498,13 @@
 }
 
 .auth-optional {
-  color: #64748b;
+  color: var(--muted);
   font-weight: 500;
   text-transform: lowercase;
 }
 
 .auth-hint {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   margin: 0;
 }
@@ -474,9 +512,9 @@
 /* Standing note, not an alarm: it can be closed and comes back in a week. */
 .email-reminder-banner {
   align-items: center;
-  background: #eff6ff;
-  border-bottom: 1px solid #3b82f6;
-  color: #1e3a8a;
+  background: var(--primary-soft);
+  border-bottom: 1px solid var(--primary-edge-soft);
+  color: var(--primary-ink);
   display: flex;
   font-size: 14px;
   gap: 12px;
@@ -508,217 +546,99 @@
 
 .recovery-page {
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 48px 16px;
+  min-height: 70vh;
+  padding: 40px 16px;
 }
 
+/* The split auth card: a friendly art panel beside the form. */
 .recovery-card {
-  background: #fff;
-  border: 1px solid #dfe1e6;
-  border-radius: 12px;
-  max-width: 420px;
-  padding: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+  max-width: 880px;
   width: 100%;
 }
 
-.recovery-card h1 {
-  font-size: 20px;
-  margin: 0 0 8px;
-}
-
-.recovery-body {
-  font-size: 14px;
-  margin: 0 0 12px;
-}
-
-.ops-page {
-  margin: 0 auto;
-  max-width: 1100px;
-  padding: 24px 16px 48px;
-}
-
-.ops-header .back-link {
-  display: inline-block;
-  margin-bottom: 10px;
-}
-
-.ops-header h1 {
-  font-size: 22px;
-  margin: 0 0 12px;
-}
-
-.ops-tabs {
-  border-bottom: 1px solid #dfe1e6;
-  display: flex;
-  gap: 4px;
-  margin-bottom: 20px;
-}
-
-.ops-tabs button {
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  padding: 8px 12px;
-}
-
-.ops-tabs button.is-active {
-  border-bottom-color: currentColor;
-  font-weight: 700;
-}
-
-.ops-tiles {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  margin-bottom: 24px;
-}
-
-.ops-tile {
-  background: #fff;
-  border: 1px solid #dfe1e6;
-  border-radius: 10px;
+.recovery-aside {
+  background: var(--primary-soft);
+  padding: 34px 28px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 12px 14px;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
-/* Severity is a separate signal from the accent, so a number worth acting on
-   reads at a glance rather than having to be compared. */
-.ops-tile.is-warning {
-  border-color: #f97316;
-}
-
-.ops-tile-label {
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  opacity: 0.7;
-  text-transform: uppercase;
-}
-
-.ops-tile-value {
-  font-size: 28px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-}
-
-.ops-tile-note {
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-.ops-trends {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  margin-bottom: 24px;
-}
-
-.ops-trend-card {
-  background: #fff;
-  border: 1px solid #dfe1e6;
-  border-radius: 10px;
-  padding: 12px 14px;
-}
-
-.ops-trend-card h2 {
-  font-size: 13px;
-  margin: 0 0 6px;
-  opacity: 0.8;
-}
-
-.ops-trend-head {
-  align-items: baseline;
-  display: flex;
-  gap: 6px;
-}
-
-.ops-trend-value {
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-}
-
-.ops-trend-window {
-  font-size: 12px;
-  opacity: 0.6;
-}
-
-.ops-sparkline {
-  display: block;
-  height: auto;
-  margin-top: 6px;
-  max-width: 100%;
-  opacity: 0.75;
-  width: 100%;
-}
-
-.ops-filters {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.ops-filters input {
-  /* Explicit, not inherited: with no colour set the browser renders form
-     controls in the operating system's scheme, so a light page gets a dark
-     grey box. The same reason .auth-form input states both. */
-  background: #fff;
-  border: 1px solid #c7cad1;
-  border-radius: 6px;
-  color: #0f172a;
-  padding: 6px 8px;
-}
-
-/* Wide content scrolls inside its own container so the page never does. */
-.ops-table-scroll {
-  overflow-x: auto;
-}
-
-.ops-table {
-  border-collapse: collapse;
-  font-size: 13px;
-  min-width: 560px;
-  width: 100%;
-}
-
-.ops-table th,
-.ops-table td {
-  border-bottom: 1px solid #e5e7eb;
-  padding: 6px 8px;
-  text-align: left;
-}
-
-.ops-table .ops-number {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.ops-empty {
-  font-size: 13px;
-  opacity: 0.7;
-}
-
-.ops-recorder h2 {
-  font-size: 14px;
-  margin: 0 0 4px;
-}
-
-.ops-recorder p {
-  font-size: 13px;
+.recovery-aside h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1.25;
+  color: var(--primary-ink);
   margin: 0;
 }
 
-/* Staff entries sit apart from the player's own items: they are a different
-   kind of thing, and the separation is what stops "Moderation" reading as
-   another personal page. */
+.recovery-aside p {
+  font-size: 13.5px;
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.recovery-form {
+  padding: 30px 32px;
+  display: grid;
+  gap: 13px;
+  align-content: start;
+}
+
+.recovery-heading {
+  margin-top: 8px;
+}
+
+.recovery-card h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 23px;
+  color: var(--ink);
+  margin: 4px 0 0;
+}
+
+.recovery-body {
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.recovery-form .modal-button {
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .recovery-card {
+    grid-template-columns: 1fr;
+  }
+
+  .recovery-aside {
+    padding: 24px 28px;
+  }
+}
+
+/* Operator entries sit below a divider in the account dropdown: staff
+   destinations, not another personal page. */
 .account-dropdown .account-staff-entry {
-  border-top: 1px solid #dfe1e6;
+  border-top: 1.5px solid var(--line);
+  border-radius: 0 0 9px 9px;
   margin-top: 4px;
   padding-top: 8px;
 }
@@ -727,140 +647,4 @@
   border-top: 0;
   margin-top: 0;
   padding-top: 6px;
-}
-
-.mod-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.mod-report {
-  background: #fff;
-  border: 1px solid #dfe1e6;
-  border-radius: 10px;
-  padding: 14px 16px;
-}
-
-.mod-report-head {
-  align-items: baseline;
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.mod-reason {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.mod-when {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.7;
-}
-
-.mod-subject {
-  font-size: 14px;
-  margin: 8px 0 0;
-}
-
-.mod-details {
-  margin: 6px 0 0;
-}
-
-.mod-evidence {
-  border-left: 2px solid #dfe1e6;
-  font-size: 13px;
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0 0 0 12px;
-}
-
-.mod-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.mod-actions input {
-  background: #fff;
-  border: 1px solid #c7cad1;
-  border-radius: 6px;
-  color: #0f172a;
-  flex: 1 1 220px;
-  padding: 6px 8px;
-}
-
-.mod-actions button {
-  background: none;
-  border: 1px solid #c7cad1;
-  border-radius: 6px;
-  cursor: pointer;
-  font: inherit;
-  padding: 6px 12px;
-}
-
-/* The only action here that cannot be undone by another click. */
-.mod-actions .mod-danger {
-  border-color: #b91c1c;
-  color: #b91c1c;
-  font-weight: 600;
-}
-
-.mod-resolution {
-  font-size: 13px;
-  margin: 10px 0 0;
-  opacity: 0.8;
-}
-
-.ops-subject-kind {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  opacity: 0.65;
-  text-transform: uppercase;
-}
-
-/* An account's activity is as long as it is - a hundred rows is ordinary. The
-   card is capped and the table scrolls inside it, so the dialog cannot grow
-   past the viewport and take its own close button with it. */
-.modal-card.ops-player-dialog {
-  display: flex;
-  flex-direction: column;
-  max-height: min(80vh, 720px);
-  max-width: 640px;
-  text-align: left;
-}
-
-.modal-card.ops-player-dialog .ops-table-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* Header and footer stay put while the rows move under them. */
-.modal-card.ops-player-dialog .modal-title,
-.modal-card.ops-player-dialog .modal-body,
-.modal-card.ops-player-dialog .modal-dismiss {
-  flex: 0 0 auto;
-}
-
-.ops-toggle {
-  align-items: center;
-  display: flex;
-  font-size: 13px;
-  gap: 6px;
-}
-
-/* Ids are read a character at a time when they are read at all. */
-.ops-identifier {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
 }

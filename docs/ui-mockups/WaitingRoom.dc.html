@@ -7,258 +7,209 @@
 <body>
 <x-dc>
 <helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #f2f3f7;
-      color: #1c1d21;
-      font-family: system-ui, "Segoe UI", Roboto, sans-serif;
-    }
+    body { margin: 0; }
+
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --field: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --field: #0F172A; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }
     h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
-    a { color: #4c6ef5; text-decoration: none; }
-    a:hover { color: #3b5bdb; }
+    button { cursor: pointer; }
     summary { cursor: pointer; }
+    summary.plain { list-style: none; }
+    summary.plain::-webkit-details-marker { display: none; }
   </style>
 </helmet>
-<div style="width: 1200px; min-height: 1120px; margin: 0 auto; padding: 16px">
-
-    <header style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px">
-      <div style="display: flex; align-items: center; gap: 8px; min-width: 0">
-        <button type="button" style="background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); font-family: inherit">
-          <span>Code: BQ7F2K</span>
-        </button>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+<div style="width: 1240px; min-height: 1000px; margin: 0 auto; padding: 18px 20px 28px">
+<header style="display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; margin-bottom: 14px; min-height: 44px">
+  <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
+    <span style="font-weight: 800; font-size: 16px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Coffee break doodles</span>
+    <button type="button" title="Copy invite link" style="display: inline-flex; align-items: center; gap: 7px; background: var(--card); border: 1.5px solid var(--line); border-radius: 999px; padding: 6px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); letter-spacing: 0.08em">
+      BQ7F2K<span style="display: inline-flex; color: var(--faint)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></span>
+    </button>
+  </div>
+  <span></span>
+  <div style="display: flex; align-items: center; gap: 7px; flex: none; justify-self: end">
+    
+    <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 6px; background: var(--card); border: 1.5px solid var(--line); border-radius: 999px; padding: 7px 13px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; color: var(--muted); min-height: 38px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>AFK</button>
+    
+    <button type="button" aria-label="Settings" title="Settings" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; background: var(--card); color: var(--muted); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg></button>
+    <span style="width: 1.5px; height: 22px; background: var(--line); margin: 0 3px"></span>
+    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--danger); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; min-height: 38px; padding: 7px 10px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>Leave</button>
+  </div>
+</header>
+<div style="display: grid; grid-template-columns: 252px minmax(0, 1fr) 292px; gap: 16px; align-items: start">
+  
+<aside style="display: flex; flex-direction: column; gap: 12px">
+  <div style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px 12px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; padding: 0 4px">
+      <div style="display: flex; align-items: baseline; gap: 8px">
+        <h2 style="font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-weight: 800; font-size: 15px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink)">Players</h2>
+        <span style="color: var(--faint); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums">5/8</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: nowrap">
-        <button type="button" aria-label="Signed in as Marta" style="display: inline-flex; align-items: center; border: 1px solid #cbd5e1; background: transparent; color: inherit; border-radius: 999px; padding: 4px; gap: 0; min-height: 36px; font: inherit">
-          <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #0f766e; color: #fff; font-weight: 700; font-size: 14px; flex: none">M</span>
-        </button>
-        <button type="button" style="border-radius: 6px; padding: 8px 14px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: inherit; font-size: 16px; background: #f8fafc; border: 1px solid #cbd5e1; color: #334155"><span>AFK</span></button>
-        <button type="button" style="border-radius: 6px; padding: 8px 14px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: inherit; font-size: 16px; background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c"><span>Leave</span></button>
-        <button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 13px; font-size: 14px; font-weight: 600; color: #334155; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); font-family: inherit">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-          <span>Settings</span>
-        </button>
+      <div style="display: flex; align-items: center; gap: 6px">
+        <span style="display: inline-flex; align-items: center; gap: 5px; background: var(--successSoft); color: var(--successInk); border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">4 ready</span>
+        <span title="2 spectating" style="display: inline-flex; align-items: center; gap: 4px; color: var(--faint); font-size: 12.5px; font-weight: 800"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>2</span>
       </div>
-    </header>
-
-    <div style="display: grid; grid-template-columns: 220px minmax(0, 1fr) 280px; gap: 16px; align-items: start">
-
-      <aside style="display: flex; flex-direction: column; gap: 12px">
-        <div style="background: #fff; border: 1px solid #dfe1e6; border-radius: 10px; padding: 12px; box-sizing: border-box; min-width: 0; width: 100%">
-          <section>
-            <div style="align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-bottom: 14px; min-height: 42px">
-              <div>
-                <div style="align-items: baseline; display: flex; gap: 8px">
-                  <h2 style="color: #1e293b; font-size: 16px; margin: 0">Players</h2>
-                  <span style="color: #64748b; font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 700">5/8</span>
-                </div>
-              </div>
-              <div style="align-items: center; display: flex; flex: 0 0 auto; gap: 6px">
-                <span style="background: #dcfce7; border-radius: 999px; color: #15803d; font-size: 13px; font-weight: 700; padding: 6px 9px">4 ready</span>
-                <div style="align-items: center; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 999px; color: #64748b; display: inline-flex; font-size: 12px; font-weight: 800; gap: 3px; padding: 4px 7px">
-                  <span aria-hidden="true" style="filter: grayscale(1); font-size: 13px; opacity: .72">👀</span><span>2</span>
-                </div>
-              </div>
-            </div>
-            <ul style="list-style: none; margin: 0; padding: 0">
-              <li style="align-items: center; border-radius: 6px; column-gap: 8px; display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); padding: 6px 4px; row-gap: 4px">
-                <span role="img" aria-label="Host" title="Host" style="align-items: center; color: #7c3aed; display: inline-flex; grid-column: 1; grid-row: 1; height: 1.25rem; justify-content: center; width: 1.25rem"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2.2 12.5h11.6l-.7-7.2-3.1 2.4L8 4.2 6 7.7 2.9 5.3l-.7 7.2Zm-.4 1.3c-.5 0-.8-.5-.7-1l.8-8.2c.1-.7 1-.9 1.5-.4L5.7 6l1.6-2.8c.3-.6 1.1-.6 1.4 0L10.3 6l2.3-1.8c.5-.5 1.4-.3 1.5.4l.8 8.2c.1.5-.2 1-.7 1H1.8Z"/></svg></span>
-                <span style="align-items: center; display: inline-flex; gap: 6px; grid-column: 2; grid-row: 1; min-width: 0; overflow: hidden; white-space: nowrap">
-                  <span style="color: #0f766e; font-weight: 700">Marta</span>
-                  <span style="color: #94a3b8; flex: 0 0 auto; font-size: 11px; font-weight: 600">you</span>
-                </span>
-              </li>
-              <li style="align-items: center; border-radius: 6px; column-gap: 8px; display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); padding: 6px 4px; row-gap: 4px">
-                <span aria-hidden="true" style="grid-column: 1; grid-row: 1; height: 1.25rem; width: 1.25rem"></span>
-                <span style="align-items: center; display: inline-flex; gap: 6px; grid-column: 2; grid-row: 1; min-width: 0; overflow: hidden; white-space: nowrap">
-                  <span style="color: #c2410c; font-weight: 700">Bruno</span>
-                </span>
-              </li>
-              <li style="align-items: center; border-radius: 6px; column-gap: 8px; display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); padding: 6px 4px; row-gap: 4px">
-                <span aria-hidden="true" style="grid-column: 1; grid-row: 1; height: 1.25rem; width: 1.25rem"></span>
-                <span style="align-items: center; display: inline-flex; gap: 6px; grid-column: 2; grid-row: 1; min-width: 0; overflow: hidden; white-space: nowrap">
-                  <span style="color: #7e22ce; font-weight: 700">Yuki</span>
-                </span>
-              </li>
-              <li style="align-items: center; border-radius: 6px; column-gap: 8px; display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); padding: 6px 4px; row-gap: 4px; opacity: .72">
-                <span role="img" aria-label="AFK" title="AFK" style="align-items: center; color: #d97706; display: inline-flex; font-size: 9px; font-weight: 800; letter-spacing: 0.02em; grid-column: 1; grid-row: 1; height: 1.25rem; justify-content: center; width: 1.25rem">zzz</span>
-                <span style="align-items: center; display: inline-flex; gap: 6px; grid-column: 2; grid-row: 1; min-width: 0; overflow: hidden; white-space: nowrap">
-                  <span style="color: #0369a1; font-weight: 700">Ines</span>
-                </span>
-              </li>
-              <li style="align-items: center; border-radius: 6px; column-gap: 8px; display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); padding: 6px 4px; row-gap: 4px">
-                <span aria-hidden="true" style="grid-column: 1; grid-row: 1; height: 1.25rem; width: 1.25rem"></span>
-                <span style="align-items: center; display: inline-flex; gap: 6px; grid-column: 2; grid-row: 1; min-width: 0; overflow: hidden; white-space: nowrap">
-                  <span style="color: #6b7280; font-style: italic; font-weight: 600">Sparrow-14</span>
-                </span>
-              </li>
-            </ul>
-          </section>
-        </div>
-      </aside>
-
-      <div style="min-width: 0">
-        <main style="margin: 0; padding: 0 0 32px; width: 100%">
-
-          <section style="display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 16px; min-height: 72px">
-            <div>
-              <p style="color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 5px; text-transform: uppercase">Public room</p>
-              <h1 style="color: #1e293b; margin: 0; font-size: 28px; font-weight: 700">Coffee break doodles</h1>
-              <p style="color: #64748b; margin: 6px 0 0">Get everyone ready before the first round.</p>
-            </div>
-          </section>
-
-          <section style="background: #fff; border: 1px solid #dfe1e6; border-radius: 12px; padding: 20px">
-            <div style="margin-bottom: 14px">
-              <p style="color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 5px; text-transform: uppercase">Host settings</p>
-              <h2 style="color: #1e293b; margin: 0; font-size: 19px; font-weight: 700">Edit room settings</h2>
-            </div>
-
-            <div style="display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr))">
-
-              <div style="grid-column: 1 / -1; align-items: end; display: flex; gap: 12px; min-width: 0">
-                <label style="flex: 0 1 280px; max-width: 280px; min-width: 0; width: 100%; display: flex; flex-direction: column; font-size: 15px; font-weight: 700; gap: 5px">
-                  Room name
-                  <input type="search" value="Coffee break doodles" style="border: 1px solid #c7cad1; border-radius: 6px; font: inherit; font-weight: 400; padding: 9px 10px; width: 100%">
-                </label>
-                <div style="flex: 0 0 auto">
-                  <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 88px; padding: 3px; position: relative; width: fit-content">
-                    <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 3px; pointer-events: none; position: absolute; top: 3px; width: 88px; z-index: 0"></span>
-                    <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; position: relative; text-align: center; z-index: 1">Public</button>
-                    <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; position: relative; text-align: center; z-index: 1">Private</button>
-                  </div>
-                </div>
-              </div>
-
-              <label style="grid-column: 1 / -1; align-items: center; display: flex; flex-direction: row; font-size: 15px; font-weight: 700; gap: 12px; justify-content: flex-start; width: fit-content">
-                <span style="box-sizing: border-box; flex: 0 0 12.5rem; width: 12.5rem">Max players</span>
-                <div style="align-items: center; background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); display: grid; flex: 0 0 auto; grid-template-columns: 44px minmax(48px, 1fr) 44px; height: 44px; width: 140px">
-                  <button type="button" aria-label="Decrease Max players" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">−</button>
-                  <input type="text" value="8" aria-label="Max players" style="background: transparent; border: 0; color: #0f172a; font: inherit; font-size: 16px; font-weight: 600; height: 100%; min-width: 0; padding: 0; text-align: center; width: 100%">
-                  <button type="button" aria-label="Increase Max players" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">+</button>
-                </div>
-              </label>
-              <label style="grid-column: 1 / -1; align-items: center; display: flex; flex-direction: row; font-size: 15px; font-weight: 700; gap: 12px; justify-content: flex-start; width: fit-content">
-                <span style="box-sizing: border-box; flex: 0 0 12.5rem; width: 12.5rem">Rounds</span>
-                <div style="align-items: center; background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); display: grid; flex: 0 0 auto; grid-template-columns: 44px minmax(48px, 1fr) 44px; height: 44px; width: 140px">
-                  <button type="button" aria-label="Decrease Rounds" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">−</button>
-                  <input type="text" value="3" aria-label="Rounds" style="background: transparent; border: 0; color: #0f172a; font: inherit; font-size: 16px; font-weight: 600; height: 100%; min-width: 0; padding: 0; text-align: center; width: 100%">
-                  <button type="button" aria-label="Increase Rounds" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">+</button>
-                </div>
-              </label>
-              <label style="grid-column: 1 / -1; align-items: center; display: flex; flex-direction: row; font-size: 15px; font-weight: 700; gap: 12px; justify-content: flex-start; width: fit-content">
-                <span style="box-sizing: border-box; flex: 0 0 12.5rem; width: 12.5rem">Drawing time (seconds)</span>
-                <div style="align-items: center; background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); display: grid; flex: 0 0 auto; grid-template-columns: 44px minmax(48px, 1fr) 44px; height: 44px; width: 140px">
-                  <button type="button" aria-label="Decrease Drawing time (seconds)" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">−</button>
-                  <input type="text" value="90" aria-label="Drawing time (seconds)" style="background: transparent; border: 0; color: #0f172a; font: inherit; font-size: 16px; font-weight: 600; height: 100%; min-width: 0; padding: 0; text-align: center; width: 100%">
-                  <button type="button" aria-label="Increase Drawing time (seconds)" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">+</button>
-                </div>
-              </label>
-
-              <fieldset style="grid-column: 1 / -1; border: 0; padding: 0; min-width: 0; margin-top: 6px">
-                <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Prompt lists</legend>
-                <div style="align-items: center; color: #64748b; display: flex; font-size: 13px; gap: 8px; margin: 2px 0 7px">
-                  <label style="font-weight: 650">Prompt language</label>
-                  <output style="color: #334155; font-weight: 750">English</output>
-                </div>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px">
-                  <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
-                    <span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span>
-                    <span style="white-space: nowrap">Standard English</span>
-                    <span style="background: #eff6ff; border-radius: 999px; color: #2563eb; font-size: 11px; font-weight: 600; padding: 1px 6px">432</span>
-                  </button>
-                  <button type="button" style="align-items: center; background: #e8edf5; border: 1px solid transparent; border-radius: 999px; color: #475569; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
-                    <span aria-hidden="true" style="color: #64748b; font-size: 12px; font-weight: 800">+</span>
-                    <span style="white-space: nowrap">Extended English</span>
-                    <span style="background: rgba(100, 116, 139, 0.12); border-radius: 999px; color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px">1284</span>
-                  </button>
-                </div>
-              </fieldset>
-
-              <fieldset style="grid-column: 1 / -1; border: 0; padding: 0; min-width: 0">
-                <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Allowed tools</legend>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px">
-                  <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px"><span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span><span style="white-space: nowrap">Brush</span></button>
-                  <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px"><span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span><span style="white-space: nowrap">Fill</span></button>
-                  <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px"><span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span><span style="white-space: nowrap">Shapes</span></button>
-                </div>
-              </fieldset>
-
-              <fieldset style="grid-column: 1 / -1; border: 0; padding: 0; min-width: 0">
-                <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Colors</legend>
-                <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 135px; padding: 3px; position: relative; width: max-content; max-width: 100%">
-                  <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 3px; pointer-events: none; position: absolute; top: 3px; width: 135px; z-index: 0"></span>
-                  <button type="button" aria-pressed="true" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">All colors</button>
-                  <button type="button" aria-pressed="false" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Palette only</button>
-                  <button type="button" aria-pressed="false" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Colorblind-safe</button>
-                  <button type="button" aria-pressed="false" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Black and white</button>
-                </div>
-              </fieldset>
-
-              <details style="border-top: 1px solid #e2e8f0; grid-column: 1 / -1; padding-top: 18px">
-                <summary style="cursor: pointer; font-weight: 800">Advanced settings</summary>
-              </details>
-
-            </div>
-
-            <div style="color: #475569; display: flex; font-size: 13px; font-weight: 700; justify-content: flex-end; margin-top: 20px; min-height: 18px">Saved</div>
-          </section>
-
-          <section style="background: #fff; border: 1px solid #dfe1e6; border-radius: 12px; padding: 20px; display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-top: 16px">
-            <div>
-              <p style="color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 5px; text-transform: uppercase">Host controls</p>
-              <h2 style="color: #1e293b; margin: 0; font-size: 19px; font-weight: 700">Start when everyone is ready</h2>
-              <p style="color: #64748b; margin: 6px 0 0">4 active players are ready to play.</p>
-            </div>
-            <div style="display: flex; flex: 0 0 auto; gap: 8px">
-              <button type="button" style="background: #16a34a; border: 0; border-radius: 8px; color: #fff; flex: 0 0 auto; font-size: 15px; font-weight: 700; padding: 12px 18px; font-family: inherit">Start game</button>
-            </div>
-          </section>
-
-        </main>
-      </div>
-
-      <aside style="display: flex; flex-direction: column; gap: 12px">
-        <div style="background: #fff; border: 1px solid #dfe1e6; border-radius: 10px; padding: 12px; box-sizing: border-box; min-width: 0; width: 100%">
-          <section style="display: flex; flex-direction: column; height: 520px">
-            <div style="align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-bottom: 14px; min-height: 42px; flex: 0 0 auto">
-              <div>
-                <p style="color: #64748b; font-size: 11px; font-weight: 800; letter-spacing: .07em; margin: 0 0 3px; text-transform: uppercase">Room chat</p>
-                <h2 style="color: #1e293b; font-size: 16px; margin: 0">Chat while you wait</h2>
-              </div>
-            </div>
-            <div style="flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column">
-              <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: 14px">
-                <div style="color: #6b6f76; font-style: italic; overflow-wrap: anywhere">Bruno joined the room</div>
-                <div style="overflow-wrap: anywhere"><strong style="color: #0f766e; font-weight: 700">Marta: </strong>ready when you are</div>
-                <div style="overflow-wrap: anywhere"><strong style="color: #c2410c; font-weight: 700">Bruno: </strong>one sec, grabbing a coffee</div>
-                <div style="color: #6b6f76; font-style: italic; overflow-wrap: anywhere">Yuki joined the room</div>
-                <div style="overflow-wrap: anywhere"><strong style="color: #7e22ce; font-weight: 700">Yuki: </strong>hi all 👋</div>
-                <div style="color: #6b6f76; font-style: italic; overflow-wrap: anywhere">Sparrow-14 joined the room</div>
-                <div style="color: #6b6f76; font-style: italic; overflow-wrap: anywhere">Ines was marked AFK by vote.</div>
-              </div>
-            </div>
-            <form style="position: relative; display: flex; flex-direction: column; gap: 4px; margin-top: 8px">
-              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-height: 1.1rem; padding: 0 10px; font-size: 1rem"></div>
-              <div style="display: flex; align-items: center; gap: 6px">
-                <div style="flex: 1; display: flex; align-items: center; min-width: 0; padding: 8px 10px; border: 1px solid #c7cad1; border-radius: 6px; background: white">
-                  <input type="search" placeholder="Type a message..." style="flex: 1; min-width: 0; border: none; outline: none; padding: 0; font: inherit; background: transparent; color: inherit">
-                </div>
-                <button type="submit" style="background: #4c6ef5; color: white; border: none; border-radius: 6px; padding: 8px 14px; font-family: inherit; font-size: 16px">Send</button>
-              </div>
-            </form>
-          </section>
-        </div>
-      </aside>
-
     </div>
+    <ul style="list-style: none; margin: 0; padding: 0; display: grid; gap: 5px">
+      <li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent">
+    
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">M</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcMarta); font-weight: 800">Marta</span>
+        <span style="color: var(--faint); font-size: 12px; font-weight: 700">you</span>
+        <span title="Host" style="display: inline-flex; color: var(--muted); flex: none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M3 17h18l-1-9-4.5 3.5L12 6l-3.5 5.5L4 8l-1 9Z"/><path d="M4 21h16"/></svg></span>
+      </span>
+      
+    </span>
+    
+  </li>
+<li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent">
+    
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avBruno); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">B</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcBruno); font-weight: 800">Bruno</span>
+        
+        
+      </span>
+      
+    </span>
+    
+  </li>
+<li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent">
+    
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avYuki); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">Y</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcYuki); font-weight: 800">Yuki</span>
+        
+        
+      </span>
+      
+    </span>
+    
+  </li>
+<li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent; opacity: 0.6">
+    
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avInes); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">I</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcInes); font-weight: 800">Ines</span>
+        
+        
+      </span>
+      <span style="display: inline-flex; align-items: center; gap: 5px; color: var(--warning); font-size: 12.5px; font-weight: 800"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>AFK</span>
+    </span>
+    
+  </li>
+<li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent">
+    
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avGuest); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">S</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcSparrow); font-style: italic; font-weight: 700">Sparrow-14</span>
+        
+        
+      </span>
+      
+    </span>
+    
+  </li>
+    </ul>
+    
+  </div>
+</aside>
+  <div style="min-width: 0">
+  <div style="display: grid; gap: 14px">
+    <section style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 24px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); text-align: center">
+      <p style="color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Public room · waiting for players</p>
+      <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 28px; color: var(--ink); margin-top: 5px">Coffee break doodles</h1>
+      <p style="color: var(--muted); font-size: 14px; margin-top: 6px">Send friends the code or the link — they can join mid-lobby.</p>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 5px; margin: 18px 0 14px" aria-label="Room code BQ7F2K">
+        <span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid var(--lineStrong); border-radius: 12px; background: var(--well); font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 26px; color: var(--ink)">B</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid var(--lineStrong); border-radius: 12px; background: var(--well); font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 26px; color: var(--ink)">Q</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid var(--lineStrong); border-radius: 12px; background: var(--well); font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 26px; color: var(--ink)">7</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid var(--lineStrong); border-radius: 12px; background: var(--well); font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 26px; color: var(--ink)">F</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid var(--lineStrong); border-radius: 12px; background: var(--well); font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 26px; color: var(--ink)">2</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid var(--lineStrong); border-radius: 12px; background: var(--well); font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 26px; color: var(--ink)">K</span>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 10px">
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; padding: 11px 18px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--primaryEdge)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Copy invite link</button>
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy code</button>
+      </div>
+    </section>
+
+    <section style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 20px 22px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px">
+        <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink)">Room settings</h2>
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg>Edit settings</button>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px">
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--well); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: var(--muted)">Players<strong style="color: var(--ink); font-weight: 800">8 max</strong></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--well); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: var(--muted)">Rounds<strong style="color: var(--ink); font-weight: 800">3</strong></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--well); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: var(--muted)">Drawing time<strong style="color: var(--ink); font-weight: 800">90s</strong></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--well); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: var(--muted)">Scoring<strong style="color: var(--ink); font-weight: 800">Default</strong></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--well); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: var(--muted)">Hints<strong style="color: var(--ink); font-weight: 800">Timed</strong></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--well); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: var(--muted)">Prompts<strong style="color: var(--ink); font-weight: 800">Standard English · 432</strong></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--well); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: var(--muted)">Colors<strong style="color: var(--ink); font-weight: 800">All</strong></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--well); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: var(--muted)">Spectators<strong style="color: var(--ink); font-weight: 800">See the prompt</strong></span>
+      </div>
+      <p style="color: var(--faint); font-size: 12.5px; margin-top: 10px">Only you can edit settings while the room waits. Everyone sees changes instantly.</p>
+    </section>
+
+    <section style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 20px 22px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); display: flex; align-items: center; justify-content: space-between; gap: 16px">
+      <div>
+        <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink)">Ready when you are</h2>
+        <p style="color: var(--muted); font-size: 13.5px; margin-top: 4px">4 players are ready. Ines is AFK and will sit out until she's back.</p>
+      </div>
+      <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--successButton); color: #fff; border: 0; border-radius: 10px; padding: 13px 22px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 16px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--successButtonEdge)">Start game</button>
+    </section>
+  </div></div>
+  
+<aside style="display: flex; flex-direction: column; gap: 12px">
+  <div style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); display: flex; flex-direction: column; height: 560px">
+    <div style="margin-bottom: 12px; flex: none">
+      <h2 style="font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink)">Chat while you wait</h2>
+    </div>
+    <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; align-items: baseline; gap: 7px; color: var(--faint); font-size: 13px"><span style="flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--lineStrong); align-self: center"></span><span style="overflow-wrap: anywhere">Bruno joined the room</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: var(--pcMarta); font-weight: 800; font-size: 13.5px">Marta</span><span style="color: var(--muted)"> ready when you are</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: var(--pcBruno); font-weight: 800; font-size: 13.5px">Bruno</span><span style="color: var(--muted)"> one sec, grabbing a coffee</span></div>
+<div style="display: flex; align-items: baseline; gap: 7px; color: var(--faint); font-size: 13px"><span style="flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--lineStrong); align-self: center"></span><span style="overflow-wrap: anywhere">Yuki joined the room</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: var(--pcYuki); font-weight: 800; font-size: 13.5px">Yuki</span><span style="color: var(--muted)"> hi all</span></div>
+<div style="display: flex; align-items: baseline; gap: 7px; color: var(--faint); font-size: 13px"><span style="flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--lineStrong); align-self: center"></span><span style="overflow-wrap: anywhere">Sparrow-14 joined the room</span></div>
+<div style="display: flex; align-items: baseline; gap: 7px; color: var(--faint); font-size: 13px"><span style="flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--lineStrong); align-self: center"></span><span style="overflow-wrap: anywhere">Ines was marked AFK by vote</span></div>
+    </div>
+    
+<form style="display: flex; flex-direction: column; gap: 7px; margin-top: 10px; flex: none; border-top: 1.5px solid var(--line); padding-top: 12px">
+  
+  
+  <div style="display: flex; align-items: center; gap: 7px">
+    <div style="flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border: 1.5px solid var(--lineStrong); border-radius: 10px; background: var(--field)">
+      <input type="text" placeholder="Type a message…" style="flex: 1; min-width: 0; border: none; outline: none; padding: 0; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; background: transparent; color: var(--ink)">
+    </div>
+    <button type="submit" aria-label="Send" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; box-shadow: 0 2px 0 var(--primaryEdge); flex: none"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></button>
+  </div>
+</form>
+  </div>
+</aside>
+</div></div>
 </div>
 </x-dc>
-<script data-dc-script data-props='{"$preview": {"width": 1200, "height": 1120}}'>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 1240, "height": 1000}}'>
 class Component extends DCLogic {
   renderVals() {
-    return {};
+    const defaults = { theme: 'light' };
+    return Object.assign({}, defaults, this.props);
   }
 }
 </script>

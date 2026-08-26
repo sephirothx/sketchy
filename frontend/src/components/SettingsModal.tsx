@@ -5,9 +5,24 @@ import { emitWithAck } from "../lib/socket";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { ApiError } from "../lib/api";
 import { AuthDialog, type AuthMode } from "./AccountMenu";
-import { SettingsIcon } from "./SettingsIcon";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { FieldHint, SegmentedControl, Switch } from "./RoomSetupControls";
+import {
+  BrushIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CircleIcon,
+  EraserIcon,
+  FillIcon,
+  GearIcon,
+  KeyboardIcon,
+  RectIcon,
+  TriangleIcon,
+  UndoIcon,
+  XIcon,
+} from "./icons";
+import { getSystemTheme } from "../store/settingsStore";
+import type { ReactNode } from "react";
 import {
   ACTION_LABELS,
   DEFAULT_KEY_BINDINGS,
@@ -22,11 +37,23 @@ import { patchUserSettings } from "../lib/userSettings";
 
 type SettingsTab = "general" | "game" | "shortcuts";
 
-const TABS: { id: SettingsTab; label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "game", label: "Game" },
-  { id: "shortcuts", label: "Keyboard shortcuts" },
+const TABS: { id: SettingsTab; label: string; sub: string; icon: ReactNode }[] = [
+  { id: "general", label: "General", sub: "Account, appearance & sound", icon: <GearIcon size={16} /> },
+  { id: "game", label: "Game", sub: "Drawing & celebrations", icon: <BrushIcon size={16} /> },
+  { id: "shortcuts", label: "Shortcuts", sub: "Drawing tool key bindings", icon: <KeyboardIcon size={16} /> },
 ];
+
+const ACTION_ICONS: Record<string, ReactNode> = {
+  brush: <BrushIcon size={15} />,
+  fill: <FillIcon size={15} />,
+  eraser: <EraserIcon size={15} />,
+  rectangle: <RectIcon size={15} />,
+  triangle: <TriangleIcon size={15} />,
+  ellipse: <CircleIcon size={15} />,
+  brushDecrease: <ChevronDownIcon size={15} />,
+  brushIncrease: <ChevronUpIcon size={15} />,
+  undo: <UndoIcon size={15} />,
+};
 
 const THEME_OPTIONS: { value: AppTheme; label: string }[] = [
   { value: "light", label: "Light" },
@@ -61,8 +88,9 @@ function SettingsModalContent() {
   const [draftVolume, setDraftVolume] = useState<number>(volume);
   const [draftColorblindSafeColors, setDraftColorblindSafeColors] =
     useState<boolean>(colorblindSafeColors);
-  const [draftAutoClearChatOnGuess, setDraftAutoClearChatOnGuess] =
-    useState<boolean>(autoClearChatOnGuess);
+  // The clear-guess-box behavior kept its wire key but lost its settings row;
+  // the stored value passes through untouched.
+  const [draftAutoClearChatOnGuess] = useState<boolean>(autoClearChatOnGuess);
   const [draftNameColor, setDraftNameColor] = useState<string>(nameColor);
   const authUser = useAuthStore((state) => state.user);
   const setDisplayName = useAuthStore((state) => state.setDisplayName);
@@ -249,7 +277,7 @@ function SettingsModalContent() {
       >
         <div className="settings-modal-header">
           <h3 id={titleId} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <SettingsIcon size={20} />
+            <GearIcon size={20} />
             <span>Settings</span>
           </h3>
           <button
@@ -260,11 +288,12 @@ function SettingsModalContent() {
             title="Close"
             aria-label="Close settings"
           >
-            ✕
+            <XIcon size={16} />
           </button>
         </div>
 
-        <div className="settings-tabs" role="tablist">
+        <div className="settings-modal-body">
+        <div className="settings-tabs" role="tablist" aria-orientation="vertical">
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -274,7 +303,11 @@ function SettingsModalContent() {
               className={`settings-tab-button${activeTab === tab.id ? " active" : ""}`}
               onClick={() => setActiveTab(tab.id)}
             >
-              {tab.label}
+              <span className="settings-tab-icon" aria-hidden="true">{tab.icon}</span>
+              <span className="settings-tab-text">
+                <strong>{tab.label}</strong>
+                <small>{tab.sub}</small>
+              </span>
             </button>
           ))}
         </div>
@@ -391,14 +424,34 @@ function SettingsModalContent() {
                 </div>
 
                 <h4 className="settings-fields-heading">Appearance</h4>
-                <SegmentedControl
-                  label="Theme"
-                  showLabel
-                  hint="Follow your device preference, or lock Light / Dark."
-                  value={draftTheme}
-                  options={THEME_OPTIONS}
-                  onChange={setDraftTheme}
-                />
+                <div className="settings-labeled-field">
+                  <span className="settings-labeled-field-label">
+                    Theme
+                    <FieldHint hint="Follow your device preference, or lock Light / Dark." />
+                  </span>
+                  <div className="theme-cards" role="group" aria-label="Theme">
+                    {THEME_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`theme-card${draftTheme === option.value ? " is-selected" : ""}`}
+                        aria-pressed={draftTheme === option.value}
+                        onClick={() => setDraftTheme(option.value)}
+                      >
+                        <span className={`theme-card-preview theme-card-preview-${option.value}`} aria-hidden="true">
+                          <i />
+                          <i />
+                        </span>
+                        <strong>
+                          {option.label}
+                          {option.value === "system" && (
+                            <small>Current: {getSystemTheme() === "dark" ? "Dark" : "Light"}</small>
+                          )}
+                        </strong>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <Switch
                   label="Prefer colorblind-safe colors"
@@ -454,13 +507,6 @@ function SettingsModalContent() {
                 />
 
                 <Switch
-                  label="Clear guesses after sending"
-                  hint="Empty the guess field after each submission. Turn this off to edit and resend it."
-                  checked={draftAutoClearChatOnGuess}
-                  onChange={setDraftAutoClearChatOnGuess}
-                />
-
-                <Switch
                   label="Confetti celebration effects"
                   hint="Enable celebratory particle confetti bursts on correct guesses and victory reveals."
                   checked={draftConfettiEffects}
@@ -485,7 +531,7 @@ function SettingsModalContent() {
                   onClick={handleResetDefaults}
                   title="Reset shortcuts to original defaults"
                 >
-                  Reset defaults
+                  Reset to defaults
                 </button>
               </div>
 
@@ -496,6 +542,7 @@ function SettingsModalContent() {
 
                   return (
                     <div key={action} className="keybinding-row">
+                      <span className="keybinding-icon" aria-hidden="true">{ACTION_ICONS[action]}</span>
                       <span className="keybinding-label">{ACTION_LABELS[action]}</span>
                       <div className="keybinding-badges">
                         {/* Primary Key Slot */}
@@ -542,6 +589,7 @@ function SettingsModalContent() {
               </div>
             </div>
           )}
+        </div>
         </div>
 
         <div className="settings-modal-footer">

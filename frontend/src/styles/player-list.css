@@ -1,4 +1,8 @@
+/* Players sidebar rows, per docs/ui-mockups (playerRow in tools/shell.mjs):
+   avatar, name + live status on two lines, score on the right. */
 .player-list {
+  display: grid;
+  gap: 5px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -6,17 +10,32 @@
 
 .player-row {
   align-items: center;
-  border-radius: 6px;
-  column-gap: 8px;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  column-gap: 10px;
   display: grid;
-  grid-template-columns: 1.25rem minmax(0, 1fr);
-  padding: 6px 4px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 9px 10px;
   position: relative;
   row-gap: 4px;
 }
 
 .player-row.has-scores {
-  grid-template-columns: 1.25rem minmax(0, 1fr) 5ch;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+/* Game-end rows lead with the placement badge. */
+.player-row:has(.player-role-placement) {
+  grid-template-columns: 20px auto minmax(0, 1fr);
+}
+
+.player-row.has-scores:has(.player-role-placement) {
+  grid-template-columns: 20px auto minmax(0, 1fr) auto;
+}
+
+.player-row.is-drawing {
+  background: var(--primary-soft);
+  border-color: var(--primary-edge-soft);
 }
 
 .player-row.is-moderatable {
@@ -25,7 +44,11 @@
 
 .player-row.is-moderatable:hover,
 .player-row:has(.player-moderation-trigger[aria-expanded="true"]) {
-  background: #f1f5f9;
+  background: var(--well);
+}
+
+.player-row.is-drawing.is-moderatable:hover {
+  background: var(--primary-soft);
 }
 
 .player-row:has(.player-moderation-trigger[aria-expanded="true"]) {
@@ -33,7 +56,7 @@
 }
 
 .player-row.is-afk:not(.disconnected) > :not(.player-moderation) {
-  opacity: 0.72;
+  opacity: 0.65;
 }
 
 .player-row.disconnected > :not(.player-moderation) {
@@ -42,28 +65,27 @@
 
 .player-role {
   align-items: center;
-  color: #7c3aed;
+  color: var(--faint);
   display: inline-flex;
-  grid-column: 1;
-  grid-row: 1;
-  height: 1.25rem;
+  font-size: 12.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
   justify-content: center;
-  width: 1.25rem;
+  width: 20px;
 }
 
-.player-role-afk {
-  color: #d97706;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+.player-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .player-name {
   align-items: center;
   display: inline-flex;
   gap: 6px;
-  grid-column: 2;
-  grid-row: 1;
+  font-size: 15px;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -71,16 +93,51 @@
 
 .player-name .colored-player-name {
   flex: 0 1 auto;
+  font-weight: 800;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
 }
 
 .player-you-mark {
-  color: #94a3b8;
+  color: var(--faint);
   flex: 0 0 auto;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.player-host-mark {
+  color: var(--muted);
+  display: inline-flex;
+  flex: none;
+}
+
+.player-status {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.player-status-drawing {
+  color: var(--primary);
+}
+
+.player-status-afk {
+  color: var(--warning);
+}
+
+.player-status-guessed {
+  color: var(--success-ink);
+}
+
+.player-status-guessed .player-status-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.player-row.has-guessed {
+  background: var(--success-soft);
 }
 
 .player-moderation {
@@ -100,10 +157,10 @@
 }
 
 .player-vote-menu {
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--menu);
+  border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
   border-radius: 8px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-raised);
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -117,10 +174,10 @@
 
 .player-vote-action {
   align-items: baseline;
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--menu-ink) 6%, transparent);
   border: none;
   border-radius: 6px;
-  color: #fff;
+  color: var(--menu-ink);
   cursor: pointer;
   display: grid;
   font-size: 0.75rem;
@@ -138,7 +195,7 @@
 }
 
 .player-vote-action-label {
-  color: #cbd5e1;
+  color: color-mix(in srgb, var(--menu-ink) 78%, transparent);
 }
 
 .player-vote-action-count {
@@ -175,14 +232,13 @@
 }
 
 .player-score {
+  color: var(--ink);
+  font-size: 17px;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  grid-column: 3;
-  grid-row: 1;
+  font-weight: 800;
   justify-self: end;
   min-width: 0;
   text-align: right;
-  width: 100%;
 }
 
 .player-vote-row {
@@ -220,22 +276,23 @@ button.player-vote-chip {
 
 button.player-vote-chip-afk:hover,
 button.player-vote-chip-afk:focus-visible {
-  background: #fde68a;
+  background: var(--warning-edge);
 }
 
 button.player-vote-chip-kick:hover,
 button.player-vote-chip-kick:focus-visible {
-  background: #fecaca;
+  background: var(--danger);
+  color: #fff;
 }
 
 .player-vote-chip-afk {
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .player-vote-chip-kick {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .player-vote-chip.is-cast {
@@ -245,14 +302,14 @@ button.player-vote-chip-kick:focus-visible {
 /* Report sits with the votes and reads like them, but carries no tally: it
    asks a moderator to look rather than needing a majority. */
 .player-vote-action.player-vote-report .player-vote-action-kind {
-  color: #b45309;
+  color: #fdba74;
 }
 
 .report-details {
-  border: 1px solid #c7cad1;
-  border-radius: 8px;
-  background: #fff;
-  color: #0f172a;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: var(--ink);
   font: inherit;
   padding: 8px 10px;
   resize: vertical;

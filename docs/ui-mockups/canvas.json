@@ -1,30 +1,172 @@
 {
   "artboards": [
-    { "file": "Main.dc.html", "title": "Lobby", "x": 0, "y": 0, "w": 960, "h": 1180 },
-    { "file": "CreateRoom.dc.html", "title": "Create room", "x": 1040, "y": 0, "w": 760, "h": 1300 },
-    { "file": "AccountRecovery.dc.html", "title": "Account recovery", "x": 1880, "y": 0, "w": 560, "h": 440 },
-
-    { "file": "WaitingRoom.dc.html", "title": "Waiting room (host)", "x": 0, "y": 1460, "w": 1200, "h": 1120 },
-    { "file": "Drawing.dc.html", "title": "Drawing — the drawer", "x": 1280, "y": 1460, "w": 1200, "h": 940 },
-    { "file": "Guessing.dc.html", "title": "Drawing — a guesser", "x": 2560, "y": 1460, "w": 1200, "h": 940 },
-
-    { "file": "TurnResults.dc.html", "title": "Turn results", "x": 0, "y": 2740, "w": 1200, "h": 940 },
-    { "file": "GameOver.dc.html", "title": "Game over", "x": 1280, "y": 2740, "w": 1200, "h": 900 },
-    { "file": "Highlights.dc.html", "title": "Highlights", "x": 2560, "y": 2740, "w": 1200, "h": 900 },
-
-    { "file": "PromptStats.dc.html", "title": "Prompt stats", "x": 0, "y": 3840, "w": 900, "h": 900 },
-    { "file": "MyPromptLists.dc.html", "title": "My prompt lists", "x": 980, "y": 3840, "w": 1000, "h": 1000 },
-    { "file": "Profile.dc.html", "title": "Profile", "x": 2060, "y": 3840, "w": 900, "h": 1140 },
-
-    { "file": "AdminOps.dc.html", "title": "Server operations", "x": 0, "y": 5140, "w": 1100, "h": 800 },
-    { "file": "Moderation.dc.html", "title": "Moderation", "x": 1180, "y": 5140, "w": 1100, "h": 800 }
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 960,
+      "h": 1240,
+      "title": "Lobby"
+    },
+    {
+      "file": "CreateRoom.dc.html",
+      "x": 1050,
+      "y": 0,
+      "w": 780,
+      "h": 1100,
+      "title": "Create a room"
+    },
+    {
+      "file": "AccountRecovery.dc.html",
+      "x": 1920,
+      "y": 0,
+      "w": 880,
+      "h": 560,
+      "title": "Reset password"
+    },
+    {
+      "file": "Settings.dc.html",
+      "x": 2900,
+      "y": 0,
+      "w": 1080,
+      "h": 900,
+      "title": "Settings (new)"
+    },
+    {
+      "file": "WaitingRoom.dc.html",
+      "x": 0,
+      "y": 1780,
+      "w": 1240,
+      "h": 1000,
+      "title": "Waiting room"
+    },
+    {
+      "file": "PromptChoice.dc.html",
+      "x": 1330,
+      "y": 1780,
+      "w": 1240,
+      "h": 1000,
+      "title": "Prompt choice (new)"
+    },
+    {
+      "file": "Drawing.dc.html",
+      "x": 2660,
+      "y": 1780,
+      "w": 1240,
+      "h": 1080,
+      "title": "Drawing — drawer"
+    },
+    {
+      "file": "Guessing.dc.html",
+      "x": 3990,
+      "y": 1780,
+      "w": 1240,
+      "h": 1000,
+      "title": "Guessing — guesser"
+    },
+    {
+      "file": "TurnResults.dc.html",
+      "x": 0,
+      "y": 3000,
+      "w": 1240,
+      "h": 1000,
+      "title": "Turn results"
+    },
+    {
+      "file": "GameOver.dc.html",
+      "x": 1330,
+      "y": 3000,
+      "w": 1240,
+      "h": 960,
+      "title": "Game over"
+    },
+    {
+      "file": "Highlights.dc.html",
+      "x": 2660,
+      "y": 3000,
+      "w": 1240,
+      "h": 960,
+      "title": "Highlights"
+    },
+    {
+      "file": "PromptStats.dc.html",
+      "x": 0,
+      "y": 4180,
+      "w": 920,
+      "h": 980,
+      "title": "Prompt stats"
+    },
+    {
+      "file": "MyPromptLists.dc.html",
+      "x": 1010,
+      "y": 4180,
+      "w": 1020,
+      "h": 1080,
+      "title": "My prompt lists"
+    },
+    {
+      "file": "Profile.dc.html",
+      "x": 2120,
+      "y": 4180,
+      "w": 920,
+      "h": 1220,
+      "title": "Profile"
+    },
+    {
+      "file": "AdminOps.dc.html",
+      "x": 0,
+      "y": 5620,
+      "w": 1100,
+      "h": 1180,
+      "title": "Server operations"
+    },
+    {
+      "file": "Moderation.dc.html",
+      "x": 1190,
+      "y": 5620,
+      "w": 1160,
+      "h": 1040,
+      "title": "Moderation"
+    }
   ],
   "annotations": [
-    { "id": "row-entry", "x": 0, "y": -110, "w": 420, "text": "GETTING IN\nLobby, room setup, password recovery. Frame width is the page's real max-width, with its padding inside it — content sits at max-width minus 2× padding, as it ships." },
-    { "id": "row-room", "x": 0, "y": 1350, "w": 420, "text": "IN THE ROOM\nThe 220 / 1fr / 280 room shell. One story across all six: room BQ7F2K, five players, round 2, Marta draws lighthouse." },
-    { "id": "row-results", "x": 0, "y": 2630, "w": 420, "text": "AFTER THE TURN\nTurn results overlays the canvas area; game over and highlights replace it inside the same shell. Scores continue the round-2 turn." },
-    { "id": "row-library", "x": 0, "y": 3730, "w": 420, "text": "LIBRARY AND PROFILE\nStandalone pages reached from the lobby header and the account menu. Profile's history row is the same game." },
-    { "id": "row-operator", "x": 0, "y": 5030, "w": 420, "text": "OPERATOR PAGES\nAdministrator and moderator views. Same page shell, tab nav, no game chrome, unstyled native controls where the app ships none." }
+    {
+      "id": "note-getting-in",
+      "x": 0,
+      "y": -170,
+      "w": 460,
+      "text": "GETTING IN — one identity system everywhere: warm paper surface, Fredoka display type, SVG icons (no emoji), avatar chips for every player, and a light/dark theme switched per artboard with the theme tweak above each frame. Lobby gains header nav to stats/lists, a segmented code input, capacity meters and one primary action per card. Create-room is grouped into four sections with a sticky summary bar; drawing time steps through the real preset list, and scoring/hint modes explain themselves."
+    },
+    {
+      "id": "note-in-the-room",
+      "x": 0,
+      "y": 1610,
+      "w": 460,
+      "text": "IN THE ROOM — same story as the shipped canvas (room BQ7F2K, round 2, Marta draws lighthouse). Waiting room leads with the invite, settings collapse to a summary. NEW: the prompt-choice moment with its 15s auto-pick countdown. In-turn: ring timer with urgency color, letter-tile masked prompt, per-player status lines (Got it · time / Drawing / AFK), got-it event cards and dashed post-guess chat in the feed, near-miss attached to the guess box (Guessing is Yuki’s seat), 44px tool targets, destructive actions separated."
+    },
+    {
+      "id": "note-after-turn",
+      "x": 0,
+      "y": 2830,
+      "w": 460,
+      "text": "AFTER THE TURN — the 5-second results overlay is one readable card: prompt reveal, your outcome line, deltas and movement, plus a “next turn” progress bar. Game over gets a real podium, one primary action, and an escapable auto-continue. Highlights become four superlative cards."
+    },
+    {
+      "id": "note-library",
+      "x": 0,
+      "y": 4010,
+      "w": 460,
+      "text": "LIBRARY AND PROFILE — prompt stats get styled filters and difficulty meters; list editing gets capacity meters, visible duplicate reporting, a locked-language hint and a separated delete. Profile leads with four hero stats and placement-badged history."
+    },
+    {
+      "id": "note-operators",
+      "x": 0,
+      "y": 5450,
+      "w": 460,
+      "text": "OPERATOR PAGES — one admin workspace with a side rail. Server ops: status banner, metric cards, hourly chart, recorder health, append-only audit ledger. Moderation: queue/case master-detail with server-pinned evidence, account context, a required resolution note, and Suspend… opening the duration step."
+    }
   ],
-  "launch": { "view": "canvas" }
+  "launch": {
+    "view": "canvas"
+  }
 }

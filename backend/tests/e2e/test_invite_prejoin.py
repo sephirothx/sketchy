@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -29,9 +29,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             await host_page.fill('label:has-text("Max players") input', "3")
             await host_page.click('button:has-text("Create room")')
 
-            room_button = await host_page.wait_for_selector(".room-copy-button")
-            room_code_text = await room_button.inner_text()
-            room_code = room_code_text.split("Code:")[1].strip()
+            room_code = await get_room_code(host_page)
             invite_url = f"{BASE_URL}/room/{room_code}"
 
             # Previewing a private invite does not join the room.

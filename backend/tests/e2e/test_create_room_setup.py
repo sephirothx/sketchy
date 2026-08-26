@@ -71,7 +71,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
                 "enterKeyHint": "done",
             })
             await room_name_input.fill("Setup room")
-            await page.click('text=Advanced settings')
+            await page.click('summary:has-text("Prompts")')
             await page.fill('#custom-prompts', "apple\nred panda\nAPPLE\nthis entry is deliberately longer than thirty two characters")
             assert await page.is_visible('text=2 usable custom prompts')
             assert await page.is_visible('text=1 duplicate ignored')
@@ -81,6 +81,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await page.fill('#custom-prompts', "apple\nred panda\nAPPLE")
             assert await page.is_visible('text=2 usable custom prompts')
             await page.check('label:has-text("Only use custom prompts") input')
+            await page.click('summary:has-text("Scoring and hints")')
             await page.get_by_role("button", name="No scoring").click()
             await page.check('label:has-text("Hide blanks") input')
             assert await page.is_visible('text=Hints are off because blanks are hidden.')

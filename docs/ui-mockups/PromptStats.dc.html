@@ -7,146 +7,156 @@
 <body>
 <x-dc>
 <helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #f2f3f7;
-      color: #1c1d21;
-      font-family: system-ui, "Segoe UI", Roboto, sans-serif;
-    }
-    h1, h2, h3, p { margin: 0; }
-    a { color: #4c6ef5; text-decoration: none; }
-    a:hover { color: #3b5bdb; }
+    body { margin: 0; }
+
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --field: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --field: #0F172A; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    button { cursor: pointer; }
+    summary { cursor: pointer; }
+    summary.plain { list-style: none; }
+    summary.plain::-webkit-details-marker { display: none; }
   </style>
 </helmet>
-<div style="width: 900px; min-height: 900px; margin: 0 auto; padding: 16px">
-  <div>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
 
-    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px">
-      <button type="button" style="background: transparent; border: 0; color: #2563eb; font-size: 14px; font-weight: 700; margin-bottom: 0; padding: 0; font-family: inherit">← Back to lobby</button>
-      <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1px solid #cbd5e1; background: transparent; color: inherit; border-radius: 999px; padding: 4px 12px 4px 4px; min-height: 36px; font: inherit">
-        <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #0f766e; color: #fff; font-weight: 700; font-size: 14px; flex: none">M</span>
-        <span style="font-weight: 600; font-size: 14px">Marta</span>
-      </button>
-    </div>
+<div style="width: 920px; min-height: 980px; margin: 0 auto; padding: 26px 24px 48px">
+  
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; padding-left: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to lobby</button>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 14px; flex: none">M</span>
+    <span style="font-weight: 800; font-size: 14px; color: var(--ink)">Marta</span>
+  </button>
+</div>
+  <header style="margin-bottom: 16px">
+    <p style="color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Server-wide</p>
+    <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 28px; color: var(--ink); margin-top: 4px">Prompt stats</h1>
+    <p style="color: var(--muted); font-size: 14px; margin-top: 6px">Every prompt in the list, and how it has actually played across finished games on this server.</p>
+  </header>
 
-    <header>
-      <h1 style="color: #1e293b; font-size: 24px; margin: 16px 0 4px; font-weight: 700">Prompt stats</h1>
-      <p style="color: #475569; margin: 0 0 16px">Every prompt in the list, and how it has actually played across finished games on this server.</p>
-    </header>
-
-    <div style="align-items: center; display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px">
-      <div style="align-items: center; display: flex; gap: 8px">
-        <label style="color: #475569; font-weight: 700">Prompt list</label>
-        <select style="font-family: inherit; font-size: 13.333px; border: 1px solid #767676; border-radius: 2px; padding: 0 4px; background: #fff; color: #000">
-          <option>Standard English — English (432)</option>
-        </select>
-      </div>
-      <div style="align-items: center; display: flex; gap: 8px">
-        <label style="color: #475569; font-weight: 700">Sort</label>
-        <select style="font-family: inherit; font-size: 13.333px; border: 1px solid #767676; border-radius: 2px; padding: 0 4px; background: #fff; color: #000">
-          <option>Hardest first</option>
-        </select>
-      </div>
-      <div style="align-items: center; display: flex; gap: 8px">
-        <label style="color: #475569; font-weight: 700">Period</label>
-        <select style="font-family: inherit; font-size: 13.333px; border: 1px solid #767676; border-radius: 2px; padding: 0 4px; background: #fff; color: #000">
-          <option>All time</option>
-        </select>
-      </div>
-      <div style="align-items: center; display: flex; gap: 8px">
-        <label style="color: #475569; font-weight: 700">Scoring</label>
-        <select style="font-family: inherit; font-size: 13.333px; border: 1px solid #767676; border-radius: 2px; padding: 0 4px; background: #fff; color: #000">
-          <option>All scoring modes</option>
-        </select>
-      </div>
-      <div style="align-items: center; display: flex; gap: 8px">
-        <label style="color: #475569; font-weight: 700">Hints</label>
-        <select style="font-family: inherit; font-size: 13.333px; border: 1px solid #767676; border-radius: 2px; padding: 0 4px; background: #fff; color: #000">
-          <option>All hint modes</option>
-        </select>
-      </div>
-      <div style="align-items: center; display: flex; gap: 8px">
-        <label style="color: #475569; font-weight: 700">Find a prompt</label>
-        <input type="search" placeholder="roller coaster" style="min-width: 180px; font-family: inherit; font-size: 13.333px; border: 1px solid #767676; border-radius: 2px; padding: 0 4px; background: #fff; color: #000">
-      </div>
-    </div>
-
-    <p style="color: #475569; line-height: 1.5; margin: 12px 0 0">389 ranked. 43 more prompts are unranked: fewer than 12 guessers have seen them.</p>
-
-    <div style="overflow-x: auto; margin-top: 12px">
-      <table style="border-collapse: collapse; min-width: 480px; width: 100%">
-        <caption style="color: #64748b; font-size: 13px; padding-bottom: 8px; text-align: left">Standard English (English), hardest first</caption>
-        <thead>
-          <tr>
-            <th scope="col" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: left; color: #64748b; font-size: 12px; letter-spacing: .04em; text-transform: uppercase">Prompt</th>
-            <th scope="col" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #64748b; font-size: 12px; letter-spacing: .04em; text-transform: uppercase">How it goes</th>
-            <th scope="col" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #64748b; font-size: 12px; letter-spacing: .04em; text-transform: uppercase">Guessed</th>
-            <th scope="col" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #64748b; font-size: 12px; letter-spacing: .04em; text-transform: uppercase">Picked</th>
-            <th scope="col" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #64748b; font-size: 12px; letter-spacing: .04em; text-transform: uppercase">Drawn</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th scope="row" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: left; color: #1e293b; font-weight: 700">bow and arrow</th>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">Rarely guessed</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">11%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">24%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">38</td>
-          </tr>
-          <tr>
-            <th scope="row" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: left; color: #1e293b; font-weight: 700">roller coaster</th>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">Often missed</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">22%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">41%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">67</td>
-          </tr>
-          <tr>
-            <th scope="row" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: left; color: #1e293b; font-weight: 700">windmill</th>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">Even odds</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">48%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">57%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">91</td>
-          </tr>
-          <tr>
-            <th scope="row" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: left; color: #1e293b; font-weight: 700">lighthouse</th>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">Usually guessed</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">71%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">66%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">124</td>
-          </tr>
-          <tr>
-            <th scope="row" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: left; color: #1e293b; font-weight: 700">banana</th>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">Gets guessed</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">94%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">78%</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #334155">203</td>
-          </tr>
-          <tr>
-            <th scope="row" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: left; color: #94a3b8; font-weight: 700">sextant</th>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #94a3b8">Not played enough</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #94a3b8">—</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #94a3b8">—</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #94a3b8">3</td>
-          </tr>
-          <tr>
-            <th scope="row" style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: left; color: #94a3b8; font-weight: 700">funicular</th>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #94a3b8">Not played enough</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #94a3b8">—</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #94a3b8">—</td>
-            <td style="border-bottom: 1px solid #e2e8f0; padding: 9px 10px; text-align: right; color: #94a3b8">1</td>
-          </tr>
-        </tbody>
-      </table>
+  <div style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px">
+    <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">Standard English · 432<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+    <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">Hardest first<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+    <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">All time<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+    <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">All scoring<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+    <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">All hints<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+    <div style="flex: 1 1 180px; display: flex; align-items: center; gap: 9px; background: var(--well); border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 13px; min-height: 42px">
+      <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg></span>
+      <input type="search" placeholder="Find a prompt" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: var(--ink)">
     </div>
   </div>
+
+  <p style="color: var(--muted); font-size: 13.5px; margin-bottom: 12px">389 ranked · <span style="color: var(--faint)">43 unranked — fewer than 12 guessers have faced them yet</span></p>
+
+  <div style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); overflow: hidden">
+    <table style="border-collapse: collapse; width: 100%">
+      <thead>
+        <tr>
+          <th scope="col" style="border-bottom: 1.5px solid var(--lineStrong); padding: 9px 12px; text-align: left; color: var(--faint); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase">Prompt</th>
+          <th scope="col" style="border-bottom: 1.5px solid var(--lineStrong); padding: 9px 12px; text-align: right; color: var(--faint); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase">How it goes</th><th scope="col" style="border-bottom: 1.5px solid var(--lineStrong); padding: 9px 12px; text-align: right; color: var(--faint); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase">Guessed</th><th scope="col" style="border-bottom: 1.5px solid var(--lineStrong); padding: 9px 12px; text-align: right; color: var(--faint); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase">Picked</th><th scope="col" style="border-bottom: 1.5px solid var(--lineStrong); padding: 9px 12px; text-align: right; color: var(--faint); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase">Drawn</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+<tr>
+  <th scope="row" style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: left; color: var(--ink); font-weight: 800; font-size: 14px">bow and arrow</th>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right">
+<span style="display: inline-flex; align-items: center; gap: 9px; justify-content: flex-end">
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap">Rarely guessed</span>
+  <span aria-hidden="true" style="display: inline-block; width: 64px; height: 7px; border-radius: 999px; background: var(--line); overflow: hidden"><span style="display: block; width: 11%; height: 100%; background: var(--danger)"></span></span>
+</span></td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">11%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">24%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">38</td>
+</tr>
+        
+<tr>
+  <th scope="row" style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: left; color: var(--ink); font-weight: 800; font-size: 14px">roller coaster</th>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right">
+<span style="display: inline-flex; align-items: center; gap: 9px; justify-content: flex-end">
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap">Often missed</span>
+  <span aria-hidden="true" style="display: inline-block; width: 64px; height: 7px; border-radius: 999px; background: var(--line); overflow: hidden"><span style="display: block; width: 22%; height: 100%; background: var(--warm)"></span></span>
+</span></td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">22%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">41%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">67</td>
+</tr>
+        
+<tr>
+  <th scope="row" style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: left; color: var(--ink); font-weight: 800; font-size: 14px">windmill</th>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right">
+<span style="display: inline-flex; align-items: center; gap: 9px; justify-content: flex-end">
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap">Even odds</span>
+  <span aria-hidden="true" style="display: inline-block; width: 64px; height: 7px; border-radius: 999px; background: var(--line); overflow: hidden"><span style="display: block; width: 48%; height: 100%; background: #C9A227"></span></span>
+</span></td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">48%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">57%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">91</td>
+</tr>
+        
+<tr>
+  <th scope="row" style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: left; color: var(--ink); font-weight: 800; font-size: 14px">lighthouse</th>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right">
+<span style="display: inline-flex; align-items: center; gap: 9px; justify-content: flex-end">
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap">Usually guessed</span>
+  <span aria-hidden="true" style="display: inline-block; width: 64px; height: 7px; border-radius: 999px; background: var(--line); overflow: hidden"><span style="display: block; width: 71%; height: 100%; background: var(--success)"></span></span>
+</span></td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">71%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">66%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">124</td>
+</tr>
+        
+<tr>
+  <th scope="row" style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: left; color: var(--ink); font-weight: 800; font-size: 14px">banana</th>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right">
+<span style="display: inline-flex; align-items: center; gap: 9px; justify-content: flex-end">
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap">Almost a gimme</span>
+  <span aria-hidden="true" style="display: inline-block; width: 64px; height: 7px; border-radius: 999px; background: var(--line); overflow: hidden"><span style="display: block; width: 94%; height: 100%; background: var(--success)"></span></span>
+</span></td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">94%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">78%</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">203</td>
+</tr>
+        
+<tr style="opacity: 0.55">
+  <th scope="row" style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: left; color: var(--ink); font-weight: 800; font-size: 14px">sextant</th>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right"><span style="font-size: 13px; font-weight: 700; color: var(--faint)">Not played enough</span></td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">—</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">—</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">3</td>
+</tr>
+        
+<tr style="opacity: 0.55">
+  <th scope="row" style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: left; color: var(--ink); font-weight: 800; font-size: 14px">funicular</th>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right"><span style="font-size: 13px; font-weight: 700; color: var(--faint)">Not played enough</span></td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">—</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">—</td>
+  <td style="border-bottom: 1.5px solid var(--line); padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muted)">1</td>
+</tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 </div>
 </x-dc>
-<script data-dc-script data-props='{"$preview": {"width": 900, "height": 900}}'>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 920, "height": 980}}'>
 class Component extends DCLogic {
   renderVals() {
-    return {};
+    const defaults = { theme: 'light' };
+    return Object.assign({}, defaults, this.props);
   }
 }
 </script>

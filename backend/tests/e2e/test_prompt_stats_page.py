@@ -1,6 +1,7 @@
 """The prompt stats page: reachable, sortable, and honest about thin data."""
 import pytest
 from playwright.async_api import async_playwright
+from tests.e2e.lobby_helpers import use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -12,9 +13,11 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
         page = await browser.new_page()
 
         try:
-            # Reached the way a player would: from the lobby.
+            # Reached the way a player would: from the account menu.
             await page.goto(BASE_URL)
-            await page.get_by_role("link", name="Prompt stats").click()
+            await use_guest_name(page, "StatsReader")
+            await page.click(".identity-chip")
+            await page.get_by_role("menuitem", name="Prompt stats").click()
             await page.wait_for_url("**/prompt-lists")
             await page.get_by_role("heading", name="Prompt stats").wait_for()
 
@@ -67,6 +70,7 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
 
             # Room setup offers the stats from the chip itself, not as a link row.
             await page.goto(f"{BASE_URL}/create")
+            await page.click('summary:has-text("Prompts")')
             info = page.get_by_role("link", name="How English — Standard prompts play")
             await info.wait_for()
             assert await info.get_attribute("href") == "/prompt-lists/english_standard"

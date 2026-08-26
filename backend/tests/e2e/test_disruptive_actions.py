@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -44,8 +44,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
                 '.app-toast.error:has-text("Couldn’t copy the link")'
             )
 
-            code_text = await host_page.inner_text('.room-copy-button')
-            code = code_text.split("Code:")[1].strip()
+            code = await get_room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "SafePlayer")
             await player_page.fill('input[placeholder="ABC123"]', code)
@@ -125,7 +124,7 @@ async def test_waiting_room_leave_remains_immediate():
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')
 
-            room_code = (await page.inner_text(".room-copy-button")).split("Code:")[1].strip()
+            room_code = await get_room_code(page)
             await page.evaluate("window.__sentSocketFrames = []")
             await page.click('.game-header-leave-button')
             await page.wait_for_url(f"{BASE_URL}/")

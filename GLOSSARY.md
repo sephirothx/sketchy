@@ -40,6 +40,7 @@ and conversation.
 | **Game over** | The final screen: full standings, and the way through to the highlights and the drawing recap. | game end screen, results screen |
 | **Highlights** | The short list of superlatives from the last game — hardest prompt, fastest guess, best drawer, quickest on average. Shown on a screen of their own, reached from the game over screen or the waiting room, rather than crowded onto either. Each is dropped when the game gives it nothing to say, so the list is often shorter than four. Never derived from points, so it reads the same in a no-scoring game. | awards, MVP, trophies, achievements |
 | **Rematch** | Starting a new game with the players already in the room. | replay, new game |
+| **Continue** | The game-over screen's primary action: return to the waiting room, with the auto-continue countdown shown inside the button. **Stay here** cancels that countdown and keeps the results up. | back to waiting room, done, dismiss |
 
 The rule of thumb: **rounds contain turns**. Anything a single drawer does, is
 awarded, or is limited to belongs to a *turn*. Only the room's configured length and
@@ -100,7 +101,8 @@ Three different things, never used for one another:
 | **Prompt tag** | A stable, explicit category attached to a **Prompt version** for organization and later discovery. | category string, label |
 | **Word** | Keeps its ordinary English meaning, and only that: the individual words making up a multi-word prompt, and the letters and words hints and close guesses work on. It is never a name for the prompt itself. | — |
 | **Prompt options** | The three prompts offered to the drawer during the choosing phase. | word options, word choices, candidates |
-| **Masked prompt** | The prompt shown to guessers as underscores, with any revealed letters filled in and the word breaks visible. | masked word, hidden word, blanks |
+| **Masked prompt** | The prompt shown to guessers as letter tiles — one tile per letter, revealed letters filled in, word breaks visible, and each word's letter count as a superscript numeral beside it. | masked word, hidden word, blanks, underscores |
+| **Got it** | The per-player status shown once someone guesses the prompt this turn — in the players panel with their guess time, and in chat as the green got-it event line. | guessed it, solved it |
 | **Prompt list** | An ordered set of prompts in exactly one **Prompt language** that a room draws from. A list is either official bundled content or content a registered player explicitly saved and owns. | word list, dictionary, prompt pack, category |
 | **Prompt-list revision** | One immutable, content-hashed, ordered membership snapshot of a **Prompt list**. A game pins the exact revisions it resolves at start, so later edits cannot rewrite what it used. | list version, prompt pack version, current list |
 | **Prompt-list visibility** | Who may resolve a user-owned **Prompt list** in v1: Private means only its owner; Unlisted means its owner or someone with its share code. Public is reserved for official/future moderated discovery and is not user-selectable. | privacy, published, discoverable |
@@ -208,6 +210,7 @@ Three different things, never used for one another:
 | **Prompt-aware audience** | The restricted recipients allowed to see text that could reveal the active prompt: the author plus players who already know it, after **Blocks** are applied. It contrasts with the ordinary Room audience. | private message, drawer-only audience, secret chat |
 | **Message evidence** | An immutable copy of up to 20 unexpired **Retained messages** deliberately selected with a **Report**. The reporter must have received each line and the reported player must have authored it; the copy survives ordinary message cleanup and identity anonymization. | transcript, public chat history, telemetry |
 | **Suspension** | A temporary or permanent service-wide block imposed by a moderator or administrator. It revokes signed-in devices and prevents HTTP and Socket.IO authentication while active. | ban (in player-facing copy), kick |
+| **Warning** | A moderator's formal notice to a reported player, shown once with the reported messages behind it and acknowledged by the player. It restricts nothing and sits between dismissing a **Report** and a **Suspension**. | strike, admonition, caution |
 | **Block** | A player's private, directional choice to hide another player's ordinary chat and prevent future direct invites. It never hides game-critical state and is not a **Kick vote** or **Suspension**. | mute, ignore, ban |
 | **Restart vote** | A proposal to restart the current game, carried by a strict majority of active players. | vote restart, game restart, reset vote |
 | **Kick vote** | A proposal to remove a player from the room. | vote kick, vote-kick, boot |

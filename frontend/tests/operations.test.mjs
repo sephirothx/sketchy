@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   abandonmentRate,
   seriesFor,
-  sparklinePoints,
 } from "../src/lib/operations.ts";
 
 const days = [
@@ -30,28 +29,4 @@ test("abandonment is a share, because the count alone says nothing", () => {
   assert.equal(abandonmentRate({ finished: 90, abandoned: 10, shutdown: 0 }), 10);
   assert.equal(abandonmentRate({ finished: 2, abandoned: 10, shutdown: 0 }), 83.3);
   assert.equal(abandonmentRate({ finished: 0, abandoned: 0, shutdown: 0 }), null);
-});
-
-test("a sparkline puts the biggest value at the top of the box", () => {
-  const points = sparklinePoints(
-    [
-      { date: "a", value: 0 },
-      { date: "b", value: 10 },
-    ],
-    100,
-    40,
-  ).split(" ");
-
-  // SVG y grows downward, so the peak has to sit at 0 and the trough at the
-  // full height - inverting this is the classic upside-down chart.
-  assert.equal(points[0], "0,40");
-  assert.equal(points[1], "100,0");
-});
-
-test("a sparkline with nothing in it draws nothing", () => {
-  assert.equal(sparklinePoints([], 100, 40), "");
-});
-
-test("a single day is drawn flat rather than at the edge", () => {
-  assert.equal(sparklinePoints([{ date: "a", value: 7 }], 100, 40), "0,20 100,20");
 });

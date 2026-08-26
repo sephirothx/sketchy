@@ -7,106 +7,164 @@
 <body>
 <x-dc>
 <helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #f2f3f7;
-      color: #1c1d21;
-      font-family: system-ui, "Segoe UI", Roboto, sans-serif;
-    }
-    h1, h2, h3, p, ul { margin: 0; }
-    a { color: #4c6ef5; text-decoration: none; }
-    a:hover { color: #3b5bdb; }
+    body { margin: 0; }
+
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --field: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --field: #0F172A; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    button { cursor: pointer; }
+    summary { cursor: pointer; }
+    summary.plain { list-style: none; }
+    summary.plain::-webkit-details-marker { display: none; }
   </style>
 </helmet>
-<div style="width: 1100px; min-height: 800px; margin: 0 auto; padding: 24px 16px 48px">
-  <div>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
 
-    <header>
-      <a href="#" style="display: inline-block; margin-bottom: 10px; background: transparent; border: 0; color: #2563eb; font-size: 14px; font-weight: 700; padding: 0">← Back to lobby</a>
-      <h1 style="font-size: 22px; margin: 0 0 12px; font-weight: 700">Moderation</h1>
-      <nav style="border-bottom: 1px solid #dfe1e6; display: flex; gap: 4px; margin-bottom: 20px">
-        <button type="button" style="background: none; border: 0; border-bottom: 2px solid currentColor; color: inherit; font: inherit; padding: 8px 12px; font-weight: 700">Player reports</button>
-        <button type="button" style="background: none; border: 0; border-bottom: 2px solid transparent; color: inherit; font: inherit; padding: 8px 12px">Prompt content</button>
-        <button type="button" style="background: none; border: 0; border-bottom: 2px solid transparent; color: inherit; font: inherit; padding: 8px 12px">Suspensions</button>
-      </nav>
-    </header>
+<div style="width: 1160px; min-height: 1040px; margin: 0 auto; padding: 24px 24px 40px">
+  
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; padding-left: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to lobby</button>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 14px; flex: none">M</span>
+    <span style="font-weight: 800; font-size: 14px; color: var(--ink)">Marta</span>
+  </button>
+</div>
+  <div style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: start">
 
-    <div style="align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px">
-      <label style="font-weight: 600">Showing</label>
-      <select style="width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; background: #fff; color: #0f172a">
-        <option>Waiting for review</option>
-        <option>Resolved</option>
-        <option>Dismissed</option>
-      </select>
-      <button type="button" style="font-family: inherit; font-size: 13.333px; border: 1px solid #767676; border-radius: 3px; padding: 1px 7px; background: #efefef; color: #000">Refresh</button>
-    </div>
-
-    <ul style="display: flex; flex-direction: column; gap: 12px; list-style: none; margin: 0; padding: 0">
-
-      <li style="background: #fff; border: 1px solid #dfe1e6; border-radius: 10px; padding: 14px 16px">
-        <div style="align-items: baseline; display: flex; gap: 10px; justify-content: space-between">
-          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase">harassment</span>
-          <span style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7">25 Aug 2026, 09:41</span>
+    <aside style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); display: grid; gap: 10px; align-content: start">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+        <div>
+          <p style="color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Moderation</p>
+          <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink); margin-top: 3px">Review queue</h2>
         </div>
-        <p style="margin: 6px 0 0">Kept naming other players in chat after being asked to stop.</p>
-        <ul style="border-left: 2px solid #dfe1e6; font-size: 13px; list-style: none; margin: 10px 0 0; padding: 0 0 0 12px">
-          <li><strong>Nightjar-88:</strong> nobody wants you in this room</li>
-          <li><strong>Nightjar-88:</strong> leave already</li>
-          <li><strong>Nightjar-88:</strong> stop drawing, you are ruining it <em> — original no longer in the room</em></li>
-        </ul>
-        <div style="align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px">
-          <input aria-label="Resolution note" placeholder="Why, in one line" style="background: #fff; border: 1px solid #c7cad1; border-radius: 6px; color: #0f172a; flex: 1 1 220px; padding: 6px 8px; font: inherit">
-          <button type="button" style="background: none; border: 1px solid #c7cad1; border-radius: 6px; font: inherit; padding: 6px 12px">Resolve</button>
-          <button type="button" style="background: none; border: 1px solid #c7cad1; border-radius: 6px; font: inherit; padding: 6px 12px">Dismiss</button>
-          <button type="button" style="background: none; border: 1px solid #b91c1c; border-radius: 6px; color: #b91c1c; font: inherit; font-weight: 600; padding: 6px 12px">Suspend account</button>
-          <select style="width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; background: #fff; color: #0f172a">
-            <option>24 hours</option>
-            <option>7 days</option>
-            <option>30 days</option>
-            <option>No end date</option>
-          </select>
-        </div>
-      </li>
+        <span style="display: inline-flex; align-items: center; gap: 5px; background: var(--dangerSoft); color: var(--danger); border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">4 open</span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px">
+        <button type="button" aria-pressed="true" style="background: var(--primarySoft); border: 1.5px solid var(--primary); border-radius: 999px; padding: 6px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12px; font-weight: 800; color: var(--primaryInk)">All open</button>
+        <button type="button" aria-pressed="false" style="background: var(--card); border: 1.5px solid var(--lineStrong); border-radius: 999px; padding: 6px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12px; font-weight: 800; color: var(--muted)">Player reports</button>
+        <button type="button" aria-pressed="false" style="background: var(--card); border: 1.5px solid var(--lineStrong); border-radius: 999px; padding: 6px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12px; font-weight: 800; color: var(--muted)">Prompt content</button>
+      </div>
+      <div style="display: grid; gap: 4px">
+        
+<button type="button" style="display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: var(--primarySoft); border: 1.5px solid var(--primary); border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+  <span style="width: 9px; height: 9px; border-radius: 50%; background: var(--danger); flex: none; margin-top: 5px"></span>
+  <span style="display: grid; gap: 2px; min-width: 0">
+    <strong style="font-size: 13.5px; font-weight: 800; color: var(--primaryInk)">Harassment</strong>
+    <span style="font-size: 12px; color: var(--muted); font-weight: 600; line-height: 1.4">Kept naming other players in chat after being asked to stop.</span>
+  </span>
+  <time style="margin-left: auto; font-size: 11.5px; color: var(--faint); font-weight: 700; flex: none">4m</time>
+</button>
+        
+<button type="button" style="display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+  <span style="width: 9px; height: 9px; border-radius: 50%; background: var(--warning); flex: none; margin-top: 5px"></span>
+  <span style="display: grid; gap: 2px; min-width: 0">
+    <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Offensive drawing</strong>
+    <span style="font-size: 12px; color: var(--muted); font-weight: 600; line-height: 1.4">Drew something unrelated to the prompt, twice in a row.</span>
+  </span>
+  <time style="margin-left: auto; font-size: 11.5px; color: var(--faint); font-weight: 700; flex: none">1h</time>
+</button>
+        
+<button type="button" style="display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+  <span style="width: 9px; height: 9px; border-radius: 50%; background: var(--warning); flex: none; margin-top: 5px"></span>
+  <span style="display: grid; gap: 2px; min-width: 0">
+    <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Spam</strong>
+    <span style="font-size: 12px; color: var(--muted); font-weight: 600; line-height: 1.4">Pasted the same link into four different rooms.</span>
+  </span>
+  <time style="margin-left: auto; font-size: 11.5px; color: var(--faint); font-weight: 700; flex: none">2h</time>
+</button>
+        
+<button type="button" style="display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+  <span style="width: 9px; height: 9px; border-radius: 50%; background: var(--warning); flex: none; margin-top: 5px"></span>
+  <span style="display: grid; gap: 2px; min-width: 0">
+    <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Prompt content</strong>
+    <span style="font-size: 12px; color: var(--muted); font-weight: 600; line-height: 1.4">A custom prompt reported as targeting a player.</span>
+  </span>
+  <time style="margin-left: auto; font-size: 11.5px; color: var(--faint); font-weight: 700; flex: none">5h</time>
+</button>
+      </div>
+    </aside>
 
-      <li style="background: #fff; border: 1px solid #dfe1e6; border-radius: 10px; padding: 14px 16px">
-        <div style="align-items: baseline; display: flex; gap: 10px; justify-content: space-between">
-          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase">offensive drawing</span>
-          <span style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7">24 Aug 2026, 22:18</span>
+    <main style="display: grid; gap: 12px">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px">
+        <div>
+          <p style="color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Player report · #2841</p>
+          <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 24px; color: var(--ink); margin-top: 4px">Harassment in room chat</h1>
+          <p style="font-size: 13px; color: var(--muted); font-weight: 700; margin-top: 4px">Reported from Coffee break doodles · today 09:41</p>
         </div>
-        <p style="margin: 6px 0 0">Drew something unrelated to the prompt, twice in a row.</p>
-        <div style="align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px">
-          <input aria-label="Resolution note" placeholder="Why, in one line" style="background: #fff; border: 1px solid #c7cad1; border-radius: 6px; color: #0f172a; flex: 1 1 220px; padding: 6px 8px; font: inherit">
-          <button type="button" style="background: none; border: 1px solid #c7cad1; border-radius: 6px; font: inherit; padding: 6px 12px">Resolve</button>
-          <button type="button" style="background: none; border: 1px solid #c7cad1; border-radius: 6px; font: inherit; padding: 6px 12px">Dismiss</button>
-          <button type="button" style="background: none; border: 1px solid #b91c1c; border-radius: 6px; color: #b91c1c; font: inherit; font-weight: 600; padding: 6px 12px">Suspend</button>
-          <select style="width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; background: #fff; color: #0f172a">
-            <option>24 hours</option>
-            <option>7 days</option>
-            <option>30 days</option>
-            <option>No end date</option>
-          </select>
-        </div>
-      </li>
+        <span style="display: inline-flex; align-items: center; gap: 5px; background: var(--dangerSoft); color: var(--danger); border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Harassment</span>
+      </div>
 
-      <li style="background: #fff; border: 1px solid #dfe1e6; border-radius: 10px; padding: 14px 16px">
-        <div style="align-items: baseline; display: flex; gap: 10px; justify-content: space-between">
-          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase">spam</span>
-          <span style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.7">24 Aug 2026, 15:02</span>
-        </div>
-        <p style="margin: 6px 0 0">Pasted the same link into four different rooms.</p>
-        <p style="font-size: 13px; margin: 10px 0 0; opacity: 0.8">Resolved — suspended 7 days, third report this week.</p>
-      </li>
+      <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px">
+        <section style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+          <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink); margin-bottom: 10px">Reported evidence</h2>
+          <blockquote style="background: var(--well); border: 1px solid var(--line); border-left: 3px solid var(--danger); border-radius: 10px; margin: 0; padding: 12px 14px; display: grid; gap: 5px; font-size: 13.5px; color: var(--muted)">
+            <span><strong style="color: var(--ink); font-weight: 800">Nightjar-88:</strong> nobody wants you in this room</span>
+            <span><strong style="color: var(--ink); font-weight: 800">Nightjar-88:</strong> leave already</span>
+            <span><strong style="color: var(--ink); font-weight: 800">Nightjar-88:</strong> stop drawing, you are ruining it <em style="color: var(--faint)">— author no longer in the room</em></span>
+          </blockquote>
+          <p style="font-size: 12.5px; color: var(--faint); font-weight: 700; margin-top: 10px">Pinned by the server exactly as the reporter received them — up to 20 messages.</p>
+        </section>
 
-    </ul>
+        <aside style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+          <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink); margin-bottom: 6px">Account context</h2>
+          
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
+  <span style="color: var(--faint); font-weight: 700">Account</span>
+  <strong style="color: var(--ink); font-weight: 800; text-align: right">Registered</strong>
+</div>
+          
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
+  <span style="color: var(--faint); font-weight: 700">Age</span>
+  <strong style="color: var(--ink); font-weight: 800; text-align: right">7 months</strong>
+</div>
+          
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
+  <span style="color: var(--faint); font-weight: 700">Prior reports</span>
+  <strong style="color: var(--ink); font-weight: 800; text-align: right">2 this week</strong>
+</div>
+          
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
+  <span style="color: var(--faint); font-weight: 700">Active suspension</span>
+  <strong style="color: var(--ink); font-weight: 800; text-align: right">None</strong>
+</div>
+        </aside>
+      </div>
+
+      <label style="display: grid; gap: 6px; font-size: 13.5px; font-weight: 800; color: var(--ink)">Resolution note
+        <textarea placeholder="Why, in one line — required to decide" style="background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; padding: 10px 12px; height: 72px; resize: vertical; width: 100%; color: var(--ink)"></textarea>
+        <span style="font-size: 12px; color: var(--faint); font-weight: 700">Kept in the append-only audit ledger. A warning or suspension from here also resolves this report.</span>
+      </label>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to operations</button>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px">Dismiss</button>
+          <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">Warn player</button>
+          <button type="button" style="display: inline-flex; align-items: center; gap: 7px; background: var(--card); border: 1.5px solid var(--danger); border-radius: 10px; color: var(--danger); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; padding: 10px 16px; min-height: 44px">Suspend…</button>
+        </div>
+      </div>
+    </main>
   </div>
 </div>
+</div>
 </x-dc>
-<script data-dc-script data-props='{"$preview": {"width": 1100, "height": 800}}'>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 1160, "height": 1040}}'>
 class Component extends DCLogic {
   renderVals() {
-    return {};
+    const defaults = { theme: 'light' };
+    return Object.assign({}, defaults, this.props);
   }
 }
 </script>

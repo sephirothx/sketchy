@@ -1,5 +1,5 @@
 .prompt-list-share-form {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--line);
   display: grid;
   gap: 6px;
   margin-top: 12px;
@@ -7,7 +7,7 @@
 }
 
 .prompt-list-share-form label {
-  color: #475569;
+  color: var(--muted);
   font-size: 13px;
   font-weight: 700;
 }
@@ -18,31 +18,23 @@
 }
 
 .prompt-list-share-form input {
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
   flex: 0 1 240px;
   min-width: 0;
   padding: 8px 10px;
 }
 
-.prompt-list-share-form button,
-.prompt-list-manager-card button {
-  background: #4c6ef5;
-  border: 0;
-  border-radius: 6px;
-  color: #fff;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 600;
-  padding: 10px 16px;
-}
-
 .prompt-list-chip-report {
   align-items: center;
-  background: #fff;
-  border: 1px solid #ef4444;
+  background: var(--card);
+  border: 1px solid var(--danger);
   border-radius: 999px;
-  color: #b91c1c;
+  color: var(--danger);
   cursor: pointer;
   display: inline-flex;
   font-weight: 900;
@@ -59,12 +51,14 @@
 }
 
 .prompt-content-report-dialog form { gap: 12px; }
-.prompt-content-report-dialog label { color: #334155; font-size: 14px; font-weight: 700; }
+.prompt-content-report-dialog label { color: var(--ink); font-size: 14px; font-weight: 700; }
 .prompt-content-report-dialog select,
 .prompt-content-report-dialog textarea {
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   box-sizing: border-box;
+  color: var(--ink);
   font: inherit;
   font-weight: 400;
   padding: 9px 10px;
@@ -72,30 +66,15 @@
 }
 .prompt-content-report-dialog textarea { min-height: 100px; resize: vertical; }
 
-.prompt-list-manager-card button:disabled,
-.prompt-list-share-form button:disabled {
-  cursor: not-allowed;
-  opacity: .55;
-}
-
 .prompt-list-manager-page {
   margin: 0 auto;
   max-width: 1000px;
   padding: 24px 16px 64px;
 }
 
-.prompt-list-manager-page .site-header {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.prompt-list-manager-page .back-link { margin: 0; }
-
 .prompt-list-manager-card {
-  background: #fff;
-  border: 1px solid #dfe1e6;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 16px 20px;
 }
@@ -108,7 +87,7 @@
 }
 
 .prompt-list-manager-heading p {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: .07em;
@@ -132,21 +111,25 @@
 }
 
 .prompt-list-manager-card .prompt-list-manager-layout aside button {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #334155;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
   display: flex;
   flex-direction: column;
+  font-size: 15px;
+  font-weight: 600;
   gap: 3px;
+  padding: 10px 16px;
   text-align: left;
 }
 
 .prompt-list-manager-card .prompt-list-manager-layout aside button.is-selected {
-  background: #eef2ff;
-  border-color: #818cf8;
+  background: var(--primary-soft);
+  border-color: var(--primary-edge-soft);
 }
 
-.prompt-list-manager-layout aside span { color: #64748b; font-size: 12px; }
+.prompt-list-manager-layout aside span { color: var(--muted); font-size: 12px; }
 
 .prompt-list-manager-layout form,
 .prompt-list-manager-layout form > label {
@@ -164,9 +147,11 @@
 .prompt-list-manager-layout input,
 .prompt-list-manager-layout select,
 .prompt-list-manager-layout textarea {
-  border: 1px solid #c7cad1;
-  border-radius: 6px;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   box-sizing: border-box;
+  color: var(--ink);
   font: inherit;
   font-size: 15px;
   font-weight: normal;
@@ -193,7 +178,7 @@
 /* Both halves of the editor follow the rhythm the room-creation prompts field
    set: a rule above, a bold label, a full-width control, muted counts below. */
 .prompt-list-bulk-add {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--line);
   display: grid;
   gap: 8px;
   margin-top: 18px;
@@ -220,7 +205,7 @@
 }
 
 .prompt-list-bulk-summary {
-  color: #475569;
+  color: var(--muted);
   font-size: 13px;
   margin: 0;
 }
@@ -228,7 +213,7 @@
 /* The list of what is already saved is its own block, so a paste box and the
    words it fills are never read as one control. */
 .prompt-list-collection {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--line);
   display: grid;
   gap: 10px;
   margin-top: 18px;
@@ -256,7 +241,7 @@
 
 .prompt-list-entry-flagged {
   align-items: center;
-  color: #b45309;
+  color: var(--warning);
   display: flex;
   font-size: 13px;
   font-weight: 700;
@@ -269,7 +254,7 @@
 }
 
 .prompt-list-entry-count {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   margin-left: auto;
   white-space: nowrap;
@@ -290,8 +275,8 @@
 
 .prompt-list-entry-editor > li {
   align-items: center;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: var(--well);
+  border: 1px solid var(--line);
   border-radius: 999px;
   display: flex;
   font-size: 14px;
@@ -301,8 +286,8 @@
 }
 
 .prompt-list-entry-editor > li.is-flagged {
-  background: #fff7ed;
-  border-color: #fdba74;
+  background: var(--warning-soft);
+  border-color: var(--warning-edge);
 }
 
 .prompt-list-entry-text { min-width: 0; overflow-wrap: anywhere; }
@@ -311,49 +296,42 @@
   background: none;
   border: 0;
   border-radius: 999px;
-  color: #64748b;
+  color: var(--muted);
   font-size: 16px;
   line-height: 1;
   padding: 3px 8px;
 }
 
 .prompt-list-manager-card .prompt-list-entry-editor > li button:hover {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .prompt-list-entry-moderation {
   align-self: center;
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 12px;
   font-weight: 800;
   text-transform: capitalize;
 }
 .prompt-list-moderation-warning {
-  background: #fff7ed;
-  border: 1px solid #fdba74;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-edge);
   border-radius: 8px;
-  color: #9a3412;
+  color: var(--warm-ink);
   margin: 0;
   padding: 10px 12px;
 }
-.prompt-list-manager-card .prompt-list-entry-editor button,
-.prompt-list-manager-card .danger-button {
-  background: #fff;
-  border: 1px solid #ef4444;
-  color: #b91c1c;
-}
-
 /* Reads as one of the page's fields: a recessed well holding a value, with
    its label beside it rather than above. */
 .prompt-list-share-code {
-  background: #f8fafc;
-  border: 1px solid #c7cad1;
+  background: var(--well);
+  border: 1px solid var(--line-strong);
   border-radius: 6px;
   padding: 6px 6px 6px 12px;
 }
 
 .prompt-list-share-code > span {
-  color: #475569;
+  color: var(--muted);
   font-size: 14px;
   font-weight: 600;
 }
@@ -364,8 +342,8 @@
   font-weight: 700;
   letter-spacing: 0.04em;
 }
-.prompt-list-manager-notice { color: #15803d; }
-.prompt-list-manager-empty { color: #475569; margin-top: 24px; }
+.prompt-list-manager-notice { color: var(--success-ink); }
+.prompt-list-manager-empty { color: var(--muted); margin-top: 24px; }
 
 @media (max-width: 700px) {
   .prompt-list-manager-card { padding: 18px; }
@@ -376,4 +354,53 @@
   }
   .prompt-list-manager-layout aside button { flex: 0 0 180px; }
   .prompt-list-manager-meta { grid-template-columns: 1fr; }
+}
+
+
+/* Difficulty band + meter in the "How it goes" column. */
+.prompt-stats-band {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  justify-content: flex-end;
+}
+
+.prompt-stats-band > span:first-child {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.prompt-stats-meter {
+  display: inline-block;
+  width: 64px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+  flex: none;
+}
+
+.prompt-stats-meter > span {
+  display: block;
+  height: 100%;
+}
+
+.prompt-stats-meter > .band-low { background: var(--danger); }
+.prompt-stats-meter > .band-mid { background: var(--warning); }
+.prompt-stats-meter > .band-high { background: var(--success); }
+
+
+.prompt-stats-controls select,
+.prompt-stats-controls input[type="search"] {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 38px;
+  padding: 6px 10px;
 }

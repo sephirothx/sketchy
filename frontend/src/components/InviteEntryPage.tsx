@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRoomEntry } from "../hooks/useRoomEntry";
-import { useSettingsStore } from "../store/settingsStore";
 import { describeDrawingRules } from "../lib/drawingRules";
 import type { RoomSummary } from "../types";
-import { SettingsIcon } from "./SettingsIcon";
-import { AccountMenu } from "./AccountMenu";
+import { AppHeader } from "./AppHeader";
 import { FirstRunIdentity } from "./FirstRunIdentity";
+import { XIcon } from "./icons";
 
 const INVITE_LOADING_DELAY_MS = 250;
 
@@ -38,7 +37,6 @@ function DelayedInviteLoader() {
 
 export function InviteEntryPage({ code }: { code: string }) {
   const navigate = useNavigate();
-  const openSettings = useSettingsStore((state) => state.openSettings);
   const { state, join } = useRoomEntry(code);
   const room = state.status === "preview" || state.status === "joining" ? state.room : null;
   const busy = state.status === "joining";
@@ -47,20 +45,11 @@ export function InviteEntryPage({ code }: { code: string }) {
 
   return (
     <div className="invite-entry-page">
-      <header className="invite-entry-header">
-        <button type="button" className="invite-brand" onClick={() => navigate("/")}>Sketchy</button>
-        <div className="lobby-header-actions">
-          <AccountMenu />
-          <button type="button" className="header-settings-button" onClick={openSettings} title="Player settings">
-            <SettingsIcon size={16} />
-            <span>Settings</span>
-          </button>
-        </div>
-      </header>
+      <AppHeader backLabel="Back to lobby" />
 
       {state.status === "error" ? (
         <main className="invite-card invite-unavailable-card">
-          <div className="invite-status-icon" aria-hidden="true">✕</div>
+          <div className="invite-status-icon" aria-hidden="true"><XIcon size={20} /></div>
           <p className="invite-eyebrow">Room {code}</p>
           <h1>Room unavailable</h1>
           <p>{state.message}</p>

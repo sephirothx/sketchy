@@ -89,6 +89,7 @@ erDiagram
     users ||--o{ persistent_rooms : "owns"
     users ||--o{ room_presets : "owns"
     users ||--o{ user_bans : "suspended by"
+    users ||--o{ user_warnings : "warned by"
 
     game_records ||--o{ game_participants : "seats"
     game_records ||--o{ turn_records : "turns"
@@ -110,6 +111,7 @@ erDiagram
 
     player_reports ||--o{ player_report_message_evidence : "pins"
     player_reports ||--o{ user_bans : "sources"
+    player_reports ||--o{ user_warnings : "sources"
     room_messages ||--o{ player_report_message_evidence : "copied from"
 ```
 
@@ -117,7 +119,7 @@ erDiagram
 | --- | --- |
 | **Server & rooms** | `app_config`, `room_code_reservations`, `persistent_rooms`, `room_presets`, `planned_shutdown_abandonments` |
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
-| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `prompt_content_reports`, `user_bans`, `user_blocks` |
+| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `user_blocks` |
 | **Messages** | `room_messages` |
 | **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_participant_outcomes`, `turn_guesses`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
@@ -488,7 +490,24 @@ applying automatically; revocation preserves the historic record and its reason.
 
 `source_report_id` is what lets the suspension notice show the reported player their own
 words as they were when the report was made. **A ban naming a report about somebody else
-is refused**, so a suspension cannot be used to show one player another's messages.
+is refused**, so a suspension cannot be used to show one player another's messages. A ban
+issued from a report also **resolves that report in the same transaction**, and a report
+already decided refuses the ban - one complaint, one consequence.
+
+### `user_warnings`
+`id` · `user_id` (`SET NULL`) · `issued_by_user_id` (`SET NULL`) · `reason` ·
+`source_report_id` (FK → `player_reports`, `SET NULL`) · `created_at` · `acknowledged_at`.
+
+**Flow.** The step between dismissing a report and suspending the account: nothing is
+restricted. A connected player is told immediately over the socket (`moderator_warning`);
+otherwise the client's `GET /api/warnings/pending` on their next visit
+returns the oldest unacknowledged warning together with the pinned messages of its
+source report — the same own-words rule as a suspension, and a warning naming a report
+about somebody else is refused for the same reason. Acknowledging sets
+`acknowledged_at`, which is what stops it being shown again and records that the notice
+actually landed. Issuing one writes a `warning.issued` audit event. A warning issued
+from a report **resolves that report in the same transaction**, and a report already
+decided refuses the warning - which is also what stops a retry from warning twice.
 
 ### `user_blocks`
 `id` · `blocker_user_id` · `blocked_user_id` (both CASCADE) · `created_at`, with

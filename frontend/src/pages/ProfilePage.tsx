@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { AccountMenu, AuthDialog, type AuthMode } from "../components/AccountMenu";
+import { Link, useParams } from "react-router-dom";
+import { AuthDialog, type AuthMode } from "../components/AccountMenu";
+import { AppHeader } from "../components/AppHeader";
+import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
@@ -107,6 +109,16 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
         onClick={toggle}
         aria-expanded={expanded}
       >
+        <span
+          className={`profile-game-place${
+            seat && game.outcome === "finished" && seat.finalRank <= 3
+              ? ` is-place-${seat.finalRank}`
+              : ""
+          }`}
+          aria-hidden="true"
+        >
+          {seat && game.outcome === "finished" ? `#${seat.finalRank}` : "—"}
+        </span>
         <span className="profile-game-title">
           <span className="profile-game-room">{game.roomName}</span>
           <span className="profile-game-meta">
@@ -138,7 +150,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
           </span>
         )}
         <span className="profile-game-chevron" aria-hidden="true">
-          {expanded ? "▾" : "▸"}
+          {expanded ? <ChevronDownIcon size={16} /> : <ChevronRightIcon size={16} />}
         </span>
       </button>
 
@@ -341,7 +353,6 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
 
 export function ProfilePage() {
   const params = useParams<{ userId?: string }>();
-  const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
   const hasResolved = useAuthStore((s) => s.hasResolved);
 
@@ -352,7 +363,7 @@ export function ProfilePage() {
   if (!userId) {
     return (
       <div className="profile-page">
-        <ProfileTopBar onBack={() => navigate("/")} />
+        <AppHeader backLabel="Back to lobby" />
         <p className="profile-note">
           {hasResolved ? "There is no player with that profile." : "Loading…"}
         </p>
@@ -366,19 +377,9 @@ export function ProfilePage() {
   return <ProfileView key={userId} userId={userId} />;
 }
 
-function ProfileTopBar({ onBack }: { onBack: () => void }) {
-  return (
-    <div className="profile-top-bar">
-      <button type="button" className="back-link" onClick={onBack}>
-        ← Back to lobby
-      </button>
-      <AccountMenu />
-    </div>
-  );
-}
+
 
 function ProfileView({ userId }: { userId: string }) {
-  const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
   const isOwnProfile = userId === currentUser?.id;
 
@@ -443,7 +444,7 @@ function ProfileView({ userId }: { userId: string }) {
 
   return (
     <div className="profile-page">
-      <ProfileTopBar onBack={() => navigate("/")} />
+      <AppHeader backLabel="Back to lobby" />
 
       {!subject && !error && <p className="profile-note">Loading…</p>}
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
@@ -453,10 +454,10 @@ function ProfileView({ userId }: { userId: string }) {
           <header className="profile-identity">
             {/* The avatar wears the same color as the name it belongs to. */}
             <span
-              className="profile-avatar"
+              className="profile-avatar avatar avatar-player"
               aria-hidden="true"
               style={{
-                backgroundColor: identityColor(
+                ["--player-color" as string]: identityColor(
                   shownName,
                   subject.isAnonymous,
                   subject.nameColor,
@@ -503,6 +504,8 @@ function ProfileView({ userId }: { userId: string }) {
                 value={`${Math.round(stats.winRate * 100)}%`}
               />
               <StatTile label="Average score" value={String(Math.round(stats.averageScore))} />
+            </div>
+            <div className="profile-stats profile-stats-small">
               <StatTile label="Turns played" value={String(stats.turnsPlayed)} />
               <StatTile label="Prompts guessed" value={String(stats.promptsGuessed)} />
               <StatTile label="Drawings made" value={String(stats.drawingsMade)} />

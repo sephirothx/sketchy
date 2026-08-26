@@ -1,8 +1,8 @@
 /* Global network feedback */
 .connection-status-banner {
-  background: #fffbeb;
-  border-bottom: 1px solid #f59e0b;
-  color: #92400e;
+  background: var(--warning-soft);
+  border-bottom: 1px solid var(--warning-edge);
+  color: var(--warning);
   font-size: 14px;
   font-weight: 800;
   left: 0;
@@ -14,13 +14,17 @@
   z-index: 1100;
 }
 
-.connection-status-banner.offline { background: #fef2f2; border-bottom-color: #ef4444; color: #991b1b; }
+.connection-status-banner.offline {
+  background: var(--danger-soft);
+  border-bottom-color: var(--danger);
+  color: var(--danger);
+}
 
 .server-shutdown-banner {
   align-items: center;
-  background: #fff7ed;
-  border-bottom: 1px solid #f97316;
-  color: #9a3412;
+  background: var(--warm-soft);
+  border-bottom: 1px solid var(--warm);
+  color: var(--warm-ink);
   display: flex;
   font-size: 14px;
   font-weight: 800;
@@ -36,9 +40,9 @@
 /* The update is over by the time this shows, so it reads as information
    rather than a warning, and it waits to be closed. */
 .server-shutdown-banner.is-restarted {
-  background: #eef2ff;
-  border-bottom-color: #6366f1;
-  color: #3730a3;
+  background: var(--primary-soft);
+  border-bottom-color: var(--primary-edge-soft);
+  color: var(--primary-ink);
 }
 
 .server-shutdown-banner.is-restarted button {
@@ -53,7 +57,7 @@
 }
 
 .server-shutdown-banner.is-restarted button:hover {
-  background: #e0e7ff;
+  background: var(--primary-edge-soft);
 }
 
 .toast-viewport {
@@ -72,11 +76,11 @@
 
 .app-toast {
   align-items: center;
-  background: #eff6ff;
-  border: 1px solid #93c5fd;
+  background: var(--card);
+  border: 1.5px solid var(--primary-edge-soft);
   border-radius: 999px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
-  color: #1e40af;
+  box-shadow: var(--shadow-raised);
+  color: var(--primary-ink);
   display: flex;
   font-size: 13px;
   font-weight: 700;
@@ -87,8 +91,16 @@
   pointer-events: auto;
 }
 
-.app-toast.success { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
-.app-toast.warning { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
-.app-toast.error { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
-.app-toast button { background: transparent; border: 0; color: inherit; font-size: 18px; line-height: 1; padding: 1px 4px; }
-.app-toast button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.app-toast.success { border-color: var(--success); color: var(--success-ink); }
+.app-toast.warning { border-color: var(--warning-edge); color: var(--warning); }
+.app-toast.error { border-color: var(--danger); color: var(--danger); }
+.app-toast button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  padding: 3px 4px;
+}
+.app-toast button:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }

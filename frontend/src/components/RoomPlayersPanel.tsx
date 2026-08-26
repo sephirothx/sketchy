@@ -4,6 +4,7 @@ import { recordRender } from "../lib/renderDiagnostics";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../types";
 import { PlayerList } from "./PlayerList";
+import { EyeIcon } from "./icons";
 
 interface RoomPlayersPanelProps {
   mode: "waiting" | "playing" | "game-end";
@@ -14,6 +15,7 @@ interface RoomPlayersPanelProps {
   showScores: boolean;
   finalScores: ScoreEntry[] | null;
   moderation: ModerationState;
+  turnCorrectGuesses?: Record<string, number>;
 }
 
 export function RoomPlayersPanel({
@@ -25,6 +27,7 @@ export function RoomPlayersPanel({
   showScores,
   finalScores,
   moderation,
+  turnCorrectGuesses,
 }: RoomPlayersPanelProps) {
   recordRender("players");
   const [promotionBusy, setPromotionBusy] = useState(false);
@@ -92,7 +95,7 @@ export function RoomPlayersPanel({
               aria-label={`${spectators.length} spectator${spectators.length === 1 ? "" : "s"}`}
               aria-describedby="room-spectator-tooltip"
             >
-              <span className="room-spectator-icon" aria-hidden="true">👀</span>
+              <span className="room-spectator-icon" aria-hidden="true"><EyeIcon size={14} /></span>
               <span className="room-spectator-count">{spectators.length}</span>
               <div
                 id="room-spectator-tooltip"
@@ -128,6 +131,7 @@ export function RoomPlayersPanel({
           variant={showFinalStandings ? "game-end" : mode === "game-end" ? "waiting" : mode}
           allowVoting={mode === "playing"}
           moderation={moderation}
+          turnCorrectGuesses={mode === "playing" ? turnCorrectGuesses : undefined}
         />
       </div>
       {canPromoteSelf && (

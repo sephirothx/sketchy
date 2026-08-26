@@ -1,3 +1,4 @@
+import { XIcon } from "./icons";
 import { useCallback, useEffect, useState } from "react";
 
 import { AddEmailDialog } from "./AddEmailDialog";
@@ -76,7 +77,7 @@ export function EmailRecoveryReminder() {
           aria-label="Dismiss"
           onClick={() => void close()}
         >
-          ×
+          <XIcon size={14} />
         </button>
       </div>
       {adding && (

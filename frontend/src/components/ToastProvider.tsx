@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ToastContext, type ToastTone } from "../lib/toast";
+import { XIcon } from "./icons";
 
 interface Toast {
   id: number;
@@ -41,7 +42,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             role={toast.tone === "error" ? "alert" : "status"}
           >
             <span>{toast.message}</span>
-            <button type="button" onClick={() => dismiss(toast.id)} aria-label="Dismiss notification">×</button>
+            <button type="button" onClick={() => dismiss(toast.id)} aria-label="Dismiss notification"><XIcon size={14} /></button>
           </div>
         ))}
       </div>

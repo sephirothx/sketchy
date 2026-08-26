@@ -1,100 +1,361 @@
-.create-room-page { margin: 0 auto; max-width: 760px; padding: 28px 16px 64px; }
-.back-link { background: transparent; border: 0; color: #2563eb; cursor: pointer; font-size: 14px; font-weight: 700; margin-bottom: 16px; padding: 0; }
-.create-room-card { background: #fff; border: 1px solid #dfe1e6; border-radius: 12px; padding: 24px; }
-.create-room-heading p { color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 4px; text-transform: uppercase; }
-.create-room-heading h1 { color: #1e293b; margin: 0; }
-.create-room-heading span { color: #64748b; display: block; margin-top: 7px; }
-/* Presets are a shortcut, not a section: one muted row above the form, whose
-   controls appear as they become relevant. */
+/* Create-room page, per docs/ui-mockups (CreateRoomPage in
+   tools/pages-entry.mjs). The control recipes here (segmented, steppers,
+   chips, switches) are shared with the waiting room's settings editor. */
+.create-room-page { margin: 0 auto; max-width: 780px; padding: 26px 16px 64px; }
+
+.create-room-heading-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.create-room-heading h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 30px;
+  color: var(--ink);
+  margin: 4px 0 0;
+}
+
+/* Presets are a shortcut, not a section: one muted row beside the heading,
+   whose controls appear as they become relevant. */
 .room-preset-bar {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   font-size: 13px;
-  gap: 12px;
-  margin-top: 14px;
+  color: var(--muted);
+  gap: 10px;
 }
 
 .room-preset-bar select,
 .room-preset-bar .room-preset-name {
-  border: 1px solid #c7cad1;
-  border-radius: 6px;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
   font: inherit;
+  font-weight: 700;
   max-width: 220px;
-  padding: 6px 8px;
+  min-height: 42px;
+  padding: 6px 10px;
 }
 
 .room-preset-bar .auth-link { font-size: 13px; }
-.room-preset-bar .room-preset-delete { color: #b91c1c; }
+.room-preset-bar .room-preset-delete { color: var(--danger); }
 .room-preset-bar button:disabled { cursor: not-allowed; opacity: .55; }
 
-.room-preset-status { color: #475569; display: inline-flex; gap: 8px; }
-.create-room-basic-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 24px; }
-.input-number-field {
-  align-items: center;
+.room-preset-status { color: var(--muted); display: inline-flex; gap: 8px; }
+
+/* ------------------------------------------------------------ form sections */
+.create-room-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.form-section {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 22px;
+}
+
+.form-section-head {
   display: flex;
-  flex-direction: row;
-  font-size: 15px;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.form-section h2 {
+  display: inline;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--ink);
+  margin: 0;
+}
+
+details.form-section {
+  padding: 0;
+}
+
+details.form-section summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 20px 22px;
+  cursor: pointer;
+  list-style: none;
+}
+
+details.form-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.form-section-summary {
+  font-size: 12.5px;
+  color: var(--faint);
   font-weight: 700;
-  gap: 12px;
-  justify-content: flex-start;
-  width: fit-content;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.input-number-field > span {
-  box-sizing: border-box;
-  flex: 0 0 12.5rem;
-  width: 12.5rem;
+
+.form-section-chevron {
+  margin-left: auto;
+  align-self: center;
+  display: inline-flex;
+  color: var(--faint);
+  transition: transform 160ms ease;
 }
-.create-room-basic-grid label:not(.input-number-field):not(.m3-switch-label),
-.advanced-settings label:not(.m3-switch-label),
-.custom-prompts-editor > label { display: flex; flex-direction: column; font-size: 15px; font-weight: 700; gap: 5px; }
-.create-room-basic-grid .create-room-name-row,
-.create-room-basic-grid .input-number-field,
-.create-room-basic-grid .m3-switch-label,
-.room-settings-fields .create-room-name-row,
-.room-settings-fields .input-number-field,
-.room-settings-fields .m3-switch-label,
-.advanced-settings-content .m3-switch-label,
-.room-settings-advanced .m3-switch-label { grid-column: 1 / -1; }
-/* Chip groups take the whole row. Four color modes side by side with the
-   prompt lists would overflow their column and collide. */
-.create-room-basic-grid > .room-choice-group,
-.room-settings-fields > .room-choice-group { grid-column: 1 / -1; }
-.create-room-name-row {
-  align-items: end;
+
+details.form-section[open] .form-section-chevron {
+  transform: rotate(90deg);
+}
+
+details.form-section > .form-section-body {
+  padding: 0 22px 20px;
+}
+
+.form-section-body {
+  display: grid;
+  gap: 16px;
+}
+
+.form-section-switch-row {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  border-top: 1.5px solid var(--line);
+  padding-top: 14px;
+}
+
+/* ------------------------------------------------------------------- basics */
+.create-room-name-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 20px;
   min-width: 0;
 }
-.create-room-name-row .create-room-name-field {
-  flex: 0 1 280px;
-  max-width: 280px;
+
+.create-room-name-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--ink);
   min-width: 0;
-  width: 100%;
 }
-.create-room-name-row .segmented-control-field {
+
+.visibility-field {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
   flex: 0 0 auto;
 }
-.create-room-card input[type="text"],
-.create-room-card input[type="search"],
-.create-room-card select,
-.create-room-card textarea { border: 1px solid #c7cad1; border-radius: 6px; font: inherit; font-weight: 400; padding: 9px 10px; }
-.custom-prompts-editor textarea { box-sizing: border-box; display: block; height: 150px; resize: none; width: 100%; }
-.advanced-settings { border-top: 1px solid #e2e8f0; margin-top: 24px; padding-top: 18px; }
-.advanced-settings summary { color: #334155; cursor: pointer; font-weight: 800; }
-.advanced-settings summary span { color: #64748b; font-size: 13px; font-weight: 400; margin-left: 8px; }
-.advanced-settings-content { display: grid; gap: 14px; margin-top: 18px; }
-.custom-prompts-editor { border-top: 1px solid #e2e8f0; padding-top: 16px; }
-.custom-prompts-summary { color: #475569; display: flex; flex-wrap: wrap; font-size: 13px; gap: 4px 12px; margin-top: 7px; }
-.custom-prompts-summary strong { color: #15803d; }
-.custom-prompts-summary.has-errors strong,
-.custom-prompts-summary.has-errors span { color: #b91c1c; }
-.custom-prompts-error,
-.create-room-error { color: #b91c1c; margin: 8px 0 0; }
-.setting-dependency { color: #64748b; font-size: 13px; margin: -7px 0 0; }
-.create-room-submit { background: #4c6ef5; border: 0; border-radius: 7px; color: #fff; font-size: 15px; font-weight: 800; margin-top: 24px; padding: 11px 18px; }
-.create-room-submit:disabled { background: #94a3b8; cursor: not-allowed; }
 
+.visibility-field-label {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.visibility-caption {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--faint);
+  max-width: 240px;
+}
+
+.form-section input[type="text"],
+.form-section input[type="search"],
+.form-section select,
+.form-section textarea {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+  min-height: 42px;
+  padding: 9px 12px;
+}
+
+.setting-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+/* A numeric setting as a small card: icon + label up top, − value + in
+   display type in the middle, the allowed range as a quiet caption. */
+.input-number-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  background: var(--well);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  padding: 15px 12px 12px;
+  text-align: center;
+}
+
+.input-number-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.input-number {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.input-number button {
+  align-items: center;
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  font-family: var(--font-body);
+  font-size: 19px;
+  font-weight: 700;
+  height: 40px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 40px;
+}
+
+.input-number button:disabled { color: var(--faint); cursor: not-allowed; opacity: .5; }
+
+.input-number-value {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  min-width: 68px;
+}
+
+.input-number input {
+  appearance: textfield;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+  width: 3ch;
+}
+
+.input-number input::-webkit-outer-spin-button,
+.input-number input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+
+.input-number-unit {
+  color: var(--faint);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.input-number-hint {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.create-room-duration {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.create-room-duration > svg {
+  color: var(--warm);
+  flex: none;
+}
+
+.create-room-duration strong {
+  color: var(--ink);
+}
+
+/* --------------------------------------------------------------- summaries */
+.custom-prompts-editor textarea { box-sizing: border-box; display: block; height: 150px; resize: none; width: 100%; }
+.custom-prompts-editor > label { display: flex; flex-direction: column; font-size: 14.5px; font-weight: 800; color: var(--ink); gap: 5px; }
+.custom-prompts-summary { color: var(--muted); display: flex; flex-wrap: wrap; font-size: 13px; font-weight: 700; gap: 4px 12px; margin-top: 7px; }
+.custom-prompts-summary strong { color: var(--success-ink); }
+.custom-prompts-summary.has-errors strong,
+.custom-prompts-summary.has-errors span { color: var(--danger); }
+.custom-prompts-error,
+.create-room-error { color: var(--danger); font-weight: 600; margin: 8px 0 0; }
+.create-room-error { margin: 0 0 14px; }
+.setting-dependency { color: var(--muted); font-size: 13px; margin: -7px 0 0; }
+
+/* ------------------------------------------------------------------ footer */
+.create-room-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+  padding: 14px 18px;
+  margin-top: 16px;
+}
+
+.create-room-footer-info {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.create-room-footer-summary {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.create-room-footer .create-room-submit {
+  flex: none;
+}
+
+/* -------------------------------------------------- shared control recipes */
 .segmented-control-field,
 .room-choice-group { border: 0; margin: 0; min-width: 0; padding: 0; }
 .segmented-control-field.is-labeled {
@@ -110,7 +371,7 @@
 .segmented-control-label {
   align-items: center;
   box-sizing: border-box;
-  color: #1e293b;
+  color: var(--ink);
   display: inline-flex;
   flex: 0 0 16.5rem;
   gap: 6px;
@@ -121,49 +382,55 @@
   max-width: 100%;
   width: auto;
 }
-.room-choice-group legend { font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0; }
+.room-choice-group legend { color: var(--ink); font-size: 14.5px; font-weight: 800; margin-bottom: 8px; padding: 0; }
 .segmented-control {
-  background: #e8edf5;
+  background: var(--track);
   border-radius: 999px;
   display: inline-grid;
-  gap: 2px;
+  gap: 3px;
   grid-auto-flow: column;
   grid-auto-columns: minmax(88px, 1fr);
-  padding: 3px;
+  padding: 4px;
   position: relative;
   width: fit-content;
 }
 .segmented-control-thumb {
-  background: #fff;
+  background: var(--card);
   border-radius: 999px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
-  height: calc(100% - 6px);
-  left: 3px;
+  box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14);
+  height: calc(100% - 8px);
+  left: 4px;
   pointer-events: none;
   position: absolute;
-  top: 3px;
-  transform: translateX(calc(var(--segment-index, 0) * (100% + 2px)));
+  top: 4px;
+  transform: translateX(calc(var(--segment-index, 0) * (100% + 3px)));
   transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
-  width: calc((100% - 6px - (var(--segment-count, 2) - 1) * 2px) / var(--segment-count, 2));
+  width: calc((100% - 8px - (var(--segment-count, 2) - 1) * 3px) / var(--segment-count, 2));
   z-index: 0;
 }
 .segmented-control button {
+  align-items: center;
   background: transparent;
   border: 0;
   border-radius: 999px;
-  color: #475569;
+  color: var(--muted);
   cursor: pointer;
+  display: inline-flex;
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
-  padding: 8px 14px;
+  gap: 6px;
+  justify-content: center;
+  padding: 8px 16px;
   position: relative;
   text-align: center;
   transition: color 180ms ease;
+  white-space: nowrap;
   z-index: 1;
 }
 .segmented-control button[aria-pressed="true"] {
-  color: #1e293b;
+  color: var(--ink);
+  font-weight: 800;
 }
 @media (prefers-reduced-motion: reduce) {
   .segmented-control-thumb { transition: none; }
@@ -172,56 +439,9 @@
 .segmented-control button:focus-visible,
 .input-number button:focus-visible,
 .m3-switch-label input:focus-visible ~ .m3-switch-track {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--primary-edge-soft);
   outline-offset: 2px;
 }
-
-.input-number {
-  align-items: center;
-  background: #fff;
-  border-radius: 999px;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1);
-  display: grid;
-  flex: 0 0 auto;
-  grid-template-columns: 44px minmax(48px, 1fr) 44px;
-  height: 44px;
-  max-width: 180px;
-  overflow: visible;
-  width: 140px;
-}
-.input-number button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: #0f172a;
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 22px;
-  font-weight: 500;
-  height: 100%;
-  justify-content: center;
-  line-height: 1;
-  padding: 0;
-  position: relative;
-  z-index: 1;
-}
-.input-number button:disabled { color: #cbd5e1; cursor: not-allowed; }
-.input-number input {
-  appearance: textfield;
-  background: transparent;
-  border: 0;
-  color: #0f172a;
-  font: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  height: 100%;
-  min-width: 0;
-  padding: 0;
-  text-align: center;
-  width: 100%;
-}
-.input-number input::-webkit-outer-spin-button,
-.input-number input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 
 .room-choice-segmented {
   display: inline-grid;
@@ -229,7 +449,6 @@
   max-width: 100%;
   width: max-content;
 }
-.advanced-settings-content .segmented-control.room-choice-segmented,
 .room-settings-advanced .segmented-control.room-choice-segmented {
   width: max-content;
 }
@@ -246,24 +465,89 @@
   opacity: .45;
 }
 
+/* Option cards: one-of-several choices with a visible description. */
+.choice-cards {
+  display: grid;
+  grid-template-columns: repeat(var(--choice-columns, 2), minmax(0, 1fr));
+  gap: 8px;
+}
+
+.choice-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-family: var(--font-body);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.choice-card.is-selected {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.choice-card:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.choice-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.choice-card.is-selected .choice-card-title {
+  color: var(--primary-ink);
+}
+
+.choice-card-check {
+  display: inline-flex;
+  color: var(--primary);
+}
+
+.choice-card-desc {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.choice-card:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- switches */
 .m3-switch-label {
   align-items: center;
-  color: #1e293b;
+  color: var(--ink);
   cursor: pointer;
   display: flex;
-  font-size: 15px;
-  font-weight: 700;
-  gap: 12px;
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  font-size: 13.5px;
+  font-weight: 800;
+  gap: 10px;
+  /* Anchors the visually-hidden checkbox inside the label, so scrolling the
+     control into view (keyboard users, test drivers) lands on the switch. */
+  position: relative;
   user-select: none;
   width: fit-content;
 }
 .m3-switch-text {
   align-items: center;
   display: inline-flex;
-  flex: 0 0 16.5rem;
   gap: 6px;
   line-height: 1.3;
-  width: 16.5rem;
 }
 .m3-switch-hint-wrap {
   display: inline-flex;
@@ -272,10 +556,10 @@
 }
 .m3-switch-hint {
   align-items: center;
-  background: #cbd5e1;
+  background: var(--track);
   border: 0;
   border-radius: 999px;
-  color: #334155;
+  color: var(--muted);
   cursor: help;
   display: inline-flex;
   font: inherit;
@@ -288,14 +572,14 @@
   width: 16px;
 }
 .m3-switch-hint:focus-visible {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--primary-edge-soft);
   outline-offset: 2px;
 }
 .m3-switch-hint-tooltip {
-  background: #0f172a;
+  background: var(--ink);
   border-radius: 8px;
   box-sizing: border-box;
-  color: #f8fafc;
+  color: var(--paper);
   font-size: 12px;
   font-weight: 600;
   left: 50%;
@@ -315,7 +599,7 @@
 }
 .m3-switch-hint-tooltip::after {
   border: 5px solid transparent;
-  border-top-color: #0f172a;
+  border-top-color: var(--ink);
   content: "";
   left: 50%;
   position: absolute;
@@ -343,74 +627,59 @@
   width: 1px;
 }
 .m3-switch-track {
-  background: #e3e3e3;
-  border: 2px solid #747775;
-  border-radius: 16px;
+  background: var(--line-strong);
+  border-radius: 999px;
   box-sizing: border-box;
   display: inline-flex;
+  align-items: center;
   flex: 0 0 auto;
-  height: 32px;
-  padding: 2px;
-  transition: background-color .2s ease, border-color .2s ease;
-  width: 52px;
+  height: 24px;
+  padding: 3px;
+  transition: background-color .2s ease;
+  width: 42px;
 }
 .m3-switch-thumb {
-  background: #747775;
+  background: #fff;
   border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25);
   display: block;
-  height: 24px;
-  transition: transform .2s ease, background-color .2s ease, width .2s ease;
-  width: 24px;
+  height: 18px;
+  transition: transform .2s ease;
+  width: 18px;
 }
 .m3-switch-label input:checked ~ .m3-switch-track {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--primary);
 }
 .m3-switch-label input:checked ~ .m3-switch-track .m3-switch-thumb {
-  background: #fff;
-  transform: translateX(20px);
+  transform: translateX(18px);
 }
 /* Only apply hover polish on real hover devices — touch leaves :hover stuck after tap */
 @media (hover: hover) and (pointer: fine) {
-  .m3-switch-label:hover:not(.is-disabled) input:not(:checked) ~ .m3-switch-track .m3-switch-thumb {
-    background: #5f6368;
+  .m3-switch-label:hover:not(.is-disabled) input:not(:checked) ~ .m3-switch-track {
+    background: var(--faint);
   }
   .m3-switch-label:hover:not(.is-disabled) input:checked ~ .m3-switch-track {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
+    background: var(--primary-ink);
   }
 }
 
-@media (max-width: 600px) {
-  .create-room-card { padding: 18px; }
-  .create-room-basic-grid { grid-template-columns: 1fr; }
-  .create-room-basic-grid .create-room-name-row,
-  .create-room-basic-grid .input-number-field,
-  .create-room-basic-grid .m3-switch-label { grid-column: auto; }
+@media (max-width: 640px) {
+  .create-room-heading-row { align-items: stretch; flex-direction: column; }
+  .room-preset-bar { justify-content: flex-start; }
   .create-room-name-row {
     align-items: stretch;
     flex-direction: column;
+    gap: 14px;
   }
-  .create-room-name-row .create-room-name-field {
-    flex-basis: auto;
-    max-width: none;
-  }
-  .create-room-name-row .segmented-control-field,
-  .create-room-name-row .segmented-control {
-    width: fit-content;
-  }
-  .advanced-settings summary span { display: block; margin: 4px 0 0; }
-  .create-room-submit { width: 100%; }
-  .segmented-control:not(.room-choice-segmented) { grid-auto-columns: minmax(88px, 1fr); width: fit-content; }
+  .setting-cards { grid-template-columns: 1fr; }
+  .choice-cards { grid-template-columns: 1fr !important; }
+  .create-room-footer { align-items: stretch; flex-direction: column; }
+  .create-room-footer .create-room-submit { width: 100%; }
 
-  /* Hints ChoiceChips: 2x2 on narrow screens (thumb assumes a single row) */
-  .room-choice-group {
-    max-width: 100%;
-  }
+  /* ChoiceChips (waiting-room editor): 2x2 on narrow screens, where the
+     sliding thumb assumes a single row. */
   .room-choice-segmented,
-  .advanced-settings-content .segmented-control.room-choice-segmented,
   .room-settings-advanced .segmented-control.room-choice-segmented {
-    /* Same outer radius as the single-line pill (~37px tall), not height/2 of the 2x2 */
     border-radius: 18.5px;
     box-sizing: border-box;
     grid-auto-columns: unset;
@@ -428,53 +697,33 @@
     white-space: nowrap;
   }
   .room-choice-segmented button[aria-pressed="true"] {
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
-    color: #1e293b;
-  }
-  [data-theme="dark"] .room-choice-segmented button[aria-pressed="true"] {
-    background: #1e293b;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-    color: #f8fafc;
+    background: var(--card);
+    box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14);
+    color: var(--ink);
   }
 
-  /* Stack InputNumber / labeled segmented rows; keep switches on one line */
-  .create-room-card .input-number-field,
+  /* Stack labeled segmented rows (waiting-room editor); keep switches inline. */
   .room-settings-fields .input-number-field,
-  .create-room-card .segmented-control-field.is-labeled,
   .room-settings-fields .segmented-control-field.is-labeled,
-  .advanced-settings-content .segmented-control-field.is-labeled,
   .room-settings-advanced .segmented-control-field.is-labeled {
     align-items: flex-start;
     flex-direction: column;
     width: 100%;
   }
 
-  .create-room-card .input-number-field > span,
-  .room-settings-fields .input-number-field > span,
-  .create-room-card .segmented-control-label,
   .room-settings-fields .segmented-control-label,
-  .advanced-settings-content .segmented-control-label,
   .room-settings-advanced .segmented-control-label {
     flex: none;
     white-space: normal;
     width: auto;
   }
 
-  .create-room-card .m3-switch-label,
-  .room-settings-fields .m3-switch-label,
-  .advanced-settings-content .m3-switch-label,
-  .room-settings-advanced .m3-switch-label {
-    align-items: center;
-    flex-direction: row;
+  .room-settings-fields .m3-switch-label {
     max-width: 100%;
     width: 100%;
   }
 
-  .create-room-card .m3-switch-text,
-  .room-settings-fields .m3-switch-text,
-  .advanced-settings-content .m3-switch-text,
-  .room-settings-advanced .m3-switch-text {
+  .room-settings-fields .m3-switch-text {
     flex: 1 1 auto;
     min-width: 0;
     white-space: normal;
@@ -482,48 +731,33 @@
   }
 }
 
-.lobby-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
 /* Toggle chips: a set of independent on/off choices. Shared by the
    prompt list picker and the room's allowed tools. */
 .prompt-list-picker-group {
   grid-column: 1 / -1;
-  margin-top: 6px;
 }
 .prompt-list-language-row {
   align-items: center;
-  color: #64748b;
+  color: var(--muted);
   display: flex;
   font-size: 13px;
   gap: 8px;
   margin: 2px 0 7px;
 }
 .prompt-list-language-row label {
-  font-weight: 650;
+  font-weight: 700;
 }
 .prompt-list-language-row output {
-  color: #334155;
-  font-weight: 750;
+  color: var(--ink);
+  font-weight: 800;
 }
 .prompt-list-language-row select {
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #1e293b;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
   font: inherit;
   padding: 5px 28px 5px 8px;
-}
-[data-theme="dark"] .prompt-list-language-row output {
-  color: #e2e8f0;
-}
-[data-theme="dark"] .prompt-list-language-row select {
-  background: #0f172a;
-  border-color: #334155;
-  color: #e2e8f0;
 }
 .toggle-chips {
   display: flex;
@@ -533,80 +767,54 @@
 }
 .toggle-chip {
   align-items: center;
-  background: #e8edf5;
-  border: 1px solid transparent;
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
   border-radius: 999px;
-  color: #475569;
+  color: var(--muted);
   cursor: pointer;
   display: inline-flex;
   font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  gap: 6px;
-  padding: 6px 14px;
+  font-size: 13.5px;
+  font-weight: 800;
+  gap: 7px;
+  min-height: 42px;
+  padding: 9px 15px;
   transition: all 150ms ease;
   user-select: none;
 }
-[data-theme="dark"] .toggle-chip {
-  background: #0f172a;
-  color: #94a3b8;
-}
 .toggle-chip:hover:not(:disabled) {
-  background: #dfe6f0;
-  color: #1e293b;
-}
-[data-theme="dark"] .toggle-chip:hover:not(:disabled) {
-  background: #1e293b;
-  color: #f8fafc;
+  border-color: var(--faint);
+  color: var(--ink);
 }
 .toggle-chip.is-selected {
-  background: #fff;
-  border-color: #cbd5e1;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-  color: #1e293b;
-}
-[data-theme="dark"] .toggle-chip.is-selected {
-  background: #1e293b;
-  border-color: #334155;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  color: #f8fafc;
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
 }
 .toggle-chip-status {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 800;
+  color: var(--faint);
+  display: inline-flex;
 }
 .toggle-chip.is-selected .toggle-chip-status {
-  color: #2563eb;
-}
-[data-theme="dark"] .toggle-chip.is-selected .toggle-chip-status {
-  color: #60a5fa;
+  color: var(--primary);
 }
 .toggle-chip-name {
   white-space: nowrap;
 }
 .prompt-list-chip-count {
-  background: rgba(100, 116, 139, 0.12);
+  background: var(--well);
   border-radius: 999px;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 1px 6px;
-}
-[data-theme="dark"] .prompt-list-chip-count {
-  background: rgba(148, 163, 184, 0.15);
-  color: #94a3b8;
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 1px 8px;
 }
 .toggle-chip.is-selected .prompt-list-chip-count {
-  background: #eff6ff;
-  color: #2563eb;
-}
-[data-theme="dark"] .toggle-chip.is-selected .prompt-list-chip-count {
-  background: rgba(96, 165, 250, 0.15);
-  color: #93c5fd;
+  background: var(--card);
+  color: var(--primary);
 }
 .toggle-chip:focus-visible {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--primary-edge-soft);
   outline-offset: 2px;
 }
 .toggle-chip:disabled {
@@ -615,7 +823,7 @@
 }
 .prompt-list-picker-loading,
 .prompt-list-picker-fallback {
-  color: #64748b;
+  color: var(--muted);
   font-size: 13px;
   grid-column: 1 / -1;
   margin-top: 4px;

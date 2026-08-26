@@ -72,26 +72,6 @@ export function abandonmentRate(games: LiveMetrics["games"]): number | null {
   return Math.round((games.abandoned / total) * 1000) / 10;
 }
 
-/** Points for a sparkline polyline, normalised into the given box. */
-export function sparklinePoints(
-  series: Series,
-  width: number,
-  height: number,
-): string {
-  if (series.length === 0) return "";
-  if (series.length === 1) return `0,${height / 2} ${width},${height / 2}`;
-  const peak = Math.max(...series.map((point) => point.value), 1);
-  const step = width / (series.length - 1);
-  return series
-    .map((point, index) => {
-      const x = Math.round(index * step * 100) / 100;
-      // SVG y grows downward, so a bigger value has to sit closer to zero.
-      const y = Math.round((height - (point.value / peak) * height) * 100) / 100;
-      return `${x},${y}`;
-    })
-    .join(" ");
-}
-
 export function readLiveMetrics(): Promise<LiveMetrics> {
   return apiRequest<LiveMetrics>("/api/admin/metrics");
 }

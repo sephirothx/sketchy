@@ -63,6 +63,12 @@ interface GameStore {
   totalRounds: number;
   phaseSeconds: number;
   phaseStartedAt: number;
+  /** The phase's full length. phaseSeconds is rebased to the remaining time
+      by sync_game, so ring/bar fractions divide by this instead. */
+  phaseDurationSeconds: number;
+  /** Per-player elapsed seconds for correct guesses this turn, derived
+      client-side from correct_guess events (lost on mid-turn reconnect). */
+  turnCorrectGuesses: Record<string, number>;
   nextHintCost: number | null;
   letterPrices: Record<string, number> | null;
   /** Points committed to hints so far this turn, and the ceiling on them. */
@@ -89,7 +95,9 @@ interface GameStore {
   setColorblindSafeSuggestion: (suggestion: ColorblindSafeSuggestion) => void;
   addMessage: (message: ChatMessage) => void;
   applyGuessPoints: (playerId: string, points: number) => void;
+  recordCorrectGuess: (playerId: string) => void;
   startChoosing: (payload: {
+    isSync?: boolean;
     drawerId: string;
     roundNumber: number;
     totalRounds: number;
@@ -97,6 +105,7 @@ interface GameStore {
   }) => void;
   setMyPromptChoices: (choices: string[], seconds: number) => void;
   startDrawing: (payload: {
+    isSync?: boolean;
     drawerId: string;
     maskedPrompt: string;
     roundNumber: number;
@@ -134,6 +143,8 @@ const initialGameFields = {
   totalRounds: 0,
   phaseSeconds: 0,
   phaseStartedAt: 0,
+  phaseDurationSeconds: 0,
+  turnCorrectGuesses: {},
   nextHintCost: null as number | null,
   letterPrices: null as Record<string, number> | null,
   hintSpend: 0,
@@ -221,23 +232,51 @@ export const useGameStore = create<GameStore>((set) => ({
     set((s) => ({
       players: s.players.map((p) => (p.playerId === playerId ? { ...p, score: p.score + points } : p)),
     })),
-  startChoosing: ({ drawerId, roundNumber, totalRounds, seconds }) =>
-    set({
+  recordCorrectGuess: (playerId) =>
+    set((s) => ({
+      turnCorrectGuesses: {
+        ...s.turnCorrectGuesses,
+        // phaseStartedAt is rebased by sync_game, so seconds since it only
+        // cover the time since the last sync; the difference between the
+        // phase's full length and what remained at that sync is the part
+        // that had already elapsed.
+        [playerId]: Math.max(
+          0,
+          Math.round(
+            (Date.now() - s.phaseStartedAt) / 1000 +
+              Math.max(0, s.phaseDurationSeconds - s.phaseSeconds),
+          ),
+        ),
+      },
+    })),
+  startChoosing: ({ drawerId, roundNumber, totalRounds, seconds, isSync }) =>
+    set((s) => ({
       phase: "choosing_prompt",
       drawerId,
       roundNumber,
       totalRounds,
       phaseSeconds: seconds,
       phaseStartedAt: Date.now(),
+      // A sync mid-phase reports what is left, not how long the phase is.
+      phaseDurationSeconds:
+        isSync && s.phase === "choosing_prompt" && s.phaseDurationSeconds > 0
+          ? s.phaseDurationSeconds
+          : seconds,
       maskedPrompt: "",
       myPrompt: null,
       guessedPrompt: null,
       promptChoices: [],
       lastTurnResult: null,
-    }),
+      turnCorrectGuesses: {},
+    })),
   setMyPromptChoices: (choices, seconds) =>
-    set({ promptChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
-  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend }) =>
+    set({
+      promptChoices: choices,
+      phaseSeconds: seconds,
+      phaseStartedAt: Date.now(),
+      phaseDurationSeconds: seconds,
+    }),
+  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync }) =>
     set((s) => ({
       phase: "drawing",
       drawerId,
@@ -246,6 +285,13 @@ export const useGameStore = create<GameStore>((set) => ({
       totalRounds,
       phaseSeconds: seconds,
       phaseStartedAt: Date.now(),
+      // On a mid-turn sync the room's drawing time is the real duration; a
+      // fresh page load has no better answer than that either.
+      phaseDurationSeconds: isSync
+        ? (s.phase === "drawing" && s.phaseDurationSeconds > 0
+          ? s.phaseDurationSeconds
+          : Math.max(s.drawingSeconds, seconds))
+        : seconds,
       promptChoices: [],
       nextHintCost: hintCost ?? null,
       letterPrices: letterPrices ?? null,
@@ -254,6 +300,7 @@ export const useGameStore = create<GameStore>((set) => ({
       hintSpend: hintSpend ?? 0,
       maxHintSpend: maxHintSpend ?? s.maxHintSpend,
       lastGuessBreakdown: null,
+      turnCorrectGuesses: {},
     })),
   setMyPrompt: (prompt) => set({ myPrompt: prompt }),
   setGuessedPrompt: (prompt, breakdown) =>
@@ -275,6 +322,7 @@ export const useGameStore = create<GameStore>((set) => ({
       lastTurnResult: payload,
       phaseSeconds: payload.seconds ?? 0,
       phaseStartedAt: Date.now(),
+      phaseDurationSeconds: payload.seconds ?? 0,
       players: s.players.map((p) => {
         const updated = payload.scores.find((sc) => sc.playerId === p.playerId);
         return updated ? { ...p, score: updated.score } : p;

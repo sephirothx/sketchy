@@ -1,26 +1,123 @@
+/* Lobby and invite-entry pages, per docs/ui-mockups (MainPage in
+   tools/pages-entry.mjs). Shared recipes come from primitives.css. */
+
+.lobby-wordmark {
+  margin: 0;
+  line-height: 1;
+}
+
+.header-back-button {
+  padding-left: 0;
+}
+
+.lobby-columns {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 16px;
+}
+
 @media (max-width: 720px) {
   .lobby-columns {
     grid-template-columns: 1fr;
   }
 }
 
-.panel button {
-  background: #4c6ef5;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 16px;
-  font-size: 15px;
-  font-weight: 600;
+.lobby-entry-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.error-banner {
-  background: #fff0f0;
-  border: 1px solid #f5b5b5;
-  color: #a02020;
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin-bottom: 16px;
+.lobby-entry-panel h2,
+.panel > h2 {
+  margin: 0;
+}
+
+.lobby-entry-panel .create-room-lobby-copy {
+  margin: 0;
+}
+
+.lobby-entry-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+}
+
+/* --------------------------------------------------- segmented code input */
+/* Scoped under .panel to outrank the generic `.panel label` recipe. */
+.room-code-label,
+.panel .room-code-label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+  width: fit-content;
+  margin-bottom: 0;
+}
+
+.room-code-cells {
+  position: relative;
+  display: flex;
+  gap: 6px;
+}
+
+/* The real input: invisible but focusable across the whole cell row, so a
+   click anywhere in it focuses the field and paste works as usual. */
+.room-code-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour. */
+}
+
+.room-code-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 48px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--field);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.room-code-cell.is-filled {
+  border-color: var(--line-strong);
+}
+
+.room-code-cells:focus-within .room-code-cell.is-active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+/* ------------------------------------------------------------ public rooms */
+.lobby-rooms-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+}
+
+.lobby-rooms-heading h2 {
+  margin: 0;
+}
+
+.lobby-rooms-count {
+  font-size: 13px;
+  color: var(--faint);
+  font-weight: 700;
 }
 
 .room-list {
@@ -29,140 +126,214 @@
 }
 
 .lobby-filter-bar {
-  align-items: center;
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 8px;
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  padding: 0.6rem 0.8rem;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
-.panel .lobby-filter-bar input[type="search"] {
-  flex: 1 1 200px;
-  font-size: 0.9rem;
-  padding: 0.4rem 0.75rem;
+.lobby-room-search {
+  flex: 1 1 240px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--well);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  min-height: 44px;
+  color: var(--faint);
 }
 
-.lobby-filter-bar .checkbox-label {
-  font-size: 0.85rem;
-  white-space: nowrap;
+.lobby-room-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
 }
 
+.lobby-room-search:focus-within {
+  border-color: var(--primary);
+}
+
+.lobby-language-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--faint);
+}
+
+.lobby-language-filter select {
+  appearance: none;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 9px 34px 9px 12px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  min-height: 42px;
+}
+
+.lobby-language-filter svg {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+}
+
+.lobby-filter-toggle {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 9px 15px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+  min-height: 42px;
+}
+
+.lobby-filter-toggle[aria-pressed="true"] {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.lobby-no-matches {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* --------------------------------------------------------------- room card */
 .public-room-card {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   display: flex;
   gap: 18px;
   justify-content: space-between;
-  padding: 16px;
+  padding: 16px 18px;
 }
 
-.public-room-card-main { min-width: 0; }
+.public-room-card-main {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
 
 .public-room-title-row {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 9px;
 }
 
-.public-room-title-row h3 { color: #1e293b; font-size: 17px; margin: 0; }
-
-.room-state-badge {
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 8px;
-  white-space: nowrap;
+.public-room-title-row h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--ink);
+  margin: 0;
 }
-
-.room-state-waiting { background: #d1fae5; color: #065f46; }
-.room-state-playing { background: #fef3c7; color: #92400e; }
 
 .public-room-facts {
-  color: #64748b;
+  color: var(--muted);
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   font-size: 13px;
-  gap: 4px 12px;
-  margin: 8px 0 0;
+  font-weight: 700;
+  gap: 5px 16px;
+  margin: 0;
 }
 
-.public-room-facts strong { color: #b45309; }
+.public-room-facts > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 
-.public-room-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.public-room-facts strong {
+  color: var(--warning);
+}
 
-.public-room-badges span {
-  background: #e0e7ff;
+.public-room-capacity {
+  display: inline-block;
+  width: 44px;
+  height: 5px;
   border-radius: 999px;
-  color: #3730a3;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 7px;
+  background: var(--line);
+  overflow: hidden;
 }
 
-.public-room-rules { color: #64748b; font-size: 13px; margin-top: 10px; }
-.public-room-rules summary { cursor: pointer; font-weight: 600; width: fit-content; }
-.public-room-rules ul { line-height: 1.45; margin: 8px 0 0; padding-left: 20px; }
-
-.public-room-actions { display: flex; flex: 0 0 auto; flex-direction: column; gap: 8px; min-width: 142px; }
-
-.public-room-actions button {
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 9px 12px;
+.public-room-capacity > span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
 }
 
-.public-room-primary-action { background: #4c6ef5; border: 1px solid #4c6ef5; color: white; }
+.public-room-capacity > span.is-full {
+  background: var(--warm);
+}
 
-.public-room-secondary-action { background: transparent; border: 1px solid #94a3b8; color: #475569; }
+.public-room-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 
-.public-room-actions button:focus-visible,
-.public-room-rules summary:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.public-room-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 132px;
+}
 
 @media (max-width: 600px) {
-  .public-room-card { align-items: stretch; flex-direction: column; gap: 14px; }
-  .public-room-actions { flex-direction: row; min-width: 0; }
-  .public-room-actions button { flex: 1; }
+  .public-room-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .public-room-actions {
+    flex-direction: row;
+    min-width: 0;
+  }
+
+  .public-room-actions .btn {
+    flex: 1;
+  }
 }
 
-/* Invite entry */
+/* ------------------------------------------------------------ invite entry */
 .invite-entry-page {
   min-height: 100vh;
   padding: 20px 16px 48px;
 }
 
-.invite-entry-header {
+.invite-entry-page .lobby-header {
   max-width: 760px;
   margin: 0 auto 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.invite-brand {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: #1c1d21;
-  font-size: 1.7rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
 }
 
 .invite-card {
   width: min(100%, 680px);
   margin: 0 auto;
   padding: 28px;
-  border: 1px solid #dfe1e6;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.09);
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow-raised);
 }
 
 .invite-card-heading {
@@ -174,34 +345,37 @@
 }
 
 .invite-card h1 {
-  margin: 2px 0 0;
-  color: #0f172a;
-  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(1.6rem, 5vw, 2.1rem);
   line-height: 1.15;
 }
 
 .invite-eyebrow {
   margin: 0;
-  color: #64748b;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
 .invite-state-badge {
   flex: 0 0 auto;
-  padding: 5px 10px;
+  padding: 5px 11px;
   border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
-  font-size: 0.78rem;
-  font-weight: 700;
+  background: var(--success-soft);
+  color: var(--success-ink);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .invite-state-badge.playing {
-  background: #fff7ed;
-  color: #9a3412;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .invite-room-facts {
@@ -214,23 +388,23 @@
 .invite-room-facts > div {
   min-width: 0;
   padding: 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8fafc;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--well);
 }
 
 .invite-room-facts dt {
   margin-bottom: 4px;
-  color: #64748b;
-  font-size: 0.75rem;
-  font-weight: 600;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .invite-room-facts dd {
   margin: 0;
-  color: #1e293b;
+  color: var(--ink);
   font-size: 0.92rem;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .invite-rule-list {
@@ -243,12 +417,13 @@
 }
 
 .invite-rule-list li {
-  padding: 6px 9px;
-  border-radius: 7px;
-  background: #eef2ff;
-  color: #3730a3;
-  font-size: 0.78rem;
-  font-weight: 600;
+  padding: 4px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--well);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .invite-callout,
@@ -256,52 +431,35 @@
 .invite-form-error {
   margin: 0 0 16px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 0.88rem;
+  font-weight: 600;
   line-height: 1.4;
 }
 
 .invite-callout {
-  border: 1px solid #fed7aa;
-  background: #fff7ed;
-  color: #9a3412;
+  border: 1px solid var(--warning-edge);
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .invite-notice {
-  border: 1px solid #bfdbfe;
-  background: #eff6ff;
-  color: #1e40af;
+  border: 1px solid var(--primary-edge-soft);
+  background: var(--primary-soft);
+  color: var(--primary-ink);
 }
 
 .invite-join-form {
   padding-top: 20px;
-  border-top: 1px solid #e2e8f0;
-}
-
-.invite-join-form label {
-  display: block;
-  margin-bottom: 6px;
-  color: #334155;
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.invite-join-form input {
-  width: 100%;
-  padding: 11px 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  color: #1e293b;
-  font: inherit;
+  border-top: 1.5px solid var(--line);
 }
 
 .invite-form-error {
   margin-top: 8px;
   margin-bottom: 0;
   padding: 8px 10px;
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .invite-actions {
@@ -314,37 +472,30 @@
 .invite-primary-button,
 .invite-secondary-button {
   min-height: 44px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 10px 16px;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 800;
+  font-family: var(--font-body);
 }
 
 .invite-primary-button {
-  border: 1px solid #4c6ef5;
-  background: #4c6ef5;
+  border: 0;
+  background: var(--primary);
   color: #fff;
-}
-
-.invite-primary-button:hover:not(:disabled) {
-  border-color: #3b5bdb;
-  background: #3b5bdb;
+  box-shadow: 0 2px 0 var(--primary-edge);
 }
 
 .invite-secondary-button {
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  color: #334155;
-}
-
-.invite-secondary-button:hover:not(:disabled) {
-  border-color: #94a3b8;
-  background: #f8fafc;
+  border: 1.5px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow);
 }
 
 .invite-action-hint {
   margin: 9px 0 0;
-  color: #64748b;
+  color: var(--muted);
   font-size: 0.8rem;
   text-align: center;
 }
@@ -357,15 +508,15 @@
 
 .invite-loading-card p,
 .invite-unavailable-card p:not(.invite-eyebrow) {
-  color: #64748b;
+  color: var(--muted);
 }
 
 .invite-loading-spinner {
   width: 34px;
   height: 34px;
   margin: 0 auto 18px;
-  border: 3px solid #dbe4ff;
-  border-top-color: #4c6ef5;
+  border: 3px solid var(--primary-soft);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: invite-spin 700ms linear infinite;
 }
@@ -377,10 +528,8 @@
   margin: 0 auto 14px;
   place-items: center;
   border-radius: 50%;
-  background: #fee2e2;
-  color: #b91c1c;
-  font-size: 1.3rem;
-  font-weight: 800;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 @keyframes invite-spin {
@@ -394,13 +543,13 @@
     padding: 14px 12px 32px;
   }
 
-  .invite-entry-header {
+  .invite-entry-page .lobby-header {
     margin-bottom: 18px;
   }
 
   .invite-card {
     padding: 20px 16px;
-    border-radius: 12px;
+    border-radius: var(--radius);
   }
 
   .invite-card-heading {

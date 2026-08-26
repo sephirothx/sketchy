@@ -1,4 +1,4 @@
-/* Guess / chat */
+/* Guess / chat, per docs/ui-mockups (chat recipes in tools/shell.mjs). */
 .guess-chat {
   display: flex;
   flex-direction: column;
@@ -18,9 +18,17 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   font-size: 14px;
   padding-right: 4px;
+}
+
+.chat-message {
+  overflow-wrap: anywhere;
+}
+
+.chat-message .colored-player-name {
+  font-size: 13.5px;
 }
 
 .chat-scroll-bottom-button {
@@ -28,15 +36,15 @@
   bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  background: #2563eb;
+  background: var(--primary);
   color: #ffffff;
   border: none;
   border-radius: 20px;
   padding: 6px 14px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  box-shadow: var(--shadow-raised);
   z-index: 10;
   display: flex;
   align-items: center;
@@ -46,24 +54,58 @@
 }
 
 .chat-scroll-bottom-button:hover {
-  background: #1d4ed8;
+  background: var(--primary-ink);
   transform: translateX(-50%) translateY(-2px);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
 }
 
+/* System lines read quietly, marked with a dot instead of a color. */
 .chat-message.system {
-  color: #6b6f76;
-  font-style: italic;
+  color: var(--faint);
+  font-size: 13px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
 }
 
+.chat-message.system::before {
+  content: "";
+  flex: none;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  align-self: center;
+}
+
+/* A correct guess is an event card: soft green with a left accent. */
 .chat-message.correct {
-  color: #2f9e44;
-  font-weight: 600;
+  background: var(--success-soft);
+  border-left: 3px solid var(--success);
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin: 2px 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--success-ink);
 }
 
+.chat-message.correct::before {
+  display: none;
+}
+
+/* The near-miss notice, shown only to the guesser. */
 .chat-message.close-hint {
-  color: #f08c00;
-  font-style: italic;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-edge);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: var(--warning);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .guess-focus-flash-label {
@@ -73,22 +115,22 @@
 }
 
 .guess-focus-flash-close {
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-  color: #c2410c;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-edge);
+  color: var(--warning);
 }
 
 .guess-focus-flash-miss {
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  color: #334155;
+  background: var(--well);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
 }
 
 .guess-focus-flash-info,
 .guess-focus-flash-error {
-  background: #fef2f2;
-  border: 1px solid #fca5a5;
-  color: #b91c1c;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  color: var(--danger);
 }
 
 @keyframes guessFlashIn {
@@ -96,12 +138,14 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Post-guess chat is restricted to the drawer, spectators, and players who
+   already guessed; the dashed rule marks it for those who see it. */
 .chat-message.restricted {
-  color: #495057;
+  color: var(--muted);
   font-style: italic;
-  background: #f1f3f5;
-  border-radius: 4px;
-  padding: 2px 4px;
+  border-left: 3px dashed var(--line-strong);
+  border-radius: 0;
+  padding: 1px 0 1px 9px;
 }
 
 .chat-input {
@@ -110,6 +154,8 @@
   flex-direction: column;
   gap: 4px;
   margin-top: 8px;
+  border-top: 1.5px solid var(--line);
+  padding-top: 10px;
 }
 
 .guess-focus-flash {
@@ -127,14 +173,14 @@
   line-height: 1.35;
   text-align: center;
   pointer-events: none;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-raised);
   animation: guessFlashIn 0.18s ease-out;
 }
 
 .chat-input-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 
 .chat-input-box {
@@ -142,10 +188,14 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid #c7cad1;
-  border-radius: 6px;
-  background: white;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+}
+
+.chat-input-box:focus-within {
+  border-color: var(--primary);
 }
 
 .chat-input-box input {
@@ -154,37 +204,55 @@
   border: none;
   outline: none;
   padding: 0;
-  font: inherit;
+  font-family: var(--font-body);
+  font-size: 14.5px;
   background: transparent;
-  color: inherit;
+  color: var(--ink);
 }
 
 .guess-hint {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px;
-  min-height: 1.1rem;
-  padding: 0 10px;
-  font-size: 1rem;
+  gap: 8px;
+  min-height: 15px;
+  padding: 0 6px;
+}
+
+.guess-hint sup {
+  font-size: 12.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .guess-hint-typing {
-  color: #868e96;
+  color: var(--faint);
 }
 
 .guess-hint-correct {
-  color: #2f9e44;
+  color: var(--success);
 }
 
 .guess-hint-wrong {
-  color: #e03131;
+  color: var(--danger);
 }
 
-.chat-input button {
-  background: #4c6ef5;
-  color: white;
+.chat-send-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  background: var(--primary);
+  color: #fff;
   border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 0 var(--primary-edge);
+}
+
+.chat-send-button:disabled {
+  background: var(--faint);
+  box-shadow: none;
+  cursor: not-allowed;
 }

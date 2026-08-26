@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { GuessBreakdown, TurnEndedPayload, TurnScoreEntry } from "../types";
+import { BrushIcon, PencilIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import {
   entranceDelays,
@@ -17,6 +18,9 @@ interface TurnResultsOverlayProps {
   showScores?: boolean;
   /** How my own turn score was arrived at, when I bought hints this turn. */
   myBreakdown?: GuessBreakdown | null;
+  /** The results phase duration, driving the next-turn progress bar. */
+  nextTurnSeconds?: number;
+  nextTurnStartedAt?: number;
 }
 
 // Must match the height of .turn-results-score-row in App.css - used to compute how
@@ -49,6 +53,8 @@ export function TurnResultsOverlay({
   scores,
   showScores = true,
   myBreakdown = null,
+  nextTurnSeconds = 0,
+  nextTurnStartedAt = 0,
 }: TurnResultsOverlayProps) {
   // Rows render in their final (new-rank) order the whole time, but start
   // visually offset to where they *used* to rank. After a short pause (so
@@ -64,6 +70,10 @@ export function TurnResultsOverlay({
   const mine = sorted.find((entry) => entry.playerId === myPlayerId);
 
   const [settled, setSettled] = useState(false);
+  // Captured once on mount: how far into the results phase this client joined.
+  const [progressOffsetSeconds] = useState(() =>
+    Math.max(0, (Date.now() - nextTurnStartedAt) / 1000),
+  );
 
   useEffect(() => {
     // Rearranging waits, so the standings can be read before they move.
@@ -151,7 +161,6 @@ export function TurnResultsOverlay({
                 >
                   <span className="turn-results-score-rank">#{entry.newRank}</span>
                   <span className="turn-results-score-name">
-                    {entry.playerId === drawerId ? "\u270F\uFE0F " : ""}
                     <span
                       className={playerNameClass(entry.isAnonymous)}
                       style={playerNameStyle(entry.nameColor, entry.isAnonymous)}
@@ -161,8 +170,18 @@ export function TurnResultsOverlay({
                     {entry.playerId === myPlayerId && (
                       <span className="turn-results-score-you"> (you)</span>
                     )}
+                    {entry.playerId === drawerId && (
+                      <span className="turn-results-drew" title="Drew this turn">
+                        <PencilIcon size={12} />
+                        drew
+                      </span>
+                    )}
                   </span>
-                  {entry.playerId === drawerId && drawerBonus > 0 && <span className="drawer-bonus">🎨 +{drawerBonus}</span>}
+                  {entry.playerId === drawerId && drawerBonus > 0 && (
+                    <span className="drawer-bonus">
+                      <BrushIcon size={12} /> +{drawerBonus}
+                    </span>
+                  )}
                   {change && (
                     <span className={`turn-results-score-change ${change.className}`}>
                       {change.symbol}
@@ -177,6 +196,21 @@ export function TurnResultsOverlay({
               );
             })}
           </ul>
+        )}
+        {nextTurnSeconds > 0 && (
+          <div className="turn-results-progress">
+            <div className="turn-results-progress-labels">
+              <span>Next turn</span>
+            </div>
+            <div className="turn-results-progress-track" aria-hidden="true">
+              <span
+                style={{
+                  animationDuration: `${nextTurnSeconds}s`,
+                  animationDelay: `-${progressOffsetSeconds}s`,
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../lib/api";
+import { Squiggle, Wordmark } from "../components/icons";
+import { SectionLabel } from "../components/ui/Card";
 import {
   completePasswordReset,
   confirmEmailToken,
@@ -137,7 +139,20 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
   return (
     <main className="recovery-page">
       <div className="recovery-card">
-        <h1>{heading}</h1>
+        <section className="recovery-aside" aria-hidden="true">
+          <h2>Even the best guessers forget sometimes.</h2>
+          <Squiggle width={110} color="var(--primary)" />
+          <p>
+            We&rsquo;ll send a secure, time-limited link to the confirmed email
+            on your account.
+          </p>
+        </section>
+        <section className="recovery-form">
+        <Wordmark size={22} />
+        <div className="recovery-heading">
+          <SectionLabel>Account help</SectionLabel>
+          <h1>{heading}</h1>
+        </div>
 
         {done ? (
           <>
@@ -232,6 +247,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
             </Link>
           </p>
         )}
+        </section>
       </div>
     </main>
   );

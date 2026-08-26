@@ -251,7 +251,8 @@ the server resolves the seat against the live room and selects the evidence itse
 | `kicked` | `{reason}` | one socket |
 | `colorblind_safe_suggestion` | `{active}` | **host only**, unattributed |
 | `session_superseded` | `{reason}` — then the socket is disconnected | the superseded socket |
-| `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | the suspended account's sockets |
+| `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
+| `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
@@ -673,12 +674,15 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | --- | --- | --- | --- |
 | `POST` | `/api/reports` | any signed-in | ≤ 2000 chars detail, ≤ 32 768 bytes context, ≤ 20 **unique** `messageIds`. One open report per reporter/target |
 | `POST` | `/api/prompt-content-reports` | any signed-in | Targets a list or an exact `promptVersionId`. Official content and self-reports rejected |
-| `GET` | `/api/moderation/reports` | moderator+ | The queue |
+| `GET` | `/api/moderation/reports` | moderator+ | The queue; each report carries `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension) |
 | `PATCH` | `/api/moderation/reports/{report_id}` | moderator+ | Review is one-way |
 | `GET` | `/api/moderation/prompt-content-reports` | moderator+ | The queue |
 | `PATCH` | `/api/moderation/prompt-content-reports/{report_id}` | moderator+ | A resolution chooses Active or Hidden; a dismissal cannot mutate content |
-| `GET`/`POST` | `/api/moderation/bans` | moderator+ | Moderators cannot suspend peers; administrators cannot be targeted |
+| `GET`/`POST` | `/api/moderation/bans` | moderator+ | Moderators cannot suspend peers; administrators cannot be targeted. With `reportId`, resolves that report in the same transaction (`409` if already decided) |
 | `POST` | `/api/moderation/bans/{ban_id}/revoke` | moderator+ | Preserves the historic record and reason |
+| `POST` | `/api/moderation/warnings` | moderator+ | Formal warning; same role boundaries as a suspension, restricts nothing. With `reportId`, resolves that report in the same transaction (`409` if already decided) |
+| `GET` | `/api/warnings/pending` | any signed-in | The caller's own oldest unacknowledged warning, with the reported messages behind it |
+| `POST` | `/api/warnings/{warning_id}/acknowledge` | any signed-in | Own warnings only (`404` otherwise); records that the notice landed |
 
 ### Operations — [`backend/app/api/operations.py`](../backend/app/api/operations.py)
 

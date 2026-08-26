@@ -1,6 +1,7 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import close_room_settings, open_room_settings
+from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -27,8 +28,7 @@ async def test_players_approve_restart_without_losing_room_context():
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
-            code_text = await host_page.inner_text(".room-copy-button")
-            room_code = code_text.split("Code:")[1].strip()
+            room_code = await get_room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "RestartPlayer")
             await player_page.fill('input[placeholder="ABC123"]', room_code)
@@ -43,6 +43,7 @@ async def test_players_approve_restart_without_losing_room_context():
             # Settings save themselves, so a value the room refuses has to snap
             # back to what the room holds and say why - three players seated is
             # exactly what makes a max of two impossible.
+            await open_room_settings(host_page)
             await host_page.fill(
                 '.room-settings-editor label:has-text("Max players") input', "2"
             )
@@ -57,6 +58,7 @@ async def test_players_approve_restart_without_losing_room_context():
             await player_page.click(".waiting-chat-form button")
             await host_page.wait_for_selector("text=Keep this message")
 
+            await close_room_settings(host_page)
             await host_page.click('button:has-text("Start game")')
             await host_page.wait_for_selector(".game-layout")
             await player_page.wait_for_selector(".game-layout")
@@ -128,8 +130,7 @@ async def test_players_see_a_rejected_restart_and_cooldown():
             await host_page.click('button:has-text("Create room")')
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
-            code_text = await host_page.inner_text(".room-copy-button")
-            room_code = code_text.split("Code:")[1].strip()
+            room_code = await get_room_code(host_page)
 
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "RejectPlayer")

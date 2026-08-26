@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 from playwright.async_api import Page, async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import close_room_settings, open_room_settings, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -40,8 +40,7 @@ async def test_finished_game_shows_up_on_the_profile_page():
             await host.click('button:has-text("Create room")')
             await host.locator('[data-testid="waiting-room"]').wait_for()
 
-            code_text = await host.locator(".room-copy-button").inner_text()
-            code = code_text.split("Code:")[1].strip()
+            code = await room_code(host)
 
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "ProfileGuest")
@@ -51,11 +50,13 @@ async def test_finished_game_shows_up_on_the_profile_page():
 
             # One round of two players is two turns: each drives one, and each
             # guesses the other's prompt, so both sides of the stats are covered.
+            await open_room_settings(host)
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await host.locator(".room-settings-editor details").click()
             await host.locator("#custom-prompts").fill("apple\ntree")
             await host.get_by_label("Only use custom prompts").check()
             await guest.get_by_text("Custom prompts only (2)").wait_for()
+            await close_room_settings(host)
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, guest]

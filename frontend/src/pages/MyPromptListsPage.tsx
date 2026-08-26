@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { AccountMenu } from "../components/AccountMenu";
+import { useLocation } from "react-router-dom";
+import { AppHeader } from "../components/AppHeader";
+import { PlusIcon, TrashIcon, XIcon } from "../components/icons";
 import { ApiError } from "../lib/api";
 import {
   createOwnedPromptList,
@@ -219,14 +220,11 @@ export function MyPromptListsPage() {
   }
 
   return <main className="prompt-list-manager-page">
-    <header className="site-header">
-      <Link to="/" className="back-link">← Lobby</Link>
-      <AccountMenu />
-    </header>
+    <AppHeader backLabel="Back to lobby" />
     <section className="prompt-list-manager-card">
       <div className="prompt-list-manager-heading">
         <div><p>Your library</p><h1>Reusable prompt lists</h1></div>
-        {user && !user.isAnonymous && <button type="button" onClick={beginNew}>New list</button>}
+        {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />New list</button>}
       </div>
       {!user || user.isAnonymous ? (
         <div className="prompt-list-manager-empty">
@@ -264,7 +262,7 @@ export function MyPromptListsPage() {
             </div>
             {draft.visibility === "unlisted" && shareCode && <div className="prompt-list-share-code">
               <span>Share code</span><code>{shareCode}</code>
-              <button type="button" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError("Could not copy the share code."))}>Copy</button>
+              <button type="button" className="btn btn-secondary btn-compact" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError("Could not copy the share code."))}>Copy</button>
             </div>}
             <div className="prompt-list-bulk-add">
               <label htmlFor="prompt-bulk-input">Add prompts</label>
@@ -281,6 +279,7 @@ export function MyPromptListsPage() {
                 </p>
                 <button
                   type="button"
+                  className="btn btn-primary btn-compact"
                   disabled={!bulkInput.trim() || draft.prompts.length >= MAX_LIST_PROMPTS}
                   onClick={addBulkPrompts}
                 >
@@ -333,7 +332,7 @@ export function MyPromptListsPage() {
                         >
                           <span className="prompt-list-entry-text">{prompt.prompt}</span>
                           {flagged && <span className="prompt-list-entry-moderation">{promptModeration[prompt.conceptId!]?.replace("_", " ")}</span>}
-                          <button type="button" aria-label={`Remove ${prompt.prompt}`} onClick={() => removePrompt(prompt.prompt)}>×</button>
+                          <button type="button" aria-label={`Remove ${prompt.prompt}`} onClick={() => removePrompt(prompt.prompt)}><XIcon size={13} /></button>
                         </li>
                       );
                     })}
@@ -345,8 +344,8 @@ export function MyPromptListsPage() {
             {error && <p className="auth-error" role="alert">{error}</p>}
             {notice && <p className="prompt-list-manager-notice" role="status">{notice}</p>}
             <div className="prompt-list-manager-actions">
-              {selectedId && <button type="button" className="danger-button" disabled={busy} onClick={() => void remove()}>Delete</button>}
-              <button type="submit" disabled={busy}>{busy ? "Saving…" : "Save list"}</button>
+              {selectedId && <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />Delete list…</button>}
+              <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Save list"}</button>
             </div>
           </form>
         </div>

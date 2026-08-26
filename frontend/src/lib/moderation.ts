@@ -42,10 +42,22 @@ export interface PlayerReportMessageEvidence {
   copiedAt: string;
 }
 
+/** The reported player's standing, as a moderator weighs the case. */
+export interface ReportedPlayerContext {
+  displayName: string;
+  registered: boolean;
+  createdAt: string;
+  priorReports: number;
+  priorWarnings: number;
+  activeSuspension: boolean;
+}
+
 export interface PlayerReport {
   id: string;
   reporterUserId: string | null;
   reportedUserId: string | null;
+  /** Null when the account is gone. */
+  reportedPlayer: ReportedPlayerContext | null;
   gameId: string | null;
   turnId: string | null;
   reason: ReportReason;
@@ -128,6 +140,32 @@ export function createUserBan(input: {
   expiresAt?: string;
 }): Promise<UserBan> {
   return apiRequest("/api/moderation/bans", { method: "POST", body: input });
+}
+
+/** A moderator warning waiting to be shown to its player. */
+export interface PendingWarning {
+  id: string;
+  reason: string;
+  createdAt: string;
+  /** The reported messages behind it - the player's own words. */
+  messages: { text: string; at: string | null }[];
+}
+
+export function createUserWarning(input: {
+  userId: string;
+  reason: string;
+  /** The report this was decided from, when it came from one. */
+  reportId?: string;
+}): Promise<{ id: string; userId: string; reason: string; createdAt: string }> {
+  return apiRequest("/api/moderation/warnings", { method: "POST", body: input });
+}
+
+export function fetchPendingWarning(): Promise<{ warning: PendingWarning | null }> {
+  return apiRequest("/api/warnings/pending");
+}
+
+export function acknowledgeWarning(warningId: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/api/warnings/${warningId}/acknowledge`, { method: "POST" });
 }
 
 export function listUserBans(active?: boolean): Promise<{ bans: UserBan[] }> {

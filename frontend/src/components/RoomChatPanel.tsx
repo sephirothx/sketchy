@@ -8,6 +8,7 @@ import { emitTransient, emitWithAck, socketRequestErrorMessage } from "../lib/so
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { useSettingsStore } from "../store/settingsStore";
+import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 
 interface RoomChatPanelProps {
   messages: ChatMessage[];
@@ -295,16 +296,13 @@ export function RoomChatPanel({
       aria-labelledby="room-chat-title"
     >
       <div className="room-panel-heading room-chat-heading">
-        <div>
-          <p className="room-panel-kicker">Room chat</p>
-          <h2 id="room-chat-title">
-            {mode === "waiting"
-              ? "Chat while you wait"
-              : mode === "game-end"
-                ? "Game chat"
-                : "Guess and chat"}
-          </h2>
-        </div>
+        <h2 id="room-chat-title">
+          {mode === "waiting"
+            ? "Chat while you wait"
+            : mode === "game-end"
+              ? "Game chat"
+              : "Guess and chat"}
+        </h2>
       </div>
 
       <div className="chat-messages-container">
@@ -347,7 +345,7 @@ export function RoomChatPanel({
         </div>
         {isScrolledUp && unreadCount > 0 && (
           <button type="button" className="chat-scroll-bottom-button" onClick={scrollToBottom}>
-            ↓ {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
+            <ChevronDownIcon size={13} /> {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
           </button>
         )}
       </div>
@@ -427,8 +425,8 @@ export function RoomChatPanel({
                 enterKeyHint="send"
               />
             </div>
-            <button type="submit" disabled={sending}>
-              {sending ? "Sending…" : "Send"}
+            <button type="submit" className="chat-send-button" disabled={sending} aria-label="Send">
+              <ChevronRightIcon size={17} />
             </button>
           </div>
         </form>

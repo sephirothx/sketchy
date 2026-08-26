@@ -1,7 +1,7 @@
 """The host's tool and color rules, from the lobby through to the canvas."""
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import close_room_settings, open_room_settings, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -26,13 +26,13 @@ async def test_the_rules_the_host_sets_reach_the_lobby_and_then_the_toolbar():
             # Private: this room is reached by code, and a public one would sit
             # in the lobby list every other test is reading.
             await host_page.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
+            await host_page.click('summary:has-text("Drawing")')
             await host_page.click('fieldset:has(legend:text-is("Allowed tools")) button:has-text("Fill")')
             await host_page.click('fieldset:has(legend:text-is("Colors")) button:has-text("Black and white")')
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
-            code_text = await host_page.inner_text('.room-copy-button')
-            code = code_text.split('Code:')[1].strip()
+            code = await room_code(host_page)
 
             # Everyone else reads them off the waiting-room rules.
             await player_page.goto(BASE_URL)
@@ -43,6 +43,7 @@ async def test_the_rules_the_host_sets_reach_the_lobby_and_then_the_toolbar():
             await player_page.wait_for_selector('text=Brush and Shapes, black and white')
 
             # ...and they follow the host's edits, like every other setting.
+            await open_room_settings(host_page)
             await host_page.click(
                 '.room-settings-editor fieldset:has(legend:text-is("Allowed tools")) button:has-text("Shapes")'
             )
@@ -59,6 +60,7 @@ async def test_the_rules_the_host_sets_reach_the_lobby_and_then_the_toolbar():
             # The drawer has to be identified while the choosing phase is still
             # up: waiting for the canvas first lets that phase time out, and
             # then neither page is holding the prompt choices any more.
+            await close_room_settings(host_page)
             await host_page.click('.waiting-start-button')
             await host_page.wait_for_selector('.prompt-choices, [data-testid="choosing-prompt-status"]')
             drawer_page = (

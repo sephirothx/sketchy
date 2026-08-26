@@ -1,3 +1,6 @@
+import type { ReactNode } from "react";
+import { CheckIcon, PlusIcon } from "./icons";
+
 function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, Math.round(value)));
@@ -41,6 +44,12 @@ interface InputNumberProps {
   min?: number;
   max?: number;
   options?: readonly number[];
+  /** Decorative icon beside the label, per the redesign's setting cards. */
+  icon?: ReactNode;
+  /** Unit suffix rendered after the value (e.g. "s"). */
+  unit?: string;
+  /** Quiet caption under the control (allowed range, behavior notes). */
+  hint?: string;
 }
 
 export function InputNumber({
@@ -50,6 +59,9 @@ export function InputNumber({
   min = 0,
   max = 100,
   options,
+  icon,
+  unit,
+  hint,
 }: InputNumberProps) {
   const low = options ? options[0] : min;
   const high = options ? options[options.length - 1] : max;
@@ -62,7 +74,10 @@ export function InputNumber({
 
   return (
     <label className="input-number-field">
-      <span>{label}</span>
+      <span className="input-number-label">
+        {icon}
+        {label}
+      </span>
       <div className="input-number">
         <button
           type="button"
@@ -74,23 +89,26 @@ export function InputNumber({
         >
           −
         </button>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={low}
-          max={high}
-          step={1}
-          value={value}
-          aria-label={label}
-          onChange={(event) => {
-            const next = Number(event.currentTarget.value);
-            if (Number.isInteger(next)) onChange(next);
-          }}
-          onBlur={(event) => {
-            const parsed = Number(event.currentTarget.value);
-            commit(Number.isFinite(parsed) ? parsed : value);
-          }}
-        />
+        <span className="input-number-value">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={low}
+            max={high}
+            step={1}
+            value={value}
+            aria-label={label}
+            onChange={(event) => {
+              const next = Number(event.currentTarget.value);
+              if (Number.isInteger(next)) onChange(next);
+            }}
+            onBlur={(event) => {
+              const parsed = Number(event.currentTarget.value);
+              commit(Number.isFinite(parsed) ? parsed : value);
+            }}
+          />
+          {unit && <span className="input-number-unit" aria-hidden="true">{unit}</span>}
+        </span>
         <button
           type="button"
           aria-label={`Increase ${label}`}
@@ -102,6 +120,7 @@ export function InputNumber({
           +
         </button>
       </div>
+      {hint && <span className="input-number-hint">{hint}</span>}
     </label>
   );
 }
@@ -109,7 +128,7 @@ export function InputNumber({
 interface SegmentedControlProps<T extends string> {
   label: string;
   value: T;
-  options: { value: T; label: string }[];
+  options: { value: T; label: ReactNode; name?: string }[];
   onChange: (value: T) => void;
   hint?: string;
   showLabel?: boolean;
@@ -141,6 +160,7 @@ export function SegmentedControl<T extends string>({
           key={option.value}
           type="button"
           aria-pressed={value === option.value}
+          aria-label={option.name}
           onClick={() => onChange(option.value)}
         >
           {option.label}
@@ -261,9 +281,68 @@ export function ToggleChips<T extends string>({
               onClick={() => toggle(option.value)}
             >
               <span className="toggle-chip-status" aria-hidden="true">
-                {selected ? "\u2713" : "+"}
+                {selected ? <CheckIcon size={12} /> : <PlusIcon size={12} />}
               </span>
               <span className="toggle-chip-name">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+interface ChoiceCardsProps<T extends string> {
+  label: string;
+  value: T;
+  options: { value: T; label: string; description: string; disabled?: boolean }[];
+  disabled?: boolean;
+  /** Grid column count (mockup: 3 for scoring, 2 for hints). */
+  columns?: number;
+  onChange: (value: T) => void;
+}
+
+/**
+ * One-of-several choice as pressable cards with a visible description, per
+ * the redesign's "Scoring and hints" section. Same contract as ChoiceChips.
+ */
+export function ChoiceCards<T extends string>({
+  label,
+  value,
+  options,
+  disabled = false,
+  columns = 2,
+  onChange,
+}: ChoiceCardsProps<T>) {
+  return (
+    <fieldset className="room-choice-group choice-cards-group" disabled={disabled}>
+      <legend>{label}</legend>
+      <div
+        className="choice-cards"
+        role="group"
+        aria-label={label}
+        style={{ ["--choice-columns" as string]: columns }}
+      >
+        {options.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={`choice-card${selected ? " is-selected" : ""}`}
+              aria-pressed={selected}
+              disabled={disabled || option.disabled}
+              onClick={() => onChange(option.value)}
+            >
+              <span className="choice-card-title">
+                {selected && (
+                  <span className="choice-card-check" aria-hidden="true">
+                    <CheckIcon size={13} />
+                  </span>
+                )}
+                {option.label}
+              </span>
+              <span className="choice-card-desc">{option.description}</span>
             </button>
           );
         })}

@@ -1,0 +1,693 @@
+/* Operator pages: the Server operations dashboard and the Moderation
+   queue/case view, per docs/ui-mockups (AdminOps, Moderation). */
+
+.ops-page {
+  margin: 0 auto;
+  max-width: 1100px;
+  padding: 24px 16px 48px;
+}
+
+.ops-header {
+  align-items: flex-end;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.ops-header h1 {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* ------------------------------------------------------------ status banner */
+.ops-status-banner {
+  align-items: center;
+  background: var(--success-soft);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 11px 14px;
+}
+
+.ops-status-banner strong {
+  color: var(--success-ink);
+  font-weight: 800;
+}
+
+.ops-status-banner span:not(.ops-status-dot) {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.ops-status-dot {
+  background: var(--success);
+  border-radius: 50%;
+  flex: none;
+  height: 9px;
+  width: 9px;
+}
+
+.ops-status-banner.is-warning {
+  background: var(--warning-soft);
+}
+
+.ops-status-banner.is-warning strong {
+  color: var(--warm-ink);
+}
+
+.ops-status-banner.is-warning .ops-status-dot {
+  background: var(--warm);
+}
+
+/* ------------------------------------------------------------- metric cards */
+.ops-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 14px;
+}
+
+.ops-metric {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+}
+
+/* Severity is a separate signal from the accent, so a number worth acting on
+   reads at a glance rather than having to be compared. */
+.ops-metric.is-warning {
+  border-color: var(--warm);
+}
+
+.ops-metric-label {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ops-metric-value {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.ops-metric.is-warning .ops-metric-value {
+  color: var(--warm-ink);
+}
+
+.ops-metric-note {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------- card scaffold */
+.ops-card {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+}
+
+.ops-card-head {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ops-card h2 {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.ops-card-sub {
+  color: var(--faint);
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.ops-columns {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.5fr 1fr;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 800px) {
+  .ops-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* -------------------------------------------------------------- trend chart */
+.ops-chart-bars {
+  align-items: flex-end;
+  border-bottom: 1.5px solid var(--line-strong);
+  display: flex;
+  gap: 7px;
+  height: 150px;
+  padding: 0 2px;
+}
+
+.ops-chart-bar {
+  background: var(--primary);
+  border-radius: 5px 5px 0 0;
+  flex: 1;
+  min-height: 2px;
+  opacity: 0.85;
+}
+
+.ops-chart-axis {
+  color: var(--faint);
+  display: flex;
+  font-size: 11.5px;
+  font-weight: 700;
+  justify-content: space-between;
+  margin-top: 7px;
+}
+
+.ops-select {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+/* ---------------------------------------------------------- recorder health */
+.ops-health-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  font-size: 13.5px;
+  gap: 10px;
+  padding: 9px 2px;
+}
+
+.ops-health-dot {
+  background: var(--success);
+  border-radius: 50%;
+  flex: none;
+  height: 9px;
+  width: 9px;
+}
+
+.ops-health-row.is-warning .ops-health-dot {
+  background: var(--warm);
+}
+
+.ops-health-row strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.ops-health-row span:last-child {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+.ops-attention h3 {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  margin-top: 14px;
+}
+
+.ops-attention p {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-top: 5px;
+}
+
+/* ------------------------------------------------------------- audit ledger */
+.ops-ledger {
+  margin-bottom: 14px;
+}
+
+.ops-audit-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  font-size: 13.5px;
+  gap: 14px;
+  padding: 11px 2px;
+}
+
+.ops-audit-row time {
+  color: var(--faint);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  width: 84px;
+}
+
+.ops-audit-body {
+  color: var(--muted);
+  font-weight: 600;
+  min-width: 0;
+}
+
+.ops-audit-body strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.ops-audit-row .chip {
+  flex: none;
+  margin-left: auto;
+}
+
+/* -------------------------------------------------- tables and inspect flow */
+.ops-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+.ops-filters label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ops-filters input {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  padding: 7px 10px;
+  width: 180px;
+}
+
+.ops-table-scroll {
+  overflow-x: auto;
+}
+
+.ops-table {
+  border-collapse: collapse;
+  font-size: 13.5px;
+  width: 100%;
+}
+
+.ops-table th,
+.ops-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.ops-table th {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ops-table .ops-number {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ops-empty {
+  color: var(--muted);
+  font-weight: 600;
+  padding: 12px 0;
+}
+
+.ops-activity {
+  margin-bottom: 14px;
+}
+
+.ops-activity > summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.ops-toggle {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.ops-subject-kind {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ops-identifier {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+
+.modal-card.ops-player-dialog {
+  max-width: 640px;
+  width: min(92vw, 640px);
+}
+
+.modal-card.ops-player-dialog .ops-table-scroll {
+  margin: 12px 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* ================================================================ moderation */
+.mod-layout {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+@media (max-width: 860px) {
+  .mod-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mod-queue {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.mod-queue-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.mod-queue-head h2 {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+.mod-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mod-filter-pill {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 12px;
+}
+
+.mod-filter-pill[aria-pressed="true"] {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.mod-queue-list {
+  display: grid;
+  gap: 4px;
+}
+
+.mod-queue-item {
+  align-items: flex-start;
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-body);
+  gap: 10px;
+  padding: 11px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.mod-queue-item.is-selected {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.mod-queue-dot {
+  background: var(--warning);
+  border-radius: 50%;
+  flex: none;
+  height: 9px;
+  margin-top: 5px;
+  width: 9px;
+}
+
+.mod-queue-dot.is-danger {
+  background: var(--danger);
+}
+
+.mod-queue-dot.is-neutral {
+  background: var(--faint);
+}
+
+.mod-queue-item-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mod-queue-item-text strong {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.mod-queue-item.is-selected .mod-queue-item-text strong {
+  color: var(--primary-ink);
+}
+
+.mod-queue-item-text span {
+  color: var(--muted);
+  display: -webkit-box;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.mod-queue-item time {
+  color: var(--faint);
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+/* ----------------------------------------------------------------- the case */
+.mod-case {
+  display: grid;
+  gap: 12px;
+}
+
+.mod-case-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.mod-case-head h1 {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.mod-case-meta {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.mod-case .ops-card h2 {
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.mod-case-columns {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.6fr 1fr;
+}
+
+@media (max-width: 1000px) {
+  .mod-case-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mod-context-row {
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  font-size: 13px;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 2px;
+}
+
+.mod-context-row span {
+  color: var(--faint);
+  font-weight: 700;
+}
+
+.mod-context-row strong {
+  color: var(--ink);
+  font-weight: 800;
+  text-align: right;
+}
+
+.mod-evidence {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  display: grid;
+  font-size: 13.5px;
+  gap: 5px;
+  margin: 0;
+  padding: 12px 14px;
+}
+
+.mod-evidence strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.mod-evidence em {
+  color: var(--faint);
+}
+
+.mod-evidence-caption {
+  color: var(--faint);
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-top: 10px;
+}
+
+.mod-case-details {
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.mod-note {
+  color: var(--ink);
+  display: grid;
+  font-size: 13.5px;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.mod-note textarea {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 400;
+  height: 72px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.mod-note-hint {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mod-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Outlined danger: destructive, but never the visually loudest thing. */
+.mod-danger-button {
+  align-items: center;
+  background: var(--card);
+  border: 1.5px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 800;
+  gap: 7px;
+  min-height: 44px;
+  padding: 10px 16px;
+}
+
+.mod-resolution {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+  font-weight: 600;
+}

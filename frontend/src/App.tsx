@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import "./App.css";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
@@ -18,10 +18,22 @@ import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
 import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { SuspensionNotice } from "./components/SuspensionNotice";
+import { WarningNotice } from "./components/WarningNotice";
+import { XIcon } from "./components/icons";
 import { useAuthStore } from "./store/authStore";
 import { socket } from "./lib/socket";
 import { parseShutdownNotice, shutdownSecondsRemaining } from "./lib/shutdownNotice";
 import type { ServerShutdownNotice } from "./types";
+
+/* The router keeps the window scroll across navigations, so submitting a form
+   at the bottom of one page would open the next one part-way down. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
 
 function App() {
   useGameSocketListeners();
@@ -92,13 +104,15 @@ function App() {
       {restarted && (
         <div className="server-shutdown-banner is-restarted" role="status" aria-live="polite">
           <span>The server was updated and is back. Any game in progress ended.</span>
-          <button type="button" aria-label="Dismiss" onClick={() => setRestarted(false)}>×</button>
+          <button type="button" aria-label="Dismiss" onClick={() => setRestarted(false)}><XIcon size={14} /></button>
         </div>
       )}
       <ConnectionStatusBanner />
       <EmailRecoveryReminder />
       <SuspensionNotice />
+      <WarningNotice />
       <BrowserRouter>
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<LobbyBrowserPage />} />
           <Route path="/create" element={<CreateRoomPage />} />

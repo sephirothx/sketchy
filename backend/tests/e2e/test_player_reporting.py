@@ -6,7 +6,7 @@ sat with no caller, and the review queue could only ever be empty.
 """
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -33,8 +33,7 @@ async def test_a_player_reports_another_from_the_room_menu():
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
-            code_text = await host_page.inner_text(".room-copy-button")
-            code = code_text.split("Code:")[1].strip()
+            code = await room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "ReportedPlayer")
             await player_page.fill('input[placeholder="ABC123"]', code)
@@ -124,8 +123,7 @@ async def test_a_guest_votes_but_is_offered_no_way_to_report():
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
-            code_text = await host_page.inner_text(".room-copy-button")
-            code = code_text.split("Code:")[1].strip()
+            code = await room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "GuestOther")
             await player_page.fill('input[placeholder="ABC123"]', code)

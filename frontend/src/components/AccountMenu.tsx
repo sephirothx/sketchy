@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { avatarInitial, identityColor } from "../lib/avatar";
@@ -14,8 +22,40 @@ import {
 import { AddEmailDialog } from "./AddEmailDialog";
 import { SessionManagerDialog } from "./SessionManagerDialog";
 import { AccountDataDialog } from "./AccountDataDialog";
+import {
+  BulbIcon,
+  ChevronDownIcon,
+  DevicesIcon,
+  DownloadIcon,
+  KeyIcon,
+  LeaveIcon,
+  MailIcon,
+  PlusIcon,
+  ShieldIcon,
+  UserIcon,
+  ZapIcon,
+} from "./icons";
 
 export type AuthMode = "claim" | "login";
+
+function MenuItem({
+  icon,
+  className,
+  onClick,
+  children,
+}: {
+  icon: ReactNode;
+  className?: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button type="button" role="menuitem" className={className} onClick={onClick}>
+      <span className="menu-item-icon" aria-hidden="true">{icon}</span>
+      {children}
+    </button>
+  );
+}
 
 /**
  * The single identity control.
@@ -111,14 +151,19 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         }
       >
         <span
-          className="identity-avatar"
+          className="identity-avatar avatar-player"
           aria-hidden="true"
-          style={{ backgroundColor: identityColor(shownName, isGuest, user.nameColor) }}
+          style={{ "--player-color": identityColor(shownName, isGuest, user.nameColor) } as CSSProperties}
         >
           {avatarInitial(shownName)}
         </span>
         {!compact && <span className="identity-name">{shownName}</span>}
         {isGuest && <span className="identity-unclaimed" aria-hidden="true" />}
+        {!compact && (
+          <span className="identity-chevron" aria-hidden="true">
+            <ChevronDownIcon size={14} />
+          </span>
+        )}
       </button>
 
       {menuOpen && !opensDialogDirectly && (
@@ -131,89 +176,99 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
-          <button
-            type="button"
-            role="menuitem"
+          <MenuItem
+            icon={<UserIcon size={16} />}
             onClick={() => {
               setMenuOpen(false);
               navigate("/profile");
             }}
           >
             My profile
-          </button>
-          <button
-            type="button"
-            role="menuitem"
+          </MenuItem>
+          <MenuItem
+            icon={<ZapIcon size={16} />}
             onClick={() => {
               setMenuOpen(false);
-              setAccountDataOpen(true);
+              navigate("/prompt-lists");
             }}
           >
-            Your data
-          </button>
+            Prompt stats
+          </MenuItem>
           {isGuest ? (
             <>
-              <button
-                type="button"
-                role="menuitem"
+              <MenuItem
+                icon={<DownloadIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  setAccountDataOpen(true);
+                }}
+              >
+                Your data
+              </MenuItem>
+              <MenuItem
+                icon={<PlusIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
                   setMode("claim");
                 }}
               >
                 Create account
-              </button>
-              <button
-                type="button"
-                role="menuitem"
+              </MenuItem>
+              <MenuItem
+                icon={<KeyIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
                   setMode("login");
                 }}
               >
                 Log in
-              </button>
+              </MenuItem>
             </>
           ) : (
             <>
-              <button
-                type="button"
-                role="menuitem"
+              <MenuItem
+                icon={<BulbIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
                   navigate("/my-prompt-lists");
                 }}
               >
                 My prompt lists
-              </button>
-              <button
-                type="button"
-                role="menuitem"
+              </MenuItem>
+              <MenuItem
+                icon={<DownloadIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  setAccountDataOpen(true);
+                }}
+              >
+                Your data
+              </MenuItem>
+              <MenuItem
+                icon={<MailIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
                   setEmailOpen(true);
                 }}
               >
                 Email &amp; recovery
-              </button>
-              <button
-                type="button"
-                role="menuitem"
+              </MenuItem>
+              <MenuItem
+                icon={<DevicesIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
                   setSessionsOpen(true);
                 }}
               >
                 Signed-in devices
-              </button>
+              </MenuItem>
               {/* Shown, not enforced: each of these endpoints checks the role
                   again for itself and answers 404 to anyone else. Hiding them
                   is about not offering a door that will not open. */}
               {staffEntries.map((entry) => (
-                <button
+                <MenuItem
                   key={entry.path}
-                  type="button"
-                  role="menuitem"
+                  icon={<ShieldIcon size={16} />}
                   className="account-staff-entry"
                   onClick={() => {
                     setMenuOpen(false);
@@ -221,18 +276,19 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   }}
                 >
                   {entry.label}
-                </button>
+                </MenuItem>
               ))}
-              <button
-                type="button"
-                role="menuitem"
-                onClick={async () => {
+              <div className="account-menu-divider" role="presentation" />
+              <MenuItem
+                icon={<LeaveIcon size={16} />}
+                className="menu-item-danger"
+                onClick={() => {
                   setMenuOpen(false);
-                  await logout();
+                  void logout();
                 }}
               >
                 Log out
-              </button>
+              </MenuItem>
             </>
           )}
         </div>

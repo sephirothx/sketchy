@@ -2,7 +2,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--scrim);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -21,14 +21,15 @@
 }
 
 .modal-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
   padding: 24px 28px;
   max-width: 380px;
   width: 90%;
   text-align: center;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+  box-shadow: var(--shadow-raised);
   animation: popUpModal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -48,41 +49,55 @@
   margin-bottom: 8px;
 }
 
+/* An SVG badge in place of the old emoji glyphs. */
+.modal-icon.is-danger {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .modal-title {
   margin: 0 0 8px;
+  font-family: var(--font-display);
   font-size: 1.2rem;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .modal-body {
   margin: 0 0 20px;
   font-size: 0.95rem;
-  color: #475569;
+  color: var(--muted);
   line-height: 1.4;
 }
 
 .modal-button {
-  background: #4c6ef5;
+  background: var(--primary);
   color: #ffffff;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 0 var(--primary-edge);
   padding: 10px 24px;
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 800;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: filter 0.15s ease;
 }
 
 .modal-button:hover {
-  background: #3b5bdb;
+  filter: brightness(1.05);
 }
 
 .confirmation-dialog-icon {
   align-items: center;
-  background: #fee2e2;
+  background: var(--danger-soft);
   border-radius: 999px;
-  color: #b91c1c;
+  color: var(--danger);
   display: inline-flex;
   font-size: 1.25rem;
   font-weight: 900;
@@ -106,19 +121,19 @@
 }
 
 .confirmation-cancel-button {
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  color: #334155;
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  color: var(--ink);
 }
 
 .confirmation-danger-button {
-  background: #dc2626;
-  border: 1px solid #dc2626;
+  background: var(--danger);
+  border: 1px solid var(--danger);
   color: #fff;
 }
 
-.confirmation-danger-button:hover { background: #b91c1c; border-color: #b91c1c; }
-.confirmation-dialog-actions button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.confirmation-danger-button:hover { filter: brightness(1.08); }
+.confirmation-dialog-actions button:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
 /* This one dialog is opened from inside the mobile players drawer, which is
    itself at 1200 - the highest layer the game has. Matching it would leave the

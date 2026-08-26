@@ -7,244 +7,279 @@
 <body>
 <x-dc>
 <helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #f2f3f7;
-      color: #1c1d21;
-      font-family: system-ui, "Segoe UI", Roboto, sans-serif;
-    }
-    h1, h2, h3, p, ul, ol, fieldset, legend { margin: 0; }
-    a { color: #4c6ef5; text-decoration: none; }
-    a:hover { color: #3b5bdb; }
+    body { margin: 0; }
+
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --field: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --field: #0F172A; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    button { cursor: pointer; }
     summary { cursor: pointer; }
+    summary.plain { list-style: none; }
+    summary.plain::-webkit-details-marker { display: none; }
   </style>
 </helmet>
-<div style="width: 760px; min-height: 1300px; margin: 0 auto; padding: 28px 16px 64px">
-  <div>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
 
-    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px">
-      <button type="button" style="background: transparent; border: 0; color: #2563eb; font-size: 14px; font-weight: 700; margin-bottom: 16px; padding: 0; font-family: inherit">← Back to lobby</button>
-      <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1px solid #cbd5e1; background: transparent; color: inherit; border-radius: 999px; padding: 4px 12px 4px 4px; min-height: 36px; font: inherit">
-        <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #0f766e; color: #fff; font-weight: 700; font-size: 14px; flex: none">M</span>
-        <span style="font-weight: 600; font-size: 14px">Marta</span>
-      </button>
+<div style="width: 780px; min-height: 1100px; margin: 0 auto; padding: 26px 24px 48px">
+  
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; padding-left: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to lobby</button>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 14px; flex: none">M</span>
+    <span style="font-weight: 800; font-size: 14px; color: var(--ink)">Marta</span>
+  </button>
+</div>
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 18px">
+    <div>
+      <p style="color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Room setup</p>
+      <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 30px; color: var(--ink); margin-top: 4px">Create a room</h1>
     </div>
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">Start from a preset…<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+      <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px">Save as preset</button>
+    </div>
+  </div>
 
-    <section style="background: #fff; border: 1px solid #dfe1e6; border-radius: 12px; padding: 24px">
-      <div>
-        <p style="color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .07em; margin: 0 0 4px; text-transform: uppercase">Room setup</p>
-        <h1 style="color: #1e293b; margin: 0; font-size: 32px; font-weight: 700">Create a room</h1>
-      </div>
-
-      <div style="align-items: center; display: flex; flex-wrap: wrap; font-size: 13px; gap: 12px; margin-top: 14px">
-        <select style="border: 1px solid #c7cad1; border-radius: 6px; font: inherit; max-width: 220px; padding: 6px 8px; background: #fff; color: #1c1d21">
-          <option>Start from a preset…</option>
-        </select>
-        <button type="button" style="border: none; background: none; padding: 0; color: #4f46e5; font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline">Save these settings</button>
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px">
-
-        <label style="grid-column: 1 / -1; align-items: center; color: #1e293b; display: flex; font-size: 15px; font-weight: 700; gap: 12px; width: fit-content">
-          <span style="align-items: center; display: inline-flex; flex: 0 0 16.5rem; gap: 6px; line-height: 1.3; width: 16.5rem">
-            Keep this room for future games
-            <span style="align-items: center; background: #cbd5e1; border: 0; border-radius: 999px; color: #334155; display: inline-flex; font-size: 11px; font-weight: 800; height: 16px; justify-content: center; line-height: 1; width: 16px; flex: 0 0 auto">?</span>
-          </span>
-          <span style="background: #e3e3e3; border: 2px solid #747775; border-radius: 16px; display: inline-flex; flex: 0 0 auto; height: 32px; padding: 2px; width: 52px">
-            <span style="background: #747775; border-radius: 50%; display: block; height: 24px; width: 24px"></span>
-          </span>
-        </label>
-
-        <div style="grid-column: 1 / -1; align-items: end; display: flex; gap: 12px; min-width: 0">
-          <label style="flex: 0 1 280px; max-width: 280px; min-width: 0; width: 100%; display: flex; flex-direction: column; font-size: 15px; font-weight: 700; gap: 5px">
-            Room name (optional)
-            <input type="search" placeholder="Leave blank for a random name!" style="border: 1px solid #c7cad1; border-radius: 6px; font: inherit; font-weight: 400; padding: 9px 10px; width: 100%">
+  <div style="display: grid; gap: 14px">
+    
+<section style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 20px 22px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+  <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px">
+    <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink)">Basics</h2>
+    </div>
+  
+      <div style="display: grid; gap: 16px">
+        <div style="display: flex; align-items: flex-start; gap: 20px">
+          <label style="flex: 1; display: grid; gap: 6px; font-size: 14.5px; font-weight: 800; color: var(--ink)">Room name
+            <span style="display: flex; align-items: center; gap: 8px">
+              <input type="text" placeholder="Leave blank for a random name!" style="background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; color: var(--ink); min-height: 42px; width: 100%">
+              <button type="button" title="Roll a random name" aria-label="Roll a random name" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; background: var(--card); color: var(--muted); border: 1.5px solid var(--lineStrong); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.2" cy="8.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="8.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="8.2" cy="15.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="15.8" r="1.1" fill="currentColor" stroke="none"/></svg></button>
+            </span>
           </label>
-          <div style="flex: 0 0 auto">
-            <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 88px; padding: 3px; position: relative; width: fit-content">
-              <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 3px; pointer-events: none; position: absolute; top: 3px; width: 88px; z-index: 0"></span>
-              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; position: relative; text-align: center; z-index: 1">Public</button>
-              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; position: relative; text-align: center; z-index: 1">Private</button>
-            </div>
+          <div style="display: grid; gap: 6px; justify-items: start">
+            <span style="font-size: 14.5px; font-weight: 800; color: var(--ink)">Visibility</span>
+            <div style="display: inline-flex; gap: 3px; background: var(--track); border-radius: 999px; padding: 4px; width: fit-content">
+    <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--card); border: 0; border-radius: 999px; color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; padding: 8px 16px; box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14); white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.3 4 5.5 4 9s-1.5 6.7-4 9c-2.5-2.3-4-5.5-4-9s1.5-6.7 4-9Z"/></svg>Public</button><button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private</button>
+  </div>
+            <span style="font-size: 11.5px; font-weight: 700; color: var(--faint)">Listed in the lobby — anyone can wander in.</span>
           </div>
         </div>
-
-        <label style="grid-column: 1 / -1; align-items: center; display: flex; flex-direction: row; font-size: 15px; font-weight: 700; gap: 12px; justify-content: flex-start; width: fit-content">
-          <span style="box-sizing: border-box; flex: 0 0 12.5rem; width: 12.5rem">Max players</span>
-          <div style="align-items: center; background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); display: grid; flex: 0 0 auto; grid-template-columns: 44px minmax(48px, 1fr) 44px; height: 44px; width: 140px">
-            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">−</button>
-            <input type="text" value="8" style="background: transparent; border: 0; color: #0f172a; font: inherit; font-size: 16px; font-weight: 600; height: 100%; min-width: 0; padding: 0; text-align: center; width: 100%">
-            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">+</button>
-          </div>
-        </label>
-
-        <label style="grid-column: 1 / -1; align-items: center; display: flex; flex-direction: row; font-size: 15px; font-weight: 700; gap: 12px; justify-content: flex-start; width: fit-content">
-          <span style="box-sizing: border-box; flex: 0 0 12.5rem; width: 12.5rem">Rounds</span>
-          <div style="align-items: center; background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); display: grid; flex: 0 0 auto; grid-template-columns: 44px minmax(48px, 1fr) 44px; height: 44px; width: 140px">
-            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">−</button>
-            <input type="text" value="3" style="background: transparent; border: 0; color: #0f172a; font: inherit; font-size: 16px; font-weight: 600; height: 100%; min-width: 0; padding: 0; text-align: center; width: 100%">
-            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">+</button>
-          </div>
-        </label>
-
-        <label style="grid-column: 1 / -1; align-items: center; display: flex; flex-direction: row; font-size: 15px; font-weight: 700; gap: 12px; justify-content: flex-start; width: fit-content">
-          <span style="box-sizing: border-box; flex: 0 0 12.5rem; width: 12.5rem">Drawing time (seconds)</span>
-          <div style="align-items: center; background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1); display: grid; flex: 0 0 auto; grid-template-columns: 44px minmax(48px, 1fr) 44px; height: 44px; width: 140px">
-            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">−</button>
-            <input type="text" value="90" style="background: transparent; border: 0; color: #0f172a; font: inherit; font-size: 16px; font-weight: 600; height: 100%; min-width: 0; padding: 0; text-align: center; width: 100%">
-            <button type="button" style="align-items: center; background: transparent; border: 0; color: #0f172a; display: inline-flex; font-size: 22px; font-weight: 500; height: 100%; justify-content: center; line-height: 1; padding: 0; font-family: inherit">+</button>
-          </div>
-        </label>
-
-        <fieldset style="grid-column: 1 / -1; border: 0; padding: 0; min-width: 0; margin-top: 6px">
-          <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Prompt lists</legend>
-          <div style="align-items: center; color: #64748b; display: flex; font-size: 13px; gap: 8px; margin: 2px 0 7px">
-            <label style="font-weight: 650">Prompt language</label>
-            <output style="color: #334155; font-weight: 750">English</output>
-          </div>
-          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px">
-            <span style="align-items: center; display: inline-flex; gap: 2px">
-              <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
-                <span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span>
-                <span style="white-space: nowrap">Standard English</span>
-                <span style="background: #eff6ff; border-radius: 999px; color: #2563eb; font-size: 11px; font-weight: 600; padding: 1px 6px">432</span>
-              </button>
-              <a href="#" style="align-items: center; color: #64748b; display: inline-flex; height: 24px; justify-content: center; width: 24px">
-                <span aria-hidden="true" style="align-items: center; border: 1px solid #cbd5e1; border-radius: 999px; display: inline-flex; font-family: Georgia, 'Times New Roman', serif; font-size: 11px; font-style: italic; font-weight: 700; height: 18px; justify-content: center; line-height: 1; width: 18px">i</span>
-              </a>
-            </span>
-            <span style="align-items: center; display: inline-flex; gap: 2px">
-              <button type="button" style="align-items: center; background: #e8edf5; border: 1px solid transparent; border-radius: 999px; color: #475569; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
-                <span aria-hidden="true" style="color: #64748b; font-size: 12px; font-weight: 800">+</span>
-                <span style="white-space: nowrap">Extended English</span>
-                <span style="background: rgba(100, 116, 139, 0.12); border-radius: 999px; color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px">1284</span>
-              </button>
-              <a href="#" style="align-items: center; color: #64748b; display: inline-flex; height: 24px; justify-content: center; width: 24px">
-                <span aria-hidden="true" style="align-items: center; border: 1px solid #cbd5e1; border-radius: 999px; display: inline-flex; font-family: Georgia, 'Times New Roman', serif; font-size: 11px; font-style: italic; font-weight: 700; height: 18px; justify-content: center; line-height: 1; width: 18px">i</span>
-              </a>
-            </span>
-            <button type="button" style="align-items: center; background: #e8edf5; border: 1px solid transparent; border-radius: 999px; color: #475569; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
-              <span aria-hidden="true" style="color: #64748b; font-size: 12px; font-weight: 800">+</span>
-              <span style="white-space: nowrap">Studio in-jokes</span>
-              <span style="background: rgba(100, 116, 139, 0.12); border-radius: 999px; color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px">64</span>
-            </button>
-          </div>
-          <div style="border-top: 1px solid #e2e8f0; display: grid; gap: 6px; margin-top: 12px; padding-top: 12px">
-            <label style="color: #475569; font-size: 13px; font-weight: 700">Add an unlisted list by code</label>
-            <div style="display: flex; gap: 8px">
-              <input style="border: 1px solid #cbd5e1; border-radius: 6px; flex: 0 1 240px; min-width: 0; padding: 8px 10px; font: inherit">
-              <button type="button" style="background: #4c6ef5; border: 0; border-radius: 6px; color: #fff; font-size: 15px; font-weight: 600; padding: 10px 16px; font-family: inherit; opacity: .55">Add</button>
-            </div>
-          </div>
-        </fieldset>
-
-        <fieldset style="grid-column: 1 / -1; border: 0; padding: 0; min-width: 0">
-          <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Allowed tools</legend>
-          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px">
-            <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
-              <span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span>
-              <span style="white-space: nowrap">Brush</span>
-            </button>
-            <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
-              <span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span>
-              <span style="white-space: nowrap">Fill</span>
-            </button>
-            <button type="button" style="align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); color: #1e293b; display: inline-flex; font: inherit; font-size: 13px; font-weight: 700; gap: 6px; padding: 6px 14px">
-              <span aria-hidden="true" style="color: #2563eb; font-size: 12px; font-weight: 800">✓</span>
-              <span style="white-space: nowrap">Shapes</span>
-            </button>
-          </div>
-        </fieldset>
-
-        <fieldset style="grid-column: 1 / -1; border: 0; padding: 0; min-width: 0">
-          <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Colors</legend>
-          <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 135px; padding: 3px; position: relative; width: max-content; max-width: 100%">
-            <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 3px; pointer-events: none; position: absolute; top: 3px; width: 135px; z-index: 0"></span>
-            <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; min-width: 0; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">All colors</button>
-            <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; min-width: 0; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Palette only</button>
-            <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; min-width: 0; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Colorblind-safe</button>
-            <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; min-width: 0; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Black and white</button>
-          </div>
-        </fieldset>
-
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px">
+          
+<div style="display: flex; flex-direction: column; align-items: center; gap: 11px; background: var(--well); border: 1.5px solid var(--line); border-radius: 14px; padding: 15px 12px 12px; text-align: center">
+  <span style="display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5a3.5 3.5 0 0 1 0 6.7"/><path d="M17.5 14.4a6.5 6.5 0 0 1 4 5.6"/></svg>Players</span>
+  <div style="display: flex; align-items: center; gap: 10px">
+    <button type="button" aria-label="Decrease Players" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--lineStrong); background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 19px; font-weight: 700; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); flex: none">−</button>
+    <span style="min-width: 68px; text-align: center; font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 30px; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1">8<span style="font-size: 16px; color: var(--faint)"></span></span>
+    <button type="button" aria-label="Increase Players" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--lineStrong); background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 19px; font-weight: 700; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); flex: none">+</button>
+  </div>
+  <span style="color: var(--faint); font-size: 11.5px; font-weight: 700; line-height: 1.45">2–16 · spectators aren't counted</span>
+</div>
+          
+<div style="display: flex; flex-direction: column; align-items: center; gap: 11px; background: var(--well); border: 1.5px solid var(--line); border-radius: 14px; padding: 15px 12px 12px; text-align: center">
+  <span style="display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></svg>Rounds</span>
+  <div style="display: flex; align-items: center; gap: 10px">
+    <button type="button" aria-label="Decrease Rounds" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--lineStrong); background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 19px; font-weight: 700; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); flex: none">−</button>
+    <span style="min-width: 68px; text-align: center; font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 30px; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1">3<span style="font-size: 16px; color: var(--faint)"></span></span>
+    <button type="button" aria-label="Increase Rounds" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--lineStrong); background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 19px; font-weight: 700; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); flex: none">+</button>
+  </div>
+  <span style="color: var(--faint); font-size: 11.5px; font-weight: 700; line-height: 1.45">1–10 · everyone draws once per round</span>
+</div>
+          
+<div style="display: flex; flex-direction: column; align-items: center; gap: 11px; background: var(--well); border: 1.5px solid var(--line); border-radius: 14px; padding: 15px 12px 12px; text-align: center">
+  <span style="display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>Drawing time</span>
+  <div style="display: flex; align-items: center; gap: 10px">
+    <button type="button" aria-label="Decrease Drawing time" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--lineStrong); background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 19px; font-weight: 700; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); flex: none">−</button>
+    <span style="min-width: 68px; text-align: center; font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 30px; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1">90<span style="font-size: 16px; color: var(--faint)">s</span></span>
+    <button type="button" aria-label="Increase Drawing time" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--lineStrong); background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 19px; font-weight: 700; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); flex: none">+</button>
+  </div>
+  <span style="color: var(--faint); font-size: 11.5px; font-weight: 700; line-height: 1.45">Snaps to presets · 30s to 300s</span>
+</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; border: 1.5px dashed var(--lineStrong); border-radius: 10px; padding: 11px 14px; color: var(--muted)">
+          <span style="display: inline-flex; color: var(--warm)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+          <span style="font-size: 13.5px; font-weight: 700">This setup runs <strong style="color: var(--ink)">about 45 minutes</strong> with a full room of 8 — closer to <strong style="color: var(--ink)">20</strong> if 4 join.</span>
+        </div>
       </div>
+</section>
 
-      <details open style="border-top: 1px solid #e2e8f0; margin-top: 24px; padding-top: 18px">
-        <summary style="color: #334155; cursor: pointer; font-weight: 800">Advanced settings <span style="color: #64748b; font-size: 13px; font-weight: 400; margin-left: 8px">Spectators, scoring, hints, and custom prompts</span></summary>
-        <div style="display: grid; gap: 14px; margin-top: 18px">
-
-          <label style="align-items: center; color: #1e293b; display: flex; font-size: 15px; font-weight: 700; gap: 12px; width: fit-content">
-            <span style="align-items: center; display: inline-flex; flex: 0 0 16.5rem; gap: 6px; line-height: 1.3; width: 16.5rem">Allow spectators to see the prompt</span>
-            <span style="background: #2563eb; border: 2px solid #2563eb; border-radius: 16px; display: inline-flex; flex: 0 0 auto; height: 32px; padding: 2px; width: 52px">
-              <span style="background: #fff; border-radius: 50%; display: block; height: 24px; width: 24px; transform: translateX(20px)"></span>
-            </span>
-          </label>
-
-          <label style="align-items: center; color: #1e293b; display: flex; font-size: 15px; font-weight: 700; gap: 12px; width: fit-content">
-            <span style="align-items: center; display: inline-flex; flex: 0 0 16.5rem; gap: 6px; line-height: 1.3; width: 16.5rem">Hide blanks</span>
-            <span style="background: #e3e3e3; border: 2px solid #747775; border-radius: 16px; display: inline-flex; flex: 0 0 auto; height: 32px; padding: 2px; width: 52px">
-              <span style="background: #747775; border-radius: 50%; display: block; height: 24px; width: 24px"></span>
-            </span>
-          </label>
-
-          <fieldset style="border: 0; padding: 0; min-width: 0">
-            <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Scoring</legend>
-            <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 98px; padding: 3px; position: relative; width: max-content">
-              <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 103px; pointer-events: none; position: absolute; top: 3px; width: 98px; z-index: 0"></span>
-              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">No scoring</button>
-              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Default</button>
-              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Pressure</button>
-            </div>
-          </fieldset>
-
-          <fieldset style="border: 0; padding: 0; min-width: 0">
-            <legend style="font-size: 15px; font-weight: 700; margin-bottom: 5px; padding: 0">Hints</legend>
-            <div style="background: #e8edf5; border-radius: 999px; display: inline-grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: 144px; padding: 3px; position: relative; width: max-content">
-              <span aria-hidden="true" style="background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); height: calc(100% - 6px); left: 149px; pointer-events: none; position: absolute; top: 3px; width: 144px; z-index: 0"></span>
-              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">No hints</button>
-              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #1e293b; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Timed hints</button>
-              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Buy letters</button>
-              <button type="button" style="background: transparent; border: 0; border-radius: 999px; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; position: relative; text-align: center; white-space: nowrap; z-index: 1">Wheel of Fortune</button>
-            </div>
-          </fieldset>
-
-          <div style="border-top: 1px solid #e2e8f0; padding-top: 16px">
-            <label style="display: flex; flex-direction: column; font-size: 15px; font-weight: 700; gap: 5px">
-              Custom prompts (optional)
-              <textarea style="border: 1px solid #c7cad1; border-radius: 6px; font: inherit; font-weight: 400; padding: 9px 10px; box-sizing: border-box; display: block; height: 150px; resize: none; width: 100%">roller coaster
+    
+<details style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+  <summary class="plain" style="display: flex; align-items: baseline; gap: 10px; padding: 20px 22px; cursor: pointer; list-style: none">
+    
+    <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink)">Prompts</h2>
+    <span style="font-size: 12.5px; color: var(--faint); font-weight: 700">English · Standard English · 432 prompts</span>
+    <span style="margin-left: auto; align-self: center; display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></span>
+  </summary>
+  <div style="padding: 0 22px 20px">
+      <div style="display: grid; gap: 14px">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; gap: 7px; background: var(--primarySoft); border: 1.5px solid var(--primary); border-radius: 999px; padding: 9px 15px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; color: var(--primaryInk); min-height: 42px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M4 12.5 9.5 18 20 6.5"/></svg>Standard English<span style="background: var(--card); border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: var(--primary)">432</span></button>
+          <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 7px; background: var(--card); border: 1.5px solid var(--lineStrong); border-radius: 999px; padding: 9px 15px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; color: var(--muted); min-height: 42px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Extended English<span style="background: var(--well); border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: var(--faint)">1284</span></button>
+          <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 7px; background: var(--card); border: 1.5px solid var(--lineStrong); border-radius: 999px; padding: 9px 15px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; color: var(--muted); min-height: 42px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Studio in-jokes<span style="background: var(--well); border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: var(--faint)">64</span></button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <input type="text" placeholder="Add an unlisted list by code" style="background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; color: var(--ink); min-height: 42px; width: 100%; max-width: 260px">
+          <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">Add</button>
+        </div>
+        <details style="border-top: 1.5px solid var(--line); padding-top: 14px">
+          <summary style="font-size: 14px; font-weight: 800; color: var(--muted)">Custom prompts for this game <span style="color: var(--faint); font-weight: 700">· 3 added</span></summary>
+          <div style="display: grid; gap: 8px; margin-top: 12px">
+            <textarea style="background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; padding: 10px 12px; height: 110px; resize: none; width: 100%; color: var(--ink)">roller coaster
 lighthouse
 bow and arrow</textarea>
-            </label>
-            <div style="color: #475569; display: flex; flex-wrap: wrap; font-size: 13px; gap: 4px 12px; margin-top: 7px">
-              <strong style="color: #15803d">3 usable custom prompts</strong>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+              <span style="font-size: 13px; font-weight: 800; color: var(--successInk)">3 usable prompts</span>
+              <div style="display: flex; align-items: center; gap: 10px">
+                
+<label style="display: inline-flex; align-items: center; gap: 10px; cursor: pointer">
+  <span role="switch" aria-checked="false" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: var(--lineStrong); flex: none">
+    <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(0)"></span>
+  </span>
+  <span style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Only use these</span>
+</label>
+                <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px">Save as a reusable list</button>
+              </div>
             </div>
-            <button type="button" style="background: #2563eb; border: 0; border-radius: 8px; color: #fff; font-size: 14px; font-weight: 700; margin-top: 10px; padding: 10px 14px; font-family: inherit">Save as reusable list</button>
           </div>
+        </details>
+      </div></div>
+</details>
 
-          <label style="align-items: center; color: #1e293b; display: flex; font-size: 15px; font-weight: 700; gap: 12px; width: fit-content">
-            <span style="align-items: center; display: inline-flex; flex: 0 0 16.5rem; gap: 6px; line-height: 1.3; width: 16.5rem">
-              Only use custom prompts
-              <span style="align-items: center; background: #cbd5e1; border: 0; border-radius: 999px; color: #334155; display: inline-flex; font-size: 11px; font-weight: 800; height: 16px; justify-content: center; line-height: 1; width: 16px; flex: 0 0 auto">?</span>
-            </span>
-            <span style="background: #e3e3e3; border: 2px solid #747775; border-radius: 16px; display: inline-flex; flex: 0 0 auto; height: 32px; padding: 2px; width: 52px">
-              <span style="background: #747775; border-radius: 50%; display: block; height: 24px; width: 24px"></span>
-            </span>
-          </label>
-
+    
+<details style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+  <summary class="plain" style="display: flex; align-items: baseline; gap: 10px; padding: 20px 22px; cursor: pointer; list-style: none">
+    
+    <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink)">Drawing</h2>
+    <span style="font-size: 12.5px; color: var(--faint); font-weight: 700">Brush, Fill, Shapes · All colors</span>
+    <span style="margin-left: auto; align-self: center; display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></span>
+  </summary>
+  <div style="padding: 0 22px 20px">
+      <div style="display: grid; gap: 16px">
+        <div style="display: grid; gap: 8px">
+          <span style="font-size: 14.5px; font-weight: 800; color: var(--ink)">Allowed tools</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px">
+            <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; gap: 7px; background: var(--primarySoft); border: 1.5px solid var(--primary); border-radius: 999px; padding: 9px 15px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; color: var(--primaryInk); min-height: 42px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M4 12.5 9.5 18 20 6.5"/></svg>Brush</button>
+            <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; gap: 7px; background: var(--primarySoft); border: 1.5px solid var(--primary); border-radius: 999px; padding: 9px 15px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; color: var(--primaryInk); min-height: 42px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M4 12.5 9.5 18 20 6.5"/></svg>Fill</button>
+            <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; gap: 7px; background: var(--primarySoft); border: 1.5px solid var(--primary); border-radius: 999px; padding: 9px 15px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; color: var(--primaryInk); min-height: 42px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M4 12.5 9.5 18 20 6.5"/></svg>Shapes</button>
+          </div>
         </div>
-      </details>
+        <div style="display: grid; gap: 8px">
+          <span style="font-size: 14.5px; font-weight: 800; color: var(--ink)">Colors</span>
+          <div style="display: inline-flex; gap: 3px; background: var(--track); border-radius: 999px; padding: 4px; width: fit-content">
+    <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--card); border: 0; border-radius: 999px; color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; padding: 8px 16px; box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14); white-space: nowrap">All colors</button><button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">Palette only</button><button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">Colorblind-safe</button><button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">Black and white</button>
+  </div>
+        </div>
+      </div></div>
+</details>
 
-      <button type="button" style="background: #4c6ef5; border: 0; border-radius: 7px; color: #fff; font-size: 15px; font-weight: 800; margin-top: 24px; padding: 11px 18px; font-family: inherit">Create room</button>
-    </section>
+    
+<details style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+  <summary class="plain" style="display: flex; align-items: baseline; gap: 10px; padding: 20px 22px; cursor: pointer; list-style: none">
+    
+    <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink)">Scoring and hints</h2>
+    <span style="font-size: 12.5px; color: var(--faint); font-weight: 700">Default scoring · Timed hints</span>
+    <span style="margin-left: auto; align-self: center; display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></span>
+  </summary>
+  <div style="padding: 0 22px 20px">
+      <div style="display: grid; gap: 16px">
+        <div style="display: grid; gap: 8px">
+          <span style="font-size: 14.5px; font-weight: 800; color: var(--ink)">Scoring</span>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px">
+            
+<button type="button" aria-pressed="true" style="display: flex; flex-direction: column; gap: 4px; text-align: left; background: var(--primarySoft); border: 1.5px solid var(--primary); border-radius: 10px; padding: 12px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-height: 44px">
+  <span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--primaryInk)"><span style="display: inline-flex; color: var(--primary)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>Default</span>
+  <span style="font-size: 12.5px; color: var(--muted); line-height: 1.45; font-weight: 600">Faster guesses earn more, 100–300 points.</span>
+</button>
+            
+<button type="button" aria-pressed="false" style="display: flex; flex-direction: column; gap: 4px; text-align: left; background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-height: 44px">
+  <span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--ink)">Pressure</span>
+  <span style="font-size: 12.5px; color: var(--muted); line-height: 1.45; font-weight: 600">Points decay — and decay doubles once someone guesses.</span>
+</button>
+            
+<button type="button" aria-pressed="false" style="display: flex; flex-direction: column; gap: 4px; text-align: left; background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-height: 44px">
+  <span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--ink)">No scoring</span>
+  <span style="font-size: 12.5px; color: var(--muted); line-height: 1.45; font-weight: 600">Just draw and guess. No standings.</span>
+</button>
+          </div>
+        </div>
+        <div style="display: grid; gap: 8px">
+          <span style="font-size: 14.5px; font-weight: 800; color: var(--ink)">Hints</span>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px">
+            
+<button type="button" aria-pressed="true" style="display: flex; flex-direction: column; gap: 4px; text-align: left; background: var(--primarySoft); border: 1.5px solid var(--primary); border-radius: 10px; padding: 12px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-height: 44px">
+  <span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--primaryInk)"><span style="display: inline-flex; color: var(--primary)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>Timed hints</span>
+  <span style="font-size: 12.5px; color: var(--muted); line-height: 1.45; font-weight: 600">Letters reveal to everyone at fixed times.</span>
+</button>
+            
+<button type="button" aria-pressed="false" style="display: flex; flex-direction: column; gap: 4px; text-align: left; background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-height: 44px">
+  <span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--ink)">No hints</span>
+  <span style="font-size: 12.5px; color: var(--muted); line-height: 1.45; font-weight: 600">Blanks only, all turn long.</span>
+</button>
+            
+<button type="button" aria-pressed="false" style="display: flex; flex-direction: column; gap: 4px; text-align: left; background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-height: 44px">
+  <span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--ink)">Buy letters</span>
+  <span style="font-size: 12.5px; color: var(--muted); line-height: 1.45; font-weight: 600">Each guesser can spend points to reveal a letter slot.</span>
+</button>
+            
+<button type="button" aria-pressed="false" style="display: flex; flex-direction: column; gap: 4px; text-align: left; background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-height: 44px">
+  <span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--ink)">Wheel of Fortune</span>
+  <span style="font-size: 12.5px; color: var(--muted); line-height: 1.45; font-weight: 600">Pick a letter, pay its price — vowels cost extra.</span>
+</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px 24px; border-top: 1.5px solid var(--line); padding-top: 14px">
+          
+<label style="display: inline-flex; align-items: center; gap: 10px; cursor: pointer">
+  <span role="switch" aria-checked="true" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: var(--primary); flex: none">
+    <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(18px)"></span>
+  </span>
+  <span style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Spectators can see the prompt</span>
+</label>
+          
+<label style="display: inline-flex; align-items: center; gap: 10px; cursor: pointer">
+  <span role="switch" aria-checked="false" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: var(--lineStrong); flex: none">
+    <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(0)"></span>
+  </span>
+  <span style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Hide blanks <span style="font-weight: 600; color: var(--faint)">(turns hints off)</span></span>
+</label>
+        </div>
+      </div></div>
+</details>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(20, 16, 10, 0.14); padding: 14px 18px; margin-top: 16px">
+    <div style="display: grid; gap: 3px">
+      <span style="font-size: 13px; color: var(--muted); font-weight: 700">Public · 8 players · 3 rounds · 90s · Default scoring · Timed hints</span>
+      
+<label style="display: inline-flex; align-items: center; gap: 10px; cursor: pointer">
+  <span role="switch" aria-checked="false" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: var(--lineStrong); flex: none">
+    <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(0)"></span>
+  </span>
+  <span style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Keep this room for future games</span>
+</label>
+    </div>
+    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; padding: 13px 22px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 16px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--primaryEdge)">Create room</button>
   </div>
 </div>
+</div>
 </x-dc>
-<script data-dc-script data-props='{"$preview": {"width": 760, "height": 1300}}'>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 780, "height": 1100}}'>
 class Component extends DCLogic {
   renderVals() {
-    return {};
+    const defaults = { theme: 'light' };
+    return Object.assign({}, defaults, this.props);
   }
 }
 </script>

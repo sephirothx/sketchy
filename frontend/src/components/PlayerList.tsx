@@ -4,10 +4,12 @@ import type { ModerationState, PlayerInfo } from "../types";
 import { emitTransient } from "../lib/socket";
 import { ReportPlayerDialog } from "./ReportPlayerDialog";
 import { useAuthStore } from "../store/authStore";
-import { competitionRanks, placementLabel } from "../lib/standings";
+import { competitionRanks } from "../lib/standings";
 import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { Avatar } from "./ui/Avatar";
+import { CheckIcon, CrownIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -17,6 +19,12 @@ interface PlayerListProps {
   variant?: "waiting" | "playing" | "game-end";
   allowVoting?: boolean;
   moderation: ModerationState;
+  /** Per-player elapsed seconds for correct guesses this turn. */
+  turnCorrectGuesses?: Record<string, number>;
+}
+
+function guessTime(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 
@@ -51,6 +59,7 @@ export function PlayerList({
   variant = "playing",
   allowVoting = true,
   moderation,
+  turnCorrectGuesses,
 }: PlayerListProps) {
   const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
   const ranks = competitionRanks(sorted.map((player) => player.score));
@@ -102,14 +111,33 @@ export function PlayerList({
         const showAfkChip = afkVotes.length > 0 && !p.isAfk;
         const showKickChip = kickVotes.length > 0;
         const showVoteRow = showAfkChip || showKickChip;
+        const guessedAt = turnCorrectGuesses?.[p.playerId];
         const rowClass = cx(
           "player-row",
           isMe && "is-self",
           !p.connected && "disconnected",
           p.isAfk && "is-afk",
+          isDrawer && "is-drawing",
+          guessedAt != null && !isDrawer && "has-guessed",
           showScores && "has-scores",
           canModerate && "is-moderatable",
         );
+        const status = isDrawer ? (
+          <span className="player-status player-status-drawing">
+            <PencilIcon size={12} />
+            Drawing
+          </span>
+        ) : guessedAt != null ? (
+          <span className="player-status player-status-guessed">
+            <CheckIcon size={12} />
+            Got it · <span className="player-status-time">{guessTime(guessedAt)}</span>
+          </span>
+        ) : p.isAfk ? (
+          <span className="player-status player-status-afk">
+            <MoonIcon size={12} />
+            AFK
+          </span>
+        ) : null;
 
         return (
           <li key={p.playerId} className={rowClass}>
@@ -130,21 +158,29 @@ export function PlayerList({
                 }
               />
             )}
-            <PlayerRole
-              variant={variant}
-              rank={ranks[index]}
-              isDrawer={isDrawer}
-              isHost={p.isHost}
-              isAfk={p.isAfk}
+            {variant === "game-end" && <PlacementBadge rank={ranks[index]} />}
+            <Avatar
+              name={p.nickname}
+              nameColor={p.nameColor}
+              isAnonymous={p.isAnonymous}
+              size={38}
             />
-            <span className="player-name">
-              <FittedPlayerName
-                nickname={p.nickname}
-                nameColor={p.nameColor}
-                isAnonymous={p.isAnonymous}
-              />
-              {isMe && <span className="player-you-mark">you</span>}
-              {!p.connected && <span className="visually-hidden">Disconnected</span>}
+            <span className="player-main">
+              <span className="player-name">
+                <FittedPlayerName
+                  nickname={p.nickname}
+                  nameColor={p.nameColor}
+                  isAnonymous={p.isAnonymous}
+                />
+                {isMe && <span className="player-you-mark">you</span>}
+                {p.isHost && (
+                  <span className="player-host-mark" role="img" aria-label="Host" title="Host">
+                    <CrownIcon size={14} />
+                  </span>
+                )}
+                {!p.connected && <span className="visually-hidden">Disconnected</span>}
+              </span>
+              {status}
             </span>
             {showScores && <span className="player-score">{p.score}</span>}
             {showVoteRow && (
@@ -214,72 +250,26 @@ function FittedPlayerName({
   );
 }
 
-function PlayerRole({
-  variant,
-  rank,
-  isDrawer,
-  isHost,
-  isAfk,
-}: {
-  variant: "waiting" | "playing" | "game-end";
-  rank: number;
-  isDrawer: boolean;
-  isHost: boolean;
-  isAfk: boolean;
-}) {
-  // One icon per row, in this order: drawing, AFK, host. Combined states
-  // (host+AFK, drawer+host) are exposed on aria-label/title instead.
-  if (variant === "game-end") {
-    return (
-      <span className="player-role player-role-placement" aria-hidden="true">
-        {placementLabel(rank)}
-      </span>
-    );
-  }
-
-  if (isDrawer) {
-    const drawingLabel = [isHost ? "host" : null, isAfk ? "AFK" : null]
-      .filter(Boolean)
-      .join(", ");
-    return (
-      <span
-        className="player-role"
-        role="img"
-        aria-label={drawingLabel ? `Drawing, ${drawingLabel}` : "Drawing"}
-        title={drawingLabel ? `Drawing, ${drawingLabel}` : "Drawing"}
-      >
-        {"\u270F\uFE0F"}
-      </span>
-    );
-  }
-
-  if (isAfk) {
-    return (
-      <span className="player-role player-role-afk" role="img" aria-label="AFK" title="AFK">
-        zzz
-      </span>
-    );
-  }
-
-  if (isHost) {
-    return (
-      <span className="player-role" role="img" aria-label="Host" title="Host">
-        <HostCrownIcon />
-      </span>
-    );
-  }
-
-  return <span className="player-role" aria-hidden="true" />;
-}
-
-function HostCrownIcon() {
+/* Podium ranks get a colored medal; the rest keep their number. Keeps the
+   .player-role-placement class the e2e suite counts. */
+function PlacementBadge({ rank }: { rank: number }) {
+  const medalColor =
+    rank === 1 ? "var(--gold)" : rank === 2 ? "var(--silver)" : rank === 3 ? "var(--bronze)" : null;
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M2.2 12.5h11.6l-.7-7.2-3.1 2.4L8 4.2 6 7.7 2.9 5.3l-.7 7.2Zm-.4 1.3c-.5 0-.8-.5-.7-1l.8-8.2c.1-.7 1-.9 1.5-.4L5.7 6l1.6-2.8c.3-.6 1.1-.6 1.4 0L10.3 6l2.3-1.8c.5-.5 1.4-.3 1.5.4l.8 8.2c.1.5-.2 1-.7 1H1.8Z"
-      />
-    </svg>
+    <span
+      className="player-role player-role-placement"
+      role="img"
+      aria-label={`Rank ${rank}`}
+      title={`Rank ${rank}`}
+    >
+      {medalColor ? (
+        <span style={{ color: medalColor, display: "inline-flex" }}>
+          <MedalIcon size={16} />
+        </span>
+      ) : (
+        `#${rank}`
+      )}
+    </span>
   );
 }
 

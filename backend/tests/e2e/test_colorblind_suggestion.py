@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import open_room_settings, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -18,8 +18,7 @@ async def _create_room(host, name: str) -> str:
     await host.get_by_role("button", name="Private").click()
     await host.get_by_role("button", name="Create room").click()
     await host.get_by_test_id("waiting-room").wait_for()
-    code_text = await host.locator(".room-copy-button").inner_text()
-    return code_text.split("Code:")[1].strip()
+    return await room_code(host)
 
 
 async def _join_invite(page, code: str, name: str, *, spectator: bool = False):
@@ -79,6 +78,7 @@ async def test_only_host_sees_suggestion_and_acceptance_switches_room_colors():
             # The host's own form has to move with the room. The palette is the
             # one setting the room can change without this form asking, and a
             # form still offering the old one would disagree with the game.
+            await open_room_settings(host)
             host_colors = host.get_by_role("group", name="Colors").get_by_role(
                 "button", name="Colorblind-safe"
             )
@@ -151,6 +151,7 @@ async def test_a_colorblind_host_starts_a_room_on_colorblind_safe_colors():
             await use_guest_name(page, "SafeCreator")
             await page.get_by_role("button", name="Create room").click()
 
+            await page.click('summary:has-text("Drawing")')
             colors = page.get_by_role("group", name="Colors")
             await expect(
                 colors.get_by_role("button", name="Colorblind-safe")

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -23,6 +23,7 @@ from app.auth.bans import active_ban_filter, active_ban_for_user
 from app.auth.mail import queue_email
 from app.services.player_reports import record_player_report
 from app.auth.sessions import revoke_all_sessions
+from app.auth.warnings import pending_warning_payload
 from app.db.models import (
     AuditEvent,
     GameRecord,
@@ -36,6 +37,7 @@ from app.db.models import (
     TurnRecord,
     User,
     UserBan,
+    UserWarning,
     generate_uuid,
 )
 from app.domain_values import (
@@ -56,6 +58,7 @@ MAX_REPORT_DETAILS = 2_000
 MAX_RESOLUTION_NOTE = 2_000
 MAX_REPORT_MESSAGES = 20
 OnUserBanned = Callable[[str], Awaitable[None]]
+OnUserWarned = Callable[[str], Awaitable[None]]
 
 
 class ReportBody(BaseModel):
@@ -201,8 +204,72 @@ def _content_target(prompt_list_id, prompt_version_id) -> tuple[str, str]:
     return AuditTargetType.PROMPT_LIST.value, str(prompt_list_id)
 
 
-def _report_payload(report: PlayerReport) -> dict:
+async def _reported_player_context(
+    session: AsyncSession, reports: list[PlayerReport]
+) -> dict[UUID, dict]:
+    """Who each report is about, as a moderator weighs it.
+
+    Standing, not identity: account age, how often this player has come up
+    before, and whether a suspension is already in force. Computed for the
+    page in three grouped queries rather than per report.
+    """
+    user_ids = {r.reported_user_id for r in reports if r.reported_user_id}
+    if not user_ids:
+        return {}
+    users = (
+        await session.scalars(select(User).where(User.id.in_(user_ids)))
+    ).all()
+    report_totals = dict(
+        (
+            await session.execute(
+                select(PlayerReport.reported_user_id, func.count())
+                .where(PlayerReport.reported_user_id.in_(user_ids))
+                .group_by(PlayerReport.reported_user_id)
+            )
+        ).all()
+    )
+    warning_totals = dict(
+        (
+            await session.execute(
+                select(UserWarning.user_id, func.count())
+                .where(UserWarning.user_id.in_(user_ids))
+                .group_by(UserWarning.user_id)
+            )
+        ).all()
+    )
+    now = datetime.now(timezone.utc)
+    suspended = set(
+        (
+            await session.scalars(
+                select(UserBan.user_id).where(
+                    UserBan.user_id.in_(user_ids), *active_ban_filter(now)
+                )
+            )
+        ).all()
+    )
     return {
+        user.id: {
+            "displayName": user.display_name,
+            "registered": user.state == AccountState.REGISTERED.value,
+            "createdAt": user.created_at.isoformat(),
+            # This report itself is not "prior".
+            "priorReports": max(0, report_totals.get(user.id, 0) - 1),
+            "priorWarnings": warning_totals.get(user.id, 0),
+            "activeSuspension": user.id in suspended,
+        }
+        for user in users
+    }
+
+
+def _report_payload(
+    report: PlayerReport, player_context: dict[UUID, dict] | None = None
+) -> dict:
+    return {
+        "reportedPlayer": (
+            (player_context or {}).get(report.reported_user_id)
+            if report.reported_user_id
+            else None
+        ),
         "id": str(report.id),
         "reporterUserId": (
             str(report.reporter_user_id) if report.reporter_user_id else None
@@ -289,6 +356,24 @@ def _prompt_content_report_payload(report: PromptContentReport) -> dict:
     }
 
 
+class WarningBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    user_id: UUID = Field(alias="userId")
+    reason: str = Field(min_length=1, max_length=255)
+    # The report this warning decides. Recording it is what lets the warned
+    # player be shown the messages the complaint was about.
+    report_id: UUID | None = Field(default=None, alias="reportId")
+
+    @field_validator("reason")
+    @classmethod
+    def clean_reason(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("reason cannot be blank")
+        return cleaned
+
+
 def _ban_payload(ban: UserBan, display_name: str | None = None) -> dict:
     """One suspension, as a moderator needs to read it.
 
@@ -336,6 +421,7 @@ def create_moderation_router(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     on_user_banned: OnUserBanned | None = None,
+    on_user_warned: OnUserWarned | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
     report_limiter = PersistentRateLimiter(
@@ -677,7 +763,12 @@ def create_moderation_router(
                     .offset(offset)
                 )
             ).all()
-            return {"reports": [_report_payload(report) for report in reports]}
+            player_context = await _reported_player_context(session, list(reports))
+            return {
+                "reports": [
+                    _report_payload(report, player_context) for report in reports
+                ]
+            }
 
     @router.get("/moderation/prompt-content-reports")
     async def list_prompt_content_reports(
@@ -868,6 +959,58 @@ def create_moderation_router(
                 await session.refresh(report)
             return _prompt_content_report_payload(report)
 
+
+    async def _attach_and_resolve_report(
+        session: AsyncSession,
+        *,
+        report_id: UUID,
+        target_id: UUID,
+        reviewer: User,
+        note: str,
+        now: datetime,
+        request_id,
+        ip_hash,
+    ) -> PlayerReport:
+        """Lock the source report and decide it in the caller's transaction.
+
+        A warning or suspension issued from a report is one decision, not
+        two requests: if the consequence lands, the report is resolved with
+        it, and a report another moderator already decided refuses the whole
+        action - which is also what stops a retry from issuing the same
+        consequence twice.
+        """
+        report = await session.scalar(
+            select(PlayerReport)
+            .where(PlayerReport.id == report_id)
+            .with_for_update()
+        )
+        if report is None or report.reported_user_id != target_id:
+            raise HTTPException(
+                status_code=422, detail="That report is not about this player."
+            )
+        if report.status != ReportStatus.PENDING.value:
+            raise HTTPException(
+                status_code=409, detail="This report was already reviewed."
+            )
+        report.status = ReportStatus.RESOLVED.value
+        report.reviewed_by_user_id = reviewer.id
+        report.resolution_note = note
+        report.reviewed_at = now
+        session.add(
+            AuditEvent(
+                id=generate_uuid(),
+                event_type="report.resolved",
+                actor_user_id=reviewer.id,
+                target_user_id=report.reported_user_id,
+                target_type=AuditTargetType.USER.value,
+                target_id=str(report.reported_user_id),
+                request_id=request_id,
+                ip_hash=ip_hash,
+                details={"report_id": str(report.id)},
+            )
+        )
+        return report
+
     @router.post("/moderation/bans", status_code=201)
     async def create_ban(body: BanBody, request: Request):
         request_id, ip_hash = await audit_coordinates(request, session_factory)
@@ -905,15 +1048,16 @@ def create_moderation_router(
                     )
                 source_report = None
                 if body.report_id is not None:
-                    source_report = await session.get(PlayerReport, body.report_id)
-                    if (
-                        source_report is None
-                        or source_report.reported_user_id != target.id
-                    ):
-                        raise HTTPException(
-                            status_code=422,
-                            detail="That report is not about this player.",
-                        )
+                    source_report = await _attach_and_resolve_report(
+                        session,
+                        report_id=body.report_id,
+                        target_id=target.id,
+                        reviewer=reviewer,
+                        note=body.reason,
+                        now=now,
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                    )
                 ban = UserBan(
                     id=generate_uuid(),
                     user_id=target.id,
@@ -1052,5 +1196,122 @@ def create_moderation_router(
                     await session.get(User, ban.user_id) if ban.user_id else None
                 )
             return _ban_payload(ban, subject.display_name if subject else None)
+
+    @router.post("/moderation/warnings", status_code=201)
+    async def create_warning(body: WarningBody, request: Request):
+        """The step between dismissing a report and suspending the account.
+
+        Nothing is restricted: the player is shown, once, what was reported
+        and that a moderator looked. Same role boundaries as a suspension,
+        because it is the same kind of judgement about a person.
+        """
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        async with session_factory() as session:
+            async with session.begin():
+                reviewer = await _reviewer(session, request)
+                target = await session.scalar(
+                    select(User).where(User.id == body.user_id)
+                )
+                if target is None or target.state in {
+                    AccountState.MERGED.value,
+                    AccountState.DELETED.value,
+                }:
+                    raise HTTPException(status_code=404, detail="No such player.")
+                if target.id == reviewer.id:
+                    raise HTTPException(
+                        status_code=422, detail="You cannot warn yourself."
+                    )
+                if target.role == UserRole.ADMIN.value:
+                    raise HTTPException(
+                        status_code=403, detail="Administrators cannot be warned."
+                    )
+                if (
+                    reviewer.role == UserRole.MODERATOR.value
+                    and target.role != UserRole.USER.value
+                ):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Moderators cannot warn another moderator.",
+                    )
+                source_report = None
+                if body.report_id is not None:
+                    source_report = await _attach_and_resolve_report(
+                        session,
+                        report_id=body.report_id,
+                        target_id=target.id,
+                        reviewer=reviewer,
+                        note=body.reason,
+                        now=datetime.now(timezone.utc),
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                    )
+                warning = UserWarning(
+                    id=generate_uuid(),
+                    user_id=target.id,
+                    issued_by_user_id=reviewer.id,
+                    reason=body.reason,
+                    source_report_id=source_report.id if source_report else None,
+                    created_at=datetime.now(timezone.utc),
+                )
+                session.add(warning)
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type="warning.issued",
+                        actor_user_id=reviewer.id,
+                        target_user_id=target.id,
+                        target_type=AuditTargetType.USER.value,
+                        target_id=str(target.id),
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                        details={
+                            "warning_id": str(warning.id),
+                            "reason": body.reason,
+                        },
+                    )
+                )
+                await session.flush()
+                payload = {
+                    "id": str(warning.id),
+                    "userId": str(target.id),
+                    "reason": warning.reason,
+                    "createdAt": warning.created_at.isoformat(),
+                }
+        # After the commit, so a socket can never announce a warning a
+        # rolled-back transaction never created.
+        if on_user_warned is not None:
+            await on_user_warned(str(body.user_id))
+        return payload
+
+    @router.get("/warnings/pending")
+    async def pending_warning(request: Request):
+        """The caller's own oldest unacknowledged warning - the catch-up
+        route for a player who was offline when it was issued. The payload is
+        shared with the live socket push (`app/auth/warnings.py`)."""
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        return await pending_warning_payload(session_factory, user_id)
+
+    @router.post("/warnings/{warning_id}/acknowledge")
+    async def acknowledge_warning(warning_id: UUID, request: Request):
+        """Recorded so a moderator can see the message actually landed."""
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        async with session_factory() as session:
+            async with session.begin():
+                warning = await session.scalar(
+                    select(UserWarning)
+                    .where(UserWarning.id == warning_id)
+                    .with_for_update()
+                )
+                # Someone else's warning is not this caller's to see, or to
+                # acknowledge away; answering 404 keeps its existence private.
+                if warning is None or warning.user_id != UUID(user_id):
+                    raise HTTPException(status_code=404, detail="No such warning.")
+                if warning.acknowledged_at is None:
+                    warning.acknowledged_at = datetime.now(timezone.utc)
+            return {"ok": True}
 
     return router

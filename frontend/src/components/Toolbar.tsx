@@ -18,6 +18,17 @@ import { useGameStore } from "../store/gameStore";
 import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 import { recordRender } from "../lib/renderDiagnostics";
+import {
+  BrushIcon,
+  ChevronDownIcon,
+  CircleIcon,
+  EraserIcon,
+  FillIcon,
+  RectIcon,
+  TrashIcon,
+  TriangleIcon,
+  UndoIcon,
+} from "./icons";
 
 const PRESET_WIDTHS = [2, 4, 6, 8, 12, 16, 24, 32];
 
@@ -58,65 +69,12 @@ function toolKeys(bindings: KeyBindings, tool: DrawTool): string[] {
 }
 
 const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
-  {
-    value: "brush",
-    name: "Brush",
-    glyph: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-      </svg>
-    ),
-  },
-  {
-    value: "fill",
-    name: "Fill",
-    glyph: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z" />
-        <path d="m5 2 5 5" />
-        <path d="M2 13h15" />
-        <path d="M22 20a2 2 0 1 1-4 0c0-1.6 2-4 2-4s2 2.4 2 4Z" />
-      </svg>
-    ),
-  },
-  {
-    value: "eraser",
-    name: "Eraser",
-    glyph: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l12-12a1 1 0 0 1 1.4 0l4.3 4.3a1 1 0 0 1 0 1.4L8.4 21a1 1 0 0 1-1.4 0Z" />
-        <path d="m22 21-15 0" />
-        <path d="m5 11 9 9" />
-      </svg>
-    ),
-  },
-  {
-    value: "rectangle",
-    name: "Rectangle",
-    glyph: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-      </svg>
-    ),
-  },
-  {
-    value: "triangle",
-    name: "Triangle",
-    glyph: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-      </svg>
-    ),
-  },
-  {
-    value: "ellipse",
-    name: "Ellipse",
-    glyph: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" />
-      </svg>
-    ),
-  },
+  { value: "brush", name: "Brush", glyph: <BrushIcon size={18} /> },
+  { value: "fill", name: "Fill", glyph: <FillIcon size={18} /> },
+  { value: "eraser", name: "Eraser", glyph: <EraserIcon size={18} /> },
+  { value: "rectangle", name: "Rectangle", glyph: <RectIcon size={18} /> },
+  { value: "triangle", name: "Triangle", glyph: <TriangleIcon size={18} /> },
+  { value: "ellipse", name: "Ellipse", glyph: <CircleIcon size={18} /> },
 ];
 
 interface ToolbarProps {
@@ -126,25 +84,6 @@ interface ToolbarProps {
   onBrushWidthChange: (width: number) => void;
   tool: DrawTool;
   onToolChange: (tool: DrawTool) => void;
-}
-
-function UndoIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 7v6h6" />
-      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
-    </svg>
-  );
-}
-
-function ClearIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 6h18" />
-      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-    </svg>
-  );
 }
 
 export function Toolbar({
@@ -384,7 +323,7 @@ export function Toolbar({
               onClick={() => toggleMobilePanel("tool")}
             >
               <span className="tool-glyph">{activeTool.glyph}</span>
-              <span className="toolbar-mobile-chip-caret" aria-hidden="true">▾</span>
+              <span className="toolbar-mobile-chip-caret" aria-hidden="true"><ChevronDownIcon size={12} /></span>
             </button>
 
             <button
@@ -398,7 +337,7 @@ export function Toolbar({
               onClick={() => toggleMobilePanel("color")}
             >
               <span className="toolbar-mobile-swatch" style={{ backgroundColor: activeColor }} />
-              <span className="toolbar-mobile-chip-caret" aria-hidden="true">▾</span>
+              <span className="toolbar-mobile-chip-caret" aria-hidden="true"><ChevronDownIcon size={12} /></span>
             </button>
 
             <button
@@ -423,7 +362,7 @@ export function Toolbar({
               title="Undo"
               onClick={requestCanvasUndo}
             >
-              <UndoIcon />
+              <UndoIcon size={18} />
             </button>
             <button
               type="button"
@@ -432,7 +371,7 @@ export function Toolbar({
               title="Clear canvas"
               onClick={requestCanvasClear}
             >
-              <ClearIcon />
+              <TrashIcon size={18} />
             </button>
           </div>
 
@@ -621,7 +560,7 @@ export function Toolbar({
               onClick={requestCanvasUndo}
               title="Undo last stroke (Ctrl+Z)"
             >
-              <UndoIcon />
+              <UndoIcon size={18} />
               <span>Undo</span>
             </button>
             <button
@@ -629,7 +568,7 @@ export function Toolbar({
               onClick={requestCanvasClear}
               title="Clear canvas"
             >
-              <ClearIcon />
+              <TrashIcon size={18} />
               <span>Clear</span>
             </button>
           </div>

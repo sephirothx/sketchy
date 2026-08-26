@@ -4,7 +4,7 @@ import asyncio
 import pytest
 from playwright.async_api import async_playwright
 
-from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -15,8 +15,7 @@ async def _create_room(page, name):
     await page.click('button:has-text("Create room")')
     await page.click('button:has-text("Create room")')
     await page.wait_for_selector('[data-testid="waiting-room"]')
-    code_text = await page.inner_text(".room-copy-button")
-    return code_text.split("Code:")[1].strip()
+    return await room_code(page)
 
 
 @pytest.mark.asyncio
@@ -205,7 +204,7 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
                 rounds -= 1
             await host.click('button:has-text("Create room")')
             await host.wait_for_selector('[data-testid="waiting-room"]')
-            code = (await host.inner_text(".room-copy-button")).split("Code:")[1].strip()
+            code = await room_code(host)
 
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "EndGuest")
