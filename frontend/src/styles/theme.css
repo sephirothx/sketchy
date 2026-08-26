@@ -55,6 +55,14 @@
   --warm-ink: #b5541f;
   --warm-edge: #c1521f;
 
+  /* brand mark — the drawn wordmark paints itself from these, so tinting the
+     logo never disturbs body --ink. On paper the lettering is a warm espresso
+     rather than flat black; the ferrule bands read as gaps in the brush
+     handle — a warm mid-grey, so they read as metal bands rather than as
+     white gaps punched through it. Matches --faint. */
+  --brand-wordmark: #3d2b1f;
+  --brand-ferrule: #a29883;
+
   /* semantic */
   --success: #2f9e44;
   --success-soft: #e7f5ea;
@@ -122,6 +130,11 @@
   --warm-soft: rgba(238, 126, 72, 0.15);
   --warm-ink: #fdba74;
   --warm-edge: #9a3412;
+
+  /* The handle inverts to paper-white here, so the bands go light-slate —
+     legible but softer than the --line-strong they used to borrow. */
+  --brand-wordmark: #f8fafc;
+  --brand-ferrule: #94a3b8;
 
   --success: #4ade80;
   --success-soft: rgba(74, 222, 128, 0.13);

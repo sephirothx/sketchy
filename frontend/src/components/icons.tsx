@@ -2,7 +2,16 @@
  * components. All icons are 24×24 stroke drawings on currentColor and are
  * decorative by default (aria-hidden) — interactive elements carry their own
  * accessible names. */
-import type { CSSProperties, ReactNode } from "react";
+import { useId } from "react";
+import type { ReactNode } from "react";
+import {
+  FERRULE_PATHS,
+  LETTERING_GRADIENT,
+  LETTERING_PATH,
+  SWOOSH_PATH,
+  WORDMARK_ASPECT,
+  WORDMARK_VIEWBOX,
+} from "./brandArt";
 
 interface IconProps {
   size?: number;
@@ -166,20 +175,38 @@ export function Squiggle({ width = 96, color = "var(--warm)" }: { width?: number
   );
 }
 
-export function Wordmark({ size = 30 }: { size?: number }) {
-  const style: CSSProperties = {
-    fontFamily: "var(--font-display)",
-    fontWeight: 600,
-    fontSize: size,
-    letterSpacing: "0.01em",
-    color: "var(--ink)",
-    lineHeight: 1,
-  };
+export function Wordmark({ size = 30, decorative = false }: { size?: number; decorative?: boolean }) {
+  /* The lockup this replaced was `size`px of display type over a 1px gap and an
+   * 8px squiggle, so height tracks that box and the header keeps its metrics. */
+  const height = size + 9;
+  const width = Math.round(height * WORDMARK_ASPECT);
+  /* Both call sites can render on one page; the gradient needs a unique id. */
+  const gradientId = `${useId()}-wordmark`;
   return (
-    <span style={{ display: "inline-flex", flexDirection: "column", gap: 1, width: "fit-content" }}>
-      <span style={style}>Sketchy</span>
-      <Squiggle width={Math.round(size * 2.6)} />
-    </span>
+    <svg
+      width={width}
+      height={height}
+      viewBox={WORDMARK_VIEWBOX}
+      /* Labelled, not decorative, by default: AppHeader renders this as the
+       * lobby's <h1>, and an unnamed svg there is an axe `svg-img-alt`
+       * violation (serious) plus an empty heading. */
+      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": "Sketchy" })}
+      style={{ display: "block", color: "var(--brand-wordmark)" }}
+    >
+      <defs>
+        {/* The authored fade from the lettering into the swoosh, retimed onto
+          * theme tokens so it works on paper and on slate. */}
+        <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" {...LETTERING_GRADIENT}>
+          <stop offset="0" stopColor="currentColor" />
+          <stop offset="1" stopColor="var(--warm)" />
+        </linearGradient>
+      </defs>
+      <path d={SWOOSH_PATH} style={{ fill: "var(--warm)" }} />
+      <path d={LETTERING_PATH} fill={`url(#${gradientId})`} />
+      {FERRULE_PATHS.map((d) => (
+        <path key={d} d={d} style={{ fill: "var(--brand-ferrule)" }} />
+      ))}
+    </svg>
   );
 }
 

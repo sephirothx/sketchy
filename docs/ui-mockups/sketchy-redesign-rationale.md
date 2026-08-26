@@ -135,7 +135,8 @@ playful, quiet where the player is reading numbers.
 | --- | --- | --- |
 | Ground | Warm paper `#FAF6EF`, warm ink `#292520`, warm borders | Reads as a drawing surface instead of a SaaS console; neutrals are chosen, not inherited. |
 | Accent | Crayon indigo `#5157D8` (actions) + marker orange `#E8703A` (energy: timers, Start, celebration) | Two accents with distinct jobs — the orange marks *game moments*, so it never competes with routine actions. Continuity with the shipped indigo keeps the change feel evolutionary. |
-| Type | **Fredoka** (display: wordmark, headings, prompts, big numbers) over **Nunito Sans** (UI/body) | A rounded, hand-drawn-adjacent display face gives the game a face; the body face stays neutral and dense enough for scores and tables. Both from Google Fonts with real fallbacks. |
+| Type | **Fredoka** (display: headings, prompts, big numbers) over **Nunito Sans** (UI/body) | A rounded, hand-drawn-adjacent display face gives the game a face; the body face stays neutral and dense enough for scores and tables. Both from Google Fonts with real fallbacks. |
+| Wordmark | The drawn logo — brush script over a marker-orange swoosh, shipped as vector paths | Supersedes the Fredoka-set wordmark this table originally specified (§1.1's "no identity"). Paths are painted with `--ink` and `--warm` rather than baked colours, so one mark serves both themes and no third webfont is loaded. |
 | Icons | One stroke-based inline SVG set | Replaces every emoji (§1.2): consistent cross-platform, recolorable, sized to the grid. |
 | Feedback colors | Green = correct/success, amber = review/warning, red = destructive only | Semantic color is separated from the accents, so green *always* means "guessed/ok" and red is never decoration. |
 | Controls | 44px minimum hit targets, 10–14px radii, one primary per view | Touch-friendly (the toolbar buttons grow from 34px), and the hierarchy problem in §1.3 is solved structurally. |

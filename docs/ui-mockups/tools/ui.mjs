@@ -5,6 +5,15 @@
 // a data-theme attribute on the artboard root. `T.<token>` interpolates as
 // `var(--<token>)`, so every component is theme-aware for free.
 
+import {
+  FERRULE_PATHS,
+  LETTERING_GRADIENT,
+  LETTERING_PATH,
+  SWOOSH_PATH,
+  WORDMARK_ASPECT,
+  WORDMARK_VIEWBOX,
+} from './brandArt.mjs';
+
 export const PALETTES = {
   light: {
     paper: '#FAF6EF',        // warm page background
@@ -30,6 +39,8 @@ export const PALETTES = {
     warmSoft: '#FBEADF',
     warmInk: '#B5541F',
     warmEdge: '#C1521F',
+    brandWordmark: '#3D2B1F',  // logo lettering on paper — warm espresso, not flat black
+    brandFerrule: '#A29883',    // brush bands — warm mid-grey metal, not white gaps
     success: '#2F9E44',
     successSoft: '#E7F5EA',
     successInk: '#1F7A33',
@@ -73,6 +84,8 @@ export const PALETTES = {
     warmSoft: 'rgba(238, 126, 72, 0.15)',
     warmInk: '#FDBA74',
     warmEdge: '#9A3412',
+    brandWordmark: '#F8FAFC',
+    brandFerrule: '#94A3B8',
     success: '#4ADE80',
     successSoft: 'rgba(74, 222, 128, 0.13)',
     successInk: '#86EFAC',
@@ -186,11 +199,22 @@ export const flag = {
 export const squiggle = (w = 96, color = T.warm) =>
   `<svg width="${w}" height="8" viewBox="0 0 ${w} 8" fill="none" aria-hidden="true" style="display: block"><path d="M2 5 C ${w * 0.14} 1, ${w * 0.22} 7, ${w * 0.36} 4 C ${w * 0.5} 1, ${w * 0.62} 7, ${w * 0.76} 4 C ${w * 0.86} 2, ${w * 0.94} 5, ${w - 2} 3" stroke-width="2.5" stroke-linecap="round" style="stroke: ${color}"/></svg>`;
 
-export const wordmark = (size = 30) =>
-  `<span style="display: inline-flex; flex-direction: column; gap: 1px; width: fit-content">
-    <span style="font-family: ${T.display}; font-weight: 600; font-size: ${size}px; letter-spacing: 0.01em; color: ${T.ink}; line-height: 1">Sketchy</span>
-    ${squiggle(Math.round(size * 2.6))}
-  </span>`;
+export const wordmark = (size = 30, id = 'wm') => {
+  /* The authored logo (scripts/brand/sketchy-logo-source.svg), painted with
+   * theme tokens so the artboards theme exactly like the app does. Height
+   * tracks the old type-plus-squiggle box so no artboard reflows. */
+  const height = size + 9;
+  const width = Math.round(height * WORDMARK_ASPECT);
+  const g = LETTERING_GRADIENT;
+  return `<svg width="${width}" height="${height}" viewBox="${WORDMARK_VIEWBOX}" role="img" aria-label="Sketchy" style="display: block; color: ${T.brandWordmark}">
+    <defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${g.x1}" y1="${g.y1}" x2="${g.x2}" y2="${g.y2}">
+      <stop offset="0" stop-color="currentColor"/><stop offset="1" stop-color="${T.warm}"/>
+    </linearGradient></defs>
+    <path d="${SWOOSH_PATH}" style="fill: ${T.warm}"/>
+    <path d="${LETTERING_PATH}" fill="url(#${id})"/>
+    ${FERRULE_PATHS.map((d) => `<path d="${d}" style="fill: ${T.brandFerrule}"/>`).join('')}
+  </svg>`;
+};
 
 export const avatar = (p, size = 28) => {
   const fz = Math.round(size * 0.48);
