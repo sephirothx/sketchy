@@ -30,6 +30,9 @@
 
 .lobby-entry-panel h2,
 .panel > h2 {
+  /* 22px per the Main artboard; the browser default 1.5em read a size too
+     large next to the body copy. Family and weight come from the base rule. */
+  font-size: 22px;
   margin: 0;
 }
 
@@ -111,6 +114,7 @@
 }
 
 .lobby-rooms-heading h2 {
+  font-size: 22px;
   margin: 0;
 }
 
