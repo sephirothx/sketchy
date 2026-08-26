@@ -5,10 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- Kept in sync with the resolved theme by the script below: the theme is
-         user-overridable, so a prefers-color-scheme media attribute here would
-         show dark chrome to someone who forced light. -->
-    <meta name="theme-color" content="#faf6ef" />
+    <!-- Two audiences, one tag. Link crawlers (Discord draws the embed's accent
+         strip from theme-color, and does not run JS) keep this static orange —
+         the same #ee7e48 as the card's swoosh and tagline. Real browsers run
+         the pre-paint script below, which overwrites it with --paper before
+         first paint, so mobile chrome still matches the theme the player chose
+         rather than going orange. -->
+    <meta name="theme-color" content="#ee7e48" />
     <meta name="description" content="Draw, guess and play with friends." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Sketchy" />
