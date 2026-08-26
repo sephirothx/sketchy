@@ -446,8 +446,9 @@ artboards, kept for stability or clarity rather than drift:
 - **Waiting-room settings chips** — chip values reuse the app's established
   copy ("Custom prompts only (2)", "2 custom prompts + curated lists")
   rather than the artboards' shortened variants.
-- **Prompt-stats chart & ops hourly bars** — the operations dashboard keeps
-  its daily sparklines; hourly buckets are not recorded.
+- **Ops chart granularity** — the operations dashboard draws the artboard's
+  bar chart from daily aggregates (metric selectable); hourly buckets are
+  not recorded.
 - **Identity chip stays in the room header** — the artboards drop it, but
   it is the only in-room path to claiming an account and account menus.
 
