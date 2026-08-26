@@ -12,12 +12,14 @@ redesigned mockups that answer it.
   and toggle dark mode:
   <https://claude.ai/code/artifact/992e6b17-17f8-41cf-bdf1-33a05ab91e95>
   (regenerate with `node tools/build-explorer.mjs`).
-- **The as-shipped mockups** they respond to: [`../ui-mockups/`](../ui-mockups/).
 - Both canvases tell the same story (room *Coffee break doodles*, code
   `BQ7F2K`, round 2, Marta drawing *lighthouse*), so every screen can be
   compared side by side. Reviewed against `0e48d50`, 2026-08-25.
 
-This is a proposal, not a record of the app. Nothing here is implemented.
+The redesign has shipped: these artboards are the living reference for the
+interface, kept in sync with the frontend (see §4b for the documented
+deviations). The pre-redesign mockups this review responded to were removed
+from the tree; they live in history at `0e48d50` (`docs/ui-mockups/`).
 
 ---
 
