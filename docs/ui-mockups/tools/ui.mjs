@@ -40,7 +40,7 @@ export const PALETTES = {
     warmInk: '#B5541F',
     warmEdge: '#C1521F',
     brandWordmark: '#3D2B1F',  // logo lettering on paper — warm espresso, not flat black
-    brandFerrule: '#A29883',    // brush bands — warm mid-grey metal, not white gaps
+    brandFerrule: '#75726D',    // brush bands — near-neutral grey, reads as metal
     success: '#2F9E44',
     successSoft: '#E7F5EA',
     successInk: '#1F7A33',

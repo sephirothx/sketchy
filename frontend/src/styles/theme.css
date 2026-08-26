@@ -58,10 +58,11 @@
   /* brand mark — the drawn wordmark paints itself from these, so tinting the
      logo never disturbs body --ink. On paper the lettering is a warm espresso
      rather than flat black; the ferrule bands read as gaps in the brush
-     handle — a warm mid-grey, so they read as metal bands rather than as
-     white gaps punched through it. Matches --faint. */
+     handle — a near-neutral grey, so they read as brush metal. Kept off the
+     warm neutrals on purpose: --faint and --muted are brown enough here to
+     look like part of the handle rather than a band across it. */
   --brand-wordmark: #3d2b1f;
-  --brand-ferrule: #a29883;
+  --brand-ferrule: #75726d;
 
   /* semantic */
   --success: #2f9e44;
