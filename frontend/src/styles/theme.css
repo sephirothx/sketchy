@@ -25,6 +25,11 @@
 
   /* text */
   --ink: #292520;
+  /* Dark popover surface (player vote menu): inverted card in light theme,
+     an elevated slate card in dark - so it cannot flip light when --ink
+     does. Derived colors use color-mix on --menu-ink. */
+  --menu: #292520;
+  --menu-ink: #faf6ef;
   --muted: #6f6759;
   --faint: #a29883;
 
@@ -95,6 +100,8 @@
   --scrim: rgba(2, 6, 23, 0.6);
 
   --ink: #f8fafc;
+  --menu: #1e293b;
+  --menu-ink: #f8fafc;
   --muted: #94a3b8;
   --faint: #64748b;
 

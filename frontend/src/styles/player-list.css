@@ -157,8 +157,8 @@
 }
 
 .player-vote-menu {
-  background: var(--ink);
-  border: 1px solid color-mix(in srgb, var(--paper) 20%, transparent);
+  background: var(--menu);
+  border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
   border-radius: 8px;
   box-shadow: var(--shadow-raised);
   display: flex;
@@ -174,10 +174,10 @@
 
 .player-vote-action {
   align-items: baseline;
-  background: color-mix(in srgb, var(--paper) 6%, transparent);
+  background: color-mix(in srgb, var(--menu-ink) 6%, transparent);
   border: none;
   border-radius: 6px;
-  color: var(--paper);
+  color: var(--menu-ink);
   cursor: pointer;
   display: grid;
   font-size: 0.75rem;
@@ -195,7 +195,7 @@
 }
 
 .player-vote-action-label {
-  color: color-mix(in srgb, var(--paper) 78%, transparent);
+  color: color-mix(in srgb, var(--menu-ink) 78%, transparent);
 }
 
 .player-vote-action-count {
