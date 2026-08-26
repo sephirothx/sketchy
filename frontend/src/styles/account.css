@@ -149,15 +149,6 @@
   cursor: pointer;
 }
 
-/* Keeps "Back to lobby" and the account control on one row. */
-.create-room-top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
 
 /* The identity chip: avatar, name, and a dot when the name is unclaimed. */
 .identity-chip {
@@ -649,10 +640,6 @@
   padding: 24px 16px 48px;
 }
 
-.ops-header .back-link {
-  display: inline-block;
-  margin-bottom: 10px;
-}
 
 .ops-header h1 {
   font-size: 22px;

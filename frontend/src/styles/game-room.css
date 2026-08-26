@@ -614,8 +614,6 @@
 .room-settings-fields .input-number-field,
 .room-settings-fields .m3-switch-label,
 .room-settings-fields > .room-choice-group { grid-column: 1 / -1; }
-.room-settings-fields .checkbox-label { align-items: center; flex-direction: row; grid-column: 1 / -1; }
-.room-settings-fields .checkbox-label input { width: auto; }
 .room-settings-fields details { border-top: 1.5px solid var(--line); grid-column: 1 / -1; padding-top: 18px; }
 .room-settings-fields summary { color: var(--ink); cursor: pointer; font-weight: 800; }
 .room-settings-advanced { display: grid; gap: 14px; margin-top: 14px; }
@@ -1417,16 +1415,6 @@
   opacity: 0.7;
 }
 
-.prompt-hidden {
-  font-size: 1.5rem;
-  letter-spacing: 4px;
-  font-weight: 700;
-  color: var(--muted);
-  background: var(--well);
-  padding: 4px 16px;
-  border-radius: var(--radius-sm);
-  border: 1px dashed var(--line-strong);
-}
 
 .prompt-choices {
   display: flex;

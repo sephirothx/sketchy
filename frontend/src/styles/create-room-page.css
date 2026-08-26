@@ -2,7 +2,6 @@
    tools/pages-entry.mjs). The control recipes here (segmented, steppers,
    chips, switches) are shared with the waiting room's settings editor. */
 .create-room-page { margin: 0 auto; max-width: 780px; padding: 26px 16px 64px; }
-.back-link { background: transparent; border: 0; color: var(--primary); cursor: pointer; font-size: 14px; font-weight: 700; margin-bottom: 16px; padding: 0; }
 
 .create-room-heading-row {
   display: flex;

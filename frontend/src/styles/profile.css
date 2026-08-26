@@ -6,20 +6,7 @@
   padding: 16px;
 }
 
-.profile-top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
 
-/* The back link carries its own bottom margin for the create-room layout,
-   which would double up against the bar's own spacing here. */
-.profile-top-bar .back-link {
-  margin-bottom: 0;
-}
 
 .profile-identity {
   display: flex;
@@ -344,11 +331,6 @@
   color: var(--ink);
 }
 
-.prompt-list-stats-links {
-  color: var(--muted);
-  font-size: 13px;
-  margin: 8px 0 0;
-}
 
 /* The info link riding along with a prompt-list chip. */
 .prompt-list-chip-group {
