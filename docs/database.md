@@ -490,7 +490,9 @@ applying automatically; revocation preserves the historic record and its reason.
 
 `source_report_id` is what lets the suspension notice show the reported player their own
 words as they were when the report was made. **A ban naming a report about somebody else
-is refused**, so a suspension cannot be used to show one player another's messages.
+is refused**, so a suspension cannot be used to show one player another's messages. A ban
+issued from a report also **resolves that report in the same transaction**, and a report
+already decided refuses the ban - one complaint, one consequence.
 
 ### `user_warnings`
 `id` · `user_id` (`SET NULL`) · `issued_by_user_id` (`SET NULL`) · `reason` ·
@@ -503,7 +505,9 @@ returns the oldest unacknowledged warning together with the pinned messages of i
 source report — the same own-words rule as a suspension, and a warning naming a report
 about somebody else is refused for the same reason. Acknowledging sets
 `acknowledged_at`, which is what stops it being shown again and records that the notice
-actually landed. Issuing one writes a `warning.issued` audit event.
+actually landed. Issuing one writes a `warning.issued` audit event. A warning issued
+from a report **resolves that report in the same transaction**, and a report already
+decided refuses the warning - which is also what stops a retry from warning twice.
 
 ### `user_blocks`
 `id` · `blocker_user_id` · `blocked_user_id` (both CASCADE) · `created_at`, with

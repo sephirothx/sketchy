@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
-import { splitMaskedPrompt } from "../lib/maskedPrompt";
+import { maskedWords, splitMaskedPrompt } from "../lib/maskedPrompt";
 import type { AckResponse, HintMode } from "../types";
 
 interface PromptDisplayProps {
@@ -19,12 +19,13 @@ interface PromptDisplayProps {
   maxHintSpend?: number;
 }
 
-// The server sends tightly spaced blanks per word, followed by each word's
-// letter count (in order) at the very end; digits only appear in that count
-// list, so splitMaskedPrompt separates the two. The redesign renders each
-// word as a run of letter tiles with the word's letter count as a
-// superscript numeral beside it (a multi-word prompt like "bow and arrow"
-// reads ³ ³ ⁵). Purchasable slots keep the `.hint-blank` button contract.
+// The server sends tightly spaced blanks per word, followed by the letter
+// counts at the very end - one count per ALPHANUMERIC RUN, with punctuation
+// as a boundary ("spider-man" reports "6 3"). The redesign renders each run
+// as letter tiles with its count as a superscript numeral beside it (a
+// multi-word prompt like "bow and arrow" reads ³ ³ ⁵, and "band-aid" reads
+// ⁴-³). Purchasable slots keep the `.hint-blank` button contract, numbered
+// across the whole prompt in run order to match the server's slot indices.
 function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
   const { blanks, counts } = splitMaskedPrompt(masked);
 
@@ -32,52 +33,61 @@ function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean;
     return <span className="prompt-blanks-text">{blanks}</span>;
   }
 
-  const words = blanks.trim().split(/\s+/);
+  const words = maskedWords(blanks);
+  let run = -1;
   let slot = -1;
 
   return (
     <span className="masked-words" aria-label={`Masked prompt, ${counts.join(" and ")} letters`}>
-      {words.map((word, wordIndex) => (
+      {words.map((segments, wordIndex) => (
         <span key={wordIndex} className="masked-word">
-          <span className="masked-tiles">
-            {[...word].map((ch, charIndex) => {
-              const isSlotChar = ch === "_" || /[a-zA-Z0-9]/.test(ch);
-              if (isSlotChar) slot += 1;
-              if (ch === "_") {
-                if (buyableProps) {
-                  const currentSlot = slot;
-                  return (
-                    <button
-                      key={charIndex}
-                      type="button"
-                      className="masked-tile hint-blank"
-                      disabled={!buyableProps.canAfford || buyableProps.busy}
-                      title={`Buy this letter for ${buyableProps.cost} points`}
-                      onClick={() => buyableProps.onBuy(currentSlot)}
-                    />
-                  );
-                }
-                return <span key={charIndex} className="masked-tile" />;
-              }
-              if (!isSlotChar) {
-                return (
-                  <span key={charIndex} className="masked-tile-glyph">
-                    {ch}
-                  </span>
-                );
-              }
+          {segments.map((segment, segmentIndex) => {
+            if (segment.kind === "glyph") {
               return (
-                <span key={charIndex} className="masked-tile is-revealed">
-                  {ch}
+                <span key={segmentIndex} className="masked-tile-glyph">
+                  {segment.text}
                 </span>
               );
-            })}
-          </span>
-          {counts[wordIndex] && (
-            <sup className="masked-word-count" aria-label={`${counts[wordIndex]} letters`}>
-              {counts[wordIndex]}
-            </sup>
-          )}
+            }
+            run += 1;
+            const count = counts[run];
+            return (
+              <span key={segmentIndex} className="masked-run">
+                <span className="masked-tiles">
+                  {segment.chars.map((ch, charIndex) => {
+                    slot += 1;
+                    if (ch === "_") {
+                      if (buyableProps) {
+                        const currentSlot = slot;
+                        return (
+                          <button
+                            key={charIndex}
+                            type="button"
+                            className="masked-tile hint-blank"
+                            disabled={!buyableProps.canAfford || buyableProps.busy}
+                            aria-label={`Buy this letter for ${buyableProps.cost} points`}
+                            title={`Buy this letter for ${buyableProps.cost} points`}
+                            onClick={() => buyableProps.onBuy(currentSlot)}
+                          />
+                        );
+                      }
+                      return <span key={charIndex} className="masked-tile" />;
+                    }
+                    return (
+                      <span key={charIndex} className="masked-tile is-revealed">
+                        {ch}
+                      </span>
+                    );
+                  })}
+                </span>
+                {count && (
+                  <sup className="masked-word-count" aria-label={`${count} letters`}>
+                    {count}
+                  </sup>
+                )}
+              </span>
+            );
+          })}
         </span>
       ))}
     </span>

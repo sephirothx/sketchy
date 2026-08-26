@@ -482,22 +482,16 @@ export function ModerationPage() {
                           onClick={() =>
                             act(
                               playerCase.id,
-                              async () => {
-                                await createUserWarning({
+                              () =>
+                                // One request: the server resolves the report
+                                // in the same transaction as the warning.
+                                createUserWarning({
                                   userId: playerCase.reportedUserId as string,
                                   reason: note[playerCase.id],
                                   // So the warned player can be shown what
                                   // the complaint was actually about.
                                   reportId: playerCase.id,
-                                });
-                                // A warning decides the report, the same way
-                                // a suspension does.
-                                await reviewModerationReport(
-                                  playerCase.id,
-                                  "resolved",
-                                  note[playerCase.id],
-                                );
-                              },
+                                }),
                               "Warned, and the report resolved. They will see it the next time they open Sketchy.",
                             )
                           }
@@ -511,11 +505,13 @@ export function ModerationPage() {
                           onClick={() =>
                             act(
                               playerCase.id,
-                              async () => {
+                              () => {
                                 const expiresAt = suspensionExpiry(
                                   duration[playerCase.id] ?? "24h",
                                 );
-                                await createUserBan({
+                                // One request: the server resolves the report
+                                // in the same transaction as the suspension.
+                                return createUserBan({
                                   userId: playerCase.reportedUserId as string,
                                   reason: note[playerCase.id],
                                   // So the suspended player can be shown what
@@ -523,14 +519,6 @@ export function ModerationPage() {
                                   reportId: playerCase.id,
                                   ...(expiresAt ? { expiresAt } : {}),
                                 });
-                                // Acting on a report decides it. Leaving it
-                                // pending puts it back in front of the next
-                                // moderator, to look at something already done.
-                                await reviewModerationReport(
-                                  playerCase.id,
-                                  "resolved",
-                                  note[playerCase.id],
-                                );
                               },
                               "Suspended, and the report resolved. They are signed out everywhere, and told why if they have a confirmed address.",
                             )

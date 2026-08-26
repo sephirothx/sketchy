@@ -353,7 +353,7 @@ page; Moderation cross-links back to operations from its action row.
   **account-context card** (registered, age, prior reports, active
   suspension), the required resolution note ("kept in the append-only audit
   ledger; a warning or suspension from here also resolves this report",
-  R-BAN-06), and a clean action row — Dismiss, **Warn player** (the R-MOD-11
+  R-BAN-06), and a clean action row — Dismiss, **Warn player** (the R-MOD-12
   formal warning), **Suspend…** whose ellipsis opens the duration step
   (R-BAN-05) instead of a permanently-visible dropdown.
 

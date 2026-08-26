@@ -969,3 +969,75 @@ async def test_the_queue_shows_the_reported_players_standing(env):
     assert player["priorReports"] == 1
     assert player["priorWarnings"] == 1
     assert player["activeSuspension"] is False
+
+
+async def test_a_consequence_decides_its_report_in_one_transaction(env):
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "AtomicReporter")
+    target = await register(target_http, "AtomicTarget")
+    moderator = await register(moderator_http, "AtomicMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "One incident, one decision.",
+        },
+    )
+    report_id = submitted.json()["id"]
+
+    issued = await moderator_http.post(
+        "/api/moderation/warnings",
+        json={
+            "userId": target["id"],
+            "reason": "Formal warning.",
+            "reportId": report_id,
+        },
+    )
+    assert issued.status_code == 201
+
+    # The warning decided the report in the same transaction...
+    listing = await moderator_http.get(
+        "/api/moderation/reports", params={"status": "resolved"}
+    )
+    resolved = listing.json()["reports"][0]
+    assert resolved["id"] == report_id
+    assert resolved["resolutionNote"] == "Formal warning."
+    assert resolved["reviewedByUserId"] == moderator["id"]
+
+    # ...so a retry (or a racing moderator) is refused rather than issuing a
+    # second consequence for the same complaint.
+    retried = await moderator_http.post(
+        "/api/moderation/warnings",
+        json={
+            "userId": target["id"],
+            "reason": "Formal warning.",
+            "reportId": report_id,
+        },
+    )
+    assert retried.status_code == 409
+    async with factory() as session:
+        from app.db.models import UserWarning
+
+        count = await session.scalar(
+            select(func.count(UserWarning.id)).where(
+                UserWarning.user_id == UUID(target["id"])
+            )
+        )
+        assert count == 1
+
+    # Suspending from an already-decided report is refused the same way.
+    banned = await moderator_http.post(
+        "/api/moderation/bans",
+        json={
+            "userId": target["id"],
+            "reason": "Escalation attempt.",
+            "reportId": report_id,
+        },
+    )
+    assert banned.status_code == 409

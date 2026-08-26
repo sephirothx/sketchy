@@ -236,7 +236,17 @@ export const useGameStore = create<GameStore>((set) => ({
     set((s) => ({
       turnCorrectGuesses: {
         ...s.turnCorrectGuesses,
-        [playerId]: Math.max(0, Math.round((Date.now() - s.phaseStartedAt) / 1000)),
+        // phaseStartedAt is rebased by sync_game, so seconds since it only
+        // cover the time since the last sync; the difference between the
+        // phase's full length and what remained at that sync is the part
+        // that had already elapsed.
+        [playerId]: Math.max(
+          0,
+          Math.round(
+            (Date.now() - s.phaseStartedAt) / 1000 +
+              Math.max(0, s.phaseDurationSeconds - s.phaseSeconds),
+          ),
+        ),
       },
     })),
   startChoosing: ({ drawerId, roundNumber, totalRounds, seconds, isSync }) =>

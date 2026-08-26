@@ -1297,6 +1297,14 @@
   gap: 4px;
 }
 
+/* One alphanumeric run and its letter count, kept together so a punctuated
+   word like band-aid reads ⁴-³. */
+.masked-run {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
 .masked-tiles {
   display: inline-flex;
   flex-wrap: wrap;

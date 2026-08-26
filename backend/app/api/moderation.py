@@ -959,6 +959,58 @@ def create_moderation_router(
                 await session.refresh(report)
             return _prompt_content_report_payload(report)
 
+
+    async def _attach_and_resolve_report(
+        session: AsyncSession,
+        *,
+        report_id: UUID,
+        target_id: UUID,
+        reviewer: User,
+        note: str,
+        now: datetime,
+        request_id,
+        ip_hash,
+    ) -> PlayerReport:
+        """Lock the source report and decide it in the caller's transaction.
+
+        A warning or suspension issued from a report is one decision, not
+        two requests: if the consequence lands, the report is resolved with
+        it, and a report another moderator already decided refuses the whole
+        action - which is also what stops a retry from issuing the same
+        consequence twice.
+        """
+        report = await session.scalar(
+            select(PlayerReport)
+            .where(PlayerReport.id == report_id)
+            .with_for_update()
+        )
+        if report is None or report.reported_user_id != target_id:
+            raise HTTPException(
+                status_code=422, detail="That report is not about this player."
+            )
+        if report.status != ReportStatus.PENDING.value:
+            raise HTTPException(
+                status_code=409, detail="This report was already reviewed."
+            )
+        report.status = ReportStatus.RESOLVED.value
+        report.reviewed_by_user_id = reviewer.id
+        report.resolution_note = note
+        report.reviewed_at = now
+        session.add(
+            AuditEvent(
+                id=generate_uuid(),
+                event_type="report.resolved",
+                actor_user_id=reviewer.id,
+                target_user_id=report.reported_user_id,
+                target_type=AuditTargetType.USER.value,
+                target_id=str(report.reported_user_id),
+                request_id=request_id,
+                ip_hash=ip_hash,
+                details={"report_id": str(report.id)},
+            )
+        )
+        return report
+
     @router.post("/moderation/bans", status_code=201)
     async def create_ban(body: BanBody, request: Request):
         request_id, ip_hash = await audit_coordinates(request, session_factory)
@@ -996,15 +1048,16 @@ def create_moderation_router(
                     )
                 source_report = None
                 if body.report_id is not None:
-                    source_report = await session.get(PlayerReport, body.report_id)
-                    if (
-                        source_report is None
-                        or source_report.reported_user_id != target.id
-                    ):
-                        raise HTTPException(
-                            status_code=422,
-                            detail="That report is not about this player.",
-                        )
+                    source_report = await _attach_and_resolve_report(
+                        session,
+                        report_id=body.report_id,
+                        target_id=target.id,
+                        reviewer=reviewer,
+                        note=body.reason,
+                        now=now,
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                    )
                 ban = UserBan(
                     id=generate_uuid(),
                     user_id=target.id,
@@ -1182,15 +1235,16 @@ def create_moderation_router(
                     )
                 source_report = None
                 if body.report_id is not None:
-                    source_report = await session.get(PlayerReport, body.report_id)
-                    if (
-                        source_report is None
-                        or source_report.reported_user_id != target.id
-                    ):
-                        raise HTTPException(
-                            status_code=422,
-                            detail="That report is not about this player.",
-                        )
+                    source_report = await _attach_and_resolve_report(
+                        session,
+                        report_id=body.report_id,
+                        target_id=target.id,
+                        reviewer=reviewer,
+                        note=body.reason,
+                        now=datetime.now(timezone.utc),
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                    )
                 warning = UserWarning(
                     id=generate_uuid(),
                     user_id=target.id,

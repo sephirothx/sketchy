@@ -299,8 +299,8 @@ claim that an arbitrary host will sustain it.
 | **R-MOD-08** | Submitted context MUST be preserved as **reporter-supplied evidence**, and MUST NOT be treated as a server-verified fact merely because it was stored. |
 | **R-MOD-09** | Player-authored prompt content MUST have a separate, target-specific report flow against a list or an exact prompt version. Official bundled content, inaccessible content, and self-reports MUST be rejected. |
 | **R-MOD-10** | Prompt-content moderation MUST be **post-moderation**: a report alone never changes availability. Resolution explicitly chooses Active or Hidden; a dismissal MUST NOT mutate content. |
-| **R-MOD-11** | A moderator MUST have a consequence between dismissal and **Suspension**: a formal **Warning** shown to the reported player once, in their own reported words, restricting nothing. Its acknowledgement MUST be recorded, and it follows the same role boundaries and same-report rule as a suspension. |
 | **R-MOD-11** | Hidden prompts MUST be filtered from future selection. Owners see moderation state in *My prompt lists*, and editing MUST NOT silently override a moderator decision. |
+| **R-MOD-12** | A moderator MUST have a consequence between dismissal and **Suspension**: a formal **Warning** shown to the reported player once, in their own reported words, restricting nothing. Its acknowledgement MUST be recorded, and it follows the same role boundaries and same-report rule as a suspension. |
 
 ### Suspensions
 
