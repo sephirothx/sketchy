@@ -1317,9 +1317,13 @@
   font-weight: 600;
   font-size: clamp(14px, 2.1vw, 18px);
   line-height: 1;
-  /* Fredoka's em box sits low; centering it leaves lowercase below the
-     optical middle, so lift the line box slightly. */
-  padding-bottom: 0.22em;
+  /* Letter-tile convention (Wordle, Scrabble): show glyphs in uppercase so
+     every tile carries the same cap-height band - no per-letter ascender or
+     descender asymmetry to fight. No vertical nudge: Fredoka 600's line
+     metrics (ascent 0.97em, descent 0.24em, cap height 0.70em) leave the
+     centered line box's cap band within half a pixel of the tile's middle
+     in both Chromium and Firefox (measured across A-Z and digits). */
+  text-transform: uppercase;
   color: var(--ink);
 }
 
@@ -1329,12 +1333,15 @@
   color: var(--primary-ink);
 }
 
+/* Punctuation between tiles (hyphens, apostrophes): match the tiles' type
+   scale so the row reads as one word. */
 .masked-tile-glyph {
   align-self: center;
   color: var(--muted);
   font-family: var(--font-display);
   font-weight: 600;
-  padding-bottom: 0.22em;
+  font-size: clamp(14px, 2.1vw, 18px);
+  line-height: 1;
 }
 
 .masked-word-count {

@@ -257,6 +257,8 @@ drawer's highest-pressure moment. The redesign gives it one:
 ### Guessing — guesser view (`Guessing`)
 
 - **Letter tiles** replace underscores: countable boxes, revealed letters
+  shown uppercase (the letter-tile convention — one cap-height band centers
+  identically in every tile, with no ascender/descender asymmetry) and
   highlighted, each word's letter count kept as a superscript numeral beside
   its tile group (a multi-word prompt reads ³ ³ ⁵), and a visible hint status
   ("Next free letter in 9s" for this room's timed-hints mode). Purchase and
