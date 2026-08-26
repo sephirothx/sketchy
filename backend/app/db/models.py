@@ -1162,6 +1162,52 @@ class UserBan(Base):
     revoke_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
+class UserWarning(Base):
+    """A moderator's formal warning: shown to the player once, then kept.
+
+    The step between dismissing a report and suspending the account. It does
+    not restrict anything - the player is told what was reported and that a
+    moderator looked, and the acknowledgement records that the message
+    actually reached them.
+    """
+
+    __tablename__ = "user_warnings"
+    __table_args__ = (
+        Index("ix_user_warnings_user_pending", "user_id", "acknowledged_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    issued_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The report this warning was decided from. It is what lets the warned
+    # player be shown the messages the complaint was about; SET NULL because
+    # the warning outlives the report if the report is ever removed.
+    source_report_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("player_reports.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
+
+
 class UserBlock(Base):
     """Directional player block used to mute ordinary social interaction."""
 

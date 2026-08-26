@@ -6,6 +6,7 @@ import { SectionLabel } from "../components/ui/Card";
 import { ApiError } from "../lib/api";
 import {
   createUserBan,
+  createUserWarning,
   listModerationReports,
   listPromptContentReports,
   listUserBans,
@@ -224,8 +225,8 @@ export function ModerationPage() {
         }
       />
       <span className="mod-note-hint">
-        Kept in the append-only audit ledger. A suspension from here also
-        resolves this report.
+        Kept in the append-only audit ledger. A warning or suspension from
+        here also resolves this report.
       </span>
     </label>
   );
@@ -388,27 +389,61 @@ export function ModerationPage() {
                     >
                       Dismiss
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      disabled={busy === playerCase.id}
-                      onClick={() =>
-                        act(
-                          playerCase.id,
-                          () =>
-                            reviewModerationReport(
-                              playerCase.id,
-                              "resolved",
-                              note[playerCase.id],
-                            ),
-                          "Resolved.",
-                        )
-                      }
-                    >
-                      Resolve
-                    </button>
+                    {/* Warning and suspending both need an account to act on;
+                        a report about an accountless seat can only be closed,
+                        so a plain Resolve stands in for those. */}
+                    {!playerCase.reportedUserId && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busy === playerCase.id}
+                        onClick={() =>
+                          act(
+                            playerCase.id,
+                            () =>
+                              reviewModerationReport(
+                                playerCase.id,
+                                "resolved",
+                                note[playerCase.id],
+                              ),
+                            "Resolved.",
+                          )
+                        }
+                      >
+                        Resolve
+                      </button>
+                    )}
                     {playerCase.reportedUserId && (
                       <>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={busy === playerCase.id}
+                          onClick={() =>
+                            act(
+                              playerCase.id,
+                              async () => {
+                                await createUserWarning({
+                                  userId: playerCase.reportedUserId as string,
+                                  reason: note[playerCase.id],
+                                  // So the warned player can be shown what
+                                  // the complaint was actually about.
+                                  reportId: playerCase.id,
+                                });
+                                // A warning decides the report, the same way
+                                // a suspension does.
+                                await reviewModerationReport(
+                                  playerCase.id,
+                                  "resolved",
+                                  note[playerCase.id],
+                                );
+                              },
+                              "Warned, and the report resolved. They will see it the next time they open Sketchy.",
+                            )
+                          }
+                        >
+                          Warn player
+                        </button>
                         <button
                           type="button"
                           className="mod-danger-button"

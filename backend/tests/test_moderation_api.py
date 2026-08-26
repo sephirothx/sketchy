@@ -779,3 +779,133 @@ async def test_a_ban_refuses_a_report_about_somebody_else(env):
     )
 
     assert refused.status_code == 422
+
+
+async def test_a_warning_reaches_the_player_once_and_its_receipt_is_recorded(env):
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "WarnReporter")
+    target = await register(target_http, "WarnTarget")
+    moderator = await register(moderator_http, "WarnModerator")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Kept it up after being asked to stop.",
+        },
+    )
+    report_id = submitted.json()["id"]
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                PlayerReportMessageEvidence(
+                    report_id=UUID(report_id),
+                    position=0,
+                    source_message_snapshot_id=generate_uuid(),
+                    sender_user_id=UUID(target["id"]),
+                    sender_display_name_snapshot="WarnTarget",
+                    sender_is_anonymous_snapshot=False,
+                    message_kind="chat",
+                    audience="room",
+                    text_snapshot="nobody wants you in this room",
+                    message_created_at=datetime.now(timezone.utc),
+                )
+            )
+
+    issued = await moderator_http.post(
+        "/api/moderation/warnings",
+        json={
+            "userId": target["id"],
+            "reason": "Harassment in room chat - next time is a suspension.",
+            "reportId": report_id,
+        },
+    )
+    assert issued.status_code == 201
+    warning_id = issued.json()["id"]
+
+    # The warned player sees their own words behind the reason, exactly once.
+    pending = await target_http.get("/api/warnings/pending")
+    assert pending.status_code == 200
+    body = pending.json()["warning"]
+    assert body["id"] == warning_id
+    assert body["reason"].startswith("Harassment in room chat")
+    assert body["messages"] == [
+        {
+            "text": "nobody wants you in this room",
+            "at": body["messages"][0]["at"],
+        }
+    ]
+
+    # Nobody else can see it or acknowledge it away.
+    assert (await reporter_http.get("/api/warnings/pending")).json()["warning"] is None
+    assert (
+        await reporter_http.post(f"/api/warnings/{warning_id}/acknowledge")
+    ).status_code == 404
+
+    assert (
+        await target_http.post(f"/api/warnings/{warning_id}/acknowledge")
+    ).status_code == 200
+    assert (await target_http.get("/api/warnings/pending")).json()["warning"] is None
+
+    async with factory() as session:
+        events = (
+            await session.scalars(
+                select(AuditEvent.event_type).order_by(AuditEvent.created_at)
+            )
+        ).all()
+        assert "warning.issued" in events
+
+
+async def test_warning_role_boundaries_match_suspensions(env):
+    new_client, factory, _ = env
+    target_http = new_client()
+    moderator_http = new_client()
+    admin_http = new_client()
+    other_http = new_client()
+    target = await register(target_http, "BoundaryTarget")
+    moderator = await register(moderator_http, "BoundaryMod")
+    admin = await register(admin_http, "BoundaryAdmin")
+    other = await register(other_http, "BoundaryOtherMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await set_role(factory, admin["id"], UserRole.ADMIN)
+    await set_role(factory, other["id"], UserRole.MODERATOR)
+
+    async def warn(client, user_id, reason="A warning."):
+        return await client.post(
+            "/api/moderation/warnings", json={"userId": user_id, "reason": reason}
+        )
+
+    # An ordinary player is refused outright.
+    assert (await warn(target_http, moderator["id"])).status_code == 403
+    # Nobody warns an administrator; a moderator cannot warn a moderator.
+    assert (await warn(moderator_http, admin["id"])).status_code == 403
+    assert (await warn(moderator_http, other["id"])).status_code == 403
+    # An admin can warn a moderator, and a moderator an ordinary player.
+    assert (await warn(admin_http, other["id"])).status_code == 201
+    assert (await warn(moderator_http, moderator["id"])).status_code == 422
+    assert (await warn(moderator_http, target["id"])).status_code == 201
+
+    # A report about somebody else cannot be attached.
+    submitted = await target_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": moderator["id"],
+            "reason": "harassment",
+            "details": "Unrelated report used as a link target.",
+        },
+    )
+    assert (
+        await admin_http.post(
+            "/api/moderation/warnings",
+            json={
+                "userId": target["id"],
+                "reason": "Mismatched report.",
+                "reportId": submitted.json()["id"],
+            },
+        )
+    ).status_code == 422

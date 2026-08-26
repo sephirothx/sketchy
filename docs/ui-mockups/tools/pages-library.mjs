@@ -467,14 +467,14 @@ export const ModerationPage = `
 
       <label style="display: grid; gap: 6px; font-size: 13.5px; font-weight: 800; color: ${T.ink}">Resolution note
         <textarea placeholder="Why, in one line — required to decide" style="background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; font-family: ${T.body}; font-size: 13.5px; padding: 10px 12px; height: 72px; resize: vertical; width: 100%; color: ${T.ink}"></textarea>
-        <span style="font-size: 12px; color: ${T.faint}; font-weight: 700">Kept in the append-only audit ledger. A suspension from here also resolves this report.</span>
+        <span style="font-size: 12px; color: ${T.faint}; font-weight: 700">Kept in the append-only audit ledger. A warning or suspension from here also resolves this report.</span>
       </label>
 
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
         ${btn.ghost('Back to operations', { iconL: icon.back(14) })}
         <div style="display: flex; align-items: center; gap: 8px">
           ${btn.ghost('Dismiss')}
-          ${btn.secondary('Resolve')}
+          ${btn.secondary('Warn player')}
           <button type="button" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.danger}; border-radius: ${T.radiusSm}; color: ${T.danger}; font-family: ${T.body}; font-size: 14px; font-weight: 800; padding: 10px 16px; min-height: 44px">Suspend…</button>
         </div>
       </div>

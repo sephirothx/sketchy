@@ -679,6 +679,9 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | `PATCH` | `/api/moderation/prompt-content-reports/{report_id}` | moderator+ | A resolution chooses Active or Hidden; a dismissal cannot mutate content |
 | `GET`/`POST` | `/api/moderation/bans` | moderator+ | Moderators cannot suspend peers; administrators cannot be targeted |
 | `POST` | `/api/moderation/bans/{ban_id}/revoke` | moderator+ | Preserves the historic record and reason |
+| `POST` | `/api/moderation/warnings` | moderator+ | Formal warning; same role boundaries as a suspension, restricts nothing |
+| `GET` | `/api/warnings/pending` | any signed-in | The caller's own oldest unacknowledged warning, with the reported messages behind it |
+| `POST` | `/api/warnings/{warning_id}/acknowledge` | any signed-in | Own warnings only (`404` otherwise); records that the notice landed |
 
 ### Operations — [`backend/app/api/operations.py`](../backend/app/api/operations.py)
 

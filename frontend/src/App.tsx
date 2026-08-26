@@ -18,6 +18,7 @@ import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
 import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { SuspensionNotice } from "./components/SuspensionNotice";
+import { WarningNotice } from "./components/WarningNotice";
 import { XIcon } from "./components/icons";
 import { useAuthStore } from "./store/authStore";
 import { socket } from "./lib/socket";
@@ -109,6 +110,7 @@ function App() {
       <ConnectionStatusBanner />
       <EmailRecoveryReminder />
       <SuspensionNotice />
+      <WarningNotice />
       <BrowserRouter>
         <ScrollToTop />
         <Routes>
