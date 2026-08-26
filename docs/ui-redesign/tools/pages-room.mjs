@@ -208,7 +208,7 @@ export const DrawingPage = roomPage(roomHeader({ inGame: true, status: headerSta
 // ----------------------------------------------------------------- Guessing
 // Viewed from Yuki's seat, moments after her near miss.
 const tile = (ch, revealed) => revealed
-  ? `<span style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 34px; border-radius: 7px; background: ${T.primarySoft}; border: 1.5px solid ${T.primary}; font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.primaryInk}">${ch}</span>`
+  ? `<span style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 34px; padding-bottom: 0.22em; box-sizing: border-box; border-radius: 7px; background: ${T.primarySoft}; border: 1.5px solid ${T.primary}; font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.primaryInk}">${ch}</span>`
   : `<span style="display: inline-flex; width: 26px; height: 34px; border-radius: 7px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}"></span>`;
 
 // One group per word, each with its letter count as a superscript numeral

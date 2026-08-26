@@ -220,6 +220,7 @@ export function useGameSocketListeners() {
           roundNumber: payload.roundNumber,
           totalRounds: payload.totalRounds,
           seconds: payload.remainingSeconds,
+          isSync: true,
         });
       } else if (payload.phase === "drawing") {
         store.getState().startDrawing({
@@ -228,6 +229,7 @@ export function useGameSocketListeners() {
           roundNumber: payload.roundNumber,
           totalRounds: payload.totalRounds,
           seconds: payload.remainingSeconds,
+          isSync: true,
           hintCost: payload.hintCost,
           letterPrices: payload.letterPrices,
           hintSpend: payload.hintSpend,

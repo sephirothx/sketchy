@@ -170,6 +170,7 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const totalRounds = useGameStore((state) => state.totalRounds);
   const phaseSeconds = useGameStore((state) => state.phaseSeconds);
   const phaseStartedAt = useGameStore((state) => state.phaseStartedAt);
+  const phaseDurationSeconds = useGameStore((state) => state.phaseDurationSeconds);
   const lastTurnResult = useGameStore((state) => state.lastTurnResult);
   const spectatorsSeePrompt = useGameStore((state) => state.spectatorsSeePrompt);
   const me = useGameStore(selectMe);
@@ -234,7 +235,12 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
             Round {roundNumber} of {totalRounds}
           </span>
           {phase !== "turn_results" && (
-            <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} variant="text" />
+            <Timer
+              totalSeconds={phaseSeconds}
+              startedAt={phaseStartedAt}
+              durationSeconds={phaseDurationSeconds}
+              variant="text"
+            />
           )}
         </div>
       )}
@@ -243,7 +249,13 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           visible timer keeps the tick sound and announcements. */}
       {isMobile && phase === "drawing" && (
         <div className="guess-timer-bar">
-          <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} variant="bar" silent />
+          <Timer
+            totalSeconds={phaseSeconds}
+            startedAt={phaseStartedAt}
+            durationSeconds={phaseDurationSeconds}
+            variant="bar"
+            silent
+          />
         </div>
       )}
       <PromptDisplay

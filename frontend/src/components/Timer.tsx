@@ -5,6 +5,10 @@ import { TimerRing } from "./icons";
 interface TimerProps {
   totalSeconds: number;
   startedAt: number;
+  /** The phase's full length for ring/bar fractions. sync_game rebases
+      totalSeconds to the remaining time, so without this a reconnect shows a
+      full ring over a correct countdown. */
+  durationSeconds?: number;
   /** Ring for the header, compact text for tight chrome, or the depleting
       bar mobile shows while guessing. */
   variant?: "ring" | "text" | "bar";
@@ -19,7 +23,7 @@ function timerColor(remaining: number, totalSeconds: number): string {
   return "var(--success)";
 }
 
-export function Timer({ totalSeconds, startedAt, variant = "ring", silent = false }: TimerProps) {
+export function Timer({ totalSeconds, startedAt, durationSeconds, variant = "ring", silent = false }: TimerProps) {
   const [remaining, setRemaining] = useState(totalSeconds);
   const [announcement, setAnnouncement] = useState("");
   const prevRemainingRef = useRef<number>(totalSeconds);
@@ -50,9 +54,10 @@ export function Timer({ totalSeconds, startedAt, variant = "ring", silent = fals
 
   if (totalSeconds <= 0) return null;
 
+  const duration = durationSeconds && durationSeconds > 0 ? durationSeconds : totalSeconds;
   const urgent = remaining <= 10;
-  const color = timerColor(remaining, totalSeconds);
-  const fraction = totalSeconds > 0 ? remaining / totalSeconds : 0;
+  const color = timerColor(remaining, duration);
+  const fraction = duration > 0 ? remaining / duration : 0;
 
   return (
     <div className={`timer${urgent ? " urgent" : ""}${variant === "bar" ? " timer-bar" : ""}`}>

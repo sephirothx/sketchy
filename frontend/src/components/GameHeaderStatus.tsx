@@ -17,6 +17,7 @@ export function GameHeaderStatus() {
   const totalRounds = useGameStore((s) => s.totalRounds);
   const phaseSeconds = useGameStore((s) => s.phaseSeconds);
   const phaseStartedAt = useGameStore((s) => s.phaseStartedAt);
+  const phaseDurationSeconds = useGameStore((s) => s.phaseDurationSeconds);
 
   if (isMobile || roomState !== "playing" || phase === "idle" || phase === "game_end") {
     return null;
@@ -26,7 +27,11 @@ export function GameHeaderStatus() {
     <div className="game-header-status">
       <Chip kind="primary">Round {roundNumber} of {totalRounds}</Chip>
       {phase !== "turn_results" && (
-        <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
+        <Timer
+          totalSeconds={phaseSeconds}
+          startedAt={phaseStartedAt}
+          durationSeconds={phaseDurationSeconds}
+        />
       )}
     </div>
   );
