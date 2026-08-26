@@ -82,6 +82,14 @@ export function applyThemeToDocument(theme: AppTheme) {
   const resolved = resolveTheme(theme);
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.colorScheme = resolved;
+  /* Mobile browser chrome follows the theme the player actually chose, not
+     their OS. Read --paper back rather than repeating the hex, so this cannot
+     drift from theme.css. index.html does the same before first paint. */
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    const paper = getComputedStyle(document.documentElement).getPropertyValue("--paper").trim();
+    if (paper) meta.setAttribute("content", paper);
+  }
 }
 
 function loadStoredKeyBindings(): KeyBindings {

@@ -1,10 +1,10 @@
 <svg
-   width="468" height="468" viewBox="-32.30 -48.36 468.28 468.28"
+   width="468" height="468" viewBox="-40.37 -56.43 484.43 484.43"
    version="1.1"
    id="svg1"
    xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg"><style>
+   xmlns:svg="http://www.w3.org/2000/svg"><rect x="-40.37" y="-56.43" width="484.43" height="484.43" fill="#0f172a"/><style>
     .letter{fill:url(#linearGradient1)}
     .swoosh{fill:#ff7f2a}
     .handle{fill:#d29b6a}

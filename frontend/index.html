@@ -3,6 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Two audiences, one tag. Link crawlers (Discord draws the embed's accent
+         strip from theme-color, and does not run JS) keep this static orange —
+         the same #ee7e48 as the card's swoosh and tagline. Real browsers run
+         the pre-paint script below, which overwrites it with --paper before
+         first paint, so mobile chrome still matches the theme the player chose
+         rather than going orange. -->
+    <meta name="theme-color" content="#ee7e48" />
+    <meta name="description" content="Draw, guess and laugh with friends!" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Sketchy" />
+    <meta property="og:title" content="Sketchy" />
+    <meta property="og:description" content="Draw, guess and laugh with friends!" />
+    <!-- Root-relative on purpose. Slack, Discord and iMessage resolve it against
+         the page they just fetched, and this app has no canonical origin to
+         hard-code. og:url is omitted for the same reason. -->
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>Sketchy</title>
     <script>
@@ -16,6 +37,8 @@
               : "light";
         document.documentElement.dataset.theme = theme;
         document.documentElement.style.colorScheme = theme;
+        var tc = document.querySelector('meta[name="theme-color"]');
+        if (tc) tc.content = theme === "dark" ? "#0f172a" : "#faf6ef";
       } catch (e) {}
     </script>
   </head>
