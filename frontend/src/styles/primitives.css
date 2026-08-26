@@ -29,6 +29,12 @@
   box-shadow: 0 2px 0 var(--warm-edge);
 }
 
+.btn-success {
+  background: var(--success-button);
+  color: #fff;
+  box-shadow: 0 2px 0 var(--success-button-edge);
+}
+
 .btn-secondary {
   background: var(--card);
   border: 1.5px solid var(--line-strong);

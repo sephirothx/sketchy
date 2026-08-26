@@ -54,6 +54,10 @@
   --success: #2f9e44;
   --success-soft: #e7f5ea;
   --success-ink: #1f7a33;
+  /* Go-action button fill (Start game); the status --success is too light
+     for white text in dark mode, so buttons get their own pair. */
+  --success-button: #2f9e44;
+  --success-button-edge: #247c34;
   --warning: #b45309;
   --warning-soft: #fdf1dc;
   --warning-edge: #ebc98a;
@@ -115,6 +119,8 @@
   --success: #4ade80;
   --success-soft: rgba(74, 222, 128, 0.13);
   --success-ink: #86efac;
+  --success-button: #2f9e44;
+  --success-button-edge: #247c34;
   --warning: #fbbf24;
   --warning-soft: rgba(251, 191, 36, 0.13);
   --warning-edge: rgba(251, 191, 36, 0.4);

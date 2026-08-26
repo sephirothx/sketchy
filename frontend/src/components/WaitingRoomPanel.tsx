@@ -205,7 +205,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             <div className="waiting-host-actions">
               <button
                 type="button"
-                className="btn btn-warm btn-big waiting-start-button"
+                className="btn btn-success btn-big waiting-start-button"
                 disabled={!canStart || props.startBusy}
                 onClick={props.onStart}
               >

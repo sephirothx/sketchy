@@ -33,6 +33,8 @@ export const PALETTES = {
     success: '#2F9E44',
     successSoft: '#E7F5EA',
     successInk: '#1F7A33',
+    successButton: '#2F9E44',      // go-action button fill (Start game)
+    successButtonEdge: '#247C34',
     warning: '#B45309',
     warningSoft: '#FDF1DC',
     warningEdge: '#EBC98A',
@@ -74,6 +76,8 @@ export const PALETTES = {
     success: '#4ADE80',
     successSoft: 'rgba(74, 222, 128, 0.13)',
     successInk: '#86EFAC',
+    successButton: '#2F9E44',      // same in both themes, like primaryEdge
+    successButtonEdge: '#247C34',
     warning: '#FBBF24',
     warningSoft: 'rgba(251, 191, 36, 0.13)',
     warningEdge: 'rgba(251, 191, 36, 0.4)',
@@ -203,6 +207,8 @@ export const btn = {
     `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.primary}; color: #fff; border: 0; border-radius: ${T.radiusSm}; padding: ${opts.big ? '13px 22px' : '11px 18px'}; font-family: ${T.body}; font-size: ${opts.big ? 16 : 14.5}px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 ${T.primaryEdge}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   warm: (label, opts = {}) =>
     `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.warm}; color: #fff; border: 0; border-radius: ${T.radiusSm}; padding: ${opts.big ? '13px 22px' : '11px 18px'}; font-family: ${T.body}; font-size: ${opts.big ? 16 : 14.5}px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 ${T.warmEdge}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
+  success: (label, opts = {}) =>
+    `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.successButton}; color: #fff; border: 0; border-radius: ${T.radiusSm}; padding: ${opts.big ? '13px 22px' : '11px 18px'}; font-family: ${T.body}; font-size: ${opts.big ? 16 : 14.5}px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 ${T.successButtonEdge}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   secondary: (label, opts = {}) =>
     `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.card}; color: ${T.ink}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 16px; font-family: ${T.body}; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: ${T.shadow}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   ghost: (label, opts = {}) =>

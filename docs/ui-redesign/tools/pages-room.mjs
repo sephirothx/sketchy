@@ -72,7 +72,7 @@ export const WaitingRoomPage = roomPage(roomHeader() + roomGrid(
         <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}">Ready when you are</h2>
         <p style="color: ${T.muted}; font-size: 13.5px; margin-top: 4px">4 players are ready. Ines is AFK and will sit out until she's back.</p>
       </div>
-      ${btn.warm('Start game', { big: true })}
+      ${btn.success('Start game', { big: true })}
     </section>
   </div>`,
   waitingChat,
