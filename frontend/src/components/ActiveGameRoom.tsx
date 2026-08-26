@@ -10,6 +10,7 @@ import { AccountMenu } from "../components/AccountMenu";
 import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
+import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import {
   ConnectedRoomChatPanel,
   ConnectedRoomPlayersPanel,
@@ -325,6 +326,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
             </button>
           )}
         </div>
+        <GameHeaderStatus />
         <div className="game-header-actions">
           {roomView === "playing" && canProposeRestart && !restartVote && (
             <button

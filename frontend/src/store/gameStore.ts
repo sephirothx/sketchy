@@ -63,6 +63,9 @@ interface GameStore {
   totalRounds: number;
   phaseSeconds: number;
   phaseStartedAt: number;
+  /** Per-player elapsed seconds for correct guesses this turn, derived
+      client-side from correct_guess events (lost on mid-turn reconnect). */
+  turnCorrectGuesses: Record<string, number>;
   nextHintCost: number | null;
   letterPrices: Record<string, number> | null;
   /** Points committed to hints so far this turn, and the ceiling on them. */
@@ -89,6 +92,7 @@ interface GameStore {
   setColorblindSafeSuggestion: (suggestion: ColorblindSafeSuggestion) => void;
   addMessage: (message: ChatMessage) => void;
   applyGuessPoints: (playerId: string, points: number) => void;
+  recordCorrectGuess: (playerId: string) => void;
   startChoosing: (payload: {
     drawerId: string;
     roundNumber: number;
@@ -134,6 +138,7 @@ const initialGameFields = {
   totalRounds: 0,
   phaseSeconds: 0,
   phaseStartedAt: 0,
+  turnCorrectGuesses: {},
   nextHintCost: null as number | null,
   letterPrices: null as Record<string, number> | null,
   hintSpend: 0,
@@ -221,6 +226,13 @@ export const useGameStore = create<GameStore>((set) => ({
     set((s) => ({
       players: s.players.map((p) => (p.playerId === playerId ? { ...p, score: p.score + points } : p)),
     })),
+  recordCorrectGuess: (playerId) =>
+    set((s) => ({
+      turnCorrectGuesses: {
+        ...s.turnCorrectGuesses,
+        [playerId]: Math.max(0, Math.round((Date.now() - s.phaseStartedAt) / 1000)),
+      },
+    })),
   startChoosing: ({ drawerId, roundNumber, totalRounds, seconds }) =>
     set({
       phase: "choosing_prompt",
@@ -234,6 +246,7 @@ export const useGameStore = create<GameStore>((set) => ({
       guessedPrompt: null,
       promptChoices: [],
       lastTurnResult: null,
+      turnCorrectGuesses: {},
     }),
   setMyPromptChoices: (choices, seconds) =>
     set({ promptChoices: choices, phaseSeconds: seconds, phaseStartedAt: Date.now() }),
@@ -254,6 +267,7 @@ export const useGameStore = create<GameStore>((set) => ({
       hintSpend: hintSpend ?? 0,
       maxHintSpend: maxHintSpend ?? s.maxHintSpend,
       lastGuessBreakdown: null,
+      turnCorrectGuesses: {},
     })),
   setMyPrompt: (prompt) => set({ myPrompt: prompt }),
   setGuessedPrompt: (prompt, breakdown) =>

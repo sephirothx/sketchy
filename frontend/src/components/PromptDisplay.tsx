@@ -19,66 +19,73 @@ interface PromptDisplayProps {
   maxHintSpend?: number;
 }
 
-// tightly spaced blanks per word, followed by each word's letter count (in
-// order) at the very end. A prompt can be several words long, which is why
-// there is a run of blanks and a count per word rather than one of each.
-// Digits only ever appear in that trailing count list, so splitting on the
-// first digit cleanly separates the two parts.
+// The server sends tightly spaced blanks per word, followed by each word's
+// letter count (in order) at the very end; digits only appear in that count
+// list, so splitMaskedPrompt separates the two. The redesign renders each
+// word as a run of letter tiles with the word's letter count as a
+// superscript numeral beside it (a multi-word prompt like "bow and arrow"
+// reads ³ ³ ⁵). Purchasable slots keep the `.hint-blank` button contract.
 function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean; cost: number; busy: boolean; onBuy: (slot: number) => void }): ReactNode {
   const { blanks, counts } = splitMaskedPrompt(masked);
-  let blanksNode: ReactNode = blanks;
 
-  if (buyableProps) {
-    const nodes: ReactNode[] = [];
-    let buffer = "";
-    let slot = -1;
-    const flush = () => {
-      if (buffer) {
-        nodes.push(buffer);
-        buffer = "";
-      }
-    };
-    for (const ch of blanks) {
-      const isSlotChar = ch === "_" || /[a-zA-Z0-9]/.test(ch);
-      if (isSlotChar) slot += 1;
-      if (ch === "_") {
-        flush();
-        const currentSlot = slot;
-        nodes.push(
-          <button
-            key={nodes.length}
-            type="button"
-            className="hint-blank"
-            disabled={!buyableProps.canAfford || buyableProps.busy}
-            title={`Buy this letter for ${buyableProps.cost} points`}
-            onClick={() => buyableProps.onBuy(currentSlot)}
-          >
-            _
-          </button>,
-        );
-      } else {
-        buffer += ch;
-      }
-    }
-    flush();
-    blanksNode = nodes;
+  if (counts.length === 0 && !blanks.includes("_")) {
+    return <span className="prompt-blanks-text">{blanks}</span>;
   }
 
-  if (counts.length === 0) {
-    return <span className="prompt-blanks-text">{blanksNode}</span>;
-  }
-
-  const totalLength = counts.reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
-  const isLong = totalLength > 10 || blanks.length > 15;
+  const words = blanks.trim().split(/\s+/);
+  let slot = -1;
 
   return (
-    <span className={`masked-container ${isLong ? "is-long" : ""}`}>
-      <span className="prompt-lengths">
-        {counts.map((count, index) => (
-          <sup key={index}>{count}</sup>
-        ))}
-      </span>
-      <span className="prompt-blanks-text">{blanksNode}</span>
+    <span className="masked-words" aria-label={`Masked prompt, ${counts.join(" and ")} letters`}>
+      {words.map((word, wordIndex) => (
+        <span key={wordIndex} className="masked-word">
+          <span className="masked-tiles">
+            {[...word].map((ch, charIndex) => {
+              const isSlotChar = ch === "_" || /[a-zA-Z0-9]/.test(ch);
+              if (isSlotChar) slot += 1;
+              if (ch === "_") {
+                if (buyableProps) {
+                  const currentSlot = slot;
+                  return (
+                    <button
+                      key={charIndex}
+                      type="button"
+                      className="masked-tile hint-blank"
+                      disabled={!buyableProps.canAfford || buyableProps.busy}
+                      title={`Buy this letter for ${buyableProps.cost} points`}
+                      onClick={() => buyableProps.onBuy(currentSlot)}
+                    >
+                      <span className="masked-tile-dash" aria-hidden="true" />
+                    </button>
+                  );
+                }
+                return (
+                  <span key={charIndex} className="masked-tile">
+                    <span className="masked-tile-dash" aria-hidden="true" />
+                  </span>
+                );
+              }
+              if (!isSlotChar) {
+                return (
+                  <span key={charIndex} className="masked-tile-glyph">
+                    {ch}
+                  </span>
+                );
+              }
+              return (
+                <span key={charIndex} className="masked-tile is-revealed">
+                  {ch}
+                </span>
+              );
+            })}
+          </span>
+          {counts[wordIndex] && (
+            <sup className="masked-word-count" aria-label={`${counts[wordIndex]} letters`}>
+              {counts[wordIndex]}
+            </sup>
+          )}
+        </span>
+      ))}
     </span>
   );
 }
@@ -115,13 +122,17 @@ export function PromptDisplay({
   if (isDrawer && promptChoices.length > 0 && !myPrompt) {
     return (
       <div className="prompt-display choosing">
-        <p>Choose a prompt to draw:</p>
-        <div className="prompt-choices">
-          {promptChoices.map((prompt) => (
-            <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${prompt}`, "select_prompt", { prompt }, "select the prompt")}>
-              {pendingAction === `prompt:${prompt}` ? "Choosing…" : prompt}
-            </button>
-          ))}
+        <div className="prompt-choice-card">
+          <p className="section-label">Your turn</p>
+          <h2 className="prompt-choice-title">Pick something to draw</h2>
+          <p className="prompt-choice-hint">Auto-picks when time runs out.</p>
+          <div className="prompt-choices">
+            {promptChoices.map((prompt) => (
+              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${prompt}`, "select_prompt", { prompt }, "select the prompt")}>
+                {pendingAction === `prompt:${prompt}` ? "Choosing…" : prompt}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );

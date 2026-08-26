@@ -1152,15 +1152,26 @@
   display: flex;
   justify-content: space-between;
   width: 100%;
-  font-weight: 600;
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .timer {
+  display: inline-flex;
+  align-items: center;
   font-variant-numeric: tabular-nums;
 }
 
 .timer.urgent {
-  color: #e03131;
+  color: var(--danger);
+}
+
+/* Header status slot: round chip + countdown ring. */
+.game-header-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
 }
 
 .prompt-display {
@@ -1188,8 +1199,40 @@
   display: block;
 }
 
+/* The drawer's prompt-choice moment as a card. */
+.prompt-choice-card {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-raised);
+  padding: 22px 26px;
+  margin: 0 auto;
+  max-width: 560px;
+  text-align: center;
+}
+
+.prompt-choice-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 24px;
+  color: var(--ink);
+  margin: 6px 0 4px;
+}
+
+.prompt-choice-hint {
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
 .prompt-reveal {
-  letter-spacing: 1px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(18px, 3vw, 27px);
+  color: var(--ink);
+  line-height: 1.2;
+  letter-spacing: 0.01em;
   max-width: 100%;
 }
 
@@ -1200,42 +1243,75 @@
   align-items: center;
 }
 
-.masked-container {
+/* Letter tiles: one group per word, with the word's letter count as a
+   superscript numeral beside it. */
+.masked-words {
   display: inline-flex;
-  align-items: baseline;
-  max-width: 100%;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
 }
 
-.masked-container .prompt-blanks-text {
-  order: 1;
-  white-space: pre;
-  letter-spacing: clamp(1px, 0.4vw, 3px);
-}
-
-.masked-container .prompt-lengths {
-  order: 2;
+.masked-word {
   display: inline-flex;
-  gap: 6px;
-  margin-left: 8px;
-  vertical-align: super;
-  letter-spacing: normal;
+  align-items: flex-start;
+  gap: 4px;
 }
 
-.masked-container.is-long {
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+.masked-tiles {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
 }
 
-.masked-container.is-long .prompt-lengths {
-  order: 1;
-  margin-left: 0;
-  margin-bottom: 2px;
-  font-size: 13px;
+.masked-tile {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: clamp(22px, 3.2vw, 30px);
+  height: clamp(30px, 4.2vw, 40px);
+  border-radius: 8px;
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  padding-bottom: 6px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(15px, 2.4vw, 21px);
+  line-height: 1;
+  color: var(--ink);
 }
 
-.masked-container.is-long .prompt-blanks-text {
-  order: 2;
+.masked-tile.is-revealed {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+  padding-bottom: 4px;
+}
+
+.masked-tile-dash {
+  width: 14px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.masked-tile-glyph {
+  align-self: flex-end;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-weight: 600;
+  padding-bottom: 6px;
+}
+
+.masked-word-count {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-top: -1px;
 }
 
 /* One compact line above the blanks: what the next hint costs (or that the
@@ -1255,38 +1331,35 @@
 }
 
 .hint-price {
-  color: #4c6ef5;
+  color: var(--primary);
 }
 
 .hint-price-warning {
-  color: #b45309;
+  color: var(--warning);
 }
 
 .hint-spend-total {
-  color: #9a3412;
+  color: var(--warm-ink);
   cursor: help;
 }
 
-/* A blank the player can buy: still reads as part of the word, so it keeps the
-   word's face and only picks up a tappable tint. */
-.hint-blank {
-  background: none;
-  border: 0;
-  border-radius: 3px;
-  color: #4c6ef5;
+/* A blank the player can buy: the tile itself is the button. */
+.masked-tile.hint-blank {
   cursor: pointer;
-  font: inherit;
-  letter-spacing: inherit;
-  padding: 0;
 }
 
-.hint-blank:hover:not(:disabled) {
-  background: #edf1ff;
+.masked-tile.hint-blank:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
 }
 
-.hint-blank:disabled {
-  color: inherit;
+.masked-tile.hint-blank:hover:not(:disabled) .masked-tile-dash {
+  background: var(--primary);
+}
+
+.masked-tile.hint-blank:disabled {
   cursor: default;
+  opacity: 1;
 }
 
 .wheel-hint-panel {
@@ -1294,7 +1367,7 @@
 }
 
 .hint-wheel-label {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: normal;
@@ -1314,14 +1387,14 @@
 .wheel-letter-btn {
   font-family: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: normal;
   min-width: 28px;
   padding: 3px 4px;
-  border: 1px solid #4c6ef5;
+  border: 1.5px solid var(--primary-edge-soft);
   border-radius: 6px;
-  background: #fff;
-  color: #4c6ef5;
+  background: var(--card);
+  color: var(--primary);
   cursor: pointer;
   line-height: 1;
 }
@@ -1334,48 +1407,54 @@
 }
 
 .wheel-letter-btn:hover:not(:disabled) {
-  background: #edf1ff;
+  background: var(--primary-soft);
 }
 
 .wheel-letter-btn:disabled {
-  border-color: #ced4da;
-  color: #adb5bd;
+  border-color: var(--line);
+  color: var(--faint);
   cursor: not-allowed;
   opacity: 0.7;
-}
-
-.prompt-lengths sup {
-  font-size: 13px;
-  font-weight: 600;
-  color: #868e96;
 }
 
 .prompt-hidden {
   font-size: 1.5rem;
   letter-spacing: 4px;
   font-weight: 700;
-  color: #64748b;
-  background: #f1f5f9;
+  color: var(--muted);
+  background: var(--well);
   padding: 4px 16px;
-  border-radius: 8px;
-  border: 1px dashed #cbd5e1;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--line-strong);
 }
 
 .prompt-choices {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: center;
-  margin-top: 8px;
 }
 
+/* Plain pressable options, distinct from their ground. */
 .prompt-choices button {
-  background: #4c6ef5;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 16px;
-  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--well);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 3px 0 var(--line-strong);
+  padding: 18px 18px;
+  min-width: 140px;
+  font-family: var(--font-display);
   font-weight: 600;
+  font-size: 19px;
+  color: var(--ink);
+}
+
+.prompt-choices button:hover:not(:disabled) {
+  border-color: var(--primary);
+  box-shadow: 0 3px 0 var(--primary-edge-soft);
 }
 
 .canvas-stack {
@@ -1384,9 +1463,10 @@
   max-width: 800px;
   aspect-ratio: 4 / 3;
   background: white;
-  border: 1px solid #c7cad1;
-  border-radius: 8px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: var(--shadow);
 }
 
 .drawing-canvas {
@@ -1398,7 +1478,7 @@
 
 .choosing-prompt-overlay {
   align-items: center;
-  background: rgba(239, 246, 255, .9);
+  background: var(--scrim);
   display: flex;
   inset: 0;
   justify-content: center;
@@ -1408,10 +1488,10 @@
 }
 
 .choosing-prompt-card {
-  background: rgba(255, 255, 255, .96);
-  border: 1px solid #bfdbfe;
-  border-radius: 14px;
-  box-shadow: 0 14px 34px rgba(30, 64, 175, .14);
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-raised);
   max-width: 360px;
   padding: 24px 28px;
   text-align: center;
@@ -1428,7 +1508,7 @@
 
 .choosing-prompt-dots span {
   animation: choosing-prompt-pulse 1.2s ease-in-out infinite;
-  background: #2563eb;
+  background: var(--primary);
   border-radius: 50%;
   height: 8px;
   width: 8px;
@@ -1443,7 +1523,7 @@
 }
 
 .choosing-prompt-kicker {
-  color: #2563eb;
+  color: var(--primary);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .08em;
@@ -1452,16 +1532,16 @@
 }
 
 .choosing-prompt-message {
-  color: #1e293b;
+  color: var(--ink);
   font-size: clamp(18px, 3vw, 24px);
   line-height: 1.25;
   margin: 0;
 }
 
-.choosing-prompt-message strong { color: #1d4ed8; }
+.choosing-prompt-message strong { color: var(--primary-ink); }
 
 .choosing-prompt-hint {
-  color: #64748b;
+  color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
   margin: 9px 0 0;

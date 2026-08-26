@@ -140,13 +140,19 @@ export function useGameSocketListeners() {
         playCorrectGuessSound();
       }
       store.getState().applyGuessPoints(payload.playerId, payload.points);
+      store.getState().recordCorrectGuess(payload.playerId);
+      const elapsed = store.getState().turnCorrectGuesses[payload.playerId];
+      const time = elapsed != null
+        ? ` · ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
+        : "";
       const pointsSuffix =
         store.getState().scoringMode !== "none" ? ` (+${payload.points})` : "";
+      // `correct` styles the line as the green got-it event card.
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.nickname} guessed the prompt!${pointsSuffix}`,
-        correct: false,
+        text: `${payload.nickname} got it${time}${pointsSuffix}`,
+        correct: true,
         system: true,
       });
     };

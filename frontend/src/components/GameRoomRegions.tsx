@@ -10,6 +10,7 @@ import { Toolbar } from "./Toolbar";
 import { WaitingRoomPanel } from "./WaitingRoomPanel";
 import { PromptDisplay } from "./PromptDisplay";
 import { useToolbarState } from "../hooks/useToolbarState";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { splitMaskedPrompt } from "../lib/maskedPrompt";
 import { recordRender } from "../lib/renderDiagnostics";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
@@ -23,6 +24,7 @@ export function ConnectedRoomPlayersPanel({ mode }: { mode: RoomShellMode }) {
   const showScores = useGameStore((state) => state.scoringMode !== "none");
   const finalScores = useGameStore((state) => state.finalScores);
   const moderation = useGameStore((state) => state.moderation);
+  const turnCorrectGuesses = useGameStore((state) => state.turnCorrectGuesses);
 
   return (
     <RoomPlayersPanel
@@ -34,6 +36,7 @@ export function ConnectedRoomPlayersPanel({ mode }: { mode: RoomShellMode }) {
       showScores={showScores}
       finalScores={finalScores}
       moderation={moderation}
+      turnCorrectGuesses={turnCorrectGuesses}
     />
   );
 }
@@ -148,6 +151,7 @@ export function ConnectedWaitingRoomPanel({
 
 export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef | null> }) {
   recordRender("gameplay");
+  const isMobile = useMediaQuery("(max-width: 900px)");
   const playerId = useGameStore((state) => state.playerId);
   const phase = useGameStore((state) => state.phase);
   const drawerId = useGameStore((state) => state.drawerId);
@@ -221,14 +225,19 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   return (
     <main className="canvas-area">
       <GameAnnouncer message={phaseAnnouncement} />
-      <div className="round-info">
-        <span>
-          Round {roundNumber}/{totalRounds}
-        </span>
-        {phase !== "turn_results" && (
-          <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} />
-        )}
-      </div>
+      {/* Desktop shows the round chip and countdown ring in the room header
+          (GameHeaderStatus); this compact line covers mobile, where the header
+          hides in guess-focused mode. */}
+      {isMobile && (
+        <div className="round-info">
+          <span>
+            Round {roundNumber} of {totalRounds}
+          </span>
+          {phase !== "turn_results" && (
+            <Timer totalSeconds={phaseSeconds} startedAt={phaseStartedAt} variant="text" />
+          )}
+        </div>
+      )}
       <PromptDisplay
         isDrawer={amDrawer}
         myPrompt={myPrompt}

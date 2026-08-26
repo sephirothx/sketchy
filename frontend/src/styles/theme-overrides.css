@@ -99,96 +99,7 @@
   border-bottom-color: #334155;
 }
 
-[data-theme="dark"] .canvas-stack {
-  border-color: #334155;
-}
-
-[data-theme="dark"] .prompt-hidden {
-  color: #94a3b8;
-  background: #1e293b;
-  border-color: #475569;
-}
-
-[data-theme="dark"] .hint-blank {
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .hint-blank:hover:not(:disabled) {
-  background: #1e3a8a;
-}
-
-[data-theme="dark"] .hint-blank:disabled {
-  color: inherit;
-}
-
-[data-theme="dark"] .wheel-letter-btn {
-  background: #1e293b;
-  border-color: #3b82f6;
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .wheel-letter-btn:hover:not(:disabled) {
-  background: #1e3a8a;
-}
-
-[data-theme="dark"] .wheel-letter-btn:disabled {
-  background: #0f172a;
-  border-color: #334155;
-  color: #64748b;
-}
-
-[data-theme="dark"] .prompt-lengths sup {
-  color: #94a3b8;
-}
-
 /* Toolbar in dark mode */
-[data-theme="dark"] .toolbar-container {
-  background: #1e293b;
-  border-color: #334155;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-[data-theme="dark"] .toolbar-divider {
-  background: #334155;
-}
-
-[data-theme="dark"] .tool-button {
-  background: #334155;
-  border-color: #475569;
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .tool-button:hover {
-  background: #475569;
-  border-color: #64748b;
-  color: #ffffff;
-}
-
-[data-theme="dark"] .tool-button.selected {
-  background: #1e3a8a;
-  border-color: #3b82f6;
-  color: #60a5fa;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-}
-
-[data-theme="dark"] .shortcut-badge {
-  color: #64748b;
-}
-
-[data-theme="dark"] .tool-button.selected .shortcut-badge {
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .brush-size-trigger {
-  background: #334155;
-  border-color: #475569;
-}
-
-[data-theme="dark"] .brush-size-trigger:hover {
-  background: #475569;
-  border-color: #64748b;
-}
-
 [data-theme="dark"] .restart-vote-banner {
   background: #1e293b;
   border-color: #475569;
@@ -236,41 +147,6 @@
   color: #e2e8f0;
 }
 
-
-[data-theme="dark"] .brush-size-trigger.active {
-  background: #1e3a8a;
-  border-color: #3b82f6;
-}
-
-[data-theme="dark"] .size-text-readout {
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .brush-slider-popover {
-  background: #1e293b;
-  border-color: #334155;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
-}
-
-[data-theme="dark"] .preview-readout {
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .recent-colors-label {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .toolbar-action-button {
-  background: #334155;
-  border-color: #475569;
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .toolbar-action-button:hover {
-  background: #475569;
-  color: #ffffff;
-  border-color: #64748b;
-}
 
 [data-theme="dark"] .game-end-podium {
   background: #1e293b;
@@ -382,20 +258,6 @@
   background: rgba(0, 0, 0, 0.75);
 }
 
-[data-theme="dark"] .choosing-prompt-overlay {
-  background: rgba(15, 23, 42, .9);
-}
-
-[data-theme="dark"] .choosing-prompt-card {
-  background: rgba(30, 41, 59, .97);
-  border-color: #334155;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .32);
-}
-
-[data-theme="dark"] .choosing-prompt-message { color: #f8fafc; }
-[data-theme="dark"] .choosing-prompt-message strong { color: #93c5fd; }
-[data-theme="dark"] .choosing-prompt-hint { color: #94a3b8; }
-
 [data-theme="dark"] .turn-results-panel {
   background: #1e293b;
   border: 1px solid #334155;
@@ -429,19 +291,6 @@
 
 [data-theme="dark"] .turn-results-score-rank,
 [data-theme="dark"] .turn-results-score-delta {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .turn-results-hint-debt,
-[data-theme="dark"] .hint-price-warning {
-  color: #fbbf24;
-}
-
-[data-theme="dark"] .hint-spend-total {
-  color: #fdba74;
-}
-
-[data-theme="dark"] .hint-wheel-label {
   color: #94a3b8;
 }
 

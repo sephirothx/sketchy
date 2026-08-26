@@ -15,6 +15,7 @@ interface RoomPlayersPanelProps {
   showScores: boolean;
   finalScores: ScoreEntry[] | null;
   moderation: ModerationState;
+  turnCorrectGuesses?: Record<string, number>;
 }
 
 export function RoomPlayersPanel({
@@ -26,6 +27,7 @@ export function RoomPlayersPanel({
   showScores,
   finalScores,
   moderation,
+  turnCorrectGuesses,
 }: RoomPlayersPanelProps) {
   recordRender("players");
   const [promotionBusy, setPromotionBusy] = useState(false);
@@ -129,6 +131,7 @@ export function RoomPlayersPanel({
           variant={showFinalStandings ? "game-end" : mode === "game-end" ? "waiting" : mode}
           allowVoting={mode === "playing"}
           moderation={moderation}
+          turnCorrectGuesses={mode === "playing" ? turnCorrectGuesses : undefined}
         />
       </div>
       {canPromoteSelf && (

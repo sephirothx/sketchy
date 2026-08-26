@@ -9,7 +9,7 @@ import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderatio
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
-import { CrownIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
+import { CheckIcon, CrownIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -19,6 +19,12 @@ interface PlayerListProps {
   variant?: "waiting" | "playing" | "game-end";
   allowVoting?: boolean;
   moderation: ModerationState;
+  /** Per-player elapsed seconds for correct guesses this turn. */
+  turnCorrectGuesses?: Record<string, number>;
+}
+
+function guessTime(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 
@@ -53,6 +59,7 @@ export function PlayerList({
   variant = "playing",
   allowVoting = true,
   moderation,
+  turnCorrectGuesses,
 }: PlayerListProps) {
   const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
   const ranks = competitionRanks(sorted.map((player) => player.score));
@@ -104,12 +111,14 @@ export function PlayerList({
         const showAfkChip = afkVotes.length > 0 && !p.isAfk;
         const showKickChip = kickVotes.length > 0;
         const showVoteRow = showAfkChip || showKickChip;
+        const guessedAt = turnCorrectGuesses?.[p.playerId];
         const rowClass = cx(
           "player-row",
           isMe && "is-self",
           !p.connected && "disconnected",
           p.isAfk && "is-afk",
           isDrawer && "is-drawing",
+          guessedAt != null && !isDrawer && "has-guessed",
           showScores && "has-scores",
           canModerate && "is-moderatable",
         );
@@ -117,6 +126,11 @@ export function PlayerList({
           <span className="player-status player-status-drawing">
             <PencilIcon size={12} />
             Drawing
+          </span>
+        ) : guessedAt != null ? (
+          <span className="player-status player-status-guessed">
+            <CheckIcon size={12} />
+            Got it · <span className="player-status-time">{guessTime(guessedAt)}</span>
           </span>
         ) : p.isAfk ? (
           <span className="player-status player-status-afk">
