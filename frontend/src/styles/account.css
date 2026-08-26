@@ -260,7 +260,7 @@
 
 .session-list li {
   align-items: center;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   border-radius: 10px;
   display: flex;
   gap: 12px;
@@ -269,27 +269,27 @@
 }
 
 .session-list li > span { display: grid; gap: 3px; }
-.session-list small { color: #64748b; }
-.session-current { color: #047857; font-size: 12px; font-weight: 700; }
+.session-list small { color: var(--muted); }
+.session-current { color: var(--success-ink); font-size: 12px; font-weight: 700; }
 .session-list button, .session-actions button {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   cursor: pointer;
   padding: 8px 12px;
 }
 .session-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.session-revoke-all { background: #dc2626; border-color: #dc2626 !important; color: #fff; }
+.session-revoke-all { background: var(--danger); border-color: var(--danger) !important; color: var(--card); }
 .session-list button:disabled, .session-actions button:disabled { cursor: wait; opacity: 0.6; }
 
 .account-data-dialog { max-width: 620px; text-align: left; }
-.account-data-section { border-top: 1px solid #cbd5e1; margin-top: 18px; padding-top: 16px; }
+.account-data-section { border-top: 1px solid var(--line-strong); margin-top: 18px; padding-top: 16px; }
 .account-data-section h4 { margin: 0; }
 .account-data-heading-row { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
 .account-data-heading-row button,
 .account-export-list a,
 .account-danger-zone button,
 .account-data-actions button {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   color: inherit;
   cursor: pointer;
@@ -299,16 +299,16 @@
 }
 .account-data-heading-row button, .account-data-actions button { background: transparent; }
 .account-export-list { display: grid; gap: 8px; list-style: none; margin: 12px 0; padding: 0; }
-.account-export-list li { align-items: center; border: 1px solid #cbd5e1; border-radius: 10px; display: flex; gap: 12px; justify-content: space-between; padding: 12px; }
+.account-export-list li { align-items: center; border: 1px solid var(--line-strong); border-radius: 10px; display: flex; gap: 12px; justify-content: space-between; padding: 12px; }
 .account-export-list li > span { display: grid; gap: 3px; min-width: 0; }
-.account-export-list small, .account-data-note, .account-data-empty { color: #64748b; font-size: 13px; }
-.account-export-list a { background: #4f46e5; border-color: #4f46e5; color: #fff; text-decoration: none; }
-.account-danger-zone { border-color: #fecaca; }
+.account-export-list small, .account-data-note, .account-data-empty { color: var(--muted); font-size: 13px; }
+.account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--card); text-decoration: none; }
+.account-danger-zone { border-color: var(--danger-soft); }
 .account-danger-zone > p { font-size: 14px; line-height: 1.5; }
-.account-delete-start, .account-delete-confirm { background: #dc2626; border-color: #dc2626 !important; color: #fff !important; }
+.account-delete-start, .account-delete-confirm { background: var(--danger); border-color: var(--danger) !important; color: var(--card) !important; }
 .account-delete-form { display: grid; gap: 12px; }
 .account-delete-form label { display: grid; font-size: 13px; font-weight: 700; gap: 5px; }
-.account-delete-form input { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; color: #0f172a; font-size: 16px; padding: 9px 11px; }
+.account-delete-form input { background: var(--card); border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); font-size: 16px; padding: 9px 11px; }
 .account-delete-actions, .account-data-actions { display: flex; gap: 10px; justify-content: flex-end; }
 .account-data-actions { margin-top: 18px; }
 .account-danger-zone button:disabled, .account-data-heading-row button:disabled { cursor: wait; opacity: .6; }
@@ -346,7 +346,7 @@
 .first-run-signup {
   border: none;
   background: var(--primary);
-  color: #fff;
+  color: var(--card);
   border-radius: var(--radius-sm);
   padding: 11px 20px;
   font-size: 15px;
@@ -441,7 +441,7 @@
 }
 
 .settings-account-action {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-strong);
   background: transparent;
   color: inherit;
   border-radius: 8px;
@@ -479,8 +479,8 @@
 
 .game-end-claim-action {
   border: none;
-  background: #4f46e5;
-  color: #fff;
+  background: var(--primary);
+  color: var(--card);
   border-radius: 8px;
   padding: 9px 16px;
   font-weight: 700;
@@ -560,8 +560,8 @@
 }
 
 .recovery-card {
-  background: #fff;
-  border: 1px solid #dfe1e6;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: 12px;
   max-width: 420px;
   padding: 24px;
@@ -595,7 +595,7 @@
 }
 
 .ops-tabs {
-  border-bottom: 1px solid #dfe1e6;
+  border-bottom: 1px solid var(--line);
   display: flex;
   gap: 4px;
   margin-bottom: 20px;
@@ -624,8 +624,8 @@
 }
 
 .ops-tile {
-  background: #fff;
-  border: 1px solid #dfe1e6;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -636,7 +636,7 @@
 /* Severity is a separate signal from the accent, so a number worth acting on
    reads at a glance rather than having to be compared. */
 .ops-tile.is-warning {
-  border-color: #f97316;
+  border-color: var(--warm);
 }
 
 .ops-tile-label {
@@ -665,8 +665,8 @@
 }
 
 .ops-trend-card {
-  background: #fff;
-  border: 1px solid #dfe1e6;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px 14px;
 }
@@ -715,10 +715,10 @@
   /* Explicit, not inherited: with no colour set the browser renders form
      controls in the operating system's scheme, so a light page gets a dark
      grey box. The same reason .auth-form input states both. */
-  background: #fff;
-  border: 1px solid #c7cad1;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
   border-radius: 6px;
-  color: #0f172a;
+  color: var(--ink);
   padding: 6px 8px;
 }
 
@@ -736,7 +736,7 @@
 
 .ops-table th,
 .ops-table td {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
   padding: 6px 8px;
   text-align: left;
 }
@@ -787,8 +787,8 @@
 }
 
 .mod-report {
-  background: #fff;
-  border: 1px solid #dfe1e6;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 14px 16px;
 }
@@ -823,7 +823,7 @@
 }
 
 .mod-evidence {
-  border-left: 2px solid #dfe1e6;
+  border-left: 2px solid var(--line);
   font-size: 13px;
   list-style: none;
   margin: 10px 0 0;
@@ -839,17 +839,17 @@
 }
 
 .mod-actions input {
-  background: #fff;
-  border: 1px solid #c7cad1;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
   border-radius: 6px;
-  color: #0f172a;
+  color: var(--ink);
   flex: 1 1 220px;
   padding: 6px 8px;
 }
 
 .mod-actions button {
   background: none;
-  border: 1px solid #c7cad1;
+  border: 1px solid var(--line-strong);
   border-radius: 6px;
   cursor: pointer;
   font: inherit;
@@ -858,8 +858,8 @@
 
 /* The only action here that cannot be undone by another click. */
 .mod-actions .mod-danger {
-  border-color: #b91c1c;
-  color: #b91c1c;
+  border-color: var(--danger);
+  color: var(--danger);
   font-weight: 600;
 }
 
@@ -911,4 +911,122 @@
 .ops-identifier {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
+}
+
+
+/* Operations status banner. */
+.ops-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--success-soft);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  margin-bottom: 14px;
+  font-size: 13.5px;
+}
+
+.ops-status-banner strong {
+  color: var(--success-ink);
+  font-weight: 800;
+}
+
+.ops-status-banner span:not(.ops-status-dot) {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.ops-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--success);
+  flex: none;
+}
+
+.ops-status-banner.is-warning {
+  background: var(--warning-soft);
+}
+
+.ops-status-banner.is-warning strong {
+  color: var(--warning);
+}
+
+.ops-status-banner.is-warning .ops-status-dot {
+  background: var(--warning);
+}
+
+/* Redesign refinements for the operator surfaces. */
+.ops-header h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 26px;
+  color: var(--ink);
+  margin: 4px 0 12px;
+}
+
+.ops-tabs {
+  border-bottom: 0;
+  gap: 6px;
+}
+
+.ops-tabs button {
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 15px;
+}
+
+.ops-tabs button.is-active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+  font-weight: 800;
+}
+
+.ops-tile {
+  border-width: 1.5px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.ops-tile-value {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.ops-trend-card {
+  border-width: 1.5px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.mod-report {
+  border-width: 1.5px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.mod-evidence {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px 10px 14px;
+}
+
+.mod-actions .mod-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.ops-filters button:not(.btn) {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-weight: 700;
+  padding: 7px 12px;
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { AppHeader } from "../components/AppHeader";
+import { SectionLabel } from "../components/ui/Card";
 
 import { ApiError } from "../lib/api";
 import {
@@ -115,9 +117,10 @@ export function ModerationPage() {
 
   return (
     <main className="ops-page">
+      <AppHeader backLabel="Back to lobby" />
       <header className="ops-header">
-        <Link to="/" className="back-link">← Back to lobby</Link>
-        <h1>Moderation</h1>
+        <SectionLabel>Moderation</SectionLabel>
+        <h1>Review queue</h1>
         <nav className="ops-tabs" aria-label="Report queues">
           {(["players", "content", "bans"] as Queue[]).map((name) => (
             <button
@@ -277,7 +280,7 @@ export function ModerationPage() {
                           )
                         }
                       >
-                        Suspend account
+                        Suspend…
                       </button>
                       <select
                         aria-label="How long the suspension lasts"

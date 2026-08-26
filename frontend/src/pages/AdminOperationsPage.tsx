@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { AppHeader } from "../components/AppHeader";
+import { SectionLabel } from "../components/ui/Card";
 
 import { ApiError } from "../lib/api";
 import {
@@ -136,11 +137,9 @@ export function AdminOperationsPage() {
 
   return (
     <main className="ops-page">
+      <AppHeader backLabel="Back to lobby" />
       <header className="ops-header">
-        {/* These pages are reached from the account menu and have none of the
-            game's chrome, so without this there is no way out but the browser
-            button. Same affordance the other standalone pages use. */}
-        <Link to="/" className="back-link">← Back to lobby</Link>
+        <SectionLabel>Administrators only</SectionLabel>
         <h1>Server operations</h1>
         <nav className="ops-tabs" aria-label="Operator views">
           {(["overview", "events", "audit"] as Tab[]).map((name) => (
@@ -169,16 +168,28 @@ export function AdminOperationsPage() {
 
       {tab === "overview" && live && (
         <>
+          <div
+            className={`ops-status-banner${live.recorder.dropped > 0 ? " is-warning" : ""}`}
+            role="status"
+          >
+            <span className="ops-status-dot" aria-hidden="true" />
+            <strong>
+              {live.recorder.dropped > 0
+                ? "Recorder dropped observations"
+                : "All systems operational"}
+            </strong>
+            <span>Single worker · accepting rooms</span>
+          </div>
           <section className="ops-tiles" aria-label="Live counts">
             <div className="ops-tile">
-              <span className="ops-tile-label">Rooms</span>
-              <span className="ops-tile-value">{live.live.rooms}</span>
-              <span className="ops-tile-note">peak {live.peak.rooms}</span>
+              <span className="ops-tile-label">Players online</span>
+              <span className="ops-tile-value">{live.live.players}</span>
+              <span className="ops-tile-note">peak {live.peak.players} · resets on restart</span>
             </div>
             <div className="ops-tile">
-              <span className="ops-tile-label">Players</span>
-              <span className="ops-tile-value">{live.live.players}</span>
-              <span className="ops-tile-note">peak {live.peak.players}</span>
+              <span className="ops-tile-label">Live rooms</span>
+              <span className="ops-tile-value">{live.live.rooms}</span>
+              <span className="ops-tile-note">peak {live.peak.rooms}</span>
             </div>
             <div className="ops-tile">
               <span className="ops-tile-label">Games running</span>
