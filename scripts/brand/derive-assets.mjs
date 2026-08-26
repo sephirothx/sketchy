@@ -15,7 +15,6 @@
 // Run:  node scripts/brand/derive-assets.mjs
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -255,67 +254,16 @@ writeFileSync(join(here, "raster", "icon-square.svg"), rasterIcon(0.10));
 // inside the 80% safe zone.
 writeFileSync(join(here, "raster", "icon-maskable.svg"), rasterIcon(0.28));
 
-// The social card is a composition, not a resize: the full lockup on a ground,
-// at a size a 1200x630 crop can actually hold.
-//
-// The tagline is converted to outlines rather than set as live text. sharp's
-// SVG rasteriser has no access to the app's webfonts, so a <text> element
-// would silently fall back to a system face — the PNG would not match the app.
-// Fredoka is already a dependency; opentype.js reads its .woff directly.
+// The social card is a composition, not a resize: the lockup centred on the
+// dark ground, sized so the 1200x630 crop still leaves it room to breathe.
 const OG_BG = "#0f172a", OG_INK = "#f8fafc", OG_WARM = "#ee7e48", OG_FER = "#94a3b8";
-const TAGLINE = "DRAW · GUESS · LAUGH WITH FRIENDS";
-const TAGLINE_SIZE = 40;
-
-// This script lives outside frontend/, so Node will not find its node_modules
-// by walking up. Anchor resolution at the frontend package instead of adding a
-// second package.json here for one dev dependency.
-const frontendRequire = createRequire(join(repo, "frontend", "package.json"));
-const opentype = frontendRequire("opentype.js");
-
-const fredokaFile = join(repo, "frontend", "node_modules", "@fontsource", "fredoka", "files", "fredoka-latin-600-normal.woff");
-const fredokaBuf = readFileSync(fredokaFile);
-const fredoka = opentype.parse(
-  fredokaBuf.buffer.slice(fredokaBuf.byteOffset, fredokaBuf.byteOffset + fredokaBuf.byteLength),
-);
-const taglinePath = fredoka.getPath(TAGLINE, 0, 0, TAGLINE_SIZE);
-
-// opentype.js 2.x's toPathData() emits literal NaN for this string at every
-// decimal precision, even though every command coordinate is finite — verified
-// by scanning path.commands. Renderers abort a path at the first NaN, which
-// silently truncated the tagline to "DRA". Serialise the commands directly.
-const n = (v) => {
-  if (!Number.isFinite(v)) throw new Error(`non-finite coordinate in tagline path: ${v}`);
-  return Number(v.toFixed(2));
-};
-const toPathData = (path) =>
-  path.commands
-    .map((c) => {
-      switch (c.type) {
-        case "M": return `M${n(c.x)} ${n(c.y)}`;
-        case "L": return `L${n(c.x)} ${n(c.y)}`;
-        case "C": return `C${n(c.x1)} ${n(c.y1)} ${n(c.x2)} ${n(c.y2)} ${n(c.x)} ${n(c.y)}`;
-        case "Q": return `Q${n(c.x1)} ${n(c.y1)} ${n(c.x)} ${n(c.y)}`;
-        case "Z": return "Z";
-        default: throw new Error(`unhandled path command: ${c.type}`);
-      }
-    })
-    .join("");
-
-const taglineData = toPathData(taglinePath);
-if (taglineData.includes("NaN")) throw new Error("tagline path still contains NaN");
-const tb = taglinePath.getBoundingBox();
-const taglineW = tb.x2 - tb.x1;
-
-const lockW = 720, lockH = Math.round(lockW / Number(aspect));
-const gap = 54;
-const blockH = lockH + gap + (tb.y2 - tb.y1);
-const lockY = (630 - blockH) / 2;
+const lockW = 820, lockH = Math.round(lockW / Number(aspect));
 
 writeFileSync(
   join(here, "raster", "og-image.svg"),
   `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <rect width="1200" height="630" fill="${OG_BG}"/>
-  <g transform="translate(${((1200 - lockW) / 2).toFixed(1)} ${lockY.toFixed(1)})">
+  <g transform="translate(${((1200 - lockW) / 2).toFixed(1)} ${((630 - lockH) / 2).toFixed(1)})">
     <svg width="${lockW}" height="${lockH}" viewBox="${viewBox}">
       <defs><linearGradient id="og" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">
         <stop offset="0" stop-color="${OG_INK}"/><stop offset="1" stop-color="${OG_WARM}"/>
@@ -324,9 +272,6 @@ writeFileSync(
       <path d="${found.lettering[0]}" fill="url(#og)"/>
 ${found.ferrule.map((d) => `      <path d="${d}" fill="${OG_FER}"/>`).join("\n")}
     </svg>
-  </g>
-  <g transform="translate(${(600 - taglineW / 2 - tb.x1).toFixed(1)} ${(lockY + lockH + gap - tb.y1).toFixed(1)})">
-    <path d="${taglineData}" fill="${OG_WARM}"/>
   </g>
 </svg>
 `,
