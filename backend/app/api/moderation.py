@@ -23,6 +23,7 @@ from app.auth.bans import active_ban_filter, active_ban_for_user
 from app.auth.mail import queue_email
 from app.services.player_reports import record_player_report
 from app.auth.sessions import revoke_all_sessions
+from app.auth.warnings import pending_warning_payload
 from app.db.models import (
     AuditEvent,
     GameRecord,
@@ -31,7 +32,6 @@ from app.db.models import (
     PromptList,
     PromptListRevision,
     PromptListRevisionItem,
-    PlayerReportMessageEvidence,
     PromptVersion,
     RoomMessage,
     TurnRecord,
@@ -58,6 +58,7 @@ MAX_REPORT_DETAILS = 2_000
 MAX_RESOLUTION_NOTE = 2_000
 MAX_REPORT_MESSAGES = 20
 OnUserBanned = Callable[[str], Awaitable[None]]
+OnUserWarned = Callable[[str], Awaitable[None]]
 
 
 class ReportBody(BaseModel):
@@ -420,6 +421,7 @@ def create_moderation_router(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     on_user_banned: OnUserBanned | None = None,
+    on_user_warned: OnUserWarned | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
     report_limiter = PersistentRateLimiter(
@@ -1215,65 +1217,27 @@ def create_moderation_router(
                     )
                 )
                 await session.flush()
-                return {
+                payload = {
                     "id": str(warning.id),
                     "userId": str(target.id),
                     "reason": warning.reason,
                     "createdAt": warning.created_at.isoformat(),
                 }
+        # After the commit, so a socket can never announce a warning a
+        # rolled-back transaction never created.
+        if on_user_warned is not None:
+            await on_user_warned(str(body.user_id))
+        return payload
 
     @router.get("/warnings/pending")
     async def pending_warning(request: Request):
-        """The caller's own oldest unacknowledged warning, with the reported
-        messages behind it - their own words, which is what makes the reason
-        something they can weigh rather than just be told."""
+        """The caller's own oldest unacknowledged warning - the catch-up
+        route for a player who was offline when it was issued. The payload is
+        shared with the live socket push (`app/auth/warnings.py`)."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
             raise HTTPException(status_code=401, detail="Sign in first.")
-        async with session_factory() as session:
-            warning = await session.scalar(
-                select(UserWarning)
-                .where(
-                    UserWarning.user_id == UUID(user_id),
-                    UserWarning.acknowledged_at.is_(None),
-                )
-                .order_by(UserWarning.created_at)
-                .limit(1)
-            )
-            if warning is None:
-                return {"warning": None}
-            messages: list[dict] = []
-            if warning.source_report_id is not None:
-                rows = (
-                    await session.scalars(
-                        select(PlayerReportMessageEvidence)
-                        .where(
-                            PlayerReportMessageEvidence.report_id
-                            == warning.source_report_id
-                        )
-                        .order_by(PlayerReportMessageEvidence.position)
-                    )
-                ).all()
-                # Only the snapshot, and only the text and the time: the
-                # evidence is authored by the warned player by construction,
-                # so nothing here can name whoever reported them.
-                messages = [
-                    {
-                        "text": row.text_snapshot,
-                        "at": row.message_created_at.isoformat()
-                        if row.message_created_at
-                        else None,
-                    }
-                    for row in rows
-                ]
-            return {
-                "warning": {
-                    "id": str(warning.id),
-                    "reason": warning.reason,
-                    "createdAt": warning.created_at.isoformat(),
-                    "messages": messages,
-                }
-            }
+        return await pending_warning_payload(session_factory, user_id)
 
     @router.post("/warnings/{warning_id}/acknowledge")
     async def acknowledge_warning(warning_id: UUID, request: Request):

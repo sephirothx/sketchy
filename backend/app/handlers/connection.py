@@ -36,6 +36,11 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
         auth_session = resolution.session
         user_id = auth_session.user_id if auth_session else None
     await ctx.sio.save_session(sid, {"user_id": user_id})
+    if user_id is not None:
+        # Every socket of an account shares one broadcast room, so account-
+        # level news (a suspension, a moderator warning) reaches a player in
+        # the lobby as immediately as one seated in a game.
+        await ctx.sio.enter_room(sid, f"user:{user_id}")
     shutdown = getattr(ctx, "shutdown", None)
     if shutdown is not None and shutdown.is_draining:
         await ctx.sio.emit(

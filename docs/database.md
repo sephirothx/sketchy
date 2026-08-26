@@ -497,8 +497,9 @@ is refused**, so a suspension cannot be used to show one player another's messag
 `source_report_id` (FK → `player_reports`, `SET NULL`) · `created_at` · `acknowledged_at`.
 
 **Flow.** The step between dismissing a report and suspending the account: nothing is
-restricted. The player's next `GET /api/warnings/pending` (the client checks on every
-visit) returns the oldest unacknowledged warning together with the pinned messages of its
+restricted. A connected player is told immediately over the socket (`moderator_warning`);
+otherwise the client's `GET /api/warnings/pending` on their next visit
+returns the oldest unacknowledged warning together with the pinned messages of its
 source report — the same own-words rule as a suspension, and a warning naming a report
 about somebody else is refused for the same reason. Acknowledging sets
 `acknowledged_at`, which is what stops it being shown again and records that the notice

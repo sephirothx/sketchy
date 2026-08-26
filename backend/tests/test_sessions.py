@@ -120,12 +120,15 @@ def test_device_label_is_coarse_and_drops_versions():
 async def test_socket_handshake_uses_the_same_revocation_record(database):
     factory, user = database
     issued = await create_session(factory, user_id=user.id, device_label="Browser")
-    sio = SimpleNamespace(save_session=AsyncMock())
+    sio = SimpleNamespace(save_session=AsyncMock(), enter_room=AsyncMock())
     context = SimpleNamespace(sio=sio, session_factory=factory)
     environ = {"HTTP_COOKIE": f"sketchy_session={issued.token}"}
 
     await socket_connect(context, "first", environ, None)
     sio.save_session.assert_awaited_with("first", {"user_id": user.id})
+    # The account broadcast room is what account-level news (a suspension, a
+    # moderator warning) is emitted to, wherever the socket is in the app.
+    sio.enter_room.assert_awaited_with("first", f"user:{user.id}")
 
     await revoke_session(
         factory, session_id=issued.session.id, user_id=user.id

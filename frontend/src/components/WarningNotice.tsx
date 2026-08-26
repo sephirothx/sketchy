@@ -5,7 +5,31 @@ import {
   fetchPendingWarning,
   type PendingWarning,
 } from "../lib/moderation";
+import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
+
+/** Keep only a payload shaped like a warning; a malformed one is dropped
+rather than rendered as "undefined" in front of the player. */
+function warningFromPayload(payload: unknown): PendingWarning | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = (payload as { warning?: unknown }).warning;
+  if (!body || typeof body !== "object") return null;
+  const warning = body as Record<string, unknown>;
+  if (typeof warning.id !== "string" || typeof warning.reason !== "string") {
+    return null;
+  }
+  return {
+    id: warning.id,
+    reason: warning.reason,
+    createdAt: typeof warning.createdAt === "string" ? warning.createdAt : "",
+    messages: Array.isArray(warning.messages)
+      ? warning.messages.filter(
+          (line): line is { text: string; at: string | null } =>
+            !!line && typeof (line as { text?: unknown }).text === "string",
+        )
+      : [],
+  };
+}
 
 /** Show a moderator's warning to its player, once.
 
@@ -34,6 +58,19 @@ export function WarningNotice() {
       cancelled = true;
     };
   }, [hasResolved, userId]);
+
+  useEffect(() => {
+    // A player who is online when the moderator decides hears it now; the
+    // fetch above is the catch-up route for everybody else.
+    function onModeratorWarning(payload: unknown) {
+      const pushed = warningFromPayload(payload);
+      if (pushed) setWarning(pushed);
+    }
+    socket.on("moderator_warning", onModeratorWarning);
+    return () => {
+      socket.off("moderator_warning", onModeratorWarning);
+    };
+  }, []);
 
   if (!warning) return null;
 

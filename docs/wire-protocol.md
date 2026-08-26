@@ -251,7 +251,8 @@ the server resolves the seat against the live room and selects the evidence itse
 | `kicked` | `{reason}` | one socket |
 | `colorblind_safe_suggestion` | `{active}` | **host only**, unattributed |
 | `session_superseded` | `{reason}` — then the socket is disconnected | the superseded socket |
-| `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | the suspended account's sockets |
+| `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
+| `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.

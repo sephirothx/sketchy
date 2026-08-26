@@ -48,11 +48,16 @@ async def env(monkeypatch):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     users = SqlAlchemyUserRepository(factory)
     banned_callback = AsyncMock()
+    warned_callback = AsyncMock()
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_auth_router(users, factory))
     app.include_router(
-        create_moderation_router(factory, on_user_banned=banned_callback)
+        create_moderation_router(
+            factory,
+            on_user_banned=banned_callback,
+            on_user_warned=warned_callback,
+        )
     )
 
     @app.get("/api/health")
@@ -68,6 +73,8 @@ async def env(monkeypatch):
         clients.append(client)
         return client
 
+    # Reachable from tests without widening the fixture's 3-tuple.
+    new_client.warned_callback = warned_callback
     try:
         yield new_client, factory, banned_callback
     finally:
@@ -827,6 +834,9 @@ async def test_a_warning_reaches_the_player_once_and_its_receipt_is_recorded(env
     )
     assert issued.status_code == 201
     warning_id = issued.json()["id"]
+    # The live-push hook fired after commit, naming the warned account - this
+    # is what tells a connected player without waiting for their next visit.
+    new_client.warned_callback.assert_awaited_once_with(target["id"])
 
     # The warned player sees their own words behind the reason, exactly once.
     pending = await target_http.get("/api/warnings/pending")

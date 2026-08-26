@@ -18,6 +18,7 @@ from app.api.operations import create_operations_router
 from app.api.user_settings import create_user_settings_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.bans import suspension_payload
+from app.auth.warnings import pending_warning_payload
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
@@ -159,11 +160,32 @@ async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
 
 
 async def remove_banned_account_from_live_rooms(user_id: str) -> None:
+    suspension = await suspension_payload(async_session_factory, user_id)
     await _remove_account_from_live_rooms(
         user_id,
         reason="Your account was suspended.",
-        suspension=await suspension_payload(async_session_factory, user_id),
+        suspension=suspension,
     )
+    # The eviction above only reaches a socket seated in a room. The account
+    # broadcast room covers the rest - a player idling in the lobby learns
+    # now, not on their next refused request - and then every remaining
+    # socket of the suspended account is closed.
+    account_room = f"user:{user_id}"
+    await sio.emit("account_suspended", suspension, to=account_room)
+    for sid, _ in list(sio.manager.get_participants("/", account_room)):
+        await sio.disconnect(sid)
+
+
+async def push_warning_to_account(user_id: str) -> None:
+    """Tell a warned player now if any of their sockets is connected.
+
+    The pop-up otherwise waits for their next visit's
+    ``GET /api/warnings/pending``; both routes share one payload builder so
+    they cannot say different things.
+    """
+    payload = await pending_warning_payload(async_session_factory, user_id)
+    if payload.get("warning") is not None:
+        await sio.emit("moderator_warning", payload, to=f"user:{user_id}")
 
 
 @asynccontextmanager
@@ -234,6 +256,7 @@ api.include_router(
     create_moderation_router(
         async_session_factory,
         on_user_banned=remove_banned_account_from_live_rooms,
+        on_user_warned=push_warning_to_account,
     )
 )
 
