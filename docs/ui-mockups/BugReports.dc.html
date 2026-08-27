@@ -32,7 +32,7 @@
 </helmet>
 <div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
 
-<div style="width: 1160px; min-height: 1180px; margin: 0 auto; padding: 24px 24px 40px">
+<div style="width: 1160px; min-height: 1175px; margin: 0 auto; padding: 24px 24px 40px">
   
 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
   <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; padding-left: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to lobby</button>
@@ -113,7 +113,73 @@
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; align-items: start">
+      <!-- Diagnostics across the width, not down a column: nine short facts in
+           a narrow aside became a very tall list, and the user agent wrapped
+           into a paragraph. -->
+      <section style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+        <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink); margin-bottom: 10px">Diagnostics</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); border: 1px solid var(--line); border-radius: 10px; overflow: hidden">
+          
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line)">
+  <span style="color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Build</span>
+  <span style="color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5">a299f80</span>
+</div>
+          
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line)">
+  <span style="color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Page</span>
+  <span style="color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5">/room/BQ7F2K</span>
+</div>
+          
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line)">
+  <span style="color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Room</span>
+  <span style="color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere">BQ7F2K · round 2 of 3</span>
+</div>
+          
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line)">
+  <span style="color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Screen</span>
+  <span style="color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere">1440 × 900 · 2×</span>
+</div>
+          
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line)">
+  <span style="color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Connection</span>
+  <span style="color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere">connected · 1 reconnect this visit</span>
+</div>
+          
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line)">
+  <span style="color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Seat</span>
+  <span style="color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere">Guessing</span>
+</div>
+          
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line)">
+  <span style="color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Account</span>
+  <span style="color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere">Guest</span>
+</div>
+          
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line)">
+  <span style="color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Clock skew</span>
+  <span style="color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere">0.9s</span>
+</div>
+          
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); grid-column: 1 / -1; border-bottom: 0; border-right: 0">
+  <span style="color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Browser</span>
+  <span style="color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5">Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.280 Safari/537.36</span>
+</div>
+        </div>
+        <!-- Full width, because these are long flat lists: opening one in a
+             sidebar was the same problem again. -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px">
+          
+<div style="border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 800; color: var(--muted)">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></span>Everything the server saw
+</div>
+          
+<div style="border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 800; color: var(--muted)">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></span>Everything the client reported
+</div>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; align-items: start">
         <section style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); display: grid; gap: 12px">
           <div>
             <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink); margin-bottom: 8px">What happened</h2>
@@ -134,52 +200,12 @@
           </div>
         </section>
 
-        <div style="display: grid; gap: 12px">
-          <aside style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
-            <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink); margin-bottom: 6px">Diagnostics</h2>
-            
-<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
-  <span style="color: var(--faint); font-weight: 700; flex: none">Build</span>
-  <strong style="color: var(--ink); font-weight: 800; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px">a299f80</strong>
-</div>
-            
-<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
-  <span style="color: var(--faint); font-weight: 700; flex: none">Page</span>
-  <strong style="color: var(--ink); font-weight: 800; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px">/room/BQ7F2K</strong>
-</div>
-            
-<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
-  <span style="color: var(--faint); font-weight: 700; flex: none">Room</span>
-  <strong style="color: var(--ink); font-weight: 800; text-align: right">BQ7F2K · r2 t1</strong>
-</div>
-            
-<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
-  <span style="color: var(--faint); font-weight: 700; flex: none">Screen</span>
-  <strong style="color: var(--ink); font-weight: 800; text-align: right">1440 × 900 · 2×</strong>
-</div>
-            
-<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
-  <span style="color: var(--faint); font-weight: 700; flex: none">Browser</span>
-  <strong style="color: var(--ink); font-weight: 800; text-align: right">Chrome 141 · macOS</strong>
-</div>
-            
-<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
-  <span style="color: var(--faint); font-weight: 700; flex: none">Connection</span>
-  <strong style="color: var(--ink); font-weight: 800; text-align: right">reconnected 12s before</strong>
-</div>
-            
-<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px">
-  <span style="color: var(--faint); font-weight: 700; flex: none">Account</span>
-  <strong style="color: var(--ink); font-weight: 800; text-align: right">Guest, 3 days old</strong>
-</div>
-          </aside>
-
-          <aside style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
-              <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink)">Screenshot</h2>
-              <span style="margin-left: auto"><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--well); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">184 KB</span></span>
-            </div>
-            
+        <aside style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
+            <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink)">Screenshot</h2>
+            <span style="margin-left: auto"><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--well); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">184 KB</span></span>
+          </div>
+          
 <span style="display: block; position: relative; width: 268px; height: 166px; border-radius: 7px; overflow: hidden; border: 1.5px solid var(--lineStrong); background: var(--paper); flex: none">
   <span style="position: absolute; inset: 0 0 auto 0; height: 22px; background: var(--card); border-bottom: 1px solid var(--line)"></span>
   <span style="position: absolute; left: 4%; top: 26px; bottom: 4px; width: 66%; border-radius: 4px; overflow: hidden; background: #fff; border: 1px solid var(--line)"><svg viewBox="0 0 800 600" style="display: block; width: 100%; height: 100%" xmlns="http://www.w3.org/2000/svg">
@@ -205,12 +231,11 @@
 </svg></span>
   <span style="position: absolute; right: 4%; top: 26px; bottom: 4px; width: 24%; border-radius: 4px; background: var(--card); border: 1px solid var(--line)"></span>
 </span>
-            <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px">
-              <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; min-height: 34px; padding: 6px 8px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Open full size</button>
-            </div>
-            <p style="font-size: 11.5px; color: var(--faint); font-weight: 700; margin-top: 6px; line-height: 1.5">Erased when this report is decided — the row stays, the pixels do not.</p>
-          </aside>
-        </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px">
+            <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; min-height: 34px; padding: 6px 8px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Open full size</button>
+          </div>
+          <p style="font-size: 11.5px; color: var(--faint); font-weight: 700; margin-top: 6px; line-height: 1.5">Erased when this report is decided — the row stays, the pixels do not.</p>
+        </aside>
       </div>
 
       <details style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">

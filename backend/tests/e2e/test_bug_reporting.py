@@ -113,8 +113,11 @@ async def test_a_guest_files_a_bug_and_an_admin_reads_it():
             # is one disclosure away - both halves still labelled for what they
             # are: what the browser said, and what the server saw.
             await admin_page.wait_for_selector("text=Diagnostics")
-            highlights = admin_page.locator(".mod-case .bug-context").first
-            assert await highlights.locator("dt").count() >= 6
+            # Read as a strip across the width rather than a column down the
+            # side, so the decision controls stay on screen.
+            cells = admin_page.locator(".bug-diagnostics .bug-diagnostic")
+            assert await cells.count() >= 8
+            assert await cells.locator("dt").count() >= 8
             await admin_page.click('summary:has-text("Everything the client reported")')
             await admin_page.wait_for_selector("text=browser.userAgent")
             await admin_page.click('summary:has-text("Everything the server saw")')

@@ -232,7 +232,36 @@ export function BugReportsPage() {
                 </div>
               </div>
 
-              <div className="bug-case-grid">
+              {/* Diagnostics run across the top rather than down a column.
+                  Nine short facts in a narrow aside became a very tall list,
+                  and the one genuinely long value - the user agent - wrapped
+                  into a paragraph. Across the width they read as a strip, and
+                  the long one gets a cell wide enough to hold it. */}
+              <section className="ops-card bug-diagnostics-card">
+                <h2>Diagnostics</h2>
+                <dl className="bug-diagnostics">
+                  {highlights(active).map(([label, shown, wide]) => (
+                    <div key={label} className={`bug-diagnostic${wide ? " is-wide" : ""}`}>
+                      <dt>{label}</dt>
+                      <dd>{shown}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {/* Full width, because these are long flat lists: opening one
+                    in a sidebar was the same problem again. */}
+                <div className="bug-more-row">
+                  <details className="bug-more-context">
+                    <summary>Everything the server saw</summary>
+                    <ContextList value={active.serverContext} />
+                  </details>
+                  <details className="bug-more-context">
+                    <summary>Everything the client reported</summary>
+                    <ContextList value={active.clientContext} skip={["recentErrors"]} />
+                  </details>
+                </div>
+              </section>
+
+              <div className={`bug-case-grid${active.screenshot.status === "none" ? " is-single" : ""}`}>
                 <section className="ops-card">
                   <h2>What happened</h2>
                   <p className="bug-case-details">{active.details}</p>
@@ -254,55 +283,31 @@ export function BugReportsPage() {
                   )}
                 </section>
 
-                <div className="bug-case-side">
+                {active.screenshot.status !== "none" && (
                   <aside className="ops-card">
-                    <h2>Diagnostics</h2>
-                    {/* The half-dozen facts triage starts from. Everything
-                        gathered is still here, one disclosure away - leading
-                        with all of it pushed the decision off the screen. */}
-                    <dl className="bug-context">
-                      {highlights(active).map(([label, shown]) => (
-                        <div key={label}>
-                          <dt>{label}</dt>
-                          <dd>{shown}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    <details className="bug-more-context">
-                      <summary>Everything the server saw</summary>
-                      <ContextList value={active.serverContext} />
-                    </details>
-                    <details className="bug-more-context">
-                      <summary>Everything the client reported</summary>
-                      <ContextList value={active.clientContext} skip={["recentErrors"]} />
-                    </details>
+                    <div className="bug-shot-head">
+                      <h2>Screenshot</h2>
+                      <Chip kind="neutral">{bytes(active.screenshot.byteSize)}</Chip>
+                    </div>
+                    {active.screenshot.status === "ready" ? (
+                      <>
+                        <a href={bugReportScreenshotUrl(active.id)} target="_blank" rel="noreferrer">
+                          <img
+                            className="bug-shot"
+                            src={bugReportScreenshotUrl(active.id)}
+                            alt={`Screenshot attached to bug report ${active.id}`}
+                          />
+                        </a>
+                        <p className="mod-note-hint">
+                          Erased when this report is decided — the row stays, the
+                          pixels do not.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="ops-empty">Erased when this report was decided.</p>
+                    )}
                   </aside>
-                  {active.screenshot.status !== "none" && (
-                    <aside className="ops-card">
-                      <div className="bug-shot-head">
-                        <h2>Screenshot</h2>
-                        <Chip kind="neutral">{bytes(active.screenshot.byteSize)}</Chip>
-                      </div>
-                      {active.screenshot.status === "ready" ? (
-                        <>
-                          <a href={bugReportScreenshotUrl(active.id)} target="_blank" rel="noreferrer">
-                            <img
-                              className="bug-shot"
-                              src={bugReportScreenshotUrl(active.id)}
-                              alt={`Screenshot attached to bug report ${active.id}`}
-                            />
-                          </a>
-                          <p className="mod-note-hint">
-                            Erased when this report is decided — the row stays, the
-                            pixels do not.
-                          </p>
-                        </>
-                      ) : (
-                        <p className="ops-empty">Erased when this report was decided.</p>
-                      )}
-                    </aside>
-                  )}
-                </div>
+                )}
               </div>
 
               {active.status === "pending" ? (
@@ -371,8 +376,13 @@ function at(blob: Record<string, unknown>, path: string): string | null {
 }
 
 /** What a reader wants before anything else: which build, which screen, what
-    the connection had been doing, and whose account filed it. */
-function highlights(report: BugReport): [string, string][] {
+ * the connection had been doing, and whose account filed it.
+ *
+ * The third element marks a value that needs more than one cell. Only the user
+ * agent does - it is an order of magnitude longer than everything else here,
+ * and giving it its own width is what stops it wrapping into a paragraph.
+ */
+function highlights(report: BugReport): [string, string, boolean?][] {
   const client = report.clientContext;
   const server = report.serverContext;
   const round = at(server, "game.roundNumber");
@@ -389,7 +399,6 @@ function highlights(report: BugReport): [string, string][] {
     ["Page", report.route ?? "—"],
     ["Room", room],
     ["Screen", viewport],
-    ["Browser", at(client, "browser.userAgent") ?? "—"],
     [
       "Connection",
       `${at(client, "connection.connected") === "true" ? "connected" : "offline"}`
@@ -407,6 +416,7 @@ function highlights(report: BugReport): [string, string][] {
     ],
     ["Account", at(server, "account.registered") === "true" ? "Registered" : "Guest"],
     ["Clock skew", skew ? `${skew}s` : "—"],
+    ["Browser", at(client, "browser.userAgent") ?? "—", true],
   ];
 }
 

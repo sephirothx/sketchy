@@ -724,14 +724,77 @@
   align-items: start;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
 }
+
+/* Nothing in the side column when there is no screenshot, so the text takes
+   the whole width rather than leaving a gap where a picture would have been. */
+.bug-case-grid.is-single { grid-template-columns: minmax(0, 1fr); }
 
 @media (max-width: 900px) {
   .bug-case-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
-.bug-case-side { display: grid; gap: 12px; }
+/* Facts across the width instead of down a column. Cells are sized by content
+   rather than fixed, so a narrow window reflows to fewer per row instead of
+   squeezing each one thinner. */
+.bug-diagnostics-card h2 { margin-bottom: 10px; }
+
+.bug-diagnostics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+/* Rules drawn on the cells rather than as a background showing through gaps:
+   the column count changes with the width, so the last row is usually short,
+   and a painted background turns that leftover into a grey notch. Bordered
+   cells leave it as plain whitespace. */
+.bug-diagnostic {
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  display: grid;
+  gap: 3px;
+  padding: 9px 12px;
+}
+
+/* The user agent, which is an order of magnitude longer than its neighbours. */
+.bug-diagnostic.is-wide {
+  border-bottom: 0;
+  border-right: 0;
+  grid-column: 1 / -1;
+}
+
+.bug-diagnostic dt {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.bug-diagnostic dd {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.bug-diagnostic.is-wide dd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.bug-more-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 12px;
+}
 
 .bug-case-details {
   color: var(--muted);
@@ -831,10 +894,14 @@
 }
 
 .bug-more-context {
-  border-top: 1px solid var(--line);
-  margin-top: 10px;
-  padding-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
 }
+
+/* The flat lists inside can be long; bound them rather than letting one
+   disclosure push the decision controls off the screen again. */
+.bug-more-context[open] { max-height: 320px; overflow-y: auto; }
 
 .bug-more-context > summary {
   color: var(--muted);

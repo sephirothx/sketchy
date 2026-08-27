@@ -222,10 +222,19 @@ const queueItem = (summary, meta, age, { current = false, dot = T.warning, shott
   <time style="margin-left: auto; font-size: 11.5px; color: ${T.faint}; font-weight: 700; flex: none">${age}</time>
 </button>`;
 
-const specRow = (label, value, isMono = false) => `
-<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 2px; border-bottom: 1px solid ${T.line}; font-size: 13px">
-  <span style="color: ${T.faint}; font-weight: 700; flex: none">${label}</span>
-  <strong style="color: ${T.ink}; font-weight: 800; text-align: right${isMono ? '; ' + mono('; font-size: 12px') : ''}">${value}</strong>
+// One fact in the diagnostics strip. Rules are drawn on the cell rather than
+// as a background behind the grid: the column count changes with the width, so
+// the last row is usually short, and a painted background would turn that
+// leftover into a grey notch.
+const diagCell = (label, value, { wide = false, isMono = false } = {}) => `
+<div style="display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid ${T.line}; border-right: 1px solid ${T.line}${wide ? `; grid-column: 1 / -1; border-bottom: 0; border-right: 0` : ''}">
+  <span style="color: ${T.faint}; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">${label}</span>
+  <span style="color: ${T.ink}; font-size: 13px; font-weight: 700; overflow-wrap: anywhere${isMono ? '; ' + mono('; font-size: 12px; line-height: 1.5') : ''}">${value}</span>
+</div>`;
+
+const moreContext = (label) => `
+<div style="border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 10px 12px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 800; color: ${T.muted}">
+  <span style="display: inline-flex; color: ${T.faint}">${icon.chevR(12)}</span>${label}
 </div>`;
 
 // What the Copy for triage button puts on the clipboard, shown verbatim so the
@@ -268,7 +277,7 @@ const TRIAGE_TEXT = [
 ].map((line) => `<div>${line || '&nbsp;'}</div>`).join('');
 
 export const BugReportsQueuePage = `
-<div style="width: 1160px; min-height: 1180px; margin: 0 auto; padding: 24px 24px 40px">
+<div style="width: 1160px; min-height: 1175px; margin: 0 auto; padding: 24px 24px 40px">
   ${backBar}
   <div style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: start">
 
@@ -310,7 +319,31 @@ export const BugReportsQueuePage = `
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; align-items: start">
+      <!-- Diagnostics across the width, not down a column: nine short facts in
+           a narrow aside became a very tall list, and the user agent wrapped
+           into a paragraph. -->
+      <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
+        <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}; margin-bottom: 10px">Diagnostics</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; overflow: hidden">
+          ${diagCell('Build', 'a299f80', { isMono: true })}
+          ${diagCell('Page', '/room/BQ7F2K', { isMono: true })}
+          ${diagCell('Room', 'BQ7F2K · round 2 of 3')}
+          ${diagCell('Screen', '1440 × 900 · 2×')}
+          ${diagCell('Connection', 'connected · 1 reconnect this visit')}
+          ${diagCell('Seat', 'Guessing')}
+          ${diagCell('Account', 'Guest')}
+          ${diagCell('Clock skew', '0.9s')}
+          ${diagCell('Browser', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.280 Safari/537.36', { wide: true, isMono: true })}
+        </div>
+        <!-- Full width, because these are long flat lists: opening one in a
+             sidebar was the same problem again. -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px">
+          ${moreContext('Everything the server saw')}
+          ${moreContext('Everything the client reported')}
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; align-items: start">
         <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}; display: grid; gap: 12px">
           <div>
             <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}; margin-bottom: 8px">What happened</h2>
@@ -323,30 +356,17 @@ export const BugReportsQueuePage = `
           </div>
         </section>
 
-        <div style="display: grid; gap: 12px">
-          <aside style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
-            <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}; margin-bottom: 6px">Diagnostics</h2>
-            ${specRow('Build', 'a299f80', true)}
-            ${specRow('Page', '/room/BQ7F2K', true)}
-            ${specRow('Room', 'BQ7F2K · r2 t1')}
-            ${specRow('Screen', '1440 × 900 · 2×')}
-            ${specRow('Browser', 'Chrome 141 · macOS')}
-            ${specRow('Connection', 'reconnected 12s before')}
-            ${specRow('Account', 'Guest, 3 days old')}
-          </aside>
-
-          <aside style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
-              <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}">Screenshot</h2>
-              <span style="margin-left: auto">${chip('184 KB', 'neutral')}</span>
-            </div>
-            ${shot(268, 166)}
-            <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px">
-              ${btn.ghost('Open full size', { iconL: icon.eye(14), style: 'min-height: 34px; padding: 6px 8px; font-size: 13px' })}
-            </div>
-            <p style="font-size: 11.5px; color: ${T.faint}; font-weight: 700; margin-top: 6px; line-height: 1.5">Erased when this report is decided — the row stays, the pixels do not.</p>
-          </aside>
-        </div>
+        <aside style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
+            <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}">Screenshot</h2>
+            <span style="margin-left: auto">${chip('184 KB', 'neutral')}</span>
+          </div>
+          ${shot(268, 166)}
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px">
+            ${btn.ghost('Open full size', { iconL: icon.eye(14), style: 'min-height: 34px; padding: 6px 8px; font-size: 13px' })}
+          </div>
+          <p style="font-size: 11.5px; color: ${T.faint}; font-weight: 700; margin-top: 6px; line-height: 1.5">Erased when this report is decided — the row stays, the pixels do not.</p>
+        </aside>
       </div>
 
       <details style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px 18px; box-shadow: ${T.shadow}">
