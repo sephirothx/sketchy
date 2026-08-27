@@ -336,7 +336,7 @@ bit  7 6 5 4 | 3 2 1 0
 
 | Tag | Value | Event | Frame |
 | --- | --- | --- | --- |
-| `PATH_START` | 0 | `draw_start` | binary, 8 bytes |
+| `PATH_START` | 0 | `draw_start` | binary, 9 bytes |
 | `PATH_POINTS` | 1 | `draw_move` | binary, 1 + 4·n bytes |
 | `PATH_END` | 2 | `draw_end` | integer `0x12` |
 | `SHAPE` | 3 | `draw_shape` | binary, 14 bytes |
