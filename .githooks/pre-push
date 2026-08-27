@@ -15,6 +15,10 @@ set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
 status=0
 
+scan() {
+  "$root/scripts/check-tracked-artifacts.sh" "$@"
+}
+
 # Scope "already published" to the remote actually being pushed to. Bare
 # `--remotes` covers every remote at once, which quietly excuses history from
 # scanning the moment a second remote exists: commits sitting on a fork's
@@ -34,14 +38,9 @@ if [ -z "$remote_name" ] || ! git remote get-url "$remote_name" >/dev/null 2>&1;
   done
 fi
 
+published=()
 if git remote get-url "$remote_name" >/dev/null 2>&1; then
   published=("--remotes=$remote_name")
-else
-  # A genuinely unknown URL has no tracking refs to compare against. Strictly,
-  # nothing has been published there and the whole history should be scanned -
-  # but this history permanently contains one committed database, so that would
-  # refuse every such push forever. Fall back to every remote known here.
-  published=(--remotes)
 fi
 
 while read -r _local_ref local_sha _remote_ref remote_sha; do
@@ -54,12 +53,25 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
   # An all-zero remote sha is a branch the remote has never seen, so there is no
   # far end to diff against. Everything not already published to this remote is
   # what the push would add.
+  #
+  # For a destination we cannot identify at all there are no tracking refs to
+  # subtract, and "already on some other remote" is not an answer: a secret
+  # sitting in a private fork is exactly what must not reach a public URL
+  # unscanned. Scan from the baseline floor instead, the same one CI uses.
   case "$remote_sha" in
-    *[!0]*) range=("$remote_sha..$local_sha") ;;
-    *) range=("$local_sha" --not "${published[@]}") ;;
+    *[!0]*)
+      range=("$remote_sha..$local_sha")
+      ;;
+    *)
+      if [ ${#published[@]} -gt 0 ]; then
+        range=("$local_sha" --not "${published[@]}")
+      else
+        range=("$(scan --baseline)..$local_sha")
+      fi
+      ;;
   esac
 
-  if ! "$root/scripts/check-tracked-artifacts.sh" --range "${range[@]}"; then
+  if ! scan --range "${range[@]}"; then
     status=1
   fi
 done

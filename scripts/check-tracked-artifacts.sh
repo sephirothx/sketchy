@@ -21,6 +21,9 @@
 #
 # Usage:
 #   check-tracked-artifacts.sh                  scan every tracked file
+#   check-tracked-artifacts.sh --baseline       print the commit this history is
+#                                               scannable from, for callers that
+#                                               need a floor and have no base
 #   check-tracked-artifacts.sh --range <spec>   also scan every file the commits in
 #                                               <spec> ADD OR MODIFY (any rev-list
 #                                               arguments), so a file that is added
@@ -33,6 +36,16 @@ set -euo pipefail
 
 # "SQLite format 3\0", the 16-byte header every SQLite database opens with.
 SQLITE_MAGIC_HEX="53514c69746520666f726d6174203300"
+
+# The commit that added `backend/sketchy.db.broken-20260827-033005`. Removing
+# that file was a deletion and not a rewrite, so the blob is in this history for
+# good, and any range reaching back to it fails forever. Callers with no base
+# commit to work from use this as their floor - half-open, so the commit itself
+# is excluded and everything the guard can still act on is included.
+#
+# It lives here so the hook and CI cannot drift apart on it. If this history is
+# ever rewritten, this is the one line to change.
+HISTORY_BASELINE="f0696b46e0c3305624349c8df9c55fc6595e1d44"
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
@@ -52,6 +65,10 @@ while [ $# -gt 0 ]; do
       mode="range"
       range_args=("$@")
       break
+      ;;
+    --baseline)
+      printf '%s\n' "$HISTORY_BASELINE"
+      exit 0
       ;;
     -h|--help)
       usage
@@ -202,10 +219,17 @@ if [ "$mode" = "range" ]; then
   # A detected rename would be reported as R and skipped by the filter, and it
   # would also emit a third NUL-separated field for the destination path, which
   # the two-read loop below would misparse.
+  #
+  # -m is what makes a merge commit produce a file list at all. Without it
+  # `diff-tree` prints nothing for a merge, so anything that exists only in the
+  # merge result - a conflict resolved by pasting in the wrong file - is
+  # invisible. With it, each parent is diffed separately, and the blob-keyed
+  # dedupe below collapses the entries that repeat across parents. -z keeps the
+  # two-field-per-entry stream intact; -m adds no commit-id records to it.
   while IFS= read -r commit; do
     while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
       check_entry "$path" "$(printf '%s\n' "$meta" | awk '{print $4}')"
-    done < <(git diff-tree -r -z --no-commit-id --no-renames --diff-filter=d --root "$commit")
+    done < <(git diff-tree -r -m -z --no-commit-id --no-renames --diff-filter=d --root "$commit")
   done < <(git rev-list "${range_args[@]}")
 fi
 

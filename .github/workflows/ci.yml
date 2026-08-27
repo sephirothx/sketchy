@@ -33,13 +33,10 @@ jobs:
       - name: Scan every commit the change adds
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          # The commit that added `backend/sketchy.db.broken-20260827-033005`.
-          # Removing that file was a deletion, not a rewrite, so the blob is in
-          # this history for good and any range reaching back to it fails
-          # forever. Exclusive `..` puts the floor just after it: everything the
-          # guard can still do something about, and nothing it cannot.
-          BASELINE: f0696b46e0c3305624349c8df9c55fc6595e1d44
         run: |
+          # The floor comes from the script, not from a copy of the sha kept
+          # here, so this and `.githooks/pre-push` cannot drift apart on it.
+          BASELINE="$(bash scripts/check-tracked-artifacts.sh --baseline)"
           # An all-zero or unreachable base means there is no far end to diff
           # against - a new branch, or a force-push over a discarded commit.
           # Falling back to the tip scan there would wave through exactly the

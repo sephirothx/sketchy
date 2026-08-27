@@ -285,6 +285,82 @@ def test_public_pem_material_is_not_refused(armour, tmp_path):
 
 
 @requires_git
+def test_a_secret_introduced_only_by_a_merge_is_refused(tmp_path):
+    """`git diff-tree` prints nothing at all for a merge commit unless asked for
+    a per-parent diff, so a conflict resolved by pasting in the wrong file left
+    no trace in the range scan."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", ".")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+
+    (repo / "f.txt").write_text("base\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "base")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    git(repo, "checkout", "-qb", "side")
+    (repo / "f.txt").write_text("side\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "side")
+
+    git(repo, "checkout", "-q", base, "-B", "trunk")
+    (repo / "f.txt").write_text("trunk\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "trunk")
+
+    # Conflicts, which is the point: the resolution is where the secret enters,
+    # and it exists in neither parent.
+    subprocess.run(["git", "merge", "side"], cwd=repo, capture_output=True)
+    (repo / "f.txt").write_text("resolved\n")
+    (repo / "notes.txt").write_bytes(SQLITE_MAGIC + b"\x00" * 512)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "resolve the conflict")
+
+    # Gone by the tip, so only the merge commit carries it.
+    git(repo, "rm", "-q", "notes.txt")
+    git(repo, "commit", "-qm", "tidy up")
+
+    ranged = run_checker(repo, "--range", f"{base}..HEAD")
+
+    assert ranged.returncode == 1
+    assert "notes.txt" in ranged.stderr
+
+
+@requires_git
+def test_the_baseline_is_a_commit_in_this_history():
+    """The hook and CI both take their floor from `--baseline`. A sha that does
+    not resolve would send both of them to their weakest fallback without
+    saying so."""
+    baseline = subprocess.run(
+        ["bash", str(CHECKER), "--baseline"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+    resolved = subprocess.run(
+        ["git", "cat-file", "-e", f"{baseline}^{{commit}}"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+    )
+
+    assert resolved.returncode == 0, f"baseline {baseline!r} is not a commit here"
+
+    # And the floor has to be usable: scanning from it must not trip over the
+    # artifact whose presence in history is the reason it exists.
+    assert run_checker(REPO_ROOT, "--range", f"{baseline}..HEAD").returncode == 0
+
+
+@requires_git
 def test_an_example_env_file_is_allowed(tmp_path):
     """.gitignore deliberately un-ignores `.env.example`, so the checker must not
     contradict it."""
