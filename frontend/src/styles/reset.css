@@ -18,6 +18,22 @@ body {
   min-height: 100dvh;
 }
 
+/* Headings carry the display face. Without this every classless <h1>-<h6>
+   inherits --font-body from <body> and renders in Nunito Sans at the browser's
+   default bold — which is what the lobby's section titles were doing, against
+   the mockups. Weight 600 matches every heading in docs/ui-mockups. Size stays
+   per-surface, as it is in the mockups too. This sits in @layer reset, so any
+   component rule still overrides it. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
 button {
   font-family: inherit;
   cursor: pointer;
