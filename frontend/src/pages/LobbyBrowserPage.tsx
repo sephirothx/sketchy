@@ -191,11 +191,17 @@ export function LobbyBrowserPage() {
           return;
         }
         if (!res.ok) throw new Error(`Room list request failed with ${res.status}`);
-        roomsEtagRef.current = res.headers.get("ETag");
         const data: unknown = await res.json();
         if (!Array.isArray(data)) throw new Error("Invalid room list response");
         if (!cancelled) {
           hasLoadedRoomsRef.current = true;
+          // Stored with the list it describes, never before it. This poll can
+          // land after the effect has torn down, and the ref outlives the
+          // effect - so recording a validator whose body was then dropped
+          // would make every later poll answer 304 for rooms that were never
+          // applied, leaving the lobby stale until the list happened to
+          // change again.
+          roomsEtagRef.current = res.headers.get("ETag");
           setRooms(data as RoomSummary[]);
           setRoomListStatus("loaded");
           setRoomListError(null);
