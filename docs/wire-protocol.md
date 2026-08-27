@@ -331,14 +331,7 @@ different game state per player.
 **`turn_ended`** carries `prompt`, `drawerId`, `drawerBonus`, `seconds`, the ordered
 `guesses[]` (each with the guesser's `seconds`), and `scores[]` — each entry carrying
 `score`, `delta`, `previousRank`, and `newRank` so the client can animate the standings
-without recomputing ranks.
-
-**Both arrays address players by `playerId` alone.** Nickname, colour, and anonymity come
-from the roster the client already holds; `gameStore.endTurn` joins them on receipt, so
-nothing downstream changes. That makes the roster the single source of truth for identity
-— a rename mid-turn can no longer show one name in the player list and another in the
-results — and removes ~39% of the payload's raw bytes. On the wire, behind
-permessage-deflate, it is worth about 4%: the repeated names compressed well already. Ranks use standard competition ranking (1, 2, 2, 4) via
+without recomputing ranks. Ranks use standard competition ranking (1, 2, 2, 4) via
 `competition_ranks()` ([`backend/app/game.py:53`](../backend/app/game.py)), shared with
 the recorded standings so the final screen and the history row can never disagree.
 
