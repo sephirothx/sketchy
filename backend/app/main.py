@@ -2,8 +2,13 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import hashlib
+import json
+
 import socketio
-from fastapi import FastAPI
+
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
@@ -285,8 +290,28 @@ async def ready():
 
 
 @api.get("/api/rooms")
-async def list_public_rooms():
-    return room_manager.list_public_rooms()
+async def list_public_rooms(request: Request):
+    """The lobby list, with a validator so an unchanged list costs no body.
+
+    Every lobby viewer re-fetches this every four seconds whether or not
+    anything moved, and most of the time nothing has. gzip shrinks the body
+    but still sends it; a 304 sends none of it.
+
+    The validator is a hash of the serialized list rather than a change
+    counter. A counter has to be bumped at every site that touches any of the
+    22 fields in `to_public_summary()`, and a missed bump is a lobby that is
+    stale until something else happens to change - a silent correctness bug
+    traded for a few microseconds. Hashing cannot go stale by construction.
+    """
+    rooms = room_manager.list_public_rooms()
+    body = json.dumps(rooms, separators=(",", ":"), sort_keys=True).encode()
+    etag = f'"{hashlib.blake2b(body, digest_size=16).hexdigest()}"'
+    # `no-cache` rather than a max-age: the lobby is public and must never be
+    # served stale from a browser cache, only revalidated cheaply.
+    headers = {"ETag": etag, "Cache-Control": "no-cache"}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(content=body, media_type="application/json", headers=headers)
 
 
 # In production, serve the built frontend as static files from the same origin

@@ -132,6 +132,9 @@ export function LobbyBrowserPage() {
   const [roomRefreshError, setRoomRefreshError] = useState<string | null>(null);
   const [roomListRetry, setRoomListRetry] = useState(0);
   const hasLoadedRoomsRef = useRef(false);
+  // The validator from the last successful fetch. A ref rather than state:
+  // changing it must not re-render, and the poll reads it at request time.
+  const roomsEtagRef = useRef<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [languageFilter, setLanguageFilter] = useState("all");
@@ -174,12 +177,31 @@ export function LobbyBrowserPage() {
       activeController = controller;
       activeTimeout = timeout;
       try {
-        const res = await fetch("/api/rooms", { signal: controller.signal });
+        const res = await fetch("/api/rooms", {
+          signal: controller.signal,
+          headers: roomsEtagRef.current ? { "If-None-Match": roomsEtagRef.current } : {},
+        });
+        if (res.status === 304) {
+          // Nothing has changed since the last poll, and the server sent no
+          // body to prove it. The rooms already on screen are current.
+          if (!cancelled) {
+            setRoomListStatus("loaded");
+            setRoomRefreshError(null);
+          }
+          return;
+        }
         if (!res.ok) throw new Error(`Room list request failed with ${res.status}`);
         const data: unknown = await res.json();
         if (!Array.isArray(data)) throw new Error("Invalid room list response");
         if (!cancelled) {
           hasLoadedRoomsRef.current = true;
+          // Stored with the list it describes, never before it. This poll can
+          // land after the effect has torn down, and the ref outlives the
+          // effect - so recording a validator whose body was then dropped
+          // would make every later poll answer 304 for rooms that were never
+          // applied, leaving the lobby stale until the list happened to
+          // change again.
+          roomsEtagRef.current = res.headers.get("ETag");
           setRooms(data as RoomSummary[]);
           setRoomListStatus("loaded");
           setRoomListError(null);
