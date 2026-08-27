@@ -16,7 +16,7 @@ from app.repositories.interfaces import (
     PromptListRepository,
 )
 from app.domain_values import RuntimeEventType
-from app.handlers.budgets import CommandBudgets, budget_for
+from app.handlers.budgets import CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
 from app.services.runtime_metrics import metrics
 from app.services.timers import TimerManager
@@ -76,12 +76,15 @@ class HandlerContext:
     _seating_gates: dict[str, SeatingGate] = field(
         default_factory=dict, init=False, repr=False
     )
-    _command_budgets: CommandBudgets = field(
-        default_factory=lambda: CommandBudgets(), init=False, repr=False
+    # The budgets in force. Mutable on purpose: #446 wants tunables changed
+    # from an admin panel without a deploy, so they live where a request could
+    # reach them rather than in constants only a deploy can replace.
+    command_budgets: CommandBudgetPolicy = field(
+        default_factory=CommandBudgetPolicy, init=False, repr=False
     )
-    # Sockets already told they are going too fast, so the observation is
-    # recorded once a run rather than once a refusal.
-    _throttled: set[str] = field(default_factory=set, init=False, repr=False)
+    _command_windows: CommandBudgets = field(
+        default_factory=CommandBudgets, init=False, repr=False
+    )
     # Sockets this server is in the act of closing, counted so that two
     # closes of the same socket cannot uncount each other.
     _closing_sockets: dict[str, int] = field(
@@ -96,41 +99,34 @@ class HandlerContext:
         one. `test_command_budgets.py` checks the two lists against each other.
         """
 
-        budget = budget_for(command)
-
         async def guarded(sid, *args):
             # Before parsing, before authorization, before any mutation: a
             # refused command must cost nothing but the check itself.
-            if not self._command_budgets.check(f"{sid}:{command}", budget):
-                self._note_throttled(sid, command)
-                return {
-                    "ok": False,
-                    "error": "You are doing that too quickly. Slow down a moment.",
-                }
-            return await handler(sid, *args)
+            budget = self.command_budgets.for_command(command)
+            key = f"{sid}:{command}"
+            if self._command_windows.check(key, budget):
+                return await handler(sid, *args)
+            if self._command_windows.should_report(key, budget):
+                logger.warning("throttled %s from %s", command, sid)
+                metrics.record(
+                    RuntimeEventType.COMMAND_THROTTLED, details={"command": command}
+                )
+            if budget.silent:
+                # A frame nobody is waiting on. Answering would put an error on
+                # screen in the middle of a stroke, about a frame the client
+                # never expected a reply to.
+                return None
+            return {
+                "ok": False,
+                "error": "You are doing that too quickly. Slow down a moment.",
+            }
 
         self.sio.on(command, handler=guarded)
 
-    def _note_throttled(self, sid: str, command: str) -> None:
-        """Record the first refusal of a run, not every one of them.
-
-        A caller who is being refused is being refused repeatedly, and one
-        observation per refused command would be its own write amplification -
-        the thing these budgets exist to stop.
-        """
-
-        key = f"{sid}:{command}"
-        if key in self._throttled:
-            return
-        self._throttled.add(key)
-        logger.warning("throttled %s from %s", command, sid)
-        metrics.record(RuntimeEventType.COMMAND_THROTTLED, details={"command": command})
-
     def clear_command_budget(self, sid: str) -> None:
-        """Forget a socket that has gone, so neither map grows for ever."""
+        """Forget a socket that has gone, so the windows do not outlive it."""
 
-        self._command_budgets.forget(sid)
-        self._throttled = {key for key in self._throttled if not key.startswith(f"{sid}:")}
+        self._command_windows.forget(sid)
 
     @asynccontextmanager
     async def seating(self, sid: str) -> AsyncIterator[SeatingGate]:
