@@ -28,10 +28,36 @@ Companion documents: [`architecture.md`](architecture.md) ·
 | Authentication | The HttpOnly `sketchy_session` cookie, read from `HTTP_COOKIE` at handshake |
 | REST base | `/api`, relative to whatever origin served the page |
 | Default ack timeout | 8000 ms (`DEFAULT_ACK_TIMEOUT_MS`) |
+| Compression | **permessage-deflate with context takeover**, negotiated on every WebSocket |
 
 The client does **not** auto-connect. The handshake reads the session cookie exactly
 once, and on a first visit that cookie does not exist until `GET /api/auth/me` has
 provisioned the account, so `App.tsx` connects only after identity has settled.
+
+### Compression, and what it means for every size in this document
+
+uvicorn's wsproto transport offers `PerMessageDeflate()` and `ws_per_message_deflate`
+defaults to true, so the handshake really does carry
+`Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits=15`. **Every byte
+count anywhere in this document is therefore an input to the wire cost, not the wire
+cost.** Three consequences worth stating, because each one has already reversed a
+plausible-looking optimization:
+
+- **Repetition is nearly free.** With context takeover a socket's compressor keeps its
+  window across messages, so a payload that resembles the previous one encodes largely
+  as a back-reference — consecutive `room_state` broadcasts compress by ~98.7%. Anything
+  that saves bytes by *not repeating* something is competing with that and will usually
+  lose.
+- **Every message costs a boundary.** Each message ends in a `Z_SYNC_FLUSH`, roughly
+  five bytes that no payload change can remove. On high-frequency paths this is the
+  dominant residue, and only *fewer messages* removes it.
+- **A broadcast saves no bytes.** A deflate context is per **connection**, so a
+  room-wide emit is compressed separately for every socket, exactly as N individual
+  emits are. Replacing a per-socket loop with one broadcast is a server-CPU change and
+  nothing more.
+
+Measure compressed, through one context, over a plausible sequence — never a single
+payload in isolation.
 
 ### Handshake
 
@@ -337,6 +363,16 @@ all resolve seats server-side.
 **`turn_started`** is emitted per socket because `maskedPrompt`, `hintCost`,
 `letterPrices`, and `hintSpend` are private to that viewer. A spectator sees the masked
 prompt unless the room enabled `spectatorsSeePrompt`; the drawer sees the answer.
+
+At *turn start* those four are in fact identical for every guesser — nothing has been
+bought yet — so only the drawer and any prompt-seeing spectators genuinely diverge, and
+collapsing the loop into one broadcast plus a small private follow-up looks free.
+[`benchmarks/turn_start.py`](../benchmarks/turn_start.py) measures what that would buy:
+**zero bytes** (see §1 — a broadcast is compressed per connection either way) and
+55–271 µs of server work, once per turn, which is three ten-thousandths of one percent
+of a core. The loop stays. It has one payload shape rather than two, no second event
+whose loss would leave a drawer looking at a masked prompt, and mid-turn
+(`hint_revealed`, `sync_game`) the divergence is real anyway.
 
 **`chat_message`** (`ChatMessage`) has `id`, `nickname`, `text`, `correct`, and the
 optional `retainedMessageId`, `playerId`, `nameColor`, `isAnonymous`, `system`, `close`
