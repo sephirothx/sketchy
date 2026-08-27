@@ -78,6 +78,36 @@ socket.on("upgrade_required", (notice: UpgradeRequiredNotice | undefined) => {
   });
 });
 
+let serverFullReason: string | null = null;
+const serverFullListeners = new Set<(reason: string) => void>();
+
+// Same reasoning as the upgrade notice above: being turned away for capacity
+// is not scoped to a screen, and the socket is closed immediately afterwards,
+// so this has to be read where the socket lives rather than in a component
+// that may not be mounted.
+socket.on("server_full", (notice: { reason?: string } | undefined) => {
+  recordClientError("socket", "server_full");
+  serverFullReason =
+    typeof notice?.reason === "string" && notice.reason
+      ? notice.reason
+      : "Sketchy is full right now. Try again in a few minutes.";
+  serverFullListeners.forEach((listener) => listener(serverFullReason!));
+});
+
+/** The reason this client was turned away, if it was. */
+export function currentServerFullReason(): string | null {
+  return serverFullReason;
+}
+
+/** Subscribe to being turned away. Called immediately if it already happened. */
+export function onServerFull(listener: (reason: string) => void): () => void {
+  serverFullListeners.add(listener);
+  if (serverFullReason !== null) listener(serverFullReason);
+  return () => {
+    serverFullListeners.delete(listener);
+  };
+}
+
 export interface ConnectionTelemetry {
   connected: boolean;
   everConnected: boolean;

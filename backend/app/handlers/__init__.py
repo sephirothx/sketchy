@@ -16,7 +16,7 @@ from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
 from app.services.message_retention import MessageRetentionService
 from app.services.room_codes import RoomCodeService
-from app.services.room_quotas import RoomQuotaService
+from app.services.room_quotas import RoomCapacityService, RoomQuotaService
 from app.services.timers import TimerManager
 from app.services.shutdown import ShutdownCoordinator
 
@@ -65,6 +65,7 @@ def register_all_handlers(
     # Built even without a database: the live-room ceilings are answered from
     # memory, and only the creation *rate* needs a persistent bucket.
     ctx.room_quotas = RoomQuotaService(room_manager, session_factory)
+    ctx.room_capacity = RoomCapacityService()
 
     moderation.register(ctx)
     restart.register(ctx)

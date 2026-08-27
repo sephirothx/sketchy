@@ -28,6 +28,24 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     solely by ``GET /api/auth/me`` so that merely opening a socket cannot
     create user rows.
     """
+    # Counted before the ceiling is read, so that the close below - which runs
+    # the disconnect handler and gives the place back - balances the books.
+    ctx.room_capacity.note_socket_opened(sid)
+    if not ctx.room_capacity.has_socket_capacity():
+        ctx.room_capacity.note_socket_closed(sid)
+        # Told, not refused. A refusal carries no diagnosable signal and
+        # `ConnectionRefusedError` is reserved for suspensions, so the client
+        # learns why and can say so instead of retrying into silence.
+        logger.warning(
+            "refusing socket %s: %d already open", sid, ctx.room_capacity.open_sockets
+        )
+        await ctx.sio.emit(
+            "server_full",
+            {"reason": "Sketchy is full right now. Try again in a few minutes."},
+            to=sid,
+        )
+        await ctx.sio.disconnect(sid)
+        return
     user_id = None
     if ctx.session_factory is not None:
         token = session_token_from_cookie_header(environ.get("HTTP_COOKIE"))
@@ -67,6 +85,7 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
 async def disconnect(ctx: HandlerContext, sid):
     if not sid:
         return
+    ctx.room_capacity.note_socket_closed(sid)
     if ctx.is_closing(sid):
         # We are closing this socket ourselves, from inside a seat transition
         # that has already moved its seat on - the tab a reconnect superseded.

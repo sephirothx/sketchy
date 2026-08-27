@@ -24,6 +24,7 @@ import { XIcon } from "./components/icons";
 import { useAuthStore } from "./store/authStore";
 import { socket } from "./lib/socket";
 import { parseShutdownNotice, shutdownSecondsRemaining } from "./lib/shutdownNotice";
+import { onServerFull } from "./lib/socket";
 import type { ServerShutdownNotice } from "./types";
 
 /* The router keeps the window scroll across navigations, so submitting a form
@@ -41,6 +42,7 @@ function App() {
   useRoomSessionReconnect();
   const fetchMe = useAuthStore((state) => state.fetchMe);
   const [shutdownNotice, setShutdownNotice] = useState<ServerShutdownNotice | null>(null);
+  const [serverFull, setServerFull] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [restarted, setRestarted] = useState(false);
 
@@ -70,6 +72,11 @@ function App() {
     };
   }, []);
 
+  // Being turned away closes the socket immediately, so this is the only
+  // chance to say why: without it the player sees a silent, permanent
+  // disconnection and no reason for it.
+  useEffect(() => onServerFull(setServerFull), []);
+
   useEffect(() => {
     if (!shutdownNotice) return;
     const tick = () => setSecondsLeft(shutdownSecondsRemaining(shutdownNotice));
@@ -94,6 +101,11 @@ function App() {
 
   return (
     <ToastProvider>
+      {serverFull && (
+        <div className="server-shutdown-banner" role="status" aria-live="polite">
+          {serverFull}
+        </div>
+      )}
       {shutdownNotice && (
         <div className="server-shutdown-banner" role="status" aria-live="polite">
           Server update in progress. No new rooms or games can start;{" "}
