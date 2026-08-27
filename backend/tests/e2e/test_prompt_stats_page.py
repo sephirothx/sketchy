@@ -1,6 +1,6 @@
 """The prompt stats page: reachable, sortable, and honest about thin data."""
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import use_guest_name
 
 BASE_URL = "http://localhost:8000"
@@ -50,9 +50,18 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             await table.wait_for()
 
             # The sort is in the URL, so a chosen view can be linked to.
+            #
+            # `expect` rather than a bare `input_value`, because the URL leads
+            # the control rather than following it: react-router writes history
+            # synchronously and commits the re-render in a transition, so for a
+            # frame or more `location` already says `most-picked` while the
+            # controlled select is still held at the old value. `wait_for_url`
+            # returns at the *start* of that window. It is one frame on an idle
+            # machine and eight under load, which is why this only ever failed
+            # on CI.
             await page.select_option("#prompt-stats-sort", "most-picked")
             await page.wait_for_url("**sort=most-picked")
-            assert await page.locator("#prompt-stats-sort").input_value() == "most-picked"
+            await expect(page.locator("#prompt-stats-sort")).to_have_value("most-picked")
 
             # Facts can be sliced without resetting or rewriting them. The
             # chosen period and rule dimensions remain linkable in the URL.
