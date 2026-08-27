@@ -532,6 +532,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | --- | --- |
 | [`app/api/__init__.py`](../backend/app/api/__init__.py) | REST routers served alongside the Socket.IO application. |
 | [`app/api/bug_reports.py`](../backend/app/api/bug_reports.py) | Player-filed bug reports and the administrator queue that triages them. |
+| [`app/request_limits.py`](../backend/app/request_limits.py) | The ceiling on request bodies, applied before anything reads one. |
 | [`app/api/moderation.py`](../backend/app/api/moderation.py) | Player reports and role-gated moderation actions. |
 | [`app/api/operations.py`](../backend/app/api/operations.py) | Operator-facing views of how the server is behaving. |
 | [`app/api/persistent_rooms.py`](../backend/app/api/persistent_rooms.py) | Owner-facing discovery for persistent group rooms. |

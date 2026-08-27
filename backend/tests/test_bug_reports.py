@@ -13,7 +13,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.api.bug_reports import create_bug_report_router
+from app.api.bug_reports import MAX_SCREENSHOT_BASE64, create_bug_report_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import AuditEvent, Base, BugReport, User, generate_uuid
@@ -361,6 +361,29 @@ async def test_an_oversized_screenshot_is_refused(env):
         "/api/bug-reports", json=a_report(screenshot=encoded(huge))
     )
     assert response.status_code == 422
+
+
+async def test_the_screenshot_field_is_bounded_before_it_is_decoded(env):
+    """The body limit guards the memory; this guards the decode.
+
+    Base64 grows by four thirds, so the field cap is what stops a body that
+    still fits under the transport limit from asking for an oversized decode.
+    """
+    new_client, _, _ = env
+    http = new_client()
+    await guest(http)
+    response = await http.post(
+        "/api/bug-reports",
+        json=a_report(screenshot="A" * (MAX_SCREENSHOT_BASE64 + 4)),
+    )
+    assert response.status_code == 422
+    # Refused by the field's own bound, before the handler runs: the decode
+    # never happens, so the oversized image is never held in memory at all.
+    # The handler's own size check would answer with a plain string instead.
+    detail = response.json()["detail"]
+    assert isinstance(detail, list), detail
+    assert detail[0]["type"] == "string_too_long", detail
+    assert detail[0]["loc"][-1] == "screenshot", detail
 
 
 async def test_the_queue_is_for_administrators_only(env):

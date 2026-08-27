@@ -22,6 +22,7 @@ from app.auth.bans import suspension_payload
 from app.auth.warnings import pending_warning_payload
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
+from app.request_limits import RequestSizeLimitMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db
 from app.db.seed import seed_prompt_lists
@@ -235,6 +236,9 @@ api.add_middleware(
     allow_headers=["*"],
 )
 api.add_middleware(SessionAuthMiddleware, session_factory=async_session_factory)
+# Added last so it runs first: an oversized body is refused before any routing
+# or session lookup, rather than after the server has already held it.
+api.add_middleware(RequestSizeLimitMiddleware)
 api.include_router(
     create_auth_router(
         user_repo,

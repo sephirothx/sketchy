@@ -700,6 +700,15 @@ A screenshot is validated rather than believed: real PNG or WebP magic bytes, �
 with byte size and SHA-256 re-derived server-side. Anything else is `422` — never a
 silently dropped attachment.
 
+Request bodies are capped before they are read at all
+([`app/request_limits.py`](../backend/app/request_limits.py)): 512 KiB by default — sized against the largest
+body the API declares, a 500-prompt list with aliases — and 4 MiB for
+`POST /api/bug-reports`, which is the one route that legitimately carries a
+screenshot. An over-length `Content-Length` is answered `413` without invoking the
+application; a body with no length, or a false one, is cut off as it streams and fails
+its own validation. The `screenshot` field is separately bounded at its base64 length,
+so an oversized image is refused before it is decoded.
+
 `clientContext.route` is cut back to its path before it is stored, in the blob as well
 as in the column lifted out of it. The client already sends a bare `location.pathname`,
 but a query string is where invite codes and identifiers live, so the rule holds against

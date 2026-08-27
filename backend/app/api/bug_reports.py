@@ -45,6 +45,11 @@ MAX_DETAILS = 4_000
 MAX_RESOLUTION_NOTE = 2_000
 MAX_CLIENT_CONTEXT_BYTES = 32_768
 MAX_SCREENSHOT_BYTES = 2_097_152
+# What 2 MiB looks like once base64 has grown it by four thirds, plus padding.
+# The body limit in `app/request_limits.py` is the memory guard; this is the
+# correctness one, so an oversized image is refused before it is decoded rather
+# than after.
+MAX_SCREENSHOT_BASE64 = ((MAX_SCREENSHOT_BYTES + 2) // 3) * 4 + 8
 # Long enough to see what led to the failure, short enough that a page looping
 # an error cannot turn one report into a log shipment.
 MAX_CLIENT_ERRORS = 20
@@ -86,7 +91,7 @@ class BugReportBody(BaseModel):
     # Which room they believe they are in. Checked against the live room rather
     # than believed: the server records the seat it can actually see.
     room_code: str | None = Field(default=None, alias="roomCode", max_length=16)
-    screenshot: str | None = Field(default=None)
+    screenshot: str | None = Field(default=None, max_length=MAX_SCREENSHOT_BASE64)
 
     @field_validator("summary", "details")
     @classmethod
