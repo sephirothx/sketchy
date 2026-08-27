@@ -407,6 +407,7 @@ claim that an arbitrary host will sustain it.
 | **R-BUG-05** | The server MUST resolve room, game and turn from the reporter's **live seat**, never from the code the client sent. Naming a room you are not sitting in MUST attach nothing. |
 | **R-BUG-06** | A report MUST NOT carry the prompt in play, chat text, or any query string. A guesser filing a bug is still a guesser. |
 | **R-BUG-07** | A screenshot MUST be optional, captured only through the browser's own picker, and validated server-side — real PNG or WebP magic bytes, ≤ 2 MB, with byte size and SHA-256 re-derived rather than believed. |
+| **R-BUG-11** | The report dialog MUST conceal itself before the frame is taken and MUST wait for the capture stream to show the page without it. A screenshot of the form asking for a screenshot is worth nothing. The dialog MUST be restored however the capture ends, including on failure. |
 | **R-BUG-08** | Screenshot bytes MUST be **erased when the report is decided**, and that erasure MUST be structural: a row whose screenshot status is `erased` cannot hold a payload. The metadata stays, so the record still says a picture existed. |
 | **R-BUG-09** | Review MUST be one-way and require a note: a pending report receives one decision and cannot later be silently rewritten. |
 | **R-BUG-10** | Submission and each decision MUST append an audit event. The ledger records that a bug was filed and acted on, **never what it said**. |

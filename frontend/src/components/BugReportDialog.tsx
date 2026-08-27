@@ -30,6 +30,7 @@ function bytes(size: number): string {
  * honest version of "we collect some technical details" is the details.
  */
 export function BugReportDialog({ onClose }: { onClose: () => void }) {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
@@ -79,7 +80,9 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
     setCapturing(true);
     setError(null);
     try {
-      const captured = await captureScreenshot();
+      // The whole overlay, scrim included: hiding only the card would leave a
+      // dimmed page, and the point is the screen as it really looks.
+      const captured = await captureScreenshot({ hide: overlayRef.current });
       // Null means they closed the picker, which is an answer, not a failure.
       if (captured) {
         if (shot) URL.revokeObjectURL(shot.previewUrl);
@@ -154,7 +157,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  return <div className="modal-overlay" onMouseDown={(event) => {
+  return <div ref={overlayRef} className="modal-overlay" onMouseDown={(event) => {
     if (event.target === event.currentTarget) onClose();
   }}>
     <div ref={dialogRef} className="modal-card bug-report-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
@@ -205,7 +208,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
                 <img src={shot.previewUrl} alt="The screenshot that will be sent with this report" />
                 <div>
                   <p className="bug-report-shot-meta">{shot.width} × {shot.height} · {shot.contentType.replace("image/", "").toUpperCase()} · {bytes(shot.byteSize)}</p>
-                  <p className="auth-hint">Captured from what you picked. Look at it before you send — you chose what to share.</p>
+                  <p className="auth-hint">This dialog hides itself while the shot is taken, so you get the page behind it. Look at it before you send — you chose what to share.</p>
                   <div className="bug-report-shot-actions">
                     <button type="button" onClick={() => void attach()} disabled={capturing}>Replace</button>
                     <button type="button" className="bug-report-remove" onClick={discard}>Remove</button>
@@ -217,7 +220,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
                 <button type="button" className="bug-report-attach" onClick={() => void attach()} disabled={capturing}>
                   {capturing ? "Waiting for the picker…" : "Attach a screenshot"}
                 </button>
-                <p className="auth-hint">Opens your browser's own picker — choose this tab. Nothing is captured until you do.</p>
+                <p className="auth-hint">Opens your browser's own picker — choose this tab. This dialog hides itself while the shot is taken, so you get the page behind it.</p>
               </>
             )}
           </section>

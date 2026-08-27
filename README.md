@@ -856,8 +856,10 @@ play or chat text. Everything gathered is shown in the dialog before sending, an
 one checkbox drops all of it.
 
 A screenshot is optional, captured through the browser's own picker via
-`getDisplayMedia` so the player chooses what to share, then validated
-server-side — real PNG or WebP magic bytes, at most 2 MB, size and SHA-256
+`getDisplayMedia` so the player chooses what to share. The dialog hides itself
+and waits for the stream to catch up before the frame is taken — otherwise the
+only thing in the picture is the form asking for it — then the image is
+validated server-side — real PNG or WebP magic bytes, at most 2 MB, size and SHA-256
 re-derived rather than believed. Its bytes are **erased when the report is
 decided**, structurally: a check constraint forbids a decided row from holding
 pixels. Triage offers **Copy for triage**, which puts the whole report on the

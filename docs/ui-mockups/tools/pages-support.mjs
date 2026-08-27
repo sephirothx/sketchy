@@ -150,7 +150,7 @@ export const BugReportDialogPage = `
           ${shot(148, 92)}
           <div style="display: grid; gap: 6px; min-width: 0">
             <span style="font-size: 12.5px; font-weight: 800; color: ${T.ink}; ${mono()}">1440 × 900 · WebP · 184 KB</span>
-            <span style="font-size: 12px; color: ${T.muted}; font-weight: 600; line-height: 1.45">Captured from the tab you picked. Look at it before you send — you chose what to share, and we cannot see it until you do.</span>
+            <span style="font-size: 12px; color: ${T.muted}; font-weight: 600; line-height: 1.45">This dialog hides itself while the shot is taken, so you get the page behind it. Look at it before you send — you chose what to share.</span>
             <div style="display: flex; gap: 6px">
               ${btn.ghost('Replace', { style: 'min-height: 34px; padding: 6px 10px; font-size: 13px' })}
               ${btn.dangerGhost('Remove', { style: 'min-height: 34px; padding: 6px 10px; font-size: 13px' })}
