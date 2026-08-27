@@ -99,6 +99,11 @@ def _limit(name: str, default: int) -> int:
 # each one would mean a write per visitor per load.
 LAST_LOGIN_THROTTLE_SECONDS = 300
 
+# One bucket for the whole deployment, so the daily ceiling is a property of
+# the service rather than of whoever happens to be calling. The bucket is a
+# database row, so replicas share the number rather than each getting one.
+GLOBAL_PROVISION_KEY = "all"
+
 
 
 class CredentialsBody(BaseModel):
@@ -187,6 +192,23 @@ def create_auth_router(
         limit=_limit("AUTH_LOOKUP_LIMIT", 60),
         window_seconds=60,
     )
+    # Provisioning is the one unauthenticated call that writes rows - a
+    # `users` row and an `auth_sessions` row - so it is bounded twice. The
+    # address key is what a single flooding client meets; the daily ceiling is
+    # what still holds behind a reverse proxy, where every caller presents the
+    # proxy, and against a botnet, where no address key means anything.
+    provision_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="guest_provision",
+        limit=_limit("GUEST_PROVISION_LIMIT", 60),
+        window_seconds=3600,
+    )
+    daily_provision_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="guest_provision_day",
+        limit=_limit("GUEST_PROVISION_DAILY_LIMIT", 5000),
+        window_seconds=86400,
+    )
     # Mailing costs somebody else's inbox, so both of these are tighter than
     # the flows that only cost a database round trip.
     reset_limiter = PersistentRateLimiter(
@@ -237,6 +259,14 @@ def create_auth_router(
                 status_code=429, detail="Too many attempts. Please wait and try again."
             )
 
+    async def refuse_a_registered_name(name: str) -> None:
+        """A guest may not play under a name that belongs to an account."""
+        owner = await user_repo.get_by_username(name)
+        if owner is not None and not owner.is_anonymous:
+            raise HTTPException(
+                status_code=409, detail="That name belongs to a registered player."
+            )
+
     async def require_user(request: Request):
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
@@ -246,19 +276,23 @@ def create_auth_router(
 
     @router.get("/me")
     async def me(request: Request, response: Response):
-        """Return the caller's account, creating a guest on first visit.
+        """Return the caller's account, or nothing if they do not have one.
 
-        The only endpoint that provisions. Everything else merely reads the
-        cookie, so background traffic like the lobby room-list poll can never
-        create user rows.
+        Deliberately creates nothing. This runs on every page load, including
+        ones nobody is behind - a crawler, a link preview, an uptime check -
+        and provisioning here meant each of those cost a `users` row and an
+        `auth_sessions` row. Choosing a name is what creates an account now,
+        because that is the first act only a person about to play performs.
+
+        Not write-free, though: a caller who already has an account still has
+        their activity recorded and their session rotated when it is due. The
+        rule is about creation, which is what an anonymous flood can force.
         """
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
 
         if user is None:
-            user = await user_repo.create_anonymous(display_name="")
-            await issue_cookie(response, request, user.id)
-            return user_payload(user)
+            return None
 
         refreshed = await user_repo.touch_last_login(
             user.id, min_interval_seconds=LAST_LOGIN_THROTTLE_SECONDS
@@ -315,7 +349,34 @@ def create_auth_router(
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
         if user is None:
-            user = await user_repo.create_anonymous(display_name=name)
+            # Checked before anything is charged, and before the account
+            # exists: the rename path below has always refused a registered
+            # player's username, and a first name is no different. Without it
+            # the uniqueness rule held everywhere except the one place an
+            # account is created.
+            await refuse_a_registered_name(name)
+            await throttle(provision_limiter, request)
+            if not await daily_provision_limiter.check(GLOBAL_PROVISION_KEY):
+                logger.warning("guest provisioning is at its daily ceiling")
+                # The day refused them, so the hour is still theirs: the
+                # ceiling lifts and a caller who bought nothing would
+                # otherwise still be blocked by an allowance they never spent.
+                await provision_limiter.refund(client_key(request))
+                raise HTTPException(
+                    status_code=429,
+                    detail=(
+                        "Sketchy is not taking new visitors right now. "
+                        "Please try again later."
+                    ),
+                )
+            try:
+                user = await user_repo.create_anonymous(display_name=name)
+            except Exception:
+                # An allowance buys an account; one that bought nothing is
+                # given back, the same way a refused room gives back its own.
+                await provision_limiter.refund(client_key(request))
+                await daily_provision_limiter.refund(GLOBAL_PROVISION_KEY)
+                raise
             await issue_cookie(response, request, user.id)
             return user_payload(user)
         if not user.is_anonymous:
@@ -325,11 +386,7 @@ def create_auth_router(
                 status_code=409, detail="Registered players play as their username."
             )
 
-        owner = await user_repo.get_by_username(name)
-        if owner is not None and not owner.is_anonymous:
-            raise HTTPException(
-                status_code=409, detail="That name belongs to a registered player."
-            )
+        await refuse_a_registered_name(name)
 
         updated = await user_repo.update_profile(user.id, display_name=name)
         return user_payload(updated or user)

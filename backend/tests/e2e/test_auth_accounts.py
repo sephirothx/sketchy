@@ -337,7 +337,9 @@ async def test_player_can_download_then_delete_account_from_account_menu():
                     return response.json();
                 }"""
             )
-            assert current["isAnonymous"] is True
-            assert current["username"] is None
+            # Deleting the account leaves the browser holding none at all,
+            # and the first-run block above is what offers a new one. It used
+            # to be handed a fresh guest by the act of asking.
+            assert current is None
         finally:
             await browser.close()

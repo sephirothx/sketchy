@@ -48,7 +48,9 @@ async def env(monkeypatch):
 
 async def test_guests_remain_local_only(env):
     http, factory = env
-    guest = (await http.get("/api/auth/me")).json()
+    guest = (
+        await http.post("/api/auth/display-name", json={"displayName": "Visitor"})
+    ).json()
     response = await http.get("/api/users/me/settings")
     assert response.status_code == 403
     async with factory() as session:

@@ -204,8 +204,9 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-ACCT-01** | Playing MUST NOT require an account. Every visitor MUST be given one automatically on first page load, remembered by an HttpOnly `sketchy_session` cookie. |
-| **R-ACCT-02** | Guests MUST be provisioned **only** by `GET /api/auth/me`. Merely opening a socket MUST NOT create a user row. |
+| **R-ACCT-00** | Choosing a name MUST be what provisions a guest account. `GET /api/auth/me` MUST NOT provision: it runs on every page load, including ones nobody is behind, and provisioning there charged a crawler, a link preview and an uptime check two rows each. It may still write for a caller who already has an account — recording activity, rotating a session — but it MUST create nothing for one who does not. |
+| **R-ACCT-01** | Playing MUST NOT require an account of its own: a visitor with no cookie at all MUST still be seatable (see R-HIST-10). A visitor who chooses a name MUST be given an account, remembered by an HttpOnly `sketchy_session` cookie. |
+| **R-ACCT-02** | Guests MUST be provisioned **only** by choosing a name (`POST /api/auth/display-name`), and accounts otherwise only by registering. Merely opening a socket, or merely loading the page, MUST NOT create a user row. |
 | **R-ACCT-03** | Setting a username and password later MUST claim that same account, so stats collected as a guest carry over. |
 | **R-ACCT-04** | Logging in while carrying a guest identity MUST create an **immutable alias**, never rewrite historical seats. A game containing both identities keeps two factual seats. |
 | **R-ACCT-05** | A registered player MUST always play as their username and account color, so a name in the player list is either a claimed account or an unclaimed guest — never one impersonating the other. Guests MUST be pinned to the guest grey. |
@@ -241,6 +242,7 @@ claim that an arbitrary host will sustain it.
 | **R-RATE-02** | Bucket keys MUST be HMAC-SHA-256 digests under `IP_HASH_SECRET`. **Raw IP addresses MUST NOT be stored.** |
 | **R-RATE-03** | Expired buckets MUST be cleaned in bounded batches. |
 | **R-RATE-04** | Rotating the secret MUST start fresh buckets without exposing or re-identifying old keys. |
+| **R-RATE-07** | Guest provisioning MUST be bounded per address **and** by a daily ceiling for the whole deployment — the bucket is a shared database row, so replicas count against one number, not one each — and stale guest rows MUST be purged on a schedule the application owns. A retention policy nothing runs is not a policy. |
 | **R-RATE-06** | Seating joins MUST be rate-limited per socket, and rebinding an existing seat to a new socket MUST be rate-limited **per seat** — a per-socket key cannot see that churn, because every attempt arrives on a new socket with a fresh allowance and the one it supersedes is closed. Confirming a seat already held MUST NOT be charged: a client heartbeats through that path, and a liveness check must never be able to lock a player out of their own room. |
 | **R-RATE-05** | The room-creation limit MUST use the same persistent buckets, keyed by **account**, and an attempt that opens no room MUST be given back rather than spent. A per-address key MUST NOT be introduced until a trustworthy client address exists to key on: behind a reverse proxy every socket presents the proxy, and the forwarded header is attacker-controlled. |
 

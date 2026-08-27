@@ -5,6 +5,8 @@ import { sessionFrom } from "../lib/roomEntryState";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
+import { ApiError } from "../lib/api";
+import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
 import { currentPlayerName } from "../store/authStore";
 import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
@@ -109,6 +111,21 @@ function RoomCodeInput({
   );
 }
 
+/**
+ * What to show when becoming somebody failed.
+ *
+ * The server's own words where it has them: a name that belongs to a
+ * registered player, or a provisioning ceiling that has been reached, are
+ * both things a player can act on, and "please try again" tells them to do
+ * the one thing that will not work.
+ */
+function identityMessage(error: unknown): string {
+  if (error instanceof IdentityRequiredError || error instanceof ApiError) {
+    return error.message;
+  }
+  return "Could not save that name. Please try again.";
+}
+
 export function LobbyBrowserPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -135,6 +152,11 @@ export function LobbyBrowserPage() {
   const [languageFilter, setLanguageFilter] = useState("all");
   const [hideFullRooms, setHideFullRooms] = useState(false);
   const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
+  // Nothing here works without a name: the server provisions on naming,
+  // needs an account to open a room, and needs a valid nickname to seat
+  // anybody. The first-run block above asks for it.
+  const awaitingName = useAuthStore((state) => needsIdentity(state.user));
+  const ensureIdentity = useAuthStore((state) => state.ensureIdentity);
 
   // Arriving at the lobby means any room exit has completed.
   useEffect(() => {
@@ -240,7 +262,18 @@ export function LobbyBrowserPage() {
   });
 
   // No gate: every visitor already has a name, generated on their first load.
-  function handleOpenCreateRoom() {
+  async function handleOpenCreateRoom() {
+    // A visitor who typed a name and pressed this plainly means to play under
+    // it, so provision from the draft rather than sending them back to a form
+    // they have already filled in.
+    if (awaitingName) {
+      try {
+        await ensureIdentity();
+      } catch (identityError) {
+        setError(identityMessage(identityError));
+        return;
+      }
+    }
     navigate("/create");
   }
 
@@ -260,9 +293,22 @@ export function LobbyBrowserPage() {
     if (pendingJoin) return;
     setPendingJoin({ key, mode: asSpectator ? "spectate" : "join" });
     setError(null);
+    // Every join arrives here - a public room card, a code, a spectate - so
+    // this is where a visitor who typed a name and pressed one of those
+    // instead of the block's own button becomes somebody.
+    let playerName = currentPlayerName();
+    if (awaitingName) {
+      try {
+        playerName = (await ensureIdentity()).displayName;
+      } catch (identityError) {
+        setError(identityMessage(identityError));
+        setPendingJoin(null);
+        return;
+      }
+    }
     try {
       const res = await emitWithAck<AckResponse>("join_room", {
-        nickname: currentPlayerName(),
+        nickname: playerName,
         nameColor,
         colorblindSafeColors,
         asSpectator,
@@ -304,7 +350,12 @@ export function LobbyBrowserPage() {
           <h2>Start a game</h2>
           <p className="create-room-lobby-copy">Pick the basics, invite your friends, draw. Settings can change any time before the first round.</p>
           <div className="lobby-entry-actions">
-            <Button variant="primary" big iconLeft={<PlusIcon size={16} />} onClick={handleOpenCreateRoom}>
+            <Button
+              variant="primary"
+              big
+              iconLeft={<PlusIcon size={16} />}
+              onClick={() => void handleOpenCreateRoom()}
+            >
               Create room
             </Button>
           </div>

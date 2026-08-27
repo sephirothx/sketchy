@@ -111,3 +111,44 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await visitor_context.close()
             await spectator_context.close()
             await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_a_typed_name_is_enough_to_join_without_pressing_play_as_guest():
+    """Typing a name and pressing Join means what pressing the block's own
+    button means. The name is what provisions the account, so a visitor who
+    skipped that button used to arrive as nobody, with an empty nickname."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        visitor_context = await browser.new_context()
+        host = await host_context.new_page()
+        visitor = await visitor_context.new_page()
+        try:
+            await host.goto(BASE_URL)
+            await use_guest_name(host, "DraftHost")
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector(".create-room-page")
+            await host.fill(
+                'input[placeholder="Leave blank for a random name!"]', "Draft welcome"
+            )
+            await host.click(".create-room-submit")
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+
+            # No use_guest_name here: the name is typed and left sitting in the
+            # first-run block, exactly as a hurried visitor leaves it.
+            await visitor.goto(BASE_URL)
+            await visitor.wait_for_selector(".first-run-guest-row input")
+            await visitor.fill(".first-run-guest-row input", "DraftVisitor")
+            card = visitor.locator(
+                '[data-testid="public-room-card"]', has_text="Draft welcome"
+            )
+            await card.get_by_role("button", name="Join", exact=True).click()
+
+            await visitor.wait_for_selector('[data-testid="waiting-room"]')
+            assert await visitor.get_by_text("DraftVisitor", exact=True).is_visible()
+            await host.get_by_text("DraftVisitor", exact=True).wait_for()
+        finally:
+            await host_context.close()
+            await visitor_context.close()
+            await browser.close()

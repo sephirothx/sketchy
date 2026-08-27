@@ -752,7 +752,9 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
 
 async def test_guest_can_delete_auto_provisioned_account_without_password(env):
     http, _, _, factory = env
-    guest = (await http.get("/api/auth/me")).json()
+    guest = (
+        await http.post("/api/auth/display-name", json={"displayName": "Visitor"})
+    ).json()
     response = await http.request("DELETE", "/api/auth/account", json={})
     assert response.status_code == 200
     async with factory() as session:

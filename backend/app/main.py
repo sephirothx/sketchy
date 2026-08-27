@@ -37,6 +37,7 @@ from app.deployment import (
 )
 from app.handlers import register_all_handlers
 from app.logging_config import configure_logging
+from app.auth.retention import start_retention_loop, stop_retention_loop
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
 from app.repositories.sqlalchemy import (
@@ -197,6 +198,7 @@ async def lifespan(_app: FastAPI):
     )
     mail_delivery = None
     metrics_flush = None
+    retention_sweep = None
     try:
         # Before anything that might have something to say.
         configure_logging()
@@ -212,11 +214,13 @@ async def lifespan(_app: FastAPI):
         # and no second process that somebody has to remember to start.
         mail_delivery = start_delivery_loop(async_session_factory)
         metrics_flush = start_metrics_loop(async_session_factory)
+        retention_sweep = start_retention_loop(async_session_factory)
         shutdown_coordinator.mark_ready()
         yield
     finally:
         # Flushed on the way out, so the observations describing a planned
         # restart are not the ones lost to it.
+        await stop_retention_loop(retention_sweep)
         await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)

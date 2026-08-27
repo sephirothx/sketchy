@@ -66,7 +66,7 @@ async def env(monkeypatch):
 
 
 async def register(client: AsyncClient, username: str, email: str | None = None) -> dict:
-    assert (await client.get("/api/auth/me")).status_code == 200
+    # No guest step: registering with no account creates one outright.
     body = {"username": username, "password": PASSWORD}
     if email is not None:
         body["email"] = email
@@ -206,7 +206,9 @@ async def test_a_completed_reset_signs_every_device_out(env):
 
     # The other device is out, the old password no longer works, and the one
     # that performed the reset is signed back in.
-    assert (await phone.get("/api/auth/me")).json()["id"] != account["id"]
+    # Signed out means holding no account at all now, rather than being handed
+    # a fresh guest by the act of asking.
+    assert (await phone.get("/api/auth/me")).json() is None
     old = await new_client().post(
         "/api/auth/login", json={"username": "Recovering", "password": PASSWORD}
     )
