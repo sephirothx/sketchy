@@ -168,3 +168,38 @@ def test_the_length_bound_admits_the_largest_legitimate_frame():
     encoded = base64.b64encode(frame).decode()
     assert len(encoded) <= _MAX_BASE64_CHARS
     assert decode_live_drawing(encoded) == decode_live_drawing(frame)
+
+
+def test_every_fill_pixel_survives_the_wire_round_trip():
+    """A fill must be recorded on the pixel the drawer actually clicked.
+
+    The seed point crosses the wire as an integer pixel, comes back as a
+    normalized float, and is re-quantized by `CanvasSession.record_stroke` and
+    again by the client's renderer. If that round trip is not exact the fill
+    starts a pixel away from the click - and for a flood fill a single pixel
+    can be the far side of an outline, so the whole region that gets painted
+    is different.
+    """
+    for x in range(CANVAS_WIDTH):
+        packet = decode_live_drawing(
+            encode_live_drawing(
+                "draw_fill",
+                {"x": (x + 0.5) / CANVAS_WIDTH, "y": 0.5, "color": "#123456"},
+            )
+        )
+        recorded = min(
+            CANVAS_WIDTH - 1, int(packet.payload["x"] * CANVAS_WIDTH)
+        )
+        assert recorded == x, f"fill at x={x} was recorded at {recorded}"
+
+    for y in range(CANVAS_HEIGHT):
+        packet = decode_live_drawing(
+            encode_live_drawing(
+                "draw_fill",
+                {"x": 0.5, "y": (y + 0.5) / CANVAS_HEIGHT, "color": "#123456"},
+            )
+        )
+        recorded = min(
+            CANVAS_HEIGHT - 1, int(packet.payload["y"] * CANVAS_HEIGHT)
+        )
+        assert recorded == y, f"fill at y={y} was recorded at {recorded}"

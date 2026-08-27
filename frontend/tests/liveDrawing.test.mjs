@@ -10,6 +10,7 @@ import {
   encodePathStart,
   encodeShape,
 } from "../src/lib/liveDrawing.ts";
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from "../src/lib/canvasHistory.ts";
 
 test("live drawing frames round-trip with compact fixed sizes", () => {
   const cases = [
@@ -53,11 +54,28 @@ test("decoder accepts ArrayBuffer and rejects malformed frames", () => {
 });
 
 test("fill coordinates preserve the addressed canvas pixel", () => {
-  const packet = decodeLiveDrawing(
-    encodeFill({ x: 0.9999, y: 0.9999, color: "#abcdef" }),
-  );
-  assert.deepEqual(packet, {
-    event: "draw_fill",
-    payload: { x: 799 / 800, y: 599 / 600, color: "#abcdef" },
-  });
+  // The property the name promises, rather than the arithmetic that used to
+  // implement it. A seed point crosses the wire as an integer pixel and is
+  // re-quantized by the renderer, and `x / CANVAS_WIDTH` did not survive that
+  // for 37 of the 800 columns - those fills started a pixel to the left. For a
+  // flood fill one pixel can be the far side of an outline, so the wrong
+  // region gets painted entirely.
+  for (let x = 0; x < CANVAS_WIDTH; x += 1) {
+    const packet = decodeLiveDrawing(
+      encodeFill({ x: (x + 0.5) / CANVAS_WIDTH, y: 0.5, color: "#abcdef" }),
+    );
+    const rendered = Math.floor(packet.payload.x * CANVAS_WIDTH);
+    assert.equal(rendered, x, `fill at x=${x} rendered at ${rendered}`);
+  }
+  for (let y = 0; y < CANVAS_HEIGHT; y += 1) {
+    const packet = decodeLiveDrawing(
+      encodeFill({ x: 0.5, y: (y + 0.5) / CANVAS_HEIGHT, color: "#abcdef" }),
+    );
+    const rendered = Math.floor(packet.payload.y * CANVAS_HEIGHT);
+    assert.equal(rendered, y, `fill at y=${y} rendered at ${rendered}`);
+  }
+  // The last pixel still clamps rather than running off the canvas.
+  const edge = decodeLiveDrawing(encodeFill({ x: 0.9999, y: 0.9999, color: "#abcdef" }));
+  assert.equal(Math.floor(edge.payload.x * CANVAS_WIDTH), CANVAS_WIDTH - 1);
+  assert.equal(Math.floor(edge.payload.y * CANVAS_HEIGHT), CANVAS_HEIGHT - 1);
 });

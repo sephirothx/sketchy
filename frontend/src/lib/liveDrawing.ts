@@ -344,8 +344,13 @@ export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
       event: "draw_fill",
       payload: {
         color: binaryColor(view, 1),
-        x: x / CANVAS_WIDTH,
-        y: y / CANVAS_HEIGHT,
+        // The centre of the pixel, not its corner - see the matching comment
+        // in `backend/app/live_drawing.py`. `x / CANVAS_WIDTH` does not
+        // survive being re-quantized by the renderer: 37 columns and 26 rows
+        // land a pixel short, and for a flood fill one pixel can be the far
+        // side of an outline.
+        x: (x + 0.5) / CANVAS_WIDTH,
+        y: (y + 0.5) / CANVAS_HEIGHT,
       },
     };
   }

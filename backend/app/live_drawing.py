@@ -394,8 +394,21 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
         return LiveDrawingPacket(
             "draw_fill",
             {
-                "x": x / CANVAS_WIDTH,
-                "y": y / CANVAS_HEIGHT,
+                # The centre of the pixel, not its corner. A fill seed is an
+                # integer pixel that crosses the wire and is re-quantized by
+                # the recorder and again by the client's renderer, and
+                # `x / CANVAS_WIDTH` does not survive that: 37 of the 800
+                # columns and 26 of the 600 rows land a pixel short, because
+                # `(x / w) * w` can fall just below `x` in binary floating
+                # point and truncation then takes it down. Offsetting to the
+                # pixel centre puts the value half a pixel clear of the
+                # boundary, which is exact for every column and row.
+                #
+                # For a flood fill this is not a rounding nicety: one pixel
+                # can be the far side of an outline, so the wrong region gets
+                # painted entirely.
+                "x": (x + 0.5) / CANVAS_WIDTH,
+                "y": (y + 0.5) / CANVAS_HEIGHT,
                 "color": _unpack_color(color),
             },
         )
