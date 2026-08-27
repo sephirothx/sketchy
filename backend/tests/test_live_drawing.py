@@ -7,9 +7,25 @@ from app.live_drawing import decode_live_drawing, encode_live_drawing
     "event,payload,expected_size",
     [
         ("draw_start", {"x": 0.25, "y": 0.75, "color": "#aabbcc", "width": 4}, 9),
+        # A whole canvas apart, so delta coding would need an escape and come
+        # out larger. The encoder picks absolute instead - the fallback that
+        # keeps this change from ever costing more than it saves.
         (
             "draw_move",
             {"points": [{"x": 0.1, "y": 0.2}, {"x": 1.2, "y": -0.1}]},
+            9,
+        ),
+        # The ordinary case: adjacent pointer samples, two bytes per point
+        # after the first, which is where the volume actually is.
+        (
+            "draw_move",
+            {
+                "points": [
+                    {"x": 0.1, "y": 0.2},
+                    {"x": 0.105, "y": 0.205},
+                    {"x": 0.11, "y": 0.21},
+                ]
+            },
             9,
         ),
         ("draw_end", {}, None),

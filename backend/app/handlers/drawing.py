@@ -9,7 +9,7 @@ from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     PayloadError,
     parse_draw_payload,
-    parse_empty_payload,
+    parse_sync_request_payload,
     parse_undo_payload,
 )
 
@@ -180,13 +180,13 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
 
 async def request_sync_strokes(ctx: HandlerContext, sid, data=None):
     try:
-        parse_empty_payload(data)
+        holds = parse_sync_request_payload(data)
     except PayloadError as error:
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if current and current[0].game:
         room, _ = current
-        await ctx.game_flow._emit_canvas_sync(room, sid)
+        await ctx.game_flow._emit_canvas_sync(room, sid, holds)
 
 
 def register(ctx: HandlerContext) -> None:

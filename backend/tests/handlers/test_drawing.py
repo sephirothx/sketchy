@@ -930,3 +930,56 @@ async def test_a_refused_path_does_not_wedge_the_tools_that_remain():
     )
 
     assert len(room.game.canvas.history) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_verified_prefix_claim_is_answered_with_only_the_missing_tail():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    drawer.sid = "drawer-sid"
+    room.game = Game(turn_order=list(room.players))
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_prompt_choice()
+    canvas = room.game.canvas
+    for index in range(5):
+        canvas.record_stroke(
+            "draw_shape",
+            {
+                "shape": "rectangle",
+                "from": {"x": 0.1 * index, "y": 0.1},
+                "to": {"x": 0.2, "y": 0.3},
+                "color": "#112233",
+                "width": 4,
+            },
+        )
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": drawer.id}
+    )
+    sio.emit = AsyncMock()
+    sync = sio.handlers["/"]["request_sync_strokes"]
+
+    # Claiming the first three actions, with the hash the server itself
+    # computed for that prefix.
+    await sync("drawer-sid", [canvas.generation, 3, canvas.hashes[2]])
+    event, payload = sio.emit.await_args.args
+    assert event == "sync_strokes_tail"
+    assert payload[1] == 3
+    tail = decode_binary_canvas_history(payload[0])
+    assert len(tail) == 2
+    assert list(tail) == list(canvas.history)[3:]
+
+    # Anything that does not check out falls back to the whole history, which
+    # is what keeps the claim an optimization rather than a trust boundary.
+    for bad in (
+        [canvas.generation, 3, 999],
+        [canvas.generation + 1, 3, canvas.hashes[2]],
+        [canvas.generation, 99, canvas.hashes[2]],
+        None,
+    ):
+        sio.emit.reset_mock()
+        await sync("drawer-sid", bad)
+        assert sio.emit.await_args.args[0] == "sync_strokes", bad

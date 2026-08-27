@@ -24,6 +24,7 @@ from app.auth.sessions import (
 )
 from app.db.models import AuthSession, Base
 from app.handlers.connection import connect as socket_connect
+from app.protocol import PROTOCOL_VERSION
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 
 
@@ -124,7 +125,7 @@ async def test_socket_handshake_uses_the_same_revocation_record(database):
     context = SimpleNamespace(sio=sio, session_factory=factory)
     environ = {"HTTP_COOKIE": f"sketchy_session={issued.token}"}
 
-    await socket_connect(context, "first", environ, None)
+    await socket_connect(context, "first", environ, {"protocol": PROTOCOL_VERSION})
     sio.save_session.assert_awaited_with("first", {"user_id": user.id})
     # The account broadcast room is what account-level news (a suspension, a
     # moderator warning) is emitted to, wherever the socket is in the app.
@@ -133,5 +134,5 @@ async def test_socket_handshake_uses_the_same_revocation_record(database):
     await revoke_session(
         factory, session_id=issued.session.id, user_id=user.id
     )
-    await socket_connect(context, "second", environ, None)
+    await socket_connect(context, "second", environ, {"protocol": PROTOCOL_VERSION})
     sio.save_session.assert_awaited_with("second", {"user_id": None})

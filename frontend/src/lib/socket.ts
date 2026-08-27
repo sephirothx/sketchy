@@ -1,5 +1,7 @@
 import { io, Socket } from "socket.io-client";
 import { recordClientError } from "./clientErrorLog.ts";
+import { PROTOCOL_VERSION, handleUpgradeRequired } from "./protocol.ts";
+import type { UpgradeRequiredNotice } from "./protocol.ts";
 import type { AckResponse } from "../types";
 
 // No URL: connect to the origin that served the page. The backend serves the
@@ -14,6 +16,10 @@ import type { AckResponse } from "../types";
 export const socket: Socket = io({
   autoConnect: false,
   transports: ["websocket", "polling"],
+  // Settled at the handshake, where there is somewhere to put the answer. A
+  // frame refused by the codec is refused inside a handler with no
+  // acknowledgement, so a stale build is never told and diverges in silence.
+  auth: { protocol: PROTOCOL_VERSION },
 });
 
 // Registered here rather than in a component so the flag is set by the very
@@ -50,6 +56,26 @@ socket.on("disconnect", (reason) => {
 
 socket.on("connect_error", (error) => {
   recordClientError("socket", `connect_error: ${error?.message ?? error}`);
+});
+
+// Registered here rather than in a component because a version skew is not
+// scoped to any screen: the socket can be told to upgrade while the player is
+// in the lobby, mid-game, or on the invite page.
+socket.on("upgrade_required", (notice: UpgradeRequiredNotice | undefined) => {
+  recordClientError(
+    "socket",
+    `upgrade_required: expected ${notice?.expected}, sent ${notice?.received}`,
+  );
+  handleUpgradeRequired(notice, {
+    storage: typeof sessionStorage === "undefined" ? null : sessionStorage,
+    reload: () => window.location.reload(),
+    onStuck: () => {
+      recordClientError(
+        "socket",
+        "upgrade_required repeated after a reload; the bundle is not updating",
+      );
+    },
+  });
 });
 
 export interface ConnectionTelemetry {

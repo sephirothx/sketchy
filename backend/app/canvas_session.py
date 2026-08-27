@@ -150,8 +150,26 @@ class CanvasSession:
         self._finalize_history_action()
         return True
 
-    def sync_payload(self) -> bytes:
-        return self.history.binary_payload()
+    def sync_payload(self, start: int = 0) -> bytes:
+        return self.history.binary_payload(start)
+
+    def committed_prefix_matches(self, count: int, history_hash: int) -> bool:
+        """Whether this session's first `count` actions hash to `history_hash`.
+
+        O(1): `hashes` is already a prefix array, so a client's claim about
+        what it holds is checked by one lookup rather than by rehashing.
+
+        Deliberately refuses to validate inside an open path. `hashes` holds
+        one entry per *finalized* action, so while the drawer holds the pen the
+        history is one longer than the prefix array - and the hash of a record
+        still being appended to is not something a client could have committed
+        to. Refusing there costs a full sync in the rarest case and keeps this
+        from ever answering about a moving target.
+        """
+        if not 0 <= count <= len(self.hashes):
+            return False
+        expected = HISTORY_HASH_INITIAL if count == 0 else self.hashes[count - 1]
+        return expected == history_hash
 
     @property
     def hash(self) -> int:

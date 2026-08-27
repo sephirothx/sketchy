@@ -10,6 +10,7 @@ import socketio
 from app.game import Game
 from app.handlers import register_all_handlers as register_handlers
 from app.handlers import restart
+from app.protocol import PROTOCOL_VERSION
 from app.rooms import RestartVote, RoomManager
 
 
@@ -75,7 +76,7 @@ async def test_new_connection_receives_current_versioned_shutdown_notice():
     sio.save_session = AsyncMock()
     sio.emit = AsyncMock()
 
-    await sio.handlers["/"]["connect"]("sid", {}, None)
+    await sio.handlers["/"]["connect"]("sid", {}, {"protocol": PROTOCOL_VERSION})
 
     sio.emit.assert_awaited_once_with(
         "server_shutdown", shutdown.notice_payload(), to="sid"

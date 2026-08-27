@@ -45,6 +45,38 @@ the cookie to a session record and stores `{"user_id": …}` on the Socket.IO se
   `connect_error`.
 - A drain already in progress → the socket is immediately sent `server_shutdown`.
 
+### Protocol version
+
+The client sends `auth: {protocol: PROTOCOL_VERSION}`
+([`frontend/src/lib/protocol.ts`](../frontend/src/lib/protocol.ts)); the server compares it
+against its own `PROTOCOL_VERSION` ([`backend/app/protocol.py`](../backend/app/protocol.py)).
+Anything that is not a plain integer — absent, a string, a boolean — reads as **0**, because
+every build from before this handshake existed sends no `auth` at all and *absent* means
+older than version 1, never *trusted*.
+
+A mismatch is **not** refused. The socket connects normally and is sent
+`upgrade_required {reason, expected, received}`, which the client answers by reloading —
+`index.html` is served `no-cache` precisely so that reload lands on the current bundle.
+Refusing instead would hand a stale build nothing it could act on, and
+`ConnectionRefusedError` is reserved for suspensions.
+
+> **Why this exists at all.** Frame layouts carry their own version bytes, but they are
+> checked far too late to help. A `draw` frame refused by the codec is refused inside a
+> handler that has **no acknowledgement** (§4), so the sender is never told: it keeps
+> drawing into a canvas the server has stopped recording, and when it finally requests a
+> resync it cannot decode the reply — so it requests another. Silent, permanent, and
+> indistinguishable to the player from a frozen game. The handshake is the one place with
+> somewhere to put the answer.
+
+The client reloads **at most once per server version**, recording the version it reloaded
+for in `sessionStorage`. A bundle that somehow does not update — a proxy ignoring
+`no-cache`, a stale service worker — would otherwise reload forever, turning a recoverable
+skew into an unusable page.
+
+**Bump `PROTOCOL_VERSION` on both sides whenever any payload on the socket changes shape.**
+It is cheap: both ends deploy together, so the only client that ever sees a mismatch is one
+that was already open across the deploy.
+
 ---
 
 ## 2. Acknowledgement convention
@@ -152,7 +184,7 @@ client uses the acknowledgement.
 | `select_prompt` | `SelectPromptPayload` | ✓ | [`game.py`](../backend/app/handlers/game.py) |
 | `draw` | binary frame + optional `[generation, sequence]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `undo_stroke` | `[generation, sequence, revision, historyHash]` | ✓ | [`drawing.py`](../backend/app/handlers/drawing.py) |
-| `request_sync_strokes` | `EmptyPayload` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
+| `request_sync_strokes` | `null`, or `[generation, actionCount, historyHash]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `send_chat` | `TextPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `guess` | `TextPayload` | — | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_hint` | `HintPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
@@ -246,11 +278,13 @@ the server resolves the seat against the live room and selects the evidence itse
 | `canvas_commit` | `[generation, sequence, revision, historyHash]` | room (or one socket) |
 | `canvas_undo` | `[generation, sequence, revisionBefore, revisionAfter, historyHash]` | room (or one socket) |
 | `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash)` | one socket |
+| `sync_strokes_tail` | `(binaryTail, baseActionCount, revision, generation, sequence, historyHash)` — only the actions after a verified prefix (§7) | one socket |
 | `request_canvas_actions` | `[generation, expectedSequence, receivedSequence]` | one socket |
 | `voted_afk` | `{message}` | the player who was voted AFK |
 | `kicked` | `{reason}` | one socket |
 | `colorblind_safe_suggestion` | `{active}` | **host only**, unattributed |
 | `session_superseded` | `{reason}` — then the socket is disconnected | the superseded socket |
+| `upgrade_required` | `{reason, expected, received}` — the socket stays open; the client reloads (§1) | one socket, at handshake |
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
 | `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
@@ -317,13 +351,27 @@ exercised from both sides by
 [`backend/tests/test_live_drawing.py`](../backend/tests/test_live_drawing.py) and
 [`frontend/tests/canvasProtocolFixtures.test.mjs`](../frontend/tests/canvasProtocolFixtures.test.mjs).
 
-All live drawing rides on **one** Socket.IO event, `draw`. This is a *hybrid* protocol:
+All live drawing rides on **one** Socket.IO event, `draw`. This is a *hybrid* protocol,
+and the shape a frame travels in is chosen by size rather than fixed:
 
-- **Data-bearing actions** (path start, path points, shape, fill) are binary
-  attachments.
 - **Control actions** (path end, clear) send their single header byte as a bare
-  **integer**, avoiding Socket.IO's binary-attachment envelope when it would be larger
-  than the action itself.
+  **integer** — already the cheapest thing Socket.IO can carry.
+- **Small data-bearing frames** (≤ `MAX_BASE64_FRAME_BYTES`, 85 B) travel as **base64
+  inside an ordinary text event**.
+- **Larger frames** travel as **binary attachments**.
+
+> **Why base64 is cheaper for small frames.** Socket.IO cannot put binary inside an event
+> without its placeholder envelope: `51-["draw",{"_placeholder":true,"num":0}]` is 41 bytes
+> whose only job is to announce that a blob follows, and the blob is then a *second*
+> WebSocket frame with its own header. On a 13-byte frame that is 76% overhead. Base64
+> expands the payload by a third and deletes both, which wins until the expansion
+> overtakes the envelope it saved — measured at about 85 bytes. A 5-point frame goes from
+> 59 B to 33 B on the wire.
+>
+> Only the **sender** consults the threshold. The server accepts either shape and
+> rebroadcasts whatever it was handed, so the value can move without a protocol change.
+> `sync_strokes` is untouched and stays binary: histories run to kilobytes, far past the
+> crossover.
 
 ### Header byte
 
@@ -336,7 +384,7 @@ bit  7 6 5 4 | 3 2 1 0
 
 | Tag | Value | Event | Frame |
 | --- | --- | --- | --- |
-| `PATH_START` | 0 | `draw_start` | binary, 8 bytes |
+| `PATH_START` | 0 | `draw_start` | binary, 9 bytes |
 | `PATH_POINTS` | 1 | `draw_move` | binary, 1 + 4·n bytes |
 | `PATH_END` | 2 | `draw_end` | integer `0x12` |
 | `SHAPE` | 3 | `draw_shape` | binary, 14 bytes |
@@ -480,6 +528,40 @@ drawer                                     server                       everyone
 
 `sync_strokes` is emitted as a **tuple**:
 `(binaryHistory, revision, generation, sequence, historyHash)`.
+
+### Incremental resync
+
+`request_sync_strokes` may carry a claim about the prefix the client already holds:
+
+```jsonc
+[generation, actionCount, historyHash]
+```
+
+The server checks it in **O(1)** against `CanvasSession.hashes`, the per-action prefix
+array it already maintains, and answers a verified claim with `sync_strokes_tail` —
+the same `SKCH` frame containing only the actions from `actionCount` on, plus the
+`baseActionCount` they splice onto.
+
+**The claim is an optimization, never a trust boundary.** Every one of these falls back
+to the full `sync_strokes` dump:
+
+| Situation | Why |
+| --- | --- |
+| `generation` is not current | The turn's canvas has been replaced |
+| the hash disagrees | The client's prefix is not the server's |
+| `actionCount` exceeds what is finalized | Includes the client being *ahead*, which undo can cause |
+| `actionCount` lands inside an open path | `hashes` holds one entry per finalized action; the record under the pen is a moving target |
+| no claim at all (`null`) | What every client sent before this existed |
+
+A client only claims a prefix when it has **nothing pending**. Unacknowledged mutations
+mean it has optimistically applied actions the server may never have accepted, so its
+history is a guess rather than a prefix of server truth — and a resync is precisely the
+moment that guess is being abandoned. Viewers never hold pending mutations, so they
+always qualify; the drawer qualifies between strokes.
+
+On the client, `replace()` recomputes the prefix hashes over the spliced history and
+rejects one that does not hash to what the server said, so a bad splice costs one full
+sync rather than a wrong canvas.
 
 `MAX_CANVAS_COMMITS = 512` bounds the acknowledgement window — twice the 256
 unacknowledged mutations the browser retains — so ordinary duplicate deliveries are
