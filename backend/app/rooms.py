@@ -9,6 +9,7 @@ import string
 import time
 import uuid
 from uuid import UUID
+from collections import deque
 from dataclasses import dataclass, field, replace
 from typing import Literal, Optional
 
@@ -28,6 +29,12 @@ DEFAULT_ROOM_HINT_MODE = "checkpoints"
 DRAWING_TIME_OPTIONS = (15, 30, 60, 90, 120, 180, 240, 300)
 MAX_PLAYERS_MIN = 2
 MAX_PLAYERS_MAX = 16
+
+# How many recent guess ids a seat remembers per connection. The client retries
+# a guess once, about two seconds after sending it, so only the handful of
+# guesses typed inside that window can ever be retried - and the bound is what
+# keeps a client that invents ids from growing this without limit.
+GUESS_DEDUP_WINDOW = 16
 
 # How much drawing a room keeps for the recap, across the whole game.
 #
@@ -182,6 +189,33 @@ class Player:
     colorblind_safe_colors: bool = False
     kick_votes: set[str] = field(default_factory=set)
     afk_votes: set[str] = field(default_factory=set)
+    # Guess ids already handled on the current connection. A guess is emitted
+    # volatile, so the client retries once with the same id when the server
+    # never acknowledges; without this the retry of a guess that did arrive
+    # would be echoed to the room twice and counted twice in the turn stats.
+    _guess_window_sid: Optional[str] = None
+    _guess_ids_seen: deque[int] = field(
+        default_factory=lambda: deque(maxlen=GUESS_DEDUP_WINDOW)
+    )
+
+    def accept_guess_id(self, sid: str, guess_id: Optional[int]) -> bool:
+        """Whether this guess is new to `sid`, remembering it if so.
+
+        Ids are monotonic within one connection and meaningless across
+        connections, so a new sid starts a fresh window rather than judging a
+        reconnected client's counter against the old one. A client that sends
+        no id forgoes deduplication and is always accepted - a retry it never
+        makes cannot be confused for one.
+        """
+        if guess_id is None:
+            return True
+        if self._guess_window_sid != sid:
+            self._guess_window_sid = sid
+            self._guess_ids_seen.clear()
+        if guess_id in self._guess_ids_seen:
+            return False
+        self._guess_ids_seen.append(guess_id)
+        return True
 
 
 @dataclass(slots=True)

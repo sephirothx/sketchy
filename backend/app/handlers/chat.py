@@ -5,6 +5,7 @@ from functools import partial
 
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
+    GuessPayload,
     HintPayload,
     PayloadError,
     TextPayload,
@@ -119,8 +120,18 @@ async def send_chat(ctx: HandlerContext, sid, data):
 
 
 async def guess(ctx: HandlerContext, sid, data):
+    """Handle one guess, acknowledging that it arrived.
+
+    The acknowledgement is the whole of the delivery guarantee: `guess` is
+    emitted volatile, which drops the packet whenever the transport is briefly
+    unwritable, and returning at all tells the client its guess landed. Every
+    path below returns, including the ones that deliberately ignore the guess -
+    a guess the server chose not to act on is not one worth resending. What the
+    client must never be told is that a guess arrived when it did not, so
+    nothing here is acknowledged early.
+    """
     try:
-        payload = parse_payload(TextPayload, data)
+        payload = parse_payload(GuessPayload, data)
     except PayloadError as error:
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
@@ -129,6 +140,12 @@ async def guess(ctx: HandlerContext, sid, data):
     room, player = current
     text = payload.text.strip()
     if not text:
+        return
+    if not player.accept_guess_id(sid, payload.id):
+        # The client's one retry of a guess that did arrive. Acknowledged like
+        # any other so it stops retrying, but not replayed: this is the only
+        # thing standing between a retry and a second chat line, a second entry
+        # in the turn's wrong-guess counts, and a second near-miss hint.
         return
 
     if player.is_afk:

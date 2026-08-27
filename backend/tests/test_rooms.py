@@ -6,6 +6,7 @@ from app.game import Game
 from app.domain_values import HINT_MODES, SCORING_MODES
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
+    GUESS_DEDUP_WINDOW,
     DrawingRecapEntry,
     NAME_COLOR_PATTERN,
     RoomFullError,
@@ -484,3 +485,20 @@ def test_create_room_applies_the_whole_hint_rule(settings):
     # and not only at the boundary model.
     room = RoomManager().create_room(name="Room", **settings)
     assert room.hint_mode == "none"
+
+
+def test_a_seat_remembers_only_a_bounded_window_of_guess_ids():
+    """The window exists to stop one retry being processed twice, not to
+    remember a turn. A client inventing ids must not be able to grow it, and
+    the price of the bound is that an id older than the window is accepted
+    again - which no client that retries once, seconds later, ever reaches."""
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+    player = rm.add_player(room, "Guesser")
+
+    for guess_id in range(GUESS_DEDUP_WINDOW):
+        assert player.accept_guess_id("sid-1", guess_id) is True
+    assert player.accept_guess_id("sid-1", 0) is False
+
+    assert player.accept_guess_id("sid-1", GUESS_DEDUP_WINDOW) is True
+    assert player.accept_guess_id("sid-1", 0) is True, "the window grew without bound"

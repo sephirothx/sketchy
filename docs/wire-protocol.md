@@ -28,10 +28,36 @@ Companion documents: [`architecture.md`](architecture.md) ·
 | Authentication | The HttpOnly `sketchy_session` cookie, read from `HTTP_COOKIE` at handshake |
 | REST base | `/api`, relative to whatever origin served the page |
 | Default ack timeout | 8000 ms (`DEFAULT_ACK_TIMEOUT_MS`) |
+| Compression | **permessage-deflate with context takeover**, negotiated on every WebSocket |
 
 The client does **not** auto-connect. The handshake reads the session cookie exactly
 once, and on a first visit that cookie does not exist until `GET /api/auth/me` has
 provisioned the account, so `App.tsx` connects only after identity has settled.
+
+### Compression, and what it means for every size in this document
+
+uvicorn's wsproto transport offers `PerMessageDeflate()` and `ws_per_message_deflate`
+defaults to true, so the handshake really does carry
+`Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits=15`. **Every byte
+count anywhere in this document is therefore an input to the wire cost, not the wire
+cost.** Three consequences worth stating, because each one has already reversed a
+plausible-looking optimization:
+
+- **Repetition is nearly free.** With context takeover a socket's compressor keeps its
+  window across messages, so a payload that resembles the previous one encodes largely
+  as a back-reference — consecutive `room_state` broadcasts compress by ~98.7%. Anything
+  that saves bytes by *not repeating* something is competing with that and will usually
+  lose.
+- **Every message costs a boundary.** Each message ends in a `Z_SYNC_FLUSH`, roughly
+  five bytes that no payload change can remove. On high-frequency paths this is the
+  dominant residue, and only *fewer messages* removes it.
+- **A broadcast saves no bytes.** A deflate context is per **connection**, so a
+  room-wide emit is compressed separately for every socket, exactly as N individual
+  emits are. Replacing a per-socket loop with one broadcast is a server-CPU change and
+  nothing more.
+
+Measure compressed, through one context, over a plausible sequence — never a single
+payload in isolation.
 
 ### Handshake
 
@@ -102,7 +128,7 @@ as `{"ok": false, "error": …, "field": …}` — before any authorization or m
 
 ### Client-side delivery guarantees
 
-`emitWithAckOn` ([`frontend/src/lib/socket.ts:67`](../frontend/src/lib/socket.ts))
+`emitWithAckOn` ([`frontend/src/lib/socket.ts:139`](../frontend/src/lib/socket.ts))
 never hands a packet to a disconnected socket. Socket.IO would queue it and deliver it
 on reconnect, and no `disconnect` event would arrive to reject against — so the timeout
 would tell the player the action failed while the packet still lands seconds later. On
@@ -111,11 +137,34 @@ these paths that means a second room, or a game started twice. Instead:
 - **Acknowledged actions** (create a room, join, start, vote to restart) wait for the
   connection and are sent exactly once, or they time out having never been sent.
 - **Momentary actions** (`guess`, `vote_player`, `toggle_afk`, `leave_room`) go through
-  `emitTransient` ([`frontend/src/lib/socket.ts:148`](../frontend/src/lib/socket.ts)),
+  `emitTransient` ([`frontend/src/lib/socket.ts:220`](../frontend/src/lib/socket.ts)),
   which uses `socket.volatile.emit` so the packet is **dropped** rather than replayed
   into whatever the room has become — a vote cast in a turn that has ended, a guess
   against a prompt nobody is drawing any more, a `leave_room` that evicts the player
   from the room they just rejoined.
+- **`guess` is momentary *and* confirmed.** Volatile delivery drops the packet whenever
+  the transport is briefly unwritable, not only when the connection is gone, and a lost
+  guess is the one silent failure in the game's core loop. So `guess` keeps volatile
+  delivery and adds an acknowledgement: `createGuessSender`
+  ([`frontend/src/lib/socket.ts:259`](../frontend/src/lib/socket.ts)) emits with a
+  2-second ack timeout and **resends once** if nothing comes back, carrying the same
+  `id`. A retry is abandoned rather than sent while disconnected — after a reconnect it
+  would be exactly the replay volatile delivery exists to prevent. Two unacknowledged
+  attempts are reported to the player instead of vanishing.
+
+  The `id` is what makes the retry safe. It is a per-page-load counter, and the server
+  remembers a bounded window of ids **per connection**
+  (`Player.accept_guess_id`, [`backend/app/rooms.py`](../backend/app/rooms.py)), so a
+  retry of a guess that did arrive is acknowledged and dropped rather than echoed to the
+  room a second time and counted twice in the turn's statistics. Ids are meaningless
+  across connections: a new sid starts a fresh window, so a reconnected client's counter
+  is never judged against the old one. A client that sends no `id` forgoes the
+  deduplication and is always processed.
+
+  The acknowledgement carries no body — the handler returns `None` and python-socketio
+  sends an empty ACK. Its arrival *is* the message: the guess reached the server. Every
+  path in the handler returns, including the ones that deliberately ignore the guess, so
+  a client is never told to resend something the server chose not to act on.
 - **Live drawing is deliberately not routed through either.** Its frames carry a
   generation and sequence the server checks, and it has an explicit resync path, so
   replay is already answered there (§7).
@@ -155,13 +204,15 @@ Shared bounds:
 | `MAX_IDENTIFIER_LENGTH` | 128 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 | `MAX_PROMPT_LISTS` per room | 20 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 | `MAX_CANVAS_SEQUENCE` | 2³¹ − 1 | [`payloads.py`](../backend/app/handlers/payloads.py) |
+| `MAX_GUESS_ID` | 2³¹ − 1 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 
 ---
 
 ## 4. Client → server events
 
 Registered in each domain's `register(ctx)`. The **Ack** column says whether the
-client uses the acknowledgement.
+client uses the acknowledgement. `guess` is the one command whose acknowledgement is
+empty: the client reads only its arrival, as proof the guess was delivered (§2).
 
 | Event | Payload model | Ack | Handler |
 | --- | --- | --- | --- |
@@ -186,7 +237,7 @@ client uses the acknowledgement.
 | `undo_stroke` | `[generation, sequence, revision, historyHash]` | ✓ | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `request_sync_strokes` | `null`, or `[generation, actionCount, historyHash]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `send_chat` | `TextPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
-| `guess` | `TextPayload` | — | [`chat.py`](../backend/app/handlers/chat.py) |
+| `guess` | `GuessPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_hint` | `HintPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_wheel_letter` | `WheelLetterPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `toggle_afk` | `ToggleAfkPayload` | — | [`moderation.py`](../backend/app/handlers/moderation.py) |
@@ -274,8 +325,8 @@ the server resolves the seat against the live room and selects the evidence itse
 | `you_guessed_correctly` | `{prompt, points, basePoints, hintSpend}` | guesser only |
 | `hint_revealed` | `buy_hint`: `{maskedPrompt, hintCost, hintSpend}`. `buy_wheel_letter`: `{maskedPrompt, letterPrices, hintSpend}` | buyer only |
 | `canvas_reset` | `[revision, generation, sequence, historyHash]` | room |
-| `draw` | the drawer's exact wire frame, rebroadcast verbatim | room, `skip_sid` drawer |
-| `canvas_commit` | `[generation, sequence, revision, historyHash]` | room (or one socket) |
+| `draw` | the drawer's exact wire frame, rebroadcast verbatim — plus `[generation, sequence, revision, historyHash]` when that frame commits an action (§7) | room, `skip_sid` drawer |
+| `canvas_commit` | `[generation, sequence, revision, historyHash]` | the drawer, or one socket replaying a duplicate |
 | `canvas_undo` | `[generation, sequence, revisionBefore, revisionAfter, historyHash]` | room (or one socket) |
 | `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash)` | one socket |
 | `sync_strokes_tail` | `(binaryTail, baseActionCount, revision, generation, sequence, historyHash)` — only the actions after a verified prefix (§7) | one socket |
@@ -312,6 +363,16 @@ all resolve seats server-side.
 **`turn_started`** is emitted per socket because `maskedPrompt`, `hintCost`,
 `letterPrices`, and `hintSpend` are private to that viewer. A spectator sees the masked
 prompt unless the room enabled `spectatorsSeePrompt`; the drawer sees the answer.
+
+At *turn start* those four are in fact identical for every guesser — nothing has been
+bought yet — so only the drawer and any prompt-seeing spectators genuinely diverge, and
+collapsing the loop into one broadcast plus a small private follow-up looks free.
+[`benchmarks/turn_start.py`](../benchmarks/turn_start.py) measures what that would buy:
+**zero bytes** (see §1 — a broadcast is compressed per connection either way) and
+55–271 µs of server work, once per turn, which is three ten-thousandths of one percent
+of a core. The loop stays. It has one payload shape rather than two, no second event
+whose loss would leave a drawer looking at a masked prompt, and mid-turn
+(`hint_revealed`, `sync_game`) the divergence is real anyway.
 
 **`chat_message`** (`ChatMessage`) has `id`, `nickname`, `text`, `correct`, and the
 optional `retainedMessageId`, `playerId`, `nameColor`, `isAnonymous`, `system`, `close`
@@ -512,8 +573,9 @@ drawer                                     server                       everyone
   │  draw(frame, [generation, sequence])      │
   │──────────────────────────────────────────▶│  validate rules, generation, sequence
   │                                           │  CanvasSession.record_stroke(...)
-  │                                           │────── draw(frame verbatim) ──────────▶
-  │◀──── canvas_commit [gen, seq, rev, hash] ─│──────────────────────────────────────▶
+  │                                           │  commit_sequence(...) if it closes one
+  │                                           │─ draw(frame verbatim, [gen, seq, rev, hash]) ▶
+  │◀──── canvas_commit [gen, seq, rev, hash] ─│
 ```
 
 - Only the frame that **starts** an action carries `[generation, sequence]`. Path
@@ -522,14 +584,31 @@ drawer                                     server                       everyone
 - A path is committed on `draw_end`, using the sequence its `draw_start` carried. A
   shape or fill commits immediately. A clear commits immediately.
 - The rebroadcast to other clients is the drawer's **exact wire bytes**, never a
-  re-encoded frame.
+  re-encoded frame — plus, on the frame that *commits* an action, the commit itself as
+  a trailing `[generation, sequence, revision, historyHash]`. Point frames commit
+  nothing and carry nothing.
+- **The drawer still receives `canvas_commit` as its own event**, because `skip_sid`
+  excludes them from the rebroadcast and their pending-mutation window is what the
+  commit resolves. Everyone else reads the commit off the frame that caused it, which
+  costs the room one event per action instead of two and makes it impossible to observe
+  a commit for a frame that has not arrived.
+- `canvas_undo` is unaffected: an undo has no frame of its own to ride on, so it stays a
+  room-wide event.
+- **A viewer refuses a frame that disagrees with its commit.** A committing frame
+  without one, or a commit on a frame that committed nothing, is a protocol break, and
+  the viewer takes a resync rather than continuing. `ClientCanvasHistory.apply` returns
+  whether a `draw_end` really closed an open path — the same condition the server
+  commits on — so the check is exact rather than a guess about server state. Without it
+  a viewer that stopped reading commits would drift silently: identical pixels, stale
+  sequence, and nothing to notice until something validated against that sequence
+  arrived.
 
 ### Recovery paths
 
 | Situation | Server response |
 | --- | --- |
 | `generation` is stale | `sync_strokes` (full authoritative history) |
-| `sequence` ≤ committed | replay the stored `canvas_commit` for it if the recorded mutation matches, else `sync_strokes` |
+| `sequence` ≤ committed | replay the stored `canvas_commit` to that socket if the recorded mutation matches, else `sync_strokes` |
 | `sequence` > expected (a gap) | `request_canvas_actions [generation, expected, received]` |
 | A new action arrives while a path is still open | `request_canvas_actions`, unless it is a `draw_start` repeating the open sequence, which restarts that path |
 | A refused tool or color | `sync_strokes` |

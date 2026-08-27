@@ -635,3 +635,143 @@ async def test_pressure_room_credits_the_decayed_points():
     )
     assert correct_guess.args[1]["points"] == 235
     assert guesser.score == opening_balance + 235
+
+
+def _guessing_room():
+    """A room mid-turn where `guesser` may guess at "panda"."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid = "drawer-sid"
+    guesser.sid = "guesser-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, guesser.id], prompt_pool=["panda"])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "panda")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": guesser.id}
+    )
+    sio.emit = AsyncMock()
+    return room, guesser, sio
+
+
+def _guess_lines(sio, text):
+    return [
+        call
+        for call in sio.emit.await_args_list
+        if call.args[0] == "chat_message" and call.args[1].get("text") == text
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_retried_guess_is_acknowledged_but_not_processed_twice():
+    """The client resends a guess it never saw acknowledged. If the first copy
+    did arrive, replaying it would double the chat line and the turn's counts."""
+    room, guesser, sio = _guessing_room()
+    guess = sio.handlers["/"]["guess"]
+
+    assert await guess("guesser-sid", {"text": "otter", "id": 0}) is None
+    assert await guess("guesser-sid", {"text": "otter", "id": 0}) is None
+
+    assert len(_guess_lines(sio, "otter")) == 1
+    assert room.game.wrong_guesses[guesser.id] == 1
+
+
+@pytest.mark.asyncio
+async def test_the_same_word_guessed_again_under_a_new_id_is_processed():
+    room, guesser, sio = _guessing_room()
+    guess = sio.handlers["/"]["guess"]
+
+    await guess("guesser-sid", {"text": "otter", "id": 0})
+    await guess("guesser-sid", {"text": "otter", "id": 1})
+
+    assert len(_guess_lines(sio, "otter")) == 2
+    assert room.game.wrong_guesses[guesser.id] == 2
+
+
+@pytest.mark.asyncio
+async def test_a_reconnected_client_restarts_its_guess_ids_without_being_deduped():
+    """Ids are per connection. A reconnect starts them over, and judging the
+    new counter against the old one would swallow a genuine guess."""
+    room, guesser, sio = _guessing_room()
+    guess = sio.handlers["/"]["guess"]
+
+    await guess("guesser-sid", {"text": "otter", "id": 0})
+    guesser.sid = "guesser-sid-2"
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": guesser.id}
+    )
+    await guess("guesser-sid-2", {"text": "badger", "id": 0})
+
+    assert len(_guess_lines(sio, "badger")) == 1
+    assert room.game.wrong_guesses[guesser.id] == 2
+
+
+@pytest.mark.asyncio
+async def test_a_guess_without_an_id_is_never_deduped():
+    """A client that sends no id forgoes deduplication rather than losing
+    guesses to an id it never claimed."""
+    room, guesser, sio = _guessing_room()
+    guess = sio.handlers["/"]["guess"]
+
+    await guess("guesser-sid", {"text": "otter"})
+    await guess("guesser-sid", {"text": "otter"})
+
+    assert len(_guess_lines(sio, "otter")) == 2
+    assert room.game.wrong_guesses[guesser.id] == 2
+
+
+@pytest.mark.asyncio
+async def test_a_near_miss_retry_repeats_neither_the_echo_nor_the_hint():
+    """The near-miss path answers one guess with two messages to the guesser -
+    their own line and the hint. A replayed guess would duplicate both."""
+    room, guesser, sio = _guessing_room()
+    guess = sio.handlers["/"]["guess"]
+
+    await guess("guesser-sid", {"text": "pandas", "id": 4})
+    await guess("guesser-sid", {"text": "pandas", "id": 4})
+
+    to_guesser = [
+        call
+        for call in sio.emit.await_args_list
+        if call.args[0] == "chat_message" and call.kwargs.get("to") == "guesser-sid"
+    ]
+    assert [call.args[1]["text"] for call in to_guesser] == [
+        "pandas",
+        '"pandas" is very close!',
+    ]
+    assert room.game.near_misses[guesser.id] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_correct_guess_retried_is_answered_with_silence():
+    """Scoring twice is already impossible - the guesser is in
+    `correct_guessers` by then. What the retry would otherwise produce is a
+    second chat line, echoing the answer back as ordinary post-guess chatter."""
+    room, guesser, sio = _guessing_room()
+    guess = sio.handlers["/"]["guess"]
+
+    await guess("guesser-sid", {"text": "panda", "id": 7})
+    scored = guesser.score
+    sio.emit.reset_mock()
+
+    await guess("guesser-sid", {"text": "panda", "id": 7})
+
+    assert guesser.score == scored
+    assert sio.emit.await_args_list == []
+
+
+@pytest.mark.asyncio
+async def test_an_invalid_guess_payload_is_refused_in_the_acknowledgement():
+    room, _guesser, sio = _guessing_room()
+    guess = sio.handlers["/"]["guess"]
+
+    response = await guess("guesser-sid", {"text": "otter", "id": -1})
+
+    assert response["ok"] is False
+    assert response["field"] == "id"
+    assert not _guess_lines(sio, "otter")

@@ -224,11 +224,13 @@ Two frontend conventions worth knowing:
    cookie does not exist until `GET /api/auth/me` has provisioned the account.
    `App.tsx` connects only once identity has settled.
 2. **`emitWithAck` never hands a packet to a disconnected socket**
-   ([`frontend/src/lib/socket.ts:67`](../frontend/src/lib/socket.ts)). Socket.IO would
+   ([`frontend/src/lib/socket.ts:139`](../frontend/src/lib/socket.ts)). Socket.IO would
    queue it and deliver it on reconnect, so a request reported as failed could arrive
    seconds later — a second room, or a game started twice. Actions that only make
-   sense in the moment (a guess, a vote, leaving, toggling AFK) are dropped outright
-   rather than replayed.
+   sense in the moment (a vote, leaving, toggling AFK) are dropped outright rather than
+   replayed. A guess is dropped the same way but *confirmed*: it is resent once if the
+   server does not acknowledge it, and carries an id so the resend cannot be processed
+   twice (`wire-protocol.md` §2).
 
 ---
 
@@ -417,10 +419,12 @@ drawer: select_prompt  (or the timer forces a choice)
 
 drawer: draw / undo_stroke      (binary; see wire-protocol.md)
   └─ handlers/drawing.py  →  CanvasSession.record_stroke / undo_last_stroke
-       ├─ rebroadcast the exact wire frame to the room (skip_sid=drawer)
-       └─ emit canvas_commit / canvas_undo                                → room
+       ├─ rebroadcast the exact wire frame to the room (skip_sid=drawer),
+       │  with the commit attached when that frame commits an action
+       ├─ emit canvas_commit                                → the drawer alone
+       └─ emit canvas_undo                                               → room
 
-guessers: guess
+guessers: guess          (volatile, acknowledged; a retry carrying a seen id stops here)
   └─ handlers/chat.py  →  Game.submit_guess
        ├─ correct  → emit correct_guess (room) + you_guessed_correctly (guesser)
        ├─ near miss→ emit chat_message twice, drawer-safe, to the guesser only

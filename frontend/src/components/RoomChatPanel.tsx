@@ -4,7 +4,7 @@ import { MAX_PROMPT_LENGTH } from "../lib/customPrompts";
 import { chatAnnouncement } from "../lib/chatAnnouncements";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { recordRender } from "../lib/renderDiagnostics";
-import { emitTransient, emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { emitWithAck, sendGuess, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { useSettingsStore } from "../store/settingsStore";
@@ -61,6 +61,7 @@ export function RoomChatPanel({
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -130,6 +131,14 @@ export function RoomChatPanel({
     inputRef.current?.focus();
   }, [isMobile, canGuess, isDrawer]);
 
+  // Long enough to read and act on, short enough that it cannot still be on
+  // screen for a turn the player has since stopped guessing in.
+  useEffect(() => {
+    if (!deliveryError) return;
+    const timeout = window.setTimeout(() => setDeliveryError(null), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [deliveryError]);
+
   useEffect(() => {
     if (!guessFlash) return;
     const flashId = guessFlash.id;
@@ -144,6 +153,7 @@ export function RoomChatPanel({
     setText("");
     setHistoryIndex(null);
     setError(null);
+    setDeliveryError(null);
   }
 
   if ((!canGuess || isDrawer) && guessFlash) {
@@ -243,7 +253,14 @@ export function RoomChatPanel({
 
     setError(null);
     if (inputPurpose === "guess") {
-      emitTransient("guess", { text: trimmed });
+      // A guess is volatile: a momentarily unwritable transport drops it. The
+      // sender resends once on its own; this only has to report the guess that
+      // never made it, which otherwise vanishes with nothing said.
+      setDeliveryError(null);
+      sendGuess(trimmed, {
+        onUndelivered: () =>
+          setDeliveryError(`Your guess "${trimmed}" did not reach the server. Send it again.`),
+      });
       setHistory((current) =>
         current.length === 0 || current[current.length - 1] !== trimmed
           ? [...current, trimmed]
@@ -353,7 +370,9 @@ export function RoomChatPanel({
         {liveAnnouncement}
       </div>
 
-      {error && <p className="waiting-chat-error" role="alert">{error}</p>}
+      {(error ?? deliveryError) && (
+        <p className="waiting-chat-error" role="alert">{error ?? deliveryError}</p>
+      )}
       {inputVisible && (
         <form
           className={`chat-input${mode === "waiting" ? " waiting-chat-form" : ""}`}

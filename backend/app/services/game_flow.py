@@ -486,6 +486,23 @@ class GameFlowService:
             to=sid,
         )
 
+    def canvas_commit_payload(self, room: Room, sequence: int) -> list | None:
+        """`[generation, sequence, revision, historyHash]` for a committed action.
+
+        None when the sequence is not a committed action - it was never
+        committed, it has aged out of the commit window, or it is an undo,
+        which has its own five-element shape and its own event. Exposed
+        because a committing frame carries this alongside itself for viewers
+        (§7), so the drawing handler builds it at the moment it emits.
+        """
+        if not room.game:
+            return None
+        commit = room.game.canvas.get_commit(sequence)
+        if not commit or commit[2] == "undo":
+            return None
+        revision, history_hash, _mutation = commit
+        return [room.game.canvas.generation, sequence, revision, history_hash]
+
     async def _emit_canvas_commit(
         self,
         room: Room,
@@ -499,23 +516,18 @@ class GameFlowService:
         if not commit:
             return
         revision, history_hash, mutation = commit
-        event = "canvas_undo" if mutation == "undo" else "canvas_commit"
-        payload = (
-            [
+        if mutation == "undo":
+            event = "canvas_undo"
+            payload = [
                 room.game.canvas.generation,
                 sequence,
                 revision - 1,
                 revision,
                 history_hash,
             ]
-            if mutation == "undo"
-            else [
-                room.game.canvas.generation,
-                sequence,
-                revision,
-                history_hash,
-            ]
-        )
+        else:
+            event = "canvas_commit"
+            payload = self.canvas_commit_payload(room, sequence)
         await self._sio.emit(
             event,
             payload,
@@ -660,6 +672,14 @@ class GameFlowService:
             }
         )
         game.set_phase_deadline(game.drawing_seconds)
+        # One emit per socket, deliberately, even though at turn start every
+        # guesser's payload is identical - nothing has been bought yet, so only
+        # the drawer and prompt-seeing spectators actually diverge. Broadcasting
+        # the guesser shape and following with a private event for the few that
+        # differ saves no bytes at all (a deflate context is per connection, so
+        # a broadcast is compressed once per socket regardless) and about 55-271
+        # microseconds of work once every ninety seconds. Measured in
+        # benchmarks/turn_start.py; the reasoning is in wire-protocol.md §5.
         for p in room.player_list():
             if not p.sid:
                 continue
