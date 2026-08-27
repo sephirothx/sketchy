@@ -14,7 +14,14 @@ import {
 test("live drawing frames round-trip with compact fixed sizes", () => {
   const cases = [
     [encodePathStart({ x: 0.25, y: 0.75, color: "#aabbcc", width: 4 }), "draw_start", 9],
-    [encodePathPoints({ points: [{ x: 0.1, y: 0.2 }, { x: 1.2, y: -0.1 }] }), "draw_move", 9],
+    // A whole canvas apart, so the second point takes the -128 escape and a
+    // full absolute pair rather than a delta.
+    [encodePathPoints({ points: [{ x: 0.1, y: 0.2 }, { x: 1.2, y: -0.1 }] }), "draw_move", 10],
+    // Adjacent pointer samples: two bytes per point after the first, which is
+    // the case that carries essentially all of the traffic.
+    [encodePathPoints({
+      points: [{ x: 0.1, y: 0.2 }, { x: 0.105, y: 0.205 }, { x: 0.11, y: 0.21 }],
+    }), "draw_move", 9],
     [encodePathEnd(), "draw_end", null],
     [encodeShape({
       shape: "ellipse",

@@ -18,6 +18,16 @@ const MAX_BRUSH_WIDTH = 64;
 const MAX_POINTS_PER_FRAME = 256;
 const SHAPES = ["rectangle", "ellipse", "triangle"] as const;
 
+// Path points travel as deltas from the point before them; see the matching
+// block in `backend/app/live_drawing.py`, which this must agree with byte for
+// byte. The first point of every frame stays absolute so each frame decodes
+// independently of the ones around it. -128 is not a delta but the escape
+// marker: a stroke moving faster than ~3810 px/s (measured crossover at a
+// 120Hz pointer) writes it, followed by an absolute pair.
+const DELTA_ESCAPE = -128;
+const MIN_DELTA = -127;
+const MAX_DELTA = 127;
+
 const PATH_START_TAG = 0;
 const PATH_POINTS_TAG = 1;
 const PATH_END_TAG = 2;
@@ -74,15 +84,35 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
   if (payload.points.length < 1 || payload.points.length > MAX_POINTS_PER_FRAME) {
     throw new Error("Invalid path point count");
   }
-  const frame = new Uint8Array(1 + payload.points.length * 4);
-  const view = new DataView(frame.buffer);
+  const packed = payload.points.map((point) => [
+    packedCoordinate(point.x, CANVAS_WIDTH),
+    packedCoordinate(point.y, CANVAS_HEIGHT),
+  ]);
+  // Worst case is every point escaping, which is still bounded.
+  const scratch = new Uint8Array(1 + packed.length * (1 + 4));
+  const view = new DataView(scratch.buffer);
   view.setUint8(0, header(PATH_POINTS_TAG));
-  payload.points.forEach((point, index) => {
-    const offset = 1 + index * 4;
-    view.setInt16(offset, packedCoordinate(point.x, CANVAS_WIDTH), true);
-    view.setInt16(offset + 2, packedCoordinate(point.y, CANVAS_HEIGHT), true);
-  });
-  return frame;
+  view.setInt16(1, packed[0][0], true);
+  view.setInt16(3, packed[0][1], true);
+  let offset = 5;
+  for (let index = 1; index < packed.length; index += 1) {
+    const deltaX = packed[index][0] - packed[index - 1][0];
+    const deltaY = packed[index][1] - packed[index - 1][1];
+    if (
+      deltaX >= MIN_DELTA && deltaX <= MAX_DELTA
+      && deltaY >= MIN_DELTA && deltaY <= MAX_DELTA
+    ) {
+      view.setInt8(offset, deltaX);
+      view.setInt8(offset + 1, deltaY);
+      offset += 2;
+    } else {
+      view.setInt8(offset, DELTA_ESCAPE);
+      view.setInt16(offset + 1, packed[index][0], true);
+      view.setInt16(offset + 3, packed[index][1], true);
+      offset += 5;
+    }
+  }
+  return scratch.slice(0, offset);
 }
 
 export function encodePathEnd(): number {
@@ -163,19 +193,33 @@ export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
     };
   }
   if (tag === PATH_POINTS_TAG) {
-    if (
-      view.byteLength <= 1
-      || (view.byteLength - 1) % 4 !== 0
-      || (view.byteLength - 1) / 4 > MAX_POINTS_PER_FRAME
-    ) {
-      return null;
-    }
-    const points = [];
-    for (let offset = 1; offset < view.byteLength; offset += 4) {
+    // Variable-length records, so the frame is walked rather than divided.
+    if (view.byteLength < 5) return null;
+    let x = view.getInt16(1, true);
+    let y = view.getInt16(3, true);
+    let offset = 5;
+    const points = [{
+      x: unpackedCoordinate(x, CANVAS_WIDTH),
+      y: unpackedCoordinate(y, CANVAS_HEIGHT),
+    }];
+    while (offset < view.byteLength) {
+      if (view.getInt8(offset) === DELTA_ESCAPE) {
+        if (offset + 5 > view.byteLength) return null;
+        x = view.getInt16(offset + 1, true);
+        y = view.getInt16(offset + 3, true);
+        offset += 5;
+      } else {
+        if (offset + 2 > view.byteLength) return null;
+        x += view.getInt8(offset);
+        y += view.getInt8(offset + 1);
+        offset += 2;
+        if (x < -0x8000 || x > 0x7fff || y < -0x8000 || y > 0x7fff) return null;
+      }
       points.push({
-        x: unpackedCoordinate(view.getInt16(offset, true), CANVAS_WIDTH),
-        y: unpackedCoordinate(view.getInt16(offset + 2, true), CANVAS_HEIGHT),
+        x: unpackedCoordinate(x, CANVAS_WIDTH),
+        y: unpackedCoordinate(y, CANVAS_HEIGHT),
       });
+      if (points.length > MAX_POINTS_PER_FRAME) return null;
     }
     return { event: "draw_move", payload: { points } };
   }

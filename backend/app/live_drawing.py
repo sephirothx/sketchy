@@ -31,6 +31,27 @@ CLEAR_TAG = 5
 _HEADER_VERSION_SHIFT = 4
 _HEADER_TAG_MASK = 0x0F
 _POINT = struct.Struct("<hh")
+_DELTA = struct.Struct("<bb")
+
+# Path points travel as deltas from the point before them. Consecutive pointer
+# samples are milliseconds apart, so the gap between two of them almost always
+# fits a signed byte at quarter-pixel scale (+/-31.75px) where an absolute
+# coordinate needs two - halving the per-point cost on much the highest-volume
+# packet in the protocol.
+#
+# The first point of every frame stays absolute, deliberately. It makes each
+# frame independently decodable, so a frame that arrives late, out of order, or
+# not at all cannot corrupt the points in any other frame. That property is
+# worth more than the two bytes it costs.
+#
+# -128 is not a delta. It is the escape marker: a flick fast enough to move
+# more than 31.75px between samples writes it, then an absolute pair. Escapes
+# cost 5 bytes against 2, so they are a loss when frequent - but they are the
+# reason an arbitrarily fast stroke stays representable rather than being
+# refused.
+_DELTA_ESCAPE = -128
+_MIN_DELTA = -127
+_MAX_DELTA = 127
 _PATH_START = struct.Struct("<B3sBhh")
 _SHAPE = struct.Struct("<BB3sBhhhh")
 _FILL = struct.Struct("<B3sHH")
@@ -93,15 +114,26 @@ def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
         if not isinstance(points, list) or not 1 <= len(points) <= MAX_POINTS_PER_FRAME:
             raise ValueError("invalid path point count")
         frame = bytearray((_header(PATH_POINTS_TAG),))
+        previous_x = previous_y = None
         for point in points:
             if not isinstance(point, dict):
                 raise ValueError("invalid path point")
-            frame.extend(
-                _POINT.pack(
-                    _pack_coordinate(point.get("x"), CANVAS_WIDTH),
-                    _pack_coordinate(point.get("y"), CANVAS_HEIGHT),
-                )
-            )
+            x = _pack_coordinate(point.get("x"), CANVAS_WIDTH)
+            y = _pack_coordinate(point.get("y"), CANVAS_HEIGHT)
+            if previous_x is None:
+                frame.extend(_POINT.pack(x, y))
+            else:
+                delta_x = x - previous_x
+                delta_y = y - previous_y
+                if (
+                    _MIN_DELTA <= delta_x <= _MAX_DELTA
+                    and _MIN_DELTA <= delta_y <= _MAX_DELTA
+                ):
+                    frame.extend(_DELTA.pack(delta_x, delta_y))
+                else:
+                    frame.append(_DELTA_ESCAPE & 0xFF)
+                    frame.extend(_POINT.pack(x, y))
+            previous_x, previous_y = x, y
         return bytes(frame)
     if event == "draw_end":
         return _header(PATH_END_TAG)
@@ -189,21 +221,43 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
             },
         )
     if tag == PATH_POINTS_TAG:
-        if (
-            len(frame) <= 1
-            or (len(frame) - 1) % _POINT.size
-            or (len(frame) - 1) // _POINT.size > MAX_POINTS_PER_FRAME
-        ):
+        # Variable-length records, so the frame is walked rather than divided.
+        # Every step is bounded by the frame it is reading, and the point count
+        # is checked as it grows, so a malformed frame is refused rather than
+        # read past.
+        if len(frame) < 1 + _POINT.size:
             raise ValueError("invalid path-points frame size")
+        x, y = _POINT.unpack_from(frame, 1)
+        offset = 1 + _POINT.size
+        packed = [(x, y)]
+        while offset < len(frame):
+            if frame[offset] == (_DELTA_ESCAPE & 0xFF):
+                offset += 1
+                if offset + _POINT.size > len(frame):
+                    raise ValueError("invalid path-points frame size")
+                x, y = _POINT.unpack_from(frame, offset)
+                offset += _POINT.size
+            else:
+                if offset + _DELTA.size > len(frame):
+                    raise ValueError("invalid path-points frame size")
+                delta_x, delta_y = _DELTA.unpack_from(frame, offset)
+                offset += _DELTA.size
+                x += delta_x
+                y += delta_y
+                if not (
+                    MIN_PACKED_COORDINATE <= x <= MAX_PACKED_COORDINATE
+                    and MIN_PACKED_COORDINATE <= y <= MAX_PACKED_COORDINATE
+                ):
+                    raise ValueError("path point is outside packed range")
+            packed.append((x, y))
+            if len(packed) > MAX_POINTS_PER_FRAME:
+                raise ValueError("invalid path point count")
         points = [
             {
-                "x": _unpack_coordinate(x, CANVAS_WIDTH),
-                "y": _unpack_coordinate(y, CANVAS_HEIGHT),
+                "x": _unpack_coordinate(point_x, CANVAS_WIDTH),
+                "y": _unpack_coordinate(point_y, CANVAS_HEIGHT),
             }
-            for x, y in (
-                _POINT.unpack_from(frame, offset)
-                for offset in range(1, len(frame), _POINT.size)
-            )
+            for point_x, point_y in packed
         ]
         return LiveDrawingPacket("draw_move", {"points": points})
     if tag == PATH_END_TAG:
