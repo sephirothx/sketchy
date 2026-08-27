@@ -180,3 +180,36 @@ async def test_confirming_a_seat_never_spends_the_join_allowance():
             "joiner", {"roomId": other.id, "nickname": "Joiner"}
         )
     )["ok"] is True
+
+
+def test_room_state_carries_vote_lists_only_where_there_are_votes():
+    """An empty list per player, per broadcast, is the payload's own O(N^2).
+
+    The client already reads these as optional, so their absence means "no
+    votes" without it having to learn anything new.
+    """
+    from app.presenters import room_state_payload
+
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Full house", max_players=16)
+    seats = [
+        room_manager.add_player(room, f"Player{index:02d}", user_id=f"u{index}")
+        for index in range(16)
+    ]
+    for index in range(8):
+        room_manager.add_player(
+            room, f"Watcher{index:02d}", is_spectator=True, user_id=f"w{index}"
+        )
+
+    quiet = room_state_payload(room)
+    assert len(quiet["players"]) == 24
+    assert all("kickVotes" not in player for player in quiet["players"])
+    assert all("afkVotes" not in player for player in quiet["players"])
+
+    seats[1].kick_votes.add(seats[0].id)
+    seats[2].afk_votes.add(seats[0].id)
+    voted = room_state_payload(room)
+    by_id = {player["playerId"]: player for player in voted["players"]}
+    assert by_id[seats[1].id]["kickVotes"] == [seats[0].id]
+    assert by_id[seats[2].id]["afkVotes"] == [seats[0].id]
+    assert "afkVotes" not in by_id[seats[1].id]

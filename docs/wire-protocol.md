@@ -343,6 +343,7 @@ the server resolves the seat against the live room and selects the evidence itse
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
 | `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
+| `server_full` | `{reason}` — the socket is closed immediately afterwards | one socket, at handshake |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
 
@@ -358,8 +359,13 @@ in §4, `state` (`waiting | playing`), `customPromptCount` (a count, never the p
 
 ```ts
 { playerId, nickname, nameColor?, isAnonymous?, score,
-  connected, isHost, isSpectator, isAfk, kickVotes[], afkVotes[] }
+  connected, isHost, isSpectator, isAfk, kickVotes?[], afkVotes?[] }
 ```
+
+The two vote lists are **present only where somebody has voted**; absent means no
+votes. Every seat receives every other seat's entry on every broadcast, so two empty
+arrays per player is the payload paying an O(N²) price for the state almost every
+player is in almost always.
 
 **Room payloads deliberately carry no account IDs.** Reports, blocks, and profile links
 all resolve seats server-side.
