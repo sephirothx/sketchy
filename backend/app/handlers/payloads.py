@@ -19,8 +19,8 @@ Command inventory (client request shape)
 UpdateRoomSettingsPayload; ``update_player_settings`` PlayerSettingsPayload;
 ``rename_player`` RenamePlayerPayload; ``get_recap_drawing`` RecapDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
 ``vote_player`` VotePayload; ``cast_restart_vote`` RestartVotePayload;
-``select_prompt`` SelectPromptPayload; ``send_chat`` and
-``guess`` TextPayload; ``buy_hint`` HintPayload; ``buy_wheel_letter``
+``select_prompt`` SelectPromptPayload; ``send_chat`` TextPayload;
+``guess`` GuessPayload; ``buy_hint`` HintPayload; ``buy_wheel_letter``
 WheelLetterPayload; ``draw`` DrawPayload; ``undo_stroke`` UndoPayload. The
 remaining commands (room/custom-prompt reads, promotion, leave, game start,
 session ping, and canvas sync) have EmptyPayload.
@@ -54,6 +54,8 @@ from app.rooms import (
 from app.prompts import MAX_RAW_INPUT_LENGTH, MAX_PROMPT_LENGTH
 
 MAX_CANVAS_SEQUENCE = 2**31 - 1
+# Client-generated, so bounded here like every other inbound integer.
+MAX_GUESS_ID = 2**31 - 1
 MAX_ROOM_NAME_LENGTH = 40
 # Guest nicknames and account usernames share one rule (app/auth/names.py).
 # Keep in sync with frontend/src/lib/roomEntryState.ts MAX_NICKNAME_LENGTH.
@@ -395,6 +397,19 @@ class SelectPromptPayload(RequestModel):
 
 class TextPayload(RequestModel):
     text: str = Field(max_length=MAX_CHAT_MESSAGE_LENGTH)
+
+
+class GuessPayload(TextPayload):
+    """A guess, optionally carrying the client's own delivery identifier.
+
+    `guess` is emitted volatile, so a momentarily unwritable transport drops it
+    silently; the client retries once with the same `id` when the server never
+    acknowledges. The id lets the server tell that retry apart from a player
+    genuinely guessing the same word twice. It is per connection and monotonic,
+    and omitting it simply forgoes the deduplication.
+    """
+
+    id: int | None = Field(default=None, ge=0, le=MAX_GUESS_ID)
 
 
 class HintPayload(RequestModel):

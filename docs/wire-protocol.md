@@ -102,7 +102,7 @@ as `{"ok": false, "error": …, "field": …}` — before any authorization or m
 
 ### Client-side delivery guarantees
 
-`emitWithAckOn` ([`frontend/src/lib/socket.ts:67`](../frontend/src/lib/socket.ts))
+`emitWithAckOn` ([`frontend/src/lib/socket.ts:139`](../frontend/src/lib/socket.ts))
 never hands a packet to a disconnected socket. Socket.IO would queue it and deliver it
 on reconnect, and no `disconnect` event would arrive to reject against — so the timeout
 would tell the player the action failed while the packet still lands seconds later. On
@@ -111,11 +111,34 @@ these paths that means a second room, or a game started twice. Instead:
 - **Acknowledged actions** (create a room, join, start, vote to restart) wait for the
   connection and are sent exactly once, or they time out having never been sent.
 - **Momentary actions** (`guess`, `vote_player`, `toggle_afk`, `leave_room`) go through
-  `emitTransient` ([`frontend/src/lib/socket.ts:148`](../frontend/src/lib/socket.ts)),
+  `emitTransient` ([`frontend/src/lib/socket.ts:220`](../frontend/src/lib/socket.ts)),
   which uses `socket.volatile.emit` so the packet is **dropped** rather than replayed
   into whatever the room has become — a vote cast in a turn that has ended, a guess
   against a prompt nobody is drawing any more, a `leave_room` that evicts the player
   from the room they just rejoined.
+- **`guess` is momentary *and* confirmed.** Volatile delivery drops the packet whenever
+  the transport is briefly unwritable, not only when the connection is gone, and a lost
+  guess is the one silent failure in the game's core loop. So `guess` keeps volatile
+  delivery and adds an acknowledgement: `createGuessSender`
+  ([`frontend/src/lib/socket.ts:259`](../frontend/src/lib/socket.ts)) emits with a
+  2-second ack timeout and **resends once** if nothing comes back, carrying the same
+  `id`. A retry is abandoned rather than sent while disconnected — after a reconnect it
+  would be exactly the replay volatile delivery exists to prevent. Two unacknowledged
+  attempts are reported to the player instead of vanishing.
+
+  The `id` is what makes the retry safe. It is a per-page-load counter, and the server
+  remembers a bounded window of ids **per connection**
+  (`Player.accept_guess_id`, [`backend/app/rooms.py`](../backend/app/rooms.py)), so a
+  retry of a guess that did arrive is acknowledged and dropped rather than echoed to the
+  room a second time and counted twice in the turn's statistics. Ids are meaningless
+  across connections: a new sid starts a fresh window, so a reconnected client's counter
+  is never judged against the old one. A client that sends no `id` forgoes the
+  deduplication and is always processed.
+
+  The acknowledgement carries no body — the handler returns `None` and python-socketio
+  sends an empty ACK. Its arrival *is* the message: the guess reached the server. Every
+  path in the handler returns, including the ones that deliberately ignore the guess, so
+  a client is never told to resend something the server chose not to act on.
 - **Live drawing is deliberately not routed through either.** Its frames carry a
   generation and sequence the server checks, and it has an explicit resync path, so
   replay is already answered there (§7).
@@ -155,13 +178,15 @@ Shared bounds:
 | `MAX_IDENTIFIER_LENGTH` | 128 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 | `MAX_PROMPT_LISTS` per room | 20 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 | `MAX_CANVAS_SEQUENCE` | 2³¹ − 1 | [`payloads.py`](../backend/app/handlers/payloads.py) |
+| `MAX_GUESS_ID` | 2³¹ − 1 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 
 ---
 
 ## 4. Client → server events
 
 Registered in each domain's `register(ctx)`. The **Ack** column says whether the
-client uses the acknowledgement.
+client uses the acknowledgement. `guess` is the one command whose acknowledgement is
+empty: the client reads only its arrival, as proof the guess was delivered (§2).
 
 | Event | Payload model | Ack | Handler |
 | --- | --- | --- | --- |
@@ -186,7 +211,7 @@ client uses the acknowledgement.
 | `undo_stroke` | `[generation, sequence, revision, historyHash]` | ✓ | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `request_sync_strokes` | `null`, or `[generation, actionCount, historyHash]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `send_chat` | `TextPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
-| `guess` | `TextPayload` | — | [`chat.py`](../backend/app/handlers/chat.py) |
+| `guess` | `GuessPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_hint` | `HintPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_wheel_letter` | `WheelLetterPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `toggle_afk` | `ToggleAfkPayload` | — | [`moderation.py`](../backend/app/handlers/moderation.py) |

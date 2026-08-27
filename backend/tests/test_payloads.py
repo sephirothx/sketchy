@@ -8,8 +8,10 @@ import socketio
 from app.handlers import register_all_handlers as register_handlers
 from app.game import Game
 from app.handlers.payloads import (
+    MAX_GUESS_ID,
     MAX_NICKNAME_LENGTH,
     CreateRoomPayload,
+    GuessPayload,
     HintPayload,
     PayloadError,
     TextPayload,
@@ -37,6 +39,13 @@ from app.rooms import RoomManager
         (HintPayload, {"slot": True}),
         (TextPayload, {"text": 123}),
         (TextPayload, {"text": "x" * (MAX_CHAT_MESSAGE_LENGTH + 1)}),
+        (GuessPayload, {"text": "panda", "id": "1"}),
+        (GuessPayload, {"text": "panda", "id": True}),
+        (GuessPayload, {"text": "panda", "id": -1}),
+        (GuessPayload, {"text": "panda", "id": MAX_GUESS_ID + 1}),
+        # The delivery id belongs to `guess` alone; waiting-room chat is
+        # acknowledged already and has no use for it.
+        (TextPayload, {"text": "panda", "id": 1}),
     ],
 )
 def test_json_payloads_do_not_coerce_and_enforce_bounds(model, payload):
@@ -49,6 +58,13 @@ def test_json_payloads_reject_non_objects_and_unknown_fields():
         parse_payload(TextPayload, ["hello"])
     with pytest.raises(PayloadError):
         parse_payload(TextPayload, {"text": "hello", "unexpected": True})
+
+
+def test_a_guess_carries_an_optional_delivery_id():
+    """Omitted by a client that does not retry, and accepted at the bound."""
+    assert parse_payload(GuessPayload, {"text": "panda"}).id is None
+    assert parse_payload(GuessPayload, {"text": "panda", "id": 0}).id == 0
+    assert parse_payload(GuessPayload, {"text": "panda", "id": MAX_GUESS_ID}).id == MAX_GUESS_ID
 
 
 def test_nickname_is_capped_at_sixteen_characters():

@@ -220,3 +220,81 @@ explicit resync path, so replay is already answered there. */
 export function emitTransient(event: string, ...args: unknown[]): void {
   socket.volatile.emit(event, ...args);
 }
+
+/** How long a guess waits for the server's acknowledgement before it is resent. */
+export const GUESS_ACK_TIMEOUT_MS = 2000;
+
+/** The slice of a Socket.IO client a confirmed transient emit uses.
+
+Named so a test can supply one: the states that matter here - the packet
+discarded before it is written, the acknowledgement that never comes, the
+connection gone by the time the retry would go out - are exactly the ones a
+real socket will not hold still in. */
+export interface TransientAckTarget {
+  readonly connected: boolean;
+  /** Emit volatile, calling back with an error if no ack arrives in `timeoutMs`. */
+  emitTransient(event: string, data: unknown, timeoutMs: number, ack: (error: unknown) => void): void;
+}
+
+export interface GuessDeliveryResult {
+  /** The guess reached the server. It may still have been ignored there. */
+  onDelivered?: () => void;
+  /** Both attempts went unacknowledged: the guess is lost, and the player should be told. */
+  onUndelivered?: () => void;
+}
+
+/** Build a guess sender that retries once when delivery goes unacknowledged.
+
+A guess is volatile (see `emitTransient`) because a guess replayed into a turn
+that has ended is worse than a guess lost - but volatile also drops the packet
+when the transport is merely *momentarily* unwritable, which a mobile player
+hits mid-round and which nothing currently reports. The acknowledgement turns
+that silence into a signal, and one retry covers the blip.
+
+The retry carries the same `id`, which the server remembers per connection, so
+a guess that did arrive is never processed twice. That is also why a retry is
+abandoned rather than sent while disconnected: after a reconnect the ids start
+over, and the packet would be replayed into a turn that has moved on - the very
+thing volatile delivery exists to prevent. */
+export function createGuessSender(
+  target: TransientAckTarget,
+  options: { timeoutMs?: number } = {},
+): (text: string, result?: GuessDeliveryResult) => void {
+  const timeoutMs = options.timeoutMs ?? GUESS_ACK_TIMEOUT_MS;
+  // Per page load, not per connection: a counter that restarted on reconnect
+  // could reissue an id the server still remembers. The server keys its window
+  // on the connection, so this only has to never repeat within one.
+  let nextGuessId = 0;
+
+  return function sendGuess(text: string, result: GuessDeliveryResult = {}): void {
+    const id = nextGuessId++;
+    let retriesLeft = 1;
+
+    function attempt() {
+      target.emitTransient("guess", { text, id }, timeoutMs, (error) => {
+        if (!error) {
+          result.onDelivered?.();
+          return;
+        }
+        if (retriesLeft > 0 && target.connected) {
+          retriesLeft -= 1;
+          attempt();
+          return;
+        }
+        result.onUndelivered?.();
+      });
+    }
+
+    attempt();
+  };
+}
+
+/** Send a guess on the shared socket, retrying once if it goes unacknowledged. */
+export const sendGuess = createGuessSender({
+  get connected() {
+    return socket.connected;
+  },
+  emitTransient(event, data, timeoutMs, ack) {
+    socket.volatile.timeout(timeoutMs).emit(event, data, ack);
+  },
+});
