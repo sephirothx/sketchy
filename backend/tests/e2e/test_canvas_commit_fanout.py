@@ -15,7 +15,7 @@ against its sequence. That is what the undo at the end is for: `canvas_undo` is
 still an event of its own and refuses a sequence that is not the next one
 expected, so a viewer that ignored its commits asks for a full resync there.
 This therefore watches the socket rather than the canvas: no commit events in,
-an undo accepted, and no resync out.
+an undo accepted, and no resync of either shape out.
 """
 import asyncio
 
@@ -153,8 +153,14 @@ async def test_a_viewer_gets_its_commits_on_the_frame_and_never_resyncs():
             assert _named(watched, "canvas_commit") == [], (
                 "the viewer was still sent a separate commit event"
             )
-            assert _named(watched, "sync_strokes") == [], (
-                "the viewer's bookkeeping fell behind and it asked for a full resync"
+            # Both shapes of resync, because they are not interchangeable here.
+            # A viewer that drifts still holds a *correct* history - only its
+            # sequence is stale - so its prefix claim is accepted and it is
+            # answered with the incremental tail, not the full dump. Watching
+            # only for `sync_strokes` misses exactly the case this guards.
+            resyncs = _named(watched, "sync_strokes") + _named(watched, "sync_strokes_tail")
+            assert resyncs == [], (
+                "the viewer's bookkeeping fell behind and it asked for a resync"
             )
         finally:
             await browser.close()

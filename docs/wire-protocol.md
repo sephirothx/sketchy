@@ -594,6 +594,14 @@ drawer                                     server                       everyone
   a commit for a frame that has not arrived.
 - `canvas_undo` is unaffected: an undo has no frame of its own to ride on, so it stays a
   room-wide event.
+- **A viewer refuses a frame that disagrees with its commit.** A committing frame
+  without one, or a commit on a frame that committed nothing, is a protocol break, and
+  the viewer takes a resync rather than continuing. `ClientCanvasHistory.apply` returns
+  whether a `draw_end` really closed an open path — the same condition the server
+  commits on — so the check is exact rather than a guess about server state. Without it
+  a viewer that stopped reading commits would drift silently: identical pixels, stale
+  sequence, and nothing to notice until something validated against that sequence
+  arrived.
 
 ### Recovery paths
 

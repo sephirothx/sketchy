@@ -11,10 +11,31 @@ import { createCanvasSyncRequester } from "../lib/canvasSyncRequests";
 import type { CanvasSyncRequester } from "../lib/canvasSyncRequests";
 import { decodeLiveDrawing, encodeClear, toWireFrame } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
+import { recordClientError } from "../lib/clientErrorLog";
 import { emitWithAck, socket } from "../lib/socket";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 
 const MAX_PENDING_CANVAS_ACTIONS = 256;
+
+/** Whether this frame closed or committed an action in the local history.
+
+The server attaches the commit to exactly the frame that commits an action, so
+a viewer can check the two agree instead of trusting them to. `applied` is what
+makes this exact rather than a guess about server state: `apply` accepts a
+`draw_end` only when it really closed an open path, which is the same condition
+the server commits on.
+
+Without the check a viewer that stopped reading commits would drift in silence -
+same pixels, stale sequence - until something validated against that sequence
+finally arrived. Cheap to recover from and almost impossible to notice, which
+is the wrong way round. */
+function commitsAnAction(packet: LiveDrawingPacket, applied: boolean): boolean {
+  if (!applied) return false;
+  return packet.event === "draw_end"
+    || packet.event === "draw_shape"
+    || packet.event === "draw_fill"
+    || packet.event === "clear_canvas";
+}
 
 export type DrawingFrame = number | Uint8Array;
 
@@ -220,9 +241,21 @@ export function useCanvasProtocol(
         requestAuthoritativeSync();
         return;
       }
-      historyRef.current.apply(packet);
+      const applied = historyRef.current.apply(packet);
       renderer.apply(packet);
       publishBudgets();
+      if (commitsAnAction(packet, applied) !== (commit !== undefined)) {
+        // A committing frame with no commit, or a commit on a frame that
+        // committed nothing. Either way the two sides disagree about what this
+        // frame did, so stop here and take server truth - loudly, because the
+        // alternative is a viewer that looks perfectly fine and is not.
+        recordClientError(
+          "socket",
+          `draw frame ${packet.event} ${commit === undefined ? "missing its" : "carried an unexpected"} commit`,
+        );
+        requestAuthoritativeSync();
+        return;
+      }
       if (commit !== undefined) onCanvasCommit(commit);
     };
 
