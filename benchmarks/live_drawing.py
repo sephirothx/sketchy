@@ -5,6 +5,13 @@ Socket.IO totals include Engine.IO packet markers and, for data-bearing binary
 actions, the standard binary-placeholder envelope. WebSocket framing is
 intentionally excluded.
 
+The deployment negotiates permessage-deflate with context takeover (uvicorn's
+wsproto transport offers it and `ws_per_message_deflate` defaults to true), so
+the uncompressed figures are an input to the wire cost, not the wire cost. The
+sustained-drawing model reports both, and the compressed column is the honest
+one: repeated framing compresses to almost nothing across messages, which
+changes not just the totals but which encoding choice is worth what.
+
 Two views:
 
 - Per action, the legacy all-JSON encoding against the #203 hybrid protocol.
@@ -24,6 +31,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import zlib
 import os
 import sys
 from pathlib import Path
@@ -102,6 +110,30 @@ def current_action_bytes(event: str, payload: dict, identity=(1, 1)) -> int:
     )
 
 
+# Each message ends with a Z_SYNC_FLUSH boundary, which is what makes a
+# deflate stream framable per message - and costs a few bytes every time.
+def deflated_stream_bytes(messages: list[bytes]) -> int:
+    """Bytes these messages cost through one permessage-deflate context."""
+    compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
+    return sum(
+        len(compressor.compress(message) + compressor.flush(zlib.Z_SYNC_FLUSH))
+        for message in messages
+    )
+
+
+def draw_messages(payload: bytes) -> list[bytes]:
+    """The WebSocket messages one `draw` frame actually becomes."""
+    if len(payload) <= MAX_BASE64_FRAME_BYTES:
+        text = "42" + json.dumps(
+            ["draw", base64.b64encode(payload).decode()], separators=(",", ":")
+        )
+        return [text.encode()]
+    placeholder = "451-" + json.dumps(
+        ["draw", {"_placeholder": True, "num": 0}], separators=(",", ":")
+    )
+    return [placeholder.encode(), payload]
+
+
 def reduction(before: int, after: int) -> str:
     if not before:
         return "     -"
@@ -162,6 +194,15 @@ def stroke_session(
     frames = frames_per_second * seconds
     inbound = frame_bytes * frames
     audience = max(0, room_size - 1)
+    # A second of frames through one deflate context, as a live socket sees it.
+    payload = encode_live_drawing(
+        "draw_move", {"points": _sample_points(points_per_frame)}
+    )
+    stream = []
+    for _ in range(int(frames)):
+        stream.extend(draw_messages(payload))
+    compressed = deflated_stream_bytes(stream)
+    compressed_per_frame = compressed / max(1, int(frames))
     return {
         "pointer_hz": pointer_hz,
         "flush_interval_ms": flush_interval_ms,
@@ -172,6 +213,10 @@ def stroke_session(
         "bytes_per_frame": frame_bytes,
         "inbound_bytes_per_second": round(inbound / seconds),
         "egress_bytes_per_second": round(inbound * audience / seconds),
+        "deflated_bytes_per_frame": round(compressed_per_frame, 1),
+        "deflated_egress_bytes_per_second": round(
+            compressed_per_frame * frames_per_second * audience
+        ),
     }
 
 
@@ -250,6 +295,9 @@ def main() -> None:
     print(f"  bytes per frame         {session['bytes_per_frame']:>10,} B")
     print(f"  drawer sends            {session['inbound_bytes_per_second']:>10,} B/s")
     print(f"  server pushes out       {session['egress_bytes_per_second']:>10,} B/s")
+    print("  -- through permessage-deflate, which the deployment negotiates --")
+    print(f"  bytes per frame         {session['deflated_bytes_per_frame']:>10} B")
+    print(f"  server pushes out       {session['deflated_egress_bytes_per_second']:>10,} B/s")
 
     if args.json_output:
         args.json_output.write_text(
