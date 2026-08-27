@@ -258,6 +258,14 @@ def create_auth_router(
                 status_code=429, detail="Too many attempts. Please wait and try again."
             )
 
+    async def refuse_a_registered_name(name: str) -> None:
+        """A guest may not play under a name that belongs to an account."""
+        owner = await user_repo.get_by_username(name)
+        if owner is not None and not owner.is_anonymous:
+            raise HTTPException(
+                status_code=409, detail="That name belongs to a registered player."
+            )
+
     async def require_user(request: Request):
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
@@ -336,9 +344,19 @@ def create_auth_router(
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
         if user is None:
+            # Checked before anything is charged, and before the account
+            # exists: the rename path below has always refused a registered
+            # player's username, and a first name is no different. Without it
+            # the uniqueness rule held everywhere except the one place an
+            # account is created.
+            await refuse_a_registered_name(name)
             await throttle(provision_limiter, request)
             if not await daily_provision_limiter.check(GLOBAL_PROVISION_KEY):
                 logger.warning("guest provisioning is at its daily ceiling")
+                # The day refused them, so the hour is still theirs: the
+                # ceiling lifts and a caller who bought nothing would
+                # otherwise still be blocked by an allowance they never spent.
+                await provision_limiter.refund(client_key(request))
                 raise HTTPException(
                     status_code=429,
                     detail=(
@@ -363,11 +381,7 @@ def create_auth_router(
                 status_code=409, detail="Registered players play as their username."
             )
 
-        owner = await user_repo.get_by_username(name)
-        if owner is not None and not owner.is_anonymous:
-            raise HTTPException(
-                status_code=409, detail="That name belongs to a registered player."
-            )
+        await refuse_a_registered_name(name)
 
         updated = await user_repo.update_profile(user.id, display_name=name)
         return user_payload(updated or user)

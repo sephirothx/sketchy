@@ -198,6 +198,7 @@ async def lifespan(_app: FastAPI):
     )
     mail_delivery = None
     metrics_flush = None
+    retention_sweep = None
     try:
         # Before anything that might have something to say.
         configure_logging()

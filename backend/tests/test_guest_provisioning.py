@@ -47,6 +47,19 @@ async def count(factory, model) -> int:
         return await session.scalar(select(func.count()).select_from(model))
 
 
+async def hourly_attempts(factory) -> int:
+    """What the per-address provisioning bucket has recorded."""
+    from app.db.models import AuthRateLimitBucket
+
+    async with factory() as session:
+        return (
+            await session.scalar(
+                select(func.coalesce(func.sum(AuthRateLimitBucket.attempt_count), 0))
+                .where(AuthRateLimitBucket.scope == "guest_provision")
+            )
+        ) or 0
+
+
 @pytest_asyncio.fixture
 async def site(monkeypatch):
     async with build_site(monkeypatch) as opened:
@@ -171,3 +184,51 @@ async def test_the_application_sweeps_stale_guests_without_being_asked(monkeypat
                 await sweep
 
         assert await count(factory, User) == 0, "the sweep left the stale guest behind"
+
+
+@pytest.mark.asyncio
+async def test_a_first_name_cannot_be_a_registered_players_username(monkeypatch):
+    """The rename path has always refused this; provisioning skipped it."""
+    async with build_site(monkeypatch) as (client, factory):
+        registered = await client.post(
+            "/api/auth/register",
+            json={"username": "Stefano", "password": "a-good-password"},
+        )
+        assert registered.status_code == 200
+
+        stranger = AsyncClient(
+            transport=client._transport, base_url="http://test"
+        )
+        async with stranger:
+            taken = await stranger.post(
+                "/api/auth/display-name", json={"displayName": "Stefano"}
+            )
+
+        assert taken.status_code == 409
+        assert "registered player" in taken.json()["detail"]
+        assert await count(factory, User) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_daily_ceiling_does_not_spend_the_hourly_allowance(monkeypatch):
+    """A refusal buys nothing, so it must not cost the caller their turn: the
+    day rolls over and they would still be blocked by an hour they never used."""
+    async with build_site(
+        monkeypatch, GUEST_PROVISION_LIMIT=10, GUEST_PROVISION_DAILY_LIMIT=1
+    ) as (client, factory):
+        client.cookies.clear()
+        first = await client.post(
+            "/api/auth/display-name", json={"displayName": "First"}
+        )
+        assert first.status_code == 200
+        assert await hourly_attempts(factory) == 1
+
+        client.cookies.clear()
+        refused = await client.post(
+            "/api/auth/display-name", json={"displayName": "Second"}
+        )
+
+        assert refused.status_code == 429
+        assert await count(factory, User) == 1
+        # The day refused this one, so the hour is untouched by it.
+        assert await hourly_attempts(factory) == 1

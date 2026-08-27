@@ -266,18 +266,6 @@ export function LobbyBrowserPage() {
   }
 
   async function handleJoinByCode(asSpectator = false) {
-    if (awaitingName) {
-      try {
-        await ensureIdentity();
-      } catch (identityError) {
-        setError(
-          identityError instanceof IdentityRequiredError
-            ? identityError.message
-            : "Could not save that name. Please try again.",
-        );
-        return;
-      }
-    }
     if (!joinCode.trim()) {
       setError("Please enter a room code");
       return;
@@ -293,9 +281,26 @@ export function LobbyBrowserPage() {
     if (pendingJoin) return;
     setPendingJoin({ key, mode: asSpectator ? "spectate" : "join" });
     setError(null);
+    // Every join arrives here - a public room card, a code, a spectate - so
+    // this is where a visitor who typed a name and pressed one of those
+    // instead of the block's own button becomes somebody.
+    let playerName = currentPlayerName();
+    if (awaitingName) {
+      try {
+        playerName = (await ensureIdentity()).displayName;
+      } catch (identityError) {
+        setError(
+          identityError instanceof IdentityRequiredError
+            ? identityError.message
+            : "Could not save that name. Please try again.",
+        );
+        setPendingJoin(null);
+        return;
+      }
+    }
     try {
       const res = await emitWithAck<AckResponse>("join_room", {
-        nickname: currentPlayerName(),
+        nickname: playerName,
         nameColor,
         colorblindSafeColors,
         asSpectator,
