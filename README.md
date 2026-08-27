@@ -966,6 +966,13 @@ docs/
   wire-protocol.md  Every Socket.IO event, the binary drawing formats, and the REST surface
   database.md       Every table, its columns and constraints, and the flows that write them
   requirements.md   Numbered MUST/MUST NOT requirements, non-goals, and traceability
+scripts/
+  serve.sh          Local development server
+  test-e2e.sh       Frontend build + throwaway-database server + the Playwright suite
+  check-tracked-artifacts.sh  Refuses a tracked database, env file, or private key
+  brand/            Logo and icon sources, and the scripts that raster them
+.githooks/
+  pre-push          Opt-in local copy of the artifact scan, before anything leaves the machine
 ```
 
 ## Getting started
@@ -991,6 +998,28 @@ PORT=9000 ./scripts/serve.sh      # serve on a custom port
 
 For frontend development with hot-reload instead, follow the Backend/Frontend steps below and
 run each independently.
+
+### Before you commit
+
+```bash
+git config core.hooksPath .githooks
+```
+
+One line, once per clone. It installs [`.githooks/pre-push`](.githooks/pre-push), which
+refuses to send a database, an env file, or a private key to the remote.
+
+A database has reached a commit here twice - a SQLite write-ahead log, then a whole
+344KB database with a signing secret inside it, pushed to a public repository. Both times
+`.gitignore` was the only defence and both times it missed, because it can only match the
+filename shapes someone already anticipated: `*.db` matches neither `sketchy.db-wal` nor
+`sketchy.db.broken-20260827-033005`. So
+[`scripts/check-tracked-artifacts.sh`](scripts/check-tracked-artifacts.sh) also refuses a
+file for its *bytes* - a SQLite header is a SQLite header, whatever the file is called -
+and it scans the whole push range, so adding a file and deleting it two commits later
+does not sneak the blob into history.
+
+CI runs the same script, but a secret pushed to a public remote is already public by the
+time CI has an opinion. The hook is the one that actually protects anything.
 
 ### Backend
 
@@ -1036,6 +1065,9 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 
 # Lint (undefined/unused names, mutable defaults, truncating zips, async sleeps)
 .venv/bin/ruff check app tests
+
+# Refuse a tracked database, env file, or private key (also a CI job)
+./scripts/check-tracked-artifacts.sh
 
 # Backend performance micro-benchmarks
 backend/.venv/bin/python benchmarks/backend.py

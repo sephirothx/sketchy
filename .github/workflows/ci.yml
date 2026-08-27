@@ -12,6 +12,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repo-hygiene:
+    name: Repository artifact scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The range scan below needs both ends of the change, not just its tip.
+          fetch-depth: 0
+
+      # Cheap and first: a committed database or key is worth failing on before
+      # anyone spends a runner on tests. `.githooks/pre-push` runs the same
+      # script locally for whoever opts in.
+      - name: Scan the tracked tree
+        run: bash scripts/check-tracked-artifacts.sh
+
+      # The tip scan above cannot see a file that was committed and then deleted
+      # a commit later: the tree ends up clean and the blob stays in history for
+      # good. Scan what the change actually adds, the way pre-push does.
+      - name: Scan every commit the change adds
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # The floor comes from the script, not from a copy of the sha kept
+          # here, so this and `.githooks/pre-push` cannot drift apart on it.
+          BASELINE="$(bash scripts/check-tracked-artifacts.sh --baseline)"
+          # An all-zero or unreachable base means there is no far end to diff
+          # against - a new branch, or a force-push over a discarded commit.
+          # Falling back to the tip scan there would wave through exactly the
+          # case this step exists for: commit a secret, delete it a commit later,
+          # clean tree, green build. Fall back to the baseline floor instead, so
+          # every commit that could still be scanned is.
+          if git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            # The fork point, clamped: a base branch that forked before the
+            # baseline would otherwise pull the range back over the commit that
+            # added the database, and fail every build from then on.
+            from="$(bash scripts/check-tracked-artifacts.sh --floor "$(git merge-base "$BASE" HEAD)")"
+          elif git cat-file -e "${BASELINE}^{commit}" 2>/dev/null; then
+            echo "No reachable base commit; scanning everything since the baseline."
+            from="$BASELINE"
+          else
+            # This job clones in full, so an unreachable baseline here is not a
+            # shallow checkout - it is a sha that has stopped resolving, which
+            # would silently drop both this step and the hook to their weakest
+            # fallback. Fail instead, and say what to fix.
+            echo "Baseline ${BASELINE} does not resolve in a full clone." >&2
+            echo "Update HISTORY_BASELINE in scripts/check-tracked-artifacts.sh." >&2
+            exit 1
+          fi
+          bash scripts/check-tracked-artifacts.sh --range "${from}..HEAD"
+
   backend:
     name: Backend lint & tests
     runs-on: ubuntu-latest

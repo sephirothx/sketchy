@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Stop a database, an environment file, or a private key before it leaves the
+# machine. CI refuses the same files, but only after the push is already public -
+# and for a secret, public is the whole problem.
+#
+# Hooks are not tracked by git, so this one is opt-in per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# git feeds pre-push one line per ref: <local ref> <local sha> <remote ref> <remote sha>,
+# and passes the remote's name and URL as arguments.
+
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+status=0
+
+scan() {
+  "$root/scripts/check-tracked-artifacts.sh" "$@"
+}
+
+# What the remote already has, as the remote itself reports it.
+#
+# Local tracking refs are the tempting answer and the wrong one. They record the
+# last fetch, not the remote: after someone force-pushes, a stale `refs/remotes/*`
+# tip can sit ahead of what is really there, and subtracting it would mark
+# commits that are about to be uploaded as already published. Subtraction is only
+# ever an optimisation here - the baseline is what makes a range correct - so it
+# must never be the thing that decides a commit goes unscanned.
+#
+# `git ls-remote` takes a name or a URL, which is also why there is no guessing
+# about unconfigured destinations any more: the URL git hands us is asked
+# directly. GIT_TERMINAL_PROMPT=0 keeps a credential prompt from hanging a hook.
+target=${2:-${1:-}}
+
+# The floor only applies where the history it protects is actually present. A
+# shallow clone has neither the baseline commit nor the ancient artifacts it
+# fences off, and asking for it there would turn every push into an unresolvable
+# range - which now fails closed, so it would block the push rather than quietly
+# skip the scan.
+baseline="$(scan --baseline)"
+floor=()
+if git cat-file -e "${baseline}^{commit}" 2>/dev/null; then
+  floor=("^$baseline")
+fi
+
+published_shas=()
+if [ -n "$target" ]; then
+  while IFS= read -r sha; do
+    # A ref never fetched here is not an object here, and rev-list rejects those.
+    # Dropping it just means scanning more, which is the safe direction.
+    if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+      published_shas+=("$sha")
+    fi
+  done < <(GIT_TERMINAL_PROMPT=0 git ls-remote "$target" 2>/dev/null | cut -f1 | sort -u)
+fi
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  # An all-zero local sha is a branch deletion: nothing is being sent.
+  case "$local_sha" in
+    *[!0]*) ;;
+    *) continue ;;
+  esac
+
+  # An all-zero remote sha is a branch the remote has never seen, so there is no
+  # far end to diff against, and everything not already on that remote is what
+  # the push would add.
+  #
+  # The floor matters in both branches. This history holds the write-ahead logs
+  # from the first incident as well as the database from the second, so any walk
+  # that reaches back over the baseline refuses the push permanently - which is
+  # what an empty subtraction does, and an unreachable remote gives exactly that.
+  case "$remote_sha" in
+    *[!0]*)
+      # Clamped, because the ref being pushed to can itself sit at a commit
+      # older than the baseline.
+      if [ ${#floor[@]} -gt 0 ]; then
+        range=("$(scan --floor "$remote_sha")..$local_sha")
+      else
+        range=("$remote_sha..$local_sha")
+      fi
+      ;;
+    *)
+      if [ ${#published_shas[@]} -gt 0 ]; then
+        # `^baseline` goes before `--not`, which flips the sense of every `^`
+        # that follows it - putting the floor after would include the history it
+        # is meant to cut off.
+        # `${a[@]+"${a[@]}"}` because bash 3.2 - which is what macOS ships, and
+        # what this repository is developed on - treats an empty array under
+        # `set -u` as an unbound variable.
+        range=("$local_sha" ${floor[@]+"${floor[@]}"} --not "${published_shas[@]}")
+      elif [ ${#floor[@]} -gt 0 ]; then
+        range=("$baseline..$local_sha")
+      else
+        range=("$local_sha")
+      fi
+      ;;
+  esac
+
+  if ! scan --range "${range[@]}"; then
+    status=1
+  fi
+done
+
+if [ "$status" -ne 0 ]; then
+  printf '\npre-push: refusing to push the files listed above.\n' >&2
+fi
+
+exit "$status"
