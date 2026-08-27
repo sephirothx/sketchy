@@ -44,12 +44,40 @@ fail_startup() {
   exit 1
 }
 
-# Pre-flight port check
-existing_pid="$(lsof -nP -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true)"
-if [[ -n "$existing_pid" ]]; then
-  log "Port $PORT is in use by PID $existing_pid - stopping server to run clean E2E tests"
-  kill $existing_pid 2>/dev/null || true
-  sleep 1
+port_listeners() {
+  lsof -nP -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true
+}
+
+# Wait for the port to come free, escalating to SIGKILL. Bounded, and the
+# caller decides what an unfree port means.
+release_port() {
+  local waited=0
+  while [[ -n "$(port_listeners)" ]]; do
+    if (( waited == 20 )); then
+      kill -9 $(port_listeners) 2>/dev/null || true
+    fi
+    if (( waited >= 40 )); then
+      return 1
+    fi
+    kill $(port_listeners) 2>/dev/null || true
+    sleep 0.25
+    waited=$(( waited + 1 ))
+  done
+  return 0
+}
+
+# Pre-flight port check. This has to hold before the server starts, not just be
+# attempted: a leftover server that survives keeps the port, the new one fails
+# to bind and exits, and the readiness check below is then answered by the old
+# process - so the whole suite runs against a stale build and fails in ways
+# that look like broken code.
+if [[ -n "$(port_listeners)" ]]; then
+  log "Port $PORT is in use by PID $(port_listeners | tr '\n' ' ')- stopping it to run clean E2E tests"
+  release_port || {
+    printf 'E2E server startup failed: port %s is still held by PID %s\n' \
+      "$PORT" "$(port_listeners | tr '\n' ' ')" >&2
+    exit 1
+  }
 fi
 
 # The frontend talks to /api and /socket.io relative to whatever origin served
@@ -65,7 +93,10 @@ SERVER_LOG="$(mktemp "${TMPDIR:-/tmp}/sketchy-e2e-server.XXXXXX")"
 E2E_DB="$(mktemp "${TMPDIR:-/tmp}/sketchy-e2e-db.XXXXXX")"
 rm -f "$E2E_DB"
 log "Starting background server on http://127.0.0.1:$PORT"
-(cd "$BACKEND_DIR" && DATABASE_URL="sqlite+aiosqlite:///$E2E_DB" \
+# `exec` so the subshell *becomes* the server: without it `$!` is the
+# subshell, killing that leaves the real process holding the port, and the
+# next run inherits a server serving the previous build.
+(cd "$BACKEND_DIR" && exec env DATABASE_URL="sqlite+aiosqlite:///$E2E_DB" \
   AUTH_LOGIN_LIMIT=1000 AUTH_REGISTER_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 \
   TURN_RESULTS_SECONDS=0.5 SHUTDOWN_DRAIN_SECONDS=0 LOG_LEVEL=warning \
   "$BACKEND_DIR/.venv/bin/python" -m app.server) >"$SERVER_LOG" 2>&1 &
@@ -78,6 +109,10 @@ cleanup() {
     fi
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
+    # Anything still on the port is this run's doing, and leaving it there is
+    # what makes the *next* run mysterious rather than this one.
+    release_port || printf 'Warning: port %s is still held by PID %s\n' \
+      "$PORT" "$(port_listeners | tr '\n' ' ')" >&2
   fi
   rm -f "$SERVER_LOG"
   [[ -n "${E2E_DB:-}" ]] && rm -f "$E2E_DB"
@@ -103,6 +138,13 @@ done
 
 if [[ "$server_healthy" == false ]]; then
   fail_startup "health check did not pass within 15 seconds"
+fi
+
+# The thing answering must be the thing we started. A 200 alone does not say
+# that, and a stale server answering for us is the failure this whole run is
+# least able to diagnose: every test fails against code nobody is looking at.
+if ! port_listeners | grep -qx "$SERVER_PID"; then
+  fail_startup "port $PORT is answering from PID $(port_listeners | tr '\n' ' ')rather than the server this run started ($SERVER_PID)"
 fi
 
 log "Running Playwright Multi-Browser E2E Tests ($E2E_WORKERS workers)"
