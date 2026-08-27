@@ -374,6 +374,11 @@ async def _join_room(ctx: HandlerContext, sid, data):
             stored = await _account_name_color(ctx, player.user_id)
             if stored or name_color:
                 player.name_color = stored or name_color
+        if not ctx.room_capacity.admits_a_takeover(player.id):
+            return {
+                "ok": False,
+                "error": "This seat is changing hands too quickly. Try again in a minute.",
+            }
         # _join_socket_room notifies and disconnects any socket that was
         # holding this seat before handing it to the new one.
         metrics.record(

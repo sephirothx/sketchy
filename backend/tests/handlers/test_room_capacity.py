@@ -213,3 +213,57 @@ def test_room_state_carries_vote_lists_only_where_there_are_votes():
     assert by_id[seats[1].id]["kickVotes"] == [seats[0].id]
     assert by_id[seats[2].id]["afkVotes"] == [seats[0].id]
     assert "afkVotes" not in by_id[seats[1].id]
+
+
+@pytest.mark.asyncio
+async def test_a_handshake_that_fails_does_not_hold_a_place_for_ever():
+    """The ledger must balance on every way out, not just the happy one."""
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+
+    class ExplodingSessionFactory:
+        def __call__(self):
+            raise RuntimeError("the session store is down")
+
+    ctx.session_factory = ExplodingSessionFactory()
+
+    with pytest.raises(RuntimeError):
+        # A cookie is what sends the handshake to the session store, which is
+        # where a real handshake fails.
+        await sio.handlers["/"]["connect"](
+            "doomed", {"HTTP_COOKIE": "sketchy_session=whatever"}, None
+        )
+
+    assert ctx.room_capacity.open_sockets == 0
+
+
+@pytest.mark.asyncio
+async def test_taking_over_a_seat_from_another_tab_is_rate_limited():
+    """A takeover costs the room a full broadcast and supersedes a socket.
+
+    Per-socket limits cannot see it: every attempt arrives on a new socket
+    with a fresh allowance, and the superseded one is closed, so the socket
+    ceiling never notices either.
+    """
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_capacity = RoomCapacityService(environ={"ROOM_TAKEOVER_LIMIT": "2"})
+    created = await open_room(sio, sessions)
+    room = room_manager.get_room(created["roomId"])
+    seat = room.players[created["playerId"]]
+
+    takeovers = []
+    for index in range(3):
+        sid = f"tab-{index}"
+        # Same account, new socket each time: what a second tab does.
+        await sessions.save(sid, {"user_id": sessions.account_for("host-sid")})
+        takeovers.append(
+            await sio.handlers["/"]["join_room"](
+                sid, {"roomId": room.id, "nickname": "Host"}
+            )
+        )
+
+    assert [result["ok"] for result in takeovers] == [True, True, False]
+    assert "too quickly" in takeovers[2]["error"]
+    # The seat is still theirs, held by the last socket that took it.
+    assert room.players[seat.id].sid == "tab-1"

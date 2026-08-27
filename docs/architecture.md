@@ -401,10 +401,18 @@ allowance it had already spent.
 `RoomCapacityService` answers the other half: how much of the server one room, or
 one socket, may occupy. Eight spectators per room (independently of `max_players`,
 so a two-player room cannot become a thirty-seat broadcast), six hundred sockets per
-process, and twenty seating joins per socket per minute. A socket past the ceiling is
+process, twenty seating joins per socket per minute, and twenty rebinds of any one
+seat to a new socket per minute — that last keyed by the seat, because a per-socket key
+cannot see the churn: every attempt arrives on a new socket with a fresh allowance and
+the socket it supersedes is closed, so the connection ceiling never notices either. A
+socket past the ceiling is
 **told and then closed** rather than refused — `ConnectionRefusedError` is reserved for
 suspensions — and the open sockets are held as a set of sids rather than a count,
-because a count is only ever as right as the last event that moved it.
+because a count is only ever as right as the last event that moved it. The set is
+balanced in a `finally`: a handshake refused with `ConnectionRefusedError` never
+reaches the disconnect handler, because Socket.IO answers it with `CONNECT_ERROR` and
+tears the session down itself, so a suspended account could otherwise fill the ceiling
+with sockets that were never open.
 
 Those ceilings are also what bounds the join fan-out. A room holds at most 24 seats, so
 the room-state broadcast every join triggers is bounded rather than quadratic in an

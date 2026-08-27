@@ -241,7 +241,7 @@ claim that an arbitrary host will sustain it.
 | **R-RATE-02** | Bucket keys MUST be HMAC-SHA-256 digests under `IP_HASH_SECRET`. **Raw IP addresses MUST NOT be stored.** |
 | **R-RATE-03** | Expired buckets MUST be cleaned in bounded batches. |
 | **R-RATE-04** | Rotating the secret MUST start fresh buckets without exposing or re-identifying old keys. |
-| **R-RATE-06** | Seating joins MUST be rate-limited per socket. Confirming a seat already held MUST NOT be charged — a client heartbeats through that path, and a liveness check must never be able to lock a player out of their own room. |
+| **R-RATE-06** | Seating joins MUST be rate-limited per socket, and rebinding an existing seat to a new socket MUST be rate-limited **per seat** — a per-socket key cannot see that churn, because every attempt arrives on a new socket with a fresh allowance and the one it supersedes is closed. Confirming a seat already held MUST NOT be charged: a client heartbeats through that path, and a liveness check must never be able to lock a player out of their own room. |
 | **R-RATE-05** | The room-creation limit MUST use the same persistent buckets, keyed by **account**, and an attempt that opens no room MUST be given back rather than spent. A per-address key MUST NOT be introduced until a trustworthy client address exists to key on: behind a reverse proxy every socket presents the proxy, and the forwarded header is attacker-controlled. |
 
 ### Player settings
@@ -286,7 +286,7 @@ claim that an arbitrary host will sustain it.
 | **R-CONN-05** | An action that expects an answer MUST NEVER be handed to a socket that is not connected. It waits for the connection and is sent once, or it times out **having never been sent** — so a request reported as failed cannot arrive later on reconnect. |
 | **R-CONN-06** | Actions that only make sense in the moment (a guess, a vote, leaving, toggling AFK) MUST be dropped outright rather than replayed into whatever the room has become. |
 | **R-CONN-07** | A disconnect MUST reconcile against every room the socket actually holds a seat in, rather than the single room its session names, so a seat stranded by an earlier build still becomes disconnected and is evicted on the ordinary grace. |
-| **R-CONN-08** | The process MUST bound how many sockets it holds at once, configurably. A socket past the ceiling MUST be **told and then closed**, never refused at the handshake: `ConnectionRefusedError` is reserved for suspensions, and a refusal carries no signal the client can explain to a player. The ledger MUST be keyed by socket id rather than counted, so a missed or repeated close cannot drift it. |
+| **R-CONN-08** | The process MUST bound how many sockets it holds at once, configurably. A socket past the ceiling MUST be **told and then closed**, never refused at the handshake: `ConnectionRefusedError` is reserved for suspensions, and a refusal carries no signal the client can explain to a player. The ledger MUST be keyed by socket id rather than counted, so a missed or repeated close cannot drift it, and it MUST be balanced on **every** way out of the handshake — a refusal never reaches the disconnect handler, so a socket counted in and refused out would hold its place for ever. |
 
 ---
 

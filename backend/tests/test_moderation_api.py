@@ -362,6 +362,11 @@ async def test_ban_revokes_sessions_and_rejects_http_login_and_socket(env):
             {"HTTP_COOKIE": f"sketchy_session={raw_cookie}"},
             None,
         )
+    # A refused handshake never reaches the disconnect handler - Socket.IO
+    # answers it with CONNECT_ERROR and tears the session down itself - so a
+    # socket counted on the way in and refused on the way out would sit in the
+    # ledger for ever. Enough of those and the process refuses everybody.
+    assert context.room_capacity.open_sockets == 0
 
     async with factory() as session:
         event = await session.scalar(

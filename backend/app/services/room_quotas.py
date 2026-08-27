@@ -55,6 +55,12 @@ DEFAULT_SOCKETS = 600
 # recovery - but a seating join costs the room a broadcast, so the churn is
 # worth bounding. Confirmations of a seat already held are free.
 DEFAULT_JOINS_PER_SOCKET = 20
+# Rebinding an existing seat to a new socket costs the room the same full
+# broadcast a fresh join does, and per-socket limits cannot see it: every
+# attempt arrives on a new socket with a fresh allowance, and the socket it
+# supersedes is closed, so the connection ceiling never notices either. Keyed
+# by the seat, which is the part the attacker is not replacing.
+DEFAULT_TAKEOVERS_PER_SEAT = 20
 JOIN_WINDOW_SECONDS = 60.0
 
 
@@ -202,7 +208,11 @@ class RoomCapacityService:
         self.joins_per_socket = _ceiling(
             values, "ROOM_JOIN_LIMIT", DEFAULT_JOINS_PER_SOCKET
         )
+        self.takeovers_per_seat = _ceiling(
+            values, "ROOM_TAKEOVER_LIMIT", DEFAULT_TAKEOVERS_PER_SEAT
+        )
         self._joins = RateLimiter(self.joins_per_socket, JOIN_WINDOW_SECONDS)
+        self._takeovers = RateLimiter(self.takeovers_per_seat, JOIN_WINDOW_SECONDS)
         self._open_sockets: set[str] = set()
 
     @property
@@ -238,3 +248,12 @@ class RoomCapacityService:
         reaches here, so ordinary liveness checks cannot exhaust it.
         """
         return self._joins.check(sid)
+
+    def admits_a_takeover(self, player_id: str) -> bool:
+        """Whether this seat may be rebound to another socket again so soon.
+
+        Reconnecting is an ordinary thing to do once; doing it over and over
+        is how one account makes a room re-broadcast itself without ever
+        taking a second seat.
+        """
+        return self._takeovers.check(player_id)

@@ -494,6 +494,7 @@ process. These deployment settings can be tuned without code changes:
 | `ROOM_SPECTATOR_LIMIT` | `8` | Spectators one room will hold, independently of `maxPlayers` |
 | `SOCKET_LIMIT` | `600` | Sockets this process will hold at once |
 | `ROOM_JOIN_LIMIT` | `20` | Seating joins per socket per minute; confirmations are free |
+| `ROOM_TAKEOVER_LIMIT` | `20` | Rebinds of one seat to a new socket, per minute |
 
 CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete
 migration chain down and up on PostgreSQL and SQLite, checks schema drift and
