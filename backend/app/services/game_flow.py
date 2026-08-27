@@ -589,9 +589,13 @@ class GameFlowService:
         self._ctx.room_manager.remove_player(room, player.id)
         await self._sio.leave_room(sid, room.id)
         # Drop the room binding but keep the account: the socket stays open and
-        # the player may immediately join another room as themselves.
+        # the player may immediately join another room as themselves. Only when
+        # the session actually names this room, though - a socket giving up a
+        # seat stranded somewhere else is still sitting in the room its session
+        # names, and clearing that would leave it seated but unable to act.
         session = await self._sio.get_session(sid) or {}
-        await self._sio.save_session(sid, {"user_id": session.get("user_id")})
+        if session.get("room_id") == room.id:
+            await self._sio.save_session(sid, {"user_id": session.get("user_id")})
         if not room.connected_players():
             self._timers.cancel_phase_timer(room.id)
             self._timers.cancel_hint_timers(room.id)

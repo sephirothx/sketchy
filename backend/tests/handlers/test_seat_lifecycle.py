@@ -263,3 +263,40 @@ async def test_two_sockets_superseding_each_other_do_not_wait_for_each_other():
         "sid-B"
     ) in ([], [(room, seat)])
     await ctx.timers.close()
+
+
+@pytest.mark.asyncio
+async def test_reclaiming_a_stranded_seat_keeps_the_binding_to_the_room_sat_in():
+    """Giving up a seat somewhere else must not unseat the socket here.
+
+    A client heartbeats through the same-room confirmation, and that entry
+    never re-saves the session afterwards - so clearing the binding there
+    leaves a player everybody can see but who can no longer act.
+    """
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+
+    home = await sio.handlers["/"]["create_room"]("sid-A", {"nickname": "Ann"})
+    stranded = room_manager.create_room(name="Stranded")
+    room_manager.add_player(stranded, "Ann").sid = "sid-A"
+
+    await sio.handlers["/"]["join_room"](
+        "sid-A", {"roomId": home["roomId"], "nickname": "Ann", "soft": True}
+    )
+
+    assert room_manager.get_room(stranded.id) is None, "the stranded room survived"
+    assert sessions.sessions["sid-A"]["room_id"] == home["roomId"]
+    assert await ctx.game_flow.require_current_player("sid-A") is not None
+
+
+@pytest.mark.asyncio
+async def test_leaving_the_room_the_session_names_drops_its_binding():
+    """The other half of the same rule, which the leave path relies on."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+
+    await sio.handlers["/"]["create_room"]("sid-A", {"nickname": "Ann"})
+    await sio.handlers["/"]["leave_room"]("sid-A")
+
+    assert sessions.sessions["sid-A"] == {"user_id": None}
+    assert await ctx.game_flow.require_current_player("sid-A") is None
