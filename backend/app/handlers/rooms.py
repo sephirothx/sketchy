@@ -374,6 +374,11 @@ async def _join_room(ctx: HandlerContext, sid, data):
             stored = await _account_name_color(ctx, player.user_id)
             if stored or name_color:
                 player.name_color = stored or name_color
+        if not ctx.room_capacity.admits_a_takeover(player.id):
+            return {
+                "ok": False,
+                "error": "This seat is changing hands too quickly. Try again in a minute.",
+            }
         # _join_socket_room notifies and disconnects any socket that was
         # holding this seat before handing it to the new one.
         metrics.record(
@@ -397,6 +402,20 @@ async def _join_room(ctx: HandlerContext, sid, data):
         )
     except IdentityError as error:
         return {"ok": False, "error": str(error), "field": "nickname"}
+
+    if payload.as_spectator and not ctx.room_capacity.admits_a_spectator(room):
+        # Deliberately without `roomFull`: that flag is what makes the client
+        # offer spectating instead, and offering it to somebody refused *as* a
+        # spectator is a loop.
+        return {
+            "ok": False,
+            "error": "This room is not taking any more spectators.",
+        }
+    if not ctx.room_capacity.admits_a_join(sid):
+        return {
+            "ok": False,
+            "error": "You are joining rooms too quickly. Try again in a minute.",
+        }
 
     try:
         player = ctx.room_manager.add_player(

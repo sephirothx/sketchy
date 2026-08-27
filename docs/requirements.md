@@ -70,6 +70,7 @@ claim that an arbitrary host will sustain it.
 | **R-ROOM-05** | A game MUST require at least 2 players before the host can start it. |
 | **R-ROOM-06** | The host role is a **gameplay** role only. It MUST NOT confer any service-wide privilege. Conversely an administrator MUST NOT become host merely by holding the role. |
 | **R-ROOM-07** | Room payloads MUST NOT carry account IDs. Anything that needs an account (reports, blocks, profile links) resolves the seat server-side. |
+| **R-ROOM-13** | Room state MUST carry a player's kick and AFK vote lists only where votes exist. Every seat receives every other seat's entry on every broadcast, so an empty list per player is the payload paying a quadratic price for the state almost every player is in almost always. |
 | **R-ROOM-08** | A socket MUST hold at most one live seat. Creating or joining a room MUST first release any seat that connection already holds, by the same path an explicit leave takes: room state re-emitted, timers cancelled, empty-room teardown and code retirement run. Seats MUST be matched by socket, never by account — two tabs of one account may sit in two different rooms. |
 | **R-ROOM-09** | Opening a room MUST require a provisioned session. Joining, playing, and receiving a factual history seat MUST NOT — a visitor whose browser keeps no cookie can still play (R-HIST-10); they cannot host. |
 | **R-ROOM-10** | Room creation MUST be bounded on four axes: live rooms per account, room creations per account per hour, live rooms per process, and quick-prompt characters retained across every live room. Each MUST be configurable, and each refusal MUST say which ceiling was reached in terms a player can act on. |
@@ -125,10 +126,11 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-SPEC-01** | Anyone MUST be able to join any room as a spectator, **including a full room**. |
+| **R-SPEC-01** | Anyone MUST be able to join a room as a spectator **whose player seats are full** — that is what spectating is for. Watching is not unlimited: a room admits spectators up to its own ceiling, and refusing one MUST NOT offer spectating back, which would be a loop. |
 | **R-SPEC-02** | Spectators MUST NOT draw, score, vote, or be selected as moderation targets. |
 | **R-SPEC-03** | Spectators MUST see the masked prompt by default; the room may enable *Allow spectators to see the prompt*. |
 | **R-SPEC-04** | Spectator chat MUST be restricted to the drawer, spectators, and players who have already guessed correctly, keeping active guessers spoiler-free. |
+| **R-SPEC-05** | Spectators MUST be bounded per room, configurably, independently of `max_players`. Every spectator is another recipient of every broadcast, so an unbounded audience makes a room arbitrarily expensive to be in without anyone taking a player seat. |
 | **R-AFK-01** | A player MUST be able to toggle their own AFK status at any time. AFK players MUST be skipped for drawing turns and not waited for during rounds. |
 
 ### Votes
@@ -239,6 +241,7 @@ claim that an arbitrary host will sustain it.
 | **R-RATE-02** | Bucket keys MUST be HMAC-SHA-256 digests under `IP_HASH_SECRET`. **Raw IP addresses MUST NOT be stored.** |
 | **R-RATE-03** | Expired buckets MUST be cleaned in bounded batches. |
 | **R-RATE-04** | Rotating the secret MUST start fresh buckets without exposing or re-identifying old keys. |
+| **R-RATE-06** | Seating joins MUST be rate-limited per socket, and rebinding an existing seat to a new socket MUST be rate-limited **per seat** — a per-socket key cannot see that churn, because every attempt arrives on a new socket with a fresh allowance and the one it supersedes is closed. Confirming a seat already held MUST NOT be charged: a client heartbeats through that path, and a liveness check must never be able to lock a player out of their own room. |
 | **R-RATE-05** | The room-creation limit MUST use the same persistent buckets, keyed by **account**, and an attempt that opens no room MUST be given back rather than spent. A per-address key MUST NOT be introduced until a trustworthy client address exists to key on: behind a reverse proxy every socket presents the proxy, and the forwarded header is attacker-controlled. |
 
 ### Player settings
@@ -283,6 +286,7 @@ claim that an arbitrary host will sustain it.
 | **R-CONN-05** | An action that expects an answer MUST NEVER be handed to a socket that is not connected. It waits for the connection and is sent once, or it times out **having never been sent** — so a request reported as failed cannot arrive later on reconnect. |
 | **R-CONN-06** | Actions that only make sense in the moment (a guess, a vote, leaving, toggling AFK) MUST be dropped outright rather than replayed into whatever the room has become. |
 | **R-CONN-07** | A disconnect MUST reconcile against every room the socket actually holds a seat in, rather than the single room its session names, so a seat stranded by an earlier build still becomes disconnected and is evicted on the ordinary grace. |
+| **R-CONN-08** | The process MUST bound how many sockets it holds at once, configurably. A socket past the ceiling MUST be **told and then closed**, never refused at the handshake: `ConnectionRefusedError` is reserved for suspensions, and a refusal carries no signal the client can explain to a player. The ledger MUST be keyed by socket id rather than counted, so a missed or repeated close cannot drift it, and it MUST be balanced on **every** way out of the handshake — a refusal never reaches the disconnect handler, so a socket counted in and refused out would hold its place for ever. |
 
 ---
 

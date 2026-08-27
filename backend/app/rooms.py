@@ -548,6 +548,32 @@ class Room:
             "state": self.state,
         }
 
+    def _player_entry(self, player: Player) -> dict:
+        """One player as the room broadcasts them.
+
+        The vote lists are carried only where somebody has actually voted.
+        Every seat in the room receives every other seat's entry on every
+        broadcast, so two empty arrays per player is the payload paying an
+        O(N^2) price for a state almost every player is in almost always. The
+        client already reads them as optional, so absence means no votes.
+        """
+        entry = {
+            "playerId": player.id,
+            "nickname": player.nickname,
+            "nameColor": player.name_color,
+            "isAnonymous": player.is_anonymous,
+            "score": player.score,
+            "connected": player.connected,
+            "isHost": player.is_host,
+            "isSpectator": player.is_spectator,
+            "isAfk": player.is_afk,
+        }
+        if player.kick_votes:
+            entry["kickVotes"] = list(player.kick_votes)
+        if player.afk_votes:
+            entry["afkVotes"] = list(player.afk_votes)
+        return entry
+
     def to_state_payload(self) -> dict:
         return {
             "id": self.id,
@@ -584,22 +610,7 @@ class Room:
             "restartVoteCooldownUntil": round(
                 self.restart_vote_cooldown_until * 1000
             ),
-            "players": [
-                {
-                    "playerId": p.id,
-                    "nickname": p.nickname,
-                    "nameColor": p.name_color,
-                    "isAnonymous": p.is_anonymous,
-                    "score": p.score,
-                    "connected": p.connected,
-                    "isHost": p.is_host,
-                    "isSpectator": p.is_spectator,
-                    "isAfk": p.is_afk,
-                    "kickVotes": list(p.kick_votes),
-                    "afkVotes": list(p.afk_votes),
-                }
-                for p in self.player_list()
-            ],
+            "players": [self._player_entry(p) for p in self.player_list()],
         }
 
 

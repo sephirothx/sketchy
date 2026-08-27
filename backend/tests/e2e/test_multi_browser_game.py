@@ -1,5 +1,5 @@
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
@@ -351,6 +351,13 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             # therefore ranked first. The rows are offset to animate overtakes,
             # and offsetting them by a difference of ranks rather than of row
             # positions once stacked the whole list onto one line.
+            # Waited for by the thing being measured, not by its container:
+            # the overlay is present a frame before its rows are, and reading
+            # positions out of an empty list fails as "no rows" on a loaded
+            # machine while passing everywhere else (R-ENG-09).
+            await expect(
+                guesser_page.locator(".turn-results-score-row")
+            ).to_have_count(2)
             tops = await guesser_page.evaluate(
                 """() => [...document.querySelectorAll('.turn-results-score-row')]
                      .map(row => Math.round(row.getBoundingClientRect().top))"""

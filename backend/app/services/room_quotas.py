@@ -1,4 +1,4 @@
-"""Ceilings on room creation, so one client cannot spend the whole server.
+"""Ceilings on rooms: who may open one, and how many may crowd into one.
 
 Creating a room is the only command an ordinary socket can issue that
 allocates unbounded process memory - a `Room`, its `CanvasSession`, its recap
@@ -27,7 +27,7 @@ from collections.abc import Iterable, Mapping
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.auth.rate_limit import PersistentRateLimiter
+from app.auth.rate_limit import PersistentRateLimiter, RateLimiter
 from app.rooms import Room, RoomManager
 
 logger = logging.getLogger("sketchy.room_quotas")
@@ -43,6 +43,25 @@ DEFAULT_CREATIONS_PER_HOUR = 10
 # The per-room ceiling (MAX_RAW_INPUT_LENGTH) bounds one room; this bounds the
 # sum, which is otherwise that ceiling multiplied by DEFAULT_GLOBAL_ROOMS.
 DEFAULT_PROMPT_CHARACTERS = 4 * 1024 * 1024
+
+
+# Watching is cheaper than playing but not free: every spectator is another
+# recipient of every broadcast, and `max_players` never counted them.
+DEFAULT_SPECTATORS_PER_ROOM = 8
+# Above the 400-seat validation target in `docs/requirements.md` with room to
+# spare, and still a number one process can be reasoned about holding.
+DEFAULT_SOCKETS = 600
+# A client re-enters a room for ordinary reasons - a reconnect, a stall
+# recovery - but a seating join costs the room a broadcast, so the churn is
+# worth bounding. Confirmations of a seat already held are free.
+DEFAULT_JOINS_PER_SOCKET = 20
+# Rebinding an existing seat to a new socket costs the room the same full
+# broadcast a fresh join does, and per-socket limits cannot see it: every
+# attempt arrives on a new socket with a fresh allowance, and the socket it
+# supersedes is closed, so the connection ceiling never notices either. Keyed
+# by the seat, which is the part the attacker is not replacing.
+DEFAULT_TAKEOVERS_PER_SEAT = 20
+JOIN_WINDOW_SECONDS = 60.0
 
 
 class RoomQuotaExceeded(Exception):
@@ -169,3 +188,72 @@ class RoomQuotaService:
         if self._creations is None:
             return
         await self._creations.refund(user_id)
+
+
+class RoomCapacityService:
+    """How many may crowd into one room, and into this process.
+
+    Separate from `RoomQuotaService` because it answers a different question:
+    that one decides whether a room may exist, this one decides how much of
+    the server one room - or one socket - may occupy. Both are process-local
+    and synchronous; neither needs a database to say no.
+    """
+
+    def __init__(self, *, environ: Mapping[str, str] | None = None) -> None:
+        values = os.environ if environ is None else environ
+        self.spectators_per_room = _ceiling(
+            values, "ROOM_SPECTATOR_LIMIT", DEFAULT_SPECTATORS_PER_ROOM
+        )
+        self.sockets = _ceiling(values, "SOCKET_LIMIT", DEFAULT_SOCKETS)
+        self.joins_per_socket = _ceiling(
+            values, "ROOM_JOIN_LIMIT", DEFAULT_JOINS_PER_SOCKET
+        )
+        self.takeovers_per_seat = _ceiling(
+            values, "ROOM_TAKEOVER_LIMIT", DEFAULT_TAKEOVERS_PER_SEAT
+        )
+        self._joins = RateLimiter(self.joins_per_socket, JOIN_WINDOW_SECONDS)
+        self._takeovers = RateLimiter(self.takeovers_per_seat, JOIN_WINDOW_SECONDS)
+        self._open_sockets: set[str] = set()
+
+    @property
+    def open_sockets(self) -> int:
+        return len(self._open_sockets)
+
+    def note_socket_opened(self, sid: str) -> None:
+        self._open_sockets.add(sid)
+
+    def note_socket_closed(self, sid: str) -> None:
+        self._open_sockets.discard(sid)
+
+    def has_socket_capacity(self) -> bool:
+        """Whether the sockets now open are within the ceiling.
+
+        Held as a set of sids rather than a count, because a count is only
+        ever as right as the last event that moved it: one missed close, or
+        one close counted twice, and it drifts for the life of the process -
+        upwards, into refusing everybody. A set cannot drift, and it makes
+        both notifications idempotent.
+        """
+        return len(self._open_sockets) <= self.sockets
+
+    def admits_a_spectator(self, room: Room) -> bool:
+        watching = sum(1 for player in room.players.values() if player.is_spectator)
+        return watching < self.spectators_per_room
+
+    def admits_a_join(self, sid: str) -> bool:
+        """Whether this socket may take a seat again so soon.
+
+        Charged only where a join actually seats somebody. A client confirming
+        the seat it already holds - which is what its heartbeat does - never
+        reaches here, so ordinary liveness checks cannot exhaust it.
+        """
+        return self._joins.check(sid)
+
+    def admits_a_takeover(self, player_id: str) -> bool:
+        """Whether this seat may be rebound to another socket again so soon.
+
+        Reconnecting is an ordinary thing to do once; doing it over and over
+        is how one account makes a room re-broadcast itself without ever
+        taking a second seat.
+        """
+        return self._takeovers.check(player_id)

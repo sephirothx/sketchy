@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from app.services.game_flow import GameFlowService
     from app.services.message_retention import MessageRetentionService
     from app.services.room_codes import RoomCodeService
-    from app.services.room_quotas import RoomQuotaService
+    from app.services.room_quotas import RoomCapacityService, RoomQuotaService
     from app.services.shutdown import ShutdownCoordinator
 
 
@@ -67,6 +67,7 @@ class HandlerContext:
     message_retention: MessageRetentionService | None = None
     room_codes: RoomCodeService | None = None
     room_quotas: RoomQuotaService = field(init=False)
+    room_capacity: RoomCapacityService = field(init=False)
     shutdown: ShutdownCoordinator | None = None
     game_flow: GameFlowService = field(init=False)
     _seating_gates: dict[str, SeatingGate] = field(

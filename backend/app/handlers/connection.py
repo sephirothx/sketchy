@@ -28,45 +28,75 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     solely by ``GET /api/auth/me`` so that merely opening a socket cannot
     create user rows.
     """
-    user_id = None
-    if ctx.session_factory is not None:
-        token = session_token_from_cookie_header(environ.get("HTTP_COOKIE"))
-        resolution = await resolve_session_status(ctx.session_factory, token)
-        if resolution.banned_user_id is not None:
-            raise ConnectionRefusedError("This account is suspended.")
-        auth_session = resolution.session
-        user_id = auth_session.user_id if auth_session else None
-    await ctx.sio.save_session(sid, {"user_id": user_id})
-    client_protocol = client_protocol_version(auth)
-    if client_protocol != PROTOCOL_VERSION:
-        # Accepted, then told. Refusing would leave a stale build with nothing
-        # to act on; this way it can reload onto the one being served. The
-        # socket is otherwise ordinary until it does.
-        await ctx.sio.emit(
-            "upgrade_required",
-            {
-                "reason": "This tab is running an older version of Sketchy.",
-                "expected": PROTOCOL_VERSION,
-                "received": client_protocol,
-            },
-            to=sid,
-        )
-    if user_id is not None:
-        # Every socket of an account shares one broadcast room, so account-
-        # level news (a suspension, a moderator warning) reaches a player in
-        # the lobby as immediately as one seated in a game.
-        await ctx.sio.enter_room(sid, f"user:{user_id}")
-    shutdown = getattr(ctx, "shutdown", None)
-    if shutdown is not None and shutdown.is_draining:
-        await ctx.sio.emit(
-            "server_shutdown", shutdown.notice_payload(), to=sid
-        )
-    logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
+    # The ledger is balanced in a `finally`, not on each way out. A handshake
+    # refused with `ConnectionRefusedError` never reaches the disconnect
+    # handler at all - Socket.IO answers it with CONNECT_ERROR and tears the
+    # session down itself - so a suspended account could otherwise fill the
+    # ceiling with sockets that were never open, and the process would refuse
+    # everybody. The same is true of any other failure in here.
+    ctx.room_capacity.note_socket_opened(sid)
+    accepted = False
+    try:
+        # Counted before the ceiling is read, so this socket is measured
+        # against a ceiling that includes it.
+        if not ctx.room_capacity.has_socket_capacity():
+            # Told, not refused. A refusal carries no diagnosable signal and
+            # `ConnectionRefusedError` is reserved for suspensions, so the client
+            # learns why and can say so instead of retrying into silence.
+            logger.warning(
+                "refusing socket %s: %d already open", sid, ctx.room_capacity.open_sockets
+            )
+            await ctx.sio.emit(
+                "server_full",
+                {"reason": "Sketchy is full right now. Try again in a few minutes."},
+                to=sid,
+            )
+            await ctx.sio.disconnect(sid)
+            return
+        user_id = None
+        if ctx.session_factory is not None:
+            token = session_token_from_cookie_header(environ.get("HTTP_COOKIE"))
+            resolution = await resolve_session_status(ctx.session_factory, token)
+            if resolution.banned_user_id is not None:
+                raise ConnectionRefusedError("This account is suspended.")
+            auth_session = resolution.session
+            user_id = auth_session.user_id if auth_session else None
+        await ctx.sio.save_session(sid, {"user_id": user_id})
+        client_protocol = client_protocol_version(auth)
+        if client_protocol != PROTOCOL_VERSION:
+            # Accepted, then told. Refusing would leave a stale build with nothing
+            # to act on; this way it can reload onto the one being served. The
+            # socket is otherwise ordinary until it does.
+            await ctx.sio.emit(
+                "upgrade_required",
+                {
+                    "reason": "This tab is running an older version of Sketchy.",
+                    "expected": PROTOCOL_VERSION,
+                    "received": client_protocol,
+                },
+                to=sid,
+            )
+        if user_id is not None:
+            # Every socket of an account shares one broadcast room, so account-
+            # level news (a suspension, a moderator warning) reaches a player in
+            # the lobby as immediately as one seated in a game.
+            await ctx.sio.enter_room(sid, f"user:{user_id}")
+        shutdown = getattr(ctx, "shutdown", None)
+        if shutdown is not None and shutdown.is_draining:
+            await ctx.sio.emit(
+                "server_shutdown", shutdown.notice_payload(), to=sid
+            )
+        logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
+        accepted = True
+    finally:
+        if not accepted:
+            ctx.room_capacity.note_socket_closed(sid)
 
 
 async def disconnect(ctx: HandlerContext, sid):
     if not sid:
         return
+    ctx.room_capacity.note_socket_closed(sid)
     if ctx.is_closing(sid):
         # We are closing this socket ourselves, from inside a seat transition
         # that has already moved its seat on - the tab a reconnect superseded.

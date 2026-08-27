@@ -10,6 +10,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.services.room_quotas import RoomCapacityService
 from app.auth.sessions import (
     ROTATE_AFTER,
     create_session,
@@ -122,7 +123,9 @@ async def test_socket_handshake_uses_the_same_revocation_record(database):
     factory, user = database
     issued = await create_session(factory, user_id=user.id, device_label="Browser")
     sio = SimpleNamespace(save_session=AsyncMock(), enter_room=AsyncMock())
-    context = SimpleNamespace(sio=sio, session_factory=factory)
+    context = SimpleNamespace(
+        sio=sio, session_factory=factory, room_capacity=RoomCapacityService()
+    )
     environ = {"HTTP_COOKIE": f"sketchy_session={issued.token}"}
 
     await socket_connect(context, "first", environ, {"protocol": PROTOCOL_VERSION})

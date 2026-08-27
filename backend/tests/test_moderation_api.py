@@ -31,6 +31,7 @@ from app.db.models import (
 )
 from app.domain_values import ReportReason, ReportStatus, UserRole
 from app.handlers.connection import connect as socket_connect
+from app.services.room_quotas import RoomCapacityService
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.message_retention import purge_expired_room_messages
 
@@ -350,7 +351,9 @@ async def test_ban_revokes_sessions_and_rejects_http_login_and_socket(env):
     assert refused.json()["detail"] == "This account is suspended."
 
     context = SimpleNamespace(
-        sio=SimpleNamespace(save_session=AsyncMock()), session_factory=factory
+        sio=SimpleNamespace(save_session=AsyncMock()),
+        session_factory=factory,
+        room_capacity=RoomCapacityService(),
     )
     with pytest.raises(ConnectionRefusedError, match="suspended"):
         await socket_connect(
@@ -359,6 +362,11 @@ async def test_ban_revokes_sessions_and_rejects_http_login_and_socket(env):
             {"HTTP_COOKIE": f"sketchy_session={raw_cookie}"},
             None,
         )
+    # A refused handshake never reaches the disconnect handler - Socket.IO
+    # answers it with CONNECT_ERROR and tears the session down itself - so a
+    # socket counted on the way in and refused on the way out would sit in the
+    # ledger for ever. Enough of those and the process refuses everybody.
+    assert context.room_capacity.open_sockets == 0
 
     async with factory() as session:
         event = await session.scalar(
