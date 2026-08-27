@@ -434,6 +434,59 @@ def test_the_floor_never_moves_earlier_than_the_baseline():
 
 
 @requires_git
+def test_an_unresolvable_range_is_an_error_not_an_empty_walk(tmp_path):
+    """Streaming `git rev-list` into the loop meant a range that did not resolve
+    printed `fatal:` and exited 0 - the scan reported success having looked at
+    nothing. A guard that cannot run has to say so, not pass."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", ".")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+    (repo / "a.txt").write_text("a\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "a")
+
+    result = run_checker(repo, "--range", "no-such-revision..HEAD")
+
+    # 2, not 1: nothing was found, the scan could not be performed at all.
+    assert result.returncode == 2
+    assert "cannot resolve the range" in result.stderr
+
+
+@requires_git
+def test_one_offending_file_is_reported_once(tmp_path):
+    """Checking is keyed on content so a path gets checked at several versions,
+    but a single bad file should be one line and count once."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", ".")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+    (repo / "a.txt").write_text("a\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "base")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    # Present in the tracked tree and added within the range, so both scans see it.
+    (repo / "notes.txt").write_bytes(SQLITE_MAGIC + b"\x00" * 512)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "add")
+
+    result = run_checker(repo, "--range", f"{base}..HEAD")
+
+    assert result.returncode == 1
+    assert result.stderr.count("notes.txt") == 1
+    assert "refusing 1 file(s)" in result.stderr
+
+
+@requires_git
 def test_an_example_env_file_is_allowed(tmp_path):
     """.gitignore deliberately un-ignores `.env.example`, so the checker must not
     contradict it."""

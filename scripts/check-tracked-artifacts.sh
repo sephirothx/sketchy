@@ -142,7 +142,15 @@ deny_name() {
   return 1
 }
 
+# Checking is keyed on content, so one path can legitimately be checked several
+# times - the tracked tree and each version in the range. Reporting is keyed on
+# the path, so a single offending file is one line and counts once.
+reported=""
 report() {
+  case "$reported" in
+    *"|$1|"*) return 0 ;;
+  esac
+  reported="$reported|$1|"
   printf '  %s\n      %s\n' "$1" "$2" >&2
   violations=$((violations + 1))
 }
@@ -249,11 +257,25 @@ if [ "$mode" = "range" ]; then
   # invisible. With it, each parent is diffed separately, and the blob-keyed
   # dedupe below collapses the entries that repeat across parents. -z keeps the
   # two-field-per-entry stream intact; -m adds no commit-id records to it.
+  # Resolved up front rather than streamed, so a range that does not resolve is
+  # an error instead of an empty walk. Streaming it hid the failure completely:
+  # `git rev-list` printed `fatal:` into the void, the loop read nothing, and the
+  # scan reported success - the exact fail-open shape this guard exists to close,
+  # sitting in the guard.
+  if ! commits="$(git rev-list "${range_args[@]}" 2>&1)"; then
+    printf 'check-tracked-artifacts: cannot resolve the range %s\n' "${range_args[*]}" >&2
+    printf '%s\n' "$commits" >&2
+    exit 2
+  fi
+
   while IFS= read -r commit; do
+    [ -n "$commit" ] || continue
     while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
       check_entry "$path" "$(printf '%s\n' "$meta" | awk '{print $4}')"
     done < <(git diff-tree -r -m -z --no-commit-id --no-renames --diff-filter=d --root "$commit")
-  done < <(git rev-list "${range_args[@]}")
+  done <<EOF
+$commits
+EOF
 fi
 
 if [ "$violations" -gt 0 ]; then
