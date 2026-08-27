@@ -803,7 +803,7 @@ your players share one address:
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
 | `AUTH_RESET_LIMIT` | 5 per hour | `POST /api/auth/password/forgot` |
 | `GUEST_PROVISION_LIMIT` | 60 per hour | Guests provisioned per address by `POST /api/auth/display-name` |
-| `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned process-wide, whatever the address |
+| `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned across the deployment, whatever the address. The bucket is a shared database row, so replicas count against one ceiling |
 | `AUTH_RESET_CHECK_LIMIT` | 30 per hour | `POST /api/auth/password/reset/check` |
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |

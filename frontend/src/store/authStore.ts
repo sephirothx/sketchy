@@ -134,10 +134,11 @@ async function loadRegisteredSettings(user: AuthUser | null): Promise<void> {
 }
 
 let inFlightProvision: Promise<AuthUser> | null = null;
-// Bumped whenever an account is installed. A `fetchMe` that began before
-// one existed answers `null` truthfully and arrives too late to be true:
-// logging out starts such a read, and naming yourself during it would be
-// undone by its result.
+// Bumped by every identity transition - provisioned, registered, logged in,
+// logged out. A `fetchMe` that began before one of those answers truthfully
+// about a moment that has since passed, and applying it would undo the
+// transition: logging out starts such a read, and naming yourself or signing
+// in during it would be erased by its result.
 let identityVersion = 0;
 let inFlightFetchMe: Promise<AuthUser | null> | null = null;
 
@@ -155,6 +156,21 @@ export function needsIdentity(user: AuthUser | null): boolean {
 
 export function currentPlayerName(): string {
   return useAuthStore.getState().user?.displayName ?? "";
+}
+
+/**
+ * Record who this browser is now, and that it changed.
+ *
+ * Every path that installs or removes an identity goes through here, so a
+ * read still in flight from before the change can tell that its answer is
+ * stale. Bumping in only one of them is how the others got clobbered.
+ */
+function installIdentity(
+  set: (partial: Partial<AuthStore>) => void,
+  user: AuthUser | null,
+): void {
+  identityVersion += 1;
+  set({ user, hasResolved: true });
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -222,14 +238,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         method: "POST",
         body: { displayName },
       });
-      identityVersion += 1;
-      set({ user, hasResolved: true });
-      // Naming is what provisions, so this is the moment a visitor stops
-      // being nobody. The socket resolved its account at the handshake and
-      // will not look again, so it has to shake hands once more or spend its
-      // life anonymous - unable to open a room for a player who now has an
-      // account.
-      if (!had) reconnectWithCurrentIdentity();
+      installIdentity(set, user);
+      // The socket resolved its account at the handshake and will not look
+      // again, so it shakes hands once more whenever the account underneath
+      // it changed. Not just when there was none before: a cached guest whose
+      // session has expired or been revoked is handed a *different* account
+      // here, and the socket would otherwise stay bound to the dead one.
+      if (had?.id !== user.id) reconnectWithCurrentIdentity();
       return user;
     })();
     if (!had) {
@@ -263,7 +278,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         ...(email ? { email } : {}),
       },
     });
-    set({ user, hasResolved: true });
+    installIdentity(set, user);
     reconcileNameColor(user);
     await loadRegisteredSettings(user);
     reconnectSocketAsNewIdentity();
@@ -275,7 +290,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       method: "POST",
       body: { username, password },
     });
-    set({ user, hasResolved: true });
+    installIdentity(set, user);
     reconcileNameColor(user);
     await loadRegisteredSettings(user);
     releaseSeatBeforeIdentityChange();
@@ -289,7 +304,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     } catch (error) {
       if (!(error instanceof ApiError)) throw error;
     }
-    set({ user: null });
+    installIdentity(set, null);
     releaseSeatBeforeIdentityChange();
     // Provision the replacement guest *before* reconnecting: the handshake
     // reads the cookie once, so bouncing first would bind the socket to no

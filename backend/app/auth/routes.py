@@ -100,7 +100,8 @@ def _limit(name: str, default: int) -> int:
 LAST_LOGIN_THROTTLE_SECONDS = 300
 
 # One bucket for the whole deployment, so the daily ceiling is a property of
-# the process rather than of whoever happens to be calling.
+# the service rather than of whoever happens to be calling. The bucket is a
+# database row, so replicas share the number rather than each getting one.
 GLOBAL_PROVISION_KEY = "all"
 
 
