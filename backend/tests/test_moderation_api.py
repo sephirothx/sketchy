@@ -409,7 +409,7 @@ async def test_revoke_and_expiry_restore_login_without_erasing_history(env):
     assert revoked.json()["revokeReason"] == "Appeal accepted"
 
     login_http = new_client()
-    await login_http.get("/api/auth/me")
+    await login_http.post("/api/auth/display-name", json={"displayName": "Visitor"})
     assert (
         await login_http.post(
             "/api/auth/login",
@@ -684,8 +684,15 @@ async def test_a_suspended_account_can_still_sign_out(env):
     # not the suspended account still being refused.
     fresh = await target_http.get("/api/auth/me")
     assert fresh.status_code == 200
-    assert fresh.json()["id"] != target["id"]
-    assert fresh.json()["isAnonymous"] is True
+    assert fresh.json() is None, "the suspended account is no longer the caller"
+    # And it is usable: naming yourself provisions somebody new, not the
+    # suspended account being refused again.
+    visitor = await target_http.post(
+        "/api/auth/display-name", json={"displayName": "Visitor"}
+    )
+    assert visitor.status_code == 200
+    assert visitor.json()["id"] != target["id"]
+    assert visitor.json()["isAnonymous"] is True
 
 
 async def test_a_suspension_from_a_report_shows_the_messages_it_was_about(env):

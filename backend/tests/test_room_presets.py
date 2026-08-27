@@ -183,7 +183,7 @@ async def test_rejects_guests_quick_prompts_shared_lists_and_duplicate_names(env
             },
         )
 
-    await client.get("/api/auth/me")
+    await client.post("/api/auth/display-name", json={"displayName": "Visitor"})
     assert (await client.get("/api/room-presets")).status_code == 403
 
     owner = await register(client)

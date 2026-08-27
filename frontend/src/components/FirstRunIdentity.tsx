@@ -23,7 +23,10 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
 
   const fieldId = useId();
   const [mode, setMode] = useState<AuthMode | null>(null);
-  const [name, setName] = useState("");
+  // Shared, so that typing a name here and pressing Create or Join instead of
+  // this form's own button means the same thing.
+  const name = useAuthStore((s) => s.nameDraft);
+  const setName = useAuthStore((s) => s.setNameDraft);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

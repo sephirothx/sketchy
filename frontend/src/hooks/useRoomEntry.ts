@@ -32,14 +32,19 @@ export function useRoomEntry(code: string) {
         }),
       preview: (roomCode) =>
         emitWithAck<RoomPreviewResponse>("get_room_preview", { code: roomCode }),
-      join: ({ code: roomCode, nickname: playerNickname, mode }) =>
-        emitWithAck<AckResponse>("join_room", {
+      join: async ({ code: roomCode, nickname: playerNickname, mode }) => {
+        // A visitor who typed a name into the block above and pressed Join
+        // means to play under it. Provisioning from that draft here is the
+        // same flow its own button runs, reached by the button they pressed.
+        const account = await useAuthStore.getState().ensureIdentity();
+        return emitWithAck<AckResponse>("join_room", {
           code: roomCode,
-          nickname: playerNickname,
+          nickname: account.displayName || playerNickname,
           nameColor,
           colorblindSafeColors,
           asSpectator: mode === "spectator",
-        }),
+        });
+      },
       acceptSession: setSession,
       requestErrorMessage: socketRequestErrorMessage,
     });

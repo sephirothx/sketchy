@@ -488,6 +488,7 @@ process. These deployment settings can be tuned without code changes:
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
+| `RETENTION_SWEEP_SECONDS` | `3600` | How often stale guest accounts are purged |
 | `ROOM_GLOBAL_LIMIT` | `200` | Live rooms this process will hold at once |
 | `ROOM_PER_ACCOUNT_LIMIT` | `3` | Live rooms one account may have open |
 | `ROOM_PROMPT_CHARACTER_LIMIT` | `4194304` | Quick-prompt characters held across every live room |
@@ -801,6 +802,8 @@ your players share one address:
 | `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
 | `AUTH_RESET_LIMIT` | 5 per hour | `POST /api/auth/password/forgot` |
+| `GUEST_PROVISION_LIMIT` | 60 per hour | Guests provisioned per address by `POST /api/auth/display-name` |
+| `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned process-wide, whatever the address |
 | `AUTH_RESET_CHECK_LIMIT` | 30 per hour | `POST /api/auth/password/reset/check` |
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |

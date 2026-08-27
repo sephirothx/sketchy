@@ -45,7 +45,7 @@ import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, ScoringMode } from "../types";
-import { currentPlayerName, useAuthStore } from "../store/authStore";
+import { currentPlayerName, needsIdentity, useAuthStore } from "../store/authStore";
 import {
   createRoomPreset,
   deleteRoomPreset,
@@ -62,6 +62,19 @@ export function CreateRoomPage() {
   const nameColor = useSettingsStore((state) => state.nameColor);
   const colorblindSafeColors = useSettingsStore((state) => state.colorblindSafeColors);
   const authUser = useAuthStore((state) => state.user);
+  // The server provisions on naming and will not open a room for a
+  // visitor without an account, so the form waits rather than filling
+  // itself in and failing at the last step.
+  const awaitingName = needsIdentity(authUser);
+  const identityResolved = useAuthStore((state) => state.hasResolved);
+
+  // Turned away at the door rather than at the submit button: a visitor with
+  // no name cannot open a room, and letting them fill in a whole form to be
+  // refused at the last step is a worse answer than not opening it. The lobby
+  // is where the first-run block asks for the name.
+  useEffect(() => {
+    if (identityResolved && awaitingName) navigate("/", { replace: true });
+  }, [identityResolved, awaitingName, navigate]);
   const [roomName, setRoomName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
@@ -590,7 +603,7 @@ export function CreateRoomPage() {
       <div className="create-room-footer-info">
         <span className="create-room-footer-summary">{footerSummary}</span>
       </div>
-      <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
+      <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
     </div>
   </main>;
 }

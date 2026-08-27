@@ -108,6 +108,21 @@ export function onServerFull(listener: (reason: string) => void): () => void {
   };
 }
 
+/**
+ * Re-handshake so the socket picks up an account it did not have.
+ *
+ * The server reads the session cookie once, at the handshake, and keeps the
+ * account on the socket session from then on. A visitor who arrives with no
+ * account connects as nobody - and since provisioning now happens when they
+ * choose a name, that is the ordinary first visit rather than a rarity. Left
+ * alone, the socket would stay anonymous for its whole life and refuse to
+ * open a room for somebody who plainly has an account.
+ */
+export function reconnectWithCurrentIdentity(): void {
+  socket.disconnect();
+  socket.connect();
+}
+
 export interface ConnectionTelemetry {
   connected: boolean;
   everConnected: boolean;

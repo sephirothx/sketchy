@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { apiRequest, ApiError } from "../lib/api";
-import { emitTransient, socket } from "../lib/socket";
+import { emitTransient, reconnectWithCurrentIdentity, socket } from "../lib/socket";
 import { useGameStore } from "./gameStore";
 import { useSettingsStore } from "./settingsStore";
+import { nicknameError } from "../lib/roomEntryState";
 import {
   applyAccountSettings,
   currentSettingsPayload,
@@ -22,11 +23,30 @@ export interface AuthUser {
   lastLoginAt: string | null;
 }
 
+/** Thrown when an action needs a name and the draft cannot supply one. */
+export class IdentityRequiredError extends Error {}
+
 interface AuthStore {
   user: AuthUser | null;
   isLoading: boolean;
   /** True once fetchMe has settled, successfully or not. */
   hasResolved: boolean;
+  /**
+   * The name typed into the first-run block but not yet submitted.
+   *
+   * Held here rather than inside that component because a visitor who types a
+   * name and then presses Create or Join plainly means to play under it, and
+   * making them press a second button first is a step that exists only
+   * because the state was in the wrong place.
+   */
+  nameDraft: string;
+  setNameDraft: (nameDraft: string) => void;
+  /**
+   * Make sure this visitor has an account, provisioning from the draft name.
+   *
+   * Returns the account, or throws with the message the field should show.
+   */
+  ensureIdentity: () => Promise<AuthUser>;
   fetchMe: () => Promise<AuthUser | null>;
   setDisplayName: (displayName: string) => Promise<AuthUser>;
   setNameColor: (nameColor: string) => Promise<AuthUser>;
@@ -115,14 +135,27 @@ async function loadRegisteredSettings(user: AuthUser | null): Promise<void> {
 
 let inFlightFetchMe: Promise<AuthUser | null> | null = null;
 
+/**
+ * Whether this visitor still has to choose a name before they can play.
+ *
+ * Naming is what provisions the account now, and the server needs one to open
+ * a room and a valid nickname to seat anybody - so an unnamed visitor who
+ * reaches a Create or Join button reaches a refusal. The first-run block asks
+ * for the name; these controls wait for it.
+ */
+export function needsIdentity(user: AuthUser | null): boolean {
+  return !user || (user.isAnonymous && !user.displayName);
+}
+
 export function currentPlayerName(): string {
   return useAuthStore.getState().user?.displayName ?? "";
 }
 
-export const useAuthStore = create<AuthStore>((set) => ({
+export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   isLoading: false,
   hasResolved: false,
+  nameDraft: "",
 
   fetchMe: async () => {
     // Single-flight. GET /api/auth/me is the call that creates the account, so
@@ -151,12 +184,29 @@ export const useAuthStore = create<AuthStore>((set) => ({
     return inFlightFetchMe;
   },
 
+  setNameDraft: (nameDraft) => set({ nameDraft }),
+
+  ensureIdentity: async () => {
+    const existing = get().user;
+    if (existing && !needsIdentity(existing)) return existing;
+    const chosen = get().nameDraft.trim();
+    const invalid = chosen ? nicknameError(chosen) : "Choose a name to play under.";
+    if (invalid) throw new IdentityRequiredError(invalid);
+    return get().setDisplayName(chosen);
+  },
+
   setDisplayName: async (displayName) => {
+    const had = get().user;
     const user = await apiRequest<AuthUser>("/api/auth/display-name", {
       method: "POST",
       body: { displayName },
     });
     set({ user, hasResolved: true });
+    // Naming is what provisions, so this is the moment a visitor stops being
+    // nobody. The socket resolved its account at the handshake and will not
+    // look again, so it has to shake hands once more or spend its life
+    // anonymous - unable to open a room for a player who now has an account.
+    if (!had) reconnectWithCurrentIdentity();
     return user;
   },
 

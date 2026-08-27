@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
+import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -13,6 +16,13 @@ from app.db import async_engine, async_session_factory, init_db
 from app.db.models import AuditEvent, GameParticipant, User, generate_uuid
 from app.domain_values import AccountState
 
+
+logger = logging.getLogger(__name__)
+
+# Hourly. The purge is batched, so a sweep is cheap when there is nothing to
+# do and keeps up when there is; daily would let a bad afternoon sit until
+# tomorrow.
+DEFAULT_SWEEP_SECONDS = 3600.0
 
 DEFAULT_UNUSED_RETENTION_DAYS = 30
 DEFAULT_PLAYER_RETENTION_DAYS = 365
@@ -123,6 +133,64 @@ async def _run(args) -> AnonymousRetentionResult:
         )
     finally:
         await async_engine.dispose()
+
+
+def sweep_interval_seconds(environ: dict[str, str] | None = None) -> float:
+    values = os.environ if environ is None else environ
+    raw = values.get("RETENTION_SWEEP_SECONDS", "").strip()
+    if not raw:
+        return DEFAULT_SWEEP_SECONDS
+    try:
+        seconds = float(raw)
+    except ValueError:
+        return DEFAULT_SWEEP_SECONDS
+    return seconds if seconds > 0 else DEFAULT_SWEEP_SECONDS
+
+
+async def run_retention_loop(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    interval_seconds: float | None = None,
+) -> None:
+    """Purge stale guest rows for ever, surviving every failure but cancellation.
+
+    Scheduled by the application rather than left to a command somebody has to
+    remember: an unrun retention policy is not a policy, and the rows that
+    accumulate without it are exactly the ones guest provisioning creates.
+    """
+    interval = interval_seconds or sweep_interval_seconds()
+    while True:
+        try:
+            result = await purge_stale_anonymous_accounts(session_factory, apply=True)
+            if result.total:
+                logger.info(
+                    "retention sweep: removed %d anonymous accounts "
+                    "(%d unused, %d with history)",
+                    result.total,
+                    result.unused_accounts,
+                    result.player_accounts,
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # A sweep that raises must not take the loop down with it: the
+            # next one is an hour away and the rows are still there.
+            logger.exception("retention sweep failed")
+        await asyncio.sleep(interval)
+
+
+def start_retention_loop(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> asyncio.Task[None]:
+    return asyncio.create_task(run_retention_loop(session_factory))
+
+
+async def stop_retention_loop(task: asyncio.Task[None] | None) -> None:
+    if task is None:
+        return
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
 
 def main() -> None:

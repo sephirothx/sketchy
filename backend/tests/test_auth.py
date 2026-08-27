@@ -52,6 +52,13 @@ async def client():
     await engine.dispose()
 
 
+async def become_guest(client, name: str = "Visitor") -> dict:
+    """Provision by choosing a name, which is the only thing that provisions."""
+    response = await client.post("/api/auth/display-name", json={"displayName": name})
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 # --- tokens ---------------------------------------------------------------
 
 def test_token_hash_is_one_way_and_fixed_length():
@@ -250,8 +257,16 @@ async def test_auth_limit_persists_across_limiter_instances_and_hashes_keys(monk
 # --- REST -----------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_me_provisions_a_guest_and_sets_an_httponly_cookie(client):
-    response = await client.get("/api/auth/me")
+async def test_naming_yourself_provisions_a_guest_and_sets_an_httponly_cookie(client):
+    # Looking at the site provisions nothing: a crawler, a link preview and an
+    # uptime check each used to cost two rows.
+    looked = await client.get("/api/auth/me")
+    assert looked.status_code == 200 and looked.json() is None
+    assert "set-cookie" not in {key.lower() for key in looked.headers}
+
+    response = await client.post(
+        "/api/auth/display-name", json={"displayName": "Visitor"}
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["isAnonymous"] is True
@@ -269,14 +284,14 @@ async def test_me_provisions_a_guest_and_sets_an_httponly_cookie(client):
 
 @pytest.mark.asyncio
 async def test_me_is_stable_across_calls(client):
-    first = (await client.get("/api/auth/me")).json()
+    first = await become_guest(client)
     second = (await client.get("/api/auth/me")).json()
     assert first["id"] == second["id"]
 
 
 @pytest.mark.asyncio
 async def test_register_claims_the_current_guest_identity(client):
-    guest = (await client.get("/api/auth/me")).json()
+    guest = await become_guest(client)
 
     registered = await client.post(
         "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
@@ -293,14 +308,14 @@ async def test_register_claims_the_current_guest_identity(client):
 
 @pytest.mark.asyncio
 async def test_register_rejects_a_taken_username_case_insensitively(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     await client.post(
         "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
     )
 
     other = AsyncClient(transport=client._transport, base_url="http://test")
     async with other:
-        await other.get("/api/auth/me")
+        await become_guest(other, "Other")
         clash = await other.post(
             "/api/auth/register", json={"username": "STEFANO", "password": "another-password"}
         )
@@ -309,7 +324,7 @@ async def test_register_rejects_a_taken_username_case_insensitively(client):
 
 @pytest.mark.asyncio
 async def test_register_rejects_weak_password_and_bad_username(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     assert (
         await client.post("/api/auth/register", json={"username": "ok-name", "password": "short"})
     ).status_code == 400
@@ -322,14 +337,14 @@ async def test_register_rejects_weak_password_and_bad_username(client):
 
 @pytest.mark.asyncio
 async def test_login_logout_round_trip(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     await client.post(
         "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
     )
 
     assert (await client.post("/api/auth/logout")).status_code == 200
     # Logging out drops the session, so the next visit is a brand new guest.
-    fresh = (await client.get("/api/auth/me")).json()
+    fresh = await become_guest(client)
     assert fresh["isAnonymous"] is True
 
     signed_in = await client.post(
@@ -352,7 +367,7 @@ async def test_login_links_the_current_guest_identity(client):
     )
     account_id = registered.json()["id"]
     await client.post("/api/auth/logout")
-    guest = (await client.get("/api/auth/me")).json()
+    guest = await become_guest(client)
 
     logged_in = await client.post(
         "/api/auth/login",
@@ -455,7 +470,7 @@ async def test_login_rehashes_a_stale_password(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_login_failures_are_indistinguishable(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     await client.post(
         "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
     )
@@ -472,7 +487,7 @@ async def test_login_failures_are_indistinguishable(client):
 
 @pytest.mark.asyncio
 async def test_nickname_availability_reflects_registered_usernames(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     await client.post(
         "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
     )
@@ -489,7 +504,7 @@ async def test_nickname_availability_reflects_registered_usernames(client):
 
 @pytest.mark.asyncio
 async def test_login_is_rate_limited(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     await client.post(
         "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
     )
@@ -507,7 +522,7 @@ async def test_login_is_rate_limited(client):
 
 @pytest.mark.asyncio
 async def test_registering_twice_is_rejected(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     await client.post(
         "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
     )
@@ -519,7 +534,7 @@ async def test_registering_twice_is_rejected(client):
 
 @pytest.mark.asyncio
 async def test_guest_display_name_is_persisted_and_survives_reload(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     saved = await client.post("/api/auth/display-name", json={"displayName": "Wanderer"})
     assert saved.status_code == 200
     assert saved.json()["displayName"] == "Wanderer"
@@ -529,14 +544,14 @@ async def test_guest_display_name_is_persisted_and_survives_reload(client):
 
 @pytest.mark.asyncio
 async def test_guest_cannot_take_a_registered_username_as_display_name(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     await client.post(
         "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
     )
 
     guest = AsyncClient(transport=client._transport, base_url="http://test")
     async with guest:
-        await guest.get("/api/auth/me")
+        await become_guest(guest)
         clash = await guest.post("/api/auth/display-name", json={"displayName": "stefano"})
         assert clash.status_code == 409
         assert (
@@ -546,7 +561,7 @@ async def test_guest_cannot_take_a_registered_username_as_display_name(client):
 
 @pytest.mark.asyncio
 async def test_claiming_an_account_aligns_display_name_with_username(client):
-    await client.get("/api/auth/me")
+    await become_guest(client)
     await client.post("/api/auth/display-name", json={"displayName": "Wanderer"})
     claimed = await client.post(
         "/api/auth/register", json={"username": "Stefano", "password": "a-good-password"}
@@ -556,14 +571,18 @@ async def test_claiming_an_account_aligns_display_name_with_username(client):
 
 
 @pytest.mark.asyncio
-async def test_a_new_guest_starts_with_no_name(client):
-    """An empty display name is the signal that this is someone's first run.
+async def test_a_first_run_is_the_absence_of_an_account(client):
+    """Having no account at all is the signal that this is someone's first run.
 
-    Nothing is invented for them: they either choose a name or sign up.
+    It used to be an account with an empty display name, because arriving
+    provisioned one. Nothing is invented for a visitor now: they either choose
+    a name - which is what creates the account - or sign up.
     """
-    body = (await client.get("/api/auth/me")).json()
-    assert body["displayName"] == ""
-    assert body["isAnonymous"] is True
+    assert (await client.get("/api/auth/me")).json() is None
+
+    named = await become_guest(client, "Wanderer")
+    assert named["displayName"] == "Wanderer"
+    assert named["isAnonymous"] is True
 
 
 # --- name color -----------------------------------------------------------
@@ -586,7 +605,7 @@ async def test_registered_player_colour_is_stored_on_the_account(client):
 @pytest.mark.asyncio
 async def test_a_guest_cannot_colour_their_name(client):
     """Grey italics is the only cue an unclaimed name carries."""
-    await client.get("/api/auth/me")
+    await become_guest(client)
     response = await client.post("/api/auth/name-color", json={"nameColor": "#4f46e5"})
     assert response.status_code == 403
 

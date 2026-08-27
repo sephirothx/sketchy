@@ -71,10 +71,13 @@ async def env(monkeypatch):
         await engine.dispose()
 
 
-async def guest(client: AsyncClient) -> dict:
-    """Arrive with no account at all and be given the guest one."""
-    response = await client.get("/api/auth/me")
-    assert response.status_code == 200
+async def guest(client: AsyncClient, name: str = "Visitor") -> dict:
+    """Arrive with no account and become a guest by choosing a name.
+
+    Naming is what provisions now; merely looking at the site does not.
+    """
+    response = await client.post("/api/auth/display-name", json={"displayName": name})
+    assert response.status_code == 200, response.text
     return response.json()
 
 

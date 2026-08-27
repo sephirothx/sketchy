@@ -5,6 +5,7 @@ import { sessionFrom } from "../lib/roomEntryState";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
+import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
 import { currentPlayerName } from "../store/authStore";
 import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
@@ -135,6 +136,11 @@ export function LobbyBrowserPage() {
   const [languageFilter, setLanguageFilter] = useState("all");
   const [hideFullRooms, setHideFullRooms] = useState(false);
   const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
+  // Nothing here works without a name: the server provisions on naming,
+  // needs an account to open a room, and needs a valid nickname to seat
+  // anybody. The first-run block above asks for it.
+  const awaitingName = useAuthStore((state) => needsIdentity(state.user));
+  const ensureIdentity = useAuthStore((state) => state.ensureIdentity);
 
   // Arriving at the lobby means any room exit has completed.
   useEffect(() => {
@@ -240,11 +246,38 @@ export function LobbyBrowserPage() {
   });
 
   // No gate: every visitor already has a name, generated on their first load.
-  function handleOpenCreateRoom() {
+  async function handleOpenCreateRoom() {
+    // A visitor who typed a name and pressed this plainly means to play under
+    // it, so provision from the draft rather than sending them back to a form
+    // they have already filled in.
+    if (awaitingName) {
+      try {
+        await ensureIdentity();
+      } catch (identityError) {
+        setError(
+          identityError instanceof IdentityRequiredError
+            ? identityError.message
+            : "Could not save that name. Please try again.",
+        );
+        return;
+      }
+    }
     navigate("/create");
   }
 
   async function handleJoinByCode(asSpectator = false) {
+    if (awaitingName) {
+      try {
+        await ensureIdentity();
+      } catch (identityError) {
+        setError(
+          identityError instanceof IdentityRequiredError
+            ? identityError.message
+            : "Could not save that name. Please try again.",
+        );
+        return;
+      }
+    }
     if (!joinCode.trim()) {
       setError("Please enter a room code");
       return;
@@ -304,7 +337,12 @@ export function LobbyBrowserPage() {
           <h2>Start a game</h2>
           <p className="create-room-lobby-copy">Pick the basics, invite your friends, draw. Settings can change any time before the first round.</p>
           <div className="lobby-entry-actions">
-            <Button variant="primary" big iconLeft={<PlusIcon size={16} />} onClick={handleOpenCreateRoom}>
+            <Button
+              variant="primary"
+              big
+              iconLeft={<PlusIcon size={16} />}
+              onClick={() => void handleOpenCreateRoom()}
+            >
               Create room
             </Button>
           </div>
