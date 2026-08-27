@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { RoomEntryMachine, type RoomEntrySnapshot, type RoomJoinMode } from "../lib/roomEntryState";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
-import { useAuthStore } from "../store/authStore";
+import { needsIdentity, useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse, RoomPreviewResponse } from "../types";
 
@@ -32,19 +32,14 @@ export function useRoomEntry(code: string) {
         }),
       preview: (roomCode) =>
         emitWithAck<RoomPreviewResponse>("get_room_preview", { code: roomCode }),
-      join: async ({ code: roomCode, nickname: playerNickname, mode }) => {
-        // A visitor who typed a name into the block above and pressed Join
-        // means to play under it. Provisioning from that draft here is the
-        // same flow its own button runs, reached by the button they pressed.
-        const account = await useAuthStore.getState().ensureIdentity();
-        return emitWithAck<AckResponse>("join_room", {
+      join: ({ code: roomCode, nickname: playerNickname, mode }) =>
+        emitWithAck<AckResponse>("join_room", {
           code: roomCode,
-          nickname: account.displayName || playerNickname,
+          nickname: playerNickname,
           nameColor,
           colorblindSafeColors,
           asSpectator: mode === "spectator",
-        });
-      },
+        }),
       acceptSession: setSession,
       requestErrorMessage: socketRequestErrorMessage,
     });
@@ -62,7 +57,40 @@ export function useRoomEntry(code: string) {
     machineRef.current?.setNicknameInput(value);
   }
 
-  function join(mode: RoomJoinMode) {
+  /**
+   * The machine, once it is showing the room again.
+   *
+   * Becoming somebody changes the nickname this hook is built on, so the
+   * effect above tears the machine down and builds a new one that has to
+   * fetch the preview afresh. Joining through the old one does nothing at
+   * all: it is disposed, and its refusal goes nowhere.
+   */
+  async function machineShowingPreview(): Promise<RoomEntryMachine | null> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const machine = machineRef.current;
+      if (machine?.getSnapshot().state.status === "preview") return machine;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return null;
+  }
+
+  async function join(mode: RoomJoinMode) {
+    // The machine checks the nickname before it calls anything, and a
+    // first-time visitor's is empty: the invite screen has no field of its
+    // own, so the name they typed is sitting in the shared draft. Becoming
+    // somebody is what fills it in.
+    if (needsIdentity(useAuthStore.getState().user)) {
+      try {
+        await useAuthStore.getState().ensureIdentity();
+      } catch {
+        // An empty or invalid draft: let the machine say so in its own words,
+        // which are the words this screen already shows for a bad name.
+        machineRef.current?.setNicknameInput(useAuthStore.getState().nameDraft);
+        return machineRef.current?.join(mode);
+      }
+      const rebuilt = await machineShowingPreview();
+      return rebuilt?.join(mode);
+    }
     return machineRef.current?.join(mode) ?? Promise.resolve();
   }
 

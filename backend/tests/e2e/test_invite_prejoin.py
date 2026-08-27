@@ -114,3 +114,37 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             await player_context.close()
             await full_room_context.close()
             await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_a_typed_name_is_enough_to_join_from_an_invite():
+    """The invite screen has no nickname field of its own: the name goes into
+    the first-run block, and pressing Join must mean what pressing that
+    block's own button means."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        visitor_context = await browser.new_context()
+        host = await host_context.new_page()
+        visitor = await visitor_context.new_page()
+        try:
+            await host.goto(BASE_URL)
+            await use_guest_name(host, "InviteDraftHost")
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector(".create-room-page")
+            await host.click(".create-room-submit")
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            code = await get_room_code(host)
+
+            # Typed and left sitting: no "Play as guest" press.
+            await visitor.goto(f"{BASE_URL}/room/{code}")
+            await visitor.wait_for_selector(".first-run-guest-row input")
+            await visitor.fill(".first-run-guest-row input", "InviteDrafter")
+            await visitor.click('button:has-text("Join game")')
+
+            await visitor.wait_for_selector(".room-copy-button")
+            await host.get_by_text("InviteDrafter", exact=True).wait_for()
+        finally:
+            await host_context.close()
+            await visitor_context.close()
+            await browser.close()
