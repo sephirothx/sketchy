@@ -498,7 +498,7 @@ one job that guards the repository rather than the program. A database has reach
 commit twice - a write-ahead log, then a whole database with a signing secret in it,
 pushed to a public remote - because `.gitignore` only ever matched the filename shapes
 someone had already thought of. So the scan refuses a file for its *bytes* as well as
-its name, and [`.githooks/pre-push`](../.githooks/pre-push) runs the same script over a
+its name - a SQLite header or PEM private-key armour, under any filename, and [`.githooks/pre-push`](../.githooks/pre-push) runs the same script over a
 push range for anyone who opts in with `git config core.hooksPath .githooks`. Catching
 it locally matters more than catching it in CI: by the time CI speaks, a secret is
 already public.

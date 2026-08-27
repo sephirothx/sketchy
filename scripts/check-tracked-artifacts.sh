@@ -15,8 +15,9 @@
 #
 #   1. The name looks like an artifact, including the suffixed-backup forms that
 #      got through before.
-#   2. The bytes are a SQLite database, whatever the file is called. That is the
-#      backstop: rename the artifact to notes.txt and this still catches it.
+#   2. The bytes say what the file is, whatever it is called - a SQLite header,
+#      or PEM private-key armour. That is the backstop: rename the artifact to
+#      notes.txt and this still catches it.
 #
 # Usage:
 #   check-tracked-artifacts.sh                  scan every tracked file
@@ -106,22 +107,51 @@ report() {
   violations=$((violations + 1))
 }
 
-# The first 16 bytes of a blob, as hex. `git cat-file` is killed by SIGPIPE once
-# head has taken its 16 bytes, which pipefail would otherwise turn into a fatal
-# error, so its failure is swallowed deliberately.
-head_hex_of_blob() {
-  { git cat-file blob "$1" 2>/dev/null || true; } | head -c 16 | od -An -v -tx1 | tr -d ' \n'
+# The head of a file, captured once and sniffed twice. It goes to a temporary
+# file rather than a variable because the SQLite magic ends in a NUL, and command
+# substitution strips those - the magic cannot survive the round trip.
+#
+# 128 bytes is enough for both sniffs: 16 for the SQLite header, and one PEM
+# armour line, which is at most `-----BEGIN PGP PRIVATE KEY BLOCK-----`.
+HEAD_BYTES="$(mktemp "${TMPDIR:-/tmp}/check-tracked-artifacts.XXXXXX")"
+trap 'rm -f "$HEAD_BYTES"' EXIT
+
+# `git cat-file` is killed by SIGPIPE once head has taken its bytes, which
+# pipefail would otherwise turn into a fatal error, so its failure is swallowed
+# deliberately.
+capture_head_of_blob() {
+  { git cat-file blob "$1" 2>/dev/null || true; } | head -c 128 > "$HEAD_BYTES"
 }
 
-head_hex_of_file() {
-  head -c 16 -- "$1" | od -An -v -tx1 | tr -d ' \n'
+capture_head_of_file() {
+  head -c 128 -- "$1" > "$HEAD_BYTES"
+}
+
+looks_like_sqlite() {
+  [ "$(od -An -v -tx1 -N16 "$HEAD_BYTES" | tr -d ' \n')" = "$SQLITE_MAGIC_HEX" ]
+}
+
+# PEM armour is plain text on the first line, so a shell glob is enough and there
+# is no NUL to lose. Covers `PRIVATE KEY`, `RSA/EC/DSA/OPENSSH PRIVATE KEY`,
+# `ENCRYPTED PRIVATE KEY`, and `PGP PRIVATE KEY BLOCK`.
+#
+# There is deliberately no equivalent for .p12/.pfx: PKCS#12 is DER, and its
+# opening bytes are a generic ASN.1 SEQUENCE that any number of innocent binary
+# formats share. Those stay caught by name only.
+looks_like_pem_private_key() {
+  local first
+  IFS= read -r first < "$HEAD_BYTES" || true
+  first=${first%$'\r'}
+  case "$first" in
+    "-----BEGIN "*"PRIVATE KEY-----"|"-----BEGIN "*"PRIVATE KEY BLOCK-----") return 0 ;;
+  esac
+  return 1
 }
 
 check_entry() {
   local path=$1
   local blob=${2:-}
   local reason
-  local head_hex
   local key
 
   # Keyed on the content as well as the path, because `git rev-list` walks
@@ -141,15 +171,17 @@ check_entry() {
   fi
 
   if [ -n "$blob" ]; then
-    head_hex=$(head_hex_of_blob "$blob")
+    capture_head_of_blob "$blob"
   elif [ -f "$path" ]; then
-    head_hex=$(head_hex_of_file "$path")
+    capture_head_of_file "$path"
   else
     return 0
   fi
 
-  if [ "$head_hex" = "$SQLITE_MAGIC_HEX" ]; then
+  if looks_like_sqlite; then
     report "$path" "SQLite database, whatever the filename says"
+  elif looks_like_pem_private_key; then
+    report "$path" "PEM private key, whatever the filename says"
   fi
 }
 

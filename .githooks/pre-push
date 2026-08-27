@@ -7,12 +7,42 @@
 #
 #   git config core.hooksPath .githooks
 #
-# git feeds pre-push one line per ref: <local ref> <local sha> <remote ref> <remote sha>.
+# git feeds pre-push one line per ref: <local ref> <local sha> <remote ref> <remote sha>,
+# and passes the remote's name and URL as arguments.
 
 set -euo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 status=0
+
+# Scope "already published" to the remote actually being pushed to. Bare
+# `--remotes` covers every remote at once, which quietly excuses history from
+# scanning the moment a second remote exists: commits sitting on a fork's
+# tracking refs would be skipped while being sent somewhere that has never seen
+# them.
+remote_name=${1:-}
+remote_url=${2:-}
+
+if [ -z "$remote_name" ] || ! git remote get-url "$remote_name" >/dev/null 2>&1; then
+  # git passes a bare URL as the name when the push names no configured remote.
+  # If that URL belongs to a remote we do know, use its tracking refs.
+  for candidate in $(git remote); do
+    if [ "$(git remote get-url "$candidate" 2>/dev/null)" = "$remote_url" ]; then
+      remote_name=$candidate
+      break
+    fi
+  done
+fi
+
+if git remote get-url "$remote_name" >/dev/null 2>&1; then
+  published=("--remotes=$remote_name")
+else
+  # A genuinely unknown URL has no tracking refs to compare against. Strictly,
+  # nothing has been published there and the whole history should be scanned -
+  # but this history permanently contains one committed database, so that would
+  # refuse every such push forever. Fall back to every remote known here.
+  published=(--remotes)
+fi
 
 while read -r _local_ref local_sha _remote_ref remote_sha; do
   # An all-zero local sha is a branch deletion: nothing is being sent.
@@ -22,11 +52,11 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
   esac
 
   # An all-zero remote sha is a branch the remote has never seen, so there is no
-  # far end to diff against. Everything not already on some remote-tracking ref
-  # is what this push would add.
+  # far end to diff against. Everything not already published to this remote is
+  # what the push would add.
   case "$remote_sha" in
     *[!0]*) range=("$remote_sha..$local_sha") ;;
-    *) range=("$local_sha" --not --remotes) ;;
+    *) range=("$local_sha" --not "${published[@]}") ;;
   esac
 
   if ! "$root/scripts/check-tracked-artifacts.sh" --range "${range[@]}"; then

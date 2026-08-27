@@ -33,18 +33,31 @@ jobs:
       - name: Scan every commit the change adds
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          # The commit that added `backend/sketchy.db.broken-20260827-033005`.
+          # Removing that file was a deletion, not a rewrite, so the blob is in
+          # this history for good and any range reaching back to it fails
+          # forever. Exclusive `..` puts the floor just after it: everything the
+          # guard can still do something about, and nothing it cannot.
+          BASELINE: f0696b46e0c3305624349c8df9c55fc6595e1d44
         run: |
           # An all-zero or unreachable base means there is no far end to diff
-          # against - a new branch, or a force-push over a discarded commit. The
-          # tip scan has already run, so take that rather than failing the job.
-          if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-            echo "No reachable base commit; the tracked-tree scan above stands alone."
+          # against - a new branch, or a force-push over a discarded commit.
+          # Falling back to the tip scan there would wave through exactly the
+          # case this step exists for: commit a secret, delete it a commit later,
+          # clean tree, green build. Fall back to the baseline floor instead, so
+          # every commit that could still be scanned is.
+          if git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            # Fork point, not the base tip, so an old base branch cannot drag the
+            # range back over the baseline.
+            from="$(git merge-base "$BASE" HEAD)"
+          elif git cat-file -e "${BASELINE}^{commit}" 2>/dev/null; then
+            echo "No reachable base commit; scanning everything since the baseline."
+            from="$BASELINE"
+          else
+            echo "Neither a base nor the baseline is reachable; the tracked-tree scan stands alone."
             exit 0
           fi
-          # Fork point, not the base tip. This history permanently contains one
-          # committed database - removing it was a deletion, not a rewrite - and
-          # a range reaching back past it would fail every build forever.
-          bash scripts/check-tracked-artifacts.sh --range "$(git merge-base "$BASE" HEAD)..HEAD"
+          bash scripts/check-tracked-artifacts.sh --range "${from}..HEAD"
 
   backend:
     name: Backend lint & tests

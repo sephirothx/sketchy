@@ -19,6 +19,15 @@ CHECKER = REPO_ROOT / "scripts" / "check-tracked-artifacts.sh"
 # "SQLite format 3\0" - the header the checker sniffs for.
 SQLITE_MAGIC = b"SQLite format 3\x00"
 
+PEM_ARMOUR = (
+    "PRIVATE KEY",
+    "RSA PRIVATE KEY",
+    "EC PRIVATE KEY",
+    "OPENSSH PRIVATE KEY",
+    "ENCRYPTED PRIVATE KEY",
+    "PGP PRIVATE KEY BLOCK",
+)
+
 
 def run_checker(cwd: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -228,6 +237,51 @@ def test_a_benign_overwrite_does_not_hide_the_blob_beneath_it(tmp_path):
 
     assert ranged.returncode == 1
     assert "notes.txt" in ranged.stderr
+
+
+@requires_git
+@pytest.mark.parametrize("armour", PEM_ARMOUR)
+def test_a_private_key_is_refused_under_an_innocuous_name(armour, tmp_path):
+    """A database gets caught by its bytes; a key used to be caught only by its
+    extension, so `id_ed25519` renamed to `deploy-notes.txt` walked through. The
+    same backstop applies to PEM armour."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", ".")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+
+    (repo / "deploy-notes.txt").write_text(
+        f"-----BEGIN {armour}-----\nZm9vYmFy\n-----END {armour}-----\n"
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "a key by another name")
+
+    result = run_checker(repo)
+
+    assert result.returncode == 1
+    assert "deploy-notes.txt" in result.stderr
+    assert "PEM private key" in result.stderr
+
+
+@requires_git
+@pytest.mark.parametrize("armour", ["PUBLIC KEY", "CERTIFICATE"])
+def test_public_pem_material_is_not_refused(armour, tmp_path):
+    """The sniff has to be narrow enough to leave a certificate alone, or nobody
+    can commit a trust store."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", ".")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+
+    (repo / "trust.dat").write_text(
+        f"-----BEGIN {armour}-----\nZm9vYmFy\n-----END {armour}-----\n"
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "public material")
+
+    assert run_checker(repo).returncode == 0
 
 
 @requires_git
