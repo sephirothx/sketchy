@@ -425,6 +425,15 @@ Fill coordinates are different on purpose: they are sent as **absolute pixel ind
 requires `0 ≤ x < 1` and `0 ≤ y < 1` normalized and clamps to
 `CANVAS_WIDTH − 1` / `CANVAS_HEIGHT − 1`.
 
+**The decoder returns the centre of that pixel, not its corner** — `(x + 0.5) / CANVAS_WIDTH`.
+The seed crosses the wire as an integer and is re-quantized twice more (by
+`CanvasSession.record_stroke` and again by the client's renderer), and `x / CANVAS_WIDTH`
+does not survive that round trip: `(x / w) * w` can fall just below `x` in binary floating
+point, and truncation then takes it down a pixel. **37 of the 800 columns and 26 of the 600
+rows were affected**, in both runtimes identically. Half a pixel of offset puts every value
+clear of the boundary. For a flood fill this is not a rounding nicety — one pixel can be
+the far side of an outline, so the wrong region is painted entirely.
+
 Colors are `#rrggbb` strings on the payload side and three raw bytes on the wire.
 `width` is 1 – `MAX_BRUSH_WIDTH` (64).
 
