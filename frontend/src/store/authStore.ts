@@ -134,6 +134,11 @@ async function loadRegisteredSettings(user: AuthUser | null): Promise<void> {
 }
 
 let inFlightProvision: Promise<AuthUser> | null = null;
+// Bumped whenever an account is installed. A `fetchMe` that began before
+// one existed answers `null` truthfully and arrives too late to be true:
+// logging out starts such a read, and naming yourself during it would be
+// undone by its result.
+let identityVersion = 0;
 let inFlightFetchMe: Promise<AuthUser | null> | null = null;
 
 /**
@@ -166,9 +171,16 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (inFlightFetchMe) return inFlightFetchMe;
 
     set({ isLoading: true });
+    const startedAt = identityVersion;
     inFlightFetchMe = (async () => {
       try {
         const user = await apiRequest<AuthUser>("/api/auth/me");
+        if (identityVersion !== startedAt) {
+          // Somebody was provisioned while this was in the air. They are the
+          // truth; this answer describes a moment that has passed.
+          set({ isLoading: false, hasResolved: true });
+          return get().user;
+        }
         set({ user, isLoading: false, hasResolved: true });
         reconcileNameColor(user);
         await loadRegisteredSettings(user);
@@ -210,6 +222,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         method: "POST",
         body: { displayName },
       });
+      identityVersion += 1;
       set({ user, hasResolved: true });
       // Naming is what provisions, so this is the moment a visitor stops
       // being nobody. The socket resolved its account at the handshake and

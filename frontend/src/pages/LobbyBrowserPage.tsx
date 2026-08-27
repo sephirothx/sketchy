@@ -5,6 +5,7 @@ import { sessionFrom } from "../lib/roomEntryState";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
+import { ApiError } from "../lib/api";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
 import { currentPlayerName } from "../store/authStore";
 import { PublicRoomCard } from "../components/PublicRoomCard";
@@ -108,6 +109,21 @@ function RoomCodeInput({
       </span>
     </label>
   );
+}
+
+/**
+ * What to show when becoming somebody failed.
+ *
+ * The server's own words where it has them: a name that belongs to a
+ * registered player, or a provisioning ceiling that has been reached, are
+ * both things a player can act on, and "please try again" tells them to do
+ * the one thing that will not work.
+ */
+function identityMessage(error: unknown): string {
+  if (error instanceof IdentityRequiredError || error instanceof ApiError) {
+    return error.message;
+  }
+  return "Could not save that name. Please try again.";
 }
 
 export function LobbyBrowserPage() {
@@ -254,11 +270,7 @@ export function LobbyBrowserPage() {
       try {
         await ensureIdentity();
       } catch (identityError) {
-        setError(
-          identityError instanceof IdentityRequiredError
-            ? identityError.message
-            : "Could not save that name. Please try again.",
-        );
+        setError(identityMessage(identityError));
         return;
       }
     }
@@ -289,11 +301,7 @@ export function LobbyBrowserPage() {
       try {
         playerName = (await ensureIdentity()).displayName;
       } catch (identityError) {
-        setError(
-          identityError instanceof IdentityRequiredError
-            ? identityError.message
-            : "Could not save that name. Please try again.",
-        );
+        setError(identityMessage(identityError));
         setPendingJoin(null);
         return;
       }
