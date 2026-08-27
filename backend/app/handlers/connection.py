@@ -14,7 +14,7 @@ from app.auth.sessions import (
 from app.domain_values import RuntimeEventType
 from app.handlers.context import HandlerContext
 from app.protocol import PROTOCOL_VERSION, client_protocol_version
-from app.rooms import _metrics_user_id as metrics_user_id
+from app.rooms import Player, Room, _metrics_user_id as metrics_user_id
 from app.services.runtime_metrics import metrics
 
 logger = logging.getLogger("sketchy.handlers.connection")
@@ -64,23 +64,46 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
 
 
-async def disconnect(ctx: HandlerContext, sid):
-    session = await ctx.sio.get_session(sid) if sid else None
-    if not session:
+async def disconnect(ctx: HandlerContext, sid, reason: str | None = None):
+    if not sid:
         return
-    room = ctx.room_manager.get_room(session.get("room_id"))
-    token = session.get("player_id")
-    if not room or not token or token not in room.players:
+    if reason == ctx.sio.reason.SERVER_DISCONNECT:
+        # This socket was closed from inside a seat transition that has
+        # already moved its seat on: the tab a reconnect superseded, or an
+        # account that just lost access. Socket.IO runs this handler inline
+        # from that transition, so queueing at the gate would be waiting for
+        # the caller - and two sockets superseding each other at the same
+        # moment would wait for each other for ever.
+        await reconcile_socket_seats(ctx, sid)
         return
-    player = room.players[token]
-    if player.sid != sid:
-        # Stale disconnect for a sid that's already been superseded by a
-        # newer connection (e.g. the client reconnected - a new sid ran
-        # join_room and updated player.sid - before this older sid's
-        # disconnect event was processed). The player is still actively
-        # connected via the newer sid, so ignore this one rather than
-        # incorrectly marking them disconnected.
-        return
+    # Queued behind whatever else is moving this socket between seats, so a
+    # connection that drops mid-entry is reconciled once its new seat exists
+    # rather than a moment before it does.
+    async with ctx.seating(sid):
+        await reconcile_socket_seats(ctx, sid)
+
+
+async def reconcile_socket_seats(ctx: HandlerContext, sid: str) -> None:
+    """Start the reconnect grace on every seat this socket still holds.
+
+    Resolved by walking the live rooms rather than by reading the socket
+    session. The session names a single room, so a socket that ever held a
+    seat in more than one - the room it was moved out of, or one stranded by
+    an older build - would leave the rest behind, connected to a socket that
+    is gone and therefore uncountable as empty forever.
+
+    A seat whose `sid` is no longer this one is simply not found: that is the
+    stale disconnect for a socket a newer connection has already superseded,
+    and its player is still actively connected through the newer sid.
+    """
+    for room, player in ctx.room_manager.seats_for_sid(sid):
+        await _begin_reconnect_grace(ctx, room, player)
+
+
+async def _begin_reconnect_grace(
+    ctx: HandlerContext, room: Room, player: Player
+) -> None:
+    token = player.id
     player.connected = False
     player.sid = None
     metrics.record(

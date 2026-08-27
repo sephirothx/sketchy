@@ -744,6 +744,25 @@ class RoomManager:
         self._observe()
         return player
 
+    def seats_for_sid(self, sid: str | None) -> list[tuple[Room, Player]]:
+        """Every live seat this socket holds, across all rooms.
+
+        A socket is meant to hold exactly one, but the answer is a list so
+        that a socket which somehow holds more can still be reconciled down to
+        none rather than leaving the rest behind, connected, forever. Walked
+        rather than indexed: at the product ceiling this is a few hundred
+        comparisons on a disconnect, and an index is one more thing that can
+        stop being true.
+        """
+        if not sid:
+            return []
+        return [
+            (room, player)
+            for room in list(self.rooms.values())
+            for player in list(room.players.values())
+            if player.sid == sid
+        ]
+
     def get_player_by_user_id(self, room: Room, user_id: object) -> Player | None:
         """Find this account's existing seat in the room, if it has one.
 

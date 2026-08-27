@@ -1,9 +1,11 @@
 """Shared dependencies passed to every Socket.IO handler domain."""
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import logging
-from typing import TYPE_CHECKING
+from typing import AsyncIterator, TYPE_CHECKING
 
 import socketio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -29,6 +31,27 @@ logger = logging.getLogger("sketchy.handlers.context")
 
 
 @dataclass
+class SeatingGate:
+    """The serializer for one socket's seat transitions.
+
+    Socket.IO dispatches each event from a connection as its own task, so a
+    second `create_room` can arrive while the first is still waiting on the
+    database. Every transition that takes, moves or gives up a seat runs under
+    this, which is what makes "one socket, one seat" a rule rather than a
+    property of where the awaits happen to fall.
+
+    The disconnect queues here too, which is the ordering that matters most:
+    a socket that drops mid-entry is reconciled after its seat exists rather
+    than before, so it cannot leave one behind marked connected.
+    """
+
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Live holders, waiting ones included. The gate is dropped at zero so the
+    # registry cannot outgrow the sockets that are actually seating.
+    holders: int = 0
+
+
+@dataclass
 class HandlerContext:
     """Application-owned state used by the Socket.IO transport adapters."""
 
@@ -46,6 +69,25 @@ class HandlerContext:
     persistent_rooms: PersistentRoomService | None = None
     shutdown: ShutdownCoordinator | None = None
     game_flow: GameFlowService = field(init=False)
+    _seating_gates: dict[str, SeatingGate] = field(
+        default_factory=dict, init=False, repr=False
+    )
+
+    @asynccontextmanager
+    async def seating(self, sid: str) -> AsyncIterator[SeatingGate]:
+        """Hold one socket's seat transitions to one at a time."""
+
+        gate = self._seating_gates.get(sid)
+        if gate is None:
+            gate = self._seating_gates[sid] = SeatingGate()
+        gate.holders += 1
+        try:
+            async with gate.lock:
+                yield gate
+        finally:
+            gate.holders -= 1
+            if gate.holders <= 0:
+                self._seating_gates.pop(sid, None)
 
     async def remove_room_if_empty(self, room_id: str) -> bool:
         """Remove an empty live room and retire its published invite code."""

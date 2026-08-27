@@ -70,6 +70,12 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
         logger.exception("Failed to record activity for user %s", player.user_id)
 
 async def create_room(ctx: HandlerContext, sid, data):
+    """Open a room and seat this socket in it, releasing any seat it held."""
+    async with ctx.seating(sid):
+        return await _create_room(ctx, sid, data)
+
+
+async def _create_room(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(CreateRoomPayload, data)
     except PayloadError as error:
@@ -296,6 +302,12 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
 
 
 async def join_room(ctx: HandlerContext, sid, data):
+    """Seat this socket in the named room, releasing any seat it held."""
+    async with ctx.seating(sid):
+        return await _join_room(ctx, sid, data)
+
+
+async def _join_room(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(JoinRoomPayload, data)
     except PayloadError as error:
@@ -345,6 +357,14 @@ async def join_room(ctx: HandlerContext, sid, data):
         already_joined.sid = sid
         already_joined.connected = True
         ctx.timers.cancel_disconnect_timer(already_joined.id)
+        # This confirmation is the only entry that does not pass through
+        # `_join_socket_room`, and a client heartbeats through it. Reconciling
+        # here too is what lets a seat stranded elsewhere - by an older build,
+        # or by a crash between the two halves of a move - be reclaimed
+        # without waiting for the socket to drop.
+        await ctx.game_flow.release_other_seats(
+            sid, keep=(room.id, already_joined.id)
+        )
         # Soft checks (heartbeat/visibility) must not dump full canvas history.
         await ctx.game_flow._sync_player_view(
             sid,
@@ -690,26 +710,12 @@ async def leave_room(ctx: HandlerContext, sid, data=None):
         parse_empty_payload(data)
     except PayloadError as error:
         return error.acknowledgement()
-    current = await ctx.game_flow.require_current_player(sid)
-    if not current:
-        return
-    room, player = current
-    ctx.timers.cancel_disconnect_timer(player.id)
-    ctx.room_manager.remove_player(room, player.id)
-    await ctx.sio.leave_room(sid, room.id)
-    # Drop the room binding but keep the account: the socket stays open and the
-    # player may immediately join another room as themselves.
-    session = await ctx.sio.get_session(sid) or {}
-    await ctx.sio.save_session(sid, {"user_id": session.get("user_id")})
-    if not room.connected_players():
-        ctx.timers.cancel_phase_timer(room.id)
-        ctx.timers.cancel_hint_timers(room.id)
-        ctx.timers.cancel_restart_timer(room.id)
-        await ctx.remove_room_if_empty(room.id)
-    else:
-        await ctx.game_flow._remove_player_from_game(room, player.id)
-        await ctx.sio.emit("player_left", {"playerId": player.id}, room=room.id)
-        await ctx.game_flow._emit_room_state(room)
+    async with ctx.seating(sid):
+        current = await ctx.game_flow.require_current_player(sid)
+        if not current:
+            return
+        room, player = current
+        await ctx.game_flow.release_seat(sid, room, player)
 
 
 def register(ctx: HandlerContext) -> None:

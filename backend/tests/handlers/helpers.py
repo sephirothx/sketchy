@@ -104,3 +104,21 @@ async def play_to_completion(ctx, room, players, *, guessers=None):
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
     await ctx.timers.close()
+
+
+class SessionStore:
+    """Socket sessions that persist, for flows that cross rooms.
+
+    ``AsyncServer.save_session`` is mocked away in most handler tests because
+    nothing reads it back. A socket moving between rooms does, and the value
+    it reads has to be the one the previous handler wrote.
+    """
+
+    def __init__(self) -> None:
+        self.sessions: dict[str, dict] = {}
+
+    async def get(self, sid, namespace=None) -> dict:
+        return self.sessions.setdefault(sid, {})
+
+    async def save(self, sid, session, namespace=None) -> None:
+        self.sessions[sid] = dict(session)
