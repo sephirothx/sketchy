@@ -57,11 +57,32 @@ export function useCanvasProtocol(
   const pendingMutationsRef = useRef(new Map<number, PendingCanvasMutation>());
   const activeOutgoingSequenceRef = useRef<number | null>(null);
   const syncRequestsRef = useRef<CanvasSyncRequester | null>(null);
-  if (syncRequestsRef.current == null) {
-    syncRequestsRef.current = createCanvasSyncRequester(
-      () => socket.emit("request_sync_strokes"),
+  // What this client can honestly say it already holds, so the server can
+  // reply with only the missing tail.
+  //
+  // Only claimed with nothing pending. A client with unacknowledged mutations
+  // has optimistically applied actions the server may never have accepted, so
+  // its history is a guess rather than a prefix of server truth - and a sync
+  // is exactly the moment that guess is being abandoned. Viewers, who never
+  // hold pending mutations and are most of a room, always qualify; the drawer
+  // qualifies between strokes.
+  const authoritativePrefixClaim = useCallback((): [number, number, number] | null => {
+    const history = historyRef.current;
+    if (pendingMutationsRef.current.size > 0) return null;
+    if (history.generation == null || history.historyHash == null) return null;
+    if (history.actions.length === 0) return null;
+    return [history.generation, history.actions.length, history.historyHash];
+  }, []);
+
+  // Built in the mount effect rather than during render: it closes over refs
+  // to read the prefix claim at request time, and reading a ref during render
+  // is exactly what the hooks rule forbids.
+  const ensureSyncRequester = useCallback((): CanvasSyncRequester => {
+    syncRequestsRef.current ??= createCanvasSyncRequester(
+      () => socket.emit("request_sync_strokes", authoritativePrefixClaim()),
     );
-  }
+    return syncRequestsRef.current;
+  }, [authoritativePrefixClaim]);
 
   // Republished wherever an action enters or leaves the history, which is the
   // only thing that moves the budget. Extending a path does not: its points
@@ -79,8 +100,8 @@ export function useCanvasProtocol(
       pendingMutationsRef.current.clear();
       activeOutgoingSequenceRef.current = null;
     }
-    syncRequestsRef.current!.request();
-  }, []);
+    ensureSyncRequester().request();
+  }, [ensureSyncRequester]);
 
   const allocateSequence = useCallback((): number | null => {
     if (pendingMutationsRef.current.size >= MAX_PENDING_CANVAS_ACTIONS) {
@@ -201,7 +222,7 @@ export function useCanvasProtocol(
     };
 
     const finishQueuedSync = () => {
-      syncRequestsRef.current!.drainQueued();
+      ensureSyncRequester().drainQueued();
     };
 
     const restoreAuthoritative = (
@@ -227,7 +248,7 @@ export function useCanvasProtocol(
       sequence: unknown,
       historyHash: unknown,
     ) => {
-      syncRequestsRef.current!.arrived();
+      ensureSyncRequester().arrived();
       const actions = decodeCanvasHistory(payload);
       if (!actions || !historyRef.current.replace(
         actions, revision, generation, sequence, historyHash,
@@ -309,6 +330,43 @@ export function useCanvasProtocol(
         return;
       }
       nextSequenceRef.current = (pendingSequences.at(-1) ?? committedSequence) + 1;
+      renderer.replay(historyRef.current.actions);
+      publishBudgets();
+      finishQueuedSync();
+    };
+
+    // Only the actions this client was missing, spliced onto the prefix it
+    // claimed. `replace` recomputes the prefix hashes and rejects a history
+    // that does not hash to what the server said, so a splice that is wrong
+    // for any reason costs one full sync rather than a wrong canvas.
+    const onSyncStrokesTail = (
+      payload: unknown,
+      baseCount: unknown,
+      revision: unknown,
+      generation: unknown,
+      sequence: unknown,
+      historyHash: unknown,
+    ) => {
+      ensureSyncRequester().arrived();
+      const tail = decodeCanvasHistory(payload);
+      if (
+        !tail
+        || typeof baseCount !== "number"
+        || !Number.isSafeInteger(baseCount)
+        || baseCount < 0
+        || baseCount > historyRef.current.actions.length
+      ) {
+        requestAuthoritativeSync();
+        return;
+      }
+      const combined = historyRef.current.actions.slice(0, baseCount).concat(tail);
+      if (!historyRef.current.replace(combined, revision, generation, sequence, historyHash)) {
+        requestAuthoritativeSync();
+        return;
+      }
+      pendingMutationsRef.current.clear();
+      activeOutgoingSequenceRef.current = null;
+      nextSequenceRef.current = historyRef.current.sequence! + 1;
       renderer.replay(historyRef.current.actions);
       publishBudgets();
       finishQueuedSync();
@@ -403,13 +461,14 @@ export function useCanvasProtocol(
       // A new turn replaces the history wholesale, so a sync still owed
       // against the old generation is worthless - and carrying its latch into
       // the new turn would suppress the syncs that turn goes on to need.
-      syncRequestsRef.current!.reset();
+      syncRequestsRef.current?.reset();
       renderer.clear();
       publishBudgets();
     };
 
     socket.on("draw", onDraw);
     socket.on("sync_strokes", onSyncStrokes);
+    socket.on("sync_strokes_tail", onSyncStrokesTail);
     socket.on("canvas_commit", onCanvasCommit);
     socket.on("canvas_undo", onUndoStroke);
     socket.on("request_canvas_actions", onRequestCanvasActions);
@@ -417,18 +476,19 @@ export function useCanvasProtocol(
     // Through the requester rather than a bare emit: this one is the most
     // likely of all to go unanswered, since the canvas can mount before the
     // socket has finished binding itself to a seat in the room.
-    syncRequestsRef.current!.request();
+    ensureSyncRequester().request();
 
     return () => {
       socket.off("draw", onDraw);
       socket.off("sync_strokes", onSyncStrokes);
+      socket.off("sync_strokes_tail", onSyncStrokesTail);
       socket.off("canvas_commit", onCanvasCommit);
       socket.off("canvas_undo", onUndoStroke);
       socket.off("request_canvas_actions", onRequestCanvasActions);
       socket.off("canvas_reset", onCanvasReset);
-      syncRequestsRef.current!.reset();
+      syncRequestsRef.current?.reset();
     };
-  }, [publishBudgets, renderer, requestAuthoritativeSync]);
+  }, [ensureSyncRequester, publishBudgets, renderer, requestAuthoritativeSync]);
 
   return useMemo(() => ({
     beginDrawAction,

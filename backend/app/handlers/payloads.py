@@ -40,6 +40,7 @@ from app.drawing_rules import (
     clean_allowed_tools,
 )
 from app.domain_values import HINT_MODES, SCORING_MODES
+from app.canvas_history import MAX_CANVAS_ACTIONS
 from app.live_drawing import LiveDrawingPacket, decode_live_drawing
 from app.auth.names import MAX_NAME_LENGTH, NAME_RULE_MESSAGE, NameError_, validate_name
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
@@ -469,6 +470,33 @@ def parse_draw_payload(data: Any, action_identity: Any = None) -> DrawPayload:
         raise PayloadError("Drawing action identity is not allowed for this frame")
     wire_data = data if isinstance(data, int) else bytes(data)
     return DrawPayload(packet=packet, wire_data=wire_data, action_identity=identity)
+
+
+def parse_sync_request_payload(data: Any) -> tuple[int, int, int] | None:
+    """Read a client's claim about the canvas prefix it already holds.
+
+    `None` means "send everything", which is what an empty payload has always
+    meant and what a client with anything uncommitted still sends. A claim is
+    only ever an optimization: it is verified against the authoritative history
+    before it is honoured, and any doubt falls back to the full dump.
+    """
+    if data is None or data == {}:
+        return None
+    if not isinstance(data, list) or len(data) != 3:
+        raise PayloadError("Invalid canvas sync request")
+    generation = _canvas_sequence(data[0])
+    count, history_hash = data[1], data[2]
+    if (
+        generation is None
+        or isinstance(count, bool)
+        or not isinstance(count, int)
+        or not 0 <= count <= MAX_CANVAS_ACTIONS
+        or isinstance(history_hash, bool)
+        or not isinstance(history_hash, int)
+        or not 0 <= history_hash <= 0xFFFFFFFF
+    ):
+        raise PayloadError("Invalid canvas sync request")
+    return generation, count, history_hash
 
 
 def parse_undo_payload(data: Any) -> UndoPayload:

@@ -184,7 +184,7 @@ client uses the acknowledgement.
 | `select_prompt` | `SelectPromptPayload` | ✓ | [`game.py`](../backend/app/handlers/game.py) |
 | `draw` | binary frame + optional `[generation, sequence]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `undo_stroke` | `[generation, sequence, revision, historyHash]` | ✓ | [`drawing.py`](../backend/app/handlers/drawing.py) |
-| `request_sync_strokes` | `EmptyPayload` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
+| `request_sync_strokes` | `null`, or `[generation, actionCount, historyHash]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `send_chat` | `TextPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `guess` | `TextPayload` | — | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_hint` | `HintPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
@@ -278,6 +278,7 @@ the server resolves the seat against the live room and selects the evidence itse
 | `canvas_commit` | `[generation, sequence, revision, historyHash]` | room (or one socket) |
 | `canvas_undo` | `[generation, sequence, revisionBefore, revisionAfter, historyHash]` | room (or one socket) |
 | `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash)` | one socket |
+| `sync_strokes_tail` | `(binaryTail, baseActionCount, revision, generation, sequence, historyHash)` — only the actions after a verified prefix (§7) | one socket |
 | `request_canvas_actions` | `[generation, expectedSequence, receivedSequence]` | one socket |
 | `voted_afk` | `{message}` | the player who was voted AFK |
 | `kicked` | `{reason}` | one socket |
@@ -513,6 +514,40 @@ drawer                                     server                       everyone
 
 `sync_strokes` is emitted as a **tuple**:
 `(binaryHistory, revision, generation, sequence, historyHash)`.
+
+### Incremental resync
+
+`request_sync_strokes` may carry a claim about the prefix the client already holds:
+
+```jsonc
+[generation, actionCount, historyHash]
+```
+
+The server checks it in **O(1)** against `CanvasSession.hashes`, the per-action prefix
+array it already maintains, and answers a verified claim with `sync_strokes_tail` —
+the same `SKCH` frame containing only the actions from `actionCount` on, plus the
+`baseActionCount` they splice onto.
+
+**The claim is an optimization, never a trust boundary.** Every one of these falls back
+to the full `sync_strokes` dump:
+
+| Situation | Why |
+| --- | --- |
+| `generation` is not current | The turn's canvas has been replaced |
+| the hash disagrees | The client's prefix is not the server's |
+| `actionCount` exceeds what is finalized | Includes the client being *ahead*, which undo can cause |
+| `actionCount` lands inside an open path | `hashes` holds one entry per finalized action; the record under the pen is a moving target |
+| no claim at all (`null`) | What every client sent before this existed |
+
+A client only claims a prefix when it has **nothing pending**. Unacknowledged mutations
+mean it has optimistically applied actions the server may never have accepted, so its
+history is a guess rather than a prefix of server truth — and a resync is precisely the
+moment that guess is being abandoned. Viewers never hold pending mutations, so they
+always qualify; the drawer qualifies between strokes.
+
+On the client, `replace()` recomputes the prefix hashes over the spliced history and
+rejects one that does not hash to what the server said, so a bad splice costs one full
+sync rather than a wrong canvas.
 
 `MAX_CANVAS_COMMITS = 512` bounds the acknowledgement window — twice the 256
 unacknowledged mutations the browser retains — so ordinary duplicate deliveries are

@@ -435,17 +435,53 @@ class GameFlowService:
         await self._sio.emit("game_started", game_started_payload, room=room.id)
         await self._start_turn(room)
 
-    async def _emit_canvas_sync(self, room: Room, sid: str) -> None:
+    async def _emit_canvas_sync(
+        self,
+        room: Room,
+        sid: str,
+        holds: tuple[int, int, int] | None = None,
+    ) -> None:
+        """Send the canvas history, or only the part the client is missing.
+
+        `holds` is the client's claim about the prefix it already has, as
+        (generation, actionCount, historyHash). It is verified against the
+        authoritative history before it is honoured, and anything that does not
+        check out - a stale generation, a count past what has been finalized, a
+        hash that disagrees, a client somehow ahead of the server after an undo
+        shrank the history - falls through to the full dump. The claim can only
+        ever make the reply smaller, never make it wrong.
+        """
         if not room.game:
             return
+        canvas = room.game.canvas
+        if holds is not None:
+            generation, count, history_hash = holds
+            if (
+                generation == canvas.generation
+                and count > 0
+                and canvas.committed_prefix_matches(count, history_hash)
+            ):
+                await self._sio.emit(
+                    "sync_strokes_tail",
+                    (
+                        canvas.sync_payload(count),
+                        count,
+                        canvas.revision,
+                        canvas.generation,
+                        canvas.sequence,
+                        canvas.hash,
+                    ),
+                    to=sid,
+                )
+                return
         await self._sio.emit(
             "sync_strokes",
             (
-                room.game.canvas.sync_payload(),
-                room.game.canvas.revision,
-                room.game.canvas.generation,
-                room.game.canvas.sequence,
-                room.game.canvas.hash,
+                canvas.sync_payload(),
+                canvas.revision,
+                canvas.generation,
+                canvas.sequence,
+                canvas.hash,
             ),
             to=sid,
         )

@@ -338,23 +338,31 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
             "a": self.wire_actions(),
         }
 
-    def binary_payload(self) -> bytes:
-        """Return one versioned, self-delimiting binary synchronization frame."""
+    def binary_payload(self, start: int = 0) -> bytes:
+        """Return one versioned, self-delimiting binary synchronization frame.
+
+        `start` drops the actions before it, so a client that already holds a
+        verified prefix can be sent only what it is missing. The frame is
+        otherwise identical, which is what lets the same decoder read both.
+        """
+        if not 0 <= start <= len(self):
+            raise IndexError("canvas history slice is out of range")
+        base = self.offsets[start] if start < len(self) else len(self.data)
         payload = bytearray(
             _BINARY_HEADER.pack(
                 BINARY_HISTORY_MAGIC,
                 CANVAS_HISTORY_VERSION,
-                len(self),
+                len(self) - start,
             )
         )
-        table = self.offsets[:]
-        table.append(len(self.data))
+        table = array("I", (offset - base for offset in self.offsets[start:]))
+        table.append(len(self.data) - base)
         if _OFFSETS_ARE_WIRE_LAYOUT:
             payload.extend(table.tobytes())
         else:
             for offset in table:
                 payload.extend(_BINARY_OFFSET.pack(offset))
-        payload.extend(self.data)
+        payload.extend(memoryview(self.data)[base:])
         return bytes(payload)
 
     def pop(self) -> PoppedCanvasAction:
