@@ -1,7 +1,6 @@
 """Socket boundaries stop admitting room/game work during a deploy drain."""
 
 import time
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -120,22 +119,3 @@ async def test_an_approved_restart_is_cancelled_once_the_drain_starts(monkeypatc
     assert shutdown.notified is True
 
 
-@pytest.mark.asyncio
-async def test_a_persistent_room_is_not_materialized_during_a_drain():
-    """Opening a durable room is new live work, so the drain refuses it."""
-
-    rooms = RoomManager()
-    sio = socketio.AsyncServer(async_mode="asgi")
-    shutdown = DrainingShutdown()
-    ctx = register_handlers(sio, rooms, shutdown=shutdown)
-    ctx.persistent_rooms = SimpleNamespace(materialize=AsyncMock())
-
-    preview = await sio.handlers["/"]["get_room_preview"]("sid", {"code": "ABC123"})
-    join = await sio.handlers["/"]["join_room"](
-        "sid", {"code": "ABC123", "nickname": "Guest"}
-    )
-
-    assert preview["serverDraining"] is True
-    assert join["serverDraining"] is True
-    ctx.persistent_rooms.materialize.assert_not_awaited()
-    assert rooms.rooms == {}

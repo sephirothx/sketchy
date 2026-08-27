@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from app.services.message_retention import MessageRetentionService
     from app.services.room_codes import RoomCodeService
     from app.services.room_quotas import RoomQuotaService
-    from app.services.persistent_rooms import PersistentRoomService
     from app.services.shutdown import ShutdownCoordinator
 
 
@@ -68,7 +67,6 @@ class HandlerContext:
     message_retention: MessageRetentionService | None = None
     room_codes: RoomCodeService | None = None
     room_quotas: RoomQuotaService = field(init=False)
-    persistent_rooms: PersistentRoomService | None = None
     shutdown: ShutdownCoordinator | None = None
     game_flow: GameFlowService = field(init=False)
     _seating_gates: dict[str, SeatingGate] = field(
@@ -133,7 +131,7 @@ class HandlerContext:
         # `_remove_player_from_game`. This is the one place every teardown
         # passes through, so it is where a lost game gets written down.
         await self.game_flow.record_abandoned_game(removed)
-        if self.room_codes is not None and removed.persistent_room_id is None:
+        if self.room_codes is not None:
             try:
                 await self.room_codes.retire_ephemeral(removed.code)
             except Exception:

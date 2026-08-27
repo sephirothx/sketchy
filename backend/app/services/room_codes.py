@@ -40,9 +40,14 @@ class RoomCodeService:
         self._session_factory = session_factory
         self._code_factory = code_factory
 
-    async def allocate(self, *, kind: str = "ephemeral") -> str:
-        if kind not in {"ephemeral", "persistent"}:
-            raise ValueError("unsupported room code kind")
+    async def allocate(self) -> str:
+        """Claim a code for a new room.
+
+        Always ephemeral. `persistent` reservations still exist as permanent
+        tombstones for rooms that predate the removal of that feature; nothing
+        creates another.
+        """
+        kind = "ephemeral"
         purged = False
         for _ in range(MAX_ALLOCATION_ATTEMPTS):
             code = self._code_factory().strip().upper()
@@ -110,14 +115,28 @@ class RoomCodeService:
         return result.rowcount or 0
 
     async def is_retired(self, code: str) -> bool:
+        """Whether an invite for this code should say the room has ended.
+
+        A `persistent` reservation is always retired now: those codes were
+        permanently claimed by a feature that no longer exists, so nothing can
+        ever be live behind one again, and the alternative is telling a player
+        holding an old invite that their room was simply not found.
+        """
         now = datetime.now(timezone.utc)
         async with self._session_factory() as session:
-            retired_until = await session.scalar(
-                select(RoomCodeReservation.retired_until).where(
-                    RoomCodeReservation.code == code.strip().upper(),
-                    RoomCodeReservation.kind == "ephemeral",
+            reservation = (
+                await session.execute(
+                    select(
+                        RoomCodeReservation.kind,
+                        RoomCodeReservation.retired_until,
+                    ).where(RoomCodeReservation.code == code.strip().upper())
                 )
-            )
+            ).first()
+        if reservation is None:
+            return False
+        kind, retired_until = reservation
+        if kind == "persistent":
+            return True
         return retired_until is not None and retired_until > now
 
     async def purge_expired(self) -> int:

@@ -64,7 +64,6 @@ export function CreateRoomPage() {
   const authUser = useAuthStore((state) => state.user);
   const [roomName, setRoomName] = useState("");
   const [isPublic, setIsPublic] = useState(true);
-  const [persistent, setPersistent] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
@@ -284,7 +283,7 @@ export function CreateRoomPage() {
     setError(null);
     try {
       const response = await emitWithAck<AckResponse>("create_room", {
-        nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, persistent, maxPlayers, rounds, drawingSeconds,
+        nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
         spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptListSlugs,
         promptListShareCodes,
@@ -491,10 +490,7 @@ export function CreateRoomPage() {
             onShareCodesChange={setPromptListShareCodes}
             onListsLoaded={setLoadedLists}
           />
-          {persistent ? (
-            <p className="setting-dependency">Persistent rooms use saved prompt lists; quick custom prompts are never stored in room configuration.</p>
-          ) : (
-            <CustomPromptsEditor
+          <CustomPromptsEditor
               value={customPrompts.value}
               analysis={customPrompts.analysis}
               onChange={handleCustomPromptsChange}
@@ -507,13 +503,12 @@ export function CreateRoomPage() {
                   Save as reusable list
                 </button>
               ) : undefined}
-            />
-          )}
+          />
           <Switch
             label="Only use custom prompts"
             hint="Add a usable custom prompt to enable this option."
             checked={customPrompts.only}
-            disabled={persistent || customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
+            disabled={customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
             onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
           />
         </div>
@@ -594,15 +589,6 @@ export function CreateRoomPage() {
     <div className="create-room-footer">
       <div className="create-room-footer-info">
         <span className="create-room-footer-summary">{footerSummary}</span>
-        <Switch
-          label="Keep this room for future games"
-          hint={authUser && !authUser.isAnonymous
-            ? "The code and settings stay with your account. Quick custom prompts must be saved as a prompt list first."
-            : "Create an account to own a persistent room."}
-          checked={persistent}
-          disabled={!authUser || authUser.isAnonymous || customPrompts.analysis.usableCount > 0}
-          onChange={setPersistent}
-        />
       </div>
       <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
     </div>

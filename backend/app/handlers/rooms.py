@@ -28,10 +28,6 @@ from app.presenters import editable_room_settings_payload, session_payload
 from app.domain_values import RuntimeEventType
 from app.services.game_flow import RoomPromptResolutionError
 from app.services.room_quotas import RoomQuotaExceeded
-from app.services.persistent_rooms import (
-    PersistentRoomError,
-    PersistentRoomUnavailable,
-)
 from app.rooms import (
     _metrics_user_id as metrics_user_id,
     ANONYMOUS_NAME_COLOR,
@@ -42,42 +38,6 @@ from app.rooms import (
 )
 
 logger = logging.getLogger("sketchy.handlers.rooms")
-
-
-class ShutdownInProgress(RuntimeError):
-    pass
-
-
-def _admits_a_materialized_room(ctx: HandlerContext):
-    """Hold materialization to the same ceilings `create_room` answers to.
-
-    Opening a saved room allocates everything opening a new one does, and it
-    is reached by joining or previewing a code - neither of which requires an
-    account. Refused as unavailable rather than as over quota: the player at
-    the keyboard is usually not the owner whose ceiling was reached, and has
-    nothing to do about somebody else's rooms.
-    """
-
-    def admit(owner_user_id: str) -> None:
-        try:
-            ctx.room_quotas.check_capacity(owner_user_id)
-        except RoomQuotaExceeded as error:
-            raise PersistentRoomUnavailable(
-                "This room cannot open right now. Try again in a few minutes."
-            ) from error
-
-    return admit
-
-
-async def _room_for_code(ctx: HandlerContext, code: str):
-    room = ctx.room_manager.get_room_by_code(code)
-    if room is not None or ctx.persistent_rooms is None:
-        return room
-    if ctx.shutdown is not None and ctx.shutdown.is_draining:
-        raise ShutdownInProgress
-    return await ctx.persistent_rooms.materialize(
-        ctx.room_manager, code, admit=_admits_a_materialized_room(ctx)
-    )
 
 
 async def _record_player_activity(ctx: HandlerContext, player) -> None:
@@ -155,35 +115,16 @@ async def _create_room(ctx: HandlerContext, sid, data):
         if not settings["name"]:
             settings["name"] = generate_random_room_name()
         code = None
-        persistent_config = None
         if ctx.room_codes is not None:
             try:
-                code = await ctx.room_codes.allocate(
-                    kind="persistent" if payload.persistent else "ephemeral"
-                )
+                code = await ctx.room_codes.allocate()
             except Exception:
                 logger.exception("Failed to allocate a room code")
                 return {"ok": False, "error": "Could not create the room"}
             if ctx.shutdown is not None and ctx.shutdown.is_draining:
                 await ctx.room_codes.release_unpublished(code)
                 return ctx.shutdown.rejection_acknowledgement()
-        if payload.persistent:
-            if code is None or ctx.persistent_rooms is None:
-                if code is not None and ctx.room_codes is not None:
-                    await ctx.room_codes.release_unpublished(code)
-                return {"ok": False, "error": "Persistent rooms require durable storage"}
-            try:
-                persistent_config = await ctx.persistent_rooms.create(
-                    owner_user_id=identity.user_id or "",
-                    code=code,
-                    settings=settings,
-                )
-            except (PersistentRoomError, ValueError) as error:
-                await ctx.room_codes.release_unpublished(code)
-                return {"ok": False, "error": str(error)}
         if ctx.shutdown is not None and ctx.shutdown.is_draining:
-            if persistent_config is not None and ctx.persistent_rooms is not None:
-                await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
             if code is not None and ctx.room_codes is not None:
                 await ctx.room_codes.release_unpublished(code)
             return ctx.shutdown.rejection_acknowledgement()
@@ -193,8 +134,6 @@ async def _create_room(ctx: HandlerContext, sid, data):
             # instant where the answer and the room are not separated by an await.
             ctx.room_quotas.check_capacity(identity.user_id)
         except RoomQuotaExceeded as error:
-            if persistent_config is not None and ctx.persistent_rooms is not None:
-                await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
             if code is not None and ctx.room_codes is not None:
                 await ctx.room_codes.release_unpublished(code)
             return {"ok": False, "error": str(error)}
@@ -203,17 +142,8 @@ async def _create_room(ctx: HandlerContext, sid, data):
                 **settings,
                 code=code,
                 created_by_user_id=identity.user_id,
-                persistent_room_id=(persistent_config.id if persistent_config else None),
-                persistent_owner_user_id=(
-                    persistent_config.owner_user_id if persistent_config else None
-                ),
-                persistent_config_version=(
-                    persistent_config.version if persistent_config else None
-                ),
             )
         except Exception:
-            if persistent_config is not None and ctx.persistent_rooms is not None:
-                await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
             if code is not None and ctx.room_codes is not None:
                 await ctx.room_codes.release_unpublished(code)
             raise
@@ -324,24 +254,6 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
             )
         except RoomQuotaExceeded as error:
             return {"ok": False, "error": str(error), "field": "customPrompts"}
-        if room.persistent_room_id is not None:
-            if (
-                ctx.persistent_rooms is None
-                or not player.user_id
-                or player.user_id != room.persistent_owner_user_id
-            ):
-                return {
-                    "ok": False,
-                    "error": "Only the persistent room owner can change its settings",
-                }
-            try:
-                room.persistent_config_version = await ctx.persistent_rooms.update(
-                    room=room,
-                    owner_user_id=player.user_id,
-                    settings=settings,
-                )
-            except PersistentRoomError as error:
-                return {"ok": False, "error": str(error)}
         for key, value in settings.items():
             if key == "custom_prompts":
                 ctx.room_manager.set_custom_prompts(room, value)
@@ -360,13 +272,7 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
         payload = parse_payload(RoomPreviewPayload, data)
     except PayloadError as error:
         return error.acknowledgement()
-    try:
-        room = await _room_for_code(ctx, payload.code)
-    except PersistentRoomUnavailable as error:
-        return {"ok": False, "error": str(error)}
-    except ShutdownInProgress:
-        assert ctx.shutdown is not None
-        return ctx.shutdown.rejection_acknowledgement()
+    room = ctx.room_manager.get_room_by_code(payload.code)
     if not room:
         if ctx.room_codes is not None and await ctx.room_codes.is_retired(payload.code):
             return {
@@ -393,13 +299,7 @@ async def _join_room(ctx: HandlerContext, sid, data):
 
     room = ctx.room_manager.get_room(payload.room_id)
     if room is None and payload.code:
-        try:
-            room = await _room_for_code(ctx, payload.code)
-        except PersistentRoomUnavailable as error:
-            return {"ok": False, "error": str(error)}
-        except ShutdownInProgress:
-            assert ctx.shutdown is not None
-            return ctx.shutdown.rejection_acknowledgement()
+        room = ctx.room_manager.get_room_by_code(payload.code)
     if not room:
         if (
             payload.code
@@ -646,40 +546,6 @@ async def dismiss_colorblind_suggestion(ctx: HandlerContext, sid, data=None):
     return {"ok": True}
 
 
-async def archive_persistent_room(ctx: HandlerContext, sid, data=None):
-    try:
-        parse_empty_payload(data)
-    except PayloadError as error:
-        return error.acknowledgement()
-    current = await ctx.game_flow.require_current_player(sid)
-    if not current:
-        return {"ok": False, "error": "Not in this room"}
-    room, player = current
-    if (
-        room.persistent_room_id is None
-        or ctx.persistent_rooms is None
-        or not player.user_id
-        or player.user_id != room.persistent_owner_user_id
-    ):
-        return {
-            "ok": False,
-            "error": "Only the persistent room owner can archive it",
-        }
-    async with room.lock:
-        try:
-            await ctx.persistent_rooms.archive(room=room, owner_user_id=player.user_id)
-        except PersistentRoomError as error:
-            return {"ok": False, "error": str(error)}
-        room.persistent_room_id = None
-        room.persistent_owner_user_id = None
-        room.persistent_config_version = None
-    await ctx.game_flow.announce(
-        room, "This persistent room was archived. This live room ends when empty."
-    )
-    await ctx.game_flow._emit_room_state(room)
-    return {"ok": True}
-
-
 async def accept_colorblind_suggestion(ctx: HandlerContext, sid, data=None):
     try:
         parse_empty_payload(data)
@@ -805,10 +671,6 @@ def register(ctx: HandlerContext) -> None:
     ctx.sio.on("join_room", handler=partial(join_room, ctx))
     ctx.sio.on("session_ping", handler=partial(session_ping, ctx))
     ctx.sio.on("update_player_settings", handler=partial(update_player_settings, ctx))
-    ctx.sio.on(
-        "archive_persistent_room",
-        handler=partial(archive_persistent_room, ctx),
-    )
     ctx.sio.on(
         "dismiss_colorblind_suggestion",
         handler=partial(dismiss_colorblind_suggestion, ctx),

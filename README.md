@@ -396,7 +396,7 @@ history and a reporter's own prompt-content report text/status, while excluding
 owner, reviewer, and internal-note identities. Account deletion removes the
 lists and their owned prompt concepts rather than leaving ownerless content.
 
-Runtime attribution observes the ephemeral/persistent boundary: completed
+Runtime attribution observes the durable/live boundary: completed
 turns snapshot nullable prompt-version source IDs, and usage writes intersect
 those IDs with the game's pinned list revisions.
 An ephemeral prompt has a null source even when its display text equals a
@@ -446,7 +446,7 @@ rooms. `GET /api/ready` returns 200 only after startup is complete and switches
 to 503 before shutdown work begins, while `/api/health` remains a liveness check
 and reports the current readiness state. At drain start the server sends every
 connected client the versioned `server_shutdown` notice, rejects new room
-creation, persistent-room materialization, new game starts, and restart votes,
+creation, new game starts, and restart votes,
 but leaves existing rooms connected so active games can finish. Set
 `SHUTDOWN_DRAIN_SECONDS` to a value from 0 through 300 (default 30), and give the
 process supervisor a termination grace period longer than that value plus the
@@ -1197,38 +1197,20 @@ allocation global and race-safe even though v1 runs one application worker.
 When an ephemeral room empties, its code is retired for 30 days; a stale invite
 during that window says the room ended instead of silently joining an unrelated
 group. Startup retires any ephemeral reservations orphaned by a restart or
-crash. Expired ephemeral reservations may be reused, while codes allocated to
-future persistent rooms are permanent and never enter the reuse pool.
-
-Registered players may choose **Keep this room for future games** during room
-creation. A **Persistent room** keeps its permanent code and typed configuration
-under that owner's account, appears under **My persistent rooms** in the lobby,
-and may be joined by anyone who has the code. Up to ten active persistent rooms
-may belong to one account. Only the registered owner becomes host and may edit
-or archive the durable configuration.
-
-Persistence stops at configuration. When an empty persistent room is opened—or
-opened again after a restart—the server creates a new in-memory room instance
-from the saved settings. Players, scores, current game/phase, timers, reconnect
-grace, canvas, recap, chat, and quick custom prompts are never restored. Durable
-configuration may reference current active built-in prompt lists or lists owned
-by the room owner using stable list IDs; the latest authorized revision is
-resolved each time and snapshotted when a game starts. A missing, deleted,
-hidden, or no-longer-authorized list blocks opening visibly instead of falling
-back to default prompts. Quick custom prompts must first be saved as a private
-prompt list.
+crash. Expired ephemeral reservations may be reused. Codes claimed by the removed
+persistent-room feature stay claimed for good, and an invite carrying one is told
+the room has ended.
 
 Registered players may also save up to 20 private **Room-setting presets** from
 the room-creation page. A preset is a named, versioned copy of typed settings
 for a future ordinary room; it has no room code, members, host identity, game,
 scores, timers, chat, canvas, or other live state. Applying one fills the create
-form but does not enable **Keep this room for future games**, so creating from a
-preset allocates a fresh ephemeral code unless the player independently chooses
-to create a persistent room. Presets can be updated with optimistic version
+form; creating from a preset allocates a fresh code like any other room. Presets
+can be updated with optimistic version
 checks or deleted, are included in the owner's private data export, and are
 erased on account deletion.
 
-Like persistent rooms, presets retain stable IDs for active built-in prompt
+Presets retain stable IDs for active built-in prompt
 lists or lists owned by the preset owner, then resolve their latest authorized
 revision when applied. Deleted, hidden, or no-longer-owned references produce a
 visible error. Borrowed Unlisted-list share codes and quick custom prompts are
@@ -1353,7 +1335,7 @@ cd backend
 
 ## Key design decisions & limitations
 
-- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, explicitly saved player prompt lists, persistent-room configuration, global room-code reservations, and the bounded retained-message window) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (live room instances, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency; durable configuration and message correlation IDs do not make an active game recoverable.
+- **Durable persistence with in-memory gameplay**: persistent domain data (users, game history records, official lists, explicitly saved player prompt lists, global room-code reservations, and the bounded retained-message window) is stored via SQLAlchemy with zero-config embedded SQLite by default and optional PostgreSQL support. Real-time game state (live room instances, active games, strokes, timers, and prompt-list share capabilities) remains purely in memory for minimal latency; durable configuration and message correlation IDs do not make an active game recoverable.
 - **Single application worker**: one Uvicorn worker owns every live room,
   Socket.IO session, timer, and canvas. Startup rejects common environment-based
   multi-worker settings, deployment commands pin one worker, and the v1 release

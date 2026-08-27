@@ -135,7 +135,7 @@ optional services. Handler domains:
 | Module | Owns |
 | --- | --- |
 | [`connection.py`](../backend/app/handlers/connection.py) | `connect`/`disconnect`, cookie→account binding, the 30-second reconnect grace, reconciling every seat a dropped socket still held |
-| [`rooms.py`](../backend/app/handlers/rooms.py) | Create/join/leave, settings, previews, renames, persistent-room archiving, colorblind suggestion |
+| [`rooms.py`](../backend/app/handlers/rooms.py) | Create/join/leave, settings, previews, renames, colorblind suggestion |
 | [`game.py`](../backend/app/handlers/game.py) | `start_game`, `select_prompt` |
 | [`drawing.py`](../backend/app/handlers/drawing.py) | `draw`, `undo_stroke`, `request_sync_strokes` |
 | [`chat.py`](../backend/app/handlers/chat.py) | `send_chat`, `guess`, `buy_hint`, `buy_wheel_letter` |
@@ -161,7 +161,7 @@ unit-testable without a socket.
 `PromptListRepository` plus the input/output dataclasses that cross the boundary.
 `sqlalchemy.py` implements them. Handlers and routers depend on the interfaces, never
 on SQLAlchemy models directly. Services that are inherently relational (moderation,
-runtime metrics, persistent rooms, room presets, user settings, blocks) take an
+runtime metrics, room presets, user settings, blocks) take an
 `async_sessionmaker` instead — a deliberate exception where a repository abstraction
 would only add indirection.
 
@@ -250,7 +250,6 @@ This is the table to consult before adding a feature: *where does this state liv
 | Accounts, sessions, roles, bans, blocks | Database | Yes |
 | Finished game history, turns, outcomes, score ledger, drawings | Database | Yes |
 | Prompt concepts, versions, aliases, lists, revisions, usage facts | Database | Yes |
-| Persistent-room *configuration* (never live state) | Database | Yes |
 | Room-setting presets | Database | Yes |
 | Room-code reservations (including retirement) | Database | Yes |
 | Retained messages (30 days) and pinned report evidence | Database | Yes |
@@ -258,9 +257,8 @@ This is the table to consult before adding a feature: *where does this state liv
 | Live counts of rooms/players/games | In-process counters | No, deliberately |
 
 The boundary is a rule, not an accident: **durable configuration and durable
-correlation IDs never make an active game recoverable.** A persistent room reopens
-from its saved settings as a brand-new in-memory room — no players, scores, phase,
-timers, canvas, recap, chat, or quick prompts are restored.
+correlation IDs never make an active game recoverable.** Nothing reopens a live room:
+when its last player leaves, the room and everything in it are gone.
 
 ---
 
@@ -319,7 +317,7 @@ revocation applies uniformly without a shared signing secret.
 
 `GET /api/ready` flips to 503 **before** drain work begins. The server then emits the
 versioned `server_shutdown` notice to every connected client, refuses new room
-creation, persistent-room materialization, new game starts, and restart votes, but
+creation, new game starts, and restart votes, but
 leaves existing rooms connected so active games can finish. `SHUTDOWN_DRAIN_SECONDS`
 (0–300, default 30) bounds the window.
 
@@ -396,16 +394,9 @@ cannot host, because a ceiling with nothing to key on is not a ceiling.
 
 The capacity check runs twice: once when the command arrives, and again in the last
 instant before the room exists, where no await separates the answer from the room. A
-refusal at that second point releases the code reservation and any persistent-room row
-the attempt had already claimed, the same way the drain checks above it do, and gives
-back the hourly allowance the attempt had already spent.
-
-**Materializing a saved room is creating one.** `PersistentRoomService.materialize`
-allocates everything `create_room` does and is reached by joining or previewing a code,
-neither of which requires an account — so it asks the same ceilings, attributed to the
-configuration's owner, inside its own lock and with no await between the answer and the
-room. It refuses as *unavailable* rather than as over-quota: the player at the keyboard
-is usually not the owner whose ceiling was reached.
+refusal at that second point releases the code reservation the attempt had already
+claimed, the same way the drain checks above it do, and gives back the hourly
+allowance it had already spent.
 
 Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
 introduces, every socket presents the proxy's address, and the forwarded header is
@@ -596,7 +587,7 @@ already public.
 | If you are changing… | Start here | Then check |
 | --- | --- | --- |
 | A game rule or a scoring constant | [`backend/app/game.py`](../backend/app/game.py) | Bump `SCORING_RULES_VERSION`; update `rule_snapshot()`; [`requirements.md`](requirements.md) §Scoring |
-| A room setting | [`backend/app/rooms.py`](../backend/app/rooms.py), [`payloads.py`](../backend/app/handlers/payloads.py) | `to_state_payload`, `editable_room_settings_payload`, `frontend/src/types.ts`, persistent-room and preset columns, [`database.md`](database.md) |
+| A room setting | [`backend/app/rooms.py`](../backend/app/rooms.py), [`payloads.py`](../backend/app/handlers/payloads.py) | `to_state_payload`, `editable_room_settings_payload`, `frontend/src/types.ts`, preset columns, [`database.md`](database.md) |
 | A Socket.IO event or payload key | the handler + [`frontend/src/types.ts`](../frontend/src/types.ts) | `test_wire_contract.py`, [`wire-protocol.md`](wire-protocol.md) |
 | The drawing wire format | [`live_drawing.py`](../backend/app/live_drawing.py) | `canvas_history.py`, `useCanvasProtocol.ts`, `fixtures/canvas_protocol_v1.json`, [`wire-protocol.md`](wire-protocol.md) |
 | The stored drawing format | [`canvas_storage.py`](../backend/app/canvas_storage.py) | Add a decoder entry; **never remove one** |
@@ -622,7 +613,6 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/request_limits.py`](../backend/app/request_limits.py) | The ceiling on request bodies, applied before anything reads one. |
 | [`app/api/moderation.py`](../backend/app/api/moderation.py) | Player reports and role-gated moderation actions. |
 | [`app/api/operations.py`](../backend/app/api/operations.py) | Operator-facing views of how the server is behaving. |
-| [`app/api/persistent_rooms.py`](../backend/app/api/persistent_rooms.py) | Owner-facing discovery for persistent group rooms. |
 | [`app/api/profiles.py`](../backend/app/api/profiles.py) | Public profile endpoints: lifetime stats and browsable game history. |
 | [`app/api/prompt_lists.py`](../backend/app/api/prompt_lists.py) | Prompt list discovery, and the usage statistics the games feed back into it. |
 | [`app/api/room_presets.py`](../backend/app/api/room_presets.py) | Authenticated CRUD API for private reusable room-setting presets. |
@@ -691,7 +681,6 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/game_history.py`](../backend/app/services/game_history.py) | Turn a finished in-memory game into the rows that record it. |
 | [`app/services/mail_delivery.py`](../backend/app/services/mail_delivery.py) | The loop that empties the email outbox. |
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
-| [`app/services/persistent_rooms.py`](../backend/app/services/persistent_rooms.py) | Owner-controlled persistent room configuration and live materialization. |
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
@@ -712,7 +701,7 @@ Files are named for their single concern; the directory says the role.
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `gameStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `gameHighlights.ts`, `liveDrawing.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `persistentRooms.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSettingsAutosave.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `gameHighlights.ts`, `liveDrawing.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSettingsAutosave.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
 | `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `InviteEntryPage.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomSetupControls.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
