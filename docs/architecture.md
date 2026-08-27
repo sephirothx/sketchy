@@ -134,7 +134,7 @@ optional services. Handler domains:
 
 | Module | Owns |
 | --- | --- |
-| [`connection.py`](../backend/app/handlers/connection.py) | `connect`/`disconnect`, cookie→account binding, the 30-second reconnect grace |
+| [`connection.py`](../backend/app/handlers/connection.py) | `connect`/`disconnect`, cookie→account binding, the 30-second reconnect grace, reconciling every seat a dropped socket still held |
 | [`rooms.py`](../backend/app/handlers/rooms.py) | Create/join/leave, settings, previews, renames, persistent-room archiving, colorblind suggestion |
 | [`game.py`](../backend/app/handlers/game.py) | `start_game`, `select_prompt` |
 | [`drawing.py`](../backend/app/handlers/drawing.py) | `draw`, `undo_stroke`, `request_sync_strokes` |
@@ -346,6 +346,37 @@ Logging in while carrying a guest identity creates an **immutable alias**
 Merely opening a socket never creates a user row — guests are provisioned solely by
 `GET /api/auth/me` ([`backend/app/handlers/connection.py:22`](../backend/app/handlers/connection.py)).
 
+### Seats and sockets
+
+**One socket holds at most one seat.** Creating or joining a room first releases
+whatever seat that connection already held, by the same path an explicit `leave_room`
+takes — the old room re-emits its state, drops its timers, loses the socket from its
+Socket.IO room, and, if that was its last player, is torn down and its invite code
+retired (`GameFlowService.release_seat`,
+[`backend/app/services/game_flow.py`](../backend/app/services/game_flow.py)). Nothing
+else reclaims an abandoned seat: it keeps `connected` and the live `sid`, which is
+enough to stop its room ever counting as empty.
+
+Every transition that takes, moves, or gives up a seat runs under that socket's
+**seating gate** — a per-`sid` lock on `HandlerContext`
+([`backend/app/handlers/context.py`](../backend/app/handlers/context.py)). Socket.IO
+dispatches each event from a connection as its own task, so without it a second
+`create_room` runs while the first is still waiting on the database. The disconnect
+queues at the same gate, which is what makes a socket that drops mid-entry reconcile
+against a seat that exists rather than a moment before it does.
+
+A disconnect **this server issued** is the exception and must stay one. Closing the tab
+a reconnect superseded runs that socket's disconnect handler inline, from inside the
+transition that closed it — the seat has already moved on, and waiting at its gate
+would be waiting for the caller. Two tabs of one account reaching the same seat at the
+same moment would then wait for each other for ever. `HandlerContext.closing` marks
+the socket for the length of the close and `disconnect` asks it, rather than reading
+the framework's disconnect reason: whether this deadlocks should not depend on how a
+dependency passes an argument.
+
+Seats are matched **by `sid`, never by account**: two tabs of one account sitting in
+two different rooms is ordinary, and only the connection that is moving is moved.
+
 ### Authorization
 
 Two independent axes:
@@ -466,6 +497,11 @@ evicted, a `player.evicted` observation is recorded, and — if the drawer was t
 who left — their turn is skipped and they leave the rotation. If everyone
 disconnects, the room is torn down and, if a game was live, an `abandoned` game record
 is written.
+
+The disconnect reconciles against **every seat the socket actually holds**
+(`RoomManager.seats_for_sid`), not the single room its session names. One session key
+cannot describe a socket that ever ended up in two rooms, so a seat stranded by an
+older build is still found and still becomes disconnected.
 
 ---
 

@@ -69,6 +69,7 @@ claim that an arbitrary host will sustain it.
 | **R-ROOM-05** | A game MUST require at least 2 players before the host can start it. |
 | **R-ROOM-06** | The host role is a **gameplay** role only. It MUST NOT confer any service-wide privilege. Conversely an administrator MUST NOT become host merely by holding the role. |
 | **R-ROOM-07** | Room payloads MUST NOT carry account IDs. Anything that needs an account (reports, blocks, profile links) resolves the seat server-side. |
+| **R-ROOM-08** | A socket MUST hold at most one live seat. Creating or joining a room MUST first release any seat that connection already holds, by the same path an explicit leave takes: room state re-emitted, timers cancelled, empty-room teardown and code retirement run. Seats MUST be matched by socket, never by account — two tabs of one account may sit in two different rooms. |
 
 ### Turn structure
 
@@ -280,6 +281,7 @@ claim that an arbitrary host will sustain it.
 | **R-CONN-04** | If everyone disconnects, the room MUST be cleaned up — and if a game was live, an `abandoned` game record MUST be written. |
 | **R-CONN-05** | An action that expects an answer MUST NEVER be handed to a socket that is not connected. It waits for the connection and is sent once, or it times out **having never been sent** — so a request reported as failed cannot arrive later on reconnect. |
 | **R-CONN-06** | Actions that only make sense in the moment (a guess, a vote, leaving, toggling AFK) MUST be dropped outright rather than replayed into whatever the room has become. |
+| **R-CONN-07** | A disconnect MUST reconcile against every room the socket actually holds a seat in, rather than the single room its session names, so a seat stranded by an earlier build still becomes disconnected and is evicted on the ordinary grace. |
 
 ---
 

@@ -576,7 +576,63 @@ class GameFlowService:
         elif game.phase == Phase.TURN_RESULTS:
             await self._sio.emit("turn_ended", self._turn_ended_payload(room), to=sid)
 
+    async def release_seat(self, sid: str, room: Room, player: Player) -> None:
+        """Give up one live seat and let the room fall away behind it.
+
+        The one way out of a room for a socket that is still connected, so
+        that leaving deliberately and being moved on by an entry somewhere
+        else are the same departure as far as the room is concerned: the same
+        timers are cancelled, the same room state is re-emitted, and an empty
+        room is torn down and its invite code retired.
+        """
+        self._timers.cancel_disconnect_timer(player.id)
+        self._ctx.room_manager.remove_player(room, player.id)
+        await self._sio.leave_room(sid, room.id)
+        # Drop the room binding but keep the account: the socket stays open and
+        # the player may immediately join another room as themselves. Only when
+        # the session actually names this room, though - a socket giving up a
+        # seat stranded somewhere else is still sitting in the room its session
+        # names, and clearing that would leave it seated but unable to act.
+        session = await self._sio.get_session(sid) or {}
+        if session.get("room_id") == room.id:
+            await self._sio.save_session(sid, {"user_id": session.get("user_id")})
+        if not room.connected_players():
+            self._timers.cancel_phase_timer(room.id)
+            self._timers.cancel_hint_timers(room.id)
+            self._timers.cancel_restart_timer(room.id)
+            await self._ctx.remove_room_if_empty(room.id)
+            return
+        await self._remove_player_from_game(room, player.id)
+        await self._sio.emit("player_left", {"playerId": player.id}, room=room.id)
+        await self._emit_room_state(room)
+
+    async def release_other_seats(self, sid: str, *, keep: tuple[str, str]) -> None:
+        """Vacate every seat this socket holds apart from the one it is taking.
+
+        Keyed on the socket, never on the account: two tabs of one account
+        sitting in two different rooms is ordinary, and only the connection
+        that is moving may be moved.
+        """
+        for room, player in self._ctx.room_manager.seats_for_sid(sid):
+            if (room.id, player.id) == keep:
+                continue
+            logger.info(
+                "socket %s gave up its seat in room %s to enter room %s",
+                sid,
+                room.id,
+                keep[0],
+            )
+            await self.release_seat(sid, room, player)
+
     async def _join_socket_room(self, sid: str, room: Room, player, is_reconnect: bool) -> None:
+        # One socket, one seat: whatever this connection was sitting in before
+        # leaves by the ordinary door before it takes this one. Without it the
+        # abandoned seat keeps `connected` and this very sid, which is enough
+        # to stop its room ever being counted as empty - and the socket
+        # session that named it has just been overwritten, so nothing would
+        # ever find it again. The caller holds the socket's seating gate,
+        # which is what stops a concurrent entry racing this release.
+        await self.release_other_seats(sid, keep=(room.id, player.id))
         superseded_sid = player.sid if player.sid != sid else None
         player.sid = sid
         player.connected = True
@@ -601,7 +657,12 @@ class GameFlowService:
                 {"reason": "This room was opened in another tab."},
                 to=superseded_sid,
             )
-            await self._sio.disconnect(superseded_sid)
+            # Its disconnect handler runs inline from here, and must not wait
+            # for that socket's own seating gate: two tabs reaching this seat
+            # at the same moment would each be holding the gate the other
+            # needs.
+            with self._ctx.closing(superseded_sid):
+                await self._sio.disconnect(superseded_sid)
         self._timers.cancel_disconnect_timer(player.id)
         await self._emit_room_state(room)
         event_name = "player_reconnected" if is_reconnect else "player_joined"

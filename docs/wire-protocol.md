@@ -277,6 +277,11 @@ plus `nickname`, `nameColor`, `colorblindSafeColors`, `asSpectator`, `soft`, and
 `reconnectOnly` — the last used by the invite screen to ask *"do I already hold a seat
 here?"* without seating a visitor who is still deciding whether to play or spectate.
 
+Both `create_room` and `join_room` **release any seat the socket already holds**: the
+room it came from sees an ordinary `player_left` for it and, if that was its last
+player, ends. A client does not have to send `leave_room` first, and one that does
+sees no difference.
+
 > **Names and colors are resolved server-side, not taken from the payload.**
 > A registered player always plays as their username and their account color
 > ([`backend/app/handlers/identity.py:30`](../backend/app/handlers/identity.py)), so a
