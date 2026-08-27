@@ -700,6 +700,11 @@ A screenshot is validated rather than believed: real PNG or WebP magic bytes, �
 with byte size and SHA-256 re-derived server-side. Anything else is `422` — never a
 silently dropped attachment.
 
+`clientContext.route` is cut back to its path before it is stored, in the blob as well
+as in the column lifted out of it. The client already sends a bare `location.pathname`,
+but a query string is where invite codes and identifiers live, so the rule holds against
+a client that is buggy or lying rather than resting on its promise.
+
 ### Operations — [`backend/app/api/operations.py`](../backend/app/api/operations.py)
 
 Administrator role required for all of these.

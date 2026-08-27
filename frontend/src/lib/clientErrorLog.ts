@@ -29,6 +29,10 @@ export const MAX_MESSAGE_CHARS = 500;
 
 const entries: ClientErrorEntry[] = [];
 let installed = false;
+// The console.error this module replaced, kept so a reset can put it back.
+// Without it a second install wraps the first wrapper, and every error is
+// recorded once per install.
+let replacedConsoleError: typeof console.error | null = null;
 // A throw inside the recorder would reach console.error and be recorded again.
 // One flag is cheaper than reasoning about how deep that could go.
 let recording = false;
@@ -86,6 +90,7 @@ export function installClientErrorLog(): void {
 
   // Wrapped rather than replaced: whatever the console would have shown still
   // shows, because a developer watching it live must not lose anything.
+  replacedConsoleError = console.error;
   const original = console.error.bind(console);
   console.error = (...args: unknown[]) => {
     recordClientError("console", args.map(describe).join(" "));
@@ -93,9 +98,18 @@ export function installClientErrorLog(): void {
   };
 }
 
-/** Test seam: forget everything and allow a fresh install. */
+/** Test seam: forget everything, unwrap the console, allow a fresh install.
+ *
+ * Restoring `console.error` is the part that matters. Clearing the flag alone
+ * would let the next install wrap the wrapper, so one error would be recorded
+ * once per install that had ever happened.
+ */
 export function resetClientErrorLog(): void {
   entries.length = 0;
   installed = false;
   recording = false;
+  if (replacedConsoleError) {
+    console.error = replacedConsoleError;
+    replacedConsoleError = null;
+  }
 }

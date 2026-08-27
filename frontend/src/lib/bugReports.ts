@@ -170,7 +170,13 @@ export function collectClientContext(sources: {
     // particular theme is a bug that is invisible without these three lines.
     preferences: {
       prefersReducedMotion: mediaQuery("(prefers-reduced-motion: reduce)"),
-      prefersColorScheme: mediaQuery("(prefers-color-scheme: dark)") ? "dark" : "light",
+      // Null rather than "light" when the browser cannot be asked: reporting a
+      // concrete theme we never established would send a reader looking for a
+      // light-mode bug that may not exist.
+      prefersColorScheme: (() => {
+        const dark = mediaQuery("(prefers-color-scheme: dark)");
+        return dark === null ? null : dark ? "dark" : "light";
+      })(),
       forcedColors: mediaQuery("(forced-colors: active)"),
       pointerCoarse: mediaQuery("(pointer: coarse)"),
       settings: sources.settings ?? null,

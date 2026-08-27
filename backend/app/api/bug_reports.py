@@ -112,6 +112,21 @@ class BugReviewBody(BaseModel):
         return cleaned
 
 
+def _safe_route(value: object) -> str | None:
+    """The path a report may keep, with everything after it removed.
+
+    The client already sends `location.pathname` alone, but that is the client's
+    promise rather than a fact. A query string is where invite codes and
+    identifiers live, and a fragment is no better; the rule that a report never
+    carries one has to hold against a client that is buggy or lying, so the cut
+    is made here rather than trusted from over there.
+    """
+    if not isinstance(value, str):
+        return None
+    path = value.split("?", 1)[0].split("#", 1)[0].strip()
+    return path[:255] or None
+
+
 def _trim_client_context(context: dict | None) -> dict:
     """Bound the parts of the reporter's context that a loop could inflate.
 
@@ -122,6 +137,10 @@ def _trim_client_context(context: dict | None) -> dict:
     if not context:
         return {}
     trimmed = dict(context)
+    # Stripped in the blob too, not only in the column lifted out of it: a
+    # query string left in the JSON is just as much a leak as one in a column.
+    if "route" in trimmed:
+        trimmed["route"] = _safe_route(trimmed.get("route"))
     errors = trimmed.get("recentErrors")
     if isinstance(errors, list):
         trimmed["recentErrors"] = [
@@ -382,11 +401,7 @@ def create_bug_report_router(
                         if client_context.get("buildSha")
                         else None
                     ),
-                    route=(
-                        str(client_context.get("route"))[:255]
-                        if client_context.get("route")
-                        else None
-                    ),
+                    route=_safe_route(client_context.get("route")),
                     room_code=room_code,
                     game_id=game_id,
                     turn_id=turn_id,

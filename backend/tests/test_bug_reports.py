@@ -241,6 +241,41 @@ async def test_the_error_tail_is_trimmed_rather_than_refused(env):
         assert errors[-1]["at"] == "09:41:59"
 
 
+@pytest.mark.parametrize(
+    "sent, stored",
+    [
+        ("/room/BQ7F2K?invite=secret-code", "/room/BQ7F2K"),
+        ("/profile#token=abc", "/profile"),
+        ("/room/BQ7F2K?invite=a#b", "/room/BQ7F2K"),
+        ("/", "/"),
+        ("?only=query", None),
+    ],
+)
+async def test_a_route_never_keeps_what_follows_the_path(env, sent, stored):
+    """The client sends a bare pathname; the server makes sure of it.
+
+    A query string is where invite codes and identifiers live. That a report
+    never carries one has to hold against a client that is buggy or lying, so
+    the cut is made server-side rather than trusted.
+    """
+    new_client, factory, _ = env
+    http = new_client()
+    await guest(http)
+
+    response = await http.post(
+        "/api/bug-reports",
+        json=a_report(clientContext={"buildSha": "a299f80", "route": sent}),
+    )
+    assert response.status_code == 201
+    async with factory() as session:
+        report = await session.get(BugReport, UUID(response.json()["id"]))
+        assert report is not None
+        assert report.route == stored
+        # And not left behind in the blob the column was lifted out of.
+        assert report.client_context["route"] == stored
+        assert "secret-code" not in str(report.client_context)
+
+
 async def test_an_oversized_context_is_refused(env):
     new_client, _, _ = env
     http = new_client()

@@ -93,6 +93,45 @@ test("a rejected promise nobody handled is recorded", () => {
   assert.equal(recentClientErrors()[0].kind, "unhandled");
 });
 
+test("a reset unwraps the console, so installs cannot stack", () => {
+  // Without the unwrap, the second install wraps the first wrapper and one
+  // console.error is recorded twice - and three times after a third install.
+  const seen = [];
+  const original = console.error;
+  console.error = (...args) => seen.push(args.join(" "));
+  try {
+    installClientErrorLog();
+    resetClientErrorLog();
+    installClientErrorLog();
+    resetClientErrorLog();
+    installClientErrorLog();
+    console.error("once");
+    assert.deepEqual(
+      recentClientErrors().map((entry) => entry.message),
+      ["once"],
+    );
+    // And the real console still heard it exactly once.
+    assert.deepEqual(seen, ["once"]);
+  } finally {
+    resetClientErrorLog();
+    console.error = original;
+  }
+});
+
+test("a reset leaves the console exactly as it found it", () => {
+  const sentinel = () => {};
+  const original = console.error;
+  console.error = sentinel;
+  try {
+    installClientErrorLog();
+    assert.notEqual(console.error, sentinel, "install should have wrapped it");
+    resetClientErrorLog();
+    assert.equal(console.error, sentinel);
+  } finally {
+    console.error = original;
+  }
+});
+
 test("recording cannot recurse when the recorder itself logs", () => {
   const original = console.error;
   console.error = () => {
