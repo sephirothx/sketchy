@@ -5,6 +5,7 @@ import {
   BUG_AREAS,
   BUG_SEVERITIES,
   collectClientContext,
+  roomSummary,
   submitBugReport,
   type BugReportArea,
   type BugReportSeverity,
@@ -101,6 +102,14 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
     setShot(null);
   }
 
+  /** Description-only really means it: the screenshot goes now, not quietly at
+   *  submit time. Leaving a thumbnail on screen next to a ticked box that drops
+   *  it is the kind of small lie that costs trust in the rest of the dialog. */
+  function setPlainDescription(on: boolean) {
+    setDescriptionOnly(on);
+    if (on) discard();
+  }
+
   const context = collectClientContext({
     roomCode,
     roomState,
@@ -117,7 +126,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
   const rows: [string, string][] = [
     ["Build", `${context.buildSha} · ${String(context.commitDate)}`],
     ["Page", context.route],
-    ["Room", roomCode ? `${roomCode} · round ${roundNumber} of ${totalRounds}` : "Not in a room"],
+    ["Room", roomSummary(roomCode, roundNumber, totalRounds)],
     ["Screen", `${window.innerWidth} × ${window.innerHeight} · ${window.devicePixelRatio}×`],
     ["Browser", navigator.userAgent],
     [
@@ -196,7 +205,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
           onChange={(event) => setDetails(event.target.value)} />
         <p className="bug-report-counter">{details.length} / {MAX_DETAILS}</p>
 
-        {captureSupported && (
+        {captureSupported && !descriptionOnly && (
           <section className="bug-report-shot">
             <div className="bug-report-shot-head">
               <ImageIcon size={15} aria-hidden="true" />
@@ -227,7 +236,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         )}
 
         <details className="bug-report-context">
-          <summary>What we send with this</summary>
+          <summary>{descriptionOnly ? "What we are leaving out" : "What we send with this"}</summary>
           <dl className="bug-context">
             {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
           </dl>
@@ -241,12 +250,16 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
               </ul>
             </>
           )}
-          <p className="auth-hint">The last 20 errors your browser recorded. No page addresses beyond the path, nothing you typed into chat, and never the prompt in play.</p>
+          <p className="auth-hint">
+            {descriptionOnly
+              ? "None of this is being sent — only your description above."
+              : "The last 20 errors your browser recorded. No page addresses beyond the path, nothing you typed into chat, and never the prompt in play."}
+          </p>
         </details>
 
         <label className="bug-report-plain">
           <input type="checkbox" checked={descriptionOnly}
-            onChange={(event) => setDescriptionOnly(event.target.checked)} />
+            onChange={(event) => setPlainDescription(event.target.checked)} />
           <span>Send my description only
             <span>Drops the details above and any screenshot. We will still read it, but the bug is much harder to reproduce.</span>
           </span>

@@ -8,6 +8,7 @@ import {
   bugReportTriageText,
   copyToClipboard,
   humanizeBugValue,
+  roomSummary,
 } from "../src/lib/bugReports.ts";
 
 /** One report, fixed, so the format itself is what is under test. */
@@ -158,6 +159,25 @@ test("the offered areas match the values the server accepts", () => {
     BUG_SEVERITIES.map((entry) => entry.value),
     ["blocks_play", "major", "minor"],
   );
+});
+
+test("a room outside a round says so rather than inventing round 0 of 0", () => {
+  // Both counters default to zero before a game starts. "round 0 of 0" reads as
+  // gameplay state rather than the absence of it, which misleads exactly the
+  // reader trying to work out what the player was doing.
+  assert.equal(roomSummary("BQ7F2K", 0, 0), "BQ7F2K · not in a round");
+  assert.equal(roomSummary("BQ7F2K", null, null), "BQ7F2K · not in a round");
+  assert.equal(roomSummary("BQ7F2K", 0, 3), "BQ7F2K · not in a round");
+  assert.equal(roomSummary("BQ7F2K", Number.NaN, Number.NaN), "BQ7F2K · not in a round");
+});
+
+test("a room mid-round names the round", () => {
+  assert.equal(roomSummary("BQ7F2K", 2, 3), "BQ7F2K · round 2 of 3");
+});
+
+test("no room at all is not a room with no round", () => {
+  assert.equal(roomSummary(null, 2, 3), "Not in a room");
+  assert.equal(roomSummary("", 2, 3), "Not in a room");
 });
 
 test("stored values are shown as words", () => {

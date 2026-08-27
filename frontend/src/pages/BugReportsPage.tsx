@@ -11,6 +11,7 @@ import {
   humanizeBugValue,
   listBugReports,
   reviewBugReport,
+  roomSummary,
   type BugReport,
   type BugReportStatus,
 } from "../lib/bugReports";
@@ -120,7 +121,13 @@ export function BugReportsPage() {
     setError(null);
     try {
       await reviewBugReport(report.id, decision, note[report.id].trim());
-      notify(`Report ${decision}. Its screenshot has been erased.`, "success");
+      // Only claim the erasure when there was something to erase.
+      notify(
+        report.screenshot.status === "ready"
+          ? `Report ${decision}. Its screenshot has been erased.`
+          : `Report ${decision}.`,
+        "success",
+      );
       setNote((current) => ({ ...current, [report.id]: "" }));
       load();
     } catch (problem) {
@@ -389,10 +396,11 @@ function at(blob: Record<string, unknown>, path: string): string | null {
 function highlights(report: BugReport): [string, string, boolean?][] {
   const client = report.clientContext;
   const server = report.serverContext;
-  const round = at(server, "game.roundNumber");
-  const room = report.roomCode
-    ? `${report.roomCode}${round ? ` · round ${round} of ${at(server, "game.roundsTotal")}` : ""}`
-    : "Not in a room";
+  const room = roomSummary(
+    report.roomCode,
+    Number(at(server, "game.roundNumber")),
+    Number(at(server, "game.roundsTotal")),
+  );
   const viewport = at(client, "viewport.width")
     ? `${at(client, "viewport.width")} × ${at(client, "viewport.height")} · ${at(client, "viewport.dpr")}×`
     : "—";

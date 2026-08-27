@@ -68,9 +68,12 @@ function MenuItem({
  * of their own and the chip is the only place to reach them from.
  *
  * `compact` drops the name and shows the avatar alone, for the game-room header
- * where the row is deliberately nowrap and every pixel is spoken for. It also
- * keeps the guest chip going straight to the claim dialog: the only route out
- * of a compact chip is a live game, and navigating away would give up the seat.
+ * where the row is deliberately nowrap and every pixel is spoken for. A guest's
+ * compact menu is cut down to the entries that keep them in their seat, because
+ * the only route out of a compact chip is a live game and navigating away would
+ * give up the seat. It used to skip the menu entirely and open the claim dialog,
+ * which was right while every guest entry navigated somewhere - reporting a bug
+ * does not, and a guest mid-game is exactly who most needs it.
  */
 export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const navigate = useNavigate();
@@ -134,7 +137,9 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const isGuest = user.isAnonymous;
   const staffEntries = operatorEntries(user.role, { isAnonymous: isGuest });
   const shownName = isGuest ? user.displayName : (user.username ?? user.displayName);
-  const opensDialogDirectly = isGuest && compact;
+  // Cut down rather than absent: a compact guest keeps the actions that do not
+  // cost them their seat.
+  const seatBound = isGuest && compact;
 
   // The same entry in both branches, fenced off by dividers on either side so
   // it never reads as one of the account actions around it. Offered to guests
@@ -156,11 +161,11 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
       <button
         type="button"
         className={compact ? "identity-chip is-compact" : "identity-chip"}
-        aria-haspopup={opensDialogDirectly ? "dialog" : "menu"}
-        aria-expanded={opensDialogDirectly ? undefined : menuOpen}
-        aria-controls={opensDialogDirectly || !menuOpen ? undefined : menuId}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-controls={menuOpen ? menuId : undefined}
         onClick={() =>
-          opensDialogDirectly ? setMode("claim") : setMenuOpen((open) => !open)
+          setMenuOpen((open) => !open)
         }
         aria-label={
           isGuest
@@ -184,7 +189,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         )}
       </button>
 
-      {menuOpen && !opensDialogDirectly && (
+      {menuOpen && (
         <div
           ref={menuRef}
           id={menuId}
@@ -194,24 +199,30 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
-          <MenuItem
-            icon={<UserIcon size={16} />}
-            onClick={() => {
-              setMenuOpen(false);
-              navigate("/profile");
-            }}
-          >
-            My profile
-          </MenuItem>
-          <MenuItem
-            icon={<ZapIcon size={16} />}
-            onClick={() => {
-              setMenuOpen(false);
-              navigate("/prompt-lists");
-            }}
-          >
-            Prompt stats
-          </MenuItem>
+          {/* The two entries that leave the page. Hidden for a guest in a
+              live game, where following one would give up their seat. */}
+          {!seatBound && (
+            <>
+              <MenuItem
+                icon={<UserIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/profile");
+                }}
+              >
+                My profile
+              </MenuItem>
+              <MenuItem
+                icon={<ZapIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/prompt-lists");
+                }}
+              >
+                Prompt stats
+              </MenuItem>
+            </>
+          )}
           {isGuest ? (
             <>
               <MenuItem

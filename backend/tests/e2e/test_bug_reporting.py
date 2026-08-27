@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import BugReport, User
 from app.domain_values import UserRole
-from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -131,6 +131,63 @@ async def test_a_guest_files_a_bug_and_an_admin_reads_it():
         finally:
             await guest_context.close()
             await admin_context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_a_guest_in_a_live_game_can_still_reach_the_report_dialog():
+    """The compact chip used to skip its menu entirely and open the claim dialog.
+
+    That was right while every guest entry navigated somewhere - following one
+    would have given up the seat. Reporting a bug does not navigate, and a guest
+    mid-game is exactly who most needs it, so the compact menu is now cut down
+    rather than absent.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        guest_context = await browser.new_context()
+        host_page = await host_context.new_page()
+        guest_page = await guest_context.new_page()
+        host_page.set_default_timeout(10000)
+        guest_page.set_default_timeout(10000)
+
+        try:
+            await host_page.goto(BASE_URL)
+            await use_guest_name(host_page, "CompactHost")
+            await host_page.click('button:has-text("Create room")')
+            await host_page.click('button:has-text("Create room")')
+            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            code = await room_code(host_page)
+
+            await guest_page.goto(BASE_URL)
+            await use_guest_name(guest_page, "CompactGuest")
+            await guest_page.fill('input[placeholder="ABC123"]', code)
+            await guest_page.click('button:has-text("Join by code")')
+            await guest_page.wait_for_selector('[data-testid="waiting-room"]')
+
+            # The compact chip only exists in the game layout.
+            await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
+            await host_page.click(".waiting-start-button")
+            await guest_page.wait_for_selector(".game-layout")
+
+            await guest_page.click(".identity-chip.is-compact")
+            menu = guest_page.locator(".account-dropdown")
+            await menu.wait_for(state="visible")
+
+            # Cut down, not absent: what is offered keeps them in their seat.
+            entries = await menu.locator("button").all_inner_texts()
+            assert "Report a bug" in entries
+            assert "My profile" not in entries, entries
+            assert "Prompt stats" not in entries, entries
+
+            await guest_page.click('button:has-text("Report a bug")')
+            await guest_page.wait_for_selector(".bug-report-dialog")
+            # Still in the game, seat intact.
+            assert await guest_page.locator(".game-layout").count() == 1
+        finally:
+            await host_context.close()
+            await guest_context.close()
             await browser.close()
 
 

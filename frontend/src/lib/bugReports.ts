@@ -280,6 +280,23 @@ export function bugReportScreenshotUrl(reportId: string): string {
   return `/api/admin/bug-reports/${reportId}/screenshot`;
 }
 
+/** How a room reads in a diagnostics row.
+ *
+ * The round is appended only when there really is one. Both counters default to
+ * zero before a game starts, and "round 0 of 0" reads as gameplay state rather
+ * than as the absence of it - misleading exactly the reader who is trying to
+ * work out what the player was doing.
+ */
+export function roomSummary(
+  code: string | null | undefined,
+  round: number | null | undefined,
+  total: number | null | undefined,
+): string {
+  if (!code) return "Not in a room";
+  if (!round || !total || round < 1 || total < 1) return `${code} · not in a round`;
+  return `${code} · round ${round} of ${total}`;
+}
+
 export function humanizeBugValue(value: string): string {
   const spaced = value.replace(/_/g, " ");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
