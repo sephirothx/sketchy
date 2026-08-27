@@ -73,21 +73,28 @@ async def test_ephemeral_codes_retire_for_thirty_days_then_become_reusable():
 
 
 async def test_startup_retires_only_orphaned_ephemeral_codes():
+    """A persistent reservation predates #489 and is a permanent tombstone."""
     engine, factory = await _database()
-    candidates = iter(("LIVE01", "KEEP01"))
+    candidates = iter(("LIVE01",))
     service = RoomCodeService(factory, code_factory=lambda: next(candidates))
     try:
         assert await service.allocate() == "LIVE01"
-        assert await service.allocate(kind="persistent") == "KEEP01"
+        async with factory() as session:
+            async with session.begin():
+                session.add(RoomCodeReservation(code="KEEP01", kind="persistent"))
         assert await service.retire_orphaned_ephemeral() == 1
         assert await service.is_retired("LIVE01") is True
 
+        # Never expires, never becomes allocatable, and an invite carrying it
+        # is told the room has ended rather than that it was never found.
         await service.retire_ephemeral("KEEP01")
         async with factory() as session:
             persistent = await session.get(RoomCodeReservation, "KEEP01")
         assert persistent is not None
         assert persistent.kind == "persistent"
         assert persistent.retired_until is None
+        assert await service.is_retired("KEEP01") is True
+        assert await service.purge_expired() == 0
     finally:
         await engine.dispose()
 

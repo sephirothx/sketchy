@@ -275,54 +275,6 @@ async def test_a_refused_room_gives_back_the_code_it_had_already_claimed():
 
 
 @pytest.mark.asyncio
-async def test_a_saved_room_reopens_only_while_the_server_has_room_for_it():
-    """Materializing allocates everything creating does, and needs the same
-    permission - it is reached by joining or previewing a code, neither of
-    which requires an account at all."""
-    from app.repositories.sqlalchemy import SqlAlchemyUserRepository
-    from tests.test_persistent_rooms import _fixture, _settings
-
-    engine, factory, prompts, owner_id = await _fixture()
-    try:
-        room_manager = RoomManager()
-        ctx, sio, sessions = build_stack(
-            room_manager,
-            user_id=owner_id,
-            user_repo=SqlAlchemyUserRepository(factory),
-            prompt_list_repo=prompts,
-            session_factory=factory,
-        )
-        config = await ctx.persistent_rooms.create(
-            owner_user_id=owner_id, code="GROUP1", settings=_settings()
-        )
-        assert config.code == "GROUP1"
-        assert room_manager.rooms == {}
-
-        ctx.room_quotas.global_rooms = 1
-        room_manager.create_room(name="Somebody else's room")
-
-        blocked = await sio.handlers["/"]["get_room_preview"](
-            "visitor-sid", {"code": "GROUP1"}
-        )
-        assert blocked["ok"] is False
-        assert len(room_manager.rooms) == 1, "a preview opened a room past the cap"
-
-        ctx.room_quotas.global_rooms = 10
-        opened = await sio.handlers["/"]["get_room_preview"](
-            "visitor-sid", {"code": "GROUP1"}
-        )
-        assert opened["ok"] is True
-        live = room_manager.get_room_by_code("GROUP1")
-        assert live is not None
-        # Visible to the per-account ceiling, which is what stops an owner's
-        # saved rooms adding up behind the count of the ones they opened.
-        assert live.created_by_user_id == owner_id
-        assert room_manager.rooms_created_by(owner_id) == 1
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
 async def test_an_attempt_that_opens_no_room_does_not_spend_the_allowance():
     from app.services.room_quotas import RoomQuotaService
     from tests.dbfixtures import create_test_db

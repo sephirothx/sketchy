@@ -43,9 +43,6 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
             assert await page.get_by_role("spinbutton", name="Max players").input_value() == "12"
             assert await page.get_by_role("spinbutton", name="Rounds").input_value() == "5"
             assert await page.get_by_role("button", name="Private").get_attribute("aria-pressed") == "true"
-            assert not await page.get_by_role(
-                "switch", name="Keep this room for future games"
-            ).is_checked()
 
             # A preset applied by accident is recoverable without leaving the page.
             await page.get_by_role("button", name="Undo").click()

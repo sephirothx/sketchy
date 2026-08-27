@@ -159,11 +159,11 @@ async def test_racing_creates_on_one_socket_still_leave_a_single_seat():
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
 
-    async def slow_allocate(kind):
+    async def slow_allocate():
         # A real allocation reaches the database, which is exactly the gap a
         # second create_room from the same socket slips into.
         await asyncio.sleep(0.01)
-        return f"CODE{len(room_manager.rooms)}{kind[0].upper()}"
+        return f"CODE{len(room_manager.rooms):04d}"
 
     ctx.room_codes = SimpleNamespace(
         allocate=AsyncMock(side_effect=slow_allocate),
@@ -191,7 +191,7 @@ async def test_a_socket_that_drops_while_creating_leaves_no_connected_seat():
     disconnect = sio.handlers["/"]["disconnect"]
     dropped: list[asyncio.Task] = []
 
-    async def allocate_then_drop(kind):
+    async def allocate_then_drop():
         dropped.append(asyncio.create_task(disconnect("sid-A")))
         # Let the disconnect run as far as it can while this is in flight.
         await asyncio.sleep(0)

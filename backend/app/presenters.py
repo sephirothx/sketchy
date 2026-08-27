@@ -29,7 +29,6 @@ def room_state_payload(room: Room) -> dict:
 def editable_room_settings_payload(room: Room) -> dict:
     return {
         "name": room.name,
-        "isPersistent": room.persistent_room_id is not None,
         "isPublic": room.is_public,
         "maxPlayers": room.max_players,
         "rounds": room.rounds,

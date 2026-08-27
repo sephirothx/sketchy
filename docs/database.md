@@ -86,7 +86,6 @@ erDiagram
     users ||--o| user_settings : "prefers"
     users ||--o{ user_stats_daily : "projects to"
     users ||--o{ prompt_lists : "owns"
-    users ||--o{ persistent_rooms : "owns"
     users ||--o{ room_presets : "owns"
     users ||--o{ user_bans : "suspended by"
     users ||--o{ user_warnings : "warned by"
@@ -117,7 +116,7 @@ erDiagram
 
 | Domain | Tables |
 | --- | --- |
-| **Server & rooms** | `app_config`, `room_code_reservations`, `persistent_rooms`, `room_presets`, `planned_shutdown_abandonments` |
+| **Server & rooms** | `app_config`, `room_code_reservations`, `room_presets`, `planned_shutdown_abandonments` |
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `user_blocks` |
 | **Messages** | `room_messages` |
@@ -144,7 +143,7 @@ allocation race-safe even though v1 runs one worker.
 | Column | Notes |
 | --- | --- |
 | `code` VARCHAR(6) **PK** | Uppercase alphanumeric, cryptographically random ([`services/room_codes.py`](../backend/app/services/room_codes.py)) |
-| `kind` | `ephemeral \| persistent` |
+| `kind` | `ephemeral \| persistent` — only `ephemeral` is written now; `persistent` rows are tombstones from the removed feature |
 | `created_at` | |
 | `retired_until` | Post-room cooling-off; indexed |
 
@@ -155,32 +154,13 @@ Constraints: `ck_room_code_kind`; `ck_persistent_room_code_never_retires` — a
 empties, its code is retired for **30 days** (`EPHEMERAL_CODE_RETENTION`), so a stale
 invite during that window says the room ended rather than silently joining an unrelated
 group. Startup retires reservations orphaned by a restart or crash. Expired ephemeral
-reservations may be reused; persistent codes never enter the reuse pool.
-
-### `persistent_rooms`
-Owner-controlled **durable configuration**, never a live-game snapshot.
-
-`id` · `code` (unique, FK → `room_code_reservations.code` `ON DELETE RESTRICT`) ·
-`owner_user_id` (FK → `users` `RESTRICT`) · `name` · `is_public` · `max_players` ·
-`rounds` · `drawing_seconds` · `hint_mode` · `scoring_mode` · `spectators_see_prompt` ·
-`hide_masked_prompt` · `allowed_tools` (JSON) · `color_mode` · `prompt_list_ids` (JSON) ·
-`version` · `created_at` · `updated_at` · `archived_at`.
-
-`CHECK` constraints mirror the room-settings bounds exactly: `max_players` 2–16,
-`rounds` 1–10, `drawing_seconds` ∈ {15, 30, 60, 90, 120, 180, 240, 300}, and the
-hint/scoring/color-mode enums.
-
-**Flow.** Up to ten active persistent rooms per account. Opening an empty one creates a
-**new in-memory room instance** from the saved settings. Players, scores, phase, timers,
-reconnect grace, canvas, recap, chat, and quick custom prompts are never restored.
-Referenced lists resolve their latest authorized revision each time and are snapshotted
-when a game starts; a missing, deleted, hidden, or no-longer-authorized list blocks
-opening **visibly** instead of falling back to default prompts. Archiving prevents new
-instances and permanently reserves the code.
+reservations may be reused. `persistent` rows are permanent tombstones left by the
+removed persistent-room feature: they are never reused, and an invite carrying one is
+told the room has ended.
 
 ### `room_presets`
 A private, named, versioned copy of typed settings for a future *ordinary* room. Same
-columns and `CHECK` set as `persistent_rooms`, minus the code, plus `name_key` with
+columns and `CHECK` set as a room's typed settings, with no code, plus `name_key` with
 `uq_room_presets_owner_name (owner_user_id, name_key)`. `ON DELETE CASCADE` from
 `users`.
 
@@ -340,7 +320,7 @@ cd backend && .venv/bin/python -m app.auth.account_data --limit 25
 Format v1 exports expire after seven days. The document contains the owner's account
 fields, linked guest identities, session metadata, game seats, drawn turns, correct
 guesses, prompt-list revision history, unexpired authored retained messages, submitted
-evidence, blocks, presets, persistent-room configuration, and account-event metadata.
+evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
 pinned by [`fixtures/account_data_export_v1_fields.json`](../fixtures/account_data_export_v1_fields.json).
@@ -877,7 +857,7 @@ in with **null** time/rule dimensions rather than fabricated metadata: all-time
 unfiltered reads retain them, while bounded or segmented reads deliberately exclude what
 cannot be attributed truthfully.
 
-**Runtime attribution observes the ephemeral/persistent boundary.** Completed turns
+**Runtime attribution observes the durable/live boundary.** Completed turns
 snapshot nullable prompt-version source IDs, and usage writes intersect those IDs with
 the game's pinned list revisions. An ephemeral prompt has a **null source even when its
 display text equals a curated prompt**, so neither its offers, picks, nor guess results
@@ -958,7 +938,7 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Bug report screenshots | Until the report is decided | Erased in the deciding transaction; `ck_bug_reports_screenshot_erased` |
 | Data exports | 7 days (format v1) | `expires_at` |
 | Ephemeral room codes | 30 days retirement, then reusable | `retired_until` |
-| Persistent room codes | Permanent | Never enter the reuse pool |
+| Codes from the removed persistent-room feature | Permanent | Never enter the reuse pool |
 | Guests with no completed game | 30 inactive days (default) | `app.auth.retention` |
 | Guests with history | 365 inactive days (default) | `app.auth.retention`; history survives via frozen snapshots |
 | Game history, turns, outcomes, ledger, drawings, usage facts | Indefinite | — |
@@ -998,8 +978,6 @@ Deletion:
 - erases the drawings that account made while leaving the row saying so;
 - erases any screenshot on a bug report that account filed, while leaving the report:
   a defect is not un-found by an erasure, and the reporter foreign key detaches;
-- does the same for every persistent room owned by that account (archive + permanent
-  code reservation).
 
 The stable anonymized row, scores, prompts, and shared game structure **remain**, so
 another player's history is never damaged. Prompt usage facts carry no user identifier

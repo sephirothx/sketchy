@@ -40,7 +40,7 @@ async def test_published_room_code_comes_from_global_reservation_service():
 
     assert response["ok"] is True
     assert response["code"] == "SAFE01"
-    ctx.room_codes.allocate.assert_awaited_once_with(kind="ephemeral")
+    ctx.room_codes.allocate.assert_awaited_once_with()
     room = room_manager.get_room(response["roomId"])
     assert room is not None
     room.players[response["playerId"]].connected = False

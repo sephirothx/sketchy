@@ -201,7 +201,6 @@ def _live_room_context(
             "playerCount": len(room.players),
             "maxPlayers": room.max_players,
             "ageSeconds": round(time.time() - room.created_at),
-            "persistent": room.persistent_room_id is not None,
         },
         "roomSettings": {
             "rounds": room.rounds,

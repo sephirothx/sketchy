@@ -132,7 +132,6 @@ export interface RoomSummary {
   code: string;
   name: string;
   isPublic: boolean;
-  isPersistent: boolean;
   playerCount: number;
   spectatorCount: number;
   maxPlayers: number;
@@ -157,7 +156,6 @@ export interface RoomStatePayload {
   code: string;
   name: string;
   isPublic: boolean;
-  isPersistent: boolean;
   maxPlayers: number;
   rounds: number;
   customPromptCount: number;
@@ -184,7 +182,6 @@ export interface RoomStatePayload {
 export interface EditableRoomSettings {
   name: string;
   isPublic: boolean;
-  isPersistent: boolean;
   maxPlayers: number;
   rounds: number;
   drawingSeconds: number;

@@ -228,7 +228,6 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `rename_player` | `RenamePlayerPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `become_player` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `session_ping` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
-| `archive_persistent_room` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `accept_colorblind_suggestion` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `dismiss_colorblind_suggestion` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `start_game` | `EmptyPayload` | ✓ | [`game.py`](../backend/app/handlers/game.py) |
@@ -269,7 +268,7 @@ mirrors it with every field optional (absent means *unchanged*).
 | `promptListSlugs` | string[] | `["english_standard"]` | ≤ 20, trimmed/lowercased/deduped; empty ⇒ default on create, refused on update |
 | `promptListShareCodes` | string[] | `[]` | ≤ 20, each 8 – 24 chars |
 
-`create_room` adds `persistent` (boolean), `nickname`, `nameColor`
+`create_room` adds `nickname`, `nameColor`
 (`#rrggbb`), and `colorblindSafeColors`.
 
 `join_room` takes `roomId` **or** `code` (at least one required; `code` is upper-cased),
@@ -351,7 +350,7 @@ Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
 
 **`room_state`** ([`backend/app/rooms.py:511`](../backend/app/rooms.py) →
 `RoomStatePayload` in [`frontend/src/types.ts`](../frontend/src/types.ts)) carries the
-room identity (`id`, `code`, `name`, `isPublic`, `isPersistent`), every setting listed
+room identity (`id`, `code`, `name`, `isPublic`), every setting listed
 in §4, `state` (`waiting | playing`), `customPromptCount` (a count, never the prompts),
 `promptLanguage`, `moderation` (`{eligibleVoterIds, requiredVotes}`), `restartVote`,
 `restartVoteCooldownUntil` (epoch ms), the previous game's `lastGameScores`,
@@ -832,7 +831,7 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | `POST` | `/api/prompt-lists/shared` | Resolve an Unlisted list by its bearer share code |
 | `GET` | `/api/prompt-lists/{slug}/prompt-stats` | Window (all-time / 30 d / 90 d) and scoring/hint segmentation |
 
-### Settings, blocks, presets, persistent rooms
+### Settings, blocks, presets
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -841,7 +840,6 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | `DELETE` | `/api/users/me/blocks/{user_id}` | Idempotent |
 | `GET`/`POST` | `/api/room-presets` | ≤ 20 per account |
 | `GET`/`PUT`/`DELETE` | `/api/room-presets/{preset_id}` | `PUT` uses an optimistic version check |
-| `GET` | `/api/persistent-rooms` | The caller's own rooms |
 
 ### Reports and moderation — [`backend/app/api/moderation.py`](../backend/app/api/moderation.py)
 

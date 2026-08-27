@@ -45,6 +45,32 @@ EXPORT_DOWNLOAD_FIELDS = {
 }
 
 
+def test_both_ends_agree_on_the_protocol_version():
+    """A version bumped on one side only is worse than no version at all.
+
+    The client sends its number at the handshake and the server answers a
+    mismatch with `upgrade_required`, which the client obeys by reloading - so
+    a backend bumped alone puts every client into a reload loop, and a
+    frontend bumped alone silently asks everyone to reload for ever.
+    """
+    backend = re.search(
+        r"^PROTOCOL_VERSION = (\d+)$",
+        (BACKEND_APP / "protocol.py").read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    frontend = re.search(
+        r"^export const PROTOCOL_VERSION = (\d+);$",
+        (FRONTEND_SRC / "lib" / "protocol.ts").read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    assert backend and frontend, "the protocol version has moved - update this test"
+    assert backend.group(1) == frontend.group(1), (
+        "backend/app/protocol.py says "
+        f"{backend.group(1)} and frontend/src/lib/protocol.ts says "
+        f"{frontend.group(1)}"
+    )
+
+
 def _diagnostic_blob_keys() -> set[str]:
     """Keys of the bug-report diagnostics blob, which no client parses.
 

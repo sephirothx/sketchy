@@ -48,7 +48,7 @@ claim that an arbitrary host will sustain it.
 | # | Requirement |
 | --- | --- |
 | **R-SHUT-01** | `GET /api/ready` MUST return 503 **before** any drain work begins; `/api/health` remains a liveness check that reports readiness state. |
-| **R-SHUT-02** | At drain start the server MUST send every connected client the versioned `server_shutdown` notice, and MUST refuse new room creation, persistent-room materialization, new game starts, and restart votes — while leaving existing rooms connected so active games can finish. |
+| **R-SHUT-02** | At drain start the server MUST send every connected client the versioned `server_shutdown` notice, and MUST refuse new room creation, new game starts, and restart votes — while leaving existing rooms connected so active games can finish. |
 | **R-SHUT-03** | The drain window MUST be configurable via `SHUTDOWN_DRAIN_SECONDS` (0–300, default 30). A second termination signal MUST abandon the remaining window immediately. |
 | **R-SHUT-04** | A game that outlives the deadline MUST NOT be recorded as completed history. Exactly one privacy-safe `planned_shutdown_abandonments` row MUST be written instead, retained 90 days. |
 | **R-SHUT-05** | That diagnostic MUST NOT contain room codes, room or player names, prompts, chat, or canvas contents. |
@@ -65,6 +65,7 @@ claim that an arbitrary host will sustain it.
 | **R-ROOM-01** | The lobby MUST show a live, polled list of public rooms, and MUST allow joining a private room by code. |
 | **R-ROOM-02** | Room codes MUST be six-character random invite **capabilities**, reserved in the database before being shown to a player. They MUST NOT be derived from an entity ID. |
 | **R-ROOM-03** | When an ephemeral room empties, its code MUST be retired for 30 days, so a stale invite says the room ended instead of silently joining an unrelated group. Startup MUST retire reservations orphaned by a crash. |
+| **R-ROOM-03a** | Codes permanently claimed by the removed persistent-room feature MUST stay claimed and MUST report a stale invite as ended. Releasing them would hand exactly those codes back to the allocator. |
 | **R-ROOM-04** | Room settings MUST be settable at creation and editable by the host while waiting: name, visibility, max players (2–16), rounds (1–10), drawing time (a fixed preset list), scoring mode, hint mode, spectator prompt visibility, masked-prompt hiding, allowed tools, color mode, prompt lists, and custom prompts. |
 | **R-ROOM-05** | A game MUST require at least 2 players before the host can start it. |
 | **R-ROOM-06** | The host role is a **gameplay** role only. It MUST NOT confer any service-wide privilege. Conversely an administrator MUST NOT become host merely by holding the role. |
@@ -72,8 +73,7 @@ claim that an arbitrary host will sustain it.
 | **R-ROOM-08** | A socket MUST hold at most one live seat. Creating or joining a room MUST first release any seat that connection already holds, by the same path an explicit leave takes: room state re-emitted, timers cancelled, empty-room teardown and code retirement run. Seats MUST be matched by socket, never by account — two tabs of one account may sit in two different rooms. |
 | **R-ROOM-09** | Opening a room MUST require a provisioned session. Joining, playing, and receiving a factual history seat MUST NOT — a visitor whose browser keeps no cookie can still play (R-HIST-10); they cannot host. |
 | **R-ROOM-10** | Room creation MUST be bounded on four axes: live rooms per account, room creations per account per hour, live rooms per process, and quick-prompt characters retained across every live room. Each MUST be configurable, and each refusal MUST say which ceiling was reached in terms a player can act on. |
-| **R-ROOM-12** | Materializing a persistent room MUST answer to the same ceilings as creating one, attributed to the configuration's **owner**. Joining or previewing a code requires no account, so this is the one path where a room can be opened by somebody who is not spending their own allowance. |
-| **R-ROOM-11** | A ceiling MUST be re-checked at the instant the room is created, not only when the command arrives: everything in between awaits, and a refusal at that point MUST release the room code and any persistent-room row it had already claimed. |
+| **R-ROOM-11** | A ceiling MUST be re-checked at the instant the room is created, not only when the command arrives: everything in between awaits, and a refusal at that point MUST release the room code it had already claimed. |
 
 ### Turn structure
 
@@ -180,6 +180,7 @@ claim that an arbitrary host will sustain it.
 | **R-LIST-04** | Limits: ≤ 25 lists per account, ≤ 500 prompts per list. |
 | **R-LIST-05** | Editing MUST use optimistic concurrency and MUST create a new immutable revision rather than rewriting the revision a running or finished game pinned. The content language MUST NOT change after creation. |
 | **R-LIST-06** | **Quick custom prompts MUST remain ephemeral room input.** They are not auto-saved, acquire no implicit owner or list, and disappear with the in-memory room. A registered host may explicitly save them as a Private list; **nothing is stored merely because it was typed.** |
+| **R-LIST-06a** | A room whose selected prompt lists cannot be read MUST be refused **visibly**, never opened on the built-in list while the host is shown the lists they chose. A custom-prompts-only room is the one exception: it was never going to draw from a list. |
 | **R-LIST-07** | Waiting rooms MUST re-authorize the list and every prompt immediately before Start, closing stale-picker bypasses. A game already in progress keeps its pinned snapshot and MUST NOT be rewritten mid-turn. |
 | **R-LIST-08** | A list with no usable prompts MUST fail **visibly**. |
 | **R-LIST-09** | User-owned lists and their prompt stats MUST NOT enter the public official catalogue. |
@@ -260,17 +261,12 @@ claim that an arbitrary host will sustain it.
 
 ---
 
-## 5. Persistent rooms and presets
+## 5. Room-setting presets
 
 | # | Requirement |
 | --- | --- |
-| **R-PERS-01** | Registered players MUST be able to keep a room for future games. It keeps its permanent code and typed configuration under that owner's account. |
-| **R-PERS-02** | Up to **ten** active persistent rooms per account. Only the registered owner becomes host and may edit or archive the configuration. |
-| **R-PERS-03** | **Persistence stops at configuration.** Opening an empty persistent room MUST create a new in-memory instance from the saved settings. Players, scores, current game/phase, timers, reconnect grace, canvas, recap, chat, and quick custom prompts MUST NOT be restored. |
-| **R-PERS-04** | Referenced lists MUST resolve their latest authorized revision each time and be snapshotted at game start. A missing, deleted, hidden, or no-longer-authorized list MUST block opening visibly, not fall back to default prompts. |
-| **R-PERS-05** | Archiving MUST prevent new instances and permanently reserve the old code. If people are still in the room, their current instance becomes ordinary ephemeral state and lasts until empty. Account deletion does the same for every room owned by that account. |
 | **R-PRESET-01** | Registered players MUST be able to save up to **20** private room-setting presets: a named, versioned copy of typed settings with no code, members, host identity, game, scores, timers, chat, or canvas. |
-| **R-PRESET-02** | Applying a preset MUST fill the create form but MUST NOT enable *Keep this room for future games*, so creating from a preset allocates a fresh ephemeral code unless the player independently chooses persistence. |
+| **R-PRESET-02** | Applying a preset MUST fill the create form only. Creating from a preset allocates a fresh code like any other room. |
 | **R-PRESET-03** | Borrowed Unlisted share codes and quick custom prompts MUST NOT be stored in a preset. |
 | **R-PRESET-04** | v1 MUST NOT ship a built-in preset catalogue or preset sharing. |
 
@@ -499,7 +495,7 @@ design, not a bug fix.
 | Moderation, reports, bans, blocks | [`api/moderation.py`](../backend/app/api/moderation.py), [`auth/bans.py`](../backend/app/auth/bans.py), [`auth/blocks.py`](../backend/app/auth/blocks.py) | `tests/test_moderation_api.py`, `test_user_blocks.py`, `test_prompt_content_moderation.py`, `tests/e2e/test_player_reporting.py` |
 | Prompt content and governance | [`prompt_content.py`](../backend/app/prompt_content.py), [`api/prompt_lists.py`](../backend/app/api/prompt_lists.py) | `tests/test_prompt_content.py`, `test_prompt_list_governance.py`, `test_owned_prompt_lists.py`, `test_prompt_list_seeding.py` |
 | Prompt usage and stats | [`services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | `tests/test_prompt_usage.py`, `test_api_prompt_stats.py` |
-| Persistent rooms, presets, room codes | [`services/persistent_rooms.py`](../backend/app/services/persistent_rooms.py), [`services/room_presets.py`](../backend/app/services/room_presets.py), [`services/room_codes.py`](../backend/app/services/room_codes.py) | `tests/test_persistent_rooms.py`, `test_room_presets.py`, `test_room_codes.py` |
+| Presets, room codes | [`services/room_presets.py`](../backend/app/services/room_presets.py), [`services/room_codes.py`](../backend/app/services/room_codes.py) | `tests/test_room_presets.py`, `test_room_codes.py` |
 | Shutdown drain | [`services/shutdown.py`](../backend/app/services/shutdown.py) | `tests/test_shutdown.py`, `tests/handlers/test_shutdown.py` |
 | Runtime analytics | [`services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | `tests/test_runtime_analytics.py` |
 | Deployment, static delivery, worker topology | [`deployment.py`](../backend/app/deployment.py) | `tests/test_deployment.py`, `test_static_delivery.py` |

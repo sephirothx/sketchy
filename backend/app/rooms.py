@@ -335,9 +335,6 @@ class Room:
     created_at: float = field(default_factory=time.time, repr=False)
     # Durable configuration identity is separate from this fresh live instance.
     # No player, score, game, timer, canvas, or room ID is restored with it.
-    persistent_room_id: str | None = None
-    persistent_owner_user_id: str | None = field(default=None, repr=False)
-    persistent_config_version: int | None = None
     # The account that opened this room, for as long as it lives. A room the
     # creator has left still counts against their ceiling, because it is still
     # this process holding it - and since #480 a room nobody is in no longer
@@ -532,7 +529,6 @@ class Room:
             "code": self.code,
             "name": self.name,
             "isPublic": self.is_public,
-            "isPersistent": self.persistent_room_id is not None,
             "playerCount": len(active_players),
             "spectatorCount": len(spectators),
             "maxPlayers": self.max_players,
@@ -558,7 +554,6 @@ class Room:
             "code": self.code,
             "name": self.name,
             "isPublic": self.is_public,
-            "isPersistent": self.persistent_room_id is not None,
             "maxPlayers": self.max_players,
             "rounds": self.rounds,
             "customPromptCount": len(self.custom_prompts),
@@ -636,9 +631,6 @@ class RoomManager:
         prompt_source_revision_ids: dict[str, tuple[str, ...]] | None = None,
         curated_prompts: list[str] | None = None,
         code: str | None = None,
-        persistent_room_id: str | None = None,
-        persistent_owner_user_id: str | None = None,
-        persistent_config_version: int | None = None,
         created_by_user_id: str | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
@@ -652,9 +644,6 @@ class RoomManager:
             code=final_code,
             name=final_name,
             is_public=is_public,
-            persistent_room_id=persistent_room_id,
-            persistent_owner_user_id=persistent_owner_user_id,
-            persistent_config_version=persistent_config_version,
             max_players=max_players,
             rounds=rounds,
             custom_prompts=custom_prompts or [],
@@ -754,22 +743,11 @@ class RoomManager:
                 else normalize_name_color(name_color) or generate_random_name_color()
             ),
             score=0,
-            is_host=(
-                not is_spectator
-                and (
-                    user_id == room.persistent_owner_user_id
-                    if room.persistent_owner_user_id is not None
-                    else len(active_players) == 0
-                )
-            ),
+            is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,
             colorblind_safe_colors=colorblind_safe_colors,
         )
         room.players[player_id] = player
-        if player.is_host and room.persistent_owner_user_id is not None:
-            for other in room.players.values():
-                if other.id != player.id:
-                    other.is_host = False
         metrics.record(
             RuntimeEventType.PLAYER_JOINED,
             room_id=room.id,
@@ -842,15 +820,6 @@ class RoomManager:
 
     def _promote_new_host_if_needed(self, room: Room) -> None:
         if any(p.is_host for p in room.players.values()):
-            return
-        if room.persistent_owner_user_id is not None:
-            for player in room.players.values():
-                if (
-                    not player.is_spectator
-                    and player.user_id == room.persistent_owner_user_id
-                ):
-                    player.is_host = True
-                    return
             return
         for p in room.players.values():
             if not p.is_spectator:

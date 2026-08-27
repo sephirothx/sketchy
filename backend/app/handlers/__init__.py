@@ -17,7 +17,6 @@ from app.services.game_flow import GameFlowService
 from app.services.message_retention import MessageRetentionService
 from app.services.room_codes import RoomCodeService
 from app.services.room_quotas import RoomQuotaService
-from app.services.persistent_rooms import PersistentRoomService
 from app.services.timers import TimerManager
 from app.services.shutdown import ShutdownCoordinator
 
@@ -58,11 +57,6 @@ def register_all_handlers(
         room_codes=(
             RoomCodeService(session_factory)
             if session_factory is not None
-            else None
-        ),
-        persistent_rooms=(
-            PersistentRoomService(session_factory, prompt_list_repo)
-            if session_factory is not None and prompt_list_repo is not None
             else None
         ),
         shutdown=shutdown,
