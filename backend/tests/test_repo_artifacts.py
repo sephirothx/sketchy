@@ -334,11 +334,31 @@ def test_a_secret_introduced_only_by_a_merge_is_refused(tmp_path):
     assert "notes.txt" in ranged.stderr
 
 
+def is_shallow() -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() == "true"
+
+
 @requires_git
+@pytest.mark.skipif(
+    is_shallow(),
+    reason="a shallow checkout has no history to resolve the baseline against",
+)
 def test_the_baseline_is_a_commit_in_this_history():
     """The hook and CI both take their floor from `--baseline`. A sha that does
     not resolve would send both of them to their weakest fallback without
-    saying so."""
+    saying so.
+
+    Only answerable where the history is actually present. The backend CI job
+    clones one commit deep, so this cannot run there - `.github/workflows/ci.yml`
+    makes the artifact-scan job, which clones in full, fail on a baseline that
+    stops resolving.
+    """
     baseline = subprocess.run(
         ["bash", str(CHECKER), "--baseline"],
         cwd=REPO_ROOT,

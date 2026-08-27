@@ -51,8 +51,13 @@ jobs:
             echo "No reachable base commit; scanning everything since the baseline."
             from="$BASELINE"
           else
-            echo "Neither a base nor the baseline is reachable; the tracked-tree scan stands alone."
-            exit 0
+            # This job clones in full, so an unreachable baseline here is not a
+            # shallow checkout - it is a sha that has stopped resolving, which
+            # would silently drop both this step and the hook to their weakest
+            # fallback. Fail instead, and say what to fix.
+            echo "Baseline ${BASELINE} does not resolve in a full clone." >&2
+            echo "Update HISTORY_BASELINE in scripts/check-tracked-artifacts.sh." >&2
+            exit 1
           fi
           bash scripts/check-tracked-artifacts.sh --range "${from}..HEAD"
 
