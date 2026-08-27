@@ -1,3 +1,6 @@
+from app.prompts import MAX_CUSTOM_PROMPTS
+
+
 def base36(value: int) -> str:
     digits = "0123456789abcdefghijklmnopqrstuvwxyz"
     result = ""
@@ -8,8 +11,10 @@ def base36(value: int) -> str:
 
 
 def maximum_custom_prompts() -> list[str]:
+    # Derived from the limit rather than repeating it: this fixture is only
+    # interesting while it is exactly as large as a room will accept.
     words = []
-    for index in range(10_000):
+    for index in range(MAX_CUSTOM_PROMPTS):
         token = base36(index).rjust(3, "0")
         if index % 3 == 0:
             words.append(f"s{token}")

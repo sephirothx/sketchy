@@ -377,6 +377,41 @@ dependency passes an argument.
 Seats are matched **by `sid`, never by account**: two tabs of one account sitting in
 two different rooms is ordinary, and only the connection that is moving is moved.
 
+### Room ceilings
+
+Creating a room is the only ordinary socket command that allocates unbounded process
+memory — a `Room`, its `CanvasSession`, its recap buffer, its quick prompts — and
+claims a durable code reservation, on a server where one process owns all of it.
+`RoomQuotaService`
+([`backend/app/services/room_quotas.py`](../backend/app/services/room_quotas.py))
+answers four questions before one is opened: how many rooms this account already
+holds, how often it has opened one this hour, how many rooms exist at all, and how
+many quick-prompt characters the live rooms are holding together. The account ones
+are answered from memory; the rate uses the same persistent bucket the authentication
+limits use, so a restart is not a fresh allowance.
+
+**Creating requires an account; joining does not.** A visitor whose browser keeps no
+cookie still plays and still receives a factual history seat (R-HIST-10) — they simply
+cannot host, because a ceiling with nothing to key on is not a ceiling.
+
+The capacity check runs twice: once when the command arrives, and again in the last
+instant before the room exists, where no await separates the answer from the room. A
+refusal at that second point releases the code reservation and any persistent-room row
+the attempt had already claimed, the same way the drain checks above it do, and gives
+back the hourly allowance the attempt had already spent.
+
+**Materializing a saved room is creating one.** `PersistentRoomService.materialize`
+allocates everything `create_room` does and is reached by joining or previewing a code,
+neither of which requires an account — so it asks the same ceilings, attributed to the
+configuration's owner, inside its own lock and with no await between the answer and the
+room. It refuses as *unavailable* rather than as over-quota: the player at the keyboard
+is usually not the owner whose ceiling was reached.
+
+Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
+introduces, every socket presents the proxy's address, and the forwarded header is
+attacker-controlled — `auth/rate_limit.client_key` refuses to read it for exactly that
+reason. The key arrives when an address worth keying on does.
+
 ### Authorization
 
 Two independent axes:
@@ -660,6 +695,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
+| [`app/services/room_quotas.py`](../backend/app/services/room_quotas.py) | Ceilings on room creation, so one client cannot spend the whole server. |
 | [`app/services/room_presets.py`](../backend/app/services/room_presets.py) | Private, account-owned templates for ordinary room configuration. |
 | [`app/services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | What the server records about its own behaviour. |
 | [`app/services/shutdown.py`](../backend/app/services/shutdown.py) | Bounded planned-shutdown drain for process-owned live rooms. |

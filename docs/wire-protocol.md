@@ -197,8 +197,8 @@ Shared bounds:
 | --- | --- | --- |
 | `MAX_CHAT_MESSAGE_LENGTH` | 500 | [`message_limits.py`](../backend/app/message_limits.py) |
 | `MAX_PROMPT_LENGTH` | 32 | [`prompts.py`](../backend/app/prompts.py) |
-| `MAX_RAW_INPUT_LENGTH` (custom prompts blob) | 400 000 | [`prompts.py`](../backend/app/prompts.py) |
-| `MAX_CUSTOM_PROMPTS` | 10 000 | [`prompts.py`](../backend/app/prompts.py) |
+| `MAX_RAW_INPUT_LENGTH` (custom prompts blob) | 80 000 | [`prompts.py`](../backend/app/prompts.py) |
+| `MAX_CUSTOM_PROMPTS` | 2 000 | [`prompts.py`](../backend/app/prompts.py) |
 | `MAX_ROOM_NAME_LENGTH` | 40 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 | `MAX_NICKNAME_LENGTH` | 16 (`MAX_NAME_LENGTH`, shared with usernames) | [`auth/names.py`](../backend/app/auth/names.py) |
 | `MAX_IDENTIFIER_LENGTH` | 128 | [`payloads.py`](../backend/app/handlers/payloads.py) |

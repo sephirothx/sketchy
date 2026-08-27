@@ -338,7 +338,17 @@ class Room:
     persistent_room_id: str | None = None
     persistent_owner_user_id: str | None = field(default=None, repr=False)
     persistent_config_version: int | None = None
+    # The account that opened this room, for as long as it lives. A room the
+    # creator has left still counts against their ceiling, because it is still
+    # this process holding it - and since #480 a room nobody is in no longer
+    # outlives its last player, so what counts against them is only ever a
+    # room somebody is actually playing in.
+    created_by_user_id: str | None = field(default=None, repr=False)
     custom_prompts: list[str] = field(default_factory=list)
+    # What this room's quick prompts cost, kept beside them so the process
+    # total is a sum of integers rather than a walk of every string. Written
+    # only by `RoomManager.set_custom_prompts`, which is what keeps it true.
+    custom_prompt_characters: int = field(default=0, repr=False)
     custom_prompts_only: bool = False
     drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS
     hint_mode: str = DEFAULT_ROOM_HINT_MODE
@@ -629,6 +639,7 @@ class RoomManager:
         persistent_room_id: str | None = None,
         persistent_owner_user_id: str | None = None,
         persistent_config_version: int | None = None,
+        created_by_user_id: str | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
@@ -663,7 +674,9 @@ class RoomManager:
             prompt_version_ids=dict(prompt_version_ids or {}),
             prompt_source_revision_ids=dict(prompt_source_revision_ids or {}),
             curated_prompts=list(curated_prompts or []),
+            created_by_user_id=created_by_user_id,
         )
+        self.set_custom_prompts(room, room.custom_prompts)
         self.rooms[room_id] = room
         metrics.record(RuntimeEventType.ROOM_CREATED, room_id=room_id)
         self._observe()
@@ -690,6 +703,28 @@ class RoomManager:
             if room.code == code:
                 return room
         return None
+
+    def set_custom_prompts(self, room: Room, prompts: list[str]) -> None:
+        """Give a room its quick prompts, and keep what they cost with them.
+
+        The single writer, so that `retained_prompt_characters` cannot drift
+        from what the rooms actually hold. `test_room_quotas.py` checks the
+        two against a full recount.
+        """
+        room.custom_prompts = list(prompts)
+        room.custom_prompt_characters = sum(len(prompt) for prompt in room.custom_prompts)
+
+    def rooms_created_by(self, user_id: str | None) -> int:
+        """How many live rooms this account opened and still has open."""
+        if not user_id:
+            return 0
+        return sum(
+            1 for room in self.rooms.values() if room.created_by_user_id == user_id
+        )
+
+    def retained_prompt_characters(self) -> int:
+        """What every live room's quick prompts cost this process together."""
+        return sum(room.custom_prompt_characters for room in self.rooms.values())
 
     def list_public_rooms(self) -> list[dict]:
         return [r.to_public_summary() for r in self.rooms.values() if r.is_public]

@@ -263,6 +263,38 @@ class PersistentRateLimiter:
         return allowed
 
 
+    async def refund(self, key: str) -> None:
+        """Give back an attempt that did not buy the thing it paid for.
+
+        A limit on an action that can still fail after the bucket is charged
+        would otherwise spend somebody's allowance on work that never
+        happened. Only ever called by the code that took the attempt, and
+        only when it knows the action did not occur; an expired or missing
+        bucket is nothing to give back to.
+        """
+        secret = await self._hash_secret()
+        key_hash = hmac.new(
+            secret.encode("utf-8"),
+            key.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        refunded_at = self._clock()
+        async with self._session_factory() as session:
+            async with session.begin():
+                bucket = await session.scalar(
+                    select(AuthRateLimitBucket)
+                    .where(
+                        AuthRateLimitBucket.scope == self._scope,
+                        AuthRateLimitBucket.key_hash == key_hash,
+                    )
+                    .with_for_update()
+                )
+                if bucket is None or bucket.window_expires_at <= refunded_at:
+                    return
+                bucket.attempt_count = max(0, bucket.attempt_count - 1)
+                bucket.updated_at = refunded_at
+
+
 def client_key(request: Request) -> str:
     """Identify the caller by their connection, never by a request header.
 

@@ -267,7 +267,10 @@ lookup rather than somebody else's inbox.
 `window_expires_at` · `updated_at`.
 
 `key_hash` is an HMAC-SHA-256 digest of the client address under `IP_HASH_SECRET` (or
-an auto-generated `app_config` secret) — **raw IP addresses are never stored.** Buckets
+an auto-generated `app_config` secret) — **raw IP addresses are never stored.** The
+`room_create` scope is the one exception to "client address": it hashes the **account**
+that opened the room, because a socket behind a reverse proxy presents the proxy and
+the forwarded header is attacker-controlled. Buckets
 are shared, so limits survive restarts and apply once across every replica. Expired
 buckets are cleaned in bounded batches. Rotating the secret starts fresh buckets without
 exposing or re-identifying old keys.
