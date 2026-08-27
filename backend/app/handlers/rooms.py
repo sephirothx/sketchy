@@ -48,13 +48,36 @@ class ShutdownInProgress(RuntimeError):
     pass
 
 
+def _admits_a_materialized_room(ctx: HandlerContext):
+    """Hold materialization to the same ceilings `create_room` answers to.
+
+    Opening a saved room allocates everything opening a new one does, and it
+    is reached by joining or previewing a code - neither of which requires an
+    account. Refused as unavailable rather than as over quota: the player at
+    the keyboard is usually not the owner whose ceiling was reached, and has
+    nothing to do about somebody else's rooms.
+    """
+
+    def admit(owner_user_id: str) -> None:
+        try:
+            ctx.room_quotas.check_capacity(owner_user_id)
+        except RoomQuotaExceeded as error:
+            raise PersistentRoomUnavailable(
+                "This room cannot open right now. Try again in a few minutes."
+            ) from error
+
+    return admit
+
+
 async def _room_for_code(ctx: HandlerContext, code: str):
     room = ctx.room_manager.get_room_by_code(code)
     if room is not None or ctx.persistent_rooms is None:
         return room
     if ctx.shutdown is not None and ctx.shutdown.is_draining:
         raise ShutdownInProgress
-    return await ctx.persistent_rooms.materialize(ctx.room_manager, code)
+    return await ctx.persistent_rooms.materialize(
+        ctx.room_manager, code, admit=_admits_a_materialized_room(ctx)
+    )
 
 
 async def _record_player_activity(ctx: HandlerContext, player) -> None:
@@ -121,74 +144,83 @@ async def _create_room(ctx: HandlerContext, sid, data):
         await ctx.room_quotas.check_creation_rate(identity.user_id)
     except RoomQuotaExceeded as error:
         return {"ok": False, "error": str(error)}
-    if ctx.shutdown is not None and ctx.shutdown.is_draining:
-        return ctx.shutdown.rejection_acknowledgement()
-
-    if not settings["name"]:
-        settings["name"] = generate_random_room_name()
-    code = None
-    persistent_config = None
-    if ctx.room_codes is not None:
-        try:
-            code = await ctx.room_codes.allocate(
-                kind="persistent" if payload.persistent else "ephemeral"
-            )
-        except Exception:
-            logger.exception("Failed to allocate a room code")
-            return {"ok": False, "error": "Could not create the room"}
+    # From here on the allowance has been spent, and everything below can
+    # still refuse: a drain beginning, an allocation failing, the capacity
+    # re-check losing its race. An attempt that opens no room gives it back.
+    created = False
+    try:
         if ctx.shutdown is not None and ctx.shutdown.is_draining:
-            await ctx.room_codes.release_unpublished(code)
             return ctx.shutdown.rejection_acknowledgement()
-    if payload.persistent:
-        if code is None or ctx.persistent_rooms is None:
+
+        if not settings["name"]:
+            settings["name"] = generate_random_room_name()
+        code = None
+        persistent_config = None
+        if ctx.room_codes is not None:
+            try:
+                code = await ctx.room_codes.allocate(
+                    kind="persistent" if payload.persistent else "ephemeral"
+                )
+            except Exception:
+                logger.exception("Failed to allocate a room code")
+                return {"ok": False, "error": "Could not create the room"}
+            if ctx.shutdown is not None and ctx.shutdown.is_draining:
+                await ctx.room_codes.release_unpublished(code)
+                return ctx.shutdown.rejection_acknowledgement()
+        if payload.persistent:
+            if code is None or ctx.persistent_rooms is None:
+                if code is not None and ctx.room_codes is not None:
+                    await ctx.room_codes.release_unpublished(code)
+                return {"ok": False, "error": "Persistent rooms require durable storage"}
+            try:
+                persistent_config = await ctx.persistent_rooms.create(
+                    owner_user_id=identity.user_id or "",
+                    code=code,
+                    settings=settings,
+                )
+            except (PersistentRoomError, ValueError) as error:
+                await ctx.room_codes.release_unpublished(code)
+                return {"ok": False, "error": str(error)}
+        if ctx.shutdown is not None and ctx.shutdown.is_draining:
+            if persistent_config is not None and ctx.persistent_rooms is not None:
+                await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
             if code is not None and ctx.room_codes is not None:
                 await ctx.room_codes.release_unpublished(code)
-            return {"ok": False, "error": "Persistent rooms require durable storage"}
+            return ctx.shutdown.rejection_acknowledgement()
         try:
-            persistent_config = await ctx.persistent_rooms.create(
-                owner_user_id=identity.user_id or "",
-                code=code,
-                settings=settings,
-            )
-        except (PersistentRoomError, ValueError) as error:
-            await ctx.room_codes.release_unpublished(code)
+            # Everything above this line awaited, and a second create_room from
+            # this account may have arrived in one of those gaps. This is the last
+            # instant where the answer and the room are not separated by an await.
+            ctx.room_quotas.check_capacity(identity.user_id)
+        except RoomQuotaExceeded as error:
+            if persistent_config is not None and ctx.persistent_rooms is not None:
+                await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
+            if code is not None and ctx.room_codes is not None:
+                await ctx.room_codes.release_unpublished(code)
             return {"ok": False, "error": str(error)}
-    if ctx.shutdown is not None and ctx.shutdown.is_draining:
-        if persistent_config is not None and ctx.persistent_rooms is not None:
-            await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
-        if code is not None and ctx.room_codes is not None:
-            await ctx.room_codes.release_unpublished(code)
-        return ctx.shutdown.rejection_acknowledgement()
-    try:
-        # Everything above this line awaited, and a second create_room from
-        # this account may have arrived in one of those gaps. This is the last
-        # instant where the answer and the room are not separated by an await.
-        ctx.room_quotas.check_capacity(identity.user_id)
-    except RoomQuotaExceeded as error:
-        if persistent_config is not None and ctx.persistent_rooms is not None:
-            await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
-        if code is not None and ctx.room_codes is not None:
-            await ctx.room_codes.release_unpublished(code)
-        return {"ok": False, "error": str(error)}
-    try:
-        room = ctx.room_manager.create_room(
-            **settings,
-            code=code,
-            created_by_user_id=identity.user_id,
-            persistent_room_id=(persistent_config.id if persistent_config else None),
-            persistent_owner_user_id=(
-                persistent_config.owner_user_id if persistent_config else None
-            ),
-            persistent_config_version=(
-                persistent_config.version if persistent_config else None
-            ),
-        )
-    except Exception:
-        if persistent_config is not None and ctx.persistent_rooms is not None:
-            await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
-        if code is not None and ctx.room_codes is not None:
-            await ctx.room_codes.release_unpublished(code)
-        raise
+        try:
+            room = ctx.room_manager.create_room(
+                **settings,
+                code=code,
+                created_by_user_id=identity.user_id,
+                persistent_room_id=(persistent_config.id if persistent_config else None),
+                persistent_owner_user_id=(
+                    persistent_config.owner_user_id if persistent_config else None
+                ),
+                persistent_config_version=(
+                    persistent_config.version if persistent_config else None
+                ),
+            )
+        except Exception:
+            if persistent_config is not None and ctx.persistent_rooms is not None:
+                await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
+            if code is not None and ctx.room_codes is not None:
+                await ctx.room_codes.release_unpublished(code)
+            raise
+        created = True
+    finally:
+        if not created:
+            await ctx.room_quotas.refund_creation(identity.user_id)
     player = ctx.room_manager.add_player(
         room,
         identity.nickname,

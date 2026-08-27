@@ -272,3 +272,99 @@ async def test_a_refused_room_gives_back_the_code_it_had_already_claimed():
     assert refused["ok"] is False
     assert len(room_manager.rooms) == 1
     assert released == ["FIRST1"], "the refused room kept its reservation"
+
+
+@pytest.mark.asyncio
+async def test_a_saved_room_reopens_only_while_the_server_has_room_for_it():
+    """Materializing allocates everything creating does, and needs the same
+    permission - it is reached by joining or previewing a code, neither of
+    which requires an account at all."""
+    from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+    from tests.test_persistent_rooms import _fixture, _settings
+
+    engine, factory, prompts, owner_id = await _fixture()
+    try:
+        room_manager = RoomManager()
+        ctx, sio, sessions = build_stack(
+            room_manager,
+            user_id=owner_id,
+            user_repo=SqlAlchemyUserRepository(factory),
+            prompt_list_repo=prompts,
+            session_factory=factory,
+        )
+        config = await ctx.persistent_rooms.create(
+            owner_user_id=owner_id, code="GROUP1", settings=_settings()
+        )
+        assert config.code == "GROUP1"
+        assert room_manager.rooms == {}
+
+        ctx.room_quotas.global_rooms = 1
+        room_manager.create_room(name="Somebody else's room")
+
+        blocked = await sio.handlers["/"]["get_room_preview"](
+            "visitor-sid", {"code": "GROUP1"}
+        )
+        assert blocked["ok"] is False
+        assert len(room_manager.rooms) == 1, "a preview opened a room past the cap"
+
+        ctx.room_quotas.global_rooms = 10
+        opened = await sio.handlers["/"]["get_room_preview"](
+            "visitor-sid", {"code": "GROUP1"}
+        )
+        assert opened["ok"] is True
+        live = room_manager.get_room_by_code("GROUP1")
+        assert live is not None
+        # Visible to the per-account ceiling, which is what stops an owner's
+        # saved rooms adding up behind the count of the ones they opened.
+        assert live.created_by_user_id == owner_id
+        assert room_manager.rooms_created_by(owner_id) == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_an_attempt_that_opens_no_room_does_not_spend_the_allowance():
+    from app.services.room_quotas import RoomQuotaService
+    from tests.dbfixtures import create_test_db
+
+    factory, engine = await create_test_db()
+    try:
+        room_manager = RoomManager()
+        ctx, sio, sessions = build_stack(
+            room_manager, user_id="user-1", session_factory=factory
+        )
+        ctx.room_quotas = RoomQuotaService(
+            room_manager, factory, environ={"ROOM_CREATE_LIMIT": "2"}
+        )
+        ctx.room_quotas.per_account_rooms = 1
+        await seat(sessions, "tab-1", "user-1")
+        await seat(sessions, "tab-2", "user-1")
+
+        allocations = 0
+
+        async def steal_the_last_place(*_args, **_kwargs):
+            nonlocal allocations
+            allocations += 1
+            if allocations > 1:
+                return f"CODE{allocations}"
+            await sio.handlers["/"]["create_room"]("tab-2", {"nickname": "Ann"})
+            return "FIRST1"
+
+        ctx.room_codes = SimpleNamespace(
+            allocate=AsyncMock(side_effect=steal_the_last_place),
+            release_unpublished=AsyncMock(),
+            retire_ephemeral=AsyncMock(),
+            is_retired=AsyncMock(return_value=False),
+        )
+
+        refused = await sio.handlers["/"]["create_room"]("tab-1", {"nickname": "Ann"})
+        assert refused["ok"] is False
+
+        # Two attempts were made and one room exists, so one allowance was
+        # spent. The second must still be there.
+        ctx.room_quotas.per_account_rooms = 10
+        await seat(sessions, "tab-3", "user-1")
+        after = await sio.handlers["/"]["create_room"]("tab-3", {"nickname": "Ann"})
+        assert after["ok"] is True, "a refused attempt kept the allowance it spent"
+    finally:
+        await engine.dispose()

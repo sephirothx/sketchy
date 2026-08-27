@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -191,7 +193,19 @@ class PersistentRoomService:
             ).all()
         return [_public_config(row) for row in rows]
 
-    async def materialize(self, room_manager: RoomManager, code: str) -> Room | None:
+    async def materialize(
+        self,
+        room_manager: RoomManager,
+        code: str,
+        admit: Callable[[str], None] | None = None,
+    ) -> Room | None:
+        """Open a live room from saved configuration, if the server has room.
+
+        `admit` is asked, with the configuration's owner, in the last instant
+        before the room exists - inside the lock and with no await after it,
+        which is what makes the answer still true when the room is created. It
+        raises to refuse.
+        """
         existing = room_manager.get_room_by_code(code)
         if existing is not None:
             return existing
@@ -212,6 +226,8 @@ class PersistentRoomService:
                 raise PersistentRoomUnavailable(
                     "This room's saved prompt lists are unavailable"
                 ) from error
+            if admit is not None:
+                admit(config.owner_user_id)
             return room_manager.create_room(
                 code=config.code,
                 name=config.name,
@@ -235,6 +251,10 @@ class PersistentRoomService:
                 persistent_room_id=config.id,
                 persistent_owner_user_id=config.owner_user_id,
                 persistent_config_version=config.version,
+                # Attributed to the account whose saved room this is: it is
+                # what caused the room to exist, and without this the
+                # per-account ceiling cannot see the room at all.
+                created_by_user_id=config.owner_user_id,
             )
 
     async def update(

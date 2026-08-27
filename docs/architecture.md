@@ -397,7 +397,15 @@ cannot host, because a ceiling with nothing to key on is not a ceiling.
 The capacity check runs twice: once when the command arrives, and again in the last
 instant before the room exists, where no await separates the answer from the room. A
 refusal at that second point releases the code reservation and any persistent-room row
-the attempt had already claimed, the same way the drain checks above it do.
+the attempt had already claimed, the same way the drain checks above it do, and gives
+back the hourly allowance the attempt had already spent.
+
+**Materializing a saved room is creating one.** `PersistentRoomService.materialize`
+allocates everything `create_room` does and is reached by joining or previewing a code,
+neither of which requires an account — so it asks the same ceilings, attributed to the
+configuration's owner, inside its own lock and with no await between the answer and the
+room. It refuses as *unavailable* rather than as over-quota: the player at the keyboard
+is usually not the owner whose ceiling was reached.
 
 Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
 introduces, every socket presents the proxy's address, and the forwarded header is

@@ -156,3 +156,16 @@ class RoomQuotaService:
             raise RoomQuotaExceeded(
                 "You have opened a lot of rooms recently. Try again later."
             )
+
+    async def refund_creation(self, user_id: str) -> None:
+        """Give the allowance back when the room was not opened after all.
+
+        The rate is charged before the room code and the persistent row are
+        claimed, so that an account already over its allowance fails without
+        costing a reservation. Everything after that point can still refuse -
+        a drain starting, an allocation failing, the capacity re-check losing
+        its race - and an attempt that opened no room must not be spent.
+        """
+        if self._creations is None:
+            return
+        await self._creations.refund(user_id)
