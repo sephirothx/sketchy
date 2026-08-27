@@ -277,11 +277,15 @@ def create_auth_router(
     async def me(request: Request, response: Response):
         """Return the caller's account, or nothing if they do not have one.
 
-        Deliberately read-only. This runs on every page load, including ones
-        nobody is behind - a crawler, a link preview, an uptime check - and
-        provisioning here meant each of those cost a `users` row and an
+        Deliberately creates nothing. This runs on every page load, including
+        ones nobody is behind - a crawler, a link preview, an uptime check -
+        and provisioning here meant each of those cost a `users` row and an
         `auth_sessions` row. Choosing a name is what creates an account now,
         because that is the first act only a person about to play performs.
+
+        Not write-free, though: a caller who already has an account still has
+        their activity recorded and their session rotated when it is due. The
+        rule is about creation, which is what an anonymous flood can force.
         """
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None

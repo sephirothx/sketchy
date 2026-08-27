@@ -133,6 +133,7 @@ async function loadRegisteredSettings(user: AuthUser | null): Promise<void> {
   }
 }
 
+let inFlightProvision: Promise<AuthUser> | null = null;
 let inFlightFetchMe: Promise<AuthUser | null> | null = null;
 
 /**
@@ -197,17 +198,36 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   setDisplayName: async (displayName) => {
     const had = get().user;
-    const user = await apiRequest<AuthUser>("/api/auth/display-name", {
-      method: "POST",
-      body: { displayName },
-    });
-    set({ user, hasResolved: true });
-    // Naming is what provisions, so this is the moment a visitor stops being
-    // nobody. The socket resolved its account at the handshake and will not
-    // look again, so it has to shake hands once more or spend its life
-    // anonymous - unable to open a room for a player who now has an account.
-    if (!had) reconnectWithCurrentIdentity();
-    return user;
+    // Single-flight while there is no account yet, for the reason `fetchMe`
+    // used to need it: two cookieless POSTs both create one, and whichever
+    // Set-Cookie lands second discards the account the first made - along
+    // with the name that was just chosen. Two callers can easily reach here
+    // at once now, because pressing Create or Join provisions from the same
+    // draft the first-run block's own button does.
+    if (!had && inFlightProvision) return inFlightProvision;
+    const request = (async () => {
+      const user = await apiRequest<AuthUser>("/api/auth/display-name", {
+        method: "POST",
+        body: { displayName },
+      });
+      set({ user, hasResolved: true });
+      // Naming is what provisions, so this is the moment a visitor stops
+      // being nobody. The socket resolved its account at the handshake and
+      // will not look again, so it has to shake hands once more or spend its
+      // life anonymous - unable to open a room for a player who now has an
+      // account.
+      if (!had) reconnectWithCurrentIdentity();
+      return user;
+    })();
+    if (!had) {
+      inFlightProvision = request;
+      try {
+        return await request;
+      } finally {
+        inFlightProvision = null;
+      }
+    }
+    return request;
   },
 
   setNameColor: async (nameColor) => {

@@ -343,10 +343,12 @@ Logging in while carrying a guest identity creates an **immutable alias**
 
 Merely opening a socket never creates a user row, and neither does merely loading the
 page: **choosing a name is what provisions a guest**
-([`POST /api/auth/display-name`](../backend/app/auth/routes.py)). `GET /api/auth/me` is
-read-only, because it runs on every page load including ones nobody is behind — a
+([`POST /api/auth/display-name`](../backend/app/auth/routes.py)). `GET /api/auth/me` creates
+nothing, because it runs on every page load including ones nobody is behind — a
 crawler, a link preview, an uptime check — and each of those used to cost a `users` row
-and an `auth_sessions` row. Provisioning is bounded per address and by a process-wide
+and an `auth_sessions` row. It still writes for a caller who *has* an account (recording
+activity, rotating a due session); the rule is about creation, which is the part an
+anonymous flood can force. Provisioning is bounded per address and by a process-wide
 daily ceiling, and stale guest rows are purged by a loop the application starts itself.
 
 The socket resolves its account once, at the handshake, so a visitor who names
