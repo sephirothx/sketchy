@@ -1278,7 +1278,8 @@ rooms, players and running games live in memory: one worker owns all of it
 restart because a live count is not a historical fact. Observations - joins,
 disconnects, evictions after the reconnect grace window, games started,
 finished and abandoned, timer overruns past 250ms, stored drawing sizes,
-drawings dropped by the recap budget - are buffered and written in batches,
+callers held to a command budget, drawings dropped by the recap budget - are
+buffered and written in batches,
 because a database round trip per join would be felt as lag in a drawing. The
 buffer is bounded and drops oldest when full, counting what it dropped, so a
 gap is visible rather than silent.

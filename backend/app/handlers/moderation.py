@@ -220,6 +220,6 @@ async def report_player(ctx: HandlerContext, sid, data):
 
 
 def register(ctx: HandlerContext) -> None:
-    ctx.sio.on("toggle_afk", handler=partial(toggle_afk, ctx))
-    ctx.sio.on("vote_player", handler=partial(vote_player, ctx))
-    ctx.sio.on("report_player", handler=partial(report_player, ctx))
+    ctx.on("toggle_afk", handler=partial(toggle_afk, ctx))
+    ctx.on("vote_player", handler=partial(vote_player, ctx))
+    ctx.on("report_player", handler=partial(report_player, ctx))

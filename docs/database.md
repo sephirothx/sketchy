@@ -896,7 +896,7 @@ One raw observation. `id` · `event_type` · `occurred_at` · `room_id` · `user
 (`SET NULL`) · `value` · `details` (JSON).
 
 Types: `room.created`, `room.closed`, `player.joined`, `player.left`,
-`player.disconnected`, `player.reconnected`, `player.evicted`, `game.started`,
+`player.disconnected`, `player.reconnected`, `player.evicted`, `command.throttled`, `game.started`,
 `game.finished`, `game.abandoned`, `turn.ended`, `timer.overran`,
 `canvas.payload_observed`, `drawing.stored`, `recap.budget_dropped`.
 

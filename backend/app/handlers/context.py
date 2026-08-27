@@ -15,7 +15,10 @@ from app.repositories.interfaces import (
     UserRepository,
     PromptListRepository,
 )
+from app.domain_values import RuntimeEventType
+from app.handlers.budgets import CommandBudgets, budget_for
 from app.rooms import RoomManager
+from app.services.runtime_metrics import metrics
 from app.services.timers import TimerManager
 
 if TYPE_CHECKING:
@@ -73,11 +76,61 @@ class HandlerContext:
     _seating_gates: dict[str, SeatingGate] = field(
         default_factory=dict, init=False, repr=False
     )
+    _command_budgets: CommandBudgets = field(
+        default_factory=lambda: CommandBudgets(), init=False, repr=False
+    )
+    # Sockets already told they are going too fast, so the observation is
+    # recorded once a run rather than once a refusal.
+    _throttled: set[str] = field(default_factory=set, init=False, repr=False)
     # Sockets this server is in the act of closing, counted so that two
     # closes of the same socket cannot uncount each other.
     _closing_sockets: dict[str, int] = field(
         default_factory=dict, init=False, repr=False
     )
+
+    def on(self, command: str, handler) -> None:
+        """Register a client command, with the budget it answers to.
+
+        Every client-originated command goes through here rather than through
+        `sio.on` directly, so that adding one cannot quietly add an unbounded
+        one. `test_command_budgets.py` checks the two lists against each other.
+        """
+
+        budget = budget_for(command)
+
+        async def guarded(sid, *args):
+            # Before parsing, before authorization, before any mutation: a
+            # refused command must cost nothing but the check itself.
+            if not self._command_budgets.check(f"{sid}:{command}", budget):
+                self._note_throttled(sid, command)
+                return {
+                    "ok": False,
+                    "error": "You are doing that too quickly. Slow down a moment.",
+                }
+            return await handler(sid, *args)
+
+        self.sio.on(command, handler=guarded)
+
+    def _note_throttled(self, sid: str, command: str) -> None:
+        """Record the first refusal of a run, not every one of them.
+
+        A caller who is being refused is being refused repeatedly, and one
+        observation per refused command would be its own write amplification -
+        the thing these budgets exist to stop.
+        """
+
+        key = f"{sid}:{command}"
+        if key in self._throttled:
+            return
+        self._throttled.add(key)
+        logger.warning("throttled %s from %s", command, sid)
+        metrics.record(RuntimeEventType.COMMAND_THROTTLED, details={"command": command})
+
+    def clear_command_budget(self, sid: str) -> None:
+        """Forget a socket that has gone, so neither map grows for ever."""
+
+        self._command_budgets.forget(sid)
+        self._throttled = {key for key in self._throttled if not key.startswith(f"{sid}:")}
 
     @asynccontextmanager
     async def seating(self, sid: str) -> AsyncIterator[SeatingGate]:

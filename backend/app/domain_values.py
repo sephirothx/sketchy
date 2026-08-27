@@ -267,6 +267,7 @@ class RuntimeEventType(StrEnum):
     CANVAS_PAYLOAD_OBSERVED = "canvas.payload_observed"
     DRAWING_STORED = "drawing.stored"
     RECAP_BUDGET_DROPPED = "recap.budget_dropped"
+    COMMAND_THROTTLED = "command.throttled"
 
 
 class GameOutcome(StrEnum):

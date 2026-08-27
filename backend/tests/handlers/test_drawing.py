@@ -989,7 +989,7 @@ async def test_a_verified_prefix_claim_is_answered_with_only_the_missing_tail():
         )
 
     sio = socketio.AsyncServer(async_mode="asgi")
-    register_handlers(sio, room_manager)
+    ctx = register_handlers(sio, room_manager)
     sio.get_session = AsyncMock(
         return_value={"room_id": room.id, "player_id": drawer.id}
     )
@@ -1015,5 +1015,9 @@ async def test_a_verified_prefix_claim_is_answered_with_only_the_missing_tail():
         None,
     ):
         sio.emit.reset_mock()
+        # This is about the answer, not the rate: a resync floor holds one
+        # caller to a few replays per window, and four claims in a row is more
+        # than a real client would ever make.
+        ctx.clear_command_budget("drawer-sid")
         await sync("drawer-sid", bad)
         assert sio.emit.await_args.args[0] == "sync_strokes", bad
