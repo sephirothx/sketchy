@@ -27,6 +27,7 @@ import json
 import os
 import sys
 import zlib
+from itertools import pairwise
 from pathlib import Path
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,7 +35,7 @@ BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.rooms import RoomManager  # noqa: E402
+from app.rooms import RoomManager
 
 
 def json_bytes(value) -> bytes:
@@ -104,7 +105,7 @@ def main() -> None:
     full_messages = [event_message("room_state", state) for state in states]
     delta_messages = [full_messages[0]] + [
         event_message("room_delta", changed_keys(previous, current))
-        for previous, current in zip(states, states[1:])
+        for previous, current in pairwise(states)
     ]
 
     full_raw = [len(message) for message in full_messages]
