@@ -12,6 +12,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repo-hygiene:
+    name: Repository artifact scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Cheap and first: a committed database or key is worth failing on before
+      # anyone spends a runner on tests. `.githooks/pre-push` runs the same
+      # script locally for whoever opts in.
+      - run: bash scripts/check-tracked-artifacts.sh
+
   backend:
     name: Backend lint & tests
     runs-on: ubuntu-latest

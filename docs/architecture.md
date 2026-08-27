@@ -480,6 +480,7 @@ is written.
 | Database | `test_db_models.py`, `test_migrations.py`, `test_repositories.py` | Schema, the full migration chain both directions, drift, and the repositories against PostgreSQL |
 | E2E | `backend/tests/e2e/` | Real multi-browser Playwright sessions across Chromium and Firefox |
 | Benchmarks | `benchmarks/`, `frontend/benchmarks/` | Diagnostic baselines, deliberately **not** CI thresholds |
+| Repository hygiene | `backend/tests/test_repo_artifacts.py` | No database, env file, or private key is tracked - by name or by bytes |
 
 Two rules keep the E2E suite fast: a test waits on the condition it actually cares
 about (never a fixed sleep sized to outlast it), and where it genuinely must sit out a
@@ -487,9 +488,20 @@ production interval it fast-forwards the page's own clock with Playwright's
 `page.clock` rather than spending the time — which keeps the interval a production
 constant instead of something bent for the tests.
 
-CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs four jobs: backend
-lint and tests, PostgreSQL migrations and repositories, frontend test/lint/build, and
-the multi-browser E2E suite.
+CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs five jobs: the
+repository artifact scan, backend lint and tests, PostgreSQL migrations and
+repositories, frontend test/lint/build, and the multi-browser E2E suite.
+
+The artifact scan
+([`scripts/check-tracked-artifacts.sh`](../scripts/check-tracked-artifacts.sh)) is the
+one job that guards the repository rather than the program. A database has reached a
+commit twice - a write-ahead log, then a whole database with a signing secret in it,
+pushed to a public remote - because `.gitignore` only ever matched the filename shapes
+someone had already thought of. So the scan refuses a file for its *bytes* as well as
+its name, and [`.githooks/pre-push`](../.githooks/pre-push) runs the same script over a
+push range for anyone who opts in with `git config core.hooksPath .githooks`. Catching
+it locally matters more than catching it in CI: by the time CI speaks, a secret is
+already public.
 
 ---
 

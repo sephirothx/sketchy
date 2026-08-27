@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Stop a database, an environment file, or a private key before it leaves the
+# machine. CI refuses the same files, but only after the push is already public -
+# and for a secret, public is the whole problem.
+#
+# Hooks are not tracked by git, so this one is opt-in per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# git feeds pre-push one line per ref: <local ref> <local sha> <remote ref> <remote sha>.
+
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+status=0
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  # An all-zero local sha is a branch deletion: nothing is being sent.
+  case "$local_sha" in
+    *[!0]*) ;;
+    *) continue ;;
+  esac
+
+  # An all-zero remote sha is a branch the remote has never seen, so there is no
+  # far end to diff against. Everything not already on some remote-tracking ref
+  # is what this push would add.
+  case "$remote_sha" in
+    *[!0]*) range=("$remote_sha..$local_sha") ;;
+    *) range=("$local_sha" --not --remotes) ;;
+  esac
+
+  if ! "$root/scripts/check-tracked-artifacts.sh" --range "${range[@]}"; then
+    status=1
+  fi
+done
+
+if [ "$status" -ne 0 ]; then
+  printf '\npre-push: refusing to push the files listed above.\n' >&2
+fi
+
+exit "$status"

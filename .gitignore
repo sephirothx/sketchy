@@ -18,6 +18,13 @@ venv
 *.db-wal
 *.db-journal
 *.sqlite*
+# `*.db` does not match a backup copy either, because the timestamp lands after
+# the extension - which is how `backend/sketchy.db.broken-20260827-033005`, a
+# whole database with a signing secret in it, reached a public remote. Twice now
+# this list has only covered the shapes someone had already thought of, so
+# `scripts/check-tracked-artifacts.sh` refuses anything whose *bytes* are a
+# SQLite database, under any name at all.
+*.db.*
 
 # --- Node / frontend ---
 node_modules
