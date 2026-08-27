@@ -319,30 +319,6 @@ export const BugReportsQueuePage = `
         </div>
       </div>
 
-      <!-- Diagnostics across the width, not down a column: nine short facts in
-           a narrow aside became a very tall list, and the user agent wrapped
-           into a paragraph. -->
-      <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
-        <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}; margin-bottom: 10px">Diagnostics</h2>
-        <div style="display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; overflow: hidden">
-          ${diagCell('Build', 'a299f80', { isMono: true })}
-          ${diagCell('Page', '/room/BQ7F2K', { isMono: true })}
-          ${diagCell('Room', 'BQ7F2K · round 2 of 3')}
-          ${diagCell('Screen', '1440 × 900 · 2×')}
-          ${diagCell('Connection', 'connected · 1 reconnect this visit')}
-          ${diagCell('Seat', 'Guessing')}
-          ${diagCell('Account', 'Guest')}
-          ${diagCell('Clock skew', '0.9s')}
-          ${diagCell('Browser', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.280 Safari/537.36', { wide: true, isMono: true })}
-        </div>
-        <!-- Full width, because these are long flat lists: opening one in a
-             sidebar was the same problem again. -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px">
-          ${moreContext('Everything the server saw')}
-          ${moreContext('Everything the client reported')}
-        </div>
-      </section>
-
       <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; align-items: start">
         <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}; display: grid; gap: 12px">
           <div>
@@ -368,6 +344,32 @@ export const BugReportsQueuePage = `
           <p style="font-size: 11.5px; color: ${T.faint}; font-weight: 700; margin-top: 6px; line-height: 1.5">Erased when this report is decided — the row stays, the pixels do not.</p>
         </aside>
       </div>
+
+      <!-- Diagnostics across the width, not down a column: nine short facts in
+           a narrow aside became a very tall list, and the user agent wrapped
+           into a paragraph. Below the report itself, because what the player
+           wrote and photographed is the case; the machine detail is what you
+           turn to once you know what you are looking for. -->
+      <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
+        <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}; margin-bottom: 10px">Diagnostics</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; overflow: hidden">
+          ${diagCell('Build', 'a299f80', { isMono: true })}
+          ${diagCell('Page', '/room/BQ7F2K', { isMono: true })}
+          ${diagCell('Room', 'BQ7F2K · round 2 of 3')}
+          ${diagCell('Screen', '1440 × 900 · 2×')}
+          ${diagCell('Connection', 'connected · 1 reconnect this visit')}
+          ${diagCell('Seat', 'Guessing')}
+          ${diagCell('Account', 'Guest')}
+          ${diagCell('Clock skew', '0.9s')}
+          ${diagCell('Browser', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.280 Safari/537.36', { wide: true, isMono: true })}
+        </div>
+        <!-- Full width, because these are long flat lists: opening one in a
+             sidebar was the same problem again. -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px">
+          ${moreContext('Everything the server saw')}
+          ${moreContext('Everything the client reported')}
+        </div>
+      </section>
 
       <details style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px 18px; box-shadow: ${T.shadow}">
         <summary class="plain" style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: ${T.ink}">

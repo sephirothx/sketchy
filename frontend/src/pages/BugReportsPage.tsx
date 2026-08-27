@@ -232,35 +232,6 @@ export function BugReportsPage() {
                 </div>
               </div>
 
-              {/* Diagnostics run across the top rather than down a column.
-                  Nine short facts in a narrow aside became a very tall list,
-                  and the one genuinely long value - the user agent - wrapped
-                  into a paragraph. Across the width they read as a strip, and
-                  the long one gets a cell wide enough to hold it. */}
-              <section className="ops-card bug-diagnostics-card">
-                <h2>Diagnostics</h2>
-                <dl className="bug-diagnostics">
-                  {highlights(active).map(([label, shown, wide]) => (
-                    <div key={label} className={`bug-diagnostic${wide ? " is-wide" : ""}`}>
-                      <dt>{label}</dt>
-                      <dd>{shown}</dd>
-                    </div>
-                  ))}
-                </dl>
-                {/* Full width, because these are long flat lists: opening one
-                    in a sidebar was the same problem again. */}
-                <div className="bug-more-row">
-                  <details className="bug-more-context">
-                    <summary>Everything the server saw</summary>
-                    <ContextList value={active.serverContext} />
-                  </details>
-                  <details className="bug-more-context">
-                    <summary>Everything the client reported</summary>
-                    <ContextList value={active.clientContext} skip={["recentErrors"]} />
-                  </details>
-                </div>
-              </section>
-
               <div className={`bug-case-grid${active.screenshot.status === "none" ? " is-single" : ""}`}>
                 <section className="ops-card">
                   <h2>What happened</h2>
@@ -309,6 +280,39 @@ export function BugReportsPage() {
                   </aside>
                 )}
               </div>
+
+              {/* Diagnostics run across the width rather than down a column.
+                  Nine short facts in a narrow aside became a very tall list,
+                  and the one genuinely long value - the user agent - wrapped
+                  into a paragraph. Across the width they read as a strip, and
+                  the long one gets a cell wide enough to hold it.
+
+                  They sit below the report itself: what the player wrote and
+                  what they photographed is the case, and the machine detail is
+                  what you turn to once you know what you are looking for. */}
+              <section className="ops-card bug-diagnostics-card">
+                <h2>Diagnostics</h2>
+                <dl className="bug-diagnostics">
+                  {highlights(active).map(([label, shown, wide]) => (
+                    <div key={label} className={`bug-diagnostic${wide ? " is-wide" : ""}`}>
+                      <dt>{label}</dt>
+                      <dd>{shown}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {/* Full width, because these are long flat lists: opening one
+                    in a sidebar was the same problem again. */}
+                <div className="bug-more-row">
+                  <details className="bug-more-context">
+                    <summary>Everything the server saw</summary>
+                    <ContextList value={active.serverContext} />
+                  </details>
+                  <details className="bug-more-context">
+                    <summary>Everything the client reported</summary>
+                    <ContextList value={active.clientContext} skip={["recentErrors"]} />
+                  </details>
+                </div>
+              </section>
 
               {active.status === "pending" ? (
                 <>
