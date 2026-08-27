@@ -11,6 +11,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { MyPromptListsPage } from "./pages/MyPromptListsPage";
 import { AccountRecoveryPage } from "./pages/AccountRecoveryPage";
 import { AdminOperationsPage } from "./pages/AdminOperationsPage";
+import { BugReportsPage } from "./pages/BugReportsPage";
 import { ModerationPage } from "./pages/ModerationPage";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
@@ -127,6 +128,7 @@ function App() {
           <Route path="/verify-email" element={<AccountRecoveryPage mode="verify" />} />
           <Route path="/admin/operations" element={<AdminOperationsPage />} />
           <Route path="/moderation" element={<ModerationPage />} />
+          <Route path="/admin/bug-reports" element={<BugReportsPage />} />
         </Routes>
         <SettingsModal />
         <ConfettiCanvas />

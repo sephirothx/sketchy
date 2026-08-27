@@ -125,6 +125,7 @@ erDiagram
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompts`, `prompt_usage_facts` |
 | **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
+| **Bug reports** | `bug_reports` |
 
 ---
 
@@ -474,6 +475,47 @@ content automatically. One review may dismiss the report or set the exact target
 or Hidden, with actor/time provenance and an append-only audit event. A dismissal
 cannot mutate content. Snapshots survive list and account deletion even after the target
 foreign keys are cleared.
+
+### `bug_reports`
+A player's report that the app itself is broken. **Not a moderation row**: it is about
+the software rather than a person, carries build and diagnostic data rather than safety
+evidence, and is triaged by administrators. It lives in this section only because it
+shares the `ReportStatus` review vocabulary.
+
+`id` · `reporter_user_id` (`SET NULL`) · `area` · `severity` · `summary` ·
+`details` · `build_sha` · `route` · `room_code` · `game_id` / `turn_id` ·
+`client_context` · `server_context` · `screenshot_*` · `status` ·
+`reviewed_by_user_id` · `resolution_note` · timestamps.
+
+Areas: `drawing_and_canvas`, `guessing_and_chat`, `rounds_and_scoring`,
+`rooms_and_lobby`, `prompt_lists`, `account_and_settings`, `connection_and_sync`,
+`performance`, `accessibility`, `other`. Severities: `blocks_play`, `major`, `minor`.
+
+`build_sha` and `route` are lifted out of the context blob so the queue can be grouped
+by them without parsing JSON. `game_id` and `turn_id` are **not** foreign keys: a live
+game is not written to `game_records` until it finishes, so at filing time they name
+rows that may not exist yet.
+
+**Two halves of context, never conflated.** `client_context` is what the reporter's
+browser said about itself — build, viewport, browser, accessibility preferences,
+connection telemetry, heap, and the last 20 client errors — and is reporter-supplied
+evidence. `server_context` is what this server observed of their **live seat**, resolved
+by walking the live rooms for that account rather than trusting the room code sent, plus
+the clock skew between the two. Only the second half is fact. Neither ever carries the
+prompt in play, chat text, or a query string.
+
+**Screenshots** follow `turn_drawings` rather than inventing storage:
+`screenshot_payload` with `screenshot_byte_size`, `screenshot_checksum_sha256`,
+`screenshot_content_type`, dimensions, and a `screenshot_status` of
+`none | ready | erased`. The server sniffs the magic bytes, re-derives the size and
+digest, and rejects anything that is not a real PNG or WebP under 2 MB.
+`ck_bug_reports_screenshot_ready_identity` requires a `ready` row to hold the bytes and
+their identity; `ck_bug_reports_screenshot_erased` makes erasure **structural** — a
+decided report cannot retain pixels, whatever a future code path does.
+
+**Deciding is one-way.** A pending report receives one resolution with a required note,
+and the same transaction erases the screenshot. Submission and each decision append an
+audit event naming the report; the ledger never records what the report said.
 
 ### `user_bans`
 `id` · `user_id` (`SET NULL`) · `banned_by_user_id` (`SET NULL`) · `reason` ·
@@ -909,6 +951,8 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | Rolled up first, then purged |
 | Daily runtime roll-ups | Permanent | — |
 | Shutdown abandonments | 90 days | Purged at startup |
+| Bug report rows | Indefinite | — |
+| Bug report screenshots | Until the report is decided | Erased in the deciding transaction; `ck_bug_reports_screenshot_erased` |
 | Data exports | 7 days (format v1) | `expires_at` |
 | Ephemeral room codes | 30 days retirement, then reusable | `retired_until` |
 | Persistent room codes | Permanent | Never enter the reuse pool |
@@ -949,6 +993,8 @@ Deletion:
 - deletes owned prompt lists and their owned prompt concepts, rather than leaving
   ownerless content;
 - erases the drawings that account made while leaving the row saying so;
+- erases any screenshot on a bug report that account filed, while leaving the report:
+  a defect is not un-found by an erasure, and the reporter foreign key detaches;
 - does the same for every persistent room owned by that account (archive + permanent
   code reservation).
 

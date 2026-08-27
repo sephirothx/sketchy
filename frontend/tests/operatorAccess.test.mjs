@@ -14,7 +14,15 @@ test("a moderator reviews reports; an administrator also runs the server", () =>
   );
   assert.deepEqual(
     operatorEntries("admin").map((entry) => entry.path),
-    ["/moderation", "/admin/operations"],
+    ["/moderation", "/admin/operations", "/admin/bug-reports"],
+  );
+});
+
+test("bug triage is an administrator surface, not a moderation one", () => {
+  // A moderator staffs the safety queue. Bug reports carry build and
+  // diagnostic data and are somebody else's job, so they are not offered.
+  assert.ok(
+    !operatorEntries("moderator").some((entry) => entry.path === "/admin/bug-reports"),
   );
 });
 

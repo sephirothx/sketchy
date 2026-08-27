@@ -193,3 +193,165 @@
 .suspension-evidence-text {
   font-size: 14px;
 }
+
+/* ------------------------------------------------------------ bug reporting
+ * Wider than a confirmation because it carries a form, a screenshot preview and
+ * the diagnostics disclosure - all of which the player is meant to read before
+ * sending, not squint at.
+ */
+.bug-report-dialog {
+  max-width: 620px;
+  max-height: min(90vh, 900px);
+  overflow-y: auto;
+  text-align: left;
+}
+
+.bug-report-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+}
+
+.bug-report-head .modal-title { margin: 0; }
+.bug-report-head .modal-body { margin-top: 3px; }
+
+.bug-report-mark {
+  align-items: center;
+  background: var(--warm-soft);
+  border-radius: 11px;
+  color: var(--warm-ink);
+  display: inline-flex;
+  flex: none;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.bug-report-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 520px) {
+  .bug-report-row { grid-template-columns: 1fr; }
+}
+
+.bug-report-counter {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+  text-align: right;
+}
+
+.bug-report-shot {
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 12px 14px;
+}
+
+.bug-report-shot-head {
+  align-items: center;
+  color: var(--faint);
+  display: flex;
+  gap: 8px;
+}
+
+.bug-report-shot-head strong { color: var(--ink); font-size: 13px; }
+
+.bug-report-optional {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  margin-left: auto;
+  padding: 4px 11px;
+}
+
+.bug-report-shot-body {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+}
+
+.bug-report-shot-body img {
+  border: 1.5px solid var(--line-strong);
+  border-radius: 7px;
+  flex: none;
+  height: auto;
+  width: 148px;
+}
+
+.bug-report-shot-meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.bug-report-shot-actions { display: flex; gap: 6px; margin-top: 6px; }
+
+.bug-report-shot-actions button,
+.bug-report-attach {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 36px;
+  padding: 7px 12px;
+}
+
+.bug-report-remove { color: var(--danger); }
+
+.bug-report-context {
+  background: var(--well);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+  padding: 12px 14px;
+}
+
+.bug-report-context > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bug-report-subhead {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 800;
+  margin: 10px 0 6px;
+}
+
+.bug-report-plain {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.bug-report-plain input { flex: none; margin-top: 2px; }
+
+.bug-report-plain > span {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.bug-report-plain > span > span {
+  color: var(--faint);
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 2px;
+}

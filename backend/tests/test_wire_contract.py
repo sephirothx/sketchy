@@ -45,6 +45,31 @@ EXPORT_DOWNLOAD_FIELDS = {
 }
 
 
+def _diagnostic_blob_keys() -> set[str]:
+    """Keys of the bug-report diagnostics blob, which no client parses.
+
+    `_live_room_context` describes the reporter's seat for a human or a model
+    to read on the triage page; the client renders it generically, key by key,
+    and never names one. Derived from the function rather than listed here so
+    that adding a diagnostic cannot silently widen the exemption to the rest of
+    the module - a camelCase key anywhere else in that file is still a wire
+    name and still has to be read.
+    """
+    tree = ast.parse(
+        (BACKEND_APP / "api" / "bug_reports.py").read_text(encoding="utf-8")
+    )
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_live_room_context":
+            return {
+                key.value
+                for inner in ast.walk(node)
+                if isinstance(inner, ast.Dict)
+                for key in inner.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+            }
+    raise AssertionError("_live_room_context has moved - update this exemption")
+
+
 def _python_sources() -> list[ast.Module]:
     return [
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -124,10 +149,9 @@ def test_server_payload_keys_are_read_by_the_client(trees, frontend):
     # A data export is downloaded as an opaque artifact rather than parsed by
     # the browser. Its v1 field surface is pinned by a dedicated checked-in
     # contract and generation test instead of this live client/server check.
+    opaque = EXPORT_DOWNLOAD_FIELDS | _diagnostic_blob_keys()
     unread = sorted(
-        key
-        for key in keys
-        if key not in EXPORT_DOWNLOAD_FIELDS and not _mentions(frontend, key)
+        key for key in keys if key not in opaque and not _mentions(frontend, key)
     )
     assert not unread, (
         "the server sends payload keys the client never names: "

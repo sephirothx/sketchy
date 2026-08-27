@@ -22,7 +22,9 @@ import {
 import { AddEmailDialog } from "./AddEmailDialog";
 import { SessionManagerDialog } from "./SessionManagerDialog";
 import { AccountDataDialog } from "./AccountDataDialog";
+import { BugReportDialog } from "./BugReportDialog";
 import {
+  BugIcon,
   BulbIcon,
   ChevronDownIcon,
   DevicesIcon,
@@ -82,6 +84,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [accountDataOpen, setAccountDataOpen] = useState(false);
+  const [bugReportOpen, setBugReportOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -132,6 +135,21 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const staffEntries = operatorEntries(user.role, { isAnonymous: isGuest });
   const shownName = isGuest ? user.displayName : (user.username ?? user.displayName);
   const opensDialogDirectly = isGuest && compact;
+
+  // The same entry in both branches, fenced off by dividers on either side so
+  // it never reads as one of the account actions around it. Offered to guests
+  // too: the bugs nobody reports are the ones met before anyone signs up.
+  const reportBugEntry = (
+    <MenuItem
+      icon={<BugIcon size={16} />}
+      onClick={() => {
+        setMenuOpen(false);
+        setBugReportOpen(true);
+      }}
+    >
+      Report a bug
+    </MenuItem>
+  );
 
   return (
     <div className="account-menu" ref={rootRef}>
@@ -205,6 +223,9 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
               >
                 Your data
               </MenuItem>
+              <div className="account-menu-divider" role="presentation" />
+              {reportBugEntry}
+              <div className="account-menu-divider" role="presentation" />
               <MenuItem
                 icon={<PlusIcon size={16} />}
                 onClick={() => {
@@ -279,6 +300,8 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                 </MenuItem>
               ))}
               <div className="account-menu-divider" role="presentation" />
+              {reportBugEntry}
+              <div className="account-menu-divider" role="presentation" />
               <MenuItem
                 icon={<LeaveIcon size={16} />}
                 className="menu-item-danger"
@@ -314,6 +337,9 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
       )}
       {accountDataOpen && (
         <AccountDataDialog onClose={() => setAccountDataOpen(false)} />
+      )}
+      {bugReportOpen && (
+        <BugReportDialog onClose={() => setBugReportOpen(false)} />
       )}
     </div>
   );

@@ -23,6 +23,7 @@ from app.db.models import (
     GameParticipant,
     GameRecord,
     IdentityAlias,
+    BugReport,
     PlayerReport,
     PlayerReportMessageEvidence,
     PersistentRoom,
@@ -287,6 +288,15 @@ async def _build_export_artifact(
                 select(PromptContentReport)
                 .where(PromptContentReport.reporter_user_id.in_(identity_ids))
                 .order_by(PromptContentReport.created_at, PromptContentReport.id)
+            )
+        ).all()
+    )
+    submitted_bug_reports = list(
+        (
+            await session.scalars(
+                select(BugReport)
+                .where(BugReport.reporter_user_id.in_(identity_ids))
+                .order_by(BugReport.created_at, BugReport.id)
             )
         ).all()
     )
@@ -727,6 +737,33 @@ async def _build_export_artifact(
             }
             for report in submitted_prompt_content_reports
         ],
+        # A bug report is the requester's own words about the software plus the
+        # diagnostics their browser volunteered, so all of it comes back. The
+        # administrator's note and identity do not: those are the operator's
+        # record of what was done, the same line the suspensions block draws.
+        # The screenshot is reported by shape rather than embedded - it is
+        # erased when the report is decided, and an export is not a way to keep
+        # a copy of it alive.
+        "bugReportsSubmitted": [
+            {
+                "id": str(report.id),
+                "area": report.area,
+                "severity": report.severity,
+                "summary": report.summary,
+                "details": report.details,
+                "buildSha": report.build_sha,
+                "route": report.route,
+                "roomCode": report.room_code,
+                "clientContext": report.client_context,
+                "screenshotStatus": report.screenshot_status,
+                "screenshotByteSize": report.screenshot_byte_size,
+                "status": report.status,
+                "createdAt": _timestamp(report.created_at),
+                "updatedAt": _timestamp(report.updated_at),
+                "reviewedAt": _timestamp(report.reviewed_at),
+            }
+            for report in submitted_bug_reports
+        ],
         # Suspension history is requester data, but moderator identities and
         # internal revocation notes remain private.
         "suspensions": [
@@ -1063,6 +1100,18 @@ async def anonymize_account(
                     sender_name_color_snapshot=None,
                     sender_is_anonymous_snapshot=True,
                 )
+            )
+            # A bug report outlives the account that filed it - a defect is not
+            # un-found by an erasure, and the foreign key detaches the reporter.
+            # The screenshot does not: it is a picture of somebody's screen, and
+            # nothing about keeping the bug report needs it.
+            await session.execute(
+                update(BugReport)
+                .where(
+                    BugReport.reporter_user_id.in_(identity_ids),
+                    BugReport.screenshot_status == "ready",
+                )
+                .values(screenshot_payload=None, screenshot_status="erased")
             )
             await session.execute(
                 delete(UploadedAvatarAsset).where(

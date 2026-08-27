@@ -203,6 +203,47 @@ class ReportStatus(StrEnum):
     DISMISSED = "dismissed"
 
 
+class BugReportArea(StrEnum):
+    """Where in the product a bug was met.
+
+    Ten buckets taken from the requirement sections rather than invented, so a
+    report lands where the code and its tests already live. Connection and
+    accessibility get their own rather than folding into `OTHER`: both have
+    dedicated requirements and end-to-end suites, and both are exactly what
+    goes unreported when the only honest answer is "something else".
+    """
+
+    DRAWING_AND_CANVAS = "drawing_and_canvas"
+    GUESSING_AND_CHAT = "guessing_and_chat"
+    ROUNDS_AND_SCORING = "rounds_and_scoring"
+    ROOMS_AND_LOBBY = "rooms_and_lobby"
+    PROMPT_LISTS = "prompt_lists"
+    ACCOUNT_AND_SETTINGS = "account_and_settings"
+    CONNECTION_AND_SYNC = "connection_and_sync"
+    PERFORMANCE = "performance"
+    ACCESSIBILITY = "accessibility"
+    OTHER = "other"
+
+
+class BugReportSeverity(StrEnum):
+    BLOCKS_PLAY = "blocks_play"
+    MAJOR = "major"
+    MINOR = "minor"
+
+
+class BugReportScreenshotStatus(StrEnum):
+    """Whether a report carries a screenshot, and whether it still does.
+
+    `ERASED` is not the same as `NONE`: a decided report should say that a
+    screenshot existed and was dropped, rather than reading as one that never
+    had a picture at all.
+    """
+
+    NONE = "none"
+    READY = "ready"
+    ERASED = "erased"
+
+
 class RuntimeEventType(StrEnum):
     """What the server records about its own behaviour.
 
@@ -282,6 +323,7 @@ class AuditTargetType(StrEnum):
     PROMPT_VERSION = "prompt_version"
     ROOM = "room"
     APP_CONFIG = "app_config"
+    BUG_REPORT = "bug_report"
 
 
 SCORING_MODES = tuple(mode.value for mode in ScoringMode)
@@ -321,6 +363,11 @@ DATA_EXPORT_STATUSES = tuple(status.value for status in DataExportStatus)
 USER_THEMES = tuple(theme.value for theme in UserTheme)
 BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)
 REPORT_REASONS = tuple(reason.value for reason in ReportReason)
+BUG_REPORT_AREAS = tuple(area.value for area in BugReportArea)
+BUG_REPORT_SEVERITIES = tuple(severity.value for severity in BugReportSeverity)
+BUG_REPORT_SCREENSHOT_STATUSES = tuple(
+    status.value for status in BugReportScreenshotStatus
+)
 REPORT_STATUSES = tuple(status.value for status in ReportStatus)
 AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
 GAME_OUTCOMES = tuple(outcome.value for outcome in GameOutcome)

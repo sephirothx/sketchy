@@ -13,6 +13,7 @@ from app.api.profiles import create_profile_router
 from app.api.persistent_rooms import create_persistent_room_router
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
+from app.api.bug_reports import create_bug_report_router
 from app.api.moderation import create_moderation_router
 from app.api.operations import create_operations_router
 from app.api.user_settings import create_user_settings_router
@@ -243,6 +244,9 @@ api.include_router(
     )
 )
 api.include_router(create_operations_router(async_session_factory))
+api.include_router(
+    create_bug_report_router(async_session_factory, room_manager)
+)
 api.include_router(create_profile_router(user_repo, game_history_repo))
 api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))

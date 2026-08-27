@@ -1,4 +1,5 @@
 import { io, Socket } from "socket.io-client";
+import { recordClientError } from "./clientErrorLog.ts";
 import type { AckResponse } from "../types";
 
 // No URL: connect to the origin that served the page. The backend serves the
@@ -21,12 +22,57 @@ export const socket: Socket = io({
 // `socket.connected` alone.
 let everConnected = false;
 socket.on("connect", () => {
+  if (everConnected) telemetry.reconnects += 1;
   everConnected = true;
 });
 
 /** True once this page load has completed at least one handshake. */
 export function hasEverConnected(): boolean {
   return everConnected;
+}
+
+/** What this page load's connection has actually been through.
+
+Kept here rather than in a store because nothing renders it: it exists so that
+a bug report saying "it froze" can also say the socket had dropped four times in
+the previous minute, which is usually the whole answer. */
+const telemetry = {
+  reconnects: 0,
+  lastDisconnectAt: null as string | null,
+  lastDisconnectReason: null as string | null,
+};
+
+socket.on("disconnect", (reason) => {
+  telemetry.lastDisconnectAt = new Date().toISOString();
+  telemetry.lastDisconnectReason = String(reason);
+  recordClientError("socket", `disconnect: ${reason}`);
+});
+
+socket.on("connect_error", (error) => {
+  recordClientError("socket", `connect_error: ${error?.message ?? error}`);
+});
+
+export interface ConnectionTelemetry {
+  connected: boolean;
+  everConnected: boolean;
+  /** Handshakes after the first. Zero on a connection that never dropped. */
+  reconnects: number;
+  lastDisconnectAt: string | null;
+  lastDisconnectReason: string | null;
+  /** "websocket" or "polling" - a game that fell back to polling behaves
+      differently enough to be worth knowing before reproducing anything. */
+  transport: string | null;
+}
+
+export function connectionTelemetry(): ConnectionTelemetry {
+  return {
+    connected: socket.connected,
+    everConnected,
+    reconnects: telemetry.reconnects,
+    lastDisconnectAt: telemetry.lastDisconnectAt,
+    lastDisconnectReason: telemetry.lastDisconnectReason,
+    transport: socket.io?.engine?.transport?.name ?? null,
+  };
 }
 
 export const DEFAULT_ACK_TIMEOUT_MS = 8000;

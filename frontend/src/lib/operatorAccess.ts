@@ -17,6 +17,13 @@ const OPERATIONS: OperatorEntry = {
   label: "Server operations",
   path: "/admin/operations",
 };
+// Administrators only, and deliberately not beside Moderation: bug reports are
+// about the software, carry build and diagnostic data, and have a different
+// audience from anything in the safety queue.
+const BUG_REPORTS: OperatorEntry = {
+  label: "Bug reports",
+  path: "/admin/bug-reports",
+};
 
 export function canModerate(role: string | null | undefined): boolean {
   return role === "moderator" || role === "admin";
@@ -40,6 +47,6 @@ export function operatorEntries(
   if (isAnonymous) return [];
   const entries: OperatorEntry[] = [];
   if (canModerate(role)) entries.push(MODERATION);
-  if (canAdminister(role)) entries.push(OPERATIONS);
+  if (canAdminister(role)) entries.push(OPERATIONS, BUG_REPORTS);
   return entries;
 }

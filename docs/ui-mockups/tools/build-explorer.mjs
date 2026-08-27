@@ -33,6 +33,9 @@ const ROUTES = {
   Profile: [['Back to lobby', 'Main']],
   AdminOps: [['Back to lobby', 'Main']],
   Moderation: [['Back to operations', 'AdminOps'], ['Back to lobby', 'Main']],
+  BugReportMenu: [['Report a bug', 'BugReportDialog']],
+  BugReportDialog: [['Cancel', 'Main'], ['Send report', 'Main']],
+  BugReports: [['Back to operations', 'AdminOps'], ['Back to lobby', 'Main']],
 };
 
 // The happy path a game actually follows, for the ◀ ▶ flow stepper.

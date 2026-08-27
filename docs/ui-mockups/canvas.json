@@ -127,6 +127,30 @@
       "w": 1160,
       "h": 1040,
       "title": "Moderation"
+    },
+    {
+      "file": "BugReportMenu.dc.html",
+      "x": 0,
+      "y": 7060,
+      "w": 820,
+      "h": 600,
+      "title": "Report a bug — entry point"
+    },
+    {
+      "file": "BugReportDialog.dc.html",
+      "x": 910,
+      "y": 7060,
+      "w": 760,
+      "h": 1330,
+      "title": "Report a bug — dialog"
+    },
+    {
+      "file": "BugReports.dc.html",
+      "x": 1760,
+      "y": 7060,
+      "w": 1160,
+      "h": 1200,
+      "title": "Bug reports (admin)"
     }
   ],
   "annotations": [
@@ -164,6 +188,13 @@
       "y": 5450,
       "w": 460,
       "text": "OPERATOR PAGES — one admin workspace with a side rail. Server ops: status banner, metric cards, hourly chart, recorder health, append-only audit ledger. Moderation: queue/case master-detail with server-pinned evidence, account context, a required resolution note, and Suspend… opening the duration step."
+    },
+    {
+      "id": "note-bug-reports",
+      "x": 0,
+      "y": 6890,
+      "w": 460,
+      "text": "REPORTING A BUG — the one flow that is about the app rather than about people. Entry point sits in the account menu for guests and registered players alike, separated from the account actions. The dialog asks where and how bad, then shows exactly what leaves the browser — build, path, room, screen, browser, connection and the last client errors — with one checkbox to send the words alone. Triage is an administrator queue, not the moderation queue: severity dots, the reporter’s own errors, a diagnostics panel, and a required note because deciding is one-way."
     }
   ],
   "launch": {
