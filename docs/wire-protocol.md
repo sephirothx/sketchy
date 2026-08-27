@@ -704,7 +704,7 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | --- | --- | --- |
 | `GET` | `/api/health` | Liveness. `{"status":"ok","readiness":…}` |
 | `GET` | `/api/ready` | 200 only when startup finished and no drain has begun; 503 otherwise |
-| `GET` | `/api/rooms` | Public room summaries (`RoomSummary[]`), polled by the lobby |
+| `GET` | `/api/rooms` | Public room summaries (`RoomSummary[]`), polled by the lobby every 4 s. Sends an `ETag` and answers a matching `If-None-Match` with an empty **304**; `Cache-Control: no-cache` so it is revalidated, never served stale. The validator is a hash of the serialized list, not a change counter — a counter must be bumped at every site touching any of the 22 fields in `to_public_summary()`, and a missed bump is a lobby that stays stale |
 | `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set** |
 
 ### Accounts and sessions — [`backend/app/auth/routes.py`](../backend/app/auth/routes.py)

@@ -132,6 +132,9 @@ export function LobbyBrowserPage() {
   const [roomRefreshError, setRoomRefreshError] = useState<string | null>(null);
   const [roomListRetry, setRoomListRetry] = useState(0);
   const hasLoadedRoomsRef = useRef(false);
+  // The validator from the last successful fetch. A ref rather than state:
+  // changing it must not re-render, and the poll reads it at request time.
+  const roomsEtagRef = useRef<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [languageFilter, setLanguageFilter] = useState("all");
@@ -174,8 +177,21 @@ export function LobbyBrowserPage() {
       activeController = controller;
       activeTimeout = timeout;
       try {
-        const res = await fetch("/api/rooms", { signal: controller.signal });
+        const res = await fetch("/api/rooms", {
+          signal: controller.signal,
+          headers: roomsEtagRef.current ? { "If-None-Match": roomsEtagRef.current } : {},
+        });
+        if (res.status === 304) {
+          // Nothing has changed since the last poll, and the server sent no
+          // body to prove it. The rooms already on screen are current.
+          if (!cancelled) {
+            setRoomListStatus("loaded");
+            setRoomRefreshError(null);
+          }
+          return;
+        }
         if (!res.ok) throw new Error(`Room list request failed with ${res.status}`);
+        roomsEtagRef.current = res.headers.get("ETag");
         const data: unknown = await res.json();
         if (!Array.isArray(data)) throw new Error("Invalid room list response");
         if (!cancelled) {
