@@ -226,7 +226,14 @@ export interface ScoreEntry {
   score: number;
 }
 
-export interface TurnScoreEntry extends ScoreEntry {
+/** One row of the turn-results standings.
+
+`nickname` is optional because `turn_ended` addresses players by id alone -
+the roster already carries their identity, so repeating it cost about 1.3 KB
+of a 3.4 KB payload every turn. `gameStore.endTurn` fills it in from the
+roster on receipt, so it is always present by the time anything renders. */
+export interface TurnScoreEntry extends Omit<ScoreEntry, "nickname"> {
+  nickname?: string;
   delta: number;
   previousRank: number;
   newRank: number;
@@ -237,9 +244,11 @@ export interface TurnEndedPayload {
   drawerId: string;
   drawerBonus: number;
   seconds?: number;
+  // `nickname`, `nameColor` and `isAnonymous` are absent on the wire and
+  // filled in from the roster by `endTurn`; see gameStore.ts.
   guesses: {
     playerId: string;
-    nickname: string;
+    nickname?: string;
     nameColor?: string;
     isAnonymous?: boolean;
     seconds: number;

@@ -130,12 +130,13 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
             if game.phase_deadline
             else TURN_RESULTS_SECONDS
         ),
+        # Identity is not repeated here. Every id in this payload is a seat in
+        # the room the client already has from `room_state`, so `nickname`,
+        # `nameColor` and `isAnonymous` would be the same strings sent again -
+        # about 1.3 KB of a 3.4 KB payload, every turn.
         "guesses": [
             {
                 "playerId": player.id,
-                "nickname": player.nickname,
-                "nameColor": player.name_color,
-                "isAnonymous": player.is_anonymous,
                 "seconds": game.guess_times[player.id],
             }
             for player in sorted(
@@ -147,9 +148,6 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
         "scores": [
             {
                 "playerId": player.id,
-                "nickname": player.nickname,
-                "nameColor": player.name_color,
-                "isAnonymous": player.is_anonymous,
                 "score": player.score,
                 "delta": deltas[player.id],
                 "previousRank": previous_ranks[player.id],

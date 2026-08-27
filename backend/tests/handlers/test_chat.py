@@ -211,7 +211,10 @@ async def test_simultaneous_final_guesses_end_turn_once():
     turn_ended_payload = next(
         call.args[1] for call in sio.emit.await_args_list if call.args[0] == "turn_ended"
     )
-    assert {guess["nickname"] for guess in turn_ended_payload["guesses"]} == {"One", "Two"}
+    guessed = {guess["playerId"] for guess in turn_ended_payload["guesses"]}
+    assert guessed == {players[1].id, players[2].id}
+    # The payload carries seats, not names - the client already has the roster.
+    assert not any("nickname" in guess for guess in turn_ended_payload["guesses"])
     assert all(0 <= guess["seconds"] <= DRAWING_SECONDS for guess in turn_ended_payload["guesses"])
 
     timer = timers.phase_timers.pop(room.id)

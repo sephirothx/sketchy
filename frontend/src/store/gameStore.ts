@@ -132,6 +132,16 @@ interface GameStore {
   reset: () => void;
 }
 
+/** Nickname and colour for a seat, from the roster the client already holds. */
+function identityOf(players: PlayerInfo[], playerId: string) {
+  const seat = players.find((player) => player.playerId === playerId);
+  return {
+    nickname: seat?.nickname ?? "(left)",
+    nameColor: seat?.nameColor,
+    isAnonymous: seat?.isAnonymous,
+  };
+}
+
 const initialGameFields = {
   phase: "idle" as GamePhase,
   drawerId: null as string | null,
@@ -319,7 +329,22 @@ export const useGameStore = create<GameStore>((set) => ({
   endTurn: (payload) =>
     set((s) => ({
       phase: "turn_results",
-      lastTurnResult: payload,
+      // `turn_ended` addresses players by id only, so identity is joined
+      // against the roster here rather than at every render site. A player
+      // who left between the last `room_state` and the turn ending is not in
+      // the roster any more; the overlay renders what it is given, so they
+      // get a neutral placeholder rather than a blank cell.
+      lastTurnResult: {
+        ...payload,
+        guesses: payload.guesses.map((guess) => ({
+          ...guess,
+          ...identityOf(s.players, guess.playerId),
+        })),
+        scores: payload.scores.map((entry) => ({
+          ...entry,
+          ...identityOf(s.players, entry.playerId),
+        })),
+      },
       phaseSeconds: payload.seconds ?? 0,
       phaseStartedAt: Date.now(),
       phaseDurationSeconds: payload.seconds ?? 0,

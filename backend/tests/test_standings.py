@@ -47,8 +47,10 @@ def test_turn_results_give_tied_players_the_same_place():
     room, players = build_room(("Ann", 300), ("Bob", 300), ("Cid", 100))
     room.game.current_drawer = players["Cid"].id
 
+    # Addressed by seat: identity is the roster's job, not this payload's.
+    by_id = {player.id: name for name, player in players.items()}
     ranks = {
-        entry["nickname"]: entry["newRank"]
+        by_id[entry["playerId"]]: entry["newRank"]
         for entry in turn_ended_payload(room, drawer_bonus=0)["scores"]
     }
 
@@ -62,8 +64,9 @@ def test_a_tie_broken_by_the_turn_shows_as_a_place_gained():
     # Ann guessed this turn and took the lead with it.
     room.game.guess_points = {players["Ann"].id: 100}
 
+    by_id = {player.id: name for name, player in players.items()}
     entries = {
-        entry["nickname"]: entry
+        by_id[entry["playerId"]]: entry
         for entry in turn_ended_payload(room, drawer_bonus=0)["scores"]
     }
 
