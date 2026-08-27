@@ -109,4 +109,7 @@ log "Running Playwright Multi-Browser E2E Tests ($E2E_WORKERS workers)"
 # --dist=load spreads individual tests rather than whole files, so one slow file
 # no longer sets the floor for the whole run. Each test builds its own room and
 # its own browser, so nothing in a file depends on its neighbours.
-(cd "$BACKEND_DIR" && .venv/bin/pytest tests/e2e -n "$E2E_WORKERS" --dist=load)
+# The tests get the server's own database URL so a test that needs a staff
+# account can promote one, rather than the suite carrying a back door for it.
+(cd "$BACKEND_DIR" && SKETCHY_E2E_DATABASE_URL="sqlite+aiosqlite:///$E2E_DB" \
+  .venv/bin/pytest tests/e2e -n "$E2E_WORKERS" --dist=load)

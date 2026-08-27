@@ -396,6 +396,23 @@ claim that an arbitrary host will sustain it.
 | **R-OBS-05** | `GET /metrics` MUST be disabled entirely until `METRICS_TOKEN` is set, and MUST require that bearer token. |
 | **R-OBS-06** | The in-app operations page MUST require the administrator role. |
 
+### Bug reports
+
+| # | Requirement |
+| --- | --- |
+| **R-BUG-01** | Any player holding an identity, **including a guest**, MUST be able to report that the app is broken, from any screen. The bugs that go unreported are the ones met before anybody signs up. |
+| **R-BUG-02** | A bug report MUST NOT be a moderation surface. It is about the software, not a person; it carries build and diagnostic data rather than safety evidence, and it is triaged by administrators, not moderators. |
+| **R-BUG-03** | A report MUST name one of ten bounded areas and one of three severities, plus a ≤ 200-character summary and ≤ 4000 characters of detail. |
+| **R-BUG-04** | Context MUST arrive in two halves that are never conflated. `client_context` is what the reporter's browser said about itself and MUST be presented as **reporter-supplied evidence**; `server_context` is what the server observed of their live seat and is the only half a reader may treat as fact. |
+| **R-BUG-05** | The server MUST resolve room, game and turn from the reporter's **live seat**, never from the code the client sent. Naming a room you are not sitting in MUST attach nothing. |
+| **R-BUG-06** | A report MUST NOT carry the prompt in play, chat text, or any query string. A guesser filing a bug is still a guesser. The **server** MUST cut a stored route back to its path — that the rule holds cannot depend on the client keeping its own promise. |
+| **R-BUG-07** | A screenshot MUST be optional, captured only through the browser's own picker, and validated server-side — real PNG or WebP magic bytes, ≤ 2 MB, with byte size and SHA-256 re-derived rather than believed. |
+| **R-BUG-12** | A request body MUST be bounded **before** it is read. Sketchy runs one worker (N-01), so an unbounded body is one process's memory: the default ceiling MUST be sized against the largest body the API itself declares; an over-length `Content-Length` MUST be refused without invoking the application, and a body that declares no length or a false one MUST be cut off as it streams. The screenshot field MUST also be bounded in its encoded form, so an oversized image is refused before it is decoded rather than after. |
+| **R-BUG-11** | The report dialog MUST conceal itself before the frame is taken and MUST wait for the capture stream to show the page without it. A screenshot of the form asking for a screenshot is worth nothing. The dialog MUST be restored however the capture ends, including on failure. |
+| **R-BUG-08** | Screenshot bytes MUST be **erased when the report is decided**, and that erasure MUST be structural: a row whose screenshot status is `erased` cannot hold a payload. The metadata stays, so the record still says a picture existed. |
+| **R-BUG-09** | Review MUST be one-way and require a note: a pending report receives one decision and cannot later be silently rewritten. |
+| **R-BUG-10** | Submission and each decision MUST append an audit event. The ledger records that a bug was filed and acted on, **never what it said**. |
+
 ---
 
 ## 11. Accessibility and UX
@@ -471,6 +488,7 @@ design, not a bug fix.
 | Accounts, sessions, recovery | [`app/auth/`](../backend/app/auth/) | `tests/test_auth.py`, `test_sessions.py`, `test_account_recovery.py`, `test_email_identity.py`, `test_identity_merge.py` |
 | Data export and deletion | [`auth/account_data.py`](../backend/app/auth/account_data.py) | `tests/test_account_data.py`, `fixtures/account_data_export_v1_fields.json` |
 | Retention | [`auth/retention.py`](../backend/app/auth/retention.py), [`services/message_retention.py`](../backend/app/services/message_retention.py) | `tests/test_anonymous_retention.py`, `test_message_retention.py` |
+| Bug reports and triage | [`api/bug_reports.py`](../backend/app/api/bug_reports.py), [`request_limits.py`](../backend/app/request_limits.py), [`lib/bugReports.ts`](../frontend/src/lib/bugReports.ts), [`lib/clientErrorLog.ts`](../frontend/src/lib/clientErrorLog.ts), [`lib/screenCapture.ts`](../frontend/src/lib/screenCapture.ts) | `tests/test_bug_reports.py`, `tests/test_request_limits.py`, `tests/e2e/test_bug_reporting.py`, `frontend/tests/bugReports.test.mjs`, `clientErrorLog.test.mjs`, `screenCapture.test.mjs` |
 | Moderation, reports, bans, blocks | [`api/moderation.py`](../backend/app/api/moderation.py), [`auth/bans.py`](../backend/app/auth/bans.py), [`auth/blocks.py`](../backend/app/auth/blocks.py) | `tests/test_moderation_api.py`, `test_user_blocks.py`, `test_prompt_content_moderation.py`, `tests/e2e/test_player_reporting.py` |
 | Prompt content and governance | [`prompt_content.py`](../backend/app/prompt_content.py), [`api/prompt_lists.py`](../backend/app/api/prompt_lists.py) | `tests/test_prompt_content.py`, `test_prompt_list_governance.py`, `test_owned_prompt_lists.py`, `test_prompt_list_seeding.py` |
 | Prompt usage and stats | [`services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | `tests/test_prompt_usage.py`, `test_api_prompt_stats.py` |

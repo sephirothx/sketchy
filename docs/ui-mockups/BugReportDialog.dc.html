@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --field: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --brandWordmark: #3D2B1F; --brandFerrule: #75726D; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --field: #0F172A; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --brandWordmark: #F8FAFC; --brandFerrule: #94A3B8; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    button { cursor: pointer; }
+    summary { cursor: pointer; }
+    summary.plain { list-style: none; }
+    summary.plain::-webkit-details-marker { display: none; }
+  </style>
+</helmet>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+
+<div style="position: relative; width: 760px; min-height: 1300px; margin: 0 auto; background: var(--paper)">
+  <div style="position: absolute; inset: 0; background: var(--scrim)"></div>
+  <div style="position: relative; padding: 30px 26px 36px; display: flex; justify-content: center">
+    <div role="dialog" aria-modal="true" aria-label="Report a bug" style="width: 100%; max-width: 620px; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(20, 16, 10, 0.14); padding: 22px 24px 20px; display: grid; gap: 14px">
+
+      <div style="display: flex; align-items: flex-start; gap: 12px">
+        <span style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 11px; background: var(--warmSoft); color: var(--warmInk); flex: none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3 3 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg></span>
+        <div>
+          <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 21px; color: var(--ink)">Report a bug</h2>
+          <p style="font-size: 13px; color: var(--muted); font-weight: 600; line-height: 1.5; margin-top: 3px">Something broken, not something someone said. This reaches the people who run Sketchy — never other players.</p>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+        
+<label style="display: grid; gap: 6px; font-size: 13.5px; font-weight: 800; color: var(--ink)">Where
+  <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">Drawing and canvas<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+  
+</label>
+        
+<label style="display: grid; gap: 6px; font-size: 13.5px; font-weight: 800; color: var(--ink)">How bad
+  <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">Major — hard to play around<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+  
+</label>
+      </div>
+
+      
+<label style="display: grid; gap: 6px; font-size: 13.5px; font-weight: 800; color: var(--ink)">One line summary
+  <input type="text" value="Timer kept counting after everyone had guessed" style="background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; color: var(--ink); min-height: 42px; width: 100%">
+  
+</label>
+
+      <label style="display: grid; gap: 6px; font-size: 13.5px; font-weight: 800; color: var(--ink)">What happened
+        <textarea style="background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; line-height: 1.5; padding: 10px 12px; height: 96px; resize: vertical; width: 100%; color: var(--ink)">Round 2, everyone had guessed the lighthouse but the ring timer kept running to zero before the results card appeared. Happened twice in the same room.</textarea>
+        <span style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--faint); font-weight: 700"><span>What you did, what you expected, what happened instead.</span><span style="font-variant-numeric: tabular-nums">211 / 4000</span></span>
+      </label>
+
+      <div style="display: grid; gap: 8px; border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg></span>
+          <strong style="font-size: 13px; font-weight: 800; color: var(--ink)">Screenshot</strong>
+          <span style="margin-left: auto"><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--well); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">Optional</span></span>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 12px">
+          
+<span style="display: block; position: relative; width: 148px; height: 92px; border-radius: 7px; overflow: hidden; border: 1.5px solid var(--lineStrong); background: var(--paper); flex: none">
+  <span style="position: absolute; inset: 0 0 auto 0; height: 12px; background: var(--card); border-bottom: 1px solid var(--line)"></span>
+  <span style="position: absolute; left: 4%; top: 16px; bottom: 4px; width: 66%; border-radius: 4px; overflow: hidden; background: #fff; border: 1px solid var(--line)"><svg viewBox="0 0 800 600" style="display: block; width: 100%; height: 100%" xmlns="http://www.w3.org/2000/svg">
+  <path d="M40 470 C 150 452, 250 462, 330 470 L 330 600 L 40 600 Z" fill="#7ac9e8" opacity="0.35"/>
+  <path d="M470 468 C 570 458, 690 470, 770 462 L 770 600 L 470 600 Z" fill="#7ac9e8" opacity="0.35"/>
+  <path d="M300 480 C 340 455, 380 448, 420 450 C 470 452, 510 462, 540 480 Z" fill="#c69c6d"/>
+  <path d="M356 470 L 372 250 L 452 250 L 468 470 Z" fill="#ffffff" stroke="#000000" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M362 400 L 462 400 L 466 448 L 358 448 Z" fill="#ed1c24"/>
+  <path d="M368 300 L 456 300 L 459 342 L 365 342 Z" fill="#ed1c24"/>
+  <rect x="360" y="228" width="104" height="22" rx="4" fill="#4c4c4c" stroke="#000000" stroke-width="5"/>
+  <rect x="378" y="180" width="68" height="50" fill="#fff200" stroke="#000000" stroke-width="6"/>
+  <path d="M374 180 L 450 180 L 412 142 Z" fill="#22b14c" stroke="#000000" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M412 130 L 412 116" stroke="#000000" stroke-width="6" stroke-linecap="round"/>
+  <path d="M446 196 L 610 150" stroke="#fff200" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M446 212 L 620 214" stroke="#fff200" stroke-width="10" stroke-linecap="round" opacity="0.55"/>
+  <path d="M378 202 L 214 158" stroke="#fff200" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M40 500 C 90 490, 140 508, 190 498 C 240 488, 280 504, 320 496" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M480 508 C 530 498, 580 516, 630 506 C 680 496, 720 512, 764 504" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M60 552 C 120 542, 190 560, 250 550" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M540 556 C 600 546, 670 564, 740 554" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M120 96 C 140 76, 180 78, 192 96 C 220 92, 236 112, 220 126 L 128 126 C 108 122, 106 104, 120 96 Z" fill="#c1c1c1" opacity="0.6"/>
+  <path d="M600 74 C 620 54, 660 56, 672 74 C 700 70, 716 90, 700 104 L 608 104 C 588 100, 586 82, 600 74 Z" fill="#c1c1c1" opacity="0.6"/>
+</svg></span>
+  <span style="position: absolute; right: 4%; top: 16px; bottom: 4px; width: 24%; border-radius: 4px; background: var(--card); border: 1px solid var(--line)"></span>
+</span>
+          <div style="display: grid; gap: 6px; min-width: 0">
+            <span style="font-size: 12.5px; font-weight: 800; color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace">1440 × 900 · WebP · 184 KB</span>
+            <span style="font-size: 12px; color: var(--muted); font-weight: 600; line-height: 1.45">This dialog hides itself while the shot is taken, so you get the page behind it. Look at it before you send — you chose what to share.</span>
+            <div style="display: flex; gap: 6px">
+              <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; min-height: 34px; padding: 6px 10px; font-size: 13px">Replace</button>
+              <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--danger); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; min-height: 34px; padding: 6px 10px; font-size: 13px">Remove</button>
+            </div>
+          </div>
+        </div>
+        <p style="font-size: 11.5px; color: var(--faint); font-weight: 700; line-height: 1.5; border-top: 1px solid var(--line); padding-top: 8px">Empty state: <strong style="color: var(--muted)">Attach a screenshot</strong> opens your browser's picker, so choose this tab. Hidden on browsers without it — phones mostly — where the description stands alone.</p>
+      </div>
+
+      <details open style="background: var(--well); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px">
+        <summary class="plain" style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; color: var(--ink)">
+          <span style="display: inline-flex; color: var(--faint)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 15 6-6 6 6"/></svg></span>What we send with this
+          <span style="margin-left: auto"><span style="display: inline-flex; align-items: center; gap: 5px; background: var(--well); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap">6 details</span></span>
+        </summary>
+        <div style="margin-top: 10px; display: grid; gap: 10px">
+          <div>
+            
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px">
+  <span style="color: var(--faint); font-weight: 700; flex: none">Build</span>
+  <span style="color: var(--ink); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums">a299f80 · 27 Aug 2026</span>
+</div>
+            
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px">
+  <span style="color: var(--faint); font-weight: 700; flex: none">Page</span>
+  <span style="color: var(--ink); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums">/room/BQ7F2K</span>
+</div>
+            
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px">
+  <span style="color: var(--faint); font-weight: 700; flex: none">Room</span>
+  <span style="color: var(--ink); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums">BQ7F2K · round 2, turn 1</span>
+</div>
+            
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px">
+  <span style="color: var(--faint); font-weight: 700; flex: none">Screen</span>
+  <span style="color: var(--ink); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums">1440 × 900 · 2×</span>
+</div>
+            
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px">
+  <span style="color: var(--faint); font-weight: 700; flex: none">Browser</span>
+  <span style="color: var(--ink); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums">Chrome 141 · macOS 15</span>
+</div>
+            
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px">
+  <span style="color: var(--faint); font-weight: 700; flex: none">Connection</span>
+  <span style="color: var(--ink); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums">reconnected once, 12s ago</span>
+</div>
+          </div>
+          <div>
+            <p style="font-size: 12px; font-weight: 800; color: var(--faint); margin-bottom: 6px">Recent client errors</p>
+            
+<div style="background: var(--well); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.5">
+  
+<div style="display: flex; gap: 10px; padding: 3px 0"><span style="color: var(--faint); flex: none">09:41:02</span><span style="color: var(--muted); word-break: break-word">TypeError: cannot read properties of null (reading &#39;ctx&#39;)</span></div>
+  
+<div style="display: flex; gap: 10px; padding: 3px 0"><span style="color: var(--faint); flex: none">09:40:58</span><span style="color: var(--muted); word-break: break-word">socket connect_error: websocket error</span></div>
+  
+<div style="display: flex; gap: 10px; padding: 3px 0"><span style="color: var(--faint); flex: none">09:40:51</span><span style="color: var(--muted); word-break: break-word">canvas replay budget exceeded, falling back to snapshot</span></div>
+</div>
+            <p style="font-size: 11.5px; color: var(--faint); font-weight: 700; margin-top: 7px; line-height: 1.5">The last 20 errors your browser recorded, trimmed to 500 characters each. No page addresses beyond the path, and nothing you typed into chat.</p>
+          </div>
+        </div>
+      </details>
+
+      <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer">
+        <span aria-hidden="true" style="display: inline-flex; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--lineStrong); background: var(--field); flex: none; margin-top: 1px"></span>
+        <span style="font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.45">Send my description only<span style="display: block; font-weight: 600; color: var(--faint); font-size: 12px; margin-top: 2px">Drops the details above and the screenshot. We will still read it, but the bug is much harder to reproduce.</span></span>
+      </label>
+
+      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1.5px solid var(--line); padding-top: 14px">
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px">Cancel</button>
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; padding: 11px 18px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--primaryEdge)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m22 2-11 11"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>Send report</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 760, "height": 1330}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const defaults = { theme: 'light' };
+    return Object.assign({}, defaults, this.props);
+  }
+}
+</script>
+</body>
+</html>

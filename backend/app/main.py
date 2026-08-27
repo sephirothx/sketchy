@@ -13,6 +13,7 @@ from app.api.profiles import create_profile_router
 from app.api.persistent_rooms import create_persistent_room_router
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
+from app.api.bug_reports import create_bug_report_router
 from app.api.moderation import create_moderation_router
 from app.api.operations import create_operations_router
 from app.api.user_settings import create_user_settings_router
@@ -21,6 +22,7 @@ from app.auth.bans import suspension_payload
 from app.auth.warnings import pending_warning_payload
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
+from app.request_limits import RequestSizeLimitMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db
 from app.db.seed import seed_prompt_lists
@@ -234,6 +236,9 @@ api.add_middleware(
     allow_headers=["*"],
 )
 api.add_middleware(SessionAuthMiddleware, session_factory=async_session_factory)
+# Added last so it runs first: an oversized body is refused before any routing
+# or session lookup, rather than after the server has already held it.
+api.add_middleware(RequestSizeLimitMiddleware)
 api.include_router(
     create_auth_router(
         user_repo,
@@ -243,6 +248,9 @@ api.include_router(
     )
 )
 api.include_router(create_operations_router(async_session_factory))
+api.include_router(
+    create_bug_report_router(async_session_factory, room_manager)
+)
 api.include_router(create_profile_router(user_repo, game_history_repo))
 api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))

@@ -837,6 +837,36 @@ detail. Moderators and administrators list and one-time review the queue at
 Active or Hidden; a dismissal cannot mutate content. The workflow is
 post-moderation, so a report alone never changes availability.
 
+### Bug reports
+
+Reporting that the *app* is broken is a separate flow from reporting a person,
+with a separate audience. Any player holding an identity, guests included, can
+open **Report a bug** from the account menu on any screen, pick one of ten areas
+and three severities, and describe what happened. It reaches administrators at
+`/admin/bug-reports`, never the moderation queue: a bug report carries build and
+diagnostic data rather than safety evidence.
+
+The client attaches what it knows — build SHA, path (never the query string),
+viewport, browser, accessibility preferences, connection telemetry, heap use, and
+the last 20 errors its own recorder caught — and the server adds its own account
+of the reporter's **live seat**, resolved by finding their room rather than
+believing the code they sent. The two halves stay labelled: one is
+reporter-supplied evidence, the other is fact. Neither ever carries the prompt in
+play or chat text. Everything gathered is shown in the dialog before sending, and
+one checkbox drops all of it.
+
+A screenshot is optional, captured through the browser's own picker via
+`getDisplayMedia` so the player chooses what to share. The dialog hides itself
+and waits for the stream to catch up before the frame is taken — otherwise the
+only thing in the picture is the form asking for it — then the image is
+validated server-side — real PNG or WebP magic bytes, at most 2 MB, size and SHA-256
+re-derived rather than believed. Its bytes are **erased when the report is
+decided**, structurally: a check constraint forbids a decided row from holding
+pixels. Triage offers **Copy for triage**, which puts the whole report on the
+clipboard as stable Markdown for pasting into an issue or handing to a model.
+Review is one-way and needs a note, and both submission and decision append an
+audit event that records the report, never what it said.
+
 Moderators and administrators can create temporary or permanent account
 **Suspensions** through `/api/moderation/bans`; moderators cannot suspend peers,
 and administrators cannot be targeted. Creating a suspension revokes every
@@ -923,11 +953,13 @@ backend/
 frontend/
   src/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat
-    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage
+    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, BugReportsPage (admin triage)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL
     lib/drawingRules.ts The client's copy of the room's tool and color rules
+    lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
+    lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
     types.ts      Shared TypeScript types for all socket payloads
 docs/
   architecture.md   Processes, layering, state ownership, lifecycle, and a module index

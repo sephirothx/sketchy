@@ -4,6 +4,7 @@
 import { MainPage, CreateRoomPage, AccountRecoveryPage, SettingsPage } from './pages-entry.mjs';
 import { WaitingRoomPage, PromptChoicePage, DrawingPage, GuessingPage, TurnResultsPage, GameOverPage, HighlightsPage } from './pages-room.mjs';
 import { PromptStatsPage, MyPromptListsPage, ProfilePage, AdminOpsPage, ModerationPage } from './pages-library.mjs';
+import { BugReportMenuPage, BugReportDialogPage, BugReportsQueuePage } from './pages-support.mjs';
 
 export const SCREENS = [
   // Row 1 — getting in
@@ -27,4 +28,8 @@ export const SCREENS = [
   // Row 5 — operator pages
   { name: 'AdminOps', page: AdminOpsPage, w: 1100, h: 1180, x: 0, y: 5620, title: 'Server operations', group: 'Operator pages' },
   { name: 'Moderation', page: ModerationPage, w: 1160, h: 1040, x: 1190, y: 5620, title: 'Moderation', group: 'Operator pages' },
+  // Row 6 — reporting a bug
+  { name: 'BugReportMenu', page: BugReportMenuPage, w: 820, h: 600, x: 0, y: 7060, title: 'Report a bug — entry point', group: 'Reporting a bug' },
+  { name: 'BugReportDialog', page: BugReportDialogPage, w: 760, h: 1330, x: 910, y: 7060, title: 'Report a bug — dialog', group: 'Reporting a bug' },
+  { name: 'BugReports', page: BugReportsQueuePage, w: 1160, h: 1200, x: 1760, y: 7060, title: 'Bug reports (admin)', group: 'Reporting a bug' },
 ];

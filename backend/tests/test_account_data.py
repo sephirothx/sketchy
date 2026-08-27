@@ -27,6 +27,7 @@ from app.db.models import (
     DataExport,
     GameParticipant,
     GameRecord,
+    BugReport,
     PlayerReport,
     PlayerReportMessageEvidence,
     PersistentRoom,
@@ -318,6 +319,21 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                     reason="harassment",
                     details="Requester-authored report details",
                     context_snapshot={"schemaVersion": 1, "submitted": {}},
+                )
+            )
+            session.add(
+                BugReport(
+                    id=generate_uuid(),
+                    reporter_user_id=owner_row.id,
+                    area="drawing_and_canvas",
+                    severity="major",
+                    summary="Requester-authored bug summary",
+                    details="Requester-authored bug details",
+                    build_sha="abc1234",
+                    route="/room/BQ7F2K",
+                    room_code="BQ7F2K",
+                    client_context={"buildSha": "abc1234"},
+                    server_context={"account": {"registered": True}},
                 )
             )
             session.add(

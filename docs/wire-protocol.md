@@ -684,6 +684,36 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | `GET` | `/api/warnings/pending` | any signed-in | The caller's own oldest unacknowledged warning, with the reported messages behind it |
 | `POST` | `/api/warnings/{warning_id}/acknowledge` | any signed-in | Own warnings only (`404` otherwise); records that the notice landed |
 
+### Bug reports — [`backend/app/api/bug_reports.py`](../backend/app/api/bug_reports.py)
+
+Not a moderation surface: the queue is administrator-only, and a moderator gets the
+same `404` as anybody else.
+
+| Method | Path | Role | Notes |
+| --- | --- | --- | --- |
+| `POST` | `/api/bug-reports` | any identity, guests included | One of ten `area` values and three `severity` values, ≤ 200-char `summary`, ≤ 4000-char `details`, ≤ 32 768 bytes `clientContext`, optional base64 `screenshot`. 5 per hour per client. Room, game and turn are resolved from the reporter's **live seat**, never from the `roomCode` sent |
+| `GET` | `/api/admin/bug-reports` | administrator | The queue, newest first, optionally filtered by `status`. Screenshot **metadata** only |
+| `GET` | `/api/admin/bug-reports/{report_id}/screenshot` | administrator | The raw bytes, `Cache-Control: private, no-store`; `404` once erased |
+| `PATCH` | `/api/admin/bug-reports/{report_id}` | administrator | Review is one-way (`409` if already decided) and requires a note. Erases the screenshot in the same transaction |
+
+A screenshot is validated rather than believed: real PNG or WebP magic bytes, ≤ 2 MB,
+with byte size and SHA-256 re-derived server-side. Anything else is `422` — never a
+silently dropped attachment.
+
+Request bodies are capped before they are read at all
+([`app/request_limits.py`](../backend/app/request_limits.py)): 512 KiB by default — sized against the largest
+body the API declares, a 500-prompt list with aliases — and 4 MiB for
+`POST /api/bug-reports`, which is the one route that legitimately carries a
+screenshot. An over-length `Content-Length` is answered `413` without invoking the
+application; a body with no length, or a false one, is cut off as it streams and fails
+its own validation. The `screenshot` field is separately bounded at its base64 length,
+so an oversized image is refused before it is decoded.
+
+`clientContext.route` is cut back to its path before it is stored, in the blob as well
+as in the column lifted out of it. The client already sends a bare `location.pathname`,
+but a query string is where invite codes and identifiers live, so the rule holds against
+a client that is buggy or lying rather than resting on its promise.
+
 ### Operations — [`backend/app/api/operations.py`](../backend/app/api/operations.py)
 
 Administrator role required for all of these.

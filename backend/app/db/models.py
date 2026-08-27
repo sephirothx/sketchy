@@ -30,6 +30,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from app.auth.avatars import BUILT_IN_AVATAR_KEYS
 from app.db.types import UTCDateTime
 from app.domain_values import (
+    BugReportScreenshotStatus,
     GameOutcome,
     RUNTIME_EVENT_TYPES,
     AUTH_TOKEN_PURPOSES,
@@ -37,6 +38,9 @@ from app.domain_values import (
     EMAIL_TEMPLATES,
     ACCOUNT_STATES,
     BRUSH_CURSOR_STYLES,
+    BUG_REPORT_AREAS,
+    BUG_REPORT_SCREENSHOT_STATUSES,
+    BUG_REPORT_SEVERITIES,
     DATA_EXPORT_STATUSES,
     DEFAULT_USER_KEY_BINDINGS,
     GAME_PROMPT_SOURCE_MODES,
@@ -685,7 +689,8 @@ class AuditEvent(Base):
         ),
         CheckConstraint(
             "target_type IS NULL OR target_type IN "
-            "('user', 'prompt_list', 'prompt_version', 'room', 'app_config')",
+            "('user', 'prompt_list', 'prompt_version', 'room', 'app_config', "
+            "'bug_report')",
             name="ck_audit_events_target_type",
         ),
         Index("ix_audit_events_target", "target_type", "target_id"),
@@ -1098,6 +1103,144 @@ class PromptContentReport(Base):
     resolution_moderation_state: Mapped[str | None] = mapped_column(
         String(16), nullable=True
     )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class BugReport(Base):
+    """A player's report that the app itself is broken.
+
+    Deliberately not a moderation row. A bug report is about the software, not
+    about a person, and it carries build and diagnostic data rather than
+    safety evidence - two different audiences, two different confidentiality
+    regimes. It reuses `ReportStatus` because the review semantics really are
+    identical: one pending row receives one decision.
+
+    Context arrives in two halves that must not be confused. `client_context`
+    is what the reporter's browser said about itself and is evidence supplied
+    by a player; `server_context` is what this server knew about their seat at
+    the moment they filed, and is the only half a reader may treat as fact.
+
+    There is no "one open report per reporter" rule here, unlike every other
+    report table. That rule exists to stop the same complaint about the same
+    person being repeated; a player who meets three unrelated bugs in one
+    session is not repeating themselves. Volume is bounded by the rate limiter.
+    """
+
+    __tablename__ = "bug_reports"
+    __table_args__ = (
+        _values_check("area", BUG_REPORT_AREAS, "ck_bug_reports_area"),
+        _values_check("severity", BUG_REPORT_SEVERITIES, "ck_bug_reports_severity"),
+        _values_check("status", REPORT_STATUSES, "ck_bug_reports_status"),
+        _values_check(
+            "screenshot_status",
+            BUG_REPORT_SCREENSHOT_STATUSES,
+            "ck_bug_reports_screenshot_status",
+        ),
+        # A row claiming to hold a screenshot holds one, with the identity
+        # needed to serve and verify it.
+        CheckConstraint(
+            "screenshot_status <> 'ready' OR ("
+            "screenshot_payload IS NOT NULL AND screenshot_byte_size IS NOT NULL "
+            "AND screenshot_checksum_sha256 IS NOT NULL "
+            "AND screenshot_content_type IS NOT NULL)",
+            name="ck_bug_reports_screenshot_ready_identity",
+        ),
+        # Erasure is structural, not procedural: deciding a report drops the
+        # picture, and no future code path can leave the pixels behind.
+        CheckConstraint(
+            "screenshot_status <> 'erased' OR screenshot_payload IS NULL",
+            name="ck_bug_reports_screenshot_erased",
+        ),
+        CheckConstraint(
+            "screenshot_status <> 'none' OR screenshot_payload IS NULL",
+            name="ck_bug_reports_screenshot_absent",
+        ),
+        CheckConstraint(
+            "screenshot_byte_size IS NULL OR ("
+            "screenshot_byte_size > 0 AND screenshot_byte_size <= 2097152)",
+            name="ck_bug_reports_screenshot_byte_size",
+        ),
+        # A decision is a decision: reviewed rows carry who and when.
+        CheckConstraint(
+            "status = 'pending' OR reviewed_at IS NOT NULL",
+            name="ck_bug_reports_reviewed_identity",
+        ),
+        Index("ix_bug_reports_status_created_at", "status", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    # Detached rather than cascaded on deletion: the bug outlives the account
+    # that met it, and a fixed defect should not be un-fixed by an erasure.
+    reporter_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    area: Mapped[str] = mapped_column(String(32), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    summary: Mapped[str] = mapped_column(String(200), nullable=False)
+    details: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Pulled out of `client_context` so a queue can be filtered and grouped by
+    # them without parsing JSON - the two questions every triage starts with
+    # are "which build" and "which screen".
+    build_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    route: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    room_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Not foreign keys: a live game is not written to `game_records` until it
+    # finishes, so at filing time these name rows that may not exist yet.
+    game_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+
+    client_context: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    server_context: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+    screenshot_status: Mapped[str] = mapped_column(
+        String(16),
+        default=BugReportScreenshotStatus.NONE.value,
+        server_default=BugReportScreenshotStatus.NONE.value,
+        nullable=False,
+    )
+    screenshot_payload: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    screenshot_content_type: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    screenshot_byte_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    screenshot_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    screenshot_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The server's own digest of the bytes it stored, never the sender's claim.
+    screenshot_checksum_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(16),
+        default=ReportStatus.PENDING.value,
+        server_default=ReportStatus.PENDING.value,
+        nullable=False,
+    )
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
