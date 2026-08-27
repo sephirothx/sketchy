@@ -365,11 +365,14 @@ dispatches each event from a connection as its own task, so without it a second
 queues at the same gate, which is what makes a socket that drops mid-entry reconcile
 against a seat that exists rather than a moment before it does.
 
-A **server-initiated** disconnect is the exception and must stay one. Closing the tab
+A disconnect **this server issued** is the exception and must stay one. Closing the tab
 a reconnect superseded runs that socket's disconnect handler inline, from inside the
 transition that closed it — the seat has already moved on, and waiting at its gate
 would be waiting for the caller. Two tabs of one account reaching the same seat at the
-same moment would then wait for each other for ever.
+same moment would then wait for each other for ever. `HandlerContext.closing` marks
+the socket for the length of the close and `disconnect` asks it, rather than reading
+the framework's disconnect reason: whether this deadlocks should not depend on how a
+dependency passes an argument.
 
 Seats are matched **by `sid`, never by account**: two tabs of one account sitting in
 two different rooms is ordinary, and only the connection that is moving is moved.

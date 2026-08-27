@@ -657,7 +657,12 @@ class GameFlowService:
                 {"reason": "This room was opened in another tab."},
                 to=superseded_sid,
             )
-            await self._sio.disconnect(superseded_sid)
+            # Its disconnect handler runs inline from here, and must not wait
+            # for that socket's own seating gate: two tabs reaching this seat
+            # at the same moment would each be holding the gate the other
+            # needs.
+            with self._ctx.closing(superseded_sid):
+                await self._sio.disconnect(superseded_sid)
         self._timers.cancel_disconnect_timer(player.id)
         await self._emit_room_state(room)
         event_name = "player_reconnected" if is_reconnect else "player_joined"

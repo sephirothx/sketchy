@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 import logging
-from typing import AsyncIterator, TYPE_CHECKING
+from typing import AsyncIterator, Iterator, TYPE_CHECKING
 
 import socketio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -72,6 +72,11 @@ class HandlerContext:
     _seating_gates: dict[str, SeatingGate] = field(
         default_factory=dict, init=False, repr=False
     )
+    # Sockets this server is in the act of closing, counted so that two
+    # closes of the same socket cannot uncount each other.
+    _closing_sockets: dict[str, int] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     @asynccontextmanager
     async def seating(self, sid: str) -> AsyncIterator[SeatingGate]:
@@ -88,6 +93,32 @@ class HandlerContext:
             gate.holders -= 1
             if gate.holders <= 0:
                 self._seating_gates.pop(sid, None)
+
+    @contextmanager
+    def closing(self, sid: str) -> Iterator[None]:
+        """Mark a socket this server is closing itself, while it closes it.
+
+        Socket.IO runs a closed socket's disconnect handler inline, so the
+        handler has to be able to tell "the client went away" from "we are
+        cutting this one off from inside a seat transition". Answered here
+        rather than from the framework's disconnect reason, which would make a
+        deadlock depend on how a dependency passes an argument.
+        """
+
+        self._closing_sockets[sid] = self._closing_sockets.get(sid, 0) + 1
+        try:
+            yield
+        finally:
+            remaining = self._closing_sockets.get(sid, 1) - 1
+            if remaining <= 0:
+                self._closing_sockets.pop(sid, None)
+            else:
+                self._closing_sockets[sid] = remaining
+
+    def is_closing(self, sid: str) -> bool:
+        """Whether this server, rather than the client, is ending this socket."""
+
+        return sid in self._closing_sockets
 
     async def remove_room_if_empty(self, room_id: str) -> bool:
         """Remove an empty live room and retire its published invite code."""

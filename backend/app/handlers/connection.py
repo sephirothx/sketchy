@@ -64,16 +64,16 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
 
 
-async def disconnect(ctx: HandlerContext, sid, reason: str | None = None):
+async def disconnect(ctx: HandlerContext, sid):
     if not sid:
         return
-    if reason == ctx.sio.reason.SERVER_DISCONNECT:
-        # This socket was closed from inside a seat transition that has
-        # already moved its seat on: the tab a reconnect superseded, or an
-        # account that just lost access. Socket.IO runs this handler inline
-        # from that transition, so queueing at the gate would be waiting for
-        # the caller - and two sockets superseding each other at the same
-        # moment would wait for each other for ever.
+    if ctx.is_closing(sid):
+        # We are closing this socket ourselves, from inside a seat transition
+        # that has already moved its seat on - the tab a reconnect superseded.
+        # Socket.IO runs this handler inline from that transition, so queueing
+        # at the gate would be waiting for the caller, and two sockets
+        # superseding each other at the same moment would wait for each other
+        # for ever.
         await reconcile_socket_seats(ctx, sid)
         return
     # Queued behind whatever else is moving this socket between seats, so a

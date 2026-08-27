@@ -233,7 +233,7 @@ async def test_two_sockets_superseding_each_other_do_not_wait_for_each_other():
     async def close_socket(target, *_args, **_kwargs):
         # What Socket.IO does: the displaced socket's disconnect handler runs
         # inline, from inside the join that displaced it.
-        await sio.handlers["/"]["disconnect"](target, sio.reason.SERVER_DISCONNECT)
+        await sio.handlers["/"]["disconnect"](target)
 
     sio.disconnect = AsyncMock(side_effect=close_socket)
     async def yield_control(*_args, **_kwargs):
