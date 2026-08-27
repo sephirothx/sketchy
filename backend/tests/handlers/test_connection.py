@@ -8,6 +8,7 @@ from app.canvas_history import encode_canvas_history
 from app.handlers import register_all_handlers as register_handlers
 from tests.handlers.helpers import contains_secret
 from app.game import DRAWING_SECONDS, MAX_HINT_SPEND, Game
+from app.protocol import PROTOCOL_VERSION
 from app.rooms import DrawingRecapEntry, RoomManager
 
 
@@ -383,3 +384,65 @@ async def test_soft_already_joined_skips_canvas_sync():
     assert response["ok"] is True
     assert "sync_game" in emitted_events
     assert "sync_strokes" not in emitted_events
+
+
+@pytest.mark.asyncio
+async def test_a_matching_protocol_version_connects_without_an_upgrade_notice():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.save_session = AsyncMock()
+    connect = sio.handlers["/"]["connect"]
+
+    await connect("sid-current", {}, {"protocol": PROTOCOL_VERSION})
+
+    assert not any(
+        call.args and call.args[0] == "upgrade_required"
+        for call in sio.emit.await_args_list
+    )
+    assert ctx is not None
+
+
+@pytest.mark.asyncio
+async def test_a_stale_protocol_version_is_told_to_upgrade_rather_than_refused():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.save_session = AsyncMock()
+    connect = sio.handlers["/"]["connect"]
+
+    # Accepted, not refused: a refusal gives the client no diagnosable signal,
+    # and the refusal path is reserved for suspensions.
+    result = await connect("sid-stale", {}, {"protocol": PROTOCOL_VERSION - 1})
+
+    assert result is not False
+    notices = [
+        call for call in sio.emit.await_args_list
+        if call.args and call.args[0] == "upgrade_required"
+    ]
+    assert len(notices) == 1
+    assert notices[0].kwargs["to"] == "sid-stale"
+    assert notices[0].args[1]["expected"] == PROTOCOL_VERSION
+    assert notices[0].args[1]["received"] == PROTOCOL_VERSION - 1
+
+
+@pytest.mark.asyncio
+async def test_a_client_that_names_no_protocol_at_all_is_told_to_upgrade():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.save_session = AsyncMock()
+    connect = sio.handlers["/"]["connect"]
+
+    # Every build before the handshake existed sends no auth at all. Absent is
+    # not "trusted", it is simply older than version 1.
+    for auth in (None, {}, {"protocol": "1"}, {"protocol": True}):
+        sio.emit.reset_mock()
+        await connect("sid-old", {}, auth)
+        assert [
+            call for call in sio.emit.await_args_list
+            if call.args and call.args[0] == "upgrade_required"
+        ], f"no upgrade notice for auth={auth!r}"

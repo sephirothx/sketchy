@@ -13,6 +13,7 @@ from app.auth.sessions import (
 )
 from app.domain_values import RuntimeEventType
 from app.handlers.context import HandlerContext
+from app.protocol import PROTOCOL_VERSION, client_protocol_version
 from app.rooms import _metrics_user_id as metrics_user_id
 from app.services.runtime_metrics import metrics
 
@@ -36,6 +37,20 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
         auth_session = resolution.session
         user_id = auth_session.user_id if auth_session else None
     await ctx.sio.save_session(sid, {"user_id": user_id})
+    client_protocol = client_protocol_version(auth)
+    if client_protocol != PROTOCOL_VERSION:
+        # Accepted, then told. Refusing would leave a stale build with nothing
+        # to act on; this way it can reload onto the one being served. The
+        # socket is otherwise ordinary until it does.
+        await ctx.sio.emit(
+            "upgrade_required",
+            {
+                "reason": "This tab is running an older version of Sketchy.",
+                "expected": PROTOCOL_VERSION,
+                "received": client_protocol,
+            },
+            to=sid,
+        )
     if user_id is not None:
         # Every socket of an account shares one broadcast room, so account-
         # level news (a suspension, a moderator warning) reaches a player in

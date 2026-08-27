@@ -45,6 +45,38 @@ the cookie to a session record and stores `{"user_id": …}` on the Socket.IO se
   `connect_error`.
 - A drain already in progress → the socket is immediately sent `server_shutdown`.
 
+### Protocol version
+
+The client sends `auth: {protocol: PROTOCOL_VERSION}`
+([`frontend/src/lib/protocol.ts`](../frontend/src/lib/protocol.ts)); the server compares it
+against its own `PROTOCOL_VERSION` ([`backend/app/protocol.py`](../backend/app/protocol.py)).
+Anything that is not a plain integer — absent, a string, a boolean — reads as **0**, because
+every build from before this handshake existed sends no `auth` at all and *absent* means
+older than version 1, never *trusted*.
+
+A mismatch is **not** refused. The socket connects normally and is sent
+`upgrade_required {reason, expected, received}`, which the client answers by reloading —
+`index.html` is served `no-cache` precisely so that reload lands on the current bundle.
+Refusing instead would hand a stale build nothing it could act on, and
+`ConnectionRefusedError` is reserved for suspensions.
+
+> **Why this exists at all.** Frame layouts carry their own version bytes, but they are
+> checked far too late to help. A `draw` frame refused by the codec is refused inside a
+> handler that has **no acknowledgement** (§4), so the sender is never told: it keeps
+> drawing into a canvas the server has stopped recording, and when it finally requests a
+> resync it cannot decode the reply — so it requests another. Silent, permanent, and
+> indistinguishable to the player from a frozen game. The handshake is the one place with
+> somewhere to put the answer.
+
+The client reloads **at most once per server version**, recording the version it reloaded
+for in `sessionStorage`. A bundle that somehow does not update — a proxy ignoring
+`no-cache`, a stale service worker — would otherwise reload forever, turning a recoverable
+skew into an unusable page.
+
+**Bump `PROTOCOL_VERSION` on both sides whenever any payload on the socket changes shape.**
+It is cheap: both ends deploy together, so the only client that ever sees a mismatch is one
+that was already open across the deploy.
+
 ---
 
 ## 2. Acknowledgement convention
@@ -251,6 +283,7 @@ the server resolves the seat against the live room and selects the evidence itse
 | `kicked` | `{reason}` | one socket |
 | `colorblind_safe_suggestion` | `{active}` | **host only**, unattributed |
 | `session_superseded` | `{reason}` — then the socket is disconnected | the superseded socket |
+| `upgrade_required` | `{reason, expected, received}` — the socket stays open; the client reloads (§1) | one socket, at handshake |
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
 | `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
