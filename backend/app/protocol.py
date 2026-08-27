@@ -19,7 +19,7 @@ was already open across the deploy.
 """
 from __future__ import annotations
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 
 
 def client_protocol_version(auth) -> int:

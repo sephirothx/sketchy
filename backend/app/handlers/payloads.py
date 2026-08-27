@@ -468,7 +468,12 @@ def parse_draw_payload(data: Any, action_identity: Any = None) -> DrawPayload:
         raise PayloadError("Drawing action identity is required")
     if not starts_action and identity is not None:
         raise PayloadError("Drawing action identity is not allowed for this frame")
-    wire_data = data if isinstance(data, int) else bytes(data)
+    # Rebroadcast exactly what arrived, in the shape it arrived in. The sender
+    # chose base64 or a binary attachment by which was smaller for that frame,
+    # and re-encoding here would throw that choice away - as well as breaking
+    # the rule that viewers see the drawer's own bytes rather than the
+    # server's idea of them.
+    wire_data = data if isinstance(data, (int, str)) else bytes(data)
     return DrawPayload(packet=packet, wire_data=wire_data, action_identity=identity)
 
 

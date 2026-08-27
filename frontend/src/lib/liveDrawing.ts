@@ -185,7 +185,50 @@ export function encodeClear(): number {
   return header(CLEAR_TAG);
 }
 
+/** Above this many payload bytes a frame goes as a binary attachment.
+
+Socket.IO cannot carry binary inside an event without its placeholder envelope
+- `51-["draw",{"_placeholder":true,"num":0}]`, 41 bytes announcing that a blob
+follows, plus a second WebSocket frame for the blob itself. On a 13-byte frame
+that is 76% overhead. Base64 costs a third more payload and deletes both, which
+wins until the expansion overtakes the envelope it saved: measured at ~85 bytes.
+
+Only the sender consults this. The server accepts either shape and rebroadcasts
+whatever it was handed, so the threshold can move without a protocol change. */
+export const MAX_BASE64_FRAME_BYTES = 85;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function base64ToBytes(text: string): Uint8Array | null {
+  try {
+    const binary = atob(text);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+/** Put a frame in whichever shape costs least on the wire. */
+export function toWireFrame(frame: number | Uint8Array): number | string | Uint8Array {
+  if (typeof frame === "number") return frame;
+  if (frame.byteLength > MAX_BASE64_FRAME_BYTES) return frame;
+  return bytesToBase64(frame);
+}
+
 export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
+  if (typeof payload === "string") {
+    const bytes = base64ToBytes(payload);
+    if (!bytes) return null;
+    return decodeLiveDrawing(bytes);
+  }
   if (typeof payload === "number") {
     if (
       !Number.isInteger(payload)

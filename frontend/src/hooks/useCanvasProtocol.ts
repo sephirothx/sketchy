@@ -9,7 +9,7 @@ import {
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { createCanvasSyncRequester } from "../lib/canvasSyncRequests";
 import type { CanvasSyncRequester } from "../lib/canvasSyncRequests";
-import { decodeLiveDrawing, encodeClear } from "../lib/liveDrawing";
+import { decodeLiveDrawing, encodeClear, toWireFrame } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
 import { emitWithAck, socket } from "../lib/socket";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
@@ -133,7 +133,7 @@ export function useCanvasProtocol(
       expectedHash: isPath ? null : historyRef.current.historyHash,
     });
     activeOutgoingSequenceRef.current = isPath ? sequence : null;
-    socket.emit("draw", frame, [generation, sequence]);
+    socket.emit("draw", toWireFrame(frame), [generation, sequence]);
     publishBudgets();
     return sequence;
   }, [allocateSequence, publishBudgets, requestAuthoritativeSync]);
@@ -161,7 +161,7 @@ export function useCanvasProtocol(
       return;
     }
     pending.frames.push(frame);
-    socket.emit("draw", frame);
+    socket.emit("draw", toWireFrame(frame));
     if (packet.event === "draw_move") publishBudgets();
   }, [publishBudgets, requestAuthoritativeSync]);
 
@@ -307,7 +307,7 @@ export function useCanvasProtocol(
           pending.frames.forEach((frame, index) => {
             socket.emit(
               "draw",
-              frame,
+              toWireFrame(frame),
               index === 0 ? [pending.generation, pendingSequence] : undefined,
             );
           });
@@ -443,7 +443,7 @@ export function useCanvasProtocol(
         pending.frames.forEach((frame, index) => {
           socket.emit(
             "draw",
-            frame,
+            toWireFrame(frame),
             index === 0 ? [pending.generation, sequence] : undefined,
           );
         });

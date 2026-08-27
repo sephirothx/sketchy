@@ -351,13 +351,27 @@ exercised from both sides by
 [`backend/tests/test_live_drawing.py`](../backend/tests/test_live_drawing.py) and
 [`frontend/tests/canvasProtocolFixtures.test.mjs`](../frontend/tests/canvasProtocolFixtures.test.mjs).
 
-All live drawing rides on **one** Socket.IO event, `draw`. This is a *hybrid* protocol:
+All live drawing rides on **one** Socket.IO event, `draw`. This is a *hybrid* protocol,
+and the shape a frame travels in is chosen by size rather than fixed:
 
-- **Data-bearing actions** (path start, path points, shape, fill) are binary
-  attachments.
 - **Control actions** (path end, clear) send their single header byte as a bare
-  **integer**, avoiding Socket.IO's binary-attachment envelope when it would be larger
-  than the action itself.
+  **integer** — already the cheapest thing Socket.IO can carry.
+- **Small data-bearing frames** (≤ `MAX_BASE64_FRAME_BYTES`, 85 B) travel as **base64
+  inside an ordinary text event**.
+- **Larger frames** travel as **binary attachments**.
+
+> **Why base64 is cheaper for small frames.** Socket.IO cannot put binary inside an event
+> without its placeholder envelope: `51-["draw",{"_placeholder":true,"num":0}]` is 41 bytes
+> whose only job is to announce that a blob follows, and the blob is then a *second*
+> WebSocket frame with its own header. On a 13-byte frame that is 76% overhead. Base64
+> expands the payload by a third and deletes both, which wins until the expansion
+> overtakes the envelope it saved — measured at about 85 bytes. A 5-point frame goes from
+> 59 B to 33 B on the wire.
+>
+> Only the **sender** consults the threshold. The server accepts either shape and
+> rebroadcasts whatever it was handed, so the value can move without a protocol change.
+> `sync_strokes` is untouched and stays binary: histories run to kilobytes, far past the
+> crossover.
 
 ### Header byte
 

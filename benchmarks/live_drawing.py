@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import sys
@@ -32,7 +33,10 @@ BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.live_drawing import encode_live_drawing  # noqa: E402
+from app.live_drawing import (  # noqa: E402
+    MAX_BASE64_FRAME_BYTES,
+    encode_live_drawing,
+)
 
 # What the drawer's canvas actually does today, so the model is not invented:
 # a point is queued on every pointermove (useCanvasPointerInput.ts) and the
@@ -72,6 +76,13 @@ def optimized_socketio_bytes(
     envelope: list = ["draw"]
     if isinstance(payload, int):
         envelope.append(payload)
+        if identity is not None:
+            envelope.append(list(identity))
+        return len(b"42") + len(json_bytes(envelope))
+    # Small frames ride inside the text packet as base64, which costs a third
+    # more payload but avoids the placeholder envelope and the second frame.
+    if len(payload) <= MAX_BASE64_FRAME_BYTES:
+        envelope.append(base64.b64encode(payload).decode())
         if identity is not None:
             envelope.append(list(identity))
         return len(b"42") + len(json_bytes(envelope))

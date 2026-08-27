@@ -1,6 +1,8 @@
 """Compact, versioned binary frames for live drawing Socket.IO events."""
 from __future__ import annotations
 
+import base64
+import binascii
 import math
 import struct
 from dataclasses import dataclass
@@ -64,6 +66,28 @@ _DELTA_ESCAPE = -128
 _MIN_DELTA = -127
 _MAX_DELTA = 127
 _ESCAPE_RECORD_SIZE = 1 + _POINT.size
+
+# Above this many payload bytes, a frame travels as a binary attachment;
+# at or below it, as base64 inside an ordinary text event.
+#
+# Socket.IO cannot put binary inside an event without the placeholder envelope:
+# `51-["draw",{"_placeholder":true,"num":0}]` is 41 bytes whose entire job is to
+# announce that a blob follows, and the blob is then a second WebSocket frame
+# with its own header. For a 13-byte frame that is 76% overhead. Base64 expands
+# the payload by a third but deletes both, which is a net win until the
+# expansion overtakes the envelope it saved - measured at about 85 bytes.
+#
+# The client picks; the server accepts either and rebroadcasts whatever it was
+# given, so the two never have to agree on the threshold. `sync_strokes` is
+# untouched and stays binary: histories run to kilobytes, far past the
+# crossover.
+MAX_BASE64_FRAME_BYTES = 85
+
+# The largest frame that can legitimately arrive, base64-expanded: a full
+# 256-point frame with every point escaping.
+_MAX_BASE64_CHARS = (
+    ((1 + _POINT.size + MAX_POINTS_PER_FRAME * _ESCAPE_RECORD_SIZE) + 2) // 3
+) * 4
 _PATH_START = struct.Struct("<B3sBhh")
 _SHAPE = struct.Struct("<BB3sBhhhh")
 _FILL = struct.Struct("<B3sHH")
@@ -223,7 +247,25 @@ def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
 
 
 def decode_live_drawing(data) -> LiveDrawingPacket:
-    """Validate and decode one binary action or numeric control payload."""
+    """Validate and decode one action, however it arrived on the wire.
+
+    Three shapes, all carrying the same frame:
+
+    - a bare integer for the two control actions, which is already the
+      cheapest thing Socket.IO can send;
+    - a base64 string, which is how ordinary small frames travel (see
+      ``MAX_BASE64_FRAME_BYTES``);
+    - raw bytes, for frames too large for base64 to be worth it.
+    """
+    if isinstance(data, str):
+        # Bounded before decoding: a peer controls this length, and base64 is
+        # the one input here that expands into an allocation.
+        if len(data) > _MAX_BASE64_CHARS:
+            raise ValueError("live drawing frame is too large")
+        try:
+            data = base64.b64decode(data, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError("live drawing frame is not valid base64") from exc
     if isinstance(data, int) and not isinstance(data, bool):
         if not 0 <= data <= 0xFF:
             raise ValueError("live drawing control is outside byte range")

@@ -10,6 +10,7 @@ Seeded, so a failure is reproducible rather than a story about a flaky run.
 """
 from __future__ import annotations
 
+import base64
 import random
 
 import pytest
@@ -23,6 +24,7 @@ from app.canvas_history import (
 )
 from app.live_drawing import (
     MAX_POINTS_PER_FRAME,
+    _MAX_BASE64_CHARS,
     PATH_POINTS_DELTA_TAG,
     PATH_POINTS_TAG,
     _HEADER_TAG_MASK,
@@ -131,3 +133,38 @@ def test_a_delta_frame_cannot_walk_a_coordinate_out_of_range():
     with pytest.raises(ValueError):
         decode_live_drawing(bytes(frame))
     assert MIN_PACKED_COORDINATE < 0 < MAX_POINTS_PER_FRAME
+
+
+def test_a_frame_survives_the_base64_wire_shape_unchanged():
+    """The cheap wire shape must decode to exactly the binary one."""
+    rng = random.Random("base64")
+    for _ in range(200):
+        points = _random_stroke(rng, rng.randint(1, 40), rng.choice([0.001, 0.05, 0.3]))
+        frame = encode_live_drawing("draw_move", {"points": points})
+        as_text = base64.b64encode(frame).decode()
+        assert decode_live_drawing(as_text) == decode_live_drawing(frame)
+
+
+def test_hostile_base64_is_refused_rather_than_decoded():
+    for bad in (
+        "not base64!!",
+        "####",
+        "A",                       # not a whole base64 group
+        "",                        # empty frame once decoded
+        base64.b64encode(b"\x20").decode(),  # valid base64, unknown version
+        "A" * (_MAX_BASE64_CHARS + 4),       # past the length bound
+    ):
+        with pytest.raises(ValueError):
+            decode_live_drawing(bad)
+
+
+def test_the_length_bound_admits_the_largest_legitimate_frame():
+    # Every point escaping is the worst case the encoder can produce.
+    points = [
+        {"x": (index % 2) * 0.9, "y": ((index + 1) % 2) * 0.9}
+        for index in range(MAX_POINTS_PER_FRAME)
+    ]
+    frame = encode_live_drawing("draw_move", {"points": points})
+    encoded = base64.b64encode(frame).decode()
+    assert len(encoded) <= _MAX_BASE64_CHARS
+    assert decode_live_drawing(encoded) == decode_live_drawing(frame)
