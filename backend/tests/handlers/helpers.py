@@ -114,11 +114,18 @@ class SessionStore:
     it reads has to be the one the previous handler wrote.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, accounts: bool = True) -> None:
         self.sessions: dict[str, dict] = {}
+        # Opening a room needs a provisioned session, so an unseeded socket
+        # gets an account of its own - one per sid, because a test that uses
+        # two sids means two people unless it says otherwise.
+        self._accounts = accounts
+
+    def account_for(self, sid: str) -> str | None:
+        return f"user-{sid}" if self._accounts else None
 
     async def get(self, sid, namespace=None) -> dict:
-        return self.sessions.setdefault(sid, {})
+        return self.sessions.setdefault(sid, {"user_id": self.account_for(sid)})
 
     async def save(self, sid, session, namespace=None) -> None:
         self.sessions[sid] = dict(session)

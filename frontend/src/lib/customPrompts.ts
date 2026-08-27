@@ -1,6 +1,9 @@
-export const MAX_CUSTOM_PROMPTS = 10_000;
+// Mirrors backend/app/prompts.py. A room holds these in memory for its whole
+// life, so the ceiling is what one room should cost, not what one message can
+// carry; a large curated set belongs in an owned prompt list instead.
+export const MAX_CUSTOM_PROMPTS = 2_000;
 export const MAX_PROMPT_LENGTH = 32;
-export const MAX_RAW_INPUT_LENGTH = 400_000;
+export const MAX_RAW_INPUT_LENGTH = 80_000;
 
 export interface CustomPromptAnalysis {
   usableCount: number;

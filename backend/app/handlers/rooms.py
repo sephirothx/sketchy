@@ -27,6 +27,7 @@ from app.handlers.identity import (
 from app.presenters import editable_room_settings_payload, session_payload
 from app.domain_values import RuntimeEventType
 from app.services.game_flow import RoomPromptResolutionError
+from app.services.room_quotas import RoomQuotaExceeded
 from app.services.persistent_rooms import (
     PersistentRoomError,
     PersistentRoomUnavailable,
@@ -91,12 +92,35 @@ async def _create_room(ctx: HandlerContext, sid, data):
         )
     except IdentityError as error:
         return {"ok": False, "error": str(error), "field": "nickname"}
+    if not identity.user_id:
+        # Joining stays open to a socket with no account - R-HIST-10 gives it
+        # a factual seat - but creating is the command that allocates a room,
+        # a code reservation and a prompt pool, and a ceiling nothing can be
+        # keyed on is not a ceiling.
+        return {
+            "ok": False,
+            "error": (
+                "Sketchy could not start a session for you, so it cannot open "
+                "a room. Allow cookies for this site and reload."
+            ),
+        }
+    try:
+        ctx.room_quotas.check_capacity(identity.user_id)
+    except RoomQuotaExceeded as error:
+        return {"ok": False, "error": str(error)}
     try:
         settings = await ctx.game_flow.room_settings_from_payload(
             payload, requesting_user_id=identity.user_id
         )
     except RoomPromptResolutionError as error:
         return {"ok": False, "error": str(error), "field": "promptListSlugs"}
+    try:
+        ctx.room_quotas.check_retained_prompts(settings["custom_prompts"])
+        # Last of the four, because it is the only one that writes: an attempt
+        # refused by a ceiling above should not also spend an allowance.
+        await ctx.room_quotas.check_creation_rate(identity.user_id)
+    except RoomQuotaExceeded as error:
+        return {"ok": False, "error": str(error)}
     if ctx.shutdown is not None and ctx.shutdown.is_draining:
         return ctx.shutdown.rejection_acknowledgement()
 
@@ -136,9 +160,21 @@ async def _create_room(ctx: HandlerContext, sid, data):
             await ctx.room_codes.release_unpublished(code)
         return ctx.shutdown.rejection_acknowledgement()
     try:
+        # Everything above this line awaited, and a second create_room from
+        # this account may have arrived in one of those gaps. This is the last
+        # instant where the answer and the room are not separated by an await.
+        ctx.room_quotas.check_capacity(identity.user_id)
+    except RoomQuotaExceeded as error:
+        if persistent_config is not None and ctx.persistent_rooms is not None:
+            await ctx.persistent_rooms.delete_unpublished(persistent_config.id)
+        if code is not None and ctx.room_codes is not None:
+            await ctx.room_codes.release_unpublished(code)
+        return {"ok": False, "error": str(error)}
+    try:
         room = ctx.room_manager.create_room(
             **settings,
             code=code,
+            created_by_user_id=identity.user_id,
             persistent_room_id=(persistent_config.id if persistent_config else None),
             persistent_owner_user_id=(
                 persistent_config.owner_user_id if persistent_config else None
@@ -250,6 +286,12 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
             return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}
         if not settings["custom_prompts"]:
             settings["custom_prompts_only"] = False
+        try:
+            ctx.room_quotas.check_retained_prompts(
+                settings["custom_prompts"], replacing=room
+            )
+        except RoomQuotaExceeded as error:
+            return {"ok": False, "error": str(error), "field": "customPrompts"}
         if room.persistent_room_id is not None:
             if (
                 ctx.persistent_rooms is None
@@ -269,6 +311,9 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
             except PersistentRoomError as error:
                 return {"ok": False, "error": str(error)}
         for key, value in settings.items():
+            if key == "custom_prompts":
+                ctx.room_manager.set_custom_prompts(room, value)
+                continue
             setattr(room, key, value)
         # No announcement: settings save as the host touches them, so a line per
         # change would bury the lobby's conversation. Everyone sees the new

@@ -70,6 +70,9 @@ claim that an arbitrary host will sustain it.
 | **R-ROOM-06** | The host role is a **gameplay** role only. It MUST NOT confer any service-wide privilege. Conversely an administrator MUST NOT become host merely by holding the role. |
 | **R-ROOM-07** | Room payloads MUST NOT carry account IDs. Anything that needs an account (reports, blocks, profile links) resolves the seat server-side. |
 | **R-ROOM-08** | A socket MUST hold at most one live seat. Creating or joining a room MUST first release any seat that connection already holds, by the same path an explicit leave takes: room state re-emitted, timers cancelled, empty-room teardown and code retirement run. Seats MUST be matched by socket, never by account — two tabs of one account may sit in two different rooms. |
+| **R-ROOM-09** | Opening a room MUST require a provisioned session. Joining, playing, and receiving a factual history seat MUST NOT — a visitor whose browser keeps no cookie can still play (R-HIST-10); they cannot host. |
+| **R-ROOM-10** | Room creation MUST be bounded on four axes: live rooms per account, room creations per account per hour, live rooms per process, and quick-prompt characters retained across every live room. Each MUST be configurable, and each refusal MUST say which ceiling was reached in terms a player can act on. |
+| **R-ROOM-11** | A ceiling MUST be re-checked at the instant the room is created, not only when the command arrives: everything in between awaits, and a refusal at that point MUST release the room code and any persistent-room row it had already claimed. |
 
 ### Turn structure
 
@@ -234,6 +237,7 @@ claim that an arbitrary host will sustain it.
 | **R-RATE-02** | Bucket keys MUST be HMAC-SHA-256 digests under `IP_HASH_SECRET`. **Raw IP addresses MUST NOT be stored.** |
 | **R-RATE-03** | Expired buckets MUST be cleaned in bounded batches. |
 | **R-RATE-04** | Rotating the secret MUST start fresh buckets without exposing or re-identifying old keys. |
+| **R-RATE-05** | The room-creation limit MUST use the same persistent buckets, keyed by **account**. A per-address key MUST NOT be introduced until a trustworthy client address exists to key on: behind a reverse proxy every socket presents the proxy, and the forwarded header is attacker-controlled. |
 
 ### Player settings
 

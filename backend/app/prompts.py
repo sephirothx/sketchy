@@ -2,13 +2,19 @@
 import random
 import re
 
-MAX_CUSTOM_PROMPTS = 10000
+# Quick prompts are typed into a room and held in memory for as long as it
+# lives, on a server that owns every room in one process. Ten thousand was
+# sized against what one message could carry rather than what one room should
+# cost; this is sized against the room. An owned prompt list remains the place
+# for a large curated set - it is stored once, not per room.
+MAX_CUSTOM_PROMPTS = 2000
 MAX_PROMPT_LENGTH = 32
-# python-socketio/engineio defaults to a 1,000,000 byte max message size, so we
-# cap the raw payload well below that (comfortably fits MAX_CUSTOM_PROMPTS entries
-# at MAX_PROMPT_LENGTH chars each, plus separators) while still guarding against
-# pathological inputs (e.g. a string made of huge numbers of commas).
-MAX_RAW_INPUT_LENGTH = 400_000
+# Comfortably fits MAX_CUSTOM_PROMPTS entries at MAX_PROMPT_LENGTH characters
+# each plus separators (66,000), while still guarding against pathological
+# input such as a string made entirely of commas. Well under the 1,000,000
+# byte message ceiling python-socketio/engineio defaults to, which is the
+# limit this used to be sized against.
+MAX_RAW_INPUT_LENGTH = 80_000
 
 PROMPTS: list[str] = [
     "apple", "banana", "airplane", "guitar", "elephant", "bicycle", "castle",

@@ -298,5 +298,5 @@ async def test_leaving_the_room_the_session_names_drops_its_binding():
     await sio.handlers["/"]["create_room"]("sid-A", {"nickname": "Ann"})
     await sio.handlers["/"]["leave_room"]("sid-A")
 
-    assert sessions.sessions["sid-A"] == {"user_id": None}
+    assert sessions.sessions["sid-A"] == {"user_id": sessions.account_for("sid-A")}
     assert await ctx.game_flow.require_current_player("sid-A") is None
