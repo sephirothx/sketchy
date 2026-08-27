@@ -124,6 +124,74 @@ def test_a_file_added_and_deleted_in_one_push_still_fails(tmp_path):
 
 
 @requires_git
+def test_a_tracked_file_overwritten_with_a_database_is_refused(tmp_path):
+    """Not every artifact arrives as a new file. A placeholder that gets replaced
+    with the real database is a modification, and its blob reaches history just
+    the same - so the range scan cannot look only at additions."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", ".")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+
+    (repo / "config.json").write_text('{"placeholder": true}\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "placeholder")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    (repo / "config.json").write_bytes(SQLITE_MAGIC + b"\x00" * 512)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "swap in the real thing")
+    git(repo, "rm", "-q", "config.json")
+    git(repo, "commit", "-qm", "tidy up")
+
+    ranged = run_checker(repo, "--range", f"{base}..HEAD")
+
+    assert ranged.returncode == 1
+    assert "config.json" in ranged.stderr
+
+
+@requires_git
+def test_a_renamed_database_is_refused_with_rename_detection_on(tmp_path):
+    """`diff.renames` turns the add half of a rename into an R, which a filter
+    looking for additions would skip - and makes git emit a third path field that
+    would desynchronise the parser."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", ".")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+    git(repo, "config", "diff.renames", "true")
+
+    (repo / "staged.bin").write_bytes(SQLITE_MAGIC + b"\x00" * 512)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "add under one name")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    git(repo, "mv", "staged.bin", "harmless.txt")
+    git(repo, "commit", "-qm", "rename it")
+    git(repo, "rm", "-q", "harmless.txt")
+    git(repo, "commit", "-qm", "and delete it")
+
+    ranged = run_checker(repo, "--range", f"{base}..HEAD")
+
+    assert ranged.returncode == 1
+    assert "harmless.txt" in ranged.stderr
+
+
+@requires_git
 def test_an_example_env_file_is_allowed(tmp_path):
     """.gitignore deliberately un-ignores `.env.example`, so the checker must not
     contradict it."""

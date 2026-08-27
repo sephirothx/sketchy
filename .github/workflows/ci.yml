@@ -17,11 +17,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The range scan below needs both ends of the change, not just its tip.
+          fetch-depth: 0
 
       # Cheap and first: a committed database or key is worth failing on before
       # anyone spends a runner on tests. `.githooks/pre-push` runs the same
       # script locally for whoever opts in.
-      - run: bash scripts/check-tracked-artifacts.sh
+      - name: Scan the tracked tree
+        run: bash scripts/check-tracked-artifacts.sh
+
+      # The tip scan above cannot see a file that was committed and then deleted
+      # a commit later: the tree ends up clean and the blob stays in history for
+      # good. Scan what the change actually adds, the way pre-push does.
+      - name: Scan every commit the change adds
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # An all-zero or unreachable base means there is no far end to diff
+          # against - a new branch, or a force-push over a discarded commit. The
+          # tip scan has already run, so take that rather than failing the job.
+          if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "No reachable base commit; the tracked-tree scan above stands alone."
+            exit 0
+          fi
+          # Fork point, not the base tip. This history permanently contains one
+          # committed database - removing it was a deletion, not a rewrite - and
+          # a range reaching back past it would fail every build forever.
+          bash scripts/check-tracked-artifacts.sh --range "$(git merge-base "$BASE" HEAD)..HEAD"
 
   backend:
     name: Backend lint & tests

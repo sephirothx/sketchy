@@ -20,8 +20,8 @@
 #
 # Usage:
 #   check-tracked-artifacts.sh                  scan every tracked file
-#   check-tracked-artifacts.sh --range <spec>   also scan every file ADDED by the
-#                                               commits in <spec> (any rev-list
+#   check-tracked-artifacts.sh --range <spec>   also scan every file the commits in
+#                                               <spec> ADD OR MODIFY (any rev-list
 #                                               arguments), so a file that is added
 #                                               and deleted inside one push - which
 #                                               leaves the tip tree clean and the
@@ -154,10 +154,19 @@ if [ "$mode" = "range" ]; then
   # `git diff-tree -z` emits ':<mode> <mode> <sha> <sha> <status>\0<path>\0', so
   # each file costs two reads. --root makes an initial commit list its own files
   # instead of nothing.
+  #
+  # --diff-filter=d is every change except a deletion, not just additions: a
+  # tracked placeholder overwritten with a database is a modification, and its
+  # blob lands in history exactly like an addition would.
+  #
+  # --no-renames keeps a rename as a delete plus an add, which matters twice.
+  # A detected rename would be reported as R and skipped by the filter, and it
+  # would also emit a third NUL-separated field for the destination path, which
+  # the two-read loop below would misparse.
   while IFS= read -r commit; do
     while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
       check_entry "$path" "$(printf '%s\n' "$meta" | awk '{print $4}')"
-    done < <(git diff-tree -r -z --no-commit-id --diff-filter=A --root "$commit")
+    done < <(git diff-tree -r -z --no-commit-id --no-renames --diff-filter=d --root "$commit")
   done < <(git rev-list "${range_args[@]}")
 fi
 
