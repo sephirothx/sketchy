@@ -122,11 +122,18 @@ check_entry() {
   local blob=${2:-}
   local reason
   local head_hex
+  local key
 
+  # Keyed on the content as well as the path, because `git rev-list` walks
+  # newest first: a path that held a database and was later overwritten with
+  # something harmless would otherwise be marked seen at its benign version and
+  # never checked at the version that matters. Same reason the tracked-tree scan
+  # cannot shadow the range scan at a shared path.
+  key="$blob:$path"
   case "$seen" in
-    *"|$path|"*) return 0 ;;
+    *"|$key|"*) return 0 ;;
   esac
-  seen="$seen|$path|"
+  seen="$seen|$key|"
 
   if reason=$(deny_name "$path"); then
     report "$path" "$reason"

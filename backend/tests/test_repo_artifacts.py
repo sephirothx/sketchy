@@ -192,6 +192,45 @@ def test_a_renamed_database_is_refused_with_rename_detection_on(tmp_path):
 
 
 @requires_git
+def test_a_benign_overwrite_does_not_hide_the_blob_beneath_it(tmp_path):
+    """`git rev-list` walks newest first, and the tracked-tree scan runs before
+    the range scan. Dedupe on the path alone lets the harmless version of a file
+    be seen first and mark the path done, hiding the database that sat at the
+    same path earlier in the very same push. The identity that matters is the
+    content, not the name."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", ".")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+
+    (repo / "seed.txt").write_text("seed\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "base")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    (repo / "notes.txt").write_bytes(SQLITE_MAGIC + b"\x00" * 512)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "database under an innocuous name")
+
+    # Survives to the tip, so the tracked-tree scan reaches this path first.
+    (repo / "notes.txt").write_text("genuinely notes now\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "overwrite")
+
+    ranged = run_checker(repo, "--range", f"{base}..HEAD")
+
+    assert ranged.returncode == 1
+    assert "notes.txt" in ranged.stderr
+
+
+@requires_git
 def test_an_example_env_file_is_allowed(tmp_path):
     """.gitignore deliberately un-ignores `.env.example`, so the checker must not
     contradict it."""
