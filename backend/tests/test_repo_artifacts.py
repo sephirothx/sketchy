@@ -381,6 +381,59 @@ def test_the_baseline_is_a_commit_in_this_history():
 
 
 @requires_git
+@pytest.mark.skipif(
+    is_shallow(),
+    reason="a shallow checkout has no history to clamp against",
+)
+def test_the_floor_never_moves_earlier_than_the_baseline():
+    """A pull request whose base branch forked before the baseline has a fork
+    point older than it, and an unclamped range from there reaches back over the
+    commit that added the database - failing every build from then on. The clamp
+    lives in the script so the hook and CI cannot implement it differently."""
+
+    def floor(rev: str) -> str:
+        return subprocess.run(
+            ["bash", str(CHECKER), "--floor", rev],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    def rev(spec: str) -> str:
+        return subprocess.run(
+            ["git", "rev-parse", spec],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    baseline = subprocess.run(
+        ["bash", str(CHECKER), "--baseline"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+    # Older than the baseline: clamped up to it.
+    assert floor(rev(f"{baseline}^")) == baseline
+    # The baseline itself: left alone, and the range stays half-open.
+    assert floor(baseline) == baseline
+    # Newer: passed straight through, so the clamp never widens a range.
+    assert floor(rev("HEAD")) == rev("HEAD")
+    # Unresolvable: the floor, not an empty string that would silently widen it.
+    assert floor("deadbeef" * 5) == baseline
+
+    # The clamp has to actually make the range usable, which is the whole point.
+    assert (
+        run_checker(REPO_ROOT, "--range", f"{floor(rev(f'{baseline}^'))}..HEAD").returncode
+        == 0
+    )
+
+
+@requires_git
 def test_an_example_env_file_is_allowed(tmp_path):
     """.gitignore deliberately un-ignores `.env.example`, so the checker must not
     contradict it."""

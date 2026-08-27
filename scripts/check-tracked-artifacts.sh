@@ -24,6 +24,10 @@
 #   check-tracked-artifacts.sh --baseline       print the commit this history is
 #                                               scannable from, for callers that
 #                                               need a floor and have no base
+#   check-tracked-artifacts.sh --floor <rev>    print <rev>, or the baseline if
+#                                               <rev> is older than it, so a
+#                                               caller's range can never reach
+#                                               back over the baseline commit
 #   check-tracked-artifacts.sh --range <spec>   also scan every file the commits in
 #                                               <spec> ADD OR MODIFY (any rev-list
 #                                               arguments), so a file that is added
@@ -68,6 +72,25 @@ while [ $# -gt 0 ]; do
       ;;
     --baseline)
       printf '%s\n' "$HISTORY_BASELINE"
+      exit 0
+      ;;
+    --floor)
+      shift
+      # A fork point is wherever the branch diverged, which can be older than the
+      # baseline whenever the base branch is old - and a range reaching back over
+      # the baseline commit includes the database it added, so it fails forever.
+      # Clamping belongs here rather than in each caller: the constant and the
+      # rule that protects it stay in one place.
+      if [ $# -eq 0 ]; then
+        printf 'check-tracked-artifacts: --floor needs a revision\n' >&2
+        exit 2
+      fi
+      if git rev-parse --verify --quiet "$1^{commit}" >/dev/null 2>&1 &&
+        git merge-base --is-ancestor "$HISTORY_BASELINE" "$1" 2>/dev/null; then
+        printf '%s\n' "$1"
+      else
+        printf '%s\n' "$HISTORY_BASELINE"
+      fi
       exit 0
       ;;
     -h|--help)

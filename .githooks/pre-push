@@ -60,11 +60,22 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
   # unscanned. Scan from the baseline floor instead, the same one CI uses.
   case "$remote_sha" in
     *[!0]*)
-      range=("$remote_sha..$local_sha")
+      # Clamped, because the ref being pushed to can itself sit at a commit
+      # older than the baseline.
+      range=("$(scan --floor "$remote_sha")..$local_sha")
       ;;
     *)
+      #
+      # The floor applies here too, and not only for an unknown destination: a
+      # remote that is configured but has no tracking refs yet subtracts
+      # nothing, which walks the whole history. That history holds the write-ahead
+      # logs from the first incident as well as the database from the second, so
+      # an unfloored walk refuses such a push permanently.
       if [ ${#published[@]} -gt 0 ]; then
-        range=("$local_sha" --not "${published[@]}")
+        # `^baseline` goes before `--not`, which flips the sense of every `^`
+        # that follows it - putting the floor after would include the history it
+        # is meant to cut off.
+        range=("$local_sha" "^$(scan --baseline)" --not "${published[@]}")
       else
         range=("$(scan --baseline)..$local_sha")
       fi

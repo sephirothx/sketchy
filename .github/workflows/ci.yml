@@ -44,9 +44,10 @@ jobs:
           # clean tree, green build. Fall back to the baseline floor instead, so
           # every commit that could still be scanned is.
           if git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-            # Fork point, not the base tip, so an old base branch cannot drag the
-            # range back over the baseline.
-            from="$(git merge-base "$BASE" HEAD)"
+            # The fork point, clamped: a base branch that forked before the
+            # baseline would otherwise pull the range back over the commit that
+            # added the database, and fail every build from then on.
+            from="$(bash scripts/check-tracked-artifacts.sh --floor "$(git merge-base "$BASE" HEAD)")"
           elif git cat-file -e "${BASELINE}^{commit}" 2>/dev/null; then
             echo "No reachable base commit; scanning everything since the baseline."
             from="$BASELINE"
