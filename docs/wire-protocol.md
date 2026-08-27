@@ -299,8 +299,8 @@ the server resolves the seat against the live room and selects the evidence itse
 | `you_guessed_correctly` | `{prompt, points, basePoints, hintSpend}` | guesser only |
 | `hint_revealed` | `buy_hint`: `{maskedPrompt, hintCost, hintSpend}`. `buy_wheel_letter`: `{maskedPrompt, letterPrices, hintSpend}` | buyer only |
 | `canvas_reset` | `[revision, generation, sequence, historyHash]` | room |
-| `draw` | the drawer's exact wire frame, rebroadcast verbatim | room, `skip_sid` drawer |
-| `canvas_commit` | `[generation, sequence, revision, historyHash]` | room (or one socket) |
+| `draw` | the drawer's exact wire frame, rebroadcast verbatim — plus `[generation, sequence, revision, historyHash]` when that frame commits an action (§7) | room, `skip_sid` drawer |
+| `canvas_commit` | `[generation, sequence, revision, historyHash]` | the drawer, or one socket replaying a duplicate |
 | `canvas_undo` | `[generation, sequence, revisionBefore, revisionAfter, historyHash]` | room (or one socket) |
 | `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash)` | one socket |
 | `sync_strokes_tail` | `(binaryTail, baseActionCount, revision, generation, sequence, historyHash)` — only the actions after a verified prefix (§7) | one socket |
@@ -537,8 +537,9 @@ drawer                                     server                       everyone
   │  draw(frame, [generation, sequence])      │
   │──────────────────────────────────────────▶│  validate rules, generation, sequence
   │                                           │  CanvasSession.record_stroke(...)
-  │                                           │────── draw(frame verbatim) ──────────▶
-  │◀──── canvas_commit [gen, seq, rev, hash] ─│──────────────────────────────────────▶
+  │                                           │  commit_sequence(...) if it closes one
+  │                                           │─ draw(frame verbatim, [gen, seq, rev, hash]) ▶
+  │◀──── canvas_commit [gen, seq, rev, hash] ─│
 ```
 
 - Only the frame that **starts** an action carries `[generation, sequence]`. Path
@@ -547,14 +548,23 @@ drawer                                     server                       everyone
 - A path is committed on `draw_end`, using the sequence its `draw_start` carried. A
   shape or fill commits immediately. A clear commits immediately.
 - The rebroadcast to other clients is the drawer's **exact wire bytes**, never a
-  re-encoded frame.
+  re-encoded frame — plus, on the frame that *commits* an action, the commit itself as
+  a trailing `[generation, sequence, revision, historyHash]`. Point frames commit
+  nothing and carry nothing.
+- **The drawer still receives `canvas_commit` as its own event**, because `skip_sid`
+  excludes them from the rebroadcast and their pending-mutation window is what the
+  commit resolves. Everyone else reads the commit off the frame that caused it, which
+  costs the room one event per action instead of two and makes it impossible to observe
+  a commit for a frame that has not arrived.
+- `canvas_undo` is unaffected: an undo has no frame of its own to ride on, so it stays a
+  room-wide event.
 
 ### Recovery paths
 
 | Situation | Server response |
 | --- | --- |
 | `generation` is stale | `sync_strokes` (full authoritative history) |
-| `sequence` ≤ committed | replay the stored `canvas_commit` for it if the recorded mutation matches, else `sync_strokes` |
+| `sequence` ≤ committed | replay the stored `canvas_commit` to that socket if the recorded mutation matches, else `sync_strokes` |
 | `sequence` > expected (a gap) | `request_canvas_actions [generation, expected, received]` |
 | A new action arrives while a path is still open | `request_canvas_actions`, unless it is a `draw_start` repeating the open sequence, which restarts that path |
 | A refused tool or color | `sync_strokes` |

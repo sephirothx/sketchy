@@ -122,8 +122,42 @@ async def test_draw_handler_records_and_rebroadcasts_every_binary_action():
         for call in sio.emit.await_args_list
         if call.args[0] == "draw"
     ]
-    assert [call.args[1] for call in broadcasts] == frames
+    # A frame that commits an action carries the commit with it, so the room
+    # never pays for a second event and a viewer cannot see a commit for a
+    # frame it has not received. Point frames commit nothing and carry nothing.
+    rebroadcast_frames = [
+        call.args[1][0] if isinstance(call.args[1], tuple) else call.args[1]
+        for call in broadcasts
+    ]
+    assert rebroadcast_frames == frames
+    commits = [
+        call.args[1][1] if isinstance(call.args[1], tuple) else None
+        for call in broadcasts
+    ]
+    generation = room.game.canvas.generation
+    # draw_start opens the action and points commit nothing; draw_end closes
+    # it, and a shape or a fill is committed by the frame that carries it.
+    assert [commit is None for commit in commits] == [True, True, False, False, False]
+    assert [commit[:2] for commit in commits if commit] == [
+        [generation, 1], [generation, 2], [generation, 3],
+    ]
+    revisions = [commit[2] for commit in commits if commit]
+    assert revisions == sorted(set(revisions)), revisions
+    assert all(isinstance(commit[3], int) for commit in commits if commit)
     assert all(call.kwargs.get("skip_sid") == "drawer-sid" for call in broadcasts)
+
+    # The drawer never receives its own rebroadcast, so their commit stays a
+    # dedicated event - addressed to them alone rather than to the room.
+    drawer_commits = [
+        call
+        for call in sio.emit.await_args_list
+        if call.args[0] == "canvas_commit"
+    ]
+    assert [call.args[1] for call in drawer_commits] == [
+        commit for commit in commits if commit is not None
+    ]
+    assert all(call.kwargs.get("to") == "drawer-sid" for call in drawer_commits)
+    assert all(call.kwargs.get("room") is None for call in drawer_commits)
 
     await draw("drawer-sid", b"\x11")
     assert len(room.game.canvas.history) == 3

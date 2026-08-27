@@ -419,8 +419,10 @@ drawer: select_prompt  (or the timer forces a choice)
 
 drawer: draw / undo_stroke      (binary; see wire-protocol.md)
   └─ handlers/drawing.py  →  CanvasSession.record_stroke / undo_last_stroke
-       ├─ rebroadcast the exact wire frame to the room (skip_sid=drawer)
-       └─ emit canvas_commit / canvas_undo                                → room
+       ├─ rebroadcast the exact wire frame to the room (skip_sid=drawer),
+       │  with the commit attached when that frame commits an action
+       ├─ emit canvas_commit                                → the drawer alone
+       └─ emit canvas_undo                                               → room
 
 guessers: guess          (volatile, acknowledged; a retry carrying a seen id stops here)
   └─ handlers/chat.py  →  Game.submit_guess

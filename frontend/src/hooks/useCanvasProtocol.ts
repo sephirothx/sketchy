@@ -210,7 +210,11 @@ export function useCanvasProtocol(
   }, [beginDrawAction, renderer]);
 
   useEffect(() => {
-    const onDraw = (payload: unknown) => {
+    // A frame that commits an action carries the commit with it, so a viewer
+    // can never see a commit for a frame that has not arrived - and the room
+    // is spared a second event per action. The drawer is skipped by the
+    // rebroadcast and still receives `canvas_commit` on its own.
+    const onDraw = (payload: unknown, commit?: unknown) => {
       const packet = decodeLiveDrawing(payload);
       if (!packet) {
         requestAuthoritativeSync();
@@ -219,6 +223,7 @@ export function useCanvasProtocol(
       historyRef.current.apply(packet);
       renderer.apply(packet);
       publishBudgets();
+      if (commit !== undefined) onCanvasCommit(commit);
     };
 
     const finishQueuedSync = () => {
@@ -372,7 +377,7 @@ export function useCanvasProtocol(
       finishQueuedSync();
     };
 
-    const onCanvasCommit = (payload: unknown) => {
+    function onCanvasCommit(payload: unknown) {
       const sequence = Array.isArray(payload) ? payload[1] : null;
       const pending = typeof sequence === "number"
         ? pendingMutationsRef.current.get(sequence)
@@ -387,7 +392,7 @@ export function useCanvasProtocol(
         return;
       }
       pendingMutationsRef.current.delete(sequence);
-    };
+    }
 
     const onUndoStroke = (payload: unknown) => {
       const sequence = Array.isArray(payload) ? payload[1] : null;
