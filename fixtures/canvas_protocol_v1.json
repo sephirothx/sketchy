@@ -25,8 +25,8 @@
      }
     ]
    },
-   "wire": "114001e00180000f10ff",
-   "note": "far apart: exercises the -128 escape"
+   "wire": "114001e001000f10ff",
+   "note": "two points a canvas apart: delta would be larger, so absolute wins"
   },
   {
    "event": "draw_move",
@@ -46,8 +46,41 @@
      }
     ]
    },
-   "wire": "114001e001100c100c",
-   "note": "adjacent samples: exercises the int8 delta path"
+   "wire": "164001e001100c100c",
+   "note": "adjacent samples: delta wins, no escapes"
+  },
+  {
+   "event": "draw_move",
+   "payload": {
+    "points": [
+     {
+      "x": 0.1,
+      "y": 0.2
+     },
+     {
+      "x": 0.10500000000000001,
+      "y": 0.20500000000000002
+     },
+     {
+      "x": 0.11,
+      "y": 0.21000000000000002
+     },
+     {
+      "x": 0.115,
+      "y": 0.21500000000000002
+     },
+     {
+      "x": 0.12000000000000001,
+      "y": 0.22
+     },
+     {
+      "x": 0.95,
+      "y": 0.9
+     }
+    ]
+   },
+   "wire": "164001e001100c100c100c100c80e00b7008",
+   "note": "adjacent samples then one flick: delta wins and carries an escape"
   },
   {
    "event": "draw_end",

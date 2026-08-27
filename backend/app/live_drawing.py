@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import struct
 from dataclasses import dataclass
+from itertools import pairwise
 
 from app.canvas_history import (
     CANVAS_HEIGHT,
@@ -27,31 +28,42 @@ PATH_END_TAG = 2
 SHAPE_TAG = 3
 FILL_TAG = 4
 CLEAR_TAG = 5
+PATH_POINTS_DELTA_TAG = 6
 
 _HEADER_VERSION_SHIFT = 4
 _HEADER_TAG_MASK = 0x0F
 _POINT = struct.Struct("<hh")
 _DELTA = struct.Struct("<bb")
 
-# Path points travel as deltas from the point before them. Consecutive pointer
-# samples are milliseconds apart, so the gap between two of them almost always
-# fits a signed byte at quarter-pixel scale (+/-31.75px) where an absolute
-# coordinate needs two - halving the per-point cost on much the highest-volume
-# packet in the protocol.
+# Path points can travel two ways, and the encoder picks per frame.
 #
-# The first point of every frame stays absolute, deliberately. It makes each
-# frame independently decodable, so a frame that arrives late, out of order, or
-# not at all cannot corrupt the points in any other frame. That property is
-# worth more than the two bytes it costs.
+# PATH_POINTS_TAG is absolute: two int16 per point, the original layout. Its
+# length is always 1 + 4n, which is a free integrity check - a truncated or
+# corrupted frame fails it rather than decoding into different points.
 #
-# -128 is not a delta. It is the escape marker: a flick fast enough to move
-# more than 31.75px between samples writes it, then an absolute pair. Escapes
-# cost 5 bytes against 2, so they are a loss when frequent - but they are the
-# reason an arbitrarily fast stroke stays representable rather than being
-# refused.
+# PATH_POINTS_DELTA_TAG stores the first point absolute and every later point
+# as a signed-byte offset from the one before it. Consecutive pointer samples
+# are milliseconds apart, so that gap usually fits a byte at quarter-pixel
+# scale (+/-31.75px) where an absolute coordinate needs two.
+#
+# It is chosen per frame because whether it wins depends on the device, not on
+# the protocol. The threshold is a distance between samples, so it scales with
+# the sample rate: ~3810 px/s at 120Hz, ~1905 at 60Hz, ~952 on a throttled
+# 30Hz client. Past it, escapes make the delta frame *larger* than the absolute
+# one - on exactly the slow devices that most need the saving. Predicting both
+# sizes and sending the smaller makes the encoding never worse than it was,
+# instead of a bet on how fast the user's hardware samples.
+#
+# The first point of a delta frame stays absolute so each frame decodes
+# independently: a frame arriving late, out of order, or not at all cannot
+# corrupt the points in any other.
+#
+# -128 is not a delta but the escape marker, followed by an absolute pair. It
+# is what keeps an arbitrarily fast stroke representable rather than refused.
 _DELTA_ESCAPE = -128
 _MIN_DELTA = -127
 _MAX_DELTA = 127
+_ESCAPE_RECORD_SIZE = 1 + _POINT.size
 _PATH_START = struct.Struct("<B3sBhh")
 _SHAPE = struct.Struct("<BB3sBhhhh")
 _FILL = struct.Struct("<B3sHH")
@@ -95,6 +107,41 @@ def _unpack_coordinate(value: int, canvas_size: int) -> float:
     return value / (canvas_size * COORDINATE_SCALE)
 
 
+def _is_delta(delta_x: int, delta_y: int) -> bool:
+    return (
+        _MIN_DELTA <= delta_x <= _MAX_DELTA
+        and _MIN_DELTA <= delta_y <= _MAX_DELTA
+    )
+
+
+def _encode_points(packed: list[tuple[int, int]]) -> bytes:
+    """Pack path points whichever way is smaller for this particular frame."""
+    absolute_size = 1 + len(packed) * _POINT.size
+    delta_size = 1 + _POINT.size + sum(
+        _DELTA.size
+        if _is_delta(x - previous_x, y - previous_y)
+        else _ESCAPE_RECORD_SIZE
+        for (previous_x, previous_y), (x, y) in pairwise(packed)
+    )
+    if delta_size >= absolute_size:
+        frame = bytearray((_header(PATH_POINTS_TAG),))
+        for x, y in packed:
+            frame.extend(_POINT.pack(x, y))
+        return bytes(frame)
+
+    frame = bytearray((_header(PATH_POINTS_DELTA_TAG),))
+    frame.extend(_POINT.pack(*packed[0]))
+    for (previous_x, previous_y), (x, y) in pairwise(packed):
+        delta_x = x - previous_x
+        delta_y = y - previous_y
+        if _is_delta(delta_x, delta_y):
+            frame.extend(_DELTA.pack(delta_x, delta_y))
+        else:
+            frame.append(_DELTA_ESCAPE & 0xFF)
+            frame.extend(_POINT.pack(x, y))
+    return bytes(frame)
+
+
 def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
     """Encode one action as a binary attachment or compact numeric control."""
     payload = payload or {}
@@ -113,28 +160,17 @@ def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
         points = payload.get("points")
         if not isinstance(points, list) or not 1 <= len(points) <= MAX_POINTS_PER_FRAME:
             raise ValueError("invalid path point count")
-        frame = bytearray((_header(PATH_POINTS_TAG),))
-        previous_x = previous_y = None
+        packed = []
         for point in points:
             if not isinstance(point, dict):
                 raise ValueError("invalid path point")
-            x = _pack_coordinate(point.get("x"), CANVAS_WIDTH)
-            y = _pack_coordinate(point.get("y"), CANVAS_HEIGHT)
-            if previous_x is None:
-                frame.extend(_POINT.pack(x, y))
-            else:
-                delta_x = x - previous_x
-                delta_y = y - previous_y
-                if (
-                    _MIN_DELTA <= delta_x <= _MAX_DELTA
-                    and _MIN_DELTA <= delta_y <= _MAX_DELTA
-                ):
-                    frame.extend(_DELTA.pack(delta_x, delta_y))
-                else:
-                    frame.append(_DELTA_ESCAPE & 0xFF)
-                    frame.extend(_POINT.pack(x, y))
-            previous_x, previous_y = x, y
-        return bytes(frame)
+            packed.append(
+                (
+                    _pack_coordinate(point.get("x"), CANVAS_WIDTH),
+                    _pack_coordinate(point.get("y"), CANVAS_HEIGHT),
+                )
+            )
+        return _encode_points(packed)
     if event == "draw_end":
         return _header(PATH_END_TAG)
     if event == "draw_shape":
@@ -221,6 +257,27 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
             },
         )
     if tag == PATH_POINTS_TAG:
+        # Fixed-width records, so the length is its own integrity check: a
+        # truncated or corrupted frame fails it rather than decoding into a
+        # different set of points.
+        if (
+            len(frame) <= 1
+            or (len(frame) - 1) % _POINT.size
+            or (len(frame) - 1) // _POINT.size > MAX_POINTS_PER_FRAME
+        ):
+            raise ValueError("invalid path-points frame size")
+        points = [
+            {
+                "x": _unpack_coordinate(x, CANVAS_WIDTH),
+                "y": _unpack_coordinate(y, CANVAS_HEIGHT),
+            }
+            for x, y in (
+                _POINT.unpack_from(frame, offset)
+                for offset in range(1, len(frame), _POINT.size)
+            )
+        ]
+        return LiveDrawingPacket("draw_move", {"points": points})
+    if tag == PATH_POINTS_DELTA_TAG:
         # Variable-length records, so the frame is walked rather than divided.
         # Every step is bounded by the frame it is reading, and the point count
         # is checked as it grows, so a malformed frame is refused rather than

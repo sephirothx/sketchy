@@ -18,15 +18,21 @@ const MAX_BRUSH_WIDTH = 64;
 const MAX_POINTS_PER_FRAME = 256;
 const SHAPES = ["rectangle", "ellipse", "triangle"] as const;
 
-// Path points travel as deltas from the point before them; see the matching
-// block in `backend/app/live_drawing.py`, which this must agree with byte for
-// byte. The first point of every frame stays absolute so each frame decodes
-// independently of the ones around it. -128 is not a delta but the escape
-// marker: a stroke moving faster than ~3810 px/s (measured crossover at a
-// 120Hz pointer) writes it, followed by an absolute pair.
+// Path points travel either absolute (PATH_POINTS_TAG, fixed 4 bytes each) or
+// delta-coded (PATH_POINTS_DELTA_TAG, first point absolute then signed-byte
+// offsets). The encoder predicts both sizes and sends the smaller, per frame.
+// See the matching block in `backend/app/live_drawing.py`, which this must
+// agree with byte for byte.
+//
+// Choosing per frame matters because the delta threshold is a distance between
+// consecutive samples, so it scales with the device's sample rate: ~3810 px/s
+// at 120Hz, ~1905 at 60Hz, ~952 on a throttled 30Hz client. Past it escapes
+// make a delta frame larger than an absolute one, on exactly the slow devices
+// that most need the saving.
 const DELTA_ESCAPE = -128;
 const MIN_DELTA = -127;
 const MAX_DELTA = 127;
+const ESCAPE_RECORD_SIZE = 5;
 
 const PATH_START_TAG = 0;
 const PATH_POINTS_TAG = 1;
@@ -34,6 +40,7 @@ const PATH_END_TAG = 2;
 const SHAPE_TAG = 3;
 const FILL_TAG = 4;
 const CLEAR_TAG = 5;
+const PATH_POINTS_DELTA_TAG = 6;
 
 export type LiveDrawingPacket =
   | { event: "draw_start"; payload: StrokeStartPayload }
@@ -88,31 +95,50 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
     packedCoordinate(point.x, CANVAS_WIDTH),
     packedCoordinate(point.y, CANVAS_HEIGHT),
   ]);
-  // Worst case is every point escaping, which is still bounded.
-  const scratch = new Uint8Array(1 + packed.length * (1 + 4));
-  const view = new DataView(scratch.buffer);
-  view.setUint8(0, header(PATH_POINTS_TAG));
+
+  const fits = (index: number): boolean => {
+    const deltaX = packed[index][0] - packed[index - 1][0];
+    const deltaY = packed[index][1] - packed[index - 1][1];
+    return deltaX >= MIN_DELTA && deltaX <= MAX_DELTA
+      && deltaY >= MIN_DELTA && deltaY <= MAX_DELTA;
+  };
+
+  const absoluteSize = 1 + packed.length * 4;
+  let deltaSize = 1 + 4;
+  for (let index = 1; index < packed.length; index += 1) {
+    deltaSize += fits(index) ? 2 : ESCAPE_RECORD_SIZE;
+  }
+
+  if (deltaSize >= absoluteSize) {
+    const frame = new Uint8Array(absoluteSize);
+    const absolute = new DataView(frame.buffer);
+    absolute.setUint8(0, header(PATH_POINTS_TAG));
+    packed.forEach(([x, y], index) => {
+      absolute.setInt16(1 + index * 4, x, true);
+      absolute.setInt16(3 + index * 4, y, true);
+    });
+    return frame;
+  }
+
+  const frame = new Uint8Array(deltaSize);
+  const view = new DataView(frame.buffer);
+  view.setUint8(0, header(PATH_POINTS_DELTA_TAG));
   view.setInt16(1, packed[0][0], true);
   view.setInt16(3, packed[0][1], true);
   let offset = 5;
   for (let index = 1; index < packed.length; index += 1) {
-    const deltaX = packed[index][0] - packed[index - 1][0];
-    const deltaY = packed[index][1] - packed[index - 1][1];
-    if (
-      deltaX >= MIN_DELTA && deltaX <= MAX_DELTA
-      && deltaY >= MIN_DELTA && deltaY <= MAX_DELTA
-    ) {
-      view.setInt8(offset, deltaX);
-      view.setInt8(offset + 1, deltaY);
+    if (fits(index)) {
+      view.setInt8(offset, packed[index][0] - packed[index - 1][0]);
+      view.setInt8(offset + 1, packed[index][1] - packed[index - 1][1]);
       offset += 2;
     } else {
       view.setInt8(offset, DELTA_ESCAPE);
       view.setInt16(offset + 1, packed[index][0], true);
       view.setInt16(offset + 3, packed[index][1], true);
-      offset += 5;
+      offset += ESCAPE_RECORD_SIZE;
     }
   }
-  return scratch.slice(0, offset);
+  return frame;
 }
 
 export function encodePathEnd(): number {
@@ -193,6 +219,24 @@ export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
     };
   }
   if (tag === PATH_POINTS_TAG) {
+    // Fixed-width records, so the length is its own integrity check.
+    if (
+      view.byteLength <= 1
+      || (view.byteLength - 1) % 4 !== 0
+      || (view.byteLength - 1) / 4 > MAX_POINTS_PER_FRAME
+    ) {
+      return null;
+    }
+    const points = [];
+    for (let offset = 1; offset < view.byteLength; offset += 4) {
+      points.push({
+        x: unpackedCoordinate(view.getInt16(offset, true), CANVAS_WIDTH),
+        y: unpackedCoordinate(view.getInt16(offset + 2, true), CANVAS_HEIGHT),
+      });
+    }
+    return { event: "draw_move", payload: { points } };
+  }
+  if (tag === PATH_POINTS_DELTA_TAG) {
     // Variable-length records, so the frame is walked rather than divided.
     if (view.byteLength < 5) return null;
     let x = view.getInt16(1, true);
