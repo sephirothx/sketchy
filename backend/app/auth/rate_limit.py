@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable
 
 from starlette.requests import Request
-from sqlalchemy import delete, select, tuple_
+from sqlalchemy import delete, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -188,6 +188,19 @@ async def cleanup_expired_rate_limit_buckets(
             return len(keys)
 
 
+def bucket_is_full(
+    attempt_count: int, window_expires_at: datetime, limit: int, now: datetime
+) -> bool:
+    """Whether this bucket is refusing, as opposed to merely not matching.
+
+    A spend that misses and a roll that misses do not together prove the
+    bucket is full: another caller's roll or refund can land between the two
+    statements, leaving a row that has room and matches neither. Presence is
+    not a refusal - only a live window at its limit is.
+    """
+    return window_expires_at > now and attempt_count >= limit
+
+
 class PersistentRateLimiter:
     """Database-backed fixed window shared by restarts and server replicas."""
 
@@ -216,96 +229,169 @@ class PersistentRateLimiter:
         )
         return self._secret
 
-    async def check(self, key: str) -> bool:
-        """Record one attempt without ever storing the raw client address."""
+    async def _key_hash(self, key: str) -> str:
+        """The bucket this caller belongs to, never their raw address."""
         secret = await self._hash_secret()
-        key_hash = hmac.new(
+        return hmac.new(
             secret.encode("utf-8"),
             key.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
 
+    async def check(self, key: str) -> bool:
+        """Record one attempt without ever storing the raw client address.
+
+        No decision is made here. Each statement carries its own condition -
+        "spend one if this window is live and has room", "roll it if it has
+        expired" - so the ceiling is evaluated by the database, against the
+        row as it stands, rather than against a copy this process read a
+        moment earlier. Reading first and writing back was safe on PostgreSQL
+        because of `SELECT … FOR UPDATE` and safe nowhere else: SQLite ignores
+        row locks and is the documented default, so the ceiling every limit
+        rests on was soft by however many attempts were in flight together.
+        """
+        key_hash = await self._key_hash(key)
+
         for _ in range(3):
             checked_at = self._clock()
-            try:
-                async with self._session_factory() as session:
-                    async with session.begin():
-                        bucket = await session.scalar(
-                            select(AuthRateLimitBucket)
+            verdict: bool | None = None
+            present = False
+            async with self._session_factory() as session:
+                async with session.begin():
+                    # Spend one from a live window that still has room. The
+                    # `attempt_count <` is the ceiling, and the database
+                    # evaluates it against the row as it stands rather than
+                    # against a copy this process read a moment earlier.
+                    taken = await session.execute(
+                        update(AuthRateLimitBucket)
+                        .where(
+                            AuthRateLimitBucket.scope == self._scope,
+                            AuthRateLimitBucket.key_hash == key_hash,
+                            AuthRateLimitBucket.window_expires_at > checked_at,
+                            AuthRateLimitBucket.attempt_count < self._limit,
+                        )
+                        .values(
+                            attempt_count=AuthRateLimitBucket.attempt_count + 1,
+                            updated_at=checked_at,
+                        )
+                    )
+                    if taken.rowcount:
+                        verdict = True
+                    else:
+                        # Or start a fresh window over one that has expired.
+                        rolled = await session.execute(
+                            update(AuthRateLimitBucket)
                             .where(
                                 AuthRateLimitBucket.scope == self._scope,
                                 AuthRateLimitBucket.key_hash == key_hash,
+                                AuthRateLimitBucket.window_expires_at <= checked_at,
                             )
-                            .with_for_update()
+                            .values(
+                                attempt_count=1,
+                                window_started_at=checked_at,
+                                window_expires_at=checked_at + self._window,
+                                updated_at=checked_at,
+                            )
                         )
-                        if bucket is None:
-                            session.add(
-                                AuthRateLimitBucket(
-                                    scope=self._scope,
-                                    key_hash=key_hash,
-                                    attempt_count=1,
-                                    window_started_at=checked_at,
-                                    window_expires_at=checked_at + self._window,
-                                    updated_at=checked_at,
-                                )
-                            )
-                            await session.flush()
-                            allowed = True
-                        elif bucket.window_expires_at <= checked_at:
-                            bucket.attempt_count = 1
-                            bucket.window_started_at = checked_at
-                            bucket.window_expires_at = checked_at + self._window
-                            bucket.updated_at = checked_at
-                            allowed = True
-                        elif bucket.attempt_count >= self._limit:
-                            allowed = False
+                        if rolled.rowcount:
+                            verdict = True
                         else:
-                            bucket.attempt_count += 1
-                            bucket.updated_at = checked_at
-                            allowed = True
-                break
-            except IntegrityError:
-                await asyncio.sleep(0)
-        else:
-            # If replicas cannot agree on the bucket, fail closed.
-            return False
+                            # Neither matched. That is not proof the bucket is
+                            # full: another caller's roll or refund can land
+                            # between the two statements above, leaving a row
+                            # with room that matched neither of them. Read what
+                            # it actually says.
+                            state = (
+                                await session.execute(
+                                    select(
+                                        AuthRateLimitBucket.attempt_count,
+                                        AuthRateLimitBucket.window_expires_at,
+                                    ).where(
+                                        AuthRateLimitBucket.scope == self._scope,
+                                        AuthRateLimitBucket.key_hash == key_hash,
+                                    )
+                                )
+                            ).first()
+                            present = state is not None
+                            if state is not None and bucket_is_full(
+                                state.attempt_count,
+                                state.window_expires_at,
+                                self._limit,
+                                checked_at,
+                            ):
+                                verdict = False
+            # Deliberately outside the transaction above: `_finish` may sweep
+            # expired buckets, and doing that on a second connection while
+            # this one still holds the row would be two writers reaching for
+            # the same table - a lock fight on SQLite and a deadlock waiting
+            # to happen on PostgreSQL.
+            if verdict is not None:
+                return await self._finish(verdict)
+            if present:
+                # The row moved underneath this attempt - rolled or refunded
+                # between the two statements - so it has room that neither
+                # matched. Go round and spend from it rather than refusing
+                # somebody a slot that exists.
+                continue
 
+            try:
+                async with self._session_factory() as session:
+                    async with session.begin():
+                        session.add(
+                            AuthRateLimitBucket(
+                                scope=self._scope,
+                                key_hash=key_hash,
+                                attempt_count=1,
+                                window_started_at=checked_at,
+                                window_expires_at=checked_at + self._window,
+                                updated_at=checked_at,
+                            )
+                        )
+                return await self._finish(True)
+            except IntegrityError:
+                # Somebody opened the window between the read and the insert.
+                # Go round: the first statement will find it and either spend
+                # from it or refuse.
+                await asyncio.sleep(0)
+
+        # If callers cannot agree on the bucket, fail closed.
+        return False
+
+    async def _finish(self, allowed: bool) -> bool:
+        """Count the check and occasionally take out the expired buckets."""
         self._checks += 1
         if self._checks % PERSISTENT_CLEANUP_INTERVAL == 0:
             await cleanup_expired_rate_limit_buckets(self._session_factory)
         return allowed
-
 
     async def refund(self, key: str) -> None:
         """Give back an attempt that did not buy the thing it paid for.
 
         A limit on an action that can still fail after the bucket is charged
         would otherwise spend somebody's allowance on work that never
-        happened. Only ever called by the code that took the attempt, and
-        only when it knows the action did not occur; an expired or missing
-        bucket is nothing to give back to.
+        happened. The condition travels with the statement, for the same
+        reason it does in `check`: two refunds in flight together must not
+        take the count below what was actually spent, and they would if this
+        read the count and wrote back a decision made from it. An expired or missing bucket is nothing to give back
+        to.
         """
-        secret = await self._hash_secret()
-        key_hash = hmac.new(
-            secret.encode("utf-8"),
-            key.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        key_hash = await self._key_hash(key)
         refunded_at = self._clock()
         async with self._session_factory() as session:
             async with session.begin():
-                bucket = await session.scalar(
-                    select(AuthRateLimitBucket)
+                await session.execute(
+                    update(AuthRateLimitBucket)
                     .where(
                         AuthRateLimitBucket.scope == self._scope,
                         AuthRateLimitBucket.key_hash == key_hash,
+                        AuthRateLimitBucket.window_expires_at > refunded_at,
+                        AuthRateLimitBucket.attempt_count > 0,
                     )
-                    .with_for_update()
+                    .values(
+                        attempt_count=AuthRateLimitBucket.attempt_count - 1,
+                        updated_at=refunded_at,
+                    )
                 )
-                if bucket is None or bucket.window_expires_at <= refunded_at:
-                    return
-                bucket.attempt_count = max(0, bucket.attempt_count - 1)
-                bucket.updated_at = refunded_at
 
 
 def client_key(request: Request) -> str:

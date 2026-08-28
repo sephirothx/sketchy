@@ -2,7 +2,7 @@
 import asyncio
 
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
 
@@ -53,7 +53,10 @@ async def test_registering_keeps_the_seat_and_drops_the_guest_styling():
         try:
             await _create_room(page, "ClaimMe")
             seats = page.locator(".player-name .colored-player-name")
-            assert await seats.count() == 1
+            # `count()` samples once; `to_have_count` waits for it. The list
+            # arrives with `room_state`, so reading it the instant the room
+            # renders is a race that fails as "wrong number of seats".
+            await expect(seats).to_have_count(1)
             assert "is-guest" in (await seats.first.get_attribute("class"))
 
             await register_account(page, "ClaimedUser")
@@ -173,7 +176,7 @@ async def test_opening_the_same_room_twice_moves_the_seat_and_tells_the_old_tab(
 
             # Exactly one seat survives, held by the newer tab.
             seats = second.locator(".player-name .colored-player-name")
-            assert await seats.count() == 1
+            await expect(seats).to_have_count(1)
         finally:
             await context.close()
             await browser.close()

@@ -72,6 +72,9 @@ async def test_a_guest_files_a_bug_and_an_admin_reads_it():
             # disclosure is the honest version of "some technical details".
             await guest_page.click('.bug-report-context > summary')
             context_rows = guest_page.locator(".bug-report-context .bug-context div")
+            # Waiting for the fifth is "at least five", and it retries; a bare
+            # `count()` reads whatever has rendered by that instant.
+            await context_rows.nth(4).wait_for()
             assert await context_rows.count() >= 5
 
             await guest_page.select_option("select#" + await guest_page.get_attribute(
@@ -116,7 +119,10 @@ async def test_a_guest_files_a_bug_and_an_admin_reads_it():
             # Read as a strip across the width rather than a column down the
             # side, so the decision controls stay on screen.
             cells = admin_page.locator(".bug-diagnostics .bug-diagnostic")
+            # The heading above arrives before the cells under it do.
+            await cells.nth(7).wait_for()
             assert await cells.count() >= 8
+            await cells.locator("dt").nth(7).wait_for()
             assert await cells.locator("dt").count() >= 8
             await admin_page.click('summary:has-text("Everything the client reported")')
             await admin_page.wait_for_selector("text=browser.userAgent")

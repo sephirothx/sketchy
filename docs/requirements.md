@@ -238,7 +238,7 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-RATE-01** | Login, registration, and lookup limits MUST be persistent, shared database buckets, so they survive restarts and apply once across every replica. |
+| **R-RATE-01** | Login, registration, and lookup limits MUST be persistent, shared database buckets, so they survive restarts and apply once across every replica. A limit MUST NOT be decided by reading a bucket, deciding in the application, and writing it back: every statement MUST carry its own condition, so the database evaluates the ceiling against the row as it stands. `SELECT … FOR UPDATE` MUST NOT be relied on for this — SQLite ignores row locks and is the documented default, so a read-then-write ceiling is soft by however many attempts are in flight together. |
 | **R-RATE-02** | Bucket keys MUST be HMAC-SHA-256 digests under `IP_HASH_SECRET`. **Raw IP addresses MUST NOT be stored.** |
 | **R-RATE-03** | Expired buckets MUST be cleaned in bounded batches. |
 | **R-RATE-04** | Rotating the secret MUST start fresh buckets without exposing or re-identifying old keys. |
@@ -453,7 +453,7 @@ claim that an arbitrary host will sustain it.
 | **R-ENG-06** | Extending a stored enum set MUST require one coordinated code, migration, contract, README, and glossary review. |
 | **R-ENG-07** | Persisted timestamps MUST require timezone-aware inputs and normalize to aware UTC, so SQLite and PostgreSQL behave identically. |
 | **R-ENG-08** | Entity IDs MUST NOT be used as capabilities. Session tokens, room codes, and share codes stay independently random. |
-| **R-ENG-09** | An E2E test MUST wait on the condition it actually cares about, never a fixed sleep sized to outlast it — such a sleep costs its full length on every run and silently stops covering anything when the thing it waits for gets slower. |
+| **R-ENG-09** | An E2E test MUST wait on the condition it actually cares about, never a fixed sleep sized to outlast it — and never `locator.count()`, which samples once and so asserts on whatever had rendered by that instant. `expect(locator).to_have_count(n)` and `locator.nth(n).wait_for()` retry; a count that loses the race fails as wrong data rather than as too early — such a sleep costs its full length on every run and silently stops covering anything when the thing it waits for gets slower. |
 | **R-ENG-10** | Where a test must sit out a production interval, it MUST fast-forward the page's own clock (`page.clock`) rather than spend the time, keeping the interval a production constant instead of something bent for the tests. |
 | **R-ENG-11** | Benchmarks are **diagnostic baselines, not CI thresholds** — browser and machine timings vary. |
 | **R-ENG-12** | CI MUST run backend lint and tests, PostgreSQL migrations and repositories, frontend test/lint/build, and multi-browser E2E. |
