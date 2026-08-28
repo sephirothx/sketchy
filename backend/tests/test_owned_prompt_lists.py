@@ -7,7 +7,14 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import Base, PromptListRevision, PromptVersion, User, generate_uuid
+from app.db.models import (
+    Base,
+    PromptListRevision,
+    PromptListRevisionItem,
+    PromptVersion,
+    User,
+    generate_uuid,
+)
 from app.prompts import letter_histogram
 from app.repositories.interfaces import (
     PromptListConflictError,
@@ -275,5 +282,97 @@ async def test_pinning_refuses_a_list_the_requester_may_not_read():
                 [created.slug], requesting_user_id=owner_id
             )
         ).prompt_count == 1
+    finally:
+        await engine.dispose()
+
+
+async def test_a_revisions_tallies_cover_every_member_whatever_moderation_says():
+    """Moderation state is mutable; a revision's membership is not.
+
+    Counting only what was active when the revision was written makes the
+    stored tallies a function of something that can change afterwards. A
+    version hidden then restored is drawable again but missing from the counts
+    for good, and a revision whose content was all hidden at write time keeps a
+    zero total - which drops wheel pricing onto the drawn sample, the very
+    thing storing a histogram exists to avoid.
+    """
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id,
+            name="Mine",
+            description="",
+            language="en",
+            visibility="private",
+            prompts=(
+                PromptListEntryInput(answer="banjo"),
+                PromptListEntryInput(answer="kazoo"),
+            ),
+        )
+
+        # A moderator hides one of them, then the owner edits the list.
+        async with factory() as session:
+            async with session.begin():
+                version = (
+                    await session.execute(
+                        select(PromptVersion).where(
+                            PromptVersion.canonical_answer == "kazoo"
+                        )
+                    )
+                ).scalars().one()
+                version.moderation_state = "hidden"
+
+        updated = await repo.update_owned(
+            owner_id,
+            created.id,
+            expected_version=created.version,
+            name="Mine",
+            description="",
+            visibility="private",
+            prompts=(
+                PromptListEntryInput(answer="banjo"),
+                PromptListEntryInput(answer="kazoo"),
+                PromptListEntryInput(answer="fiddle"),
+            ),
+        )
+
+        async with factory() as session:
+            revision = (
+                await session.execute(
+                    select(PromptListRevision)
+                    .where(PromptListRevision.prompt_list_id == UUID(created.id))
+                    .order_by(PromptListRevision.version.desc())
+                )
+            ).scalars().first()
+            members = (
+                await session.execute(
+                    select(PromptVersion.canonical_answer)
+                    .join(
+                        PromptListRevisionItem,
+                        PromptListRevisionItem.prompt_version_id == PromptVersion.id,
+                    )
+                    .where(PromptListRevisionItem.revision_id == revision.id)
+                )
+            ).scalars().all()
+
+        assert updated.version == created.version + 1
+        expected_counts, expected_total = letter_histogram(members)
+        assert revision.letter_counts == expected_counts
+        assert revision.letter_total == expected_total
+
+        # And the revision written while "kazoo" was hidden counts it too: it
+        # is a member, and a moderator restoring it must not need a rewrite.
+        async with factory() as session:
+            first = (
+                await session.execute(
+                    select(PromptListRevision)
+                    .where(PromptListRevision.prompt_list_id == UUID(created.id))
+                    .order_by(PromptListRevision.version)
+                )
+            ).scalars().first()
+        first_counts, first_total = letter_histogram(["banjo", "kazoo"])
+        assert first.letter_counts == first_counts
+        assert first.letter_total == first_total
     finally:
         await engine.dispose()

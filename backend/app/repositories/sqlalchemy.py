@@ -2296,13 +2296,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 sort_keys=True,
             ).encode("utf-8")
         ).hexdigest()
-        # Priced from the same answers `resolve_selection` would have offered,
-        # so wheel costs match the pool this revision represents.
+        # Every member, whatever moderation currently says about it. The
+        # tallies are stored because a revision's membership never changes;
+        # filtering on a mutable state would make them drift the moment it
+        # does - a version hidden after this is written would stay counted, and
+        # one restored after being hidden would never be counted at all.
         letter_counts, letter_total = letter_histogram(
-            prompt_version.canonical_answer
-            for _, prompt_version, _ in resolved
-            if prompt_version.moderation_state
-            == PromptContentModerationState.ACTIVE.value
+            prompt_version.canonical_answer for _, prompt_version, _ in resolved
         )
         revision = PromptListRevision(
             id=generate_uuid(),
@@ -2838,8 +2838,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     revision_counts, revision_total = letter_histogram(
                         prompt_version.canonical_answer
                         for prompt_version in prompt_versions
-                        if prompt_version.moderation_state
-                        == PromptContentModerationState.ACTIVE.value
                     )
                     revision = PromptListRevision(
                         id=generate_uuid(),

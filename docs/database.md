@@ -833,8 +833,8 @@ Limits: an account may own at most **25** lists, and a saved list may contain at
 (self-FK, `SET NULL`) · `version` · `language` · `content_hash` · `letter_counts` ·
 `letter_total` · `created_at`, unique on `(prompt_list_id, version)`.
 
-`letter_counts` (JSON) and `letter_total` are a **letter histogram** over the
-revision's active answers, computed and stored at the moment the revision row is
+`letter_counts` (JSON) and `letter_total` are a **letter histogram** over every
+answer the revision holds, computed and stored at the moment the revision row is
 created — by `upsert_bundled` when seeding, and by `_write_owned_revision` when a
 player creates or edits an owned list. Wheel pricing needs how
 common each letter is among the prompts a game can draw (R-HINT-03), which is a
@@ -842,9 +842,11 @@ distribution rather than the words — storing it is what lets a room price lett
 without keeping its prompt pool in memory. `letter_counts` tallies a–z, the only
 letters that can be bought; `letter_total` counts *every* alphabetic character,
 including those outside a–z, because it is the divisor and a list in such a language
-must keep the ratios it would have had. Revisions are immutable, so the tallies cannot
-drift with edits — only a later moderation takedown can leave them counting a version
-the selection no longer offers.
+must keep the ratios it would have had. Membership is counted rather than moderation
+state: a revision's members never change, while their moderation state can, so a tally
+that tracked the latter would be wrong from the first takedown and stay wrong through any
+restore. The cost is that hidden content is priced without being drawable, which
+R-HINT-03 records among the histogram's approximations.
 
 `prompt_list_revision_items`: `revision_id` + `prompt_version_id` composite **PK** ·
 `position`, unique on `(revision_id, position)`. The `RESTRICT` on `prompt_version_id`

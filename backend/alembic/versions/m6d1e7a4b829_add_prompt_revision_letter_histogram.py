@@ -55,9 +55,11 @@ def upgrade() -> None:
             )
         )
 
-    # Backfill from the same answers `resolve_selection` would have offered:
-    # active versions only, so a hidden prompt is not priced into a revision it
-    # can no longer be drawn from.
+    # Every member of a revision, whatever moderation currently says about it.
+    # The tallies are stored because a revision's membership never changes, so
+    # counting against a mutable state would defeat the point: a version hidden
+    # after the backfill would stay counted, and one restored after being
+    # hidden would never be counted at all.
     #
     # Revision history grows without bound - every edit of every owned list
     # leaves one behind - so this walks it a slice at a time rather than
@@ -97,8 +99,7 @@ def upgrade() -> None:
                 SELECT i.revision_id AS revision_id, v.canonical_answer AS answer
                 FROM prompt_list_revision_items AS i
                 JOIN prompt_versions AS v ON v.id = i.prompt_version_id
-                WHERE v.moderation_state = 'active'
-                  AND i.revision_id IN :revision_ids
+                WHERE i.revision_id IN :revision_ids
                 """
             ).bindparams(sa.bindparam("revision_ids", expanding=True)),
             {"revision_ids": batch},

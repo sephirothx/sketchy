@@ -939,11 +939,13 @@ async def test_the_open_report_folds_keep_the_earliest_of_each_duplicate(tmp_pat
         await engine.dispose()
 
 
-async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
-    """The backfill prices a revision from the answers it can still offer.
+async def test_letter_histogram_migration_counts_every_member(tmp_path):
+    """The backfill prices a revision from everything it holds.
 
-    A hidden version is skipped by `resolve_selection`, so counting it here
-    would price letters against prompts no game can draw. Letters outside a-z
+    Moderation state is mutable and membership is not, so counting the former
+    would leave the tallies wrong the first time a version was hidden or
+    restored - and a revision whose content was all hidden would carry a zero
+    total, dropping wheel pricing onto the drawn sample. Letters outside a-z
     are absent from the tallies but present in the divisor, which is what keeps
     a non-English list's ratios unchanged.
     """
@@ -956,8 +958,8 @@ async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
     identifiers = {
         "list": uuid.uuid4().hex,
         "revision": uuid.uuid4().hex,
-        # A second revision holding nothing active, to show the walk covers
-        # more than one and leaves an unpriceable revision at its defaults.
+        # A second revision holding only hidden content, to show the walk
+        # covers more than one and prices membership rather than state.
         "empty_revision": uuid.uuid4().hex,
         "active_concept": uuid.uuid4().hex,
         "hidden_concept": uuid.uuid4().hex,
@@ -1045,9 +1047,10 @@ async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
 
         counts = row[0] if isinstance(row[0], dict) else json.loads(row[0])
         # "café": c, a, f counted; "é" is alphabetic, so it lifts the divisor
-        # without being priceable. "zzz" is hidden and contributes nothing.
-        assert counts == {"a": 1, "c": 1, "f": 1}
-        assert row[1] == 4
+        # without being priceable. "zzz" is hidden today, but it is a member of
+        # this revision and a moderator can restore it, so it is counted.
+        assert counts == {"a": 1, "c": 1, "f": 1, "z": 3}
+        assert row[1] == 7
 
         async with engine.connect() as connection:
             empty = (
@@ -1060,9 +1063,11 @@ async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
                 )
             ).one()
 
+        # A revision holding only hidden content is still priced: it has
+        # members, and a zero total would drop pricing onto the drawn sample.
         empty_counts = empty[0] if isinstance(empty[0], dict) else json.loads(empty[0])
-        assert empty_counts == {}
-        assert empty[1] == 0
+        assert empty_counts == {"z": 3}
+        assert empty[1] == 3
     finally:
         await engine.dispose()
 

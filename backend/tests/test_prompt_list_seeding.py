@@ -1,16 +1,24 @@
 """Unit tests for prompt list seeding, REST API, selection, and usage metrics."""
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Base, PromptListRevision, PromptListRevisionItem
+from app.db.models import (
+    Base,
+    PromptListRevision,
+    PromptListRevisionItem,
+    PromptVersion,
+)
 from app.db.seed import seed_prompt_lists
 from app.prompts import letter_histogram
 from app.repositories.interfaces import (
+    BundledPromptDefinition,
     PromptPickTotals,
     PromptUsage,
 )
@@ -341,5 +349,77 @@ async def test_a_draw_that_excludes_most_of_a_list_still_fills_from_the_rest():
         assert sample.drawable == drawable
         assert len(sample.prompts) == drawable
         assert not shadowed & {prompt.match_key for prompt in sample.prompts}
+    finally:
+        await engine.dispose()
+
+
+async def test_a_reseeded_revision_counts_content_moderation_has_hidden():
+    """Seeding reuses an existing version even when it is hidden.
+
+    That makes a hidden version a member of a *newly written* revision, so a
+    histogram built from "active at write time" would omit it - and omit it
+    permanently, because restoring the version writes no new revision. The
+    counts follow membership, which cannot change, instead.
+    """
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        concepts = {name: str(uuid4()) for name in ("banjo", "kazoo", "fiddle")}
+
+        def definition(answer: str) -> BundledPromptDefinition:
+            return BundledPromptDefinition(
+                concept_id=concepts[answer], answer=answer, prompt_version=1
+            )
+
+        await repo.upsert_bundled(
+            slug="reseeded",
+            name="Reseeded",
+            description="",
+            language="en",
+            version=1,
+            prompts=[definition("banjo"), definition("kazoo")],
+        )
+        async with factory() as session:
+            async with session.begin():
+                hidden = (
+                    await session.execute(
+                        select(PromptVersion).where(
+                            PromptVersion.canonical_answer == "kazoo"
+                        )
+                    )
+                ).scalars().one()
+                hidden.moderation_state = "hidden"
+
+        await repo.upsert_bundled(
+            slug="reseeded",
+            name="Reseeded",
+            description="",
+            language="en",
+            version=2,
+            prompts=[definition("banjo"), definition("kazoo"), definition("fiddle")],
+        )
+
+        async with factory() as session:
+            revision = (
+                await session.execute(
+                    select(PromptListRevision)
+                    .options(
+                        selectinload(PromptListRevision.items).selectinload(
+                            PromptListRevisionItem.prompt_version
+                        )
+                    )
+                    .order_by(PromptListRevision.version.desc())
+                )
+            ).scalars().first()
+
+        members = [item.prompt_version.canonical_answer for item in revision.items]
+        assert sorted(members) == ["banjo", "fiddle", "kazoo"]
+        assert any(
+            item.prompt_version.moderation_state == "hidden"
+            for item in revision.items
+        )
+        expected_counts, expected_total = letter_histogram(members)
+        assert revision.letter_counts == expected_counts
+        assert revision.letter_total == expected_total
     finally:
         await engine.dispose()

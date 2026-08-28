@@ -10,6 +10,7 @@ pinned to the revisions the room was authorized on.
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -63,6 +64,11 @@ async def test_quick_prompts_keep_the_share_they_had_in_the_merged_pool():
     Drawing the two halves separately would make a handful of quick prompts as
     likely as the entire curated list, which is not the mixture the host chose.
     """
+    # Seeded: the assertion is about the weighting, not about whether an
+    # unseeded draw happened to land inside a tolerance. Five prompts in five
+    # hundred and five is rare enough that a fair implementation trips a
+    # three-times-either-way bound roughly one run in two thousand.
+    random.seed(20260828)
     curated = [f"prompt{index}" for index in range(500)]
     custom = [f"mine{index}" for index in range(5)]
     drawn_custom = 0
@@ -265,6 +271,7 @@ async def test_shadowing_quick_prompts_keep_the_share_the_merged_pool_gave_them(
     prompts that can never be drawn, and hands the room's own prompts a much
     smaller share of the game than the host arranged.
     """
+    random.seed(20260828)
     curated = [f"prompt{index}" for index in range(500)]
     # Every one of these shadows a curated answer of the same name, so the
     # merged pool is 400 quick prompts and the 100 curated ones left over.
