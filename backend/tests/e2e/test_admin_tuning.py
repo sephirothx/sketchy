@@ -153,9 +153,11 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
             assert (
                 await stored_settings()
             ).get("tunable.client.lobby_poll_interval_ms") == "1000"
+            # `override` says the change is now a durable row, which is the
+            # half of the record a reset later takes back.
             assert (
                 "client.lobby_poll_interval_ms",
-                {"from": 4000, "to": 1000},
+                {"from": 4000, "to": 1000, "override": "stored"},
             ) in await config_changes()
 
             # Four polls inside eight seconds is impossible at the four-second

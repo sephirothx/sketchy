@@ -316,6 +316,29 @@ async def test_resetting_drops_the_row_even_when_the_value_does_not_move(env):
     assert await stored_rows(factory) == {}
 
 
+async def test_clearing_an_override_is_recorded_even_when_no_number_moves(env):
+    """R-CONF-06: taking a durable override away is a change worth recording.
+
+    Nothing numeric moves, but how this deployment starts does: the setting
+    goes from pinned by a row to following whatever supplies the boot value.
+    An unaudited change to that is a configuration difference nobody can
+    account for afterwards.
+    """
+    _, factory, _, settings = env
+    admin = await an_admin(env)
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, "tunable.budget.drawing", "100")
+    settings.apply_stored(await read_prefixed(factory, "tunable."))
+
+    await admin.patch("/api/admin/tunables", json={"reset": ["budget.drawing"]})
+
+    (event,) = await audit_rows(factory)
+    assert event.event_type == "config.changed"
+    assert event.target_id == "budget.drawing"
+    assert event.details == {"from": 100, "to": 100, "override": "cleared"}
+
+
 async def test_a_row_matching_the_boot_value_is_still_reported_as_stored(env):
     """Row existence and numeric equality are different facts.
 
@@ -383,7 +406,8 @@ async def test_every_change_names_the_administrator_the_setting_and_the_move(env
     assert str(event.actor_user_id) == account["id"]
     assert event.target_type == AuditTargetType.APP_CONFIG.value
     assert event.target_id == "budget.resync"
-    assert event.details == {"from": 1, "to": 4}
+    # The values that moved, and that the change is now a durable override.
+    assert event.details == {"from": 1, "to": 4, "override": "stored"}
     # R-AUDIT-01: the request and a hashed address, so one change can be
     # correlated without the address ever being stored.
     assert event.request_id and event.ip_hash

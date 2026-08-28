@@ -158,15 +158,23 @@ def create_admin_settings_router(
                 for name, number in wanted.items()
                 if name not in persisted
             }
-            rows_change = any(
-                settings.is_stored(name) is not (name in persisted)
+            # Whether each setting's *row* changes, kept per name rather than
+            # as one flag: taking away a durable override is a change to how
+            # this deployment will start, so it is recorded even when nothing
+            # numeric moves (R-CONF-06). Only a submission that changes
+            # neither the value nor the row is silent, which is what keeps a
+            # panel posting its whole form from burying the one real change.
+            override_change = {
+                name: ("stored" if name in persisted else "cleared")
                 for name in wanted
-            )
-            if not moving and not rows_change:
+                if settings.is_stored(name) is not (name in persisted)
+            }
+            recorded = set(moving) | set(override_change)
+            if not recorded:
                 return {"tunables": [_wire(item) for item in settings.describe()]}
 
             request_id, ip_hash = await audit_coordinates(request, session_factory)
-            previous = {name: settings.value(name) for name in moving}
+            previous = {name: settings.value(name) for name in recorded}
             now = datetime.now(timezone.utc)
             async with session_factory() as session:
                 async with session.begin():
@@ -180,7 +188,13 @@ def create_admin_settings_router(
                         await config_store.put(
                             session, f"{CONFIG_PREFIX}{name}", _stored_form(number)
                         )
-                    for name, number in moving.items():
+                    for name in sorted(recorded):
+                        details = {"from": previous[name], "to": wanted[name]}
+                        if name in override_change:
+                            # Says which way the durable override went, so a
+                            # reset that moved no number is still legible as
+                            # the change to future restarts that it is.
+                            details["override"] = override_change[name]
                         session.add(
                             AuditEvent(
                                 id=generate_uuid(),
@@ -190,7 +204,7 @@ def create_admin_settings_router(
                                 target_id=name,
                                 request_id=request_id,
                                 ip_hash=ip_hash,
-                                details={"from": previous[name], "to": number},
+                                details=details,
                                 created_at=now,
                             )
                         )

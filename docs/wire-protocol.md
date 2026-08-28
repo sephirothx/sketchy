@@ -1002,7 +1002,9 @@ the games it was meant to protect. So the endpoint signals, and the drain runs w
 it runs for any other deploy ([`app/server.py`](../backend/app/server.py)). A
 `drainSeconds` in the body is a one-shot window for this shutdown, not a change to
 the setting. A deployment served without that runner answers **503** rather than
-pretending; nothing in the API starts a server again.
+pretending, and a second request before the drain begins answers **409** — the
+right to stop is claimed once, because `draining` is false for the whole gap
+between asking and starting. Nothing in the API starts a server again.
 
 `PATCH /api/admin/players/{id}/role` cannot grant `admin`: the first administrator
 is created by the guarded server-side command ([`auth/admin.py`](../backend/app/auth/admin.py)),

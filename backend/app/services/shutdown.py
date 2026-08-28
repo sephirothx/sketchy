@@ -59,6 +59,7 @@ class ShutdownCoordinator:
         self._room_manager = room_manager
         self._state = "starting"
         self._paused = False
+        self._shutdown_claimed = False
         self._drain_seconds = 0.0
         self._started_at: datetime | None = None
         self._game_state_changed = asyncio.Event()
@@ -92,6 +93,32 @@ class ShutdownCoordinator:
         having to be added in nine places.
         """
         return self._state == "draining" or self._paused
+
+    @property
+    def shutdown_requested(self) -> bool:
+        """Whether a stop has been asked for but has not begun draining yet."""
+        return self._shutdown_claimed
+
+    def claim_shutdown(self) -> bool:
+        """Take the right to stop this process, once. False if already taken.
+
+        There is a gap between asking the process to stop and the drain
+        actually starting, and `is_draining` is false for all of it - so
+        without a claim, two clicks a moment apart are two accepted requests,
+        two audit events for one shutdown, and a second chance to change the
+        drain window after the first was written down.
+
+        Check and set with no await between them, which on one event loop is
+        as atomic as it needs to be.
+        """
+        if self._shutdown_claimed:
+            return False
+        self._shutdown_claimed = True
+        return True
+
+    def release_shutdown_claim(self) -> None:
+        """Give the claim back, for a request that did not go through with it."""
+        self._shutdown_claimed = False
 
     def pause(self, paused: bool = True) -> None:
         """Stop, or resume, admitting new work - without stopping the process.

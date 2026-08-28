@@ -27,6 +27,7 @@ from app.domain_values import AuditTargetType
 from app.db.models import User
 from app.deployment import MAX_SHUTDOWN_DRAIN_SECONDS
 from app.domain_values import AccountState, UserRole
+from app.game import Phase
 from app.rooms import RoomManager
 from app.services import config_store
 from app.services.shutdown import ShutdownCoordinator
@@ -295,11 +296,17 @@ def create_admin_controls_router(
         """
         admin = await require_admin(request)
         room = _room_or_404(room_id)
-        ended = await context.game_flow.end_turn_now(room)
-        if not ended:
+        if room.game is None or room.game.phase != Phase.DRAWING:
             raise HTTPException(
                 status_code=409, detail="That room is not in a drawing turn."
             )
+        # Recorded before the turn is ended, as the room commands above do.
+        # Ending a turn scores it and writes history, and none of that can
+        # share a transaction with the audit row - the state it changes lives
+        # in this process, not the database. So the choice is between a ledger
+        # that can name an action which then failed and a ledger that can miss
+        # one that happened, and for an irreversible action the first is the
+        # smaller harm.
         await _audit(
             request, admin,
             event=TURN_ENDED_EVENT,
@@ -307,6 +314,12 @@ def create_admin_controls_router(
             target_id=room.id,
             details={},
         )
+        if not await context.game_flow.end_turn_now(room):
+            # The phase moved between the check and here - a guess landing, or
+            # the timer. The entry stands: an administrator did ask.
+            raise HTTPException(
+                status_code=409, detail="That turn ended before the command ran."
+            )
         return {"endedTurnIn": room.id}
 
     # --------------------------------------------------------------- shutdown
@@ -352,19 +365,39 @@ def create_admin_controls_router(
                         f"{int(MAX_SHUTDOWN_DRAIN_SECONDS)} seconds."
                     ),
                 )
-            # Set, not stored: this is the window for this shutdown, and the
-            # process will not outlive it to have a configured value again.
-            shutdown.set_drain_seconds(drain)
 
-        # Recorded before anything is asked to stop, because a shutdown that
-        # succeeds takes the chance to write it down with it.
-        await _audit(
-            request, admin,
-            event=SHUTDOWN_REQUESTED_EVENT,
-            target_type=AuditTargetType.APP_CONFIG.value,
-            target_id="server.shutdown",
-            details={"reason": body.reason, "drainSeconds": drain},
-        )
+        # Claimed before the first await. `is_draining` stays false from here
+        # until the signal lands and the runner actually begins, so without
+        # this a second click inside that gap is a second accepted request -
+        # two audit events for one shutdown, and a second chance to move the
+        # drain window after the first was written down.
+        if not shutdown.claim_shutdown():
+            raise HTTPException(
+                status_code=409, detail="A shutdown has already been requested."
+            )
+
+        try:
+            # Recorded before anything is asked to stop, because a shutdown
+            # that succeeds takes the chance to write it down with it.
+            await _audit(
+                request, admin,
+                event=SHUTDOWN_REQUESTED_EVENT,
+                target_type=AuditTargetType.APP_CONFIG.value,
+                target_id="server.shutdown",
+                details={"reason": body.reason, "drainSeconds": drain},
+            )
+        except Exception:
+            # The process is going to outlive this request after all, so it
+            # must be left exactly as it was found - including the claim.
+            shutdown.release_shutdown_claim()
+            raise
+
+        # Only now, and only because the signal is next. Setting it earlier
+        # meant a request that failed its audit still changed the window the
+        # *next* shutdown would use - a one-shot override applied to a
+        # shutdown that never happened.
+        if body.drain_seconds is not None:
+            shutdown.set_drain_seconds(drain)
         request_process_exit()
         return {"draining": True, "drainSeconds": drain}
 

@@ -8,7 +8,8 @@ event in the same transaction, and refusals that leave nothing half-done.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+import asyncio
+from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
@@ -355,6 +356,38 @@ async def test_ending_a_turn_leaves_the_game_running(env):
     assert room.id in rooms.rooms
 
 
+async def test_ending_a_turn_is_recorded_before_the_turn_is_ended(env):
+    """The room commands audit first, and ending a turn is no less final.
+
+    It scores the turn and writes history, and none of that can share a
+    transaction with the audit row - the state it changes lives in this
+    process. So the entry goes down first: a ledger that can name an action
+    which then failed is a smaller harm than one that can miss an
+    irreversible action that happened.
+    """
+    _, factory, rooms, _, context, _ = env
+    admin = await an_admin(env)
+    room = rooms.create_room(name="Studio")
+    host = rooms.add_player(room, "Host")
+    guest = rooms.add_player(room, "Guest")
+    room.state = "playing"
+    room.game = Game(turn_order=[host.id, guest.id], rounds_total=1)
+    room.game.phase = Phase.DRAWING
+    room.game.prompt = "lighthouse"
+    room.game.current_drawer = host.id
+
+    async def fail_after_audit(_room):
+        assert await audit_rows(factory), "the turn ended before it was recorded"
+        raise RuntimeError("the turn could not be ended")
+
+    with patch.object(context.game_flow, "end_turn_now", fail_after_audit):
+        with pytest.raises(RuntimeError):
+            await admin.post(f"/api/admin/rooms/{room.id}/end-turn")
+
+    (event,) = await audit_rows(factory)
+    assert event.event_type == "room.turn_ended_by_admin"
+
+
 async def test_ending_a_turn_in_a_room_that_is_not_drawing_is_refused(env):
     _, _, rooms, _, _, _ = env
     admin = await an_admin(env)
@@ -566,6 +599,70 @@ async def test_a_shutdown_requires_a_reason(env):
         response = await admin.post("/api/admin/shutdown", json=body)
         assert response.status_code == 422, body
     assert exit_requests == []
+
+
+async def test_a_second_shutdown_before_the_drain_starts_is_refused(env):
+    """`is_draining` is false for the whole gap between asking and draining.
+
+    Without a claim taken across that gap, two clicks a moment apart are two
+    accepted requests: two audit events for one shutdown, and a second chance
+    to move the drain window after the first was written down.
+    """
+    _, factory, _, _, _, exit_requests = env
+    admin = await an_admin(env)
+
+    first = await admin.post("/api/admin/shutdown", json={"reason": "deploying"})
+    second = await admin.post(
+        "/api/admin/shutdown", json={"reason": "deploying", "drainSeconds": 0}
+    )
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert exit_requests == [1]
+    assert len(await audit_rows(factory)) == 1
+
+
+async def test_concurrent_shutdowns_stop_the_process_once(env):
+    _, factory, _, _, _, exit_requests = env
+    admin = await an_admin(env)
+    results = await asyncio.gather(
+        *(
+            admin.post("/api/admin/shutdown", json={"reason": "deploying"})
+            for _ in range(4)
+        )
+    )
+    assert sorted(r.status_code for r in results) == [200, 409, 409, 409]
+    assert exit_requests == [1]
+    assert len(await audit_rows(factory)) == 1
+
+
+async def test_a_failed_shutdown_leaves_the_drain_window_alone(env):
+    """A one-shot window belongs to a shutdown that actually happens.
+
+    Applying it before the audit meant a request that errored still changed
+    what the *next* deploy would wait - a window set for a shutdown nobody
+    ever started.
+    """
+    _, _, _, coordinator, _, exit_requests = env
+    admin = await an_admin(env)
+    coordinator.set_drain_seconds(30)
+
+    with patch(
+        "app.api.admin_controls.audit_coordinates",
+        AsyncMock(side_effect=RuntimeError("the ledger is unavailable")),
+    ):
+        with pytest.raises(RuntimeError):
+            await admin.post(
+                "/api/admin/shutdown", json={"reason": "doomed", "drainSeconds": 1}
+            )
+
+    assert coordinator.drain_seconds == 30
+    assert exit_requests == []
+    # And the claim is given back, so a later attempt is not locked out by one
+    # that never went through.
+    assert not coordinator.shutdown_requested
+    assert (
+        await admin.post("/api/admin/shutdown", json={"reason": "retry"})
+    ).status_code == 200
 
 
 async def test_a_second_shutdown_during_a_drain_is_refused(env):

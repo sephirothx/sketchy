@@ -79,7 +79,11 @@ class Tunable:
             raise TunableError(f"{self.name} must be a number")
         try:
             number = float(value)
-        except ValueError as error:
+        except (ValueError, OverflowError) as error:
+            # OverflowError as well as ValueError: JSON has no integer bound
+            # and Python's has none either, so `10**309` parses fine and only
+            # falls over on the way to a float. Both are the same mistake from
+            # an operator's side, and both deserve the same bounded answer.
             raise TunableError(f"{self.name} must be a number") from error
         # Before any arithmetic. `float()` accepts "nan" and "inf" happily, and
         # every use after this point - the bounds comparison, the integer
