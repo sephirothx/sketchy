@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.auth.rate_limit import PersistentRateLimiter
+from app.auth.rate_limit import PersistentRateLimiter, bucket_is_full
 from app.db.models import AppConfig, AuthRateLimitBucket, Base
 
 
@@ -100,3 +101,40 @@ async def test_refunds_cannot_hand_back_more_than_was_taken(factory):
         )
     assert bucket is not None
     assert bucket.attempt_count == 0, "a refund went below what was spent"
+
+
+@pytest.mark.parametrize(
+    "attempts, expires_in, expected",
+    [
+        (5, 60, True),    # live and at its limit: refusing
+        (4, 60, False),   # live with room: somebody's refund landed
+        (5, -1, False),   # expired: somebody's roll is due, not a refusal
+        (0, 60, False),   # live and empty: refunded to nothing
+    ],
+)
+def test_only_a_live_bucket_at_its_limit_is_a_refusal(attempts, expires_in, expected):
+    """A spend that misses and a roll that misses do not together prove the
+    bucket is full: another caller's roll or refund can land between the two
+    statements, leaving a row with room that matched neither. Presence is not
+    a refusal, which is what made the loser of that race a false 429."""
+    now = datetime(2026, 8, 28, tzinfo=timezone.utc)
+
+    assert (
+        bucket_is_full(attempts, now + timedelta(seconds=expires_in), 5, now)
+        is expected
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_slot_freed_by_a_refund_is_given_to_the_next_caller(factory):
+    """The end state the race is about: capacity exists, so the next attempt
+    is admitted rather than refused for the row merely being there."""
+    limiter = PersistentRateLimiter(
+        factory, scope="freed", limit=1, window_seconds=3600
+    )
+    assert await limiter.check("one-caller") is True
+    assert await limiter.check("one-caller") is False
+
+    await limiter.refund("one-caller")
+
+    assert await limiter.check("one-caller") is True

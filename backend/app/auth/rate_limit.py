@@ -188,6 +188,19 @@ async def cleanup_expired_rate_limit_buckets(
             return len(keys)
 
 
+def bucket_is_full(
+    attempt_count: int, window_expires_at: datetime, limit: int, now: datetime
+) -> bool:
+    """Whether this bucket is refusing, as opposed to merely not matching.
+
+    A spend that misses and a roll that misses do not together prove the
+    bucket is full: another caller's roll or refund can land between the two
+    statements, leaving a row that has room and matches neither. Presence is
+    not a refusal - only a live window at its limit is.
+    """
+    return window_expires_at > now and attempt_count >= limit
+
+
 class PersistentRateLimiter:
     """Database-backed fixed window shared by restarts and server replicas."""
 
@@ -242,6 +255,7 @@ class PersistentRateLimiter:
         for _ in range(3):
             checked_at = self._clock()
             verdict: bool | None = None
+            present = False
             async with self._session_factory() as session:
                 async with session.begin():
                     # Spend one from a live window that still has room. The
@@ -282,15 +296,29 @@ class PersistentRateLimiter:
                         if rolled.rowcount:
                             verdict = True
                         else:
-                            # Neither matched: the bucket is either full or
-                            # absent, and only one of those is worth creating.
-                            present = await session.scalar(
-                                select(AuthRateLimitBucket.key_hash).where(
-                                    AuthRateLimitBucket.scope == self._scope,
-                                    AuthRateLimitBucket.key_hash == key_hash,
+                            # Neither matched. That is not proof the bucket is
+                            # full: another caller's roll or refund can land
+                            # between the two statements above, leaving a row
+                            # with room that matched neither of them. Read what
+                            # it actually says.
+                            state = (
+                                await session.execute(
+                                    select(
+                                        AuthRateLimitBucket.attempt_count,
+                                        AuthRateLimitBucket.window_expires_at,
+                                    ).where(
+                                        AuthRateLimitBucket.scope == self._scope,
+                                        AuthRateLimitBucket.key_hash == key_hash,
+                                    )
                                 )
-                            )
-                            if present is not None:
+                            ).first()
+                            present = state is not None
+                            if state is not None and bucket_is_full(
+                                state.attempt_count,
+                                state.window_expires_at,
+                                self._limit,
+                                checked_at,
+                            ):
                                 verdict = False
             # Deliberately outside the transaction above: `_finish` may sweep
             # expired buckets, and doing that on a second connection while
@@ -299,6 +327,12 @@ class PersistentRateLimiter:
             # to happen on PostgreSQL.
             if verdict is not None:
                 return await self._finish(verdict)
+            if present:
+                # The row moved underneath this attempt - rolled or refunded
+                # between the two statements - so it has room that neither
+                # matched. Go round and spend from it rather than refusing
+                # somebody a slot that exists.
+                continue
 
             try:
                 async with self._session_factory() as session:
