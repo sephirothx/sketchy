@@ -13,6 +13,7 @@ import socketio
 from app.handlers import register_all_handlers as register_handlers
 from app.handlers.budgets import (
     COMMAND_CLASSES,
+    DRAWING,
     CommandBudgetPolicy,
     CommandBudgets,
 )
@@ -191,6 +192,8 @@ def test_a_budget_cannot_be_tuned_to_something_the_client_cannot_live_with():
     drawing = next(item for item in policy.describe() if item["name"] == "drawing")
 
     assert drawing["minimum"] >= 50, "25 frames a second is what a drawer sends"
+    assert drawing["default_limit"] == DRAWING.default.limit
+    assert drawing["window_seconds"] == DRAWING.default.window_seconds
     policy.set_limit("drawing", drawing["minimum"])
     assert policy.for_command("draw").limit == drawing["minimum"]
 

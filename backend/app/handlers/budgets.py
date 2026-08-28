@@ -97,7 +97,9 @@ HEARTBEAT = BudgetClass(
     default=Budget(limit=20, window_seconds=10.0),
     minimum=5,
     maximum=120,
-    description="Liveness checks per ten seconds. The client sends one every five.",
+    description=(
+        "Liveness checks per ten seconds. The client sends one every five seconds."
+    ),
 )
 ACTION = BudgetClass(
     name="action",
@@ -162,6 +164,10 @@ class CommandBudgetPolicy:
     def describe(self) -> list[dict]:
         """Every budget with its current value, default, bounds and purpose.
 
+        The limit is the only tunable part, so `default_limit` names the
+        default it belongs to and the window is reported as the fixed thing
+        the limit is measured over rather than as a second value to set.
+
         Plain field names, not wire names: this is what an endpoint would be
         built from, not a payload. #446 owns the endpoint and the camelCase
         that goes with it, and inventing keys here that no client reads would
@@ -171,10 +177,13 @@ class CommandBudgetPolicy:
             {
                 "name": item.name,
                 "limit": self._budgets[item.name].limit,
-                "window_seconds": self._budgets[item.name].window_seconds,
-                "default": item.default.limit,
+                "default_limit": item.default.limit,
                 "minimum": item.minimum,
                 "maximum": item.maximum,
+                # Fixed, and reported so a panel can show what the limit is
+                # measured over. The window follows the client's cadence, so
+                # there is nothing here to tune it with.
+                "window_seconds": self._budgets[item.name].window_seconds,
                 "description": item.description,
             }
             for item in BUDGET_CLASSES
