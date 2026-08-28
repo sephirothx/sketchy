@@ -13,6 +13,7 @@ from app.prompts import PROMPTS
 from app.services import game_flow
 from tests.fake_game_history_repo import FakeGameHistoryRepository
 from tests.handlers.helpers import (
+    StubPromptListRepo,
     build_context,
     build_room,
     play_to_completion,
@@ -22,11 +23,15 @@ pytestmark = pytest.mark.asyncio
 
 
 def attach_curated_sources(room, *revision_ids: str) -> None:
-    """Give the real Game source IDs while its prompt text uses the built-ins."""
+    """Pin the room to revisions its game will draw curated prompts from.
+
+    The version IDs themselves come from the draw now, so the room only carries
+    the pin and the size that weights it; `CuratedPromptListRepository` answers
+    with the built-in prompts and a stable version ID for each.
+    """
     room.prompt_list_revision_ids = list(revision_ids or ("revision-standard",))
-    room.prompt_version_ids = {
-        prompt: f"version-{index}" for index, prompt in enumerate(PROMPTS)
-    }
+    room.prompt_list_slugs = room.prompt_list_slugs or ["english_standard"]
+    room.prompt_pool_size = len(PROMPTS)
 
 
 async def test_completed_game_records_every_round_with_participants_and_guesses():
@@ -371,7 +376,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     ctx = build_context(room_manager, history)
     flow = ctx.game_flow
 
-    class RestartingWordRepo:
+    class RestartingWordRepo(StubPromptListRepo):
         """Stands in for the prompt-stat writes, and restarts the room mid-way.
 
         These run only once the game is finished, which is exactly the window
@@ -379,6 +384,7 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
         """
 
         def __init__(self) -> None:
+            super().__init__(PROMPTS)
             self.restarted = False
 
         async def record_prompt_usage(self, slugs, usage):
@@ -467,10 +473,16 @@ async def test_history_is_skipped_entirely_without_a_repository():
     assert room.state == "waiting"
 
 
-class FakeWordListRepository:
-    """Records the batched write, and can stand in for a locked database."""
+class FakeWordListRepository(StubPromptListRepo):
+    """Records the batched write, and can stand in for a locked database.
+
+    Draws from the built-in prompts so a game started against it plays real
+    curated content, with one stable version ID per prompt - which is what the
+    usage write is keyed by.
+    """
 
     def __init__(self, *, timeline=None, hang=False):
+        super().__init__(PROMPTS)
         self.calls: list[tuple] = []
         self._timeline = timeline if timeline is not None else []
         self._hang = hang
@@ -565,13 +577,24 @@ async def test_custom_only_game_never_writes_curated_usage_on_text_collision():
 
 
 async def test_mixed_game_attributes_the_source_not_equal_custom_text():
+    """A room's own "apple" is not the curated "apple", and must not credit it.
+
+    The two share display text and nothing else. The curated twin is shadowed
+    out of the draw entirely, so no turn can offer it and no usage row can
+    reach the prompt version behind it.
+    """
     room_manager, room, players = build_room(rounds=1)
     room.custom_prompts = ["apple"]
-    room.curated_prompts = ["apple", "banana", "castle"]
     room.prompt_list_slugs = ["english_standard"]
-    attach_curated_sources(room)
-    custom_collision_id = room.prompt_version_ids["apple"]
     words = FakeWordListRepository()
+    words.prompts = ["apple", "banana", "castle"]
+    words.prompt_version_ids = {
+        prompt: f"version-{index}" for index, prompt in enumerate(words.prompts)
+    }
+    attach_curated_sources(room)
+
+    room.prompt_pool_size = len(words.prompts)
+    custom_collision_id = words.prompt_version_ids["apple"]
     ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
 
     await play_to_completion(ctx, room, players)

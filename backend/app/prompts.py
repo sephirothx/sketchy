@@ -1,6 +1,9 @@
 """Static prompt list used for turn prompt selection."""
 import random
 import re
+from collections import Counter
+from collections.abc import Iterable
+from string import ascii_lowercase
 
 # Quick prompts are typed into a room and held in memory for as long as it
 # lives, on a server that owns every room in one process. Ten thousand was
@@ -70,3 +73,26 @@ def parse_custom_prompt_list(raw: str) -> list[str]:
         if len(prompts) >= MAX_CUSTOM_PROMPTS:
             break
     return prompts
+
+
+def letter_histogram(answers: Iterable[str]) -> tuple[dict[str, int], int]:
+    """Count a-z letters across `answers`, plus the total alphabetic characters.
+
+    Wheel pricing asks how common a letter is among the solutions a game can
+    draw, which is a distribution rather than the words themselves - so it can
+    be precomputed per prompt-list revision and summed, leaving the prompts in
+    the database. The pair mirrors how the price is derived: only a-z is ever
+    priced, but the divisor counts *every* alphabetic character so a list in a
+    language with letters outside a-z keeps the same ratios it has today.
+    """
+    counts = Counter(
+        char
+        for answer in answers
+        for char in answer.lower()
+        if char.isalpha()
+    )
+    total = sum(counts.values())
+    return (
+        {letter: counts[letter] for letter in ascii_lowercase if counts[letter]},
+        total,
+    )

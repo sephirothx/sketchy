@@ -10,7 +10,10 @@ from app.handlers.payloads import (
     parse_empty_payload,
     parse_payload,
 )
-from app.services.game_flow import RoomPromptResolutionError
+from app.services.game_flow import (
+    RoomNoLongerStartableError,
+    RoomPromptResolutionError,
+)
 
 async def start_game(ctx: HandlerContext, sid, data=None):
     try:
@@ -26,6 +29,10 @@ async def start_game(ctx: HandlerContext, sid, data=None):
     # Waits out a settings change that is still being applied - see Room.lock.
     async with room.lock:
         active_players = room.active_players()
+        # Paired with the roster: everything from here to the game being built
+        # awaits at least twice, and this is what tells a player who arrives in
+        # that window from one deliberately left out of the roster above.
+        seated_before = set(room.players)
         if len(active_players) < 2:
             return {"ok": False, "error": "Need at least 2 active non-AFK players to start"}
         if room.state == "playing":
@@ -45,7 +52,23 @@ async def start_game(ctx: HandlerContext, sid, data=None):
         if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
             return ctx.shutdown.rejection_acknowledgement()
 
-        await ctx.game_flow._start_fresh_game(room, active_players)
+        try:
+            await ctx.game_flow._start_fresh_game(
+                room, active_players, seated_before=seated_before
+            )
+        except RoomNoLongerStartableError as error:
+            # The roster emptied out while the prompts were being drawn.
+            return {"ok": False, "error": str(error)}
+        except RoomPromptResolutionError as error:
+            # Drawing this game's prompts is a second read of the same lists
+            # the re-authorization above just made, and fails for the same
+            # reasons. It is answered the same way rather than escaping the
+            # handler, which would leave the host with no acknowledgement.
+            return {
+                "ok": False,
+                "error": str(error),
+                "field": "promptListSlugs",
+            }
     return {"ok": True}
 
 

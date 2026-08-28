@@ -109,6 +109,67 @@ def test_removing_drawer_positions_cursor_before_next_survivor():
     assert game.round_number == 1
 
 
+def _play_with_churn(n_players, rounds, max_players, script):
+    """Play a game to completion, applying `script`'s joins and leaves.
+
+    `script` maps a turn number to the actions taken right after that turn:
+    ``"join"`` seats a newcomer, ``"rm:<token>"`` removes one. Returns the
+    number of turns actually started and the prompts they consumed.
+    """
+    game = Game(
+        turn_order=[f"p{i}" for i in range(n_players)],
+        rounds_total=rounds,
+        max_players=max_players,
+    )
+    turns = 0
+    prompts = 0
+    joined = 0
+    while not game.is_finished() and turns < 200:
+        prompts += len(
+            game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+        )
+        turns += 1
+        for action in script.get(turns, ()):
+            if action == "join" and len(game.turn_order) < max_players:
+                joined += 1
+                game.add_player_to_rotation(f"n{joined}")
+            elif action.startswith("rm:"):
+                token = action[3:]
+                if token in game.turn_order and len(game.turn_order) > 1:
+                    game.remove_player_from_rotation(token)
+    return turns, prompts
+
+
+def test_churn_cannot_push_a_game_past_its_advertised_length():
+    """`turn_index` is re-based, not incremented, when the roster changes.
+
+    Those re-bases can move it backwards, replaying turn slots and letting a
+    room with mid-game churn run longer than the `rounds x max_players` it
+    advertised. The prompt sample is sized off that product, so it has to be a
+    ceiling rather than an estimate.
+    """
+    # A join, a departure, then another join: enough to replay a slot.
+    turns, prompts = _play_with_churn(
+        n_players=3,
+        rounds=2,
+        max_players=4,
+        script={1: ("join",), 2: ("rm:p0",), 3: ("join",)},
+    )
+
+    assert turns <= 2 * 4
+    assert prompts <= 2 * 4 * 3
+
+
+def test_turn_ceiling_does_not_cut_a_game_without_churn():
+    """The ceiling is a backstop, not a shortener: a quiet game is unaffected."""
+    turns, prompts = _play_with_churn(
+        n_players=4, rounds=2, max_players=4, script={}
+    )
+
+    assert turns == 8
+    assert prompts == 24
+
+
 def test_choose_prompt_rejects_wrong_player():
     game = make_game()
     game.start_next_turn(canvas_generation=game.canvas.generation + 1)

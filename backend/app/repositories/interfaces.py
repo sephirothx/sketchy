@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -431,6 +431,52 @@ class ResolvedPromptSelection:
     )
 
 
+@dataclass(frozen=True)
+class PinnedPromptSelection:
+    """A validated selection, pinned to revisions, carrying no prompt text.
+
+    Everything a waiting room needs in order to be a legitimate room - the
+    lists resolve, they agree on a language, they hold prompts, and their
+    answers do not collide - established without materialising the prompts
+    themselves. `prompt_count` sizes the sample a game will draw, and the
+    letter tallies price wheel hints; both are what the pool used to be kept
+    resident for.
+    """
+
+    slugs: tuple[str, ...]
+    language: str
+    revision_ids: tuple[str, ...] = ()
+    prompt_count: int = 0
+    letter_counts: Mapping[str, int] = field(default_factory=dict)
+    letter_total: int = 0
+
+
+@dataclass(frozen=True)
+class SampledPrompt:
+    """One drawn prompt with the provenance a turn records for it."""
+
+    answer: str
+    match_key: str
+    aliases: tuple[str, ...] = ()
+    prompt_version_id: str | None = None
+    source_revision_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PromptSample:
+    """A draw from pinned revisions, and how much there was to draw from.
+
+    `drawable` counts what the draw was actually eligible to return - active
+    versions the caller did not exclude - which is not the size of the lists.
+    A caller mixing these with prompts of its own needs that number to weight
+    the two halves: counting answers that cannot be drawn would give its own
+    prompts a smaller share of the game than they should have.
+    """
+
+    prompts: tuple[SampledPrompt, ...] = ()
+    drawable: int = 0
+
+
 class PromptListSelectionError(ValueError):
     """A selected list is missing or cannot be combined with the others."""
 
@@ -701,6 +747,40 @@ class PromptListRepository(ABC):
         share_codes: Sequence[str] = (),
     ) -> ResolvedPromptSelection:
         """Resolve an authorized, language-homogeneous list selection."""
+        ...
+
+    @abstractmethod
+    async def authorize_selection(
+        self,
+        slugs: list[str],
+        *,
+        requesting_user_id: str | None = None,
+        share_codes: Sequence[str] = (),
+    ) -> PinnedPromptSelection:
+        """Validate and pin a selection without reading its prompts.
+
+        Enforces exactly what `resolve_selection` does - authorization, a
+        single language, non-emptiness, and no colliding answers or aliases
+        across the chosen lists - and returns the revisions those checks ran
+        against, so a game can draw from the same content later.
+        """
+        ...
+
+    @abstractmethod
+    async def sample_prompts(
+        self,
+        revision_ids: Sequence[str],
+        *,
+        limit: int,
+        exclude_match_keys: Collection[str] = (),
+    ) -> PromptSample:
+        """Draw up to `limit` random prompts from pinned revisions.
+
+        Skips versions that are no longer active and any answer whose match key
+        is in `exclude_match_keys` - the room's own quick prompts, which shadow
+        curated content of the same name. Returns `limit` prompts whenever that
+        many remain after those exclusions, along with how many remained.
+        """
         ...
 
     @abstractmethod

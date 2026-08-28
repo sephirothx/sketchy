@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 import logging
+from collections import Counter
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from app.flow_timing import timing
-from app.game import MAX_HINT_SPEND, Game, Phase
+from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase
 from app.domain_values import (
     GameOutcome,
     RuntimeEventType,
@@ -27,15 +30,18 @@ from app.services.game_highlights import build_game_highlights
 from app.services.game_history import build_game_history
 from app.services.runtime_metrics import metrics
 from app.services.prompt_usage import tally_prompt_usage
-from app.prompt_content import prompt_match_key
 from app.presenters import (
     turn_ended_payload,
     room_state_payload,
     system_chat_message,
     turn_payload,
 )
-from app.prompts import parse_custom_prompt_list
-from app.repositories.interfaces import PromptListSelectionError
+from app.prompts import letter_histogram, parse_custom_prompt_list
+from app.repositories.interfaces import (
+    PromptListSelectionError,
+    PromptSample,
+    SampledPrompt,
+)
 
 logger = logging.getLogger("sketchy.game_flow")
 
@@ -51,6 +57,40 @@ HISTORY_WRITE_TIMEOUT_SECONDS = 10
 # writes together cannot pin the coroutine for longer than a player would
 # wait before reloading anyway.
 PROMPT_USAGE_WRITE_TIMEOUT_SECONDS = 10
+# The same ten seconds the entry path and the finished-game write allow. A
+# game start that cannot read its prompts must refuse rather than hang the
+# host, and an unbounded database call on a request path is its own finding.
+PROMPT_DRAW_TIMEOUT_SECONDS = 10
+# What both start paths require before setting a game up, and what has to
+# still hold once its prompts have been drawn.
+MIN_PLAYERS_TO_START = 2
+
+
+@dataclass(frozen=True)
+class _PromptDraw:
+    """The prompts one game will play, with the provenance its turns record.
+
+    An empty `pool` means no lists and no quick prompts, which the game reads
+    as the built-in list - the same thing an empty room resolved to before.
+    """
+
+    pool: list[str] | None = None
+    aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    version_ids: dict[str, str] = field(default_factory=dict)
+    source_revision_ids_by_answer: dict[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )
+    source_revision_ids: tuple[str, ...] = ()
+    letter_counts: dict[str, int] = field(default_factory=dict)
+    letter_total: int = 0
+
+
+class RoomNoLongerStartableError(RuntimeError):
+    """The room stopped being able to start a game while one was being set up.
+
+    Drawing the prompts is a database call, and seating is not held by
+    `room.lock`, so the roster a caller checked can empty out underneath it.
+    """
 
 
 class RoomPromptResolutionError(ValueError):
@@ -103,33 +143,30 @@ class GameFlowService:
         else:
             prompt_list_share_codes = []
 
-        curated_prompts: list[str] = []
         prompt_language = fallback.prompt_language if fallback else "en"
         prompt_list_revision_ids = (
             list(fallback.prompt_list_revision_ids) if fallback else []
         )
-        prompt_aliases = dict(fallback.prompt_aliases) if fallback else {}
-        prompt_version_ids = dict(fallback.prompt_version_ids) if fallback else {}
-        prompt_source_revision_ids = (
-            dict(fallback.prompt_source_revision_ids) if fallback else {}
+        prompt_pool_size = fallback.prompt_pool_size if fallback else 0
+        prompt_letter_counts = (
+            dict(fallback.prompt_letter_counts) if fallback else {}
         )
-        if (
+        prompt_letter_total = fallback.prompt_letter_total if fallback else 0
+        # The host edits settings one change at a time, and most of those changes
+        # leave the prompt lists alone; re-pinning them would cost a repository
+        # round-trip per keystroke for an identical answer. An *empty* pin is
+        # the exception worth asking about again - it means the read that should
+        # have filled it failed, and the room would otherwise keep drawing from
+        # the built-in list while the host is shown the lists they picked.
+        already_pinned = (
             fallback is not None
             and prompt_list_slugs == list(fallback.prompt_list_slugs)
-            # Nothing to reuse if the read that should have filled these failed:
-            # the room would keep its empty pool for as long as it lives, drawing
-            # from the built-in list while the host is shown the lists they
-            # picked. An empty pool is the one case worth asking again about.
-            and fallback.curated_prompts
-        ):
-            # The host edits settings one change at a time, and most of those
-            # changes leave the prompt lists alone. Re-reading them would cost
-            # a repository round-trip per keystroke for an identical answer.
-            curated_prompts = list(fallback.curated_prompts)
-        elif prompt_list_slugs and self._ctx.prompt_list_repo:
+            and fallback.prompt_pool_size > 0
+        )
+        if not already_pinned and prompt_list_slugs and self._ctx.prompt_list_repo:
             try:
                 if requesting_user_id is not None or prompt_list_share_codes:
-                    selection = await self._ctx.prompt_list_repo.resolve_selection(
+                    selection = await self._ctx.prompt_list_repo.authorize_selection(
                         prompt_list_slugs,
                         requesting_user_id=requesting_user_id,
                         share_codes=prompt_list_share_codes,
@@ -137,25 +174,14 @@ class GameFlowService:
                 else:
                     # Keep protocol-compatible adapters simple: public bundled
                     # selection has no authorization context to pass.
-                    selection = await self._ctx.prompt_list_repo.resolve_selection(
+                    selection = await self._ctx.prompt_list_repo.authorize_selection(
                         prompt_list_slugs
                     )
-                curated_prompts = list(selection.prompts)
                 prompt_language = selection.language
                 prompt_list_revision_ids = list(selection.revision_ids)
-                prompt_aliases = dict(selection.aliases)
-                prompt_version_ids = dict(selection.prompt_version_ids)
-                prompt_source_revision_ids = dict(
-                    selection.prompt_source_revision_ids
-                )
-                if not prompt_source_revision_ids and selection.revision_ids:
-                    # Compatibility for repository adapters implementing the
-                    # older selection DTO. The SQLAlchemy repository always
-                    # supplies exact per-version membership.
-                    prompt_source_revision_ids = {
-                        prompt: tuple(selection.revision_ids)
-                        for prompt in selection.prompts
-                    }
+                prompt_pool_size = selection.prompt_count
+                prompt_letter_counts = dict(selection.letter_counts)
+                prompt_letter_total = selection.letter_total
             except PromptListSelectionError as error:
                 raise RoomPromptResolutionError(str(error)) from error
             except Exception as error:
@@ -163,11 +189,10 @@ class GameFlowService:
                     logger.exception(
                         "Prompt-list store unavailable for custom-only room"
                     )
-                    curated_prompts = []
                     prompt_list_revision_ids = []
-                    prompt_aliases = {}
-                    prompt_version_ids = {}
-                    prompt_source_revision_ids = {}
+                    prompt_pool_size = 0
+                    prompt_letter_counts = {}
+                    prompt_letter_total = 0
                 else:
                     logger.exception(
                         "Failed to resolve prompts for slugs: %s", prompt_list_slugs
@@ -194,10 +219,9 @@ class GameFlowService:
             "prompt_list_slugs": prompt_list_slugs,
             "prompt_list_share_codes": prompt_list_share_codes,
             "prompt_list_revision_ids": prompt_list_revision_ids,
-            "prompt_aliases": prompt_aliases,
-            "prompt_version_ids": prompt_version_ids,
-            "prompt_source_revision_ids": prompt_source_revision_ids,
-            "curated_prompts": curated_prompts,
+            "prompt_pool_size": prompt_pool_size,
+            "prompt_letter_counts": prompt_letter_counts,
+            "prompt_letter_total": prompt_letter_total,
         }
 
     async def refresh_room_prompt_selection(
@@ -213,13 +237,13 @@ class GameFlowService:
             return
         try:
             if requesting_user_id is not None or room.prompt_list_share_codes:
-                selection = await self._ctx.prompt_list_repo.resolve_selection(
+                selection = await self._ctx.prompt_list_repo.authorize_selection(
                     list(room.prompt_list_slugs),
                     requesting_user_id=requesting_user_id,
                     share_codes=room.prompt_list_share_codes,
                 )
             else:
-                selection = await self._ctx.prompt_list_repo.resolve_selection(
+                selection = await self._ctx.prompt_list_repo.authorize_selection(
                     list(room.prompt_list_slugs)
                 )
         except PromptListSelectionError as error:
@@ -229,17 +253,11 @@ class GameFlowService:
             raise RoomPromptResolutionError(
                 "Prompt lists could not be loaded. Please try again."
             ) from error
-        room.curated_prompts = list(selection.prompts)
         room.prompt_language = selection.language
         room.prompt_list_revision_ids = list(selection.revision_ids)
-        room.prompt_aliases = dict(selection.aliases)
-        room.prompt_version_ids = dict(selection.prompt_version_ids)
-        room.prompt_source_revision_ids = dict(selection.prompt_source_revision_ids)
-        if not room.prompt_source_revision_ids and selection.revision_ids:
-            room.prompt_source_revision_ids = {
-                prompt: tuple(selection.revision_ids)
-                for prompt in selection.prompts
-            }
+        room.prompt_pool_size = selection.prompt_count
+        room.prompt_letter_counts = dict(selection.letter_counts)
+        room.prompt_letter_total = selection.letter_total
 
     def schedule_phase_timer(self, room: Room, seconds: float) -> None:
         async def _runner() -> None:
@@ -365,14 +383,174 @@ class GameFlowService:
             **({"to": to} if to else {"room": room.id}),
         )
 
+    async def _draw_prompt_sample(self, room: Room) -> _PromptDraw:
+        """Draw every prompt this game can possibly need, once, up front.
+
+        A game starts at most `rounds x max_players` turns and offers three
+        choices at each, so the whole pool was never needed - only that many
+        prompts. Drawing them here rather than per turn keeps the database off
+        the latency a drawer feels, and pins the content to the revisions the
+        room was just authorized on: a list edited or withdrawn mid-game cannot
+        rewrite a turn that is already in flight (R-LIST-07).
+
+        The draw is weighted so it matches the merged pool it replaces. Quick
+        prompts used to be concatenated with the curated ones and sampled
+        together, so five of them among five hundred were five in five hundred
+        and five; splitting the two halves evenly would make them far likelier
+        than the host arranged. The curated half of that ratio is what the room
+        can actually *draw* - `PromptSample.drawable`, which excludes answers a
+        quick prompt has already claimed - and not the size of its lists, or a
+        room that shadowed most of its lists would find its own prompts rarer
+        than it asked for.
+        """
+        needed = room.rounds * room.max_players * PROMPT_CHOICES_PER_TURN
+        custom = list(room.custom_prompts)
+
+        if not custom and not room.draws_from_prompt_lists():
+            # Neither lists nor quick prompts: the built-in list, as before.
+            return _PromptDraw()
+
+        # Drawn before the split, because the split needs to know how much
+        # curated content there was to draw. `needed` is the most the curated
+        # half could ever claim, so a prefix of this always covers it.
+        sample = PromptSample()
+        if room.draws_from_prompt_lists():
+            try:
+                sample = await asyncio.wait_for(
+                    self._ctx.prompt_list_repo.sample_prompts(
+                        list(room.prompt_list_revision_ids),
+                        limit=needed,
+                        exclude_match_keys=room.custom_prompt_match_keys(),
+                    ),
+                    timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
+                )
+            except Exception as error:
+                # Opening on the built-in list while the host is shown the
+                # lists they chose is the failure R-LIST-06a exists to prevent,
+                # so a draw that cannot be made refuses the start instead.
+                logger.exception("Failed to draw prompts for room %s", room.id)
+                raise RoomPromptResolutionError(
+                    "Prompt lists could not be loaded. Please try again."
+                ) from error
+
+        total = len(custom) + sample.drawable
+        if not total:
+            # Authorization proved these lists held prompts, but moderation can
+            # take the last of them away before the draw lands. Falling through
+            # to the built-in list would open the room on content the host
+            # never chose, and file the game as curated while it played
+            # defaults - the substitution R-LIST-06a and R-LIST-08 forbid.
+            logger.warning(
+                "Room %s authorized prompt lists that drew nothing", room.id
+            )
+            raise RoomPromptResolutionError(
+                "Prompt lists could not be loaded. Please try again."
+            )
+        indices = random.sample(range(total), min(needed, total))
+        from_custom = sum(1 for index in indices if index < len(custom))
+        drawn: list[SampledPrompt] = list(
+            sample.prompts[: len(indices) - from_custom]
+        )
+
+        pool = random.sample(custom, from_custom) + [
+            prompt.answer for prompt in drawn
+        ]
+        if not pool:
+            # Whatever the arithmetic said, this is the state that matters: a
+            # room that asked for content and has none to play. `Game` reads an
+            # empty pool as the built-in list, so this is the last place the
+            # forbidden substitution can be stopped.
+            logger.warning("Room %s drew an empty prompt pool", room.id)
+            raise RoomPromptResolutionError(
+                "Prompt lists could not be loaded. Please try again."
+            )
+        random.shuffle(pool)
+
+        # Only content the game can reach is priced. A room that selected lists
+        # and then turned on custom-only still has them pinned, and charging
+        # their letter frequencies would bill players for prompts no turn of
+        # this game can show.
+        letter_counts: Counter[str] = Counter()
+        letter_total = 0
+        if sample.drawable:
+            letter_counts.update(room.prompt_letter_counts)
+            letter_total += room.prompt_letter_total
+        custom_counts, custom_total = letter_histogram(custom)
+        letter_counts.update(custom_counts)
+        letter_total += custom_total
+
+        return _PromptDraw(
+            pool=pool,
+            aliases={
+                prompt.answer: prompt.aliases for prompt in drawn if prompt.aliases
+            },
+            version_ids={
+                prompt.answer: prompt.prompt_version_id
+                for prompt in drawn
+                if prompt.prompt_version_id is not None
+            },
+            source_revision_ids_by_answer={
+                prompt.answer: prompt.source_revision_ids for prompt in drawn
+            },
+            source_revision_ids=tuple(
+                revision_id
+                for revision_id in room.prompt_list_revision_ids
+                if any(
+                    revision_id in prompt.source_revision_ids for prompt in drawn
+                )
+            ),
+            letter_counts=dict(letter_counts),
+            letter_total=letter_total,
+        )
+
     async def _start_fresh_game(
         self,
         room: Room,
         active_players: list[Player],
         *,
         restarted: bool = False,
+        seated_before: set[str] | None = None,
     ) -> None:
-        """Replace any prior game with a fresh, fully synchronized game."""
+        """Replace any prior game with a fresh, fully synchronized game.
+
+        Raises `RoomPromptResolutionError` if the prompts cannot be drawn, or
+        `RoomNoLongerStartableError` if the room emptied while they were being
+        drawn. In either case nothing here has run: everything below replaces
+        the previous game, and a room left half-started would report itself as
+        playing one that does not exist, refusing every later start as already
+        in progress.
+        """
+        # Who was in the room when `active_players` was taken, so that arrivals
+        # can afterwards be told from the players the caller left out on
+        # purpose. It belongs to the caller because the window is theirs: the
+        # roster is captured, the lists are re-authorized, and only then are
+        # the prompts drawn - somebody arriving during that first await is
+        # missing from the roster and present in the room, so a snapshot taken
+        # here would see them as neither new nor included.
+        if seated_before is None:
+            seated_before = set(room.players)
+        draw = await self._draw_prompt_sample(room)
+        # Drawing is a database call, and seating is not held by `room.lock`,
+        # so the roster the caller handed over can be stale by the time there
+        # is a game to put it in. Somebody who joined in that window was seated
+        # while `room.game` was still None, so nothing enrolled them; somebody
+        # who left was never taken out. Reconciling here covers both, while
+        # leaving out whoever the caller excluded on purpose - a player already
+        # AFK is not an arrival.
+        active_players = [
+            player for player in active_players if player.id in room.players
+        ] + [
+            player
+            for player in room.players.values()
+            if player.id not in seated_before and not player.is_spectator
+        ]
+        if len(active_players) < MIN_PLAYERS_TO_START:
+            # Both start paths check this before setting anything up. The draw
+            # is long enough that it can stop being true in between, and a game
+            # nobody checked for is not one either path agreed to start.
+            raise RoomNoLongerStartableError(
+                "Need at least 2 active non-AFK players to start"
+            )
         room.restart_vote = None
         room.restart_vote_cooldown_until = 0
         room.last_game_scores = []
@@ -384,25 +562,15 @@ class GameFlowService:
         for player in room.player_list():
             player.score = 0
         room.state = "playing"
-        prompt_version_ids = room.effective_prompt_version_ids()
-        source_revision_ids_by_answer = (
-            room.effective_prompt_source_revision_ids()
-        )
-        if not source_revision_ids_by_answer and prompt_version_ids:
-            source_revision_ids_by_answer = {
-                prompt: tuple(room.prompt_list_revision_ids)
-                for prompt in prompt_version_ids
-            }
-        active_source_ids = {
-            revision_id
-            for revision_ids in source_revision_ids_by_answer.values()
-            for revision_id in revision_ids
-        }
         room.game = Game(
             turn_order=[player.id for player in active_players],
             rounds_total=room.rounds,
-            prompt_pool=room.effective_prompt_pool(),
-            prompt_aliases=room.effective_prompt_aliases(),
+            max_players=room.max_players,
+            prompt_pool=draw.pool,
+            prompt_aliases=draw.aliases,
+            letter_counts=draw.letter_counts,
+            letter_total=draw.letter_total,
+            prompt_source_mode_value=room.prompt_source_mode(),
             drawing_seconds=room.drawing_seconds,
             hint_mode=room.hint_mode,
             scoring_mode=room.scoring_mode,
@@ -410,17 +578,10 @@ class GameFlowService:
             allowed_tools=tuple(room.allowed_tools),
             color_mode=room.color_mode,
             prompt_language=room.prompt_language,
-            prompt_source_revision_ids=tuple(
-                revision_id
-                for revision_id in room.prompt_list_revision_ids
-                if revision_id in active_source_ids
-            ),
-            prompt_version_ids=prompt_version_ids,
-            prompt_source_revision_ids_by_answer=source_revision_ids_by_answer,
-            custom_prompt_keys=frozenset(
-                prompt_match_key(prompt, room.prompt_language)
-                for prompt in room.custom_prompts
-            ),
+            prompt_source_revision_ids=draw.source_revision_ids,
+            prompt_version_ids=draw.version_ids,
+            prompt_source_revision_ids_by_answer=draw.source_revision_ids_by_answer,
+            custom_prompt_keys=room.custom_prompt_match_keys(),
         )
         await self._emit_room_state(room)
         if restarted:

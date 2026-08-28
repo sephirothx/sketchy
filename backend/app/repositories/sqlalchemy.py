@@ -1,8 +1,8 @@
 """SQLAlchemy implementations of domain repository interfaces."""
 from __future__ import annotations
 
-from collections import defaultdict
-from collections.abc import Sequence
+from collections import Counter, defaultdict
+from collections.abc import Collection, Sequence
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -69,6 +69,9 @@ from app.services.user_stats_projection import (
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     BundledPromptDefinition,
+    PinnedPromptSelection,
+    PromptSample,
+    SampledPrompt,
     GameDetail,
     GameHistoryConflictError,
     GameHistoryRepository,
@@ -115,6 +118,7 @@ from app.prompt_content import (
     prompt_match_key,
     validate_prompt_language,
 )
+from app.prompts import letter_histogram
 
 MAX_PAGINATION_LIMIT = 100
 DEFAULT_PAGINATION_LIMIT = 20
@@ -2292,12 +2296,22 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 sort_keys=True,
             ).encode("utf-8")
         ).hexdigest()
+        # Every member, whatever moderation currently says about it. The
+        # tallies are stored because a revision's membership never changes;
+        # filtering on a mutable state would make them drift the moment it
+        # does - a version hidden after this is written would stay counted, and
+        # one restored after being hidden would never be counted at all.
+        letter_counts, letter_total = letter_histogram(
+            prompt_version.canonical_answer for _, prompt_version, _ in resolved
+        )
         revision = PromptListRevision(
             id=generate_uuid(),
             prompt_list_id=prompt_list.id,
             version=version,
             language=prompt_list.language,
             content_hash=content_hash,
+            letter_counts=letter_counts,
+            letter_total=letter_total,
         )
         session.add(revision)
         await session.flush()
@@ -2350,6 +2364,90 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
+    async def _pinned_revisions(
+        self,
+        session: AsyncSession,
+        slugs: list[str],
+        *,
+        requesting_user_id: str | None,
+        share_codes: Sequence[str],
+        load_items: bool,
+    ) -> tuple[list[PromptListRevision], str]:
+        """Authorize a selection and pin the revision each list is currently on.
+
+        Shared by `resolve_selection` and `authorize_selection` so the two can
+        never disagree about which lists a caller may combine: the checks a room
+        is admitted by are the checks the game's prompts are drawn under.
+        `load_items` is the only difference - pinning does not read the prompts.
+        """
+        requester_id = _optional_entity_id(requesting_user_id)
+        supplied_share_codes = set(share_codes)
+        list_rows = (
+            await session.execute(
+                select(
+                    PromptList.id,
+                    PromptList.slug,
+                    PromptList.language,
+                    PromptList.is_bundled,
+                    PromptList.owner_user_id,
+                    PromptList.visibility,
+                    PromptList.share_code,
+                    PromptList.moderation_state,
+                )
+                .where(PromptList.slug.in_(slugs))
+            )
+        ).all()
+        authorized_rows = [
+            row
+            for row in list_rows
+            if row.moderation_state == PromptContentModerationState.ACTIVE.value
+            and (
+                row.is_bundled
+                or (requester_id is not None and row.owner_user_id == requester_id)
+                or (
+                    row.visibility == PromptListVisibility.UNLISTED.value
+                    and row.share_code in supplied_share_codes
+                )
+            )
+        ]
+        found = {row.slug for row in authorized_rows}
+        missing = [slug for slug in slugs if slug not in found]
+        if missing:
+            raise PromptListSelectionError(
+                f"Prompt list{'s' if len(missing) != 1 else ''} not found: "
+                + ", ".join(missing)
+            )
+        languages = {row.language for row in authorized_rows}
+        if len(languages) != 1:
+            raise PromptListSelectionError(
+                "Selected prompt lists must use the same language"
+            )
+        rows_by_slug = {row.slug: row for row in authorized_rows}
+        revisions: list[PromptListRevision] = []
+        for slug in slugs:
+            row = rows_by_slug[slug]
+            stmt = select(PromptListRevision).where(
+                PromptListRevision.prompt_list_id == row.id,
+                PromptListRevision.version
+                == select(PromptList.version)
+                .where(PromptList.id == row.id)
+                .scalar_subquery(),
+            )
+            if load_items:
+                stmt = stmt.options(
+                    selectinload(PromptListRevision.items)
+                    .selectinload(PromptListRevisionItem.prompt_version)
+                    .selectinload(PromptVersion.version_aliases)
+                    .selectinload(PromptVersionAlias.alias)
+                )
+            revision = await session.scalar(stmt)
+            if revision is None:
+                raise PromptListSelectionError(
+                    f"Prompt list has no seeded revision: {slug}"
+                )
+            revisions.append(revision)
+        return revisions, languages.pop()
+
     async def resolve_selection(
         self,
         slugs: list[str],
@@ -2359,74 +2457,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
     ) -> ResolvedPromptSelection:
         if not slugs:
             raise PromptListSelectionError("Select at least one prompt list")
-        requester_id = _optional_entity_id(requesting_user_id)
-        supplied_share_codes = set(share_codes)
         async with self._session_factory() as session:
-            list_rows = (
-                await session.execute(
-                    select(
-                        PromptList.id,
-                        PromptList.slug,
-                        PromptList.language,
-                        PromptList.is_bundled,
-                        PromptList.owner_user_id,
-                        PromptList.visibility,
-                        PromptList.share_code,
-                        PromptList.moderation_state,
-                    )
-                    .where(PromptList.slug.in_(slugs))
-                )
-            ).all()
-            authorized_rows = [
-                row
-                for row in list_rows
-                if row.moderation_state == PromptContentModerationState.ACTIVE.value
-                and (
-                    row.is_bundled
-                    or (requester_id is not None and row.owner_user_id == requester_id)
-                    or (
-                        row.visibility == PromptListVisibility.UNLISTED.value
-                        and row.share_code in supplied_share_codes
-                    )
-                )
-            ]
-            found = {row.slug for row in authorized_rows}
-            missing = [slug for slug in slugs if slug not in found]
-            if missing:
-                raise PromptListSelectionError(
-                    f"Prompt list{'s' if len(missing) != 1 else ''} not found: "
-                    + ", ".join(missing)
-                )
-            languages = {row.language for row in authorized_rows}
-            if len(languages) != 1:
-                raise PromptListSelectionError(
-                    "Selected prompt lists must use the same language"
-                )
-            rows_by_slug = {row.slug: row for row in authorized_rows}
-            revisions: list[PromptListRevision] = []
-            for slug in slugs:
-                row = rows_by_slug[slug]
-                revision = await session.scalar(
-                    select(PromptListRevision)
-                    .where(
-                        PromptListRevision.prompt_list_id == row.id,
-                        PromptListRevision.version
-                        == select(PromptList.version)
-                        .where(PromptList.id == row.id)
-                        .scalar_subquery(),
-                    )
-                    .options(
-                        selectinload(PromptListRevision.items)
-                        .selectinload(PromptListRevisionItem.prompt_version)
-                        .selectinload(PromptVersion.version_aliases)
-                        .selectinload(PromptVersionAlias.alias)
-                    )
-                )
-                if revision is None:
-                    raise PromptListSelectionError(
-                        f"Prompt list has no seeded revision: {slug}"
-                    )
-                revisions.append(revision)
+            revisions, language = await self._pinned_revisions(
+                session,
+                slugs,
+                requesting_user_id=requesting_user_id,
+                share_codes=share_codes,
+                load_items=True,
+            )
+            languages = {language}
 
             prompts: list[str] = []
             aliases: dict[str, tuple[str, ...]] = {}
@@ -2483,6 +2522,217 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     answer: tuple(source_revisions_by_version[UUID(version_id)])
                     for answer, version_id in prompt_version_ids.items()
                 },
+            )
+
+    async def authorize_selection(
+        self,
+        slugs: list[str],
+        *,
+        requesting_user_id: str | None = None,
+        share_codes: Sequence[str] = (),
+    ) -> PinnedPromptSelection:
+        if not slugs:
+            raise PromptListSelectionError("Select at least one prompt list")
+        async with self._session_factory() as session:
+            revisions, language = await self._pinned_revisions(
+                session,
+                slugs,
+                requesting_user_id=requesting_user_id,
+                share_codes=share_codes,
+                load_items=False,
+            )
+            revision_ids = [revision.id for revision in revisions]
+
+            active_versions = (
+                select(PromptListRevisionItem.prompt_version_id)
+                .join(
+                    PromptVersion,
+                    PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+                )
+                .where(
+                    PromptListRevisionItem.revision_id.in_(revision_ids),
+                    PromptVersion.moderation_state
+                    == PromptContentModerationState.ACTIVE.value,
+                )
+            )
+            prompt_count = await session.scalar(
+                select(func.count()).select_from(
+                    active_versions.distinct().subquery()
+                )
+            )
+            if not prompt_count:
+                raise PromptListSelectionError(
+                    "Selected prompt lists do not contain any prompts"
+                )
+
+            # `resolve_selection` catches colliding answers by walking every
+            # prompt it loads. Pinning loads none, so the same question is asked
+            # of the database instead: does any match key - an answer's own or
+            # one of its aliases - reach two different prompt versions?
+            own_keys = select(
+                PromptListRevisionItem.prompt_version_id.label("version_id"),
+                PromptVersion.match_key.label("match_key"),
+            ).join(
+                PromptVersion,
+                PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+            ).where(
+                PromptListRevisionItem.revision_id.in_(revision_ids),
+                PromptVersion.moderation_state
+                == PromptContentModerationState.ACTIVE.value,
+            )
+            alias_keys = select(
+                PromptListRevisionItem.prompt_version_id.label("version_id"),
+                PromptAlias.match_key.label("match_key"),
+            ).join(
+                PromptVersion,
+                PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+            ).join(
+                PromptVersionAlias,
+                PromptVersionAlias.prompt_version_id == PromptVersion.id,
+            ).join(
+                PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id
+            ).where(
+                PromptListRevisionItem.revision_id.in_(revision_ids),
+                PromptVersion.moderation_state
+                == PromptContentModerationState.ACTIVE.value,
+            )
+            keys = own_keys.union(alias_keys).subquery()
+            collision = await session.scalar(
+                select(keys.c.match_key)
+                .group_by(keys.c.match_key)
+                .having(func.count(func.distinct(keys.c.version_id)) > 1)
+                .limit(1)
+            )
+            if collision is not None:
+                raise PromptListSelectionError(
+                    "Selected prompt lists contain ambiguous answers or aliases"
+                )
+
+            letter_counts: Counter[str] = Counter()
+            letter_total = 0
+            for revision in revisions:
+                letter_counts.update(revision.letter_counts or {})
+                letter_total += revision.letter_total or 0
+
+            return PinnedPromptSelection(
+                slugs=tuple(slugs),
+                language=language,
+                revision_ids=tuple(_public_id(rid) for rid in revision_ids),
+                prompt_count=int(prompt_count),
+                letter_counts=dict(letter_counts),
+                letter_total=letter_total,
+            )
+
+    async def sample_prompts(
+        self,
+        revision_ids: Sequence[str],
+        *,
+        limit: int,
+        exclude_match_keys: Collection[str] = (),
+    ) -> PromptSample:
+        if limit <= 0 or not revision_ids:
+            return PromptSample()
+        pinned = [_entity_id(revision_id) for revision_id in revision_ids]
+        excluded = set(exclude_match_keys)
+        async with self._session_factory() as session:
+            # Shadowed answers are excluded in the query rather than filtered
+            # afterwards, so a draw returns what was asked for however much of
+            # a list the room has claimed. Quick prompts are capped at
+            # MAX_CUSTOM_PROMPTS (2000), well inside what either backend binds.
+            eligible = [
+                PromptVersion.id.in_(
+                    select(PromptListRevisionItem.prompt_version_id).where(
+                        PromptListRevisionItem.revision_id.in_(pinned)
+                    )
+                ),
+                PromptVersion.moderation_state
+                == PromptContentModerationState.ACTIVE.value,
+            ]
+            if excluded:
+                eligible.append(PromptVersion.match_key.notin_(excluded))
+
+            versions = (
+                (
+                    await session.execute(
+                        select(PromptVersion)
+                        .where(*eligible)
+                        .order_by(func.random())
+                        .limit(limit)
+                        .options(
+                            selectinload(PromptVersion.version_aliases).selectinload(
+                                PromptVersionAlias.alias
+                            )
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if not versions:
+                return PromptSample()
+
+            # The draw comes first and the count second, so a `drawable` this
+            # draw already disproved is never reported. Postgres reads each
+            # statement at its own snapshot, so a takedown committing between
+            # the two would otherwise leave a count saying there is content and
+            # a draw holding none - and a caller weighting on that count, or
+            # trusting it to mean the lists are playable, would be wrong in the
+            # one direction that matters. Fewer rows than asked for means there
+            # are no more; only a full draw needs asking.
+            if len(versions) < limit:
+                drawable = len(versions)
+            else:
+                drawable = max(
+                    await session.scalar(
+                        select(func.count()).select_from(
+                            select(PromptVersion.id).where(*eligible).subquery()
+                        )
+                    )
+                    or 0,
+                    len(versions),
+                )
+
+            # Which of the pinned revisions each drawn prompt came from: a
+            # version can sit in several selected lists, and a turn records
+            # every source it was legitimately offered from.
+            order = {revision_id: index for index, revision_id in enumerate(pinned)}
+            sources: dict[UUID, list[UUID]] = defaultdict(list)
+            source_rows = await session.execute(
+                select(
+                    PromptListRevisionItem.prompt_version_id,
+                    PromptListRevisionItem.revision_id,
+                ).where(
+                    PromptListRevisionItem.revision_id.in_(pinned),
+                    PromptListRevisionItem.prompt_version_id.in_(
+                        [version.id for version in versions]
+                    ),
+                )
+            )
+            for version_id, revision_id in source_rows:
+                sources[version_id].append(revision_id)
+
+            return PromptSample(
+                prompts=tuple(
+                    SampledPrompt(
+                        answer=version.canonical_answer,
+                        match_key=version.match_key,
+                        aliases=tuple(
+                            sorted(
+                                link.alias.answer
+                                for link in version.version_aliases
+                            )
+                        ),
+                        prompt_version_id=_public_id(version.id),
+                        source_revision_ids=tuple(
+                            _public_id(revision_id)
+                            for revision_id in sorted(
+                                sources[version.id], key=lambda rid: order[rid]
+                            )
+                        ),
+                    )
+                    for version in versions
+                ),
+                drawable=drawable,
             )
 
     async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:
@@ -2585,12 +2835,18 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     prompt_versions = await self._ensure_bundled_prompt_versions(
                         session, definitions=source_prompts, language=language
                     )
+                    revision_counts, revision_total = letter_histogram(
+                        prompt_version.canonical_answer
+                        for prompt_version in prompt_versions
+                    )
                     revision = PromptListRevision(
                         id=generate_uuid(),
                         prompt_list_id=wl.id,
                         version=version,
                         language=language,
                         content_hash=content_hash,
+                        letter_counts=revision_counts,
+                        letter_total=revision_total,
                     )
                     session.add(revision)
                     await session.flush()

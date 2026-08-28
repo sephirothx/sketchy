@@ -1,6 +1,7 @@
 """Migration replay, downgrade, drift, and hand-written schema checks."""
 from __future__ import annotations
 
+import json
 import os
 import uuid
 import warnings
@@ -934,5 +935,223 @@ async def test_the_open_report_folds_keep_the_earliest_of_each_duplicate(tmp_pat
             ).scalars().all()
         # The earliest of the three, and the one about somebody else.
         assert surviving == ["complaint 0", "about another player"]
+    finally:
+        await engine.dispose()
+
+
+async def test_letter_histogram_migration_counts_every_member(tmp_path):
+    """The backfill prices a revision from everything it holds.
+
+    Moderation state is mutable and membership is not, so counting the former
+    would leave the tallies wrong the first time a version was hidden or
+    restored - and a revision whose content was all hidden would carry a zero
+    total, dropping wheel pricing onto the drawn sample. Letters outside a-z
+    are absent from the tallies but present in the divisor, which is what keeps
+    a non-English list's ratios unchanged.
+    """
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'letter-histogram-migration.db'}"
+    )
+    script = ScriptDirectory.from_config(get_alembic_config())
+    previous = script.get_revision("m6d1e7a4b829").down_revision
+    assert isinstance(previous, str)
+    identifiers = {
+        "list": uuid.uuid4().hex,
+        "revision": uuid.uuid4().hex,
+        # A second revision holding only hidden content, to show the walk
+        # covers more than one and prices membership rather than state.
+        "empty_revision": uuid.uuid4().hex,
+        "active_concept": uuid.uuid4().hex,
+        "hidden_concept": uuid.uuid4().hex,
+        "active": uuid.uuid4().hex,
+        "hidden": uuid.uuid4().hex,
+    }
+    try:
+        await _migrate(engine, alembic_command.upgrade, previous)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_lists "
+                    "(id, slug, name, language, is_bundled, visibility, "
+                    "moderation_state, version) VALUES "
+                    "(:list, 'legacy', 'Legacy list', 'en', 1, 'public', "
+                    "'active', 1)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revisions "
+                    "(id, prompt_list_id, version, language, content_hash) "
+                    "VALUES (:revision, :list, 1, 'en', '')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revisions "
+                    "(id, prompt_list_id, version, language, content_hash) "
+                    "VALUES (:empty_revision, :list, 2, 'en', '')"
+                ),
+                identifiers,
+            )
+            for key, answer, state in (
+                ("active", "café", "active"),
+                ("hidden", "zzz", "hidden"),
+            ):
+                await connection.execute(
+                    text(
+                        f"INSERT INTO prompt_concepts (id) VALUES (:{key}_concept)"
+                    ),
+                    identifiers,
+                )
+                await connection.execute(
+                    text(
+                        "INSERT INTO prompt_versions "
+                        "(id, concept_id, language, version, canonical_answer, "
+                        "match_key, moderation_state) VALUES "
+                        f"(:{key}, :{key}_concept, 'en', 1, '{answer}', "
+                        f"'{answer}', '{state}')"
+                    ),
+                    identifiers,
+                )
+            for position, key in enumerate(("active", "hidden")):
+                await connection.execute(
+                    text(
+                        "INSERT INTO prompt_list_revision_items "
+                        "(revision_id, prompt_version_id, position) VALUES "
+                        f"(:revision, :{key}, {position})"
+                    ),
+                    identifiers,
+                )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revision_items "
+                    "(revision_id, prompt_version_id, position) VALUES "
+                    "(:empty_revision, :hidden, 0)"
+                ),
+                identifiers,
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.connect() as connection:
+            row = (
+                await connection.execute(
+                    text(
+                        "SELECT letter_counts, letter_total "
+                        "FROM prompt_list_revisions WHERE id = :revision"
+                    ),
+                    identifiers,
+                )
+            ).one()
+
+        counts = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+        # "café": c, a, f counted; "é" is alphabetic, so it lifts the divisor
+        # without being priceable. "zzz" is hidden today, but it is a member of
+        # this revision and a moderator can restore it, so it is counted.
+        assert counts == {"a": 1, "c": 1, "f": 1, "z": 3}
+        assert row[1] == 7
+
+        async with engine.connect() as connection:
+            empty = (
+                await connection.execute(
+                    text(
+                        "SELECT letter_counts, letter_total "
+                        "FROM prompt_list_revisions WHERE id = :empty_revision"
+                    ),
+                    identifiers,
+                )
+            ).one()
+
+        # A revision holding only hidden content is still priced: it has
+        # members, and a zero total would drop pricing onto the drawn sample.
+        empty_counts = empty[0] if isinstance(empty[0], dict) else json.loads(empty[0])
+        assert empty_counts == {"z": 3}
+        assert empty[1] == 3
+    finally:
+        await engine.dispose()
+
+
+async def test_letter_histogram_migration_pages_past_the_first_batch(tmp_path):
+    """More revisions than one slice holds, so the walk has to continue.
+
+    The backfill pages by keyset rather than reading every revision ID, so a
+    corpus larger than one batch is exactly where a wrong cursor shows up: it
+    would stop after the first page and leave the rest unpriced.
+    """
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'letter-histogram-paging.db'}"
+    )
+    script = ScriptDirectory.from_config(get_alembic_config())
+    previous = script.get_revision("m6d1e7a4b829").down_revision
+    assert isinstance(previous, str)
+
+    # Loaded from the migration itself: the point is to exceed whatever it
+    # pages by, not whatever this test guessed it pages by.
+    batch_size = ScriptDirectory.from_config(get_alembic_config()).get_revision(
+        "m6d1e7a4b829"
+    ).module.BACKFILL_BATCH_SIZE
+    total_revisions = batch_size * 2 + 3
+    list_id = uuid.uuid4().hex
+    concept_id = uuid.uuid4().hex
+    version_id = uuid.uuid4().hex
+    revision_ids = [uuid.uuid4().hex for _ in range(total_revisions)]
+    try:
+        await _migrate(engine, alembic_command.upgrade, previous)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_lists "
+                    "(id, slug, name, language, is_bundled, visibility, "
+                    "moderation_state, version) VALUES "
+                    "(:id, 'paged', 'Paged', 'en', 1, 'public', 'active', 1)"
+                ),
+                {"id": list_id},
+            )
+            await connection.execute(
+                text("INSERT INTO prompt_concepts (id) VALUES (:id)"),
+                {"id": concept_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_versions "
+                    "(id, concept_id, language, version, canonical_answer, "
+                    "match_key, moderation_state) VALUES "
+                    "(:id, :concept, 'en', 1, 'ox', 'ox', 'active')"
+                ),
+                {"id": version_id, "concept": concept_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revisions "
+                    "(id, prompt_list_id, version, language, content_hash) "
+                    "VALUES (:id, :list, :version, 'en', '')"
+                ),
+                [
+                    {"id": rid, "list": list_id, "version": index + 1}
+                    for index, rid in enumerate(revision_ids)
+                ],
+            )
+            # Every revision holds the same one-prompt membership, so each must
+            # come back priced - including the ones past the first page.
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revision_items "
+                    "(revision_id, prompt_version_id, position) "
+                    "VALUES (:id, :version, 0)"
+                ),
+                [{"id": rid, "version": version_id} for rid in revision_ids],
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.connect() as connection:
+            priced = await connection.scalar(
+                text(
+                    "SELECT count(*) FROM prompt_list_revisions "
+                    "WHERE letter_total = 2"
+                )
+            )
+
+        assert priced == total_revisions
     finally:
         await engine.dispose()

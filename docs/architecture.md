@@ -118,8 +118,12 @@ game rules change — and changing an outcome-producing constant requires bumpin
 `Room`, `Player`, `RestartVote`, `DrawingRecapEntry`, and `RoomManager`. A `Room`
 outlives the `Game`s played in it. `RoomManager` is the process-wide registry, held
 as a singleton in [`backend/app/state.py`](../backend/app/state.py) so REST routes and
-Socket.IO handlers see the same rooms. Room settings, the recap buffer, and the
-resolved prompt pool live here; `to_state_payload()`
+Socket.IO handlers see the same rooms. Room settings and the recap buffer live
+here, along with the room's own quick prompts; its **curated prompts do not**.
+A room holds only what its selected lists were pinned to - the revision IDs, how
+many prompts they hold, and a letter histogram for wheel pricing - and the
+prompts themselves stay in the database until a game starts and draws the
+bounded sample it can actually play (see `app/game.py` above). `to_state_payload()`
 ([`backend/app/rooms.py:511`](../backend/app/rooms.py)) and `to_public_summary()`
 ([`backend/app/rooms.py:483`](../backend/app/rooms.py)) are the two shapes the room is
 published in.
