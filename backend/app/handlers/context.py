@@ -203,7 +203,14 @@ class HandlerContext:
                 event, payload = notice
                 await self.sio.emit(event, payload, to=player_sid)
             await self.sio.leave_room(player_sid, room.id)
-            await self.sio.disconnect(player_sid)
+            # Marked as ours, because it is: this server is ending the socket,
+            # not the client. Socket.IO runs the disconnect handler inline from
+            # here, and unmarked it would queue at that socket's seating gate -
+            # pointless work, since the seat was removed above and there is
+            # nothing left to reconcile, and a deadlock for any future caller
+            # that reaches this while already holding that gate.
+            with self.closing(player_sid):
+                await self.sio.disconnect(player_sid)
         if room.connected_players():
             await self.game_flow._emit_room_state(room)
         else:

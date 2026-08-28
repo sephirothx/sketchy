@@ -184,6 +184,7 @@ def test_describe_reports_the_value_its_bounds_and_where_it_came_from():
         "minimum": 1,
         "maximum": 100,
         "unit": "widgets",
+        "integral": True,
         "audience": "client",
         "description": "How many widgets.",
         "env_var": "WIDGET_LIMIT",

@@ -23,6 +23,8 @@ export interface Tunable {
   minimum: number;
   maximum: number;
   unit: string;
+  /** Whether the value space is whole numbers, so a control can match it. */
+  integral: boolean;
   audience: "server" | "client";
   description: string;
   /** The variable that supplied the boot value, when one did. */

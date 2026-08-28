@@ -977,7 +977,7 @@ which is the one thing the 404 exists to refuse.
 | `GET` | `/api/admin/metrics`, `/api/admin/metrics/daily`, `/api/admin/metrics/events` | |
 | `GET` | `/api/admin/players/{user_id}/activity` | **Writes an audit event on every use** |
 | `GET` | `/api/admin/audit` | |
-| `GET` | `/api/admin/tunables` | Every runtime tunable with its value, default, bounds, unit, origin and purpose |
+| `GET` | `/api/admin/tunables` | Every runtime tunable with its value, default, bounds, unit, whether its values are whole, origin and purpose |
 | `PATCH` | `/api/admin/tunables` | `{values?, reset?}`. **Writes one `config.changed` audit event per setting moved** |
 | `GET` | `/api/admin/maintenance` | Whether this process is paused, draining, and its readiness |
 | `POST` | `/api/admin/maintenance` | `{paused, reason?}`. **Writes `maintenance.paused` / `maintenance.resumed`** |

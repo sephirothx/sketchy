@@ -239,6 +239,10 @@ class RuntimeSettings:
                 "minimum": item.minimum,
                 "maximum": item.maximum,
                 "unit": item.unit,
+                # Whether the value space is whole numbers. A panel needs it to
+                # build a control that can express what the bounds allow: a
+                # number input stepping by one cannot reach 12.5 seconds.
+                "integral": item.integral,
                 "audience": item.audience,
                 "description": item.description,
                 "env_var": item.env_var,

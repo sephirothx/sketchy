@@ -25,6 +25,7 @@ from app.auth.routes import create_auth_router
 from app.db.models import AppConfig, AuditEvent, Base, User
 from app.domain_values import AuditTargetType, UserRole
 from app.client_config import ClientConfig
+from app.flow_timing import FlowTiming
 from app.handlers.budgets import CommandBudgetPolicy
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services import config_store
@@ -47,8 +48,11 @@ async def env(monkeypatch):
     policy = CommandBudgetPolicy()
     # With the client cadences, so the joint constraint between the flush
     # interval and the drawing budget is present to be exercised.
+    # With the client cadences, so the joint constraint between the flush
+    # interval and the drawing budget is present to be exercised, and with the
+    # flow timings, so a fractional setting is present too.
     settings = build_runtime_settings(
-        budgets=policy, client=ClientConfig(), environ={}
+        budgets=policy, client=ClientConfig(), flow=FlowTiming(), environ={}
     )
 
     app = FastAPI()
@@ -159,9 +163,21 @@ async def test_the_read_describes_each_setting_well_enough_to_draw_a_control(env
     assert (drawing["minimum"], drawing["maximum"]) == (50, 400)
     assert drawing["source"] == "default"
     assert drawing["unit"] == "commands per 2s"
+    # So the panel can build a control that reaches every legal value: a
+    # number input stepping by one cannot express 12.5 seconds.
+    assert drawing["integral"] is True
     # The description is what makes the panel legible without the page knowing
     # anything about any particular setting.
     assert "flush timer" in drawing["description"]
+
+
+async def test_a_setting_says_whether_its_values_are_whole(env):
+    """The panel builds its control from this; a step of one cannot reach 12.5."""
+    admin = await an_admin(env)
+    body = (await admin.get("/api/admin/tunables")).json()
+    integral = {item["name"]: item["integral"] for item in body["tunables"]}
+    assert integral["client.flush_interval_ms"] is True
+    assert integral["turn.results_seconds"] is False
 
 
 async def test_every_key_is_camel_case(env):

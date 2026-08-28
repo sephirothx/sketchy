@@ -159,6 +159,10 @@ export function TuningPanel() {
                       value={draft}
                       min={tunable.minimum}
                       max={tunable.maximum}
+                      // Whole numbers step by one; the rest step by anything,
+                      // or the browser calls a legal value like 12.5 seconds
+                      // invalid and its arrows cannot reach it.
+                      step={tunable.integral ? 1 : "any"}
                       aria-describedby={`${inputId}-why`}
                       onChange={(change) =>
                         setDrafts((current) => ({

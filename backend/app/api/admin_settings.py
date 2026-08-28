@@ -72,6 +72,7 @@ def _wire(described: dict) -> dict:
         "minimum": described["minimum"],
         "maximum": described["maximum"],
         "unit": described["unit"],
+        "integral": described["integral"],
         "audience": described["audience"],
         "description": described["description"],
         "envVar": described["env_var"],

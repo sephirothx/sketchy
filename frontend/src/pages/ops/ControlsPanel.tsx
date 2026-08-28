@@ -311,6 +311,8 @@ export function ControlsPanel() {
             type="number"
             min={0}
             max={300}
+            // The drain window is a float everywhere else it is expressed.
+            step="any"
             className="ops-drain-input"
             value={drainSeconds}
             placeholder={String(maintenance?.drainSeconds ?? 30)}
