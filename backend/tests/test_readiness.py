@@ -136,7 +136,11 @@ async def test_a_loop_that_only_errors_stays_in_rotation():
             ready = await client.get("/api/ready")
             reported = await client.get("/api/health")
     finally:
+        # Awaited, not merely cancelled: a task still pending when the test
+        # returns leaks into event-loop teardown and warns from somewhere else.
         running.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await running
 
     assert ready.status_code == 200
     loop = reported.json()["loops"]["mail_delivery"]

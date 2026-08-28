@@ -1069,6 +1069,7 @@ hand-written username index, then runs the repository suite against the migrated
 
 ```bash
 cd backend
+export SKETCHY_ENV=production                # without it every production guard is off
 export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
 .venv/bin/python -m app.db.migrate          # BEFORE starting or replacing any replica
 HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server

@@ -1212,8 +1212,17 @@ sampled, so neither of their numbers is a projection.
 
 ```bash
 cd frontend && npm run build   # outputs frontend/dist
-cd ../backend && HOST=0.0.0.0 .venv/bin/python -m app.server
+cd ../backend
+export SKETCHY_ENV=production
+export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
+HOST=0.0.0.0 .venv/bin/python -m app.server
 ```
+
+Both variables are required together: `SKETCHY_ENV=production` refuses a missing
+or SQLite `DATABASE_URL` (see [Database & Configuration](#database--configuration) for the full
+sequence, including the migration step that must run first). To check the built bundle
+locally without a PostgreSQL server, omit them both — the same `frontend/dist`
+is served either way, just in development mode.
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
 so the whole game (UI + API + WebSocket) is served from a single port. The built-in server
