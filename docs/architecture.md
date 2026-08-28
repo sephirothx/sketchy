@@ -444,9 +444,11 @@ They are grouped into five classes rather than set per command, and held in a po
 object carrying each one's default, bounds and purpose — never read from the
 environment, because [#446](https://github.com/sephirothx/sketchy/issues/446) tunes
 values like these from an admin panel without a deploy, and a value fixed at startup
-forecloses that. A refused frame drops silently, since nobody awaits an answer to one
-and an error mid-stroke is worse than the frame it describes; everything a person
-pressed a control for answers instead. Exhaustion is recorded once per window, which
+forecloses that. Windows are keyed by class, not by command, so two commands of one kind share the
+allowance that kind was given. A refused `draw` frame drops silently, since nobody
+awaits an answer to one and an error mid-stroke is worse than the frame it describes;
+everything a person pressed a control for answers instead — including `undo_stroke`,
+which shares drawing's budget but is sent with an acknowledgement waiting on it. Exhaustion is recorded once per window, which
 is what separates a mistake from a flood without writing a row per refusal.
 
 Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457

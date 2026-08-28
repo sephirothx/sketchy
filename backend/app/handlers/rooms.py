@@ -430,7 +430,12 @@ async def _join_room(ctx: HandlerContext, sid, data):
     except RoomFullError:
         # Flagged rather than left for the client to recognise by its prose:
         # the "you can still spectate" offer hangs off this exact case.
+        ctx.room_capacity.refund_join(sid)
         return {"ok": False, "error": "Room is full", "roomFull": True}
+    except Exception:
+        # Any other way seating can fail is equally not a join.
+        ctx.room_capacity.refund_join(sid)
+        raise
 
     # A game already in progress keeps running its existing turn_order -
     # joining mid-game just enrolls the new player into future turns

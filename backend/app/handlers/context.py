@@ -16,7 +16,7 @@ from app.repositories.interfaces import (
     PromptListRepository,
 )
 from app.domain_values import RuntimeEventType
-from app.handlers.budgets import CommandBudgetPolicy, CommandBudgets
+from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
 from app.services.runtime_metrics import metrics
 from app.services.timers import TimerManager
@@ -103,7 +103,9 @@ class HandlerContext:
             # Before parsing, before authorization, before any mutation: a
             # refused command must cost nothing but the check itself.
             budget = self.command_budgets.for_command(command)
-            key = f"{sid}:{command}"
+            # Keyed by the kind of traffic, not the command: two commands of
+            # one kind share the allowance their kind was given.
+            key = f"{sid}:{self.command_budgets.class_of(command)}"
             if self._command_windows.check(key, budget):
                 return await handler(sid, *args)
             if self._command_windows.should_report(key, budget):
@@ -111,7 +113,7 @@ class HandlerContext:
                 metrics.record(
                     RuntimeEventType.COMMAND_THROTTLED, details={"command": command}
                 )
-            if budget.silent:
+            if command in SILENT_COMMANDS:
                 # A frame nobody is waiting on. Answering would put an error on
                 # screen in the middle of a stroke, about a frame the client
                 # never expected a reply to.

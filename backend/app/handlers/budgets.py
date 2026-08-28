@@ -46,9 +46,6 @@ class Budget:
 
     limit: int
     window_seconds: float
-    # Frames are fire-and-forget at twenty-five a second; a refusal that
-    # answered would surface an error nobody asked for, mid-stroke.
-    silent: bool = False
 
 
 @dataclass(frozen=True)
@@ -64,7 +61,7 @@ class BudgetClass:
 
 DRAWING = BudgetClass(
     name="drawing",
-    default=Budget(limit=100, window_seconds=2.0, silent=True),
+    default=Budget(limit=100, window_seconds=2.0),
     minimum=50,
     maximum=400,
     description=(
@@ -127,6 +124,14 @@ COMMAND_CLASSES: Mapping[str, str] = {
 }
 
 
+# Fire-and-forget: nobody awaits an answer to a frame at twenty-five a second,
+# and an error surfacing mid-stroke is worse than the frame it describes.
+# Everything else - including `undo_stroke`, which shares drawing's budget but
+# is a control somebody pressed and is sent with `emitWithAck` - is refused out
+# loud, because silence on an awaited command reads as the server hanging.
+SILENT_COMMANDS: frozenset[str] = frozenset({"draw"})
+
+
 class CommandBudgetPolicy:
     """The budgets in force, and the metadata for changing them.
 
@@ -140,9 +145,13 @@ class CommandBudgetPolicy:
         self._classes = {item.name: item for item in BUDGET_CLASSES}
         self._budgets = {item.name: item.default for item in BUDGET_CLASSES}
 
+    def class_of(self, command: str) -> str:
+        """The kind of traffic this command is; everything has one."""
+        return COMMAND_CLASSES.get(command, ACTION.name)
+
     def for_command(self, command: str) -> Budget:
         """The budget this command answers to; everything has one."""
-        return self._budgets[COMMAND_CLASSES.get(command, ACTION.name)]
+        return self._budgets[self.class_of(command)]
 
     def describe(self) -> list[dict]:
         """Every budget with its current value, default, bounds and purpose.
@@ -178,7 +187,13 @@ class CommandBudgetPolicy:
 
 
 class CommandBudgets:
-    """Sliding windows for one process's callers, keyed by socket and command.
+    """Sliding windows for one process's callers, keyed by socket and kind.
+
+    By kind rather than by command, because the budget describes a kind of
+    traffic: keyed per command, `guess` and `send_chat` would each get the
+    conversation allowance and a caller could spend it twice over, while the
+    action class - a command apiece - would multiply by however many commands
+    happen to be registered.
 
     Deliberately in memory and per process: a budget is about what one live
     connection is doing right now, and a connection does not outlive the
@@ -222,8 +237,8 @@ class CommandBudgets:
     def forget(self, sid: str) -> None:
         """Drop every window belonging to a socket that has gone.
 
-        Keyed by socket and command, so the maps would otherwise keep an entry
-        per command per connection for the life of a process that also holds
+        Keyed by socket and kind, so the maps would otherwise keep an entry
+        per kind per connection for the life of a process that also holds
         every live game.
         """
         prefix = f"{sid}:"

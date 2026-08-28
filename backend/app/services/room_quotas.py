@@ -243,11 +243,22 @@ class RoomCapacityService:
     def admits_a_join(self, sid: str) -> bool:
         """Whether this socket may take a seat again so soon.
 
-        Charged only where a join actually seats somebody. A client confirming
-        the seat it already holds - which is what its heartbeat does - never
-        reaches here, so ordinary liveness checks cannot exhaust it.
+        Charged on the attempt and given back by `refund_join` when the seat
+        does not happen, so that only a join which actually seated somebody
+        costs anything. A client confirming the seat it already holds - which
+        is what its heartbeat does - never reaches here at all, so ordinary
+        liveness checks cannot exhaust it.
         """
         return self._joins.check(sid)
+
+    def refund_join(self, sid: str) -> None:
+        """Give back an attempt that seated nobody.
+
+        A full room is the ordinary case: without this, a client retrying one
+        is eventually told it is going too quickly, which is untrue and hides
+        the `roomFull` flag the invite screen hangs its offer to spectate on.
+        """
+        self._joins.refund(sid)
 
     def admits_a_takeover(self, player_id: str) -> bool:
         """Whether this seat may be rebound to another socket again so soon.

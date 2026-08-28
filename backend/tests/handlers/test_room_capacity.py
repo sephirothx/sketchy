@@ -267,3 +267,33 @@ async def test_taking_over_a_seat_from_another_tab_is_rate_limited():
     assert "too quickly" in takeovers[2]["error"]
     # The seat is still theirs, held by the last socket that took it.
     assert room.players[seat.id].sid == "tab-1"
+
+
+@pytest.mark.asyncio
+async def test_being_turned_away_from_a_full_room_does_not_spend_the_allowance():
+    """A budget buys a seat; an attempt that got none must not be charged.
+
+    Otherwise a client retrying a full room is told it is going too quickly,
+    which is both untrue and the wrong thing to act on - it hides the
+    `roomFull` flag the invite screen hangs its "you can still spectate"
+    offer on.
+    """
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_capacity = RoomCapacityService(environ={"ROOM_JOIN_LIMIT": "3"})
+    created = await open_room(sio, sessions)
+    room = room_manager.get_room(created["roomId"])
+    room.max_players = 1  # the host already fills it
+
+    await sessions.save("latecomer", {"user_id": "latecomer-user"})
+    answers = [
+        await sio.handlers["/"]["join_room"](
+            "latecomer", {"roomId": room.id, "nickname": "Late"}
+        )
+        for _ in range(6)
+    ]
+
+    assert all(answer["ok"] is False for answer in answers)
+    assert all(answer.get("roomFull") is True for answer in answers), (
+        "a refused seat spent the join budget and changed the reason given"
+    )

@@ -195,3 +195,45 @@ def test_a_budget_cannot_be_tuned_to_something_the_client_cannot_live_with():
         policy.set_limit("drawing", drawing["minimum"] - 1)
     with pytest.raises(KeyError):
         policy.set_limit("nonexistent", 10)
+
+
+@pytest.mark.asyncio
+async def test_one_window_per_kind_not_one_per_command():
+    """The budget is a property of a kind of traffic, so two commands of the
+    same kind share it. Keyed per command, `guess` and `send_chat` would each
+    get the conversation allowance and a caller could spend it twice - and the
+    action class, with a command apiece, would multiply by however many
+    commands happen to be registered."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    await seated(sio, sessions)
+    budget = ctx.command_budgets.for_command("guess")
+
+    for index in range(budget.limit):
+        answer = await sio.handlers["/"]["guess"]("host-sid", {"text": f"a{index}"})
+        assert answer is None or answer.get("ok") is not False
+
+    spent = await sio.handlers["/"]["send_chat"]("host-sid", {"text": "hello"})
+    assert spent["ok"] is False and "too quickly" in spent["error"], (
+        "chat had an allowance of its own despite sharing the conversation budget"
+    )
+
+
+@pytest.mark.asyncio
+async def test_undo_is_refused_out_loud_even_though_it_shares_the_drawing_budget():
+    """Undo is a control somebody pressed, sent with `emitWithAck`. Silence
+    leaves the client waiting for an acknowledgement that never comes, and it
+    recovers by resyncing rather than by learning it was refused."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    created = await seated(sio, sessions)
+    room = room_manager.get_room(created["roomId"])
+    room.players[created["playerId"]].sid = "host-sid"
+    budget = ctx.command_budgets.for_command("undo_stroke")
+
+    for _ in range(budget.limit):
+        await sio.handlers["/"]["draw"]("host-sid", b"", [1, 1])
+
+    refused = await sio.handlers["/"]["undo_stroke"]("host-sid", [1, 1, 1])
+    assert refused is not None, "a refused undo said nothing at all"
+    assert refused["ok"] is False and "too quickly" in refused["error"]
