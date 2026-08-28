@@ -39,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.logging_config import configure_logging
 from app.db.models import RuntimeEvent, RuntimeStatsDaily, generate_uuid
 from app.domain_values import RuntimeEventType
+from app.services.readiness import LoopHealth
 
 
 logger = logging.getLogger(__name__)
@@ -264,6 +265,7 @@ async def run_metrics_loop(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     interval_seconds: float | None = None,
+    health: LoopHealth | None = None,
 ) -> None:
     """Flush for ever, purging once a day's worth of flushes have gone by."""
     interval = interval_seconds or flush_seconds()
@@ -271,6 +273,8 @@ async def run_metrics_loop(
     while True:
         try:
             await flush_events(session_factory)
+            if health is not None:
+                health.record_success()
             since_purge += interval
             if since_purge >= 3600:
                 since_purge = 0.0
@@ -280,15 +284,21 @@ async def run_metrics_loop(
         except asyncio.CancelledError:
             raise
         except Exception:
-            # One bad batch must not stop every later observation.
+            # One bad batch must not stop every later observation. Counted
+            # rather than only logged, so a flush failing every time is
+            # visible from outside - these are the observations #472 needs.
+            if health is not None:
+                health.record_failure()
             logger.exception("runtime metrics flush failed")
         await asyncio.sleep(interval)
 
 
 def start_metrics_loop(
     session_factory: async_sessionmaker[AsyncSession],
+    *,
+    health: LoopHealth | None = None,
 ) -> asyncio.Task[None]:
-    return asyncio.create_task(run_metrics_loop(session_factory))
+    return asyncio.create_task(run_metrics_loop(session_factory, health=health))
 
 
 async def stop_metrics_loop(

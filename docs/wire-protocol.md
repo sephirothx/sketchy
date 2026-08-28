@@ -872,8 +872,8 @@ to anyone without the role — the account menu decides what is *shown* and noth
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/health` | Liveness. `{"status":"ok","readiness":…}` |
-| `GET` | `/api/ready` | 200 only when startup finished and no drain has begun; 503 otherwise |
+| `GET` | `/api/health` | Liveness, process-only — never fails on a dependency, because a restart cannot fix an outage the replacement comes back into. `{"status":"ok","readiness":…,"paused":…,"loops":{…}}`, where each supervised background loop reports `running`, `consecutive_failures`, `total_failures`, `seconds_since_success`, `seconds_since_failure` |
+| `GET` | `/api/ready` | 200 only when startup finished, no drain has begun, no supervised loop has stopped, and the database answers `SELECT 1` inside 1 s (result cached ~5 s). 503 otherwise, with `detail.reason` naming which of the three it was. A loop that is merely *erroring* stays ready — see `docs/architecture.md` §Health and readiness |
 | `GET` | `/api/rooms` | Public room summaries (`RoomSummary[]`), polled by the lobby every 4 s. Sends an `ETag` and answers a matching `If-None-Match` with an empty **304**; `Cache-Control: no-cache` so it is revalidated, never served stale. The validator is a hash of the serialized list, not a change counter — a counter must be bumped at every site touching any of the 22 fields in `to_public_summary()`, and a missed bump is a lobby that stays stale |
 | `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set** |
 

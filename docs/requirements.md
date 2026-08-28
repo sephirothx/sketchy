@@ -32,7 +32,7 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-PLAT-01** | The system MUST run with **zero configuration**, defaulting to an embedded SQLite database at `./sketchy.db`. [`db/__init__.py:23`](../backend/app/db/__init__.py) |
+| **R-PLAT-01** | The system MUST run with **zero configuration**, defaulting to an embedded SQLite database at `./sketchy.db` — in development and test only; see R-PLAT-11. [`db/__init__.py:23`](../backend/app/db/__init__.py) |
 | **R-PLAT-02** | The system MUST also support PostgreSQL via `DATABASE_URL`, with identical behaviour. Cross-dialect equivalence is proven by replaying the migration chain both directions on both engines. [`tests/test_migrations.py`](../backend/tests/test_migrations.py) |
 | **R-PLAT-03** | The whole game (UI + REST + WebSocket) MUST be servable from **one port** when `frontend/dist` exists. [`main.py:264`](../backend/app/main.py) |
 | **R-PLAT-04** | The backend MUST refuse an interpreter older than Python 3.14, and the frontend requires Node ≥ 22.12. [`deployment.py`](../backend/app/deployment.py), [`frontend/package.json`](../frontend/package.json) |
@@ -42,12 +42,14 @@ claim that an arbitrary host will sustain it.
 | **R-PLAT-08** | SQLite MUST migrate itself on startup. PostgreSQL migrations MUST be an explicit deploy step under an advisory lock; startup MUST verify the revision and fail with a direct instruction if the step was missed. [`db/migrate.py`](../backend/app/db/migrate.py) |
 | **R-PLAT-09** | Fingerprinted `/assets/` MUST be served `immutable` with a one-year lifetime, and `index.html` (including client-route fallbacks) `no-cache`, so browsers discover deployments promptly. [`deployment.py`](../backend/app/deployment.py) |
 | **R-PLAT-10** | Behind a proxy, the real client address MUST be recovered only with explicit trusted-proxy configuration (`PROXY_HEADERS=1`, `FORWARDED_ALLOW_IPS`). Without it, `X-Forwarded-For` MUST be ignored — it is attacker-controlled, and trusting it blindly would let a password-guesser sidestep rate limits by varying it per attempt. |
+| **R-PLAT-11** | The deployment environment MUST be explicit in `SKETCHY_ENV` (`development` — the default — `test`, or `production`), and an unrecognised value MUST fail startup rather than fall back: a misspelling read as development disarms every production guard at once. With `SKETCHY_ENV=production`, startup MUST refuse a missing, blank, or SQLite `DATABASE_URL` before `init_db()` runs. The zero-config fallback is a *relative* file, so a production deploy that forgot the variable looks healthy while writing durable data to storage the next replacement discards. [`deployment.py`](../backend/app/deployment.py) |
+| **R-PLAT-12** | `GET /api/ready` MUST test the dependencies this process needs to serve: a bounded, briefly cached database round-trip, and the supervised background loops. A required loop whose task has *stopped* MUST fail readiness; a loop that is merely erroring MUST NOT, so a failing email sweep cannot pull a playable game server out of rotation. `GET /api/health` MUST remain process-only and MUST NOT fail on a dependency — a restart cannot fix an outage the replacement comes back into — but MUST report each loop's run state, failure streak, and time since its last success. [`services/readiness.py`](../backend/app/services/readiness.py) |
 
 ### Planned shutdown
 
 | # | Requirement |
 | --- | --- |
-| **R-SHUT-01** | `GET /api/ready` MUST return 503 **before** any drain work begins; `/api/health` remains a liveness check that reports readiness state. |
+| **R-SHUT-01** | `GET /api/ready` MUST return 503 **before** any drain work begins; `/api/health` remains a liveness check that reports readiness state. The shutdown state MUST be tested **first**, before the R-PLAT-12 dependency checks, so a draining process answers from the drain rather than being delayed or contradicted by a dependency. |
 | **R-SHUT-02** | At drain start the server MUST send every connected client the versioned `server_shutdown` notice, and MUST refuse new room creation, new game starts, and restart votes — while leaving existing rooms connected so active games can finish. |
 | **R-SHUT-03** | The drain window MUST be configurable via `SHUTDOWN_DRAIN_SECONDS` (0–300, default 30). A second termination signal MUST abandon the remaining window immediately — **whichever supported signal it is**, since a deployment stop sends `SIGTERM` twice rather than switching to `SIGINT`. The window a drain runs on MUST be fixed when the drain starts and reported from that fixed value, so a change to the configured default cannot make the notice and the deadline disagree. |
 | **R-SHUT-04** | A game that outlives the deadline MUST NOT be recorded as completed history. Exactly one privacy-safe `planned_shutdown_abandonments` row MUST be written instead, retained 90 days. |
@@ -526,5 +528,6 @@ design, not a bug fix.
 | Shutdown drain | [`services/shutdown.py`](../backend/app/services/shutdown.py) | `tests/test_shutdown.py`, `tests/handlers/test_shutdown.py` |
 | Runtime analytics | [`services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | `tests/test_runtime_analytics.py` |
 | Runtime tuning | [`services/runtime_settings.py`](../backend/app/services/runtime_settings.py), [`services/tunables.py`](../backend/app/services/tunables.py), [`services/config_store.py`](../backend/app/services/config_store.py), [`api/admin_settings.py`](../backend/app/api/admin_settings.py) | `tests/test_runtime_settings.py`, `test_admin_tunables_api.py` |
-| Deployment, static delivery, worker topology | [`deployment.py`](../backend/app/deployment.py) | `tests/test_deployment.py`, `test_static_delivery.py` |
+| Deployment, environment mode, static delivery, worker topology | [`deployment.py`](../backend/app/deployment.py) | `tests/test_deployment.py`, `test_static_delivery.py` |
+| Health, readiness, loop supervision | [`services/readiness.py`](../backend/app/services/readiness.py) | `tests/test_readiness.py` |
 | Connection resilience | [`handlers/connection.py`](../backend/app/handlers/connection.py) | `tests/handlers/test_connection.py`, `tests/e2e/test_network_resilience.py`, `test_player_afk_reconnect.py` |

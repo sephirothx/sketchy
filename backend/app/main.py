@@ -37,6 +37,7 @@ from app.db import async_engine, async_session_factory, init_db
 from app.db.seed import seed_prompt_lists
 from app.deployment import (
     shutdown_drain_seconds,
+    validate_database_configuration,
     validate_python_runtime,
     validate_worker_topology,
 )
@@ -45,6 +46,7 @@ from app.logging_config import configure_logging
 from app.auth.retention import start_retention_loop, stop_retention_loop
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
+from app.services.readiness import LoopHealth, ReadinessProbe
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -109,6 +111,7 @@ prompt_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
 block_service = BlockService(async_session_factory)
 room_preset_service = RoomPresetService(async_session_factory, prompt_list_repo)
 shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
+readiness_probe = ReadinessProbe(async_session_factory)
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 handler_context = register_all_handlers(
@@ -289,11 +292,17 @@ async def lifespan(_app: FastAPI):
     mail_delivery = None
     metrics_flush = None
     retention_sweep = None
+    mail_health = LoopHealth("mail_delivery")
+    metrics_health = LoopHealth("runtime_metrics")
+    retention_health = LoopHealth("retention_sweep")
     try:
         # Before anything that might have something to say.
         configure_logging()
         validate_python_runtime()
         validate_worker_topology()
+        # Before init_db, so a production process pointed at a local file
+        # refuses to start rather than migrating one and serving from it.
+        validate_database_configuration()
         await init_db()
         if handler_context.room_codes is not None:
             await handler_context.room_codes.retire_orphaned_ephemeral()
@@ -303,12 +312,25 @@ async def lifespan(_app: FastAPI):
         await adopt_stored_settings()
         # One worker owns everything (#382), so the outbox needs no scheduler
         # and no second process that somebody has to remember to start.
-        mail_delivery = start_delivery_loop(async_session_factory)
-        metrics_flush = start_metrics_loop(async_session_factory)
-        retention_sweep = start_retention_loop(async_session_factory)
+        mail_delivery = start_delivery_loop(
+            async_session_factory, health=mail_health
+        )
+        metrics_flush = start_metrics_loop(
+            async_session_factory, health=metrics_health
+        )
+        retention_sweep = start_retention_loop(
+            async_session_factory, health=retention_health
+        )
+        readiness_probe.supervise("mail_delivery", mail_delivery, mail_health)
+        readiness_probe.supervise("runtime_metrics", metrics_flush, metrics_health)
+        readiness_probe.supervise("retention_sweep", retention_sweep, retention_health)
         shutdown_coordinator.mark_ready()
         yield
     finally:
+        # Released before the loops are cancelled: a loop stopped on purpose
+        # is not a crashed one, and readiness has already gone 503 for the
+        # drain by the time this runs.
+        readiness_probe.release()
         # Flushed on the way out, so the observations describing a planned
         # restart are not the ones lost to it.
         await stop_retention_loop(retention_sweep)
@@ -383,20 +405,57 @@ api.include_router(
 
 @api.get("/api/health")
 async def health():
+    """Liveness, plus what the loops have to say for themselves.
+
+    Deliberately still process-only: liveness answers "restart me or not",
+    and a dependency outage is not a reason to restart a process that would
+    come back into the same outage. The loop counters ride along because
+    nothing else exposes them - a sweep that has failed on every iteration
+    since startup is otherwise only a line in a log nobody is reading.
+    """
     return {
         "status": "ok",
         "readiness": shutdown_coordinator.state,
         "paused": shutdown_coordinator.is_paused,
+        "loops": readiness_probe.loop_snapshot(),
     }
 
 
 @api.get("/api/ready")
 async def ready():
+    """Whether this process can actually serve, not merely whether it is up.
+
+    The shutdown state is tested first and on its own: R-SHUT-01 requires
+    readiness to flip to 503 before any drain work begins, and a draining
+    process must not be held up - or contradicted - by a dependency check.
+    """
     if not shutdown_coordinator.is_ready:
         raise HTTPException(
             status_code=503,
             detail={"status": "not_ready", "reason": shutdown_coordinator.state},
         )
+
+    # A loop that only errors stays in rotation: it is reported in
+    # `/api/health` and alerted on there. A loop whose task is *gone* cannot
+    # come back without a restart, so it fails readiness and invites a
+    # supervisor to replace this instance.
+    dead = readiness_probe.dead_loops()
+    if dead:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "not_ready",
+                "reason": "background loop stopped: " + ", ".join(dead),
+            },
+        )
+
+    database_ready, reason = await readiness_probe.check_database()
+    if not database_ready:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not_ready", "reason": reason},
+        )
+
     return {"status": "ready"}
 
 

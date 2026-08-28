@@ -310,12 +310,35 @@ revocation applies uniformly without a shared signing secret.
 1. `configure_logging()`
 2. `validate_python_runtime()` — refuses an interpreter older than 3.14
 3. `validate_worker_topology()` — refuses a multi-worker configuration
-4. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
-5. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
-6. `purge_expired_room_messages()` and `purge_expired_shutdown_abandonments()`
-7. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
-8. Start the mail-delivery loop and the runtime-metrics flush loop
-9. `mark_ready()` — `GET /api/ready` starts answering 200
+4. `validate_database_configuration()` — with `SKETCHY_ENV=production`, refuses a missing, blank, or SQLite `DATABASE_URL`. Ordered before `init_db()` on purpose: a production process pointed at the zero-config *relative* file must refuse to start, not migrate one and serve from it
+5. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
+6. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
+7. `purge_expired_room_messages()` and `purge_expired_shutdown_abandonments()`
+8. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
+9. Start the mail-delivery, runtime-metrics, and retention loops, and hand each one to `readiness_probe.supervise()`
+10. `mark_ready()` — `GET /api/ready` starts answering 200
+
+### Health and readiness ([`backend/app/services/readiness.py`](../backend/app/services/readiness.py))
+
+`/api/health` is liveness and stays process-only: a restart cannot fix a database
+outage the replacement comes back into, so a dependency failure must not be reported
+as "restart me". It does carry each background loop's run state, failure streak, and
+time since its last success — the three loops swallow every exception but cancellation
+and carry on for ever, which keeps one bad row from stopping every later sweep and also
+makes a loop failing on every iteration indistinguishable from a working one. These
+counters are that distinction.
+
+`/api/ready` answers whether this process can actually serve, in three steps:
+
+1. the shutdown state, tested first so a drain answers 503 before anything else runs
+2. **supervised loops** — a loop whose task has *finished* fails readiness, because
+   `run_*_loop` never returns on its own and cannot come back without a restart. A loop
+   that is merely erroring does not: pulling a playable game server out of rotation
+   because the email sweep is failing trades a working service for a broken one
+3. a **database round-trip** — `SELECT 1` under a one-second timeout, cached about five
+   seconds. Successes and failures are cached alike, so a load balancer polling every
+   second cannot become the load, and a database already in trouble is not re-asked once
+   per probe
 
 ### Planned shutdown ([`backend/app/services/shutdown.py`](../backend/app/services/shutdown.py))
 
@@ -798,6 +821,8 @@ already public.
 | A table or column | [`backend/app/db/models.py`](../backend/app/db/models.py) | A new Alembic migration, `test_migrations.py`, [`database.md`](database.md) |
 | A player-visible name | [`GLOSSARY.md`](../GLOSSARY.md) | Rename on both sides in one change |
 | An enum backed by a `CHECK` | [`domain_values.py`](../backend/app/domain_values.py) | Coordinated code + migration + contract + README + glossary review |
+| What readiness tests, or a new background loop | [`services/readiness.py`](../backend/app/services/readiness.py), [`main.py`](../backend/app/main.py) lifespan | Supervise the task, give the loop a `LoopHealth`, `test_readiness.py`, [`requirements.md`](requirements.md) R-PLAT-12 |
+| A production-only invariant | [`deployment.py`](../backend/app/deployment.py) | Gate it on `is_production()`, call it from lifespan before `init_db()`, `test_deployment.py`, [`requirements.md`](requirements.md) R-PLAT-11 |
 
 ---
 
@@ -887,6 +912,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
+| [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
 | [`app/services/room_quotas.py`](../backend/app/services/room_quotas.py) | Ceilings on room creation, so one client cannot spend the whole server. |
 | [`app/services/room_presets.py`](../backend/app/services/room_presets.py) | Private, account-owned templates for ordinary room configuration. |

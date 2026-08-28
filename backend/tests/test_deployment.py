@@ -4,7 +4,10 @@ import pytest
 
 from app.deployment import (
     MINIMUM_PYTHON_VERSION,
+    current_environment,
+    is_production,
     shutdown_drain_seconds,
+    validate_database_configuration,
     validate_python_runtime,
     validate_worker_topology,
 )
@@ -68,3 +71,83 @@ def test_an_older_python_fails_before_startup_touches_state(version):
 
 def test_a_newer_python_is_accepted():
     validate_python_runtime((MINIMUM_PYTHON_VERSION[0], MINIMUM_PYTHON_VERSION[1] + 1))
+
+
+@pytest.mark.parametrize(
+    ("environ", "expected"),
+    [
+        ({}, "development"),
+        ({"SKETCHY_ENV": ""}, "development"),
+        ({"SKETCHY_ENV": "   "}, "development"),
+        ({"SKETCHY_ENV": "development"}, "development"),
+        ({"SKETCHY_ENV": "test"}, "test"),
+        ({"SKETCHY_ENV": "production"}, "production"),
+        ({"SKETCHY_ENV": " Production "}, "production"),
+    ],
+)
+def test_the_deployment_environment_defaults_to_development(environ, expected):
+    assert current_environment(environ) == expected
+    assert is_production(environ) is (expected == "production")
+
+
+@pytest.mark.parametrize("value", ["prod", "staging", "PRODUCTIION", "1"])
+def test_an_environment_nobody_defined_fails_closed(value):
+    """A misspelling must not read as development and disarm every guard."""
+    with pytest.raises(RuntimeError, match="SKETCHY_ENV"):
+        current_environment({"SKETCHY_ENV": value})
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {},
+        {"SKETCHY_ENV": "development"},
+        {"SKETCHY_ENV": "development", "DATABASE_URL": "sqlite:///./sketchy.db"},
+        {"SKETCHY_ENV": "test"},
+        {"SKETCHY_ENV": "test", "DATABASE_URL": "sqlite+aiosqlite:///./sketchy.db"},
+    ],
+)
+def test_zero_configuration_sqlite_still_runs_outside_production(environ):
+    validate_database_configuration(environ)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+asyncpg://user:password@db:5432/sketchy",
+        "postgresql://user:password@db:5432/sketchy",
+        "postgres://user:password@db:5432/sketchy",
+    ],
+)
+def test_production_accepts_every_postgresql_spelling(url):
+    validate_database_configuration({"SKETCHY_ENV": "production", "DATABASE_URL": url})
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {"SKETCHY_ENV": "production"},
+        {"SKETCHY_ENV": "production", "DATABASE_URL": ""},
+        {"SKETCHY_ENV": "production", "DATABASE_URL": "   "},
+    ],
+)
+def test_production_without_a_database_url_refuses_to_start(environ):
+    """The fallback is a relative file, so silence here is durable data loss."""
+    with pytest.raises(RuntimeError, match="DATABASE_URL is required"):
+        validate_database_configuration(environ)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "sqlite:///./sketchy.db",
+        "sqlite+aiosqlite:///./sketchy.db",
+        "sqlite:////var/lib/sketchy/sketchy.db",
+        "  sqlite:///./sketchy.db  ",
+    ],
+)
+def test_production_refuses_sqlite_however_it_is_spelled(url):
+    with pytest.raises(RuntimeError, match="SQLite is not supported"):
+        validate_database_configuration(
+            {"SKETCHY_ENV": "production", "DATABASE_URL": url}
+        )

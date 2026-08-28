@@ -10,6 +10,87 @@ SUPPORTED_APP_WORKERS = 1
 WORKER_COUNT_ENVIRONMENTS = ("WEB_CONCURRENCY", "UVICORN_WORKERS")
 DEFAULT_SHUTDOWN_DRAIN_SECONDS = 30.0
 MAX_SHUTDOWN_DRAIN_SECONDS = 300.0
+ENVIRONMENT_VARIABLE = "SKETCHY_ENV"
+DEVELOPMENT = "development"
+TEST = "test"
+PRODUCTION = "production"
+# Development is the default because a checkout has to run with nothing set.
+# Production is therefore always something an operator asked for by name,
+# which is the only reading under which refusing to start is fair.
+SUPPORTED_ENVIRONMENTS = (DEVELOPMENT, TEST, PRODUCTION)
+DEFAULT_ENVIRONMENT = DEVELOPMENT
+
+
+def current_environment(environ: Mapping[str, str] | None = None) -> str:
+    """Read the deployment environment, refusing a value nobody defined.
+
+    A misspelling has to fail rather than fall back: ``SKETCHY_ENV=prod``
+    silently treated as development is exactly the misconfiguration the
+    production guards exist to catch, and it would disarm every one of them
+    at once.
+    """
+
+    values = os.environ if environ is None else environ
+    raw_value = values.get(ENVIRONMENT_VARIABLE)
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_ENVIRONMENT
+    environment = raw_value.strip().lower()
+    if environment not in SUPPORTED_ENVIRONMENTS:
+        supported = ", ".join(SUPPORTED_ENVIRONMENTS)
+        raise RuntimeError(
+            f"{ENVIRONMENT_VARIABLE} must be one of {supported}; "
+            f"got {raw_value.strip()!r}."
+        )
+    return environment
+
+
+def is_production(environ: Mapping[str, str] | None = None) -> bool:
+    """Whether the production-only invariants apply to this process."""
+
+    return current_environment(environ) == PRODUCTION
+
+
+def validate_database_configuration(environ: Mapping[str, str] | None = None) -> None:
+    """Refuse to serve production traffic from a local single-writer file.
+
+    Without ``DATABASE_URL`` the application falls back to a relative SQLite
+    file, and a production deploy that forgot the variable then looks entirely
+    healthy while writing accounts, moderation evidence, and history to
+    storage the next container replacement throws away. SQLite also serializes
+    every writer, so the fallback quietly caps a production server at one
+    write at a time.
+
+    Checked here rather than in ``get_database_url()`` so that importing
+    ``app.db`` stays free of policy: the engine is built at import time, and a
+    guard there would refuse the test suite as readily as a bad deploy.
+    """
+
+    values = os.environ if environ is None else environ
+    if not is_production(values):
+        return
+
+    raw_value = values.get("DATABASE_URL")
+    if raw_value is None or not raw_value.strip():
+        raise RuntimeError(
+            f"DATABASE_URL is required when {ENVIRONMENT_VARIABLE}={PRODUCTION}. "
+            "Set it to a PostgreSQL URL, for example "
+            "postgresql+asyncpg://user:password@host:5432/sketchy."
+        )
+
+    # Normalized by the same function the engine uses, so a URL is classified
+    # here exactly as the driver will classify it moments later. Imported
+    # locally: app.db builds an engine at import time, and this module is
+    # imported by the runner before the application is.
+    from app.db import get_database_url
+
+    url = get_database_url(raw_value)
+    if url.startswith("sqlite"):
+        raise RuntimeError(
+            f"SQLite is not supported when {ENVIRONMENT_VARIABLE}={PRODUCTION} "
+            f"(DATABASE_URL={raw_value.strip()!r}). Set DATABASE_URL to a "
+            "PostgreSQL URL, for example "
+            "postgresql+asyncpg://user:password@host:5432/sketchy."
+        )
 
 
 def validate_python_runtime(version: tuple[int, ...] | None = None) -> None:
