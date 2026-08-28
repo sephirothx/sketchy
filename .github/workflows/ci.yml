@@ -62,6 +62,68 @@ jobs:
           fi
           bash scripts/check-tracked-artifacts.sh --range "${from}..HEAD"
 
+      # The scan above knows this project's own artifact shapes - a database,
+      # a key file - by magic bytes. It knows nothing about a credential
+      # pasted into source, which is a different failure with the same cost.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSLf -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          # Pinned by digest, not just by tag: a release asset can be replaced.
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive" gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+
+      # --baseline-path carries the one historical finding this repository
+      # already has: an earlier revision of the artifact scanner named PEM
+      # armour in a comment, because naming it is how it detects it. The entry
+      # is pinned to that commit, file, rule, and line, and holds no secret -
+      # it cannot excuse anything else, and history cannot be edited to remove
+      # the finding itself.
+      - name: Scan the tree for credentials
+        run: |
+          gitleaks dir . --no-banner --redact --exit-code 1 \
+            --baseline-path .gitleaks-known.json
+
+      # The tree scan cannot see a credential that was committed and then
+      # removed a commit later, which is the case that matters most: the value
+      # is burned either way, and the tree looks clean.
+      #
+      # The range is resolved exactly as the artifact scan above resolves it,
+      # including the baseline fallback. Falling back to "the tree scan stands
+      # alone" would wave through the one case this step exists for, on a
+      # first push or a force-push where `before` no longer resolves - which
+      # is a hole an actor can simply choose to push into.
+      - name: Scan every commit the change adds for credentials
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          BASELINE="$(bash scripts/check-tracked-artifacts.sh --baseline)"
+          if git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            from="$(bash scripts/check-tracked-artifacts.sh --floor "$(git merge-base "$BASE" HEAD)")"
+          elif git cat-file -e "${BASELINE}^{commit}" 2>/dev/null; then
+            echo "No reachable base commit; scanning everything since the baseline."
+            from="$BASELINE"
+          else
+            echo "Baseline ${BASELINE} does not resolve in a full clone." >&2
+            echo "Update HISTORY_BASELINE in scripts/check-tracked-artifacts.sh." >&2
+            exit 1
+          fi
+          # -m is load-bearing: `gitleaks git` runs `git log -p`, which emits
+          # no patch for a merge commit unless asked. A secret introduced only
+          # while resolving a conflict - present in neither parent - and
+          # removed in the next commit is invisible to both this scan and the
+          # tree scan without it. Verified against a real evil merge: no leaks
+          # found without the flag, found with it.
+          # scripts/check-tracked-artifacts.sh handles merges for the same
+          # reason, and has its own test for it.
+          gitleaks git . --no-banner --redact --exit-code 1 \
+            --baseline-path .gitleaks-known.json --log-opts="-m ${from}..HEAD"
+
   backend:
     name: Backend lint & tests
     runs-on: ubuntu-latest
@@ -83,7 +145,17 @@ jobs:
 
       - run: ruff check app tests
 
-      - run: pytest -q
+      # --cov-branch, because "unexecuted branches" is the finding: a statement
+      # measure marks an `if` covered the moment it is reached, whatever the
+      # condition did.
+      - run: pytest -q --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
+
+      # A whole-suite percentage moves too little to catch one module losing
+      # its tests, which is the shape the audit called out. The floors are per
+      # module, on the ones where an unexecuted branch is a way in or a way to
+      # lose data.
+      - name: Check coverage floors
+        run: python3 ../scripts/check-coverage.py coverage.json
 
   postgresql:
     name: PostgreSQL migrations & repositories
@@ -155,6 +227,47 @@ jobs:
       - run: npm run lint
 
       - run: npm run build
+
+  supply-chain:
+    name: Dependency advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: pip install -r requirements-dev.txt
+        working-directory: backend
+
+      - run: npm ci
+        working-directory: frontend
+
+      # Both manifests, not only the shipped one: a compromised test or build
+      # dependency runs here, with a checkout and a token, before anything it
+      # touched reaches a user.
+      - name: Audit Python dependencies
+        working-directory: backend
+        run: |
+          pip-audit -r requirements.txt --progress-spinner off
+          pip-audit -r requirements-dev.txt --progress-spinner off
+
+      # No --audit-level: R-ENG-14 says any known advisory fails, and a
+      # threshold here would have quietly meant something else.
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit
 
   e2e:
     name: E2E multi-browser tests

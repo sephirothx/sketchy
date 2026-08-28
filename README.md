@@ -1019,6 +1019,7 @@ scripts/
   serve.sh          Local development server
   test-e2e.sh       Frontend build + throwaway-database server + the Playwright suite
   check-tracked-artifacts.sh  Refuses a tracked database, env file, or private key
+  check-coverage.py   Per-module coverage floors on the risk-critical modules
   brand/            Logo and icon sources, and the scripts that raster them
 .githooks/
   pre-push          Opt-in local copy of the artifact scan, before anything leaves the machine
@@ -1069,6 +1070,33 @@ does not sneak the blob into history.
 
 CI runs the same script, but a secret pushed to a public remote is already public by the
 time CI has an opinion. The hook is the one that actually protects anything.
+
+### What CI refuses
+
+Beyond lint, tests, PostgreSQL migrations, and multi-browser E2E:
+
+| Gate | What fails the build |
+| --- | --- |
+| Credential scan | A credential in the tree, or in **any commit the change adds** — a value removed a commit later is burned just the same, and the tree it leaves behind looks clean. The range is resolved with the same baseline fallback as the artifact scan, and fails closed rather than falling back to the tree, so a first push or a force-push is not a way around it. Merge diffs are requested explicitly, because `git log -p` emits no patch for a merge commit — a secret introduced only while resolving a conflict, present in neither parent, is otherwise invisible to both scans. One historical finding is carried in `.gitleaks-known.json` — an earlier revision of the artifact scanner named PEM armour in a comment — pinned to its commit, file, rule, and line, holding no secret, and unable to excuse anything else. Runs alongside the artifact scan, which catches file *shapes* by their bytes rather than secrets in source |
+| Dependency advisories | A known advisory in `requirements.txt`, `requirements-dev.txt`, or the frontend lockfile. Build and test dependencies count: they run in CI, with a checkout, before anything they touched reaches a player |
+| Coverage floors | A risk-critical module dropping below **either** of its two floors in [`scripts/check-coverage.py`](scripts/check-coverage.py) — statements and branches, on authentication, moderation, request limits, payload validation, drawing storage, deployment, readiness. Both, because either alone can be met without exercising the code: `auth/blocks.py` reads 82% by statements and 50% by branches, so half its conditions have only ever gone one way. Per module rather than in total, because a suite this size absorbs one module losing its tests without moving the total more than a rounding error. A report produced without `--cov-branch` is refused rather than checked against the wrong number, and a module that vanishes from the report fails too, so a rename cannot retire a floor silently |
+
+The coverage gate has its own tests in
+[`backend/tests/test_repo_gates.py`](backend/tests/test_repo_gates.py). A green
+build only ever exercises a gate's success path, and a gate whose refusals have
+quietly stopped working is worse than none: it makes the checkbox look ticked.
+
+Not yet gated, and tracked rather than forgotten: an SBOM, artifact provenance
+and signing, deploy-by-digest, and deployment smoke/rollback checks all need a
+build artifact and a deployment that do not exist yet (#457); the
+migration-on-a-production-copy test needs the backup mechanism in #458; and
+the sustained-load gate is #461.
+
+The SBOM belongs with #457 rather than here. Generated in CI today it would
+describe a virtualenv built on a runner and thrown away thirty seconds later,
+not the thing that actually runs — an inventory nothing can be checked against.
+Once there is an image, it should be generated from that image and attached to
+it by digest, and a licence policy, if one is wanted, can read off it.
 
 ### Backend
 
