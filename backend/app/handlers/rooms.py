@@ -158,17 +158,47 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     except Exception:
         logger.exception("Failed to record activity for user %s", player.user_id)
 
-async def _record_activity_of(ctx: HandlerContext, seated: list) -> None:
-    """Write the retention signal for a seated player, outside the gate.
+async def _unseat_an_ended_account(ctx: HandlerContext, room, player) -> dict:
+    """Take back a seat the account lost the right to while taking it.
 
-    Deliberately after the gate is released rather than before: the seat
-    already exists by then, and this write is not part of making it. Held
-    inside, it would keep a disconnect - a dropped connection, or the sweep
-    closing this socket after a ban - waiting behind a write that has nothing
-    to do with the seat.
+    The check before seating is not enough on its own: `_join_socket_room`
+    awaits, and the sweep marking this socket can land in one of those gaps.
+    Refusing without removing the seat would leave the account seated until
+    the disconnect queued at this gate ran it down through the reconnect
+    grace, which is the window R-BAN-02 exists to close.
+    """
+    await ctx.evict_player(room, player.id)
+    return ENDED_ACCOUNT_ACKNOWLEDGEMENT
+
+
+async def _after_seating(ctx: HandlerContext, seated: list) -> None:
+    """The database work a new seat causes, once the gate has been released.
+
+    Deliberately after the gate rather than before: the seat already exists by
+    then, and none of this is part of making it. Held inside, it would keep a
+    disconnect - a dropped connection, or the sweep closing this socket after
+    a ban - waiting behind writes that have nothing to do with the seat.
     """
     for player in seated:
         await _record_player_activity(ctx, player)
+        await _warm_block_filter(ctx, player)
+
+
+async def _warm_block_filter(ctx: HandlerContext, player) -> None:
+    """Read this player's blockers now, so no message of theirs has to.
+
+    The chat path filters every line by who has muted the sender, and a cold
+    read there would be felt as the room going quiet. The cost is paid here
+    instead, where waiting is what entering a room already does.
+    """
+    if ctx.block_service is None or not player.user_id:
+        return
+    try:
+        await _bounded(ctx.block_service.warm(player.user_id), "reading blocks")
+    except EntryTimedOut:
+        pass
+    except Exception:
+        logger.exception("Failed to warm the block filter for user %s", player.user_id)
 
 
 async def create_room(ctx: HandlerContext, sid, data):
@@ -176,7 +206,7 @@ async def create_room(ctx: HandlerContext, sid, data):
     seated: list = []
     async with ctx.seating(sid):
         answer = await _create_room(ctx, sid, data, seated)
-    await _record_activity_of(ctx, seated)
+    await _after_seating(ctx, seated)
     return answer
 
 
@@ -315,6 +345,8 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         colorblind_safe_colors=identity.colorblind_safe_colors,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
+    if ctx.is_ending(sid):
+        return await _unseat_an_ended_account(ctx, room, player)
     seated.append(player)
     return session_payload(room, player)
 
@@ -450,7 +482,7 @@ async def join_room(ctx: HandlerContext, sid, data):
     seated: list = []
     async with ctx.seating(sid):
         answer = await _join_room(ctx, sid, data, seated)
-    await _record_activity_of(ctx, seated)
+    await _after_seating(ctx, seated)
     return answer
 
 
@@ -514,6 +546,8 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
             already_joined,
             sync_canvas=not payload.soft,
         )
+        if ctx.is_ending(sid):
+            return await _unseat_an_ended_account(ctx, room, already_joined)
         seated.append(already_joined)
         return session_payload(room, already_joined)
 
@@ -551,6 +585,8 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
         if ctx.is_ending(sid):
             return ENDED_ACCOUNT_ACKNOWLEDGEMENT
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        if ctx.is_ending(sid):
+            return await _unseat_an_ended_account(ctx, room, player)
         seated.append(player)
         return session_payload(room, player)
 
@@ -616,6 +652,8 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
         room.game.add_player_to_rotation(player.id)
 
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
+    if ctx.is_ending(sid):
+        return await _unseat_an_ended_account(ctx, room, player)
     seated.append(player)
     return session_payload(room, player)
 

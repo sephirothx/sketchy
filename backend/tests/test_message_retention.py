@@ -1,6 +1,7 @@
 """Audience-aware chat persistence and bounded cleanup."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from uuid import UUID
@@ -25,6 +26,7 @@ from app.handlers import register_all_handlers as register_handlers
 from app.rooms import RoomManager
 from app.services.message_retention import (
     MESSAGE_RETENTION,
+    MessageRetentionService,
     purge_expired_room_messages,
 )
 
@@ -72,6 +74,9 @@ async def test_wrong_guess_is_retained_with_runtime_ids_and_actual_audience():
         sio.emit = AsyncMock()
 
         await sio.handlers["/"]["guess"](guesser.sid, {"text": "stone"})
+        # Retention no longer holds up the message it retains, so the
+        # write it queued is what this waits for.
+        await context.message_retention.drain()
 
         async with factory() as session:
             message = await session.scalar(select(RoomMessage))
@@ -135,6 +140,9 @@ async def test_near_miss_audience_excludes_prompt_unaware_players_and_cleanup_is
         )
         sio.emit = AsyncMock()
         await sio.handlers["/"]["guess"](guesser.sid, {"text": "pandas"})
+        # Retention no longer holds up the message it retains, so the
+        # write it queued is what this waits for.
+        await context.message_retention.drain()
 
         async with factory() as session:
             message = await session.scalar(select(RoomMessage))
@@ -260,5 +268,123 @@ async def test_wrong_guess_text_expires_but_per_seat_outcomes_remain():
             assert turn is not None
             assert turn.wrong_guess_count == 20
             assert turn.near_miss_count == 3
+    finally:
+        await engine.dispose()
+
+
+class HangingFactory:
+    """A database that accepts the connection and then never answers."""
+
+    def __call__(self):
+        return self
+
+    async def __aenter__(self):
+        await asyncio.sleep(3600)
+
+    async def __aexit__(self, *_exc):
+        return False
+
+
+async def test_a_hung_database_does_not_delay_the_message_it_retains():
+    """The boundary this service exists for: live availability does not depend
+    on retention. Chat used to wait for the transaction, so a lock or a slow
+    disk was chat latency for every room at once."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Still talking")
+    player = room_manager.add_player(room, "Talker", user_id=str(generate_uuid()))
+    player.sid = "sid-talker"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    context = register_handlers(sio, room_manager, session_factory=HangingFactory())
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": player.id}
+    )
+    sio.emit = AsyncMock()
+
+    answer = await asyncio.wait_for(
+        sio.handlers["/"]["send_chat"](player.sid, {"text": "anyone there?"}),
+        timeout=5,
+    )
+
+    assert answer == {"ok": True}
+    emitted = next(
+        call for call in sio.emit.await_args_list if call.args[0] == "chat_message"
+    )
+    assert emitted.args[1]["text"] == "anyone there?"
+    # Handed out before the write lands: it is what lets the line be selected
+    # as report evidence, and the moderation API already answers "unavailable"
+    # for a message it cannot find.
+    assert UUID(emitted.args[1]["retainedMessageId"]).version == 7
+    await context.timers.close()
+    await context.message_retention.aclose()
+
+
+async def test_a_message_is_not_promised_when_the_queue_is_already_full():
+    """A database that has stopped answering costs bounded memory and nothing
+    else. The line still goes out; what it does not get is an identifier
+    promising it can be reported."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Backed up")
+    player = room_manager.add_player(room, "Talker", user_id=str(generate_uuid()))
+    player.sid = "sid-talker"
+    service = MessageRetentionService(HangingFactory(), queue_depth=1)
+
+    first = await service.record(
+        room=room,
+        player=player,
+        text="one",
+        message_kind="chat",
+        audience="room",
+        recipient_sids=[player.sid],
+    )
+    await asyncio.sleep(0)  # let the worker take the first one off the queue
+    second = await service.record(
+        room=room,
+        player=player,
+        text="two",
+        message_kind="chat",
+        audience="room",
+        recipient_sids=[player.sid],
+    )
+    third = await service.record(
+        room=room,
+        player=player,
+        text="three",
+        message_kind="chat",
+        audience="room",
+        recipient_sids=[player.sid],
+    )
+
+    assert first is not None and second is not None
+    assert third is None
+    await service.aclose()
+
+
+async def test_what_is_still_queued_at_shutdown_is_written():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    room_manager = RoomManager()
+    try:
+        room = room_manager.create_room(name="Last words")
+        player = room_manager.add_player(room, "Talker", user_id=str(generate_uuid()))
+        player.sid = "sid-talker"
+        service = MessageRetentionService(factory)
+
+        retained_id = await service.record(
+            room=room,
+            player=player,
+            text="goodbye",
+            message_kind="chat",
+            audience="room",
+            recipient_sids=[player.sid],
+        )
+        await service.aclose()
+
+        async with factory() as session:
+            message = await session.scalar(select(RoomMessage))
+        assert message is not None
+        assert str(message.id) == retained_id
+        assert message.text == "goodbye"
     finally:
         await engine.dispose()

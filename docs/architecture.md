@@ -389,9 +389,16 @@ two different rooms is ordinary, and only the connection that is moving is moved
 The gate cuts the other way when an account loses access. Ending it closes every
 socket it holds, and closing one waits at that socket's gate — so an entry already
 holding the gate runs to completion first, and would complete by taking a seat the
-sweep has already walked past. `HandlerContext.ending` marks those sockets before the
-first is closed, and both entry paths read the mark at their last instant before
-seating and refuse. The retention write that used to follow seating now runs after the
+sweep has already walked past. `HandlerContext.ending` marks those sockets, and the
+mark is taken **before the sweep's first await** and held across all of it: reading the
+suspension, walking the rooms, emitting the notice and closing each socket all yield,
+and an entry that reads the mark in one of those gaps and finds nothing is an entry
+that seats an account mid-ban. Both entry paths read it twice — at the last instant
+before seating, where they refuse, and again after joining the socket to its seat,
+where they give the seat back. The second read is not redundant: joining awaits, so the
+mark can arrive when the seat already exists, and refusing without removing it would
+leave the account seated until the queued disconnect ran it down through the reconnect
+grace. The retention write that used to follow seating now runs after the
 gate is released: it is not part of making the seat, and holding the gate for it kept
 every disconnect — a dropped connection, or that sweep — waiting behind a write with
 nothing to do with the seat.
@@ -477,6 +484,66 @@ Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
 introduces, every socket presents the proxy's address, and the forwarded header is
 attacker-controlled — `auth/rate_limit.client_key` refuses to read it for exactly that
 reason. The key arrives when an address worth keying on does.
+
+### Mail delivery
+
+Mail is queued in the transaction that causes it and delivered by a loop
+([`backend/app/services/mail_delivery.py`](../backend/app/services/mail_delivery.py)),
+so an unreachable relay never undoes the suspension that wanted to announce itself.
+Delivery itself is three phases, and the network is in the one holding no transaction
+([`backend/app/auth/mail.py`](../backend/app/auth/mail.py)).
+
+**Claim.** One short transaction takes a batch of due rows by pushing `next_attempt_at`
+out by a five-minute lease and counting the attempt. The claim is a lease rather than a
+`sending` state, so a process that dies mid-send leaves a row that simply comes due
+again — there is no state for an operator to clear, and no crash that strands a message
+for ever. `SELECT … FOR UPDATE SKIP LOCKED` would say this more directly on PostgreSQL
+and be silently ignored by SQLite, so it is a conditional UPDATE that means the same
+thing on both. The attempt is counted before the send rather than after, which costs a
+crashed send one attempt — the safe direction, since the alternative is a message that
+can be retried for ever by crashing.
+
+**Send.** Outside every transaction, a handful at a time. Selection, SMTP, retry
+bookkeeping and commit all used to sit inside one transaction: fifty messages against a
+relay timing out at ten seconds held it open for minutes, which blocks every SQLite
+writer, holds a PostgreSQL connection and its locks, and makes one slow recipient into
+time every later message waits. Each message carries a `Message-ID` derived from its
+row, so the send that happened before a crash and the send that happens after the lease
+expires are one message with one identity rather than two.
+
+**Record.** Each outcome in its own short transaction: sent, deferred with backoff, or —
+past `MAX_ATTEMPTS` — kept as `failed` with its last error, so a silent mail
+misconfiguration is visible rather than merely quiet.
+
+### Chat delivery and the database
+
+**A message is delivered without waiting for the database.** Two things used to sit
+between a player pressing enter and the room seeing the line, and both were database
+reads or writes on the hot path — so a lock, a slow disk, or a stalled connection was
+felt as every room going quiet at once.
+
+Retention is now a hand-off. `MessageRetentionService.record` composes the row on the
+spot — every field on it is a snapshot of live state that a moment later is gone — and
+puts it on a bounded queue that a single worker drains in batches
+([`backend/app/services/message_retention.py`](../backend/app/services/message_retention.py)).
+The caller gets the message's UUIDv7 back immediately; what it does not get is a
+promise that the row landed. That identifier is what lets a player pin the line as
+report evidence, and a report naming a message the database does not have is refused
+with the same "unavailable" answer the moderation API already gives for one past its
+retention window. When the queue is full the identifier is withheld instead, exactly as
+it was when a failed write returned nothing — the line still goes out, it simply
+cannot be cited. The queue is drained on the way out of a planned shutdown, after the
+sockets, so the last thing anybody said is written rather than abandoned.
+
+The block filter is answered from memory. `BlockService` caches who has muted a sender
+and is invalidated on every change, and the entry path warms a player's entry when they
+take a seat — where waiting is what entering a room already does — so the chat path is
+left with a cache hit. A miss is a read bounded at two seconds, and a read that does not
+come back answers "nobody": the line goes out unfiltered rather than late. That is a
+deliberate ranking of one failure over another. Blocking is a presentation filter, not a
+security boundary — the sender is in the room either way, in the player list and on the
+scoreboard — while a message silently withheld is a failure the sender cannot see and
+the room cannot distinguish from being ignored.
 
 ### Authorization
 

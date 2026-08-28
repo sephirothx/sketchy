@@ -55,15 +55,25 @@ async def test_every_socket_of_the_account_is_told_and_then_closed(
     unseated = "mid-entry-sid"
     server = FakeServer({"user:doomed": ["seated-sid", unseated]})
     monkeypatch.setattr(main, "sio", server)
+    monkeypatch.setattr(main.block_service, "clear", lambda: None)
 
-    notice = (
-        ("account_suspended", {"reason": "suspended"})
-        if ending == "suspension"
-        else ("session_superseded", {"reason": "Your account was deleted."})
-    )
-    await main._close_every_socket_of("doomed", notice)
+    async def no_seats(user_id, *, reason, suspension=None):
+        return None
 
-    assert server.emitted == [(event, notice[1], "user:doomed")]
+    monkeypatch.setattr(main, "_remove_account_from_live_rooms", no_seats)
+    if ending == "suspension":
+        payload = {"reason": "suspended"}
+
+        async def suspension_payload(*_args, **_kwargs):
+            return payload
+
+        monkeypatch.setattr(main, "suspension_payload", suspension_payload)
+        await main.remove_banned_account_from_live_rooms("doomed")
+    else:
+        payload = {"reason": "Your account was deleted."}
+        await main.remove_deleted_account_from_live_rooms("doomed")
+
+    assert server.emitted == [(event, payload, "user:doomed")]
     assert server.disconnected == ["seated-sid", unseated]
 
 
@@ -88,33 +98,48 @@ async def test_deleting_an_account_closes_its_sockets_too(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_a_socket_is_marked_as_ending_while_it_is_being_closed():
-    """The mark is what a mid-entry socket sees. Closing one waits at its
-    seating gate, so an entry already holding that gate runs to completion
-    first - and without the mark it completes by seating an account this
-    sweep has already walked past."""
+async def test_the_mark_is_taken_before_the_sweep_awaits_anything(monkeypatch):
+    """The mark is what a mid-entry socket sees, and every step of a sweep
+    yields: reading the suspension, walking the rooms, emitting the notice,
+    closing each socket. An entry that reads the mark in one of those gaps and
+    finds nothing is an entry that seats an account mid-ban."""
     from app import main
 
-    seen: dict[str, bool] = {}
+    sids = ["first-sid", "second-sid"]
+    marked_at: dict[str, list[bool]] = {}
+
+    def record(step: str) -> None:
+        marked_at[step] = [main.handler_context.is_ending(sid) for sid in sids]
 
     class MarkWatchingServer(FakeServer):
+        async def emit(self, event, payload=None, to=None, room=None, **kwargs):
+            record("emit")
+            await super().emit(event, payload, to=to, room=room, **kwargs)
+
         async def disconnect(self, sid):
-            seen[sid] = main.handler_context.is_ending(sid)
+            record(f"disconnect {sid}")
             await super().disconnect(sid)
 
-    server = MarkWatchingServer({"user:doomed": ["first-sid", "second-sid"]})
-    original = main.sio
-    main.sio = server
-    try:
-        await main._close_every_socket_of(
-            "doomed", ("session_superseded", {"reason": "gone"})
-        )
-    finally:
-        main.sio = original
+    server = MarkWatchingServer({"user:doomed": list(sids)})
+    monkeypatch.setattr(main, "sio", server)
 
-    # Marked before the first disconnect rather than one at a time: the sweep
-    # blocks on each, and the socket it has not reached yet is exactly the one
-    # that could be seating itself meanwhile.
-    assert seen == {"first-sid": True, "second-sid": True}
-    assert not main.handler_context.is_ending("first-sid")
-    assert not main.handler_context.is_ending("second-sid")
+    async def suspension_payload(*_args, **_kwargs):
+        record("reading the suspension")
+        return {"reason": "suspended"}
+
+    async def walk_the_rooms(user_id, *, reason, suspension=None):
+        record("walking the rooms")
+
+    monkeypatch.setattr(main, "suspension_payload", suspension_payload)
+    monkeypatch.setattr(main, "_remove_account_from_live_rooms", walk_the_rooms)
+
+    await main.remove_banned_account_from_live_rooms("doomed")
+
+    assert marked_at == {
+        "reading the suspension": [True, True],
+        "walking the rooms": [True, True],
+        "emit": [True, True],
+        "disconnect first-sid": [True, True],
+        "disconnect second-sid": [True, True],
+    }
+    assert not any(main.handler_context.is_ending(sid) for sid in sids)

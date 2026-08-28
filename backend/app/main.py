@@ -167,8 +167,8 @@ async def _remove_account_from_live_rooms(
         await handler_context.evict_player(room, player.id, notice=notice)
 
 
-async def _close_every_socket_of(user_id: str, notice: tuple[str, dict]) -> None:
-    """Tell an account's sockets, then close them - seated or not.
+def _sockets_of(user_id: str) -> list[str]:
+    """Every socket the account holds, seated or not.
 
     Walking the rooms only reaches a socket that already holds a seat, and one
     can be in flight: `create_room` and `join_room` await the database before
@@ -177,43 +177,55 @@ async def _close_every_socket_of(user_id: str, notice: tuple[str, dict]) -> None
     Every socket joins its account's broadcast room at the handshake, so that
     is the list that has all of them.
     """
-    account_room = f"user:{user_id}"
+    return [sid for sid, _ in sio.manager.get_participants("/", f"user:{user_id}")]
+
+
+async def _close_every_socket_of(
+    user_id: str, notice: tuple[str, dict], sids: list[str]
+) -> None:
+    """Tell an account's sockets, then close them - seated or not."""
     event, payload = notice
-    await sio.emit(event, payload, to=account_room)
-    sids = [sid for sid, _ in sio.manager.get_participants("/", account_room)]
-    # Marked before the first disconnect, not one at a time. Closing a socket
-    # waits at its seating gate, so an entry already holding one finishes
-    # first - and would otherwise finish by seating an account this sweep has
-    # already walked past. Marked, that entry refuses instead.
-    with handler_context.ending(sids):
-        for sid in sids:
-            await sio.disconnect(sid)
+    await sio.emit(event, payload, to=f"user:{user_id}")
+    for sid in sids:
+        await sio.disconnect(sid)
 
 
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
     block_service.clear()
-    await _remove_account_from_live_rooms(
-        user_id, reason="Your account was deleted."
-    )
-    # Deletion ends the account as thoroughly as a suspension does, so it ends
-    # the sockets the same way. This half was only ever done for bans.
-    await _close_every_socket_of(
-        user_id, ("session_superseded", {"reason": "Your account was deleted."})
-    )
+    # Marked before the first await, not partway through. Every step below
+    # yields, closing a socket waits at that socket's seating gate, and an
+    # entry that reads the mark in one of those gaps is an entry that seats an
+    # account this sweep is in the middle of ending.
+    with handler_context.ending(_sockets_of(user_id)) as sids:
+        await _remove_account_from_live_rooms(
+            user_id, reason="Your account was deleted."
+        )
+        # Deletion ends the account as thoroughly as a suspension does, so it
+        # ends the sockets the same way. This half was only ever done for bans.
+        await _close_every_socket_of(
+            user_id,
+            ("session_superseded", {"reason": "Your account was deleted."}),
+            sids,
+        )
 
 
 async def remove_banned_account_from_live_rooms(user_id: str) -> None:
-    suspension = await suspension_payload(async_session_factory, user_id)
-    await _remove_account_from_live_rooms(
-        user_id,
-        reason="Your account was suspended.",
-        suspension=suspension,
-    )
-    # The eviction above only reaches a socket seated in a room. The account
-    # broadcast room covers the rest - a player idling in the lobby learns
-    # now, not on their next refused request, and so does one whose entry was
-    # still in flight when the sweep walked its room.
-    await _close_every_socket_of(user_id, ("account_suspended", suspension))
+    # Marked before even reading what to tell them: that read is an await like
+    # any other, and the account is banned already by the time this is called.
+    with handler_context.ending(_sockets_of(user_id)) as sids:
+        suspension = await suspension_payload(async_session_factory, user_id)
+        await _remove_account_from_live_rooms(
+            user_id,
+            reason="Your account was suspended.",
+            suspension=suspension,
+        )
+        # The eviction above only reaches a socket seated in a room. The
+        # account broadcast room covers the rest - a player idling in the
+        # lobby learns now, not on their next refused request, and so does one
+        # whose entry was still in flight when the sweep walked its room.
+        await _close_every_socket_of(
+            user_id, ("account_suspended", suspension), sids
+        )
 
 
 async def push_warning_to_account(user_id: str) -> None:
@@ -303,6 +315,10 @@ async def lifespan(_app: FastAPI):
         await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
+        # After the sockets are drained, so the last thing anybody said is
+        # written rather than left in the queue.
+        if handler_context.message_retention is not None:
+            await handler_context.message_retention.aclose()
         await handler_context.timers.close()
         await async_engine.dispose()
 
