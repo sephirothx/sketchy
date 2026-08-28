@@ -85,3 +85,36 @@ async def test_deleting_an_account_closes_its_sockets_too(monkeypatch):
 
     assert server.disconnected == ["idle-sid"]
     assert server.emitted[0][0] == "session_superseded"
+
+
+@pytest.mark.asyncio
+async def test_a_socket_is_marked_as_ending_while_it_is_being_closed():
+    """The mark is what a mid-entry socket sees. Closing one waits at its
+    seating gate, so an entry already holding that gate runs to completion
+    first - and without the mark it completes by seating an account this
+    sweep has already walked past."""
+    from app import main
+
+    seen: dict[str, bool] = {}
+
+    class MarkWatchingServer(FakeServer):
+        async def disconnect(self, sid):
+            seen[sid] = main.handler_context.is_ending(sid)
+            await super().disconnect(sid)
+
+    server = MarkWatchingServer({"user:doomed": ["first-sid", "second-sid"]})
+    original = main.sio
+    main.sio = server
+    try:
+        await main._close_every_socket_of(
+            "doomed", ("session_superseded", {"reason": "gone"})
+        )
+    finally:
+        main.sio = original
+
+    # Marked before the first disconnect rather than one at a time: the sweep
+    # blocks on each, and the socket it has not reached yet is exactly the one
+    # that could be seating itself meanwhile.
+    assert seen == {"first-sid": True, "second-sid": True}
+    assert not main.handler_context.is_ending("first-sid")
+    assert not main.handler_context.is_ending("second-sid")

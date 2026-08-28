@@ -102,6 +102,12 @@ async def _give_back_allowance(ctx: HandlerContext, user_id) -> None:
         logger.exception("Failed to refund a creation allowance for user %s", user_id)
 
 
+ENDED_ACCOUNT_ACKNOWLEDGEMENT = {
+    "ok": False,
+    "error": "This account is no longer active.",
+}
+
+
 BUSY_ACKNOWLEDGEMENT = {
     "ok": False,
     "error": "Sketchy is having trouble reaching its database. Please try again.",
@@ -117,9 +123,9 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     ):
         return
     try:
-        # Bounded like the rest of the entry path: this runs after the seat
-        # exists but still inside the socket's seating gate, so a hang here
-        # is a seat whose disconnect can never reconcile it.
+        # Bounded like the rest of the entry path. It runs outside the gate,
+        # so a hang here no longer strands a seat - but it still holds up the
+        # acknowledgement the player is waiting for.
         await _bounded(
             ctx.user_repo.touch_last_active(player.user_id), "recording activity"
         )
@@ -128,13 +134,29 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     except Exception:
         logger.exception("Failed to record activity for user %s", player.user_id)
 
+async def _record_activity_of(ctx: HandlerContext, seated: list) -> None:
+    """Write the retention signal for a seated player, outside the gate.
+
+    Deliberately after the gate is released rather than before: the seat
+    already exists by then, and this write is not part of making it. Held
+    inside, it would keep a disconnect - a dropped connection, or the sweep
+    closing this socket after a ban - waiting behind a write that has nothing
+    to do with the seat.
+    """
+    for player in seated:
+        await _record_player_activity(ctx, player)
+
+
 async def create_room(ctx: HandlerContext, sid, data):
     """Open a room and seat this socket in it, releasing any seat it held."""
+    seated: list = []
     async with ctx.seating(sid):
-        return await _create_room(ctx, sid, data)
+        answer = await _create_room(ctx, sid, data, seated)
+    await _record_activity_of(ctx, seated)
+    return answer
 
 
-async def _create_room(ctx: HandlerContext, sid, data):
+async def _create_room(ctx: HandlerContext, sid, data, seated: list):
     try:
         payload = parse_payload(CreateRoomPayload, data)
     except PayloadError as error:
@@ -238,6 +260,13 @@ async def _create_room(ctx: HandlerContext, sid, data):
         except RoomQuotaExceeded as error:
             await _give_back_code(ctx, code)
             return {"ok": False, "error": str(error)}
+        if ctx.is_ending(sid):
+            # A ban or a deletion landed while this entry held the gate. The
+            # sweep that closes this socket is waiting at that gate right now,
+            # so seating here would hand the account a seat the sweep has
+            # already walked past.
+            await _give_back_code(ctx, code)
+            return ENDED_ACCOUNT_ACKNOWLEDGEMENT
         try:
             room = ctx.room_manager.create_room(
                 **settings,
@@ -262,7 +291,7 @@ async def _create_room(ctx: HandlerContext, sid, data):
         colorblind_safe_colors=identity.colorblind_safe_colors,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
-    await _record_player_activity(ctx, player)
+    seated.append(player)
     return session_payload(room, player)
 
 
@@ -394,11 +423,14 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
 
 async def join_room(ctx: HandlerContext, sid, data):
     """Seat this socket in the named room, releasing any seat it held."""
+    seated: list = []
     async with ctx.seating(sid):
-        return await _join_room(ctx, sid, data)
+        answer = await _join_room(ctx, sid, data, seated)
+    await _record_activity_of(ctx, seated)
+    return answer
 
 
-async def _join_room(ctx: HandlerContext, sid, data):
+async def _join_room(ctx: HandlerContext, sid, data, seated: list):
     try:
         payload = parse_payload(JoinRoomPayload, data)
     except PayloadError as error:
@@ -467,7 +499,7 @@ async def _join_room(ctx: HandlerContext, sid, data):
             already_joined,
             sync_canvas=not payload.soft,
         )
-        await _record_player_activity(ctx, already_joined)
+        seated.append(already_joined)
         return session_payload(room, already_joined)
 
     session = await ctx.sio.get_session(sid) if sid else None
@@ -510,8 +542,10 @@ async def _join_room(ctx: HandlerContext, sid, data):
             room_id=room.id,
             user_id=metrics_user_id(player.user_id),
         )
+        if ctx.is_ending(sid):
+            return ENDED_ACCOUNT_ACKNOWLEDGEMENT
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
-        await _record_player_activity(ctx, player)
+        seated.append(player)
         return session_payload(room, player)
 
     if payload.reconnect_only:
@@ -546,6 +580,8 @@ async def _join_room(ctx: HandlerContext, sid, data):
             "error": "You are joining rooms too quickly. Try again in a minute.",
         }
 
+    if ctx.is_ending(sid):
+        return ENDED_ACCOUNT_ACKNOWLEDGEMENT
     try:
         player = ctx.room_manager.add_player(
             room,
@@ -574,7 +610,7 @@ async def _join_room(ctx: HandlerContext, sid, data):
         room.game.add_player_to_rotation(player.id)
 
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
-    await _record_player_activity(ctx, player)
+    seated.append(player)
     return session_payload(room, player)
 
 

@@ -5,7 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 import logging
-from typing import AsyncIterator, Iterator, TYPE_CHECKING
+from typing import AsyncIterator, Iterable, Iterator, TYPE_CHECKING
 
 import socketio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -90,6 +90,9 @@ class HandlerContext:
     _closing_sockets: dict[str, int] = field(
         default_factory=dict, init=False, repr=False
     )
+    _ending_sockets: dict[str, int] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def on(self, command: str, handler) -> None:
         """Register a client command, with the budget it answers to.
@@ -171,6 +174,34 @@ class HandlerContext:
         """Whether this server, rather than the client, is ending this socket."""
 
         return sid in self._closing_sockets
+
+    @contextmanager
+    def ending(self, sids: Iterable[str]) -> Iterator[None]:
+        """Mark an account's sockets while its access is being taken away.
+
+        The sweep that closes them has to wait at each socket's seating gate,
+        and an entry already holding one runs to completion first - so without
+        this the ban is applied to a seat created after the ban. The entry
+        checks this at its last instant before seating and refuses instead.
+        """
+
+        marked = list(sids)
+        for sid in marked:
+            self._ending_sockets[sid] = self._ending_sockets.get(sid, 0) + 1
+        try:
+            yield
+        finally:
+            for sid in marked:
+                remaining = self._ending_sockets.get(sid, 1) - 1
+                if remaining <= 0:
+                    self._ending_sockets.pop(sid, None)
+                else:
+                    self._ending_sockets[sid] = remaining
+
+    def is_ending(self, sid: str) -> bool:
+        """Whether this socket's account has just lost access."""
+
+        return sid in self._ending_sockets
 
     async def evict_player(
         self, room, player_id: str, *, notice: tuple[str, dict] | None = None

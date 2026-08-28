@@ -176,3 +176,64 @@ async def test_a_broken_cleanup_still_answers_the_refusal(broken):
 
     assert answer == {"ok": False, "error": "You already have too many rooms"}
     assert room_manager.rooms == {}
+
+
+def held_at_the_database(monkeypatch):
+    """Stop an entry mid-flight, at a call every entry path makes.
+
+    Deterministic on purpose: the window this is about is "the gate is held",
+    not "0.05 seconds have passed".
+    """
+    from app.handlers import rooms
+
+    real = rooms.resolve_identity
+    reached, release = asyncio.Event(), asyncio.Event()
+
+    async def gated(*args, **kwargs):
+        reached.set()
+        await release.wait()
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(rooms, "resolve_identity", gated)
+    return reached, release
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", ["create_room", "join_room"])
+async def test_an_account_ending_mid_entry_is_not_seated(monkeypatch, command):
+    """The sweep that closes an account's sockets waits at each seating gate,
+    so an entry already holding one finishes first. R-BAN-02 says the account
+    stops playing immediately; an entry that seats itself after the sweep has
+    walked past would be a seat created after the ban."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_codes = SimpleNamespace(
+        allocate=AsyncMock(return_value="CODE01"),
+        release_unpublished=AsyncMock(),
+        retire_ephemeral=AsyncMock(),
+        is_retired=AsyncMock(return_value=False),
+    )
+    await sessions.save("host-sid", {"user_id": "user-1"})
+    if command == "join_room":
+        room_manager.create_room("Somewhere", code="CODE01")
+        payload = {"code": "CODE01", "nickname": "Latecomer"}
+    else:
+        payload = {"nickname": "Host"}
+    reached, release = held_at_the_database(monkeypatch)
+
+    entry = asyncio.create_task(sio.handlers["/"][command]("host-sid", payload))
+    await asyncio.wait_for(reached.wait(), timeout=5)
+
+    # What the sweep does: mark, then close - and the close waits behind the
+    # entry, which is why the mark has to be what the entry sees.
+    with ctx.ending(["host-sid"]):
+        closing = asyncio.create_task(sio.handlers["/"]["disconnect"]("host-sid"))
+        await asyncio.sleep(0)
+        release.set()
+        answer = await asyncio.wait_for(entry, timeout=5)
+        await asyncio.wait_for(closing, timeout=5)
+
+    assert answer["ok"] is False
+    assert answer["error"] == "This account is no longer active."
+    seats = [p for r in room_manager.rooms.values() for p in r.players.values()]
+    assert seats == []

@@ -180,8 +180,14 @@ async def _close_every_socket_of(user_id: str, notice: tuple[str, dict]) -> None
     account_room = f"user:{user_id}"
     event, payload = notice
     await sio.emit(event, payload, to=account_room)
-    for sid, _ in list(sio.manager.get_participants("/", account_room)):
-        await sio.disconnect(sid)
+    sids = [sid for sid, _ in sio.manager.get_participants("/", account_room)]
+    # Marked before the first disconnect, not one at a time. Closing a socket
+    # waits at its seating gate, so an entry already holding one finishes
+    # first - and would otherwise finish by seating an account this sweep has
+    # already walked past. Marked, that entry refuses instead.
+    with handler_context.ending(sids):
+        for sid in sids:
+            await sio.disconnect(sid)
 
 
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
