@@ -7,6 +7,7 @@ import {
   endTurn,
   initiateShutdown,
   kickPlayer,
+  shutdownBlocked,
   readLiveRooms,
   readMaintenance,
   setMaintenance,
@@ -70,6 +71,12 @@ export function ControlsPanel() {
   }
 
   const paused = maintenance?.paused ?? false;
+  // Both steps of the confirm ask this, not just the first.
+  const blocked = shutdownBlocked({
+    busy,
+    maintenance,
+    reason: shutdownReason,
+  });
 
   return (
     <div className="ops-controls">
@@ -330,7 +337,7 @@ export function ControlsPanel() {
               <button
                 type="button"
                 className="btn btn-danger-ghost btn-compact"
-                disabled={busy}
+                disabled={blocked}
                 onClick={() =>
                   run(
                     initiateShutdown(
@@ -357,11 +364,7 @@ export function ControlsPanel() {
             <button
               type="button"
               className="btn btn-secondary btn-compact"
-              disabled={
-                busy
-                || maintenance?.draining
-                || shutdownReason.trim().length < 3
-              }
+              disabled={blocked}
               onClick={() => setConfirmingShutdown(true)}
             >
               Initiate shutdown

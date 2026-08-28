@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { admissionLabel, isAdmitting } from "../src/lib/adminControls.ts";
+import {
+  admissionLabel,
+  isAdmitting,
+  shutdownBlocked,
+} from "../src/lib/adminControls.ts";
 
 test("an ordinary server says it is taking rooms", () => {
   assert.equal(
@@ -32,4 +36,20 @@ test("an unknown state does not assert that rooms are being taken", () => {
   // Before the first load. "accepting rooms" is the honest default only
   // because it is what an unpaused server does; the tone must not shout.
   assert.equal(admissionLabel(null), "accepting rooms");
+});
+
+test("the shutdown control refuses a click it knows will be refused", () => {
+  const ok = { busy: false, maintenance: { draining: false }, reason: "deploying" };
+  assert.equal(shutdownBlocked(ok), false);
+
+  // A reason is required by the API, so an empty or token one is a 422.
+  assert.equal(shutdownBlocked({ ...ok, reason: "" }), true);
+  assert.equal(shutdownBlocked({ ...ok, reason: "  no  " }), true);
+  // A drain already running is a 409. This is the case the confirm step used
+  // to miss: it can begin after the first click, from another operator or a
+  // stop sent to the host.
+  assert.equal(shutdownBlocked({ ...ok, maintenance: { draining: true } }), true);
+  assert.equal(shutdownBlocked({ ...ok, busy: true }), true);
+  // Before the first load nothing is known; the reason still governs.
+  assert.equal(shutdownBlocked({ ...ok, maintenance: null }), false);
 });

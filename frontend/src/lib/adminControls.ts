@@ -160,6 +160,24 @@ export function isAdmitting(
   return admissionLabel(maintenance) === "accepting rooms";
 }
 
+/** Whether the shutdown control should refuse the click it is about to get.
+
+Both steps of the confirm ask this, not just the first: the fields stay
+editable while the confirm is showing, and a drain can begin in between —
+another operator, or a stop from the host — so a second step guarded only by
+"a request is in flight" is a button whose one job is to be refused. */
+export function shutdownBlocked({
+  busy,
+  maintenance,
+  reason,
+}: {
+  busy: boolean;
+  maintenance: Pick<MaintenanceState, "draining"> | null;
+  reason: string;
+}): boolean {
+  return busy || Boolean(maintenance?.draining) || reason.trim().length < 3;
+}
+
 /** The subsystem a setting belongs to, taken from its name.
 
 The server namespaces every tunable (`budget.drawing`, `rooms.socket_limit`),
