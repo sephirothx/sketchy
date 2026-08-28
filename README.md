@@ -412,6 +412,19 @@ The UUID change rewrites the pre-v1 initial migration rather than converting
 old text keys. Databases created before this baseline must be rebuilt; preserve
 no production data on a preproduction schema.
 
+Set `SKETCHY_ENV` to say which kind of deployment this is: `development` (the
+default), `test`, or `production`. Anything else fails startup rather than
+falling back — `SKETCHY_ENV=prod` silently read as development would disarm
+every production guard at once.
+
+With `SKETCHY_ENV=production`, startup refuses a missing, blank, or SQLite
+`DATABASE_URL`, before it touches the database. The zero-configuration default
+is a *relative* SQLite file, so a production deploy that forgot the variable
+would otherwise look entirely healthy while writing accounts, moderation
+evidence, and history to storage the next container replacement throws away —
+and SQLite serializes every writer, which caps such a server at one write at a
+time.
+
 PostgreSQL migrations are an explicit deployment step protected by a database
 advisory lock, so concurrent deploy jobs cannot race. Run the migration command
 before starting or replacing any application replicas; application startup
@@ -420,6 +433,7 @@ missed:
 
 ```bash
 cd backend
+export SKETCHY_ENV=production
 export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
 .venv/bin/python -m app.db.migrate
 HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
@@ -444,7 +458,21 @@ require shared room/session/timer state plus cross-worker Socket.IO delivery.
 Planned deploys use a bounded drain; they do not snapshot or restore live
 rooms. `GET /api/ready` returns 200 only after startup is complete and switches
 to 503 before shutdown work begins, while `/api/health` remains a liveness check
-and reports the current readiness state. At drain start the server sends every
+and reports the current readiness state.
+
+Readiness also tests what this process needs in order to serve, so an
+orchestrator's 503 means something an orchestrator can act on. After the
+shutdown state — checked first, so a drain always answers from the drain — it
+tests the supervised background loops and then round-trips the database with
+`SELECT 1` under a one-second timeout, caching the result about five seconds so
+a load balancer polling every second does not become the load. A background
+loop whose task has *stopped* fails readiness, because those loops never return
+on their own and cannot come back without a restart. A loop that is merely
+erroring does **not**: taking a playable game server out of rotation because the
+email sweep is failing trades a working service for a broken one. Its failure
+streak and time since last success are reported in `/api/health` instead — which
+stays process-only and never fails on a dependency, since a restart cannot fix
+an outage the replacement comes back into. At drain start the server sends every
 connected client the versioned `server_shutdown` notice, rejects new room
 creation, new game starts, and restart votes,
 but leaves existing rooms connected so active games can finish. Set
@@ -472,6 +500,7 @@ process. These deployment settings can be tuned without code changes:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
+| `SKETCHY_ENV` | `development` | `development`, `test`, or `production`. Production refuses a missing, blank, or SQLite `DATABASE_URL` |
 | `DB_POOL_SIZE` | `5` | Persistent connections per process |
 | `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
@@ -1052,8 +1081,9 @@ python3 -m venv .venv
 ```
 
 Runs on http://localhost:8000. `GET /api/health` should report
-`{"status":"ok","readiness":"ready"}` and `GET /api/ready` should return
-`{"status":"ready"}` after startup.
+`{"status":"ok","readiness":"ready"}` — plus a `loops` object with one entry
+per background loop — and `GET /api/ready` should return `{"status":"ready"}`
+after startup.
 Install `requirements-dev.txt` instead when you plan to run unit, integration, or E2E tests.
 
 ### Frontend
@@ -1182,8 +1212,17 @@ sampled, so neither of their numbers is a projection.
 
 ```bash
 cd frontend && npm run build   # outputs frontend/dist
-cd ../backend && HOST=0.0.0.0 .venv/bin/python -m app.server
+cd ../backend
+export SKETCHY_ENV=production
+export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
+HOST=0.0.0.0 .venv/bin/python -m app.server
 ```
+
+Both variables are required together: `SKETCHY_ENV=production` refuses a missing
+or SQLite `DATABASE_URL` (see [Database & Configuration](#database--configuration) for the full
+sequence, including the migration step that must run first). To check the built bundle
+locally without a PostgreSQL server, omit them both — the same `frontend/dist`
+is served either way, just in development mode.
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
 so the whole game (UI + API + WebSocket) is served from a single port. The built-in server

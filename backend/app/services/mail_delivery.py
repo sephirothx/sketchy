@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.logging_config import configure_logging
 from app.auth.mail import DeliveryResult, deliver_pending
+from app.services.readiness import LoopHealth
 
 
 logger = logging.getLogger(__name__)
@@ -43,12 +44,15 @@ async def run_delivery_loop(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     interval_seconds: float | None = None,
+    health: LoopHealth | None = None,
 ) -> None:
     """Deliver due messages for ever, surviving every failure but cancellation."""
     interval = interval_seconds or sweep_interval_seconds()
     while True:
         try:
             result = await deliver_pending(session_factory)
+            if health is not None:
+                health.record_success()
             if result.attempted:
                 logger.info(
                     "email sweep: %d sent, %d deferred, %d given up on",
@@ -60,15 +64,20 @@ async def run_delivery_loop(
             raise
         except Exception:
             # A sweep that raises must not take the loop down with it, or one
-            # bad row stops every later message.
+            # bad row stops every later message. Counted rather than only
+            # logged, so a sweep failing every time is visible from outside.
+            if health is not None:
+                health.record_failure()
             logger.exception("email sweep failed")
         await asyncio.sleep(interval)
 
 
 def start_delivery_loop(
     session_factory: async_sessionmaker[AsyncSession],
+    *,
+    health: LoopHealth | None = None,
 ) -> asyncio.Task[None]:
-    return asyncio.create_task(run_delivery_loop(session_factory))
+    return asyncio.create_task(run_delivery_loop(session_factory, health=health))
 
 
 async def stop_delivery_loop(task: asyncio.Task[None] | None) -> None:

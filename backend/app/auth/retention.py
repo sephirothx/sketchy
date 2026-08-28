@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.db import async_engine, async_session_factory, init_db
 from app.db.models import AuditEvent, GameParticipant, User, generate_uuid
 from app.domain_values import AccountState
+from app.services.readiness import LoopHealth
 
 
 logger = logging.getLogger(__name__)
@@ -151,6 +152,7 @@ async def run_retention_loop(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     interval_seconds: float | None = None,
+    health: LoopHealth | None = None,
 ) -> None:
     """Purge stale guest rows for ever, surviving every failure but cancellation.
 
@@ -162,6 +164,8 @@ async def run_retention_loop(
     while True:
         try:
             result = await purge_stale_anonymous_accounts(session_factory, apply=True)
+            if health is not None:
+                health.record_success()
             if result.total:
                 logger.info(
                     "retention sweep: removed %d anonymous accounts "
@@ -174,15 +178,21 @@ async def run_retention_loop(
             raise
         except Exception:
             # A sweep that raises must not take the loop down with it: the
-            # next one is an hour away and the rows are still there.
+            # next one is an hour away and the rows are still there. Counted
+            # rather than only logged, so a sweep that has failed every time
+            # since startup is visible without reading the log.
+            if health is not None:
+                health.record_failure()
             logger.exception("retention sweep failed")
         await asyncio.sleep(interval)
 
 
 def start_retention_loop(
     session_factory: async_sessionmaker[AsyncSession],
+    *,
+    health: LoopHealth | None = None,
 ) -> asyncio.Task[None]:
-    return asyncio.create_task(run_retention_loop(session_factory))
+    return asyncio.create_task(run_retention_loop(session_factory, health=health))
 
 
 async def stop_retention_loop(task: asyncio.Task[None] | None) -> None:

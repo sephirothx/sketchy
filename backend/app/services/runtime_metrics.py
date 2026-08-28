@@ -39,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.logging_config import configure_logging
 from app.db.models import RuntimeEvent, RuntimeStatsDaily, generate_uuid
 from app.domain_values import RuntimeEventType
+from app.services.readiness import LoopHealth
 
 
 logger = logging.getLogger(__name__)
@@ -264,6 +265,7 @@ async def run_metrics_loop(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     interval_seconds: float | None = None,
+    health: LoopHealth | None = None,
 ) -> None:
     """Flush for ever, purging once a day's worth of flushes have gone by."""
     interval = interval_seconds or flush_seconds()
@@ -277,18 +279,30 @@ async def run_metrics_loop(
                 removed = await purge_expired_events(session_factory)
                 if removed:
                     logger.info("runtime metrics: purged %d expired events", removed)
+            # Last, so an iteration whose purge failed does not also report a
+            # success. On a purge cycle the earlier placement recorded both,
+            # and `last_success` advancing past a failed iteration is worse
+            # than useless - it is the number an alert would trust.
+            if health is not None:
+                health.record_success()
         except asyncio.CancelledError:
             raise
         except Exception:
-            # One bad batch must not stop every later observation.
+            # One bad batch must not stop every later observation. Counted
+            # rather than only logged, so a flush failing every time is
+            # visible from outside - these are the observations #472 needs.
+            if health is not None:
+                health.record_failure()
             logger.exception("runtime metrics flush failed")
         await asyncio.sleep(interval)
 
 
 def start_metrics_loop(
     session_factory: async_sessionmaker[AsyncSession],
+    *,
+    health: LoopHealth | None = None,
 ) -> asyncio.Task[None]:
-    return asyncio.create_task(run_metrics_loop(session_factory))
+    return asyncio.create_task(run_metrics_loop(session_factory, health=health))
 
 
 async def stop_metrics_loop(

@@ -44,9 +44,16 @@ def _configure_sqlite_connection(dbapi_connection: Any, _: Any) -> None:
         cursor.close()
 
 
-def get_database_url() -> str:
-    """Read and normalize the database connection URL from environment."""
-    url = os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL).strip()
+def get_database_url(raw_url: str | None = None) -> str:
+    """Read and normalize the database connection URL from environment.
+
+    An explicit value lets a caller classify a URL it already holds - the
+    production guard in `app.deployment` reads an injected environment rather
+    than the process one - without normalizing the scheme a second way.
+    """
+    if raw_url is None:
+        raw_url = os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+    url = raw_url.strip()
     if not url:
         return DEFAULT_DATABASE_URL
 

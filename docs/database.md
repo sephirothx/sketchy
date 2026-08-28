@@ -22,8 +22,9 @@ cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for
 
 | Concern | Rule | Source |
 | --- | --- | --- |
-| Default engine | Embedded SQLite at `./sketchy.db`, zero configuration | [`db/__init__.py:23`](../backend/app/db/__init__.py) |
+| Default engine | Embedded SQLite at `./sketchy.db`, zero configuration — **development and test only** | [`db/__init__.py:23`](../backend/app/db/__init__.py) |
 | Alternative | PostgreSQL via `DATABASE_URL` (`postgresql+asyncpg://…`) | [`db/__init__.py:47`](../backend/app/db/__init__.py) |
+| Production | With `SKETCHY_ENV=production`, startup **refuses** a missing, blank, or SQLite `DATABASE_URL`. The zero-config default is a *relative* file, so a production deploy that forgot the variable would look healthy while writing accounts, moderation evidence, and history to storage the next container replacement discards. SQLite also serializes every writer, which caps such a server at one write at a time | [`deployment.py`](../backend/app/deployment.py) |
 | SQLite pragmas | `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000` on **every** connection | [`db/__init__.py:36`](../backend/app/db/__init__.py) |
 | SQLite migrations | Run automatically on startup | [`db/__init__.py`](../backend/app/db/__init__.py) |
 | PostgreSQL migrations | An **explicit deploy step**, protected by an advisory lock (`POSTGRES_MIGRATION_LOCK_ID`). Startup only *verifies* the revision and fails with a direct instruction if the step was missed | [`db/migrate.py`](../backend/app/db/migrate.py) |
@@ -1068,6 +1069,7 @@ hand-written username index, then runs the repository suite against the migrated
 
 ```bash
 cd backend
+export SKETCHY_ENV=production                # without it every production guard is off
 export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
 .venv/bin/python -m app.db.migrate          # BEFORE starting or replacing any replica
 HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
