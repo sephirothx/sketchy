@@ -6,7 +6,9 @@ dependency tree a second way: the SBOM is the artifact that answers "what is in
 this build", so making it the input to the policy keeps one description of what
 ships instead of two that can disagree.
 
-**The policy is an allowlist, and it fails closed.** A denylist only refuses
+**The policy is an allowlist, and it fails closed** - on an unfamiliar
+identifier, on an expression it cannot parse, and on an SBOM that lists nothing
+at all. A denylist only refuses
 the terms somebody thought to name, so `Elastic-2.0` - source-available, and
 exactly what this gate exists to catch - would sail through one. An unfamiliar
 identifier here means nobody has looked at it yet, which is a reason to stop,
@@ -110,62 +112,92 @@ def _tokenise(expression: str) -> list[str]:
     return tokens
 
 
-def _evaluate(tokens: list[str], position: int = 0) -> tuple[bool, int]:
-    """Evaluate an SPDX expression to "this project may ship it".
+class _Parser:
+    """A recursive-descent parser for the SPDX expression grammar.
 
-    OR is satisfied by either side, because the licensor is offering a choice.
-    AND must hold on both, because every named term applies at once. AND binds
-    tighter than OR, per the SPDX grammar.
+        expression     := and-expression (OR and-expression)*
+        and-expression := atom (AND atom)*
+        atom           := IDENTIFIER [WITH IDENTIFIER] | "(" expression ")"
+
+    It validates the grammar rather than scanning for operators, because an
+    evaluator that never tracks whether it wants an operand next will happily
+    read `MIT OR`, `MIT OR OR GPL-3.0-only`, and `()` as true. Malformed means
+    unreviewed, and unreviewed has to fail.
     """
-    or_result = False
-    and_result = True
-    operator = "AND"
 
-    while position < len(tokens):
-        token = tokens[position]
+    def __init__(self, tokens: list[str]) -> None:
+        self.tokens = tokens
+        self.position = 0
+
+    def peek(self) -> str | None:
+        return self.tokens[self.position] if self.position < len(self.tokens) else None
+
+    def take(self, expecting: str = "a licence") -> str:
+        token = self.peek()
+        if token is None:
+            raise SpdxError(f"expression ends where {expecting} was expected")
+        self.position += 1
+        return token
+
+    def parse(self) -> bool:
+        value = self.parse_or()
+        if self.position != len(self.tokens):
+            raise SpdxError(f"unexpected {self.tokens[self.position]!r}")
+        return value
+
+    def parse_or(self) -> bool:
+        # An offered choice: acceptable if either side is.
+        value = self.parse_and()
+        while (token := self.peek()) is not None and token.upper() == "OR":
+            self.take()
+            # Parsed first, then combined, so validation cannot be
+            # short-circuited away by an operand that already decided it.
+            value = self.parse_and() or value
+        return value
+
+    def parse_and(self) -> bool:
+        # Every named term applies at once: acceptable only if all sides are.
+        value = self.parse_atom()
+        while (token := self.peek()) is not None and token.upper() == "AND":
+            self.take()
+            value = self.parse_atom() and value
+        return value
+
+    def parse_atom(self) -> bool:
+        token = self.take()
         upper = token.upper()
 
-        if upper == ")":
-            break
-
-        if upper in ("AND", "OR"):
-            if upper == "OR":
-                or_result = or_result or and_result
-                and_result = True
-            operator = upper
-            position += 1
-            continue
-
         if upper == "(":
-            value, position = _evaluate(tokens, position + 1)
-            if position >= len(tokens) or tokens[position] != ")":
-                raise SpdxError("unbalanced parenthesis")
-            position += 1
-        else:
-            # "Apache-2.0 WITH LLVM-exception": an exception only ever grants
-            # extra permission, so the base licence decides.
-            value = normalise(token) in ALLOWED
-            position += 1
-            if position + 1 < len(tokens) and tokens[position].upper() == "WITH":
-                position += 2
+            value = self.parse_or()
+            closing = self.take("a closing parenthesis")
+            if closing != ")":
+                raise SpdxError(f"expected ')', found {closing!r}")
+            return value
 
-        and_result = and_result and value if operator == "AND" else value
-        operator = "AND"
+        if upper in ("AND", "OR", "WITH", ")"):
+            raise SpdxError(f"expected a licence, found {token!r}")
 
-    return (or_result or and_result), position
+        value = normalise(token) in ALLOWED
+
+        # "Apache-2.0 WITH LLVM-exception": an exception only ever grants extra
+        # permission, so the base licence decides - but the name must be there.
+        if (following := self.peek()) is not None and following.upper() == "WITH":
+            self.take()
+            self.take("an exception name")
+
+        return value
 
 
 def is_allowed(text: str) -> bool:
     """Whether one licence string - id, name, or SPDX expression - is shippable."""
     tokens = _tokenise(text)
-    # A bare identifier can contain spaces ("BSD License"); only treat the
-    # string as an expression when it actually uses the grammar.
+    # A bare identifier can contain spaces - "BSD License", and every Trove
+    # classifier - so only parse as an expression when the grammar is actually
+    # in use. Otherwise "GNU Lesser General Public License v2 or later" would
+    # be read as an expression with an OR in the middle of it.
     if not any(t.upper() in ("AND", "OR", "WITH", "(", ")") for t in tokens):
         return normalise(text) in ALLOWED
-    allowed, position = _evaluate(tokens)
-    if position != len(tokens):
-        raise SpdxError(f"trailing tokens in {text!r}")
-    return allowed
+    return _Parser(tokens).parse()
 
 
 def _licence_strings(component: dict) -> list[str]:
@@ -195,7 +227,18 @@ def main() -> int:
             print(f"No SBOM at {path}.", file=sys.stderr)
             return 1
         document = json.loads(path.read_text())
-        for component in document.get("components", []):
+        components = document.get("components")
+        # A generator that produced nothing, or produced a shape this does not
+        # understand, must not read as "no problems found". That is the same
+        # silent pass as a missing file, arriving by a different route.
+        if not isinstance(components, list) or not components:
+            print(
+                f"{path} lists no components. An SBOM with nothing in it cannot "
+                "clear a licence policy - check that the generator actually ran.",
+                file=sys.stderr,
+            )
+            return 1
+        for component in components:
             counted += 1
             name = component.get("purl") or component.get("name", "(unnamed)")
             strings = _licence_strings(component)

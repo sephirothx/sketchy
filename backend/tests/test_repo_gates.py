@@ -203,10 +203,48 @@ def test_an_undeclared_licence_fails(tmp_path):
     assert "no declared licence" in result.stderr
 
 
-def test_an_unparseable_expression_fails_closed(tmp_path):
-    sbom = _sbom(tmp_path, [_with_licence(expression="MIT AND (Apache-2.0")])
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "MIT AND (Apache-2.0",   # unbalanced
+        "MIT)",                  # trailing bracket
+        "MIT OR",                # dangling operator
+        "MIT AND",
+        "OR MIT",                # leading operator
+        "MIT OR OR GPL-3.0-only",  # doubled operator
+        "()",                    # empty group
+        "(MIT OR )",
+        "WITH",
+        "Apache-2.0 WITH",       # exception named by nothing
+    ],
+)
+def test_a_malformed_expression_fails_closed(expression, tmp_path):
+    """A parser that never asks "do I want an operand here?" reads `MIT OR` as
+    true. Malformed means nobody has reviewed it, and unreviewed has to fail.
+    """
+    sbom = _sbom(tmp_path, [_with_licence(expression=expression)])
     result = run_gate(LICENCE_GATE, str(sbom))
+    assert result.returncode == 1, f"{expression!r} was accepted"
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {},
+        {"components": []},
+        {"components": "not a list"},
+        {"bomFormat": "CycloneDX", "specVersion": "1.6"},
+    ],
+)
+def test_an_sbom_listing_nothing_fails_rather_than_passing_vacuously(
+    document, tmp_path
+):
+    """A generator that silently produced nothing must not read as "all clear"."""
+    path = tmp_path / "sbom.json"
+    path.write_text(json.dumps(document))
+    result = run_gate(LICENCE_GATE, str(path))
     assert result.returncode == 1
+    assert "lists no components" in result.stderr
 
 
 def test_a_classifier_spelling_is_understood(tmp_path):
