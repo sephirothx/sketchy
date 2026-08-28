@@ -78,23 +78,43 @@ jobs:
           tar -xzf "$archive" gitleaks
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
 
+      # --baseline-path carries the one historical finding this repository
+      # already has: an earlier revision of the artifact scanner named PEM
+      # armour in a comment, because naming it is how it detects it. The entry
+      # is pinned to that commit, file, rule, and line, and holds no secret -
+      # it cannot excuse anything else, and history cannot be edited to remove
+      # the finding itself.
       - name: Scan the tree for credentials
-        run: gitleaks dir . --no-banner --redact --exit-code 1
+        run: |
+          gitleaks dir . --no-banner --redact --exit-code 1 \
+            --baseline-path .gitleaks-known.json
 
       # The tree scan cannot see a credential that was committed and then
       # removed a commit later, which is the case that matters most: the value
       # is burned either way, and the tree looks clean.
+      #
+      # The range is resolved exactly as the artifact scan above resolves it,
+      # including the baseline fallback. Falling back to "the tree scan stands
+      # alone" would wave through the one case this step exists for, on a
+      # first push or a force-push where `before` no longer resolves - which
+      # is a hole an actor can simply choose to push into.
       - name: Scan every commit the change adds for credentials
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
+          BASELINE="$(bash scripts/check-tracked-artifacts.sh --baseline)"
           if git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-            from="$(git merge-base "$BASE" HEAD)"
-            gitleaks git . --no-banner --redact --exit-code 1 \
-              --log-opts="${from}..HEAD"
+            from="$(bash scripts/check-tracked-artifacts.sh --floor "$(git merge-base "$BASE" HEAD)")"
+          elif git cat-file -e "${BASELINE}^{commit}" 2>/dev/null; then
+            echo "No reachable base commit; scanning everything since the baseline."
+            from="$BASELINE"
           else
-            echo "No reachable base commit; the tree scan above stands alone."
+            echo "Baseline ${BASELINE} does not resolve in a full clone." >&2
+            echo "Update HISTORY_BASELINE in scripts/check-tracked-artifacts.sh." >&2
+            exit 1
           fi
+          gitleaks git . --no-banner --redact --exit-code 1 \
+            --baseline-path .gitleaks-known.json --log-opts="${from}..HEAD"
 
   backend:
     name: Backend lint & tests
@@ -117,7 +137,10 @@ jobs:
 
       - run: ruff check app tests
 
-      - run: pytest -q --cov=app --cov-report=term:skip-covered --cov-report=json:coverage.json
+      # --cov-branch, because "unexecuted branches" is the finding: a statement
+      # measure marks an `if` covered the moment it is reached, whatever the
+      # condition did.
+      - run: pytest -q --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
 
       # A whole-suite percentage moves too little to catch one module losing
       # its tests, which is the shape the audit called out. The floors are per
@@ -220,25 +243,16 @@ jobs:
       - run: pip install -r requirements-dev.txt
         working-directory: backend
 
-      # Both manifests, not only the shipped one: a compromised test or build
-      # dependency runs here, with a checkout and a token, before anything it
-      # touched reaches a user.
-      - name: Audit Python dependencies
-        working-directory: backend
-        run: |
-          pip-audit -r requirements.txt --progress-spinner off
-          pip-audit -r requirements-dev.txt --progress-spinner off
-
       - run: npm ci
         working-directory: frontend
 
-      - name: Audit frontend dependencies
-        working-directory: frontend
-        run: npm audit --audit-level=high
-
-      # The SBOM is generated from what actually resolves, not from the
-      # manifest text: the manifest says what was asked for, and an SBOM that
-      # answers "what is in this build" has to say what arrived.
+      # Generated and published *before* the gates below, because every run
+      # publishing an SBOM is the point of having one: the run you most want
+      # the inventory from is the run that just failed a policy on it.
+      #
+      # Generated from what actually resolves rather than from the manifest
+      # text: the manifest says what was asked for, and an SBOM answering
+      # "what is in this build" has to say what arrived.
       - name: Generate SBOMs
         run: |
           pip install cyclonedx-bom==7.3.1
@@ -248,16 +262,32 @@ jobs:
           (cd frontend && npx --yes @cyclonedx/cyclonedx-npm@4.0.2 \
             --omit dev --output-format json --output-file ../sbom-frontend.json)
 
-      - name: Check licences
-        run: python3 scripts/check-licenses.py sbom-backend.json sbom-frontend.json
-
-      - uses: actions/upload-artifact@v5
+      - name: Publish the SBOMs
+        uses: actions/upload-artifact@v5
         with:
           name: sbom
           path: |
             sbom-backend.json
             sbom-frontend.json
           if-no-files-found: error
+
+      # Both manifests, not only the shipped one: a compromised test or build
+      # dependency runs here, with a checkout and a token, before anything it
+      # touched reaches a user.
+      - name: Audit Python dependencies
+        working-directory: backend
+        run: |
+          pip-audit -r requirements.txt --progress-spinner off
+          pip-audit -r requirements-dev.txt --progress-spinner off
+
+      # No --audit-level: R-ENG-14 says any known advisory fails, and a
+      # threshold here would have quietly meant something else.
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit
+
+      - name: Check licences
+        run: python3 scripts/check-licenses.py sbom-backend.json sbom-frontend.json
 
   e2e:
     name: E2E multi-browser tests

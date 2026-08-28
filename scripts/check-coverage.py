@@ -8,6 +8,13 @@ branches" - so the floors here are per module, and they are set on the modules
 where an unexecuted branch is a security or durability problem rather than a
 cosmetic one.
 
+The numbers are **branch** coverage, which is the half of that finding a
+statement count cannot see: a statement measure marks an `if` executed as soon
+as it is reached, whatever the condition did. Every module here reads lower
+under branch coverage than under statements, and `auth/recovery.py` reads six
+points lower - six points of conditions nothing exercises, which a statement
+floor would have called covered.
+
 Each floor sits a point or two under what the module measures today. That is
 deliberate: the gate is a ratchet against regression, not a target to chase, and
 a floor pinned to the exact current number turns every harmless refactor into a
@@ -15,7 +22,8 @@ failed build.
 
 Run it after a coverage run:
 
-    cd backend && .venv/bin/pytest -q --cov=app --cov-report=json:coverage.json
+    cd backend && .venv/bin/pytest -q --cov=app --cov-branch \
+        --cov-report=json:coverage.json
     python3 ../scripts/check-coverage.py backend/coverage.json
 """
 from __future__ import annotations
@@ -27,37 +35,37 @@ import sys
 
 # The whole-suite floor. Broad, and deliberately not the headline number: it
 # catches a change that deletes a lot of tests at once, and nothing subtler.
-TOTAL_FLOOR = 89.0
+TOTAL_FLOOR = 86.0
 
 # module -> floor. On this list because an unexercised branch here is a way in,
 # a way to lose data, or a way to serve traffic that cannot be served.
 MODULE_FLOORS: dict[str, float] = {
     # Authentication and session handling: the front door.
-    "app/auth/rate_limit.py": 90.0,
-    "app/auth/sessions.py": 90.0,
-    "app/auth/tokens.py": 88.0,
-    "app/auth/password.py": 92.0,
-    "app/auth/middleware.py": 95.0,
-    "app/auth/recovery.py": 88.0,
-    "app/auth/bans.py": 85.0,
-    "app/auth/blocks.py": 80.0,
+    "app/auth/rate_limit.py": 86.0,
+    "app/auth/sessions.py": 88.0,
+    "app/auth/tokens.py": 86.0,
+    "app/auth/password.py": 90.0,
+    "app/auth/middleware.py": 92.0,
+    "app/auth/recovery.py": 82.0,
+    "app/auth/bans.py": 84.0,
+    "app/auth/blocks.py": 77.0,
     # Privacy: export and deletion have to be right the first time.
-    "app/auth/account_data.py": 80.0,
+    "app/auth/account_data.py": 77.0,
     # Moderation is the safety surface, and its API is the staff-facing one.
-    "app/api/moderation.py": 88.0,
+    "app/api/moderation.py": 83.0,
     # Abuse ceilings and payload validation - the untrusted-traffic boundary.
-    "app/request_limits.py": 95.0,
-    "app/handlers/payloads.py": 92.0,
+    "app/request_limits.py": 94.0,
+    "app/handlers/payloads.py": 89.0,
     # Durability of what players drew, and the rules that bound it.
-    "app/canvas_storage.py": 95.0,
+    "app/canvas_storage.py": 93.0,
     "app/drawing_rules.py": 98.0,
     # Deployment invariants and the readiness contract an orchestrator acts on.
     "app/deployment.py": 98.0,
-    "app/services/readiness.py": 95.0,
-    "app/services/shutdown.py": 88.0,
-    "app/db/__init__.py": 92.0,
+    "app/services/readiness.py": 96.0,
+    "app/services/shutdown.py": 86.0,
+    "app/db/__init__.py": 89.0,
     # Room-code allocation: a collision is two rooms sharing an identity.
-    "app/services/room_codes.py": 93.0,
+    "app/services/room_codes.py": 89.0,
 }
 
 

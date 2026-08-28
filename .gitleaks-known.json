@@ -1,0 +1,23 @@
+[
+ {
+  "RuleID": "private-key",
+  "Description": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+  "StartLine": 163,
+  "EndLine": 194,
+  "StartColumn": 35,
+  "EndColumn": 36,
+  "Match": "REDACTED",
+  "Secret": "REDACTED",
+  "File": "scripts/check-tracked-artifacts.sh",
+  "SymlinkFile": "",
+  "Commit": "a13dd7067d038f9253d48750c7ae7ddae60ca54f",
+  "Link": "https://github.com/sephirothx/sketchy/blob/a13dd7067d038f9253d48750c7ae7ddae60ca54f/scripts/check-tracked-artifacts.sh#L163-L194",
+  "Entropy": 5.4338207,
+  "Author": "Stefano Prosperi",
+  "Email": "step.prosperi@gmail.com",
+  "Date": "2026-08-27T15:46:18Z",
+  "Message": "Refuse a tracked database by its bytes, not just its name (#452) (#483)",
+  "Tags": [],
+  "Fingerprint": "a13dd7067d038f9253d48750c7ae7ddae60ca54f:scripts/check-tracked-artifacts.sh:private-key:163"
+ }
+]

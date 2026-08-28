@@ -1078,13 +1078,20 @@ Beyond lint, tests, PostgreSQL migrations, and multi-browser E2E:
 
 | Gate | What fails the build |
 | --- | --- |
-| Credential scan | A credential in the tree, or in **any commit the change adds** — a value removed a commit later is burned just the same, and the tree it leaves behind looks clean. Runs alongside the artifact scan, which catches file *shapes* by their bytes rather than secrets in source |
+| Credential scan | A credential in the tree, or in **any commit the change adds** — a value removed a commit later is burned just the same, and the tree it leaves behind looks clean. The range is resolved with the same baseline fallback as the artifact scan, and fails closed rather than falling back to the tree, so a first push or a force-push is not a way around it. One historical finding is carried in `.gitleaks-known.json` — an earlier revision of the artifact scanner named PEM armour in a comment — pinned to its commit, file, rule, and line, holding no secret, and unable to excuse anything else. Runs alongside the artifact scan, which catches file *shapes* by their bytes rather than secrets in source |
 | Dependency advisories | A known advisory in `requirements.txt`, `requirements-dev.txt`, or the frontend lockfile. Build and test dependencies count: they run in CI, with a checkout, before anything they touched reaches a player |
-| Coverage floors | A risk-critical module dropping below its floor in [`scripts/check-coverage.py`](scripts/check-coverage.py) — authentication, moderation, request limits, payload validation, drawing storage, deployment, readiness. Per module rather than in total, because a suite this size absorbs one module losing its tests without moving the total more than a rounding error. A module that vanishes from the report fails too, so a rename cannot retire a floor silently |
-| Licence policy | A strong-copyleft, source-available, or licence-undeclared dependency, read off the SBOMs rather than by walking the tree a second way |
+| Coverage floors | A risk-critical module dropping below its **branch**-coverage floor in [`scripts/check-coverage.py`](scripts/check-coverage.py) — authentication, moderation, request limits, payload validation, drawing storage, deployment, readiness. Branch rather than statement, because a statement measure calls an `if` covered the moment it is reached; every gated module reads lower under branch coverage, and `auth/recovery.py` reads six points lower. Per module rather than in total, because a suite this size absorbs one module losing its tests without moving the total more than a rounding error. A module that vanishes from the report fails too, so a rename cannot retire a floor silently |
+| Licence policy | Anything not on the allowlist in [`scripts/check-licenses.py`](scripts/check-licenses.py), read off the SBOMs rather than by walking the tree a second way. An allowlist rather than a denylist, because a denylist only refuses the terms someone thought to name and would wave `Elastic-2.0` through; an unfamiliar identifier means nobody has looked yet. SPDX expressions are parsed, so `MIT OR GPL-3.0` passes on MIT and `(MIT OR GPL-3.0) AND SSPL-1.0` does not |
 
 Every run publishes a CycloneDX SBOM for both ecosystems as a build artifact,
-generated from what actually resolves rather than from the manifest text.
+generated from what actually resolves rather than from the manifest text, and
+published *before* the gates are evaluated against it — the run worth having an
+inventory from is the one that just failed a policy.
+
+Both `scripts/` gates have their own tests in
+[`backend/tests/test_repo_gates.py`](backend/tests/test_repo_gates.py). A green
+build only ever exercises a gate's success path, and a gate whose refusals have
+quietly stopped working is worse than none: it makes the checkbox look ticked.
 
 Not yet gated, and tracked rather than forgotten: artifact provenance and
 signing, deploy-by-digest, and deployment smoke/rollback checks all need a
