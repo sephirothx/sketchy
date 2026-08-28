@@ -36,10 +36,16 @@ export function parseShutdownNotice(
  * negatives after the window has closed.
  *
  * The announced window is the exact one the server will wait, fractions and
- * all, because that is what the contract is for. Rounding it up is a display
- * decision and belongs here: the clamp ceils the bound so a 1.25-second window
- * reads as "1 second" rather than "1.25 seconds", and never as more time than
- * the server is actually giving.
+ * all, because that is what the contract is for. Turning it into whole seconds
+ * is a display decision and belongs here, and it rounds *up*, as a countdown
+ * does: a 1.25-second window reads 2, then 1, then 0.
+ *
+ * So the number on screen can be up to a second larger than what is literally
+ * left. What it cannot do is outlast the deadline - `ceil` reaches 0 exactly
+ * when the window closes, never after - and the clamp keeps a skewed clock
+ * from showing more than the announced window in the first place. Those two
+ * are the guarantees; "never more than the time remaining" is not one of them,
+ * and rounding down to get it would show 0 while the server was still waiting.
  */
 export function shutdownSecondsRemaining(
   notice: ServerShutdownNotice,

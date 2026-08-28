@@ -76,10 +76,14 @@ test("an unparseable timestamp falls back to the announced window", () => {
   );
 });
 
-test("a fractional window is displayed as whole seconds, never as more time", () => {
-  // The server announces exactly what it will wait, fractions included, so a
-  // countdown cannot outlive the socket. Rounding for display belongs here -
-  // and rounds the *bound*, so it can never show more than is being given.
+test("a fractional window counts down in whole seconds and reaches zero on time", () => {
+  // The server announces exactly what it will wait, fractions included; whole
+  // seconds are this side's business. Rounding up means the number can read a
+  // little high - 2 while 1.25 remain - which is what a countdown does. The
+  // property that matters is the other one: it hits zero when the window
+  // closes and not after, so the banner never claims time the socket has
+  // already lost. Rounding down would buy the first property and break this
+  // one, showing 0 while the server was still waiting.
   const notice = {
     contractVersion: 1,
     reason: "deployment",
@@ -88,5 +92,22 @@ test("a fractional window is displayed as whole seconds, never as more time", ()
   };
   assert.equal(shutdownSecondsRemaining(notice, 1000), 2);
   assert.equal(shutdownSecondsRemaining(notice, 1500), 1);
+  // Still counting at the last instant before the deadline...
+  assert.equal(shutdownSecondsRemaining(notice, 2249), 1);
+  // ...and zero exactly on it, rather than a moment later.
+  assert.equal(shutdownSecondsRemaining(notice, 2250), 0);
   assert.equal(shutdownSecondsRemaining(notice, 3000), 0);
+});
+
+test("a clock running behind cannot show more than the announced window", () => {
+  // The deadline is the server's, measured against a clock this browser does
+  // not share. The clamp is what stops a skewed one promising time that was
+  // never offered.
+  const notice = {
+    contractVersion: 1,
+    reason: "deployment",
+    drainSeconds: 1.25,
+    startedAt: new Date(10_000).toISOString(),
+  };
+  assert.equal(shutdownSecondsRemaining(notice, 0), 2);
 });

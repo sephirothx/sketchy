@@ -456,9 +456,13 @@ the recorded standings so the final screen and the history row can never disagre
 used to be rounded up, which promised a client two seconds while the server
 stopped waiting after 1.25 and left a countdown running past the socket closing.
 Presenting it as whole seconds is the client's job
-([`shutdownNotice.ts`](../frontend/src/lib/shutdownNotice.ts) ceils the bound, so
-a display can never show more time than is being given). The window is fixed when
-the drain starts, so a change to the configured default cannot move it.
+([`shutdownNotice.ts`](../frontend/src/lib/shutdownNotice.ts)), and it rounds up
+as a countdown does — so a 1.25-second window reads 2, then 1, then 0. The
+guarantee is not that the number never exceeds the time left, which rounding up
+plainly breaks; it is that the countdown **reaches zero when the window closes
+and not after**, so the banner never claims time the socket has already lost,
+and that a skewed clock cannot show more than the announced window. The window is
+fixed when the drain starts, so a change to the configured default cannot move it.
 
 **`server_paused`**:
 
