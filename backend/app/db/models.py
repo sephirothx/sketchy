@@ -2555,6 +2555,17 @@ class PromptListRevision(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     language: Mapped[str] = mapped_column(String(16), nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # How often each a-z letter appears across this revision's active answers,
+    # and how many alphabetic characters they hold in total. Wheel pricing needs
+    # that distribution, not the words, so storing it here is what lets a room
+    # price letters without keeping its prompt pool resident. Written once when
+    # the revision is - revisions are immutable, so it cannot drift with edits.
+    letter_counts: Mapped[dict] = mapped_column(
+        JSON, default=dict, server_default=text("'{}'"), nullable=False
+    )
+    letter_total: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )

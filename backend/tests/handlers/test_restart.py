@@ -253,7 +253,12 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     assert room.game.round_number == 1
     assert room.game.rounds_total == 4
     assert room.game.drawing_seconds == 30
-    assert room.game.prompt_pool == ["reviewword", "secondword", "thirdword"]
+    # The sample is shuffled, so what matters is which prompts it holds.
+    assert sorted(room.game.prompt_pool) == [
+        "reviewword",
+        "secondword",
+        "thirdword",
+    ]
     assert room.game.hint_mode == "wheel"
     assert room.game.hide_masked_prompt is True
     assert room.spectators_see_prompt is True

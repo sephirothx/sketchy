@@ -15,9 +15,8 @@ import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
-from app.repositories.interfaces import ResolvedPromptSelection
 from app.rooms import RoomManager
-from tests.handlers.helpers import SessionStore
+from tests.handlers.helpers import SessionStore, StubPromptListRepo
 
 
 def build_stack(room_manager: RoomManager, **kwargs):
@@ -95,20 +94,22 @@ async def test_joining_another_room_leaves_the_previous_one_running():
 async def test_a_refused_create_keeps_the_seat_the_socket_already_had():
     """The old seat is only given up once the new one is certain."""
 
-    class HalfReachablePromptListRepo:
+    class HalfReachablePromptListRepo(StubPromptListRepo):
         """Answers for the default list, unreachable for the one the host asks for."""
 
-        async def resolve_selection(
+        def __init__(self):
+            super().__init__(("apple", "boat"))
+
+        async def authorize_selection(
             self, slugs, *, requesting_user_id=None, share_codes=()
         ):
             if "safari" in slugs:
                 raise RuntimeError("prompt store is unreachable")
-            return ResolvedPromptSelection(
-                slugs=tuple(slugs), language="en", prompts=("apple", "boat")
+            return await super().authorize_selection(
+                slugs,
+                requesting_user_id=requesting_user_id,
+                share_codes=share_codes,
             )
-
-        async def record_prompt_usage(self, slugs, usage):
-            return None
 
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(

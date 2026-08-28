@@ -31,9 +31,12 @@ from app.domain_values import (
     TurnParticipantState,
 )
 from app.identifiers import generate_uuid7
-from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, random_prompt_choices
+from app.prompts import MAX_PROMPT_LENGTH, PROMPTS
 from app.prompt_content import prompt_match_key
 
+# How many prompts a drawer chooses between each turn. The pre-drawn sample
+# is sized off this, so the two must not drift apart.
+PROMPT_CHOICES_PER_TURN = 3
 DRAWING_SECONDS = 80
 # The phase lengths live on `app.flow_timing.timing`, because a constant
 # imported by name is copied at import and cannot be tuned at runtime (#446).
@@ -302,6 +305,13 @@ class Game:
     turn_order: list[str]
     id: str = field(default_factory=lambda: str(generate_uuid7()))
     rounds_total: int = 3
+    # The seat count the room advertised, which bounds how long this game can
+    # run. `None` leaves the game unbounded, which is what tests constructing a
+    # bare `Game` want; `_start_fresh_game` always passes the room's setting.
+    max_players: int | None = None
+    # Turns actually started. Unlike `turn_index`, which is re-based when the
+    # roster changes, this only ever goes up - see `max_turns`.
+    turns_started: int = 0
     scoring_mode: str = "default"
     scoring_version: int = SCORING_RULES_VERSION
     turn_index: int = -1
@@ -321,7 +331,17 @@ class Game:
     canvas: CanvasSession = field(default_factory=CanvasSession)
     phase_deadline: float | None = None
     used_prompts: set[str] = field(default_factory=set)
+    # The prompts this game can play: a sample drawn once at start, holding at
+    # most `rounds x max_players x 3` entries rather than every prompt the
+    # room's lists contain. `None` means the built-in list.
     prompt_pool: list[str] | None = None
+    # How often each a-z letter appears across the pool this sample was drawn
+    # from, summed from the pinned revisions. Empty means "count `prompt_pool`
+    # instead", which is what the built-in and quick-prompt-only paths do -
+    # pricing a 72-prompt sample as though it were the whole pool would make
+    # rare letters swing on the luck of one draw.
+    letter_counts: dict[str, int] = field(default_factory=dict, repr=False)
+    letter_total: int = 0
     # Aliases belong to the exact localized prompt versions resolved when the
     # game starts. They never alter the canonical answer shown in the UI or
     # frozen into history.
@@ -333,6 +353,10 @@ class Game:
         default_factory=dict
     )
     custom_prompt_keys: frozenset[str] = frozenset()
+    # Where this game's prompts come from, decided from the room's settings.
+    # Empty means "work it out from the pool", which is what a bare `Game` in a
+    # test wants; `_start_fresh_game` always passes the room's own answer.
+    prompt_source_mode_value: str = ""
     drawing_seconds: float = DRAWING_SECONDS
     hint_mode: str = "none"
     hide_masked_prompt: bool = False
@@ -419,6 +443,14 @@ class Game:
         return PromptSourceKind.BUILTIN_FALLBACK.value
 
     def prompt_source_mode(self) -> str:
+        """Where this game's prompts came from, as recorded in its history.
+
+        Read from the room's settings rather than from the prompts on hand: the
+        pool is a sample, and a mixed room that happened to draw no quick
+        prompts would otherwise be filed for good as a purely curated game.
+        """
+        if self.prompt_source_mode_value:
+            return self.prompt_source_mode_value
         pool = self.prompt_pool if self.prompt_pool is not None else PROMPTS
         kinds = {self.prompt_source_kind(answer) for answer in pool}
         if kinds == {PromptSourceKind.CURATED.value}:
@@ -434,8 +466,19 @@ class Game:
     roster: list[str] = field(default_factory=list)
     history_seat_ids: dict[str, str] = field(default_factory=dict)
     _cached_letter_frequencies: dict[str, float] | None = field(default=None, repr=False, compare=False)
+    # The sample, shuffled and handed out three at a time. Filled on the first
+    # turn rather than at construction, so callers may still set `prompt_pool`
+    # on a freshly built game. Offers used to be resampled per turn against the
+    # picked ones, which could re-offer a prompt the drawer had already
+    # declined; taking them in order cannot.
+    _prompt_queue: list[str] = field(default_factory=list, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        if self.max_players is not None:
+            # Seating caps `turn_order` at `max_players`, so this only guards
+            # against a caller passing a ceiling below the roster it handed us -
+            # which would otherwise finish the game before its first turn.
+            self.max_players = max(self.max_players, len(self.turn_order))
         for token in self.turn_order:
             if token not in self.roster:
                 self.roster.append(token)
@@ -451,7 +494,25 @@ class Game:
             return 0
         return self.turn_index // len(self.turn_order) + 1
 
+    @property
+    def max_turns(self) -> int | None:
+        """Hard ceiling on turns started, or `None` when the game is unbounded.
+
+        `total_turns` is derived from `turn_index`, which is *re-based* rather
+        than incremented when a player joins or leaves the rotation. Those
+        re-bases can move it backwards, replaying turn slots, so a room with
+        mid-game churn can run past the length it advertised. `turns_started`
+        only ever goes up, which makes `rounds x max_players` a ceiling the
+        prompt sample can be sized against rather than an estimate.
+        """
+        if self.max_players is None:
+            return None
+        return self.rounds_total * self.max_players
+
     def is_finished(self) -> bool:
+        ceiling = self.max_turns
+        if ceiling is not None and self.turns_started >= ceiling:
+            return True
         return self.turn_index + 1 >= self.total_turns
 
     def add_player_to_rotation(self, token: str) -> None:
@@ -554,6 +615,7 @@ class Game:
         canvas_generation: int,
     ) -> list[str]:
         """Advance to the next drawer and offer prompt choices."""
+        self.turns_started += 1
         self.turn_index += 1
         if afk_tokens:
             attempts = 0
@@ -563,7 +625,7 @@ class Game:
         self.current_drawer = self.turn_order[self.turn_index % len(self.turn_order)]
         self.current_turn_id = str(generate_uuid7())
         self.prompt = None
-        self.prompt_choices = random_prompt_choices(3, exclude=self.used_prompts, pool=self.prompt_pool)
+        self.prompt_choices = self._next_prompt_choices()
         self.correct_guessers = set()
         self.guess_points = {}
         self.guess_times = {}
@@ -598,6 +660,38 @@ class Game:
         if self.phase == Phase.CHOOSING_PROMPT and self.prompt_choices:
             self.prompt_auto_picked = True
             self._set_prompt(self.prompt_choices[0])
+
+    def _shuffled_pool(self) -> list[str]:
+        pool = list(self.prompt_pool) if self.prompt_pool else list(PROMPTS)
+        random.shuffle(pool)
+        return pool
+
+    def _next_prompt_choices(self) -> list[str]:
+        """Take the next three prompts, refilling from the pool if they run out.
+
+        The sample is sized to outlast the game, so refilling only happens when
+        the pool itself is smaller than the game is long - a room playing off a
+        handful of quick prompts. Prompts already picked are held back first,
+        and only offered again once nothing else is left, which is the
+        degradation short pools have always had.
+        """
+        choices: list[str] = []
+        while len(choices) < PROMPT_CHOICES_PER_TURN:
+            if not self._prompt_queue:
+                remaining = [
+                    prompt
+                    for prompt in self._shuffled_pool()
+                    if prompt not in self.used_prompts and prompt not in choices
+                ]
+                self._prompt_queue = remaining or [
+                    prompt
+                    for prompt in self._shuffled_pool()
+                    if prompt not in choices
+                ]
+                if not self._prompt_queue:
+                    break
+            choices.append(self._prompt_queue.pop())
+        return choices
 
     def _set_prompt(self, prompt: str) -> None:
         self.prompt = prompt
@@ -750,17 +844,26 @@ class Game:
         return True
 
     def _letter_frequencies(self) -> dict[str, float]:
-        """Relative frequency (0-1) of each a-z letter across this game's prompt
-        pool (`prompt_pool`, or the built-in `PROMPTS` list when no custom pool is
-        set) - used to price wheel-of-fortune letters by how rare they are
-        among the actual possible solutions, rather than English-language
-        letter frequency.
+        """Relative frequency (0-1) of each a-z letter across the prompts this
+        game could have drawn - used to price wheel-of-fortune letters by how
+        rare they are among the actual possible solutions, rather than
+        English-language letter frequency.
+
+        `letter_counts` carries that distribution when the game drew from
+        prompt lists, because `prompt_pool` is then only a sample of them and
+        counting it would price rare letters off a few dozen words. Without it
+        the pool *is* everything the game can play - the built-in list, or a
+        room's own quick prompts - and counting it is exact.
         """
         if self._cached_letter_frequencies is not None:
             return self._cached_letter_frequencies
-        pool = self.prompt_pool or PROMPTS
-        counts = Counter(ch for w in pool for ch in w.lower() if ch.isalpha())
-        total = sum(counts.values()) or 1
+        if self.letter_total:
+            counts = self.letter_counts
+            total = self.letter_total
+        else:
+            pool = self.prompt_pool or PROMPTS
+            counts = Counter(ch for w in pool for ch in w.lower() if ch.isalpha())
+            total = sum(counts.values()) or 1
         self._cached_letter_frequencies = {letter: counts.get(letter, 0) / total for letter in string.ascii_lowercase}
         return self._cached_letter_frequencies
 

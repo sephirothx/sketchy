@@ -9,13 +9,13 @@ from app.handlers import register_all_handlers as register_handlers
 from app.presenters import editable_room_settings_payload
 from app.repositories.interfaces import (
     PromptListSelectionError,
-    ResolvedPromptSelection,
 )
 from app.rooms import (
     ANONYMOUS_NAME_COLOR,
     RoomManager,
 )
 from tests.fake_user_repo import FakeUserRepository
+from tests.handlers.helpers import StubPromptListRepo
 
 
 @pytest.mark.asyncio
@@ -224,54 +224,18 @@ async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
     assert "chat_message" not in events
 
 
-class RecordingPromptListRepo:
-    """Answers with a fixed pool, and counts how often it was asked."""
-
-    def __init__(
-        self,
-        prompts=("aardvark", "zeppelin"),
-        language="en",
-        *,
-        revision_ids=(),
-        aliases=None,
-        prompt_version_ids=None,
-    ):
-        self.prompts = list(prompts)
-        self.language = language
-        self.revision_ids = tuple(revision_ids)
-        self.aliases = dict(aliases or {})
-        self.prompt_version_ids = dict(prompt_version_ids or {})
-        self.reads = 0
-
-    async def resolve_selection(
-        self, slugs, *, requesting_user_id=None, share_codes=()
-    ):
-        self.reads += 1
-        return ResolvedPromptSelection(
-            tuple(slugs),
-            self.language,
-            tuple(self.prompts),
-            revision_ids=self.revision_ids,
-            aliases=self.aliases,
-            prompt_version_ids=self.prompt_version_ids,
-        )
-
-    async def record_prompt_usage(self, slugs, usage):
-        return None
-
-
 @pytest.mark.asyncio
 async def test_owned_and_shared_list_authority_never_leaks_into_room_payloads():
-    class AuthorizingPromptListRepo(RecordingPromptListRepo):
+    class AuthorizingPromptListRepo(StubPromptListRepo):
         def __init__(self):
             super().__init__(("capybara",), revision_ids=("revision-user-1",))
             self.authorization = None
 
-        async def resolve_selection(
+        async def authorize_selection(
             self, slugs, *, requesting_user_id=None, share_codes=()
         ):
             self.authorization = (requesting_user_id, tuple(share_codes))
-            return await super().resolve_selection(
+            return await super().authorize_selection(
                 slugs,
                 requesting_user_id=requesting_user_id,
                 share_codes=share_codes,
@@ -326,18 +290,18 @@ def build_settings_room(room_manager, prompt_list_repo, **room_kwargs):
 @pytest.mark.asyncio
 async def test_a_settings_change_does_not_re_read_prompt_lists_it_left_alone():
     room_manager = RoomManager()
-    repo = RecordingPromptListRepo()
+    repo = StubPromptListRepo()
     room, sio = build_settings_room(
         room_manager,
         repo,
         prompt_list_slugs=["safari"],
-        curated_prompts=["aardvark", "zeppelin"],
+        prompt_pool_size=2,
     )
 
     assert (await sio.handlers["/"]["update_room_settings"]("host-sid", {"rounds": 4}))["ok"] is True
 
     assert repo.reads == 0
-    assert room.curated_prompts == ["aardvark", "zeppelin"]
+    assert room.prompt_pool_size == 2
 
 
 @pytest.mark.asyncio
@@ -347,24 +311,24 @@ async def test_a_settings_change_retries_prompt_lists_that_never_loaded():
     host is still shown the lists they picked. An empty pool is the one worth
     asking about again."""
     room_manager = RoomManager()
-    repo = RecordingPromptListRepo()
+    repo = StubPromptListRepo()
     room, sio = build_settings_room(
         room_manager,
         repo,
         prompt_list_slugs=["safari"],
-        curated_prompts=[],
+        prompt_pool_size=0,
     )
 
     assert (await sio.handlers["/"]["update_room_settings"]("host-sid", {"rounds": 4}))["ok"] is True
 
     assert repo.reads == 1
-    assert room.curated_prompts == ["aardvark", "zeppelin"]
+    assert room.prompt_pool_size == 2
 
 
 @pytest.mark.asyncio
 async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matching():
     room_manager = RoomManager()
-    repo = RecordingPromptListRepo(
+    repo = StubPromptListRepo(
         ("éléphant", "vélo"),
         language="fr",
         revision_ids=("revision-fr-1",),
@@ -375,7 +339,7 @@ async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matc
         room_manager,
         repo,
         prompt_list_slugs=["english_standard"],
-        curated_prompts=["apple"],
+        prompt_pool_size=1,
     )
     room_manager.add_player(room, "Guest")
 
@@ -385,7 +349,7 @@ async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matc
 
     assert result == {"ok": True}
     assert room.prompt_language == "fr"
-    assert room.curated_prompts == ["éléphant", "vélo"]
+    assert room.prompt_pool_size == 2
     assert room.prompt_list_revision_ids == ["revision-fr-1"]
     for payload in (
         room.to_state_payload(),
@@ -409,7 +373,7 @@ async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matc
 @pytest.mark.asyncio
 async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room():
     class InvalidSelectionRepo:
-        async def resolve_selection(self, slugs):
+        async def authorize_selection(self, slugs):
             raise PromptListSelectionError(
                 "Selected prompt lists must use the same language"
             )
@@ -419,7 +383,7 @@ async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room
         room_manager,
         InvalidSelectionRepo(),
         prompt_list_slugs=["english_standard"],
-        curated_prompts=["apple"],
+        prompt_pool_size=1,
     )
 
     result = await sio.handlers["/"]["update_room_settings"](
@@ -432,13 +396,13 @@ async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room
         "field": "promptListSlugs",
     }
     assert room.prompt_list_slugs == ["english_standard"]
-    assert room.curated_prompts == ["apple"]
+    assert room.prompt_pool_size == 1
 
 
 @pytest.mark.asyncio
 async def test_start_revalidates_a_waiting_room_after_content_is_hidden():
     class HiddenSelectionRepo:
-        async def resolve_selection(self, slugs):
+        async def authorize_selection(self, slugs):
             raise PromptListSelectionError("A selected prompt list is unavailable")
 
     room_manager = RoomManager()
@@ -446,7 +410,7 @@ async def test_start_revalidates_a_waiting_room_after_content_is_hidden():
         room_manager,
         HiddenSelectionRepo(),
         prompt_list_slugs=["reported-list"],
-        curated_prompts=["cached prompt"],
+        prompt_pool_size=1,
     )
     room_manager.add_player(room, "Guest")
 
@@ -482,16 +446,17 @@ async def test_starting_waits_for_a_settings_change_that_arrived_first():
     reading = asyncio.Event()
     finish_reading = asyncio.Event()
 
-    class BlockingPromptListRepo:
-        async def resolve_selection(self, slugs):
+    class BlockingPromptListRepo(StubPromptListRepo):
+        async def authorize_selection(
+            self, slugs, *, requesting_user_id=None, share_codes=()
+        ):
             reading.set()
             await finish_reading.wait()
-            return ResolvedPromptSelection(
-                tuple(slugs), "en", ("aardvark", "zeppelin")
+            return await super().authorize_selection(
+                slugs,
+                requesting_user_id=requesting_user_id,
+                share_codes=share_codes,
             )
-
-        async def record_prompt_usage(self, slugs, usage):
-            return None
 
     ctx.prompt_list_repo = BlockingPromptListRepo()
 
@@ -1065,7 +1030,7 @@ class UnreachablePromptListRepo:
     def __init__(self):
         self.reads = 0
 
-    async def resolve_selection(
+    async def authorize_selection(
         self, slugs, *, requesting_user_id=None, share_codes=()
     ):
         self.reads += 1
@@ -1107,7 +1072,7 @@ async def test_a_prompt_store_failure_leaves_the_settings_it_could_not_read():
         room_manager,
         UnreachablePromptListRepo(),
         prompt_list_slugs=["safari"],
-        curated_prompts=["aardvark", "zeppelin"],
+        prompt_pool_size=2,
     )
 
     result = await sio.handlers["/"]["update_room_settings"](
@@ -1117,7 +1082,7 @@ async def test_a_prompt_store_failure_leaves_the_settings_it_could_not_read():
     assert result["ok"] is False
     assert result["field"] == "promptListSlugs"
     assert room.prompt_list_slugs == ["safari"]
-    assert room.curated_prompts == ["aardvark", "zeppelin"]
+    assert room.prompt_pool_size == 2
 
 
 @pytest.mark.asyncio
@@ -1145,6 +1110,9 @@ async def test_a_custom_only_room_still_opens_when_the_prompt_store_is_down():
     assert response["ok"] is True
     room = room_manager.get_room(response["roomId"])
     assert room is not None
-    assert room.curated_prompts == []
+    assert room.prompt_pool_size == 0
     assert room.custom_prompts == ["hedgehog", "lighthouse"]
-    assert set(room.effective_prompt_pool()) == {"hedgehog", "lighthouse"}
+    # Nothing was pinned, so nothing is drawn from a list: the game this room
+    # starts plays its own prompts and never asks the store it could not reach.
+    assert room.draws_from_prompt_lists() is False
+    assert room.prompt_source_mode() == "custom"

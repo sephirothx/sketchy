@@ -2,13 +2,19 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.models import Base
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import selectinload
+
+from app.db.models import Base, PromptListRevision, PromptListRevisionItem
 from app.db.seed import seed_prompt_lists
-from app.repositories.interfaces import PromptPickTotals, PromptUsage
+from app.prompts import letter_histogram
+from app.repositories.interfaces import (
+    PromptPickTotals,
+    PromptUsage,
+)
 from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
-from app.rooms import RoomManager
 
 pytestmark = pytest.mark.asyncio
 
@@ -134,31 +140,158 @@ async def test_prompt_usage_tracking_metrics():
         await engine.dispose()
 
 
-async def test_room_effective_prompt_pool_with_curated_and_custom_prompts():
-    rm = RoomManager()
-    room = rm.create_room(
-        name="Test Room",
-        prompt_list_slugs=["english_standard"],
-        curated_prompts=["apple", "banana", "cherry"],
-        custom_prompts=["dragon", "APPLE"],
-        custom_prompts_only=False,
-        prompt_aliases={"apple": ("malus",), "banana": ("plantain",)},
-        prompt_version_ids={"apple": "apple-v1", "banana": "banana-v1"},
-    )
-    pool = room.effective_prompt_pool()
-    assert pool is not None
-    # Custom prompts take priority, case-insensitively deduplicating
-    assert pool[0] == "dragon"
-    assert pool[1] == "APPLE"
-    assert "banana" in pool
-    assert "cherry" in pool
-    assert pool.count("apple") + pool.count("APPLE") == 1
-    assert room.effective_prompt_aliases() == {"banana": ("plantain",)}
-    assert room.effective_prompt_version_ids() == {"banana": "banana-v1"}
+async def test_seeded_revisions_carry_the_letter_histogram_of_their_prompts():
+    """A revision's stored tallies must equal counting its answers directly.
 
-    # Custom prompts only
-    room.custom_prompts_only = True
-    pool_custom = room.effective_prompt_pool()
-    assert pool_custom == ["dragon", "APPLE"]
-    assert room.effective_prompt_aliases() == {}
-    assert room.effective_prompt_version_ids() == {}
+    This is the substitution wheel pricing depends on: summing these instead of
+    walking a resident pool has to produce the same distribution, or letters are
+    priced against content the game is not drawing from.
+    """
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+
+        async with factory() as session:
+            revisions = (
+                await session.execute(
+                    select(PromptListRevision).options(
+                        selectinload(PromptListRevision.items).selectinload(
+                            PromptListRevisionItem.prompt_version
+                        )
+                    )
+                )
+            ).scalars().all()
+
+            assert revisions
+            for revision in revisions:
+                answers = [
+                    item.prompt_version.canonical_answer for item in revision.items
+                ]
+                expected_counts, expected_total = letter_histogram(answers)
+                assert revision.letter_counts == expected_counts
+                assert revision.letter_total == expected_total
+                assert revision.letter_total > 0
+    finally:
+        await engine.dispose()
+
+
+
+async def test_pinning_agrees_with_resolution_about_what_a_selection_holds():
+    """The count that sizes a game's draw must be the pool resolution would build."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        slugs = ["english_standard", "english_extended"]
+
+        pinned = await repo.authorize_selection(slugs)
+        resolved = await repo.resolve_selection(slugs)
+
+        assert pinned.prompt_count == len(resolved.prompts)
+        assert pinned.revision_ids == resolved.revision_ids
+        assert pinned.language == resolved.language
+    finally:
+        await engine.dispose()
+
+
+async def test_summed_histograms_price_letters_like_the_pool_they_replace():
+    """Wheel pricing must survive the substitution.
+
+    Summing per-revision tallies double-counts a prompt that sits in two
+    selected lists, where the merged pool holds it once. That is the drift this
+    design accepts, so the test pins how small it is rather than pretending it
+    is zero - the price is a clamped multiplier, and a fraction of a percent
+    cannot move it.
+    """
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        slugs = ["english_standard", "english_extended"]
+
+        pinned = await repo.authorize_selection(slugs)
+        pool = (await repo.resolve_selection(slugs)).prompts
+        expected_counts, expected_total = letter_histogram(pool)
+
+        assert pinned.letter_total >= expected_total
+        assert (pinned.letter_total - expected_total) / expected_total < 0.01
+        for letter, count in expected_counts.items():
+            assert abs(pinned.letter_counts.get(letter, 0) - count) <= 2
+
+        # A single list has no cross-list duplicate, so there it is exact.
+        only_standard = await repo.authorize_selection(["english_standard"])
+        exact_counts, exact_total = letter_histogram(
+            (await repo.resolve_selection(["english_standard"])).prompts
+        )
+        assert only_standard.letter_counts == exact_counts
+        assert only_standard.letter_total == exact_total
+    finally:
+        await engine.dispose()
+
+
+async def test_sampling_draws_distinct_prompts_and_records_where_each_came_from():
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        pinned = await repo.authorize_selection(["english_standard"])
+        revisions = list(pinned.revision_ids)
+
+        drawn = await repo.sample_prompts(revisions, limit=72)
+
+        assert len(drawn) == 72
+        assert len({prompt.answer for prompt in drawn}) == 72
+        for prompt in drawn:
+            assert prompt.prompt_version_id
+            assert prompt.source_revision_ids == tuple(revisions)
+
+        # Nothing is drawn without somewhere to draw from.
+        assert await repo.sample_prompts(revisions, limit=0) == ()
+        assert await repo.sample_prompts([], limit=5) == ()
+    finally:
+        await engine.dispose()
+
+
+async def test_sampling_skips_answers_a_room_has_already_shadowed():
+    """A quick prompt of the same name wins, so the curated twin must not be drawn."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        pinned = await repo.authorize_selection(["english_standard"])
+        revisions = list(pinned.revision_ids)
+
+        shadowed = {
+            prompt.match_key
+            for prompt in await repo.sample_prompts(revisions, limit=10)
+        }
+        drawn = await repo.sample_prompts(
+            revisions, limit=pinned.prompt_count, exclude_match_keys=shadowed
+        )
+
+        assert not shadowed & {prompt.match_key for prompt in drawn}
+        assert len(drawn) == pinned.prompt_count - len(shadowed)
+    finally:
+        await engine.dispose()
+
+
+async def test_repeated_draws_reach_every_prompt_in_the_pool():
+    """The draw has to be random across the whole revision, not a stable prefix."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        pinned = await repo.authorize_selection(["english_standard"])
+        revisions = list(pinned.revision_ids)
+
+        seen: set[str] = set()
+        for _ in range(40):
+            seen |= {
+                prompt.answer
+                for prompt in await repo.sample_prompts(revisions, limit=50)
+            }
+
+        assert len(seen) == pinned.prompt_count
+    finally:
+        await engine.dispose()

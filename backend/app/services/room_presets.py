@@ -155,7 +155,9 @@ class RoomPresetService:
             )
         slugs = [by_id[value].slug for value in row.prompt_list_ids]
         try:
-            resolved = await self._prompt_list_repo.resolve_selection(
+            # Only the slugs are wanted back, so pin rather than resolve: this
+            # validates exactly the same things without reading a prompt.
+            resolved = await self._prompt_list_repo.authorize_selection(
                 slugs, requesting_user_id=str(owner_id)
             )
         except PromptListSelectionError as error:

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import Base, PromptListRevision, PromptVersion, User, generate_uuid
+from app.prompts import letter_histogram
 from app.repositories.interfaces import (
     PromptListConflictError,
     PromptListEntryInput,
@@ -164,5 +165,115 @@ async def test_only_the_owner_can_delete_a_player_list():
         assert await repo.get_owned(owner_id, created.id) is not None
         assert await repo.delete_owned(owner_id, created.id) is True
         assert await repo.get_owned(owner_id, created.id) is None
+    finally:
+        await engine.dispose()
+
+
+async def test_an_owned_list_revision_is_priced_when_it_is_written():
+    """Owned lists take the same path: no revision exists without its tallies.
+
+    Wheel pricing reads these instead of walking a resident pool, so a revision
+    written without them would silently price every letter at the same rate.
+    """
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id,
+            name="Mine",
+            description="",
+            language="en",
+            visibility="private",
+            prompts=(
+                PromptListEntryInput(answer="banjo"),
+                PromptListEntryInput(answer="kazoo"),
+            ),
+        )
+
+        async with factory() as session:
+            revision = (
+                await session.execute(
+                    select(PromptListRevision).where(
+                        PromptListRevision.prompt_list_id == UUID(created.id)
+                    )
+                )
+            ).scalars().one()
+
+        expected_counts, expected_total = letter_histogram(["banjo", "kazoo"])
+        assert revision.letter_counts == expected_counts
+        assert revision.letter_total == expected_total == 10
+    finally:
+        await engine.dispose()
+
+
+async def test_pinning_refuses_the_colliding_selections_resolution_refuses():
+    """Pinning reads no prompts, so it must ask the database the same question.
+
+    `resolve_selection` catches colliding answers by walking everything it
+    loads. If pinning let a collision through, a room would be admitted on a
+    selection where one guess could credit two different prompts.
+    """
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        first = await repo.create_owned(
+            owner_id,
+            name="First",
+            description="",
+            language="en",
+            visibility="private",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        # A different list whose alias reaches the same answer.
+        second = await repo.create_owned(
+            owner_id,
+            name="Second",
+            description="",
+            language="en",
+            visibility="private",
+            prompts=(
+                PromptListEntryInput(answer="river weasel", aliases=("otter",)),
+            ),
+        )
+        slugs = [first.slug, second.slug]
+
+        with pytest.raises(PromptListSelectionError, match="ambiguous"):
+            await repo.resolve_selection(slugs, requesting_user_id=owner_id)
+        with pytest.raises(PromptListSelectionError, match="ambiguous"):
+            await repo.authorize_selection(slugs, requesting_user_id=owner_id)
+
+        # Each on its own is a legitimate selection.
+        for slug in slugs:
+            pinned = await repo.authorize_selection(
+                [slug], requesting_user_id=owner_id
+            )
+            assert pinned.prompt_count == 1
+    finally:
+        await engine.dispose()
+
+
+async def test_pinning_refuses_a_list_the_requester_may_not_read():
+    """R-LIST-06a rests on this check, and pinning is now the only one that runs."""
+    factory, engine, owner_id, other_id = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id,
+            name="Private",
+            description="",
+            language="en",
+            visibility="private",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+
+        with pytest.raises(PromptListSelectionError, match="not found"):
+            await repo.authorize_selection(
+                [created.slug], requesting_user_id=other_id
+            )
+        assert (
+            await repo.authorize_selection(
+                [created.slug], requesting_user_id=owner_id
+            )
+        ).prompt_count == 1
     finally:
         await engine.dispose()

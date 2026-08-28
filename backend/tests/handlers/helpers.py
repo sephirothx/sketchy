@@ -7,6 +7,9 @@ import socketio
 
 from app.game import Game
 from app.handlers import register_all_handlers as register_handlers
+from app.prompt_content import prompt_match_key
+from app.prompts import letter_histogram
+from app.repositories.interfaces import PinnedPromptSelection, SampledPrompt
 from app.rooms import RoomManager
 
 # Keys that identify a player to the server. None of them may appear in
@@ -129,3 +132,76 @@ class SessionStore:
 
     async def save(self, sid, session, namespace=None) -> None:
         self.sessions[sid] = dict(session)
+
+
+class StubPromptListRepo:
+    """A prompt-list store backed by a fixed set of prompts.
+
+    Answers both halves of the split the live repository makes: pinning, which
+    a waiting room is admitted by and which reads no prompt text, and drawing,
+    which a starting game takes its sample from. Holding one list and deriving
+    both keeps a test from asserting against a pool the draw would never
+    produce. `reads` counts pins so a test can show when one was avoided.
+    """
+
+    def __init__(
+        self,
+        prompts=("aardvark", "zeppelin"),
+        language="en",
+        *,
+        revision_ids=(),
+        aliases=None,
+        prompt_version_ids=None,
+    ):
+        self.prompts = list(prompts)
+        self.language = language
+        self.revision_ids = tuple(revision_ids)
+        self.aliases = dict(aliases or {})
+        # Curated content always carries a version identity, and usage is keyed
+        # by it - a stub without one records nothing and quietly passes tests
+        # about what was recorded.
+        self.prompt_version_ids = dict(
+            prompt_version_ids
+            if prompt_version_ids is not None
+            else {
+                prompt: f"version-{index}"
+                for index, prompt in enumerate(self.prompts)
+            }
+        )
+        self.reads = 0
+        self.draws = 0
+
+    def _match_key(self, prompt: str) -> str:
+        return prompt_match_key(prompt, self.language)
+
+    async def authorize_selection(
+        self, slugs, *, requesting_user_id=None, share_codes=()
+    ):
+        self.reads += 1
+        counts, total = letter_histogram(self.prompts)
+        return PinnedPromptSelection(
+            slugs=tuple(slugs),
+            language=self.language,
+            revision_ids=self.revision_ids,
+            prompt_count=len(self.prompts),
+            letter_counts=counts,
+            letter_total=total,
+        )
+
+    async def sample_prompts(self, revision_ids, *, limit, exclude_match_keys=()):
+        self.draws += 1
+        excluded = set(exclude_match_keys)
+        return tuple(
+            SampledPrompt(
+                answer=prompt,
+                match_key=self._match_key(prompt),
+                aliases=self.aliases.get(prompt, ()),
+                prompt_version_id=self.prompt_version_ids.get(prompt),
+                source_revision_ids=tuple(revision_ids),
+            )
+            for prompt in self.prompts
+            if self._match_key(prompt) not in excluded
+        )[:limit]
+
+    async def record_prompt_usage(self, revision_ids, usage):
+        return None

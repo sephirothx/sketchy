@@ -1,6 +1,7 @@
 """Migration replay, downgrade, drift, and hand-written schema checks."""
 from __future__ import annotations
 
+import json
 import os
 import uuid
 import warnings
@@ -934,5 +935,99 @@ async def test_the_open_report_folds_keep_the_earliest_of_each_duplicate(tmp_pat
             ).scalars().all()
         # The earliest of the three, and the one about somebody else.
         assert surviving == ["complaint 0", "about another player"]
+    finally:
+        await engine.dispose()
+
+
+async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
+    """The backfill prices a revision from the answers it can still offer.
+
+    A hidden version is skipped by `resolve_selection`, so counting it here
+    would price letters against prompts no game can draw. Letters outside a-z
+    are absent from the tallies but present in the divisor, which is what keeps
+    a non-English list's ratios unchanged.
+    """
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'letter-histogram-migration.db'}"
+    )
+    script = ScriptDirectory.from_config(get_alembic_config())
+    previous = script.get_revision("m6d1e7a4b829").down_revision
+    assert isinstance(previous, str)
+    identifiers = {
+        "list": uuid.uuid4().hex,
+        "revision": uuid.uuid4().hex,
+        "active_concept": uuid.uuid4().hex,
+        "hidden_concept": uuid.uuid4().hex,
+        "active": uuid.uuid4().hex,
+        "hidden": uuid.uuid4().hex,
+    }
+    try:
+        await _migrate(engine, alembic_command.upgrade, previous)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_lists "
+                    "(id, slug, name, language, is_bundled, visibility, "
+                    "moderation_state, version) VALUES "
+                    "(:list, 'legacy', 'Legacy list', 'en', 1, 'public', "
+                    "'active', 1)"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revisions "
+                    "(id, prompt_list_id, version, language, content_hash) "
+                    "VALUES (:revision, :list, 1, 'en', '')"
+                ),
+                identifiers,
+            )
+            for key, answer, state in (
+                ("active", "café", "active"),
+                ("hidden", "zzz", "hidden"),
+            ):
+                await connection.execute(
+                    text(
+                        f"INSERT INTO prompt_concepts (id) VALUES (:{key}_concept)"
+                    ),
+                    identifiers,
+                )
+                await connection.execute(
+                    text(
+                        "INSERT INTO prompt_versions "
+                        "(id, concept_id, language, version, canonical_answer, "
+                        "match_key, moderation_state) VALUES "
+                        f"(:{key}, :{key}_concept, 'en', 1, '{answer}', "
+                        f"'{answer}', '{state}')"
+                    ),
+                    identifiers,
+                )
+            for position, key in enumerate(("active", "hidden")):
+                await connection.execute(
+                    text(
+                        "INSERT INTO prompt_list_revision_items "
+                        "(revision_id, prompt_version_id, position) VALUES "
+                        f"(:revision, :{key}, {position})"
+                    ),
+                    identifiers,
+                )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.connect() as connection:
+            row = (
+                await connection.execute(
+                    text(
+                        "SELECT letter_counts, letter_total "
+                        "FROM prompt_list_revisions WHERE id = :revision"
+                    ),
+                    identifiers,
+                )
+            ).one()
+
+        counts = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+        # "café": c, a, f counted; "é" is alphabetic, so it lifts the divisor
+        # without being priceable. "zzz" is hidden and contributes nothing.
+        assert counts == {"a": 1, "c": 1, "f": 1}
+        assert row[1] == 4
     finally:
         await engine.dispose()

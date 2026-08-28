@@ -19,9 +19,8 @@ from app.drawing_rules import (
 )
 from app.game import Game
 from app.identifiers import generate_uuid7
-from app.domain_values import RuntimeEventType
+from app.domain_values import GamePromptSourceMode, RuntimeEventType
 from app.services.runtime_metrics import metrics
-from app.prompts import PROMPTS
 from app.prompt_content import prompt_match_key
 
 DEFAULT_ROOM_DRAWING_SECONDS = 90
@@ -361,12 +360,15 @@ class Room:
     # these in room state, settings responses, logs, or history.
     prompt_list_share_codes: list[str] = field(default_factory=list, repr=False)
     prompt_list_revision_ids: list[str] = field(default_factory=list)
-    prompt_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    prompt_version_ids: dict[str, str] = field(default_factory=dict)
-    prompt_source_revision_ids: dict[str, tuple[str, ...]] = field(
-        default_factory=dict
-    )
-    curated_prompts: list[str] = field(default_factory=list)
+    # What the pinned revisions hold, rather than the content itself. The pool
+    # used to live here for the room's whole life so that a game could offer
+    # three choices and price wheel letters; both need a number and a
+    # distribution, and a game draws the prompts it will actually use when it
+    # starts. `prompt_pool_size` also weights that draw, so a handful of quick
+    # prompts stay as likely as they were when the two were merged in memory.
+    prompt_pool_size: int = 0
+    prompt_letter_counts: dict[str, int] = field(default_factory=dict, repr=False)
+    prompt_letter_total: int = 0
     players: dict[str, Player] = field(default_factory=dict)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
@@ -460,67 +462,38 @@ class Room:
         self.canvas_generation += 1
         return self.canvas_generation
 
-    def effective_prompt_pool(self) -> list[str] | None:
-        """Return the prompt pool a Game should draw from, or None for the default list.
+    def custom_prompt_match_keys(self) -> frozenset[str]:
+        """Match keys of this room's quick prompts.
 
-        If custom_prompts_only is set and custom prompts exist, returns just those.
-        Otherwise, merges custom prompts with curated prompts (or fallback PROMPTS if none provided),
-        with custom prompts first, deduplicated case-insensitively.
+        Quick prompts shadow curated content of the same name, so these are
+        both what a draw excludes and what tells a recorded turn that a prompt
+        came from the room rather than a list.
         """
-        base_prompts = self.curated_prompts if self.curated_prompts else PROMPTS
-        if not self.custom_prompts and not self.curated_prompts:
-            return None
-        if not self.custom_prompts:
-            return self.curated_prompts
-        if self.custom_prompts_only:
-            return self.custom_prompts
-        seen = {prompt_match_key(w, self.prompt_language) for w in self.custom_prompts}
-        return self.custom_prompts + [
-            word
-            for word in base_prompts
-            if prompt_match_key(word, self.prompt_language) not in seen
-        ]
-
-    def effective_prompt_aliases(self) -> dict[str, tuple[str, ...]]:
-        """Aliases for curated prompts that custom room content did not shadow."""
-        if self.custom_prompts_only:
-            return {}
-        custom_keys = {
+        return frozenset(
             prompt_match_key(prompt, self.prompt_language)
             for prompt in self.custom_prompts
-        }
-        return {
-            answer: aliases
-            for answer, aliases in self.prompt_aliases.items()
-            if prompt_match_key(answer, self.prompt_language) not in custom_keys
-        }
+        )
 
-    def effective_prompt_version_ids(self) -> dict[str, str]:
-        if self.custom_prompts_only:
-            return {}
-        custom_keys = {
-            prompt_match_key(prompt, self.prompt_language)
-            for prompt in self.custom_prompts
-        }
-        return {
-            answer: version_id
-            for answer, version_id in self.prompt_version_ids.items()
-            if prompt_match_key(answer, self.prompt_language) not in custom_keys
-        }
+    def draws_from_prompt_lists(self) -> bool:
+        """Whether a game here would draw anything from the pinned revisions."""
+        return not self.custom_prompts_only and self.prompt_pool_size > 0
 
-    def effective_prompt_source_revision_ids(self) -> dict[str, tuple[str, ...]]:
-        """Exact curated sources after custom prompts shadow matching answers."""
-        if self.custom_prompts_only:
-            return {}
-        custom_keys = {
-            prompt_match_key(prompt, self.prompt_language)
-            for prompt in self.custom_prompts
-        }
-        return {
-            answer: revision_ids
-            for answer, revision_ids in self.prompt_source_revision_ids.items()
-            if prompt_match_key(answer, self.prompt_language) not in custom_keys
-        }
+    def prompt_source_mode(self) -> str:
+        """Where this room's prompts come from, read from its settings.
+
+        Deliberately not derived from the prompts a game happens to hold: a
+        game now draws a sample, and a mixed room that drew no quick prompts
+        would otherwise be recorded for all time as a purely curated one.
+        """
+        curated = self.draws_from_prompt_lists()
+        custom = bool(self.custom_prompts)
+        if curated and custom:
+            return GamePromptSourceMode.MIXED.value
+        if curated:
+            return GamePromptSourceMode.CURATED.value
+        if custom:
+            return GamePromptSourceMode.CUSTOM.value
+        return GamePromptSourceMode.BUILTIN_FALLBACK.value
 
     def to_public_summary(self) -> dict:
         active_players = self.seated_players()
@@ -638,10 +611,9 @@ class RoomManager:
         prompt_list_slugs: list[str] | None = None,
         prompt_list_share_codes: list[str] | None = None,
         prompt_list_revision_ids: list[str] | None = None,
-        prompt_aliases: dict[str, tuple[str, ...]] | None = None,
-        prompt_version_ids: dict[str, str] | None = None,
-        prompt_source_revision_ids: dict[str, tuple[str, ...]] | None = None,
-        curated_prompts: list[str] | None = None,
+        prompt_pool_size: int = 0,
+        prompt_letter_counts: dict[str, int] | None = None,
+        prompt_letter_total: int = 0,
         code: str | None = None,
         created_by_user_id: str | None = None,
     ) -> Room:
@@ -671,10 +643,9 @@ class RoomManager:
             prompt_list_slugs=list(prompt_list_slugs or []),
             prompt_list_share_codes=list(prompt_list_share_codes or []),
             prompt_list_revision_ids=list(prompt_list_revision_ids or []),
-            prompt_aliases=dict(prompt_aliases or {}),
-            prompt_version_ids=dict(prompt_version_ids or {}),
-            prompt_source_revision_ids=dict(prompt_source_revision_ids or {}),
-            curated_prompts=list(curated_prompts or []),
+            prompt_pool_size=prompt_pool_size,
+            prompt_letter_counts=dict(prompt_letter_counts or {}),
+            prompt_letter_total=prompt_letter_total,
             created_by_user_id=created_by_user_id,
         )
         self.set_custom_prompts(room, room.custom_prompts)
