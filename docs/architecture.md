@@ -478,6 +478,36 @@ introduces, every socket presents the proxy's address, and the forwarded header 
 attacker-controlled — `auth/rate_limit.client_key` refuses to read it for exactly that
 reason. The key arrives when an address worth keying on does.
 
+### Mail delivery
+
+Mail is queued in the transaction that causes it and delivered by a loop
+([`backend/app/services/mail_delivery.py`](../backend/app/services/mail_delivery.py)),
+so an unreachable relay never undoes the suspension that wanted to announce itself.
+Delivery itself is three phases, and the network is in the one holding no transaction
+([`backend/app/auth/mail.py`](../backend/app/auth/mail.py)).
+
+**Claim.** One short transaction takes a batch of due rows by pushing `next_attempt_at`
+out by a five-minute lease and counting the attempt. The claim is a lease rather than a
+`sending` state, so a process that dies mid-send leaves a row that simply comes due
+again — there is no state for an operator to clear, and no crash that strands a message
+for ever. `SELECT … FOR UPDATE SKIP LOCKED` would say this more directly on PostgreSQL
+and be silently ignored by SQLite, so it is a conditional UPDATE that means the same
+thing on both. The attempt is counted before the send rather than after, which costs a
+crashed send one attempt — the safe direction, since the alternative is a message that
+can be retried for ever by crashing.
+
+**Send.** Outside every transaction, a handful at a time. Selection, SMTP, retry
+bookkeeping and commit all used to sit inside one transaction: fifty messages against a
+relay timing out at ten seconds held it open for minutes, which blocks every SQLite
+writer, holds a PostgreSQL connection and its locks, and makes one slow recipient into
+time every later message waits. Each message carries a `Message-ID` derived from its
+row, so the send that happened before a crash and the send that happens after the lease
+expires are one message with one identity rather than two.
+
+**Record.** Each outcome in its own short transaction: sent, deferred with backoff, or —
+past `MAX_ATTEMPTS` — kept as `failed` with its last error, so a silent mail
+misconfiguration is visible rather than merely quiet.
+
 ### Chat delivery and the database
 
 **A message is delivered without waiting for the database.** Two things used to sit

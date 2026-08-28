@@ -28,7 +28,7 @@ from email.message import EmailMessage
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import EmailOutboxEntry, generate_uuid
@@ -45,6 +45,14 @@ RETRY_BACKOFF = (
     timedelta(hours=2),
 )
 DEFAULT_BATCH_SIZE = 50
+# How long a claimed message is left alone before another sweep may take it.
+# Comfortably longer than a send, so a lease only expires when the process
+# carrying it did not come back.
+CLAIM_LEASE = timedelta(minutes=5)
+# One slow recipient used to delay every message behind it. A handful at a
+# time is enough to drain a batch in seconds without opening a connection per
+# message to a relay that will rate-limit us for it.
+MAX_CONCURRENT_SENDS = 5
 
 
 @dataclass(frozen=True)
@@ -52,6 +60,13 @@ class OutgoingMessage:
     to_address: str
     subject: str
     body: str
+    # Derived from the outbox row rather than left to the relay, so the same
+    # row sent twice is one message with one identity. Delivery is claimed
+    # before it is attempted and recorded after, and a process that dies in
+    # between leaves a row that will be sent again - this is what makes that
+    # second send a duplicate a mail client can collapse rather than a second
+    # message.
+    message_id: str | None = None
 
 
 def public_base_url(environ: Mapping[str, str] | None = None) -> str:
@@ -170,6 +185,8 @@ class SmtpTransport:
         payload["From"] = self._sender
         payload["To"] = message.to_address
         payload["Subject"] = message.subject
+        if message.message_id:
+            payload["Message-ID"] = message.message_id
         payload.set_content(message.body)
         with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as client:
             if self._use_tls:
@@ -235,24 +252,44 @@ class DeliveryResult:
     deferred: int
 
 
-async def deliver_pending(
+@dataclass(frozen=True)
+class _Claim:
+    """One message this sweep has taken responsibility for sending."""
+
+    id: UUID
+    to_address: str
+    template: str
+    payload: dict
+    attempts: int
+
+
+def message_id_for(entry_id: UUID, sender: str | None = None) -> str:
+    """A stable RFC 5322 identity for an outbox row."""
+    domain = (sender or sender_address()).rpartition("@")[2] or "localhost"
+    return f"<{entry_id}@{domain}>"
+
+
+async def _claim_due(
     session_factory: async_sessionmaker[AsyncSession],
     *,
-    transport: EmailTransport | None = None,
-    batch_size: int = DEFAULT_BATCH_SIZE,
-    now: datetime | None = None,
-    base_url: str | None = None,
-) -> DeliveryResult:
-    """Send what is due, and reschedule what fails.
+    batch_size: int,
+    checked_at: datetime,
+) -> list[_Claim]:
+    """Take a batch of due messages, in one short transaction, and let go.
 
-    A message that keeps failing is given up on rather than retried for ever,
-    and the row is kept as `failed` with its last error, so a silent mail
-    misconfiguration is visible instead of merely quiet.
+    The claim is a lease on `next_attempt_at` rather than a new state: pushing
+    the next attempt out is what stops a second sweep taking the same row, and
+    a process that dies mid-send leaves a row that simply comes due again.
+    A `SELECT ... FOR UPDATE SKIP LOCKED` would say this more directly on
+    PostgreSQL and be silently ignored on SQLite, so the claim is a conditional
+    UPDATE that means the same thing on both.
+
+    The attempt is counted here rather than after the send, so a message whose
+    process dies while sending it costs an attempt. That is the safe direction:
+    the alternative is a message that can be retried for ever by crashing.
     """
-    carrier = transport or transport_from_environment()
-    links_from = base_url or public_base_url()
-    checked_at = now or datetime.now(timezone.utc)
-    sent = failed = deferred = 0
+    lease_until = checked_at + CLAIM_LEASE
+    claims: list[_Claim] = []
     async with session_factory() as session:
         async with session.begin():
             due = (
@@ -267,37 +304,147 @@ async def deliver_pending(
                 )
             ).all()
             for entry in due:
-                subject, body = render(entry.template, entry.payload, links_from)
-                entry.attempts += 1
-                try:
-                    await carrier.send(
-                        OutgoingMessage(
-                            to_address=entry.to_address, subject=subject, body=body
+                won = await session.execute(
+                    update(EmailOutboxEntry)
+                    .where(
+                        EmailOutboxEntry.id == entry.id,
+                        EmailOutboxEntry.state == EmailOutboxState.PENDING.value,
+                        EmailOutboxEntry.next_attempt_at <= checked_at,
+                    )
+                    .values(
+                        attempts=EmailOutboxEntry.attempts + 1,
+                        next_attempt_at=lease_until,
+                    )
+                    .execution_options(synchronize_session=False)
+                )
+                if won.rowcount == 1:
+                    claims.append(
+                        _Claim(
+                            id=entry.id,
+                            to_address=entry.to_address,
+                            template=entry.template,
+                            payload=dict(entry.payload),
+                            attempts=entry.attempts + 1,
                         )
                     )
-                except Exception as error:  # noqa: BLE001 - recorded, not swallowed
-                    entry.last_error = str(error)[:256]
-                    if entry.attempts >= MAX_ATTEMPTS:
-                        entry.state = EmailOutboxState.FAILED.value
-                        failed += 1
-                        logger.warning(
-                            "giving up on %s to %s after %d attempts: %s",
-                            entry.template,
-                            entry.to_address,
-                            entry.attempts,
-                            entry.last_error,
-                        )
-                    else:
-                        backoff = RETRY_BACKOFF[
-                            min(entry.attempts - 1, len(RETRY_BACKOFF) - 1)
-                        ]
-                        entry.next_attempt_at = checked_at + backoff
-                        deferred += 1
-                else:
-                    entry.state = EmailOutboxState.SENT.value
-                    entry.sent_at = checked_at
-                    entry.last_error = None
-                    sent += 1
+    return claims
+
+
+async def _record_sent(
+    session_factory: async_sessionmaker[AsyncSession],
+    claim: _Claim,
+    *,
+    checked_at: datetime,
+) -> None:
+    async with session_factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(EmailOutboxEntry)
+                .where(EmailOutboxEntry.id == claim.id)
+                .values(
+                    state=EmailOutboxState.SENT.value,
+                    sent_at=checked_at,
+                    last_error=None,
+                )
+                .execution_options(synchronize_session=False)
+            )
+
+
+async def _record_failure(
+    session_factory: async_sessionmaker[AsyncSession],
+    claim: _Claim,
+    error: str,
+    *,
+    checked_at: datetime,
+) -> bool:
+    """Reschedule or give up on one message. True when it was given up on."""
+    given_up = claim.attempts >= MAX_ATTEMPTS
+    values: dict[str, object] = {"last_error": error}
+    if given_up:
+        values["state"] = EmailOutboxState.FAILED.value
+    else:
+        backoff = RETRY_BACKOFF[min(claim.attempts - 1, len(RETRY_BACKOFF) - 1)]
+        values["next_attempt_at"] = checked_at + backoff
+    async with session_factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(EmailOutboxEntry)
+                .where(EmailOutboxEntry.id == claim.id)
+                .values(**values)
+                .execution_options(synchronize_session=False)
+            )
+    return given_up
+
+
+async def deliver_pending(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    transport: EmailTransport | None = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    now: datetime | None = None,
+    base_url: str | None = None,
+) -> DeliveryResult:
+    """Send what is due, and reschedule what fails.
+
+    Claim, send, record - three phases, and the network is in the one that
+    holds no transaction. Everything used to happen inside a single one: a
+    batch of fifty against a relay timing out at ten seconds held it open for
+    minutes, which on SQLite blocks every writer and on PostgreSQL keeps a
+    connection and its locks for the duration.
+
+    A message that keeps failing is given up on rather than retried for ever,
+    and the row is kept as `failed` with its last error, so a silent mail
+    misconfiguration is visible instead of merely quiet.
+    """
+    carrier = transport or transport_from_environment()
+    links_from = base_url or public_base_url()
+    checked_at = now or datetime.now(timezone.utc)
+    claimed = await _claim_due(
+        session_factory, batch_size=batch_size, checked_at=checked_at
+    )
+    if not claimed:
+        return DeliveryResult(attempted=0, sent=0, failed=0, deferred=0)
+
+    at_once = asyncio.Semaphore(MAX_CONCURRENT_SENDS)
+    sender = sender_address()
+
+    async def attempt(claim: _Claim) -> tuple[_Claim, str | None]:
+        async with at_once:
+            try:
+                subject, body = render(claim.template, claim.payload, links_from)
+                await carrier.send(
+                    OutgoingMessage(
+                        to_address=claim.to_address,
+                        subject=subject,
+                        body=body,
+                        message_id=message_id_for(claim.id, sender),
+                    )
+                )
+            except Exception as error:  # noqa: BLE001 - recorded, not swallowed
+                # Rendering is inside the try on purpose: a row whose template
+                # no longer exists is one bad message, not a dead sweep.
+                return claim, str(error)[:256]
+            return claim, None
+
+    outcomes = await asyncio.gather(*(attempt(claim) for claim in claimed))
+
+    sent = failed = deferred = 0
+    for claim, error in outcomes:
+        if error is None:
+            await _record_sent(session_factory, claim, checked_at=checked_at)
+            sent += 1
+            continue
+        if await _record_failure(session_factory, claim, error, checked_at=checked_at):
+            failed += 1
+            logger.warning(
+                "giving up on %s to %s after %d attempts: %s",
+                claim.template,
+                claim.to_address,
+                claim.attempts,
+                error,
+            )
+        else:
+            deferred += 1
     return DeliveryResult(
-        attempted=len(due), sent=sent, failed=failed, deferred=deferred
+        attempted=len(claimed), sent=sent, failed=failed, deferred=deferred
     )
