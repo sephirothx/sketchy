@@ -364,6 +364,12 @@ export interface AckResponse {
   codeRetired?: boolean;
   /** The command was refused because a bounded deployment drain has begun. */
   serverDraining?: boolean;
+  /** The command was refused because an administrator paused new rooms.
+
+  Told apart from `serverDraining` on purpose: a drain means this server is
+  going away and a reload will find another, while a pause means it is still
+  here and will take the room shortly. */
+  serverPaused?: boolean;
 }
 
 export interface ServerShutdownNotice {
@@ -371,6 +377,12 @@ export interface ServerShutdownNotice {
   reason: "deployment";
   drainSeconds: number;
   startedAt: string;
+}
+
+export interface ServerPausedNotice {
+  contractVersion: 1;
+  paused: boolean;
+  reason: "maintenance";
 }
 
 export interface RoomPreviewResponse extends AckResponse {

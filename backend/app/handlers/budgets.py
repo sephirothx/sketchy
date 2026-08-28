@@ -161,6 +161,19 @@ class CommandBudgetPolicy:
         """The budget this command answers to; everything has one."""
         return self._budgets[self.class_of(command)]
 
+    def limit_of(self, name: str) -> int:
+        """The limit one class is running at right now.
+
+        `for_command` answers the same question from the other end - given a
+        command, which budget does it spend - which is what the guard needs.
+        A panel already knows the class it is showing, and asking by class
+        saves it inventing a command that happens to map to one.
+        """
+        budget = self._budgets.get(name)
+        if budget is None:
+            raise KeyError(f"unknown budget class: {name}")
+        return budget.limit
+
     def describe(self) -> list[dict]:
         """Every budget with its current value, default, bounds and purpose.
 

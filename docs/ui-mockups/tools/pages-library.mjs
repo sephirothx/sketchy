@@ -322,8 +322,47 @@ const auditRow = (time, body, tag, tagKind) => `
 const opsBars = [42, 55, 38, 61, 70, 52, 78, 64, 58, 84, 76, 66]
   .map((h) => `<span style="flex: 1; height: ${h}%; border-radius: 5px 5px 0 0; background: ${T.primary}; opacity: 0.85"></span>`).join('');
 
+
+// The operations workspace carries five surfaces since #446: the dashboard it
+// always had, the runtime settings and the commands, and the activity table
+// and audit ledger that used to sit below the fold as a disclosure and a
+// six-row preview. The artboard shows the Tuning tab selected, because that is
+// the one the change is about.
+const opsTab = (label, active = false) => `
+<button type="button" role="tab" aria-selected="${active}" style="background: transparent; border: 0; border-bottom: 2.5px solid ${active ? T.primary : 'transparent'}; margin-bottom: -1.5px; padding: 9px 14px; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; color: ${active ? T.primaryInk : T.muted}; white-space: nowrap">${label}</button>`;
+
+const opsTabs = (activeLabel) => `
+<div role="tablist" aria-label="Server operations" style="display: flex; gap: 4px; border-bottom: 1.5px solid ${T.line}; margin-bottom: 16px">
+  ${['Overview', 'Tuning', 'Controls', 'Activity', 'Audit ledger'].map((label) => opsTab(label, label === activeLabel)).join('')}
+</div>`;
+
+// One runtime value: what it is, what it trades off, where the number in force
+// came from, and the bounds the server will hold it inside.
+const tunableRow = (label, value, bounds, why, origin, originKind = 'neutral') => `
+<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 12px 2px; border-bottom: 1px solid ${T.line}">
+  <div style="min-width: 0">
+    <strong style="display: block; font-size: 13.5px; font-weight: 800; color: ${T.ink}">${label}</strong>
+    <p style="font-size: 12.5px; font-weight: 600; color: ${T.muted}; line-height: 1.5; margin-top: 3px; max-width: 62ch">${why}</p>
+    <p style="font-size: 11.5px; font-weight: 700; color: ${T.faint}; margin-top: 4px; font-variant-numeric: tabular-nums">${bounds}</p>
+  </div>
+  <div style="display: flex; align-items: center; gap: 8px; flex: none">
+    ${chip(origin, originKind)}
+    <span style="display: inline-flex; align-items: center; justify-content: flex-end; width: 106px; padding: 7px 9px; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; background: ${T.field}; font-size: 14px; font-weight: 700; color: ${T.ink}; font-variant-numeric: tabular-nums">${value}</span>
+    ${btn.ghost('Reset')}
+  </div>
+</div>`;
+
+const tunableGroup = (title, rows, note = '') => `
+<section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}; margin-bottom: 12px">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px">
+    <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17px; color: ${T.ink}">${title}</h2>
+    ${note}
+  </div>
+  ${rows}
+</section>`;
+
 export const AdminOpsPage = `
-<div style="width: 1100px; min-height: 1180px; margin: 0 auto; padding: 24px 24px 40px">
+<div style="width: 1100px; min-height: 940px; margin: 0 auto; padding: 24px 24px 40px">
   ${backBar()}
   <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 16px">
     <div>
@@ -332,6 +371,8 @@ export const AdminOpsPage = `
     </div>
     ${btn.secondary('Refresh', { iconL: icon.rounds(15) })}
   </header>
+
+  ${opsTabs('Overview')}
 
   <div style="display: flex; align-items: center; gap: 10px; background: ${T.successSoft}; border: 1px solid transparent; border-radius: ${T.radiusSm}; padding: 11px 14px; margin-bottom: 14px; font-size: 13.5px">
     <span style="width: 9px; height: 9px; border-radius: 50%; background: ${T.success}; flex: none"></span>
@@ -374,16 +415,73 @@ export const AdminOpsPage = `
     </section>
   </div>
 
+</div>`;
+
+export const AdminOpsTuningPage = `
+<div style="width: 1100px; min-height: 1000px; margin: 0 auto; padding: 24px 24px 40px">
+  ${backBar()}
+  <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 16px">
+    <div>
+      ${sectionLabel('Administrators only')}
+      <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}; margin-top: 4px">Server operations</h1>
+    </div>
+    ${btn.secondary('Refresh', { iconL: icon.rounds(15) })}
+  </header>
+
+  ${opsTabs('Tuning')}
+
+  <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px">
+    <p style="font-size: 12.5px; font-weight: 600; color: ${T.muted}; line-height: 1.5; max-width: 60ch">Every value here is bounded by the server and takes effect on the next command. Changes survive a restart; resetting one puts it back to what this process started with.</p>
+    <div style="display: flex; align-items: center; gap: 10px; flex: none">
+      <span style="font-size: 12.5px; font-weight: 800; color: ${T.warmInk}">1 unsaved</span>
+      ${btn.primary('Apply changes')}
+    </div>
+  </div>
+
+  ${tunableGroup('Client cadences', [
+    tunableRow('flush interval ms', '56', '10–200 ms · default 40', "How long the drawer's queued points wait before going out as one frame. Bandwidth against stroke smoothness: the drawer never feels it, but a viewer draws each batch as one polyline, so a fast curve arrives faceted.", 'Changed here', 'primary'),
+    tunableRow('lobby poll interval ms', '4000', '1000–60000 ms · default 4000', 'How often the lobby asks for the room list. Freshness against request volume; polling already stops while the tab is hidden.', 'Default'),
+  ].join(''), chip('Sent to every browser', 'primary'))}
+
+  ${tunableGroup('Command budgets', [
+    tunableRow('drawing', '100', '50–400 commands per 2s · default 100', "Drawing frames per two seconds. The drawer's flush timer produces 25 a second, so anything at or below 50 refuses legitimate drawing.", 'Default'),
+    tunableRow('conversation', '20', '5–120 commands per 10s · default 20', 'Chat messages and guesses per ten seconds.', 'Default'),
+  ].join(''))}
+
+  ${tunableGroup('Room and connection ceilings', [
+    tunableRow('socket limit', '600', '10–20000 sockets · default 600', 'Connections this process admits. An arrival beyond it is told and then closed, never refused at the handshake.', 'SOCKET_LIMIT'),
+    tunableRow('spectators per room', '8', '1–100 spectators · default 8', 'Watchers one room admits. Watching is cheaper than playing but not free: every spectator is another recipient of every broadcast.', 'Default'),
+  ].join(''))}
+
+  ${tunableGroup('Turn timing', [
+    tunableRow('results seconds', '5', '0–30 seconds · default 5', 'The pause on the turn-results screen. Clients read the length off the payload, so a shorter one is still a faithful turn.', 'Default'),
+  ].join(''))}
+</div>`;
+
+export const AdminOpsAuditPage = `
+<div style="width: 1100px; min-height: 720px; margin: 0 auto; padding: 24px 24px 40px">
+  ${backBar()}
+  <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 16px">
+    <div>
+      ${sectionLabel('Administrators only')}
+      <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}; margin-top: 4px">Server operations</h1>
+    </div>
+    ${btn.secondary('Refresh', { iconL: icon.rounds(15) })}
+  </header>
+
+  ${opsTabs('Audit ledger')}
+
   <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
     <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px">
       <div>
         <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17px; color: ${T.ink}">Audit ledger</h2>
-        <p style="font-size: 12.5px; color: ${T.faint}; font-weight: 700; margin-top: 2px">Recent operator and automated actions · append-only</p>
+        <p style="font-size: 12.5px; color: ${T.faint}; font-weight: 700; margin-top: 2px">Every operator and automated action, newest first · append-only</p>
       </div>
-      ${btn.ghost('View all')}
     </div>
     ${auditRow('09:41', '<strong style="color: var(--ink)">A moderator</strong> suspended an account for 7 days, from a report', 'Moderation', 'danger')}
     ${auditRow('02:00', '<strong style="color: var(--ink)">Retention</strong> previewed stale-guest cleanup — 0 accounts affected', 'Success', 'success')}
+    ${auditRow('11:20', '<strong style="color: var(--ink)">An administrator</strong> changed client.flush_interval_ms from 40 to 56', 'Admin', 'primary')}
+    ${auditRow('11:04', '<strong style="color: var(--ink)">An administrator</strong> paused new rooms — database migration', 'Admin', 'primary')}
     ${auditRow('Yesterday', '<strong style="color: var(--ink)">An administrator</strong> opened the per-player operations view', 'Logged', 'neutral')}
   </section>
 </div>`;

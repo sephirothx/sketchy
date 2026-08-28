@@ -3,7 +3,7 @@
 A UI/UX review of every shipped Sketchy screen, and the reasoning behind the
 redesigned mockups that answer it.
 
-- **The redesigned mockups** — 16 artboards on one canvas, each with a
+- **The redesigned mockups** — 21 artboards on one canvas, each with a
   light/dark theme tweak:
   <https://claude.ai/code/artifact/1c717d8a-994f-4cfe-9a66-8308f4218958>
   (source in this directory; regenerate with `node tools/build.mjs`).
@@ -449,6 +449,15 @@ artboards, kept for stability or clarity rather than drift:
 - **Ops chart granularity** — the operations dashboard draws the artboard's
   bar chart from daily aggregates (metric selectable); hourly buckets are
   not recorded.
+- **Operator tabs** — the operations page is one workspace with five tabs
+  (Overview, Tuning, Controls, Activity, Audit ledger), shown here as three
+  artboards because an artboard holds one state. The Controls tab — the
+  maintenance pause, the live-room table and the role control — has no
+  artboard of its own; it is built from the same card, table and chip parts
+  the other operator screens already use. The shutdown control there is marked
+  out from them — a warm border and a two-step confirm — because it is the one
+  control on the page that ends the process, and nothing in the app starts it
+  again.
 - **Identity chip stays in the room header** — the artboards drop it, but
   it is the only in-room path to claiming an account and account menus.
 

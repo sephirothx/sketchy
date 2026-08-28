@@ -1,4 +1,4 @@
-import type { ServerShutdownNotice } from "../types";
+import type { ServerPausedNotice, ServerShutdownNotice } from "../types";
 
 /**
  * Accept only the shutdown contract this build understands. A later server may
@@ -43,4 +43,20 @@ export function shutdownSecondsRemaining(
   if (Number.isNaN(startedAt)) return notice.drainSeconds;
   const remaining = (startedAt + notice.drainSeconds * 1000 - now) / 1000;
   return Math.min(notice.drainSeconds, Math.max(0, Math.ceil(remaining)));
+}
+
+/**
+ * Accept only the pause contract this build understands.
+ *
+ * Separate from the shutdown notice above, and deliberately so: a pause says
+ * this server is still here and will take the room shortly, where a drain says
+ * it is going away and a reload will find another. Telling a player the wrong
+ * one of those sends them off to reload a page that was about to work.
+ */
+export function parsePausedNotice(payload: unknown): ServerPausedNotice | null {
+  if (!payload || typeof payload !== "object") return null;
+  const notice = payload as Partial<ServerPausedNotice>;
+  if (notice.contractVersion !== 1 || notice.reason !== "maintenance") return null;
+  if (typeof notice.paused !== "boolean") return null;
+  return { contractVersion: 1, paused: notice.paused, reason: "maintenance" };
 }

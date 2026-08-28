@@ -15,10 +15,10 @@ import { useSettingsStore } from "../store/settingsStore";
 import { ModalShell } from "../components/ui/ModalShell";
 import { Button } from "../components/ui/Button";
 import { AlertCircleIcon, ChevronDownIcon, EyeIcon, PlusIcon, SearchIcon } from "../components/icons";
+import { useClientConfig } from "../hooks/useClientConfig";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import type { AckResponse, RoomSummary } from "../types";
 
-const POLL_INTERVAL_MS = 4000;
 const ROOM_FETCH_TIMEOUT_MS = 6000;
 const ROOM_CODE_LENGTH = 6;
 
@@ -133,6 +133,9 @@ export function LobbyBrowserPage() {
   const colorblindSafeColors = useSettingsStore((s) => s.colorblindSafeColors);
   const setSession = useGameStore((s) => s.setSession);
   const setExitingRoom = useGameStore((s) => s.setExitingRoom);
+  // Server-decided, so lobby freshness can be traded against request volume
+  // without a deploy.
+  const { lobbyPollIntervalMs } = useClientConfig();
 
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [joinCode, setJoinCode] = useState("");
@@ -222,14 +225,14 @@ export function LobbyBrowserPage() {
       }
     }
 
-    const stopPolling = startVisibilityAwarePolling(fetchRooms, POLL_INTERVAL_MS);
+    const stopPolling = startVisibilityAwarePolling(fetchRooms, lobbyPollIntervalMs);
     return () => {
       cancelled = true;
       stopPolling();
       if (activeTimeout !== null) window.clearTimeout(activeTimeout);
       activeController?.abort();
     };
-  }, [roomListRetry]);
+  }, [roomListRetry, lobbyPollIntervalMs]);
 
   function retryRoomList() {
     setRoomListError(null);

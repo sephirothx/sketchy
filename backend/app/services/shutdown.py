@@ -20,8 +20,10 @@ from app.rooms import Room, RoomManager
 
 logger = logging.getLogger("sketchy.shutdown")
 SHUTDOWN_NOTICE_CONTRACT_VERSION = 1
+PAUSE_NOTICE_CONTRACT_VERSION = 1
 ABANDONMENT_RETENTION = timedelta(days=90)
 NEW_WORK_REJECTION = "Server update in progress; try again shortly"
+PAUSE_REJECTION = "New rooms are paused for maintenance; try again shortly"
 SHUTDOWN_NOTICE_TIMEOUT_SECONDS = 2.0
 ABANDONMENT_WRITE_TIMEOUT_SECONDS = 5.0
 
@@ -56,6 +58,7 @@ class ShutdownCoordinator:
         self._session_factory = session_factory
         self._room_manager = room_manager
         self._state = "starting"
+        self._paused = False
         self._drain_seconds = 0.0
         self._started_at: datetime | None = None
         self._game_state_changed = asyncio.Event()
@@ -70,7 +73,60 @@ class ShutdownCoordinator:
 
     @property
     def is_draining(self) -> bool:
+        """A bounded deployment drain is running. One-way, once per process."""
         return self._state == "draining"
+
+    @property
+    def is_paused(self) -> bool:
+        """An administrator has stopped this process taking new work."""
+        return self._paused
+
+    @property
+    def refuses_new_work(self) -> bool:
+        """Whether this process is taking new rooms, games and votes.
+
+        The one question every admission check actually asks. A drain and a
+        maintenance pause are different events with different notices, but
+        they are the same answer here, so the handlers consult this rather
+        than enumerating the reasons - which is what keeps a new reason from
+        having to be added in nine places.
+        """
+        return self._state == "draining" or self._paused
+
+    def pause(self, paused: bool = True) -> None:
+        """Stop, or resume, admitting new work - without stopping the process.
+
+        Deliberately not `begin_shutdown` with a longer drain. That is one-way
+        by construction, records the games it outlives as abandoned, and ends
+        with a process that has to be restarted; a pause is none of those. It
+        also leaves `is_ready` alone on purpose, so `/api/ready` keeps
+        answering 200: a readiness failure invites an orchestrator to replace
+        the container, which is the opposite of what pausing it is for.
+        """
+        self._paused = paused
+
+    def pause_payload(self) -> dict:
+        """The `server_paused` notice, sent on each toggle."""
+        return {
+            "contractVersion": PAUSE_NOTICE_CONTRACT_VERSION,
+            "paused": self._paused,
+            "reason": "maintenance",
+        }
+
+    @property
+    def drain_seconds(self) -> float:
+        return self._drain_seconds
+
+    def set_drain_seconds(self, seconds: float) -> None:
+        """Change how long the next drain will wait for games to finish.
+
+        Read at the top of `begin_shutdown` rather than captured at startup,
+        so a value changed while the process is running is the one the next
+        deployment drain uses. Changing it *during* a drain does not move the
+        deadline already being waited on, which is the honest behaviour: the
+        clients were told a number in the shutdown notice.
+        """
+        self._drain_seconds = seconds
 
     def begin_startup(self, *, drain_seconds: float) -> None:
         self._state = "starting"
@@ -87,10 +143,24 @@ class ShutdownCoordinator:
         self._game_state_changed.set()
 
     def rejection_acknowledgement(self) -> dict:
+        """Why this command was refused, in words written for the player.
+
+        A drain and a pause are told apart on the wire rather than sharing one
+        flag: a drain means this server is going away and a reload will find
+        another, while a pause means it is still here and will take the room
+        shortly. A client that could not tell them apart would have to guess
+        which advice to give.
+        """
+        if self._state == "draining":
+            return {
+                "ok": False,
+                "error": NEW_WORK_REJECTION,
+                "serverDraining": True,
+            }
         return {
             "ok": False,
-            "error": NEW_WORK_REJECTION,
-            "serverDraining": True,
+            "error": PAUSE_REJECTION,
+            "serverPaused": True,
         }
 
     def notice_payload(self) -> dict:

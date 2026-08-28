@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 import socketio
 
+from app.flow_timing import timing
 from app.game import Game
 from app.handlers import register_all_handlers as register_handlers
 from app.handlers import restart
@@ -15,6 +16,10 @@ from app.rooms import RestartVote, RoomManager
 
 class DrainingShutdown:
     is_draining = True
+    is_paused = False
+    # The handlers ask one question - is this process taking new work - and a
+    # drain is one of the two answers that means no.
+    refuses_new_work = True
 
     def __init__(self):
         self.notified = False
@@ -77,7 +82,11 @@ async def test_new_connection_receives_current_versioned_shutdown_notice():
 
     await sio.handlers["/"]["connect"]("sid", {}, {"protocol": PROTOCOL_VERSION})
 
-    sio.emit.assert_awaited_once_with(
+    # Among, not only: every socket is also handed the client cadences it
+    # needs before it draws anything.
+    emitted = [call.args[0] for call in sio.emit.await_args_list]
+    assert "server_shutdown" in emitted
+    sio.emit.assert_any_await(
         "server_shutdown", shutdown.notice_payload(), to="sid"
     )
 
@@ -86,7 +95,7 @@ async def test_new_connection_receives_current_versioned_shutdown_notice():
 async def test_an_approved_restart_is_cancelled_once_the_drain_starts(monkeypatch):
     """The vote passed before the drain, so the room is told, not restarted."""
 
-    monkeypatch.setattr(restart, "RESTART_DELAY_SECONDS", 0)
+    monkeypatch.setattr(timing, "restart_delay_seconds", 0)
     rooms = RoomManager()
     room = rooms.create_room(name="Live", is_public=True)
     host = rooms.add_player(room, "Host")

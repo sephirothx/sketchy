@@ -52,6 +52,7 @@ claim that an arbitrary host will sustain it.
 | **R-SHUT-03** | The drain window MUST be configurable via `SHUTDOWN_DRAIN_SECONDS` (0–300, default 30). A second termination signal MUST abandon the remaining window immediately. |
 | **R-SHUT-04** | A game that outlives the deadline MUST NOT be recorded as completed history. Exactly one privacy-safe `planned_shutdown_abandonments` row MUST be written instead, retained 90 days. |
 | **R-SHUT-05** | That diagnostic MUST NOT contain room codes, room or player names, prompts, chat, or canvas contents. |
+| **R-SHUT-07** | An administrator MUST be able to start a planned shutdown from the operations surface, with a bounded window for this shutdown that does not change the configured default. It MUST ask the process to terminate rather than draining inside the request — a drain is one-way, and running it in a live process leaves the real shutdown nothing left to spend. A deployment whose runner cannot signal itself MUST say so rather than appear to succeed. Nothing in the API brings a server back. |
 | **R-SHUT-06** | Live rooms, canvases, timers, scores, and games MUST NOT be serialized or restored. A crash still loses process-owned state; this is a stated property, not a defect. |
 
 ---
@@ -80,7 +81,7 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-GAME-01** | A game MUST proceed as: waiting → *choosing* (15 s) → *drawing* (room-configured, default 90 s) → *turn results* (5 s, `TURN_RESULTS_SECONDS`) → next turn → *game over*. [`game.py:139`](../backend/app/game.py) |
+| **R-GAME-01** | A game MUST proceed as: waiting → *choosing* (15 s) → *drawing* (room-configured, default 90 s) → *turn results* (5 s) → next turn → *game over*. The phase lengths live on [`flow_timing.py`](../backend/app/flow_timing.py) and are tunable (R-CONF-01); `TURN_RESULTS_SECONDS` still supplies the boot value. [`game.py`](../backend/app/game.py) |
 | **R-GAME-02** | Every active player MUST draw exactly once per round, for the configured number of rounds. |
 | **R-GAME-03** | The drawer MUST be offered **up to 3** prompt options, drawn from prompts not yet used this game (fewer only when the unused pool is smaller). Failing to choose in time MUST auto-pick, and the turn MUST record that it was auto-picked. |
 | **R-GAME-04** | The drawing phase MUST end early once every eligible guesser has answered correctly. |
@@ -340,7 +341,7 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-ROLE-01** | The account payload carries the role so the menu knows what to **show**. It MUST NEVER be what grants access. Every endpoint behind those entries MUST re-check the role and answer **404** to anyone else. |
+| **R-ROLE-01** | The account payload carries the role so the menu knows what to **show**. It MUST NEVER be what grants access. Every endpoint behind those entries MUST re-check the role and answer **404** to anyone else — **including for a malformed request**. A gate that runs after body validation answers 422 to an ordinary player, which confirms the endpoint exists. |
 | **R-AUDIT-01** | Report submission and review, suspension, and revocation MUST each append an audit event recording who acted, the request it belonged to, a hashed client address, and what was acted on. |
 | **R-AUDIT-02** | The audit table MUST be append-only. Names MUST NOT be written into it — a stored name would be personal data that erasing an account could not reach. The admin view resolves names when the ledger is read, so a deleted account reads *Deleted player* while the entry stands exactly as it was. |
 | **R-AUDIT-03** | An action on no single row MUST record no target and say so by leaving both target fields empty, rather than inventing a subject. |
@@ -406,6 +407,19 @@ claim that an arbitrary host will sustain it.
 | **R-OBS-04** | Raw observations MUST be rolled into permanent daily totals **before** being purged. Unbounded event rows on embedded SQLite is a disk that fills up quietly. |
 | **R-OBS-05** | `GET /metrics` MUST be disabled entirely until `METRICS_TOKEN` is set, and MUST require that bearer token. |
 | **R-OBS-06** | The in-app operations page MUST require the administrator role. |
+
+### Runtime tuning
+
+| # | Requirement |
+| --- | --- |
+| **R-CONF-01** | Values that decide how the running game *feels* MUST be changeable by an administrator without a deploy, and without a restart wherever the value is reached through an object rather than baked into one. The motivating case is a cadence no benchmark settles: the byte curve says to raise the drawer's flush interval and looking at a viewer's screen says otherwise, and the tolerance is far tighter than the numbers suggest. |
+| **R-CONF-02** | Every tunable MUST carry its compiled default, its bounds, its unit and a one-line description of what it trades off, and the endpoint MUST serve all of them — so the panel needs to know nothing about any particular setting, and adding one does not mean editing the page. |
+| **R-CONF-03** | Every value MUST be bounded **server-side**. The bounds MUST refuse a value the rest of the system could not live with, including pairs that are individually legal and jointly impossible: a client cadence and the budget that admits it are one setting wearing two hats. |
+| **R-CONF-04** | A change carrying several settings MUST be validated as a set and applied as a set. Applying them one at a time would leave a refused request half-committed to a configuration nobody chose, and would measure each value against the ones not yet moved. |
+| **R-CONF-05** | Changes MUST survive a restart, MUST be adopted **before** the process admits players, and MUST fall back to the compiled default when unset. One unusable stored value MUST NOT prevent startup or cost the others — a release that tightens a bound leaves an old number behind it, and the answer is that value at its default plus a line in the log. |
+| **R-CONF-06** | Every change MUST append an audit event naming the administrator, the setting, and the values moved from and to, **in the same transaction as the change itself**. A value submitted unchanged MUST NOT be recorded, or a panel posting its whole form buries the one change that was made. |
+| **R-CONF-07** | Abuse backstops MUST NOT be tunable: the authentication and submission limits, and the canvas and replay ceilings. Nor MUST anything that can change a score, since every completed game freezes a rule snapshot. Nor MUST a value the frontend duplicates, which is a wire contract rather than a setting. Each value made tunable is one that can be set wrong in production. |
+| **R-CONF-08** | A tunable is **not** a test setting. Client-side intervals MUST keep being fast-forwarded with the page's own clock (R-ENG-10) rather than made configurable, and the suite MUST NOT reach for the administrator surface to make itself faster. Configuring the *server* through the environment before it starts — as the E2E harness already does with `TURN_RESULTS_SECONDS` — is the boot value doing its documented job and is not what this forbids. |
 
 ### Bug reports
 
@@ -506,5 +520,6 @@ design, not a bug fix.
 | Presets, room codes | [`services/room_presets.py`](../backend/app/services/room_presets.py), [`services/room_codes.py`](../backend/app/services/room_codes.py) | `tests/test_room_presets.py`, `test_room_codes.py` |
 | Shutdown drain | [`services/shutdown.py`](../backend/app/services/shutdown.py) | `tests/test_shutdown.py`, `tests/handlers/test_shutdown.py` |
 | Runtime analytics | [`services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | `tests/test_runtime_analytics.py` |
+| Runtime tuning | [`services/runtime_settings.py`](../backend/app/services/runtime_settings.py), [`services/tunables.py`](../backend/app/services/tunables.py), [`services/config_store.py`](../backend/app/services/config_store.py), [`api/admin_settings.py`](../backend/app/api/admin_settings.py) | `tests/test_runtime_settings.py`, `test_admin_tunables_api.py` |
 | Deployment, static delivery, worker topology | [`deployment.py`](../backend/app/deployment.py) | `tests/test_deployment.py`, `test_static_delivery.py` |
 | Connection resilience | [`handlers/connection.py`](../backend/app/handlers/connection.py) | `tests/handlers/test_connection.py`, `tests/e2e/test_network_resilience.py`, `test_player_afk_reconnect.py` |

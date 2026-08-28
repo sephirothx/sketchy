@@ -23,7 +23,11 @@ import { WarningNotice } from "./components/WarningNotice";
 import { XIcon } from "./components/icons";
 import { useAuthStore } from "./store/authStore";
 import { socket } from "./lib/socket";
-import { parseShutdownNotice, shutdownSecondsRemaining } from "./lib/shutdownNotice";
+import {
+  parsePausedNotice,
+  parseShutdownNotice,
+  shutdownSecondsRemaining,
+} from "./lib/shutdownNotice";
 import { onServerFull } from "./lib/socket";
 import type { ServerShutdownNotice } from "./types";
 
@@ -43,6 +47,7 @@ function App() {
   const fetchMe = useAuthStore((state) => state.fetchMe);
   const [shutdownNotice, setShutdownNotice] = useState<ServerShutdownNotice | null>(null);
   const [serverFull, setServerFull] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [restarted, setRestarted] = useState(false);
 
@@ -64,10 +69,18 @@ function App() {
         return null;
       });
     };
+    // A pause is not a version skew and not a drain: the server is still
+    // here, so the banner clears when it is lifted rather than on a reload.
+    const onServerPaused = (payload: unknown) => {
+      const notice = parsePausedNotice(payload);
+      if (notice) setPaused(notice.paused);
+    };
     socket.on("server_shutdown", onServerShutdown);
+    socket.on("server_paused", onServerPaused);
     socket.on("connect", onConnect);
     return () => {
       socket.off("server_shutdown", onServerShutdown);
+      socket.off("server_paused", onServerPaused);
       socket.off("connect", onConnect);
     };
   }, []);
@@ -104,6 +117,12 @@ function App() {
       {serverFull && (
         <div className="server-shutdown-banner" role="status" aria-live="polite">
           {serverFull}
+        </div>
+      )}
+      {paused && !shutdownNotice && (
+        <div className="server-shutdown-banner" role="status" aria-live="polite">
+          New rooms are paused for maintenance. Games already running carry on
+          as normal.
         </div>
       )}
       {shutdownNotice && (

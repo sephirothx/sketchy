@@ -69,7 +69,11 @@ the cookie to a session record and stores `{"user_id": …}` on the Socket.IO se
 - An active suspension → the handshake is refused with
   `ConnectionRefusedError("This account is suspended.")`, surfacing to the client as
   `connect_error`.
-- A drain already in progress → the socket is immediately sent `server_shutdown`.
+- A drain already in progress → the socket is immediately sent `server_shutdown`;
+  a maintenance pause → `server_paused`.
+- Every accepted socket is sent **`client_config`** before anything else it will
+  need it for. There is no acknowledgement on a handshake to put these in, and
+  `room_state` is per-room so it never reaches a client sitting in the lobby.
 
 ### Protocol version
 
@@ -120,7 +124,11 @@ Every acknowledgement is a JSON object sharing these fields
 Command-specific additions, all optional: `roomId`, `code`, `playerId`,
 `isAnonymous`, `needsRebind`, `roomFull` (player slots are taken but spectating is
 open), `codeRetired` (the code was valid but its ephemeral room has ended),
-`serverDraining` (refused because a bounded deployment drain has begun).
+`serverDraining` (refused because a bounded deployment drain has begun),
+`serverPaused` (refused because an administrator paused new rooms). The last two
+are told apart on purpose: a drain means this server is going away and a reload
+will find another, while a pause means it is still here and will take the room
+shortly.
 
 A payload that fails validation is refused by
 `PayloadError.acknowledgement()` ([`backend/app/handlers/payloads.py:71`](../backend/app/handlers/payloads.py))
@@ -136,6 +144,12 @@ all. `undo_stroke` shares drawing's budget but **does** answer, because the clie
 it with an acknowledgement waiting on it.
 
 ### Command budgets
+
+These are the **defaults**. Every limit is an administrator-settable runtime value
+(§9 Operations, R-RATE-09 and R-CONF-01), bounded server-side and applied to the
+next command; the windows are fixed. The drawing budget is additionally bound to
+`client.flush_interval_ms` below, since the interval decides how many frames a
+legitimate drawer produces and the budget decides how many are accepted.
 
 | Kind | Commands | Budget |
 | --- | --- | --- |
@@ -367,7 +381,9 @@ the server resolves the seat against the live room and selects the evidence itse
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
 | `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
+| `server_paused` | `ServerPausedNotice` — an administrator stopped, or resumed, admitting new rooms | every socket on each toggle; one socket at handshake while paused |
 | `server_full` | `{reason}` — the socket is closed immediately afterwards | one socket, at handshake |
+| `client_config` | `ClientConfig` — cadences the client runs at | one socket at handshake; every socket when one changes |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
 
@@ -435,6 +451,35 @@ the recorded standings so the final screen and the history row can never disagre
 ```ts
 { contractVersion: 1, reason: "deployment", drainSeconds: number, startedAt: string }
 ```
+
+**`server_paused`**:
+
+```ts
+{ contractVersion: 1, paused: boolean, reason: "maintenance" }
+```
+
+**`client_config`** ([`backend/app/client_config.py`](../backend/app/client_config.py) →
+[`frontend/src/lib/clientConfig.ts`](../frontend/src/lib/clientConfig.ts)):
+
+```ts
+{ contractVersion: 1, flushIntervalMs: number, lobbyPollIntervalMs: number }
+```
+
+Cadences the *client* runs at, decided by the server so a deployment can tune them
+without shipping a bundle (R-CONF-01). `flushIntervalMs` is the motivating case:
+it is the largest single lever on drawing bandwidth, the drawer never feels it —
+their own canvas is rasterized on every `pointermove` — and a viewer draws each
+batch as one polyline, so a value the byte curve likes can arrive visibly faceted.
+It can only be settled by looking at a running game, which is why it ships.
+
+The client keeps its compiled defaults for any field that is missing or outside
+what it can run, because a server that cannot say is not a reason to stop drawing.
+The values are latched where the socket lives and handed to subscribers on
+subscription ([`onClientConfig`](../frontend/src/lib/clientConfig.ts)), since the
+notice arrives at the handshake — usually long before anything that depends on it
+has mounted. A change re-arms the affected timers rather than waiting for the next
+turn: the flush interval is a dependency of the effect that owns the drawer's
+`setInterval`, so it is torn down and re-armed mid-stroke.
 
 ---
 
@@ -917,15 +962,61 @@ as in the column lifted out of it. The client already sends a bare `location.pat
 but a query string is where invite codes and identifiers live, so the rule holds against
 a client that is buggy or lying rather than resting on its promise.
 
-### Operations — [`backend/app/api/operations.py`](../backend/app/api/operations.py)
+### Operations — [`backend/app/api/operations.py`](../backend/app/api/operations.py), [`admin_settings.py`](../backend/app/api/admin_settings.py)
 
-Administrator role required for all of these.
+Administrator role required for all of these, checked per request and answered **404** to
+anyone else (R-ROLE-01) by the shared gate in
+[`api/admin_auth.py`](../backend/app/api/admin_auth.py). On the routes that carry a
+body the gate is a **dependency**, not a call inside the handler: FastAPI validates a
+body before the handler runs, so a gate awaited inside one would answer `422` to an
+ordinary player who sent nonsense — confirming there was something there to process,
+which is the one thing the 404 exists to refuse.
 
-| Method | Path |
-| --- | --- |
-| `GET` | `/api/admin/metrics`, `/api/admin/metrics/daily`, `/api/admin/metrics/events` |
-| `GET` | `/api/admin/players/{user_id}/activity` — **writes an audit event on every use** |
-| `GET` | `/api/admin/audit` |
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/admin/metrics`, `/api/admin/metrics/daily`, `/api/admin/metrics/events` | |
+| `GET` | `/api/admin/players/{user_id}/activity` | **Writes an audit event on every use** |
+| `GET` | `/api/admin/audit` | |
+| `GET` | `/api/admin/tunables` | Every runtime tunable with its value, default, bounds, unit, origin and purpose |
+| `PATCH` | `/api/admin/tunables` | `{values?, reset?}`. **Writes one `config.changed` audit event per setting moved** |
+| `GET` | `/api/admin/maintenance` | Whether this process is paused, draining, and its readiness |
+| `POST` | `/api/admin/maintenance` | `{paused, reason?}`. **Writes `maintenance.paused` / `maintenance.resumed`** |
+| `POST` | `/api/admin/shutdown` | `{reason, drainSeconds?}`, 0–300. **Writes `server.shutdown_requested`** |
+| `GET` | `/api/admin/rooms` | Live rooms: code, state, phase, seat and spectator counts. No prompts, chat or canvas |
+| `DELETE` | `/api/admin/rooms/{id}` | Close a room. **Writes `room.closed_by_admin`** |
+| `DELETE` | `/api/admin/rooms/{id}/players/{playerId}` | Remove one seat. **Writes `room.player_kicked`** |
+| `POST` | `/api/admin/rooms/{id}/end-turn` | End the drawing phase as its timer would. **Writes `room.turn_ended_by_admin`** |
+| `PATCH` | `/api/admin/players/{id}/role` | `{role, reason}`, `role` ∈ `user`/`moderator`. **Writes `admin.role_changed`** |
+
+Pausing refuses new rooms, game starts and restart votes while leaving live games
+to finish, and leaves readiness alone — `/api/ready` keeps answering 200, because a
+readiness failure invites an orchestrator to replace a container that is
+deliberately still running. It survives a restart, since a pause is usually taken
+*because* one is coming. A shutdown drain still runs normally from a paused process.
+
+`POST /api/admin/shutdown` asks the *process* to stop rather than draining inside
+the request. `begin_shutdown` is one-way and ends with the coordinator `stopped`;
+running it from a handler would leave that state inside a process still listening,
+and the genuine shutdown afterwards would find the drain already spent and cut off
+the games it was meant to protect. So the endpoint signals, and the drain runs where
+it runs for any other deploy ([`app/server.py`](../backend/app/server.py)). A
+`drainSeconds` in the body is a one-shot window for this shutdown, not a change to
+the setting. A deployment served without that runner answers **503** rather than
+pretending; nothing in the API starts a server again.
+
+`PATCH /api/admin/players/{id}/role` cannot grant `admin`: the first administrator
+is created by the guarded server-side command ([`auth/admin.py`](../backend/app/auth/admin.py)),
+which refuses once one exists, and minting more over the network would mean one
+compromised session could mint them — the reasoning R-AUTH-14 applies to a remote
+password reset. An administrator also cannot change their own role, or another
+administrator's.
+
+`PATCH /api/admin/tunables` is validated as a set and applied as a set: every value is
+bounded server-side before any of them is written, so a request carrying several settings
+either takes effect entirely or not at all. A value equal to what the process booted at is
+not stored (see [`docs/database.md`](database.md) on the `tunable.` namespace), and a
+value submitted unchanged is neither stored nor audited — a panel posting its whole form
+must not bury the one change an operator made.
 
 ### Static delivery
 
@@ -974,6 +1065,8 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `GAME_RULE_SNAPSHOT_VERSION` (1) | The stored rule-snapshot JSON contract | The snapshot's *shape* changes |
 | `score_ledger_version` | The score-event ledger contract | The ledger's semantics change |
 | `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
+| `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
+| `contractVersion` on `client_config` | The client-cadence notice | A cadence is added, removed or renamed |
 | Data export `schema_version` (1) | The export document, pinned by [`fixtures/account_data_export_v1_fields.json`](../fixtures/account_data_export_v1_fields.json) | The export's field surface changes |
 
 **Checklist for any wire change:**

@@ -445,7 +445,8 @@ They are grouped into five classes rather than set per command, and held in a po
 object carrying each one's default, bounds and purpose — never read from the
 environment, because [#446](https://github.com/sephirothx/sketchy/issues/446) tunes
 values like these from an admin panel without a deploy, and a value fixed at startup
-forecloses that. Windows are keyed by class, not by command, so two commands of one kind share the
+forecloses that. That panel now exists (*Runtime settings*, below), and the limits
+are settable at runtime; the windows are not. Windows are keyed by class, not by command, so two commands of one kind share the
 allowance that kind was given. A refused `draw` frame drops silently, since nobody
 awaits an answer to one and an error mid-stroke is worse than the frame it describes;
 everything a person pressed a control for answers instead — including `undo_stroke`,
@@ -465,6 +466,63 @@ Two independent axes:
   carries the role so the account menu knows what to *show*; every endpoint behind
   those entries re-checks the role itself and answers **404** to anyone else.
 - **Room host** is an ordinary gameplay role and never implies any service privilege.
+
+One gate serves every administrator surface
+([`api/admin_auth.py`](../backend/app/api/admin_auth.py)): 401 without a session,
+**404** for the wrong role. Moderation keeps its own reviewer gate, which admits two
+roles and answers 403, because its surfaces are reachable from the in-app report flow
+where "no such page" would be the worse answer. The moderator role can be granted and
+revoked from the operations page with a recorded reason; `admin` cannot — the first
+one comes from a guarded server-side command that refuses to run once an
+administrator exists, and minting more over the network would let one compromised
+session make itself company.
+
+An administrator can also start a planned shutdown from that page, with a window
+for that shutdown alone. It signals the process rather than draining in the
+request: the drain is one-way, so running it inside a live process would leave the
+genuine shutdown nothing left to spend and cut off the games the window existed to
+protect. The signal reaches the same runner a `systemctl stop` would
+([`server.py`](../backend/app/server.py)), so an operator-initiated stop cannot
+behave differently from an operator typing it into a terminal. Whether anything
+comes back is the supervisor's business, not the server's.
+
+### Runtime settings
+
+Values that decide how the running game *feels* are held on objects a request can
+reach rather than in constants a deploy can replace
+([`services/runtime_settings.py`](../backend/app/services/runtime_settings.py),
+wired in [`services/tunables.py`](../backend/app/services/tunables.py)). The
+indirection is not decoration: several of the constants this replaced were pulled
+into other modules **by name**, which copies the number at import, and two were
+argument defaults, bound when the function was defined — so a value that looked
+mutable would silently not have been.
+
+Precedence is compiled default, then the environment, then a stored value. The
+environment still decides what a fresh deployment boots at, which is what the
+requirements naming those variables ask for; it stops being the last word. Stored
+values live in `app_config` under a `tunable.` prefix, are adopted before the process
+admits anybody, and are dropped rather than written when a value returns to its boot
+value — a row saying "the default" would pin the setting against a later change to
+the variable that supplies it.
+
+Changes are validated and applied **as a set**, because some values only make sense
+in pairs. The clearest is the drawer's flush interval and the drawing budget: the
+interval decides how many frames a legitimate drawer produces, the budget decides how
+many one caller may send, and either is defensible alone while the pair refuses
+ordinary drawing. Every change writes a `config.changed` audit event in the same
+transaction as the row.
+
+Client-side cadences are shipped rather than compiled, over `client_config` at the
+handshake and again to everyone on a change. That is the half of #446 the issue was
+actually about: the flush interval is the largest lever on drawing bandwidth, the
+number the byte curve points at is not the one that looks right, and the only way to
+judge it is to watch somebody draw while it moves — so the change re-arms the
+drawer's timer mid-stroke rather than waiting for their next turn.
+
+Deliberately **not** tunable: abuse backstops (the authentication and submission
+limits, the canvas and replay ceilings), anything that can change a score, and any
+value the frontend duplicates — the last of those is a wire contract, and moving one
+side alone makes the two disagree.
 
 ### Timers
 
@@ -521,7 +579,7 @@ host: start_game
        ├─ emit canvas_reset      [revision, generation, sequence, hash]   → room
        ├─ emit turn_starting     {drawerId, roundNumber, seconds, …}      → room
        ├─ emit your_prompt_choices {choices, seconds}                     → drawer only
-       └─ schedule the CHOOSE_PROMPT_SECONDS (15s) phase timer
+       └─ schedule the choose-prompt (15s default) phase timer
 
 drawer: select_prompt  (or the timer forces a choice)
   └─ GameFlowService._begin_drawing
@@ -570,8 +628,8 @@ Full table-by-table detail is in [`database.md`](database.md).
 
 ### Reconnection
 
-On disconnect, the player keeps their seat for `RECONNECT_GRACE_SECONDS` (30)
-([`backend/app/handlers/connection.py:20`](../backend/app/handlers/connection.py)). A
+On disconnect, the player keeps their seat for `reconnect_grace_seconds` (30 by
+default, tunable — [`backend/app/flow_timing.py`](../backend/app/flow_timing.py)). A
 successful reconnect replaces the player's active socket so the superseded socket can
 no longer issue commands (`session_superseded`). If the grace expires, the seat is
 evicted, a `player.evicted` observation is recorded, and — if the drawer was the one

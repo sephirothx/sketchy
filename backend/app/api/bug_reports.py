@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.admin_auth import admin_gate
 from app.auth.audit import audit_coordinates
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.db.models import AuditEvent, BugReport, User, generate_uuid
@@ -35,7 +36,6 @@ from app.domain_values import (
     BugReportScreenshotStatus,
     BugReportSeverity,
     ReportStatus,
-    UserRole,
 )
 from app.rooms import RoomManager
 
@@ -303,18 +303,7 @@ def create_bug_report_router(
         session_factory, scope="bug-report-submit", limit=5, window_seconds=3600
     )
 
-    async def require_admin(request: Request) -> User:
-        user_id = getattr(request.state, "user_id", None)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
-        async with session_factory() as session:
-            user = await session.get(User, UUID(user_id))
-        if user is None or user.role != UserRole.ADMIN.value:
-            # 404 rather than 403, the same answer `api/operations.py` gives:
-            # whether this deployment triages bugs in-app is not something an
-            # ordinary player needs to learn.
-            raise HTTPException(status_code=404, detail="Not found.")
-        return user
+    require_admin = admin_gate(session_factory)
 
     def _decode_screenshot(encoded: str | None) -> tuple[bytes, str, str] | None:
         """Validated bytes, content type and digest for an attached screenshot.

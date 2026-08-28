@@ -172,6 +172,47 @@ class HandlerContext:
 
         return sid in self._closing_sockets
 
+    async def evict_player(
+        self, room, player_id: str, *, notice: tuple[str, dict] | None = None
+    ) -> bool:
+        """End one player's seat now, and tell them why before the socket goes.
+
+        The sequence matters and is easy to get subtly wrong, which is why it
+        is stated once rather than at each caller. The disconnect timer has to
+        be cancelled or the grace period will try to evict a seat that is
+        already gone; the game has to be told separately from the room,
+        because a seat can be in one and not the other; the notice has to be
+        emitted *before* the socket is closed, since a closed socket delivers
+        nothing; and the room has to be either re-broadcast or torn down,
+        because a room whose last player just left does not outlive them.
+
+        `notice` is what to say, when there is anything to say. A player being
+        removed for their own account's sake reads a different sentence from
+        one an administrator closed a room around.
+        """
+        player = room.players.get(player_id)
+        if player is None:
+            return False
+        player_sid = player.sid
+        self.timers.cancel_disconnect_timer(player_id)
+        self.room_manager.remove_player(room, player_id)
+        if room.game and room.state == "playing":
+            await self.game_flow._remove_player_from_game(room, player_id)
+        if player_sid:
+            if notice is not None:
+                event, payload = notice
+                await self.sio.emit(event, payload, to=player_sid)
+            await self.sio.leave_room(player_sid, room.id)
+            await self.sio.disconnect(player_sid)
+        if room.connected_players():
+            await self.game_flow._emit_room_state(room)
+        else:
+            self.timers.cancel_phase_timer(room.id)
+            self.timers.cancel_hint_timers(room.id)
+            self.timers.cancel_restart_timer(room.id)
+            await self.remove_room_if_empty(room.id)
+        return True
+
     async def remove_room_if_empty(self, room_id: str) -> bool:
         """Remove an empty live room and retire its published invite code."""
 

@@ -139,6 +139,7 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
         main, "purge_expired_shutdown_abandonments", purge_abandonments
     )
     monkeypatch.setattr(main, "seed_prompt_lists", AsyncMock())
+    monkeypatch.setattr(main, "adopt_stored_settings", AsyncMock())
     retire_room_codes = AsyncMock()
     monkeypatch.setattr(
         main.handler_context.room_codes,
