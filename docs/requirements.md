@@ -238,7 +238,7 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-RATE-01** | Login, registration, and lookup limits MUST be persistent, shared database buckets, so they survive restarts and apply once across every replica. Each decision MUST be a single conditional statement the database evaluates, never a read followed by a write: SQLite ignores `SELECT … FOR UPDATE`, and it is the documented default, so a read-then-write ceiling is soft by however many attempts are in flight together. |
+| **R-RATE-01** | Login, registration, and lookup limits MUST be persistent, shared database buckets, so they survive restarts and apply once across every replica. A limit MUST NOT be decided by reading a bucket, deciding in the application, and writing it back: every statement MUST carry its own condition, so the database evaluates the ceiling against the row as it stands. `SELECT … FOR UPDATE` MUST NOT be relied on for this — SQLite ignores row locks and is the documented default, so a read-then-write ceiling is soft by however many attempts are in flight together. |
 | **R-RATE-02** | Bucket keys MUST be HMAC-SHA-256 digests under `IP_HASH_SECRET`. **Raw IP addresses MUST NOT be stored.** |
 | **R-RATE-03** | Expired buckets MUST be cleaned in bounded batches. |
 | **R-RATE-04** | Rotating the secret MUST start fresh buckets without exposing or re-identifying old keys. |

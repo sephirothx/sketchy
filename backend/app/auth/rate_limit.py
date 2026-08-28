@@ -228,22 +228,26 @@ class PersistentRateLimiter:
     async def check(self, key: str) -> bool:
         """Record one attempt without ever storing the raw client address.
 
-        Every decision is a single conditional statement the database
-        evaluates, rather than a read, a decision here, and a write back.
-        `SELECT … FOR UPDATE` made that safe on PostgreSQL and nothing at all
-        on SQLite, which ignores row locks - and SQLite is the documented
-        default, so the ceiling every limit rests on was soft by however many
-        attempts were in flight together.
+        No decision is made here. Each statement carries its own condition -
+        "spend one if this window is live and has room", "roll it if it has
+        expired" - so the ceiling is evaluated by the database, against the
+        row as it stands, rather than against a copy this process read a
+        moment earlier. Reading first and writing back was safe on PostgreSQL
+        because of `SELECT … FOR UPDATE` and safe nowhere else: SQLite ignores
+        row locks and is the documented default, so the ceiling every limit
+        rests on was soft by however many attempts were in flight together.
         """
         key_hash = await self._key_hash(key)
 
         for _ in range(3):
             checked_at = self._clock()
+            verdict: bool | None = None
             async with self._session_factory() as session:
                 async with session.begin():
                     # Spend one from a live window that still has room. The
-                    # `attempt_count <` is the ceiling, evaluated where the
-                    # row is locked rather than where it was last read.
+                    # `attempt_count <` is the ceiling, and the database
+                    # evaluates it against the row as it stands rather than
+                    # against a copy this process read a moment earlier.
                     taken = await session.execute(
                         update(AuthRateLimitBucket)
                         .where(
@@ -258,36 +262,43 @@ class PersistentRateLimiter:
                         )
                     )
                     if taken.rowcount:
-                        return await self._finish(True)
-
-                    # Or start a fresh window over one that has expired.
-                    rolled = await session.execute(
-                        update(AuthRateLimitBucket)
-                        .where(
-                            AuthRateLimitBucket.scope == self._scope,
-                            AuthRateLimitBucket.key_hash == key_hash,
-                            AuthRateLimitBucket.window_expires_at <= checked_at,
+                        verdict = True
+                    else:
+                        # Or start a fresh window over one that has expired.
+                        rolled = await session.execute(
+                            update(AuthRateLimitBucket)
+                            .where(
+                                AuthRateLimitBucket.scope == self._scope,
+                                AuthRateLimitBucket.key_hash == key_hash,
+                                AuthRateLimitBucket.window_expires_at <= checked_at,
+                            )
+                            .values(
+                                attempt_count=1,
+                                window_started_at=checked_at,
+                                window_expires_at=checked_at + self._window,
+                                updated_at=checked_at,
+                            )
                         )
-                        .values(
-                            attempt_count=1,
-                            window_started_at=checked_at,
-                            window_expires_at=checked_at + self._window,
-                            updated_at=checked_at,
-                        )
-                    )
-                    if rolled.rowcount:
-                        return await self._finish(True)
-
-                    # Neither matched: the bucket is either full or absent,
-                    # and only one of those is worth trying to create.
-                    present = await session.scalar(
-                        select(AuthRateLimitBucket.key_hash).where(
-                            AuthRateLimitBucket.scope == self._scope,
-                            AuthRateLimitBucket.key_hash == key_hash,
-                        )
-                    )
-                    if present is not None:
-                        return await self._finish(False)
+                        if rolled.rowcount:
+                            verdict = True
+                        else:
+                            # Neither matched: the bucket is either full or
+                            # absent, and only one of those is worth creating.
+                            present = await session.scalar(
+                                select(AuthRateLimitBucket.key_hash).where(
+                                    AuthRateLimitBucket.scope == self._scope,
+                                    AuthRateLimitBucket.key_hash == key_hash,
+                                )
+                            )
+                            if present is not None:
+                                verdict = False
+            # Deliberately outside the transaction above: `_finish` may sweep
+            # expired buckets, and doing that on a second connection while
+            # this one still holds the row would be two writers reaching for
+            # the same table - a lock fight on SQLite and a deadlock waiting
+            # to happen on PostgreSQL.
+            if verdict is not None:
+                return await self._finish(verdict)
 
             try:
                 async with self._session_factory() as session:
@@ -324,9 +335,10 @@ class PersistentRateLimiter:
 
         A limit on an action that can still fail after the bucket is charged
         would otherwise spend somebody's allowance on work that never
-        happened. One conditional statement, for the same reason `check` is:
-        two refunds in flight together must not take the count below what was
-        actually spent. An expired or missing bucket is nothing to give back
+        happened. The condition travels with the statement, for the same
+        reason it does in `check`: two refunds in flight together must not
+        take the count below what was actually spent, and they would if this
+        read the count and wrote back a decision made from it. An expired or missing bucket is nothing to give back
         to.
         """
         key_hash = await self._key_hash(key)
