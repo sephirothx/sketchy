@@ -77,6 +77,7 @@ def _wire(described: dict) -> dict:
         "description": described["description"],
         "envVar": described["env_var"],
         "source": described["source"],
+        "overrideRejected": described["override_rejected"],
     }
 
 

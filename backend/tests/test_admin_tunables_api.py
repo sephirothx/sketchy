@@ -355,6 +355,42 @@ async def test_clearing_an_override_is_recorded_even_when_no_number_moves(env):
     assert event.details == {"from": 100, "to": 100, "override": "cleared"}
 
 
+async def test_a_row_this_release_refuses_can_still_be_cleared(env):
+    """The whole chain: visible, resettable, and gone afterwards.
+
+    A row the current bounds reject is not in force, so nothing numeric moves
+    when it is reset - and an implementation that decides from the numbers
+    alone leaves it in the database, invisible, waiting for a release that
+    widens the bound to bring it back.
+    """
+    _, factory, _, settings = env
+    admin = await an_admin(env)
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, "tunable.budget.drawing", "9999")
+    settings.apply_stored(await read_prefixed(factory, "tunable."))
+
+    body = (await admin.get("/api/admin/tunables")).json()
+    drawing = next(t for t in body["tunables"] if t["name"] == "budget.drawing")
+    assert drawing["value"] == 100, "the refused value is not running"
+    assert drawing["source"] == "stored"
+    assert drawing["overrideRejected"] is True
+
+    response = await admin.patch(
+        "/api/admin/tunables", json={"reset": ["budget.drawing"]}
+    )
+    assert response.status_code == 200
+    assert await stored_rows(factory) == {}
+    (event,) = await audit_rows(factory)
+    assert event.details["override"] == "cleared"
+
+    after = next(
+        t for t in response.json()["tunables"] if t["name"] == "budget.drawing"
+    )
+    assert after["source"] == "default"
+    assert after["overrideRejected"] is False
+
+
 async def test_a_row_matching_the_boot_value_is_still_reported_as_stored(env):
     """Row existence and numeric equality are different facts.
 

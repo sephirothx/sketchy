@@ -157,6 +157,11 @@ class RuntimeSettings:
         self._boot: dict[str, float] = {}
         self._from_env: set[str] = set()
         self._stored: set[str] = set()
+        # Rows that exist and are not in force, because this release refuses
+        # the value they hold. Tracked because they are still rows: they must
+        # be visible, clearable, and must not quietly become active again if a
+        # later release widens the bound they fell outside of.
+        self._rejected: set[str] = set()
         for item in self._tunables.values():
             self._boot[item.name] = self._boot_value(item, values)
             item.write(self._boot[item.name])
@@ -210,14 +215,23 @@ class RuntimeSettings:
         return self._boot[name]
 
     def is_stored(self, name: str) -> bool:
-        """Whether a persisted row is overriding this setting."""
+        """Whether a persisted row exists for this setting, in force or not."""
         self.tunable(name)
-        return name in self._stored
+        return name in self._stored or name in self._rejected
+
+    def is_rejected(self, name: str) -> bool:
+        """Whether a stored row exists that this release will not apply."""
+        self.tunable(name)
+        return name in self._rejected
 
     def source(self, name: str) -> str:
-        """Where the value in force came from, for a panel to show."""
-        self.tunable(name)
-        if name in self._stored:
+        """Where the setting's override stands, for a panel to show.
+
+        A refused row still counts as stored: it exists, and reporting it as
+        default or environment is what left it unreachable. `override_rejected`
+        in `describe()` says whether the stored value is the one running.
+        """
+        if self.is_stored(name):
             return "stored"
         if name in self._from_env:
             return "environment"
@@ -247,6 +261,10 @@ class RuntimeSettings:
                 "description": item.description,
                 "env_var": item.env_var,
                 "source": self.source(item.name),
+                # A row this release refuses. The value above is what is
+                # actually running; without saying so, a panel would report a
+                # setting as overridden and show the default beside it.
+                "override_rejected": item.name in self._rejected,
             }
             for item in self._tunables.values()
         ]
@@ -297,6 +315,7 @@ class RuntimeSettings:
         """
         for name, number in values.items():
             self._tunables[name].write(number)
+            self._rejected.discard(name)
             if stored:
                 self._stored.add(name)
             else:
@@ -345,6 +364,12 @@ class RuntimeSettings:
                     error,
                     _plain(self._boot[name]),
                 )
+                # The row is remembered even though the value is not applied,
+                # so it can be seen and cleared. Forgetting it left an
+                # override the panel called absent, that no reset could reach,
+                # and that would come back the day a release widened the bound
+                # it fell outside of.
+                self._rejected.add(name)
                 continue
             accepted[name] = number
 
@@ -360,7 +385,8 @@ class RuntimeSettings:
                     error,
                 )
                 for name in constraint.names:
-                    accepted.pop(name, None)
+                    if accepted.pop(name, None) is not None:
+                        self._rejected.add(name)
 
         self.apply(accepted)
 

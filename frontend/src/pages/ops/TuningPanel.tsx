@@ -12,7 +12,15 @@ import {
 } from "../../lib/adminControls";
 
 /** Where a value in force came from, said in words rather than a code. */
-function origin(tunable: Tunable): { label: string; kind: "primary" | "neutral" } {
+function origin(
+  tunable: Tunable,
+): { label: string; kind: "primary" | "neutral" | "warm" } {
+  // A row this release will not apply. Said plainly, because the value beside
+  // it is the default rather than the stored one, and "stored" alone would
+  // read as a panel disagreeing with itself.
+  if (tunable.overrideRejected) {
+    return { label: "Stored value refused", kind: "warm" };
+  }
   if (tunable.source === "stored") return { label: "Changed here", kind: "primary" };
   if (tunable.source === "environment") {
     return { label: tunable.envVar ?? "Environment", kind: "neutral" };
@@ -177,7 +185,10 @@ export function TuningPanel() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-compact"
-                      disabled={saving || tunable.source !== "stored"}
+                      disabled={
+                        saving
+                        || (tunable.source !== "stored" && !tunable.overrideRejected)
+                      }
                       onClick={() => submit({ reset: [tunable.name] })}
                     >
                       Reset

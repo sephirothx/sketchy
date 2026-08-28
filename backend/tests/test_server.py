@@ -1,5 +1,6 @@
 """The production runner drains before Uvicorn closes established sockets."""
 
+import signal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -72,6 +73,34 @@ async def test_a_forced_exit_is_offered_to_the_drain():
     assert should_abort() is False
     server.force_exit = True
     assert should_abort() is True
+
+
+@pytest.mark.parametrize("sig", [signal.SIGTERM, signal.SIGINT])
+def test_a_repeated_termination_signal_cuts_the_drain_short(sig):
+    """R-SHUT-03: a *second* termination signal abandons the remaining window.
+
+    Driven through `handle_exit` rather than by assigning `force_exit`, which
+    is the whole point: Uvicorn's own handler escalates only on a repeated
+    SIGINT, so a deployment sending SIGTERM twice - what a supervisor stop and
+    a container stop both do - was held for the rest of the window with no way
+    to say otherwise. A test that sets the flag itself cannot see that.
+    """
+    server = DrainingServer(uvicorn.Config("app.main:app"), coordinator=object())
+    assert server.force_exit is False
+
+    server.handle_exit(sig, None)
+    assert server.should_exit is True
+    assert server.force_exit is False, "the first signal starts the drain"
+
+    server.handle_exit(sig, None)
+    assert server.force_exit is True, "the second signal abandons it"
+
+
+def test_an_unrelated_signal_does_not_abandon_the_drain():
+    server = DrainingServer(uvicorn.Config("app.main:app"), coordinator=object())
+    server.handle_exit(signal.SIGTERM, None)
+    server.handle_exit(signal.SIGHUP, None)
+    assert server.force_exit is False
 
 
 def test_ctrl_c_exits_quietly_after_the_shutdown_it_already_completed():

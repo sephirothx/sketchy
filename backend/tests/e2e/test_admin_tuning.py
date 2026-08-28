@@ -23,6 +23,13 @@ through the API rather than the page, so a failed assertion still restores it.
 
 These tests must never reach for a tunable to make themselves faster (R-CONF-08).
 Nothing here shortens a timeout; the settings are the subject, not the tool.
+
+For the same shared-server reason there is no end-to-end test of the
+maintenance pause: pausing refuses room creation for every test in flight, and
+a test that takes the building down around its neighbours is worse than the
+coverage is worth. The pause is covered against the API in
+`tests/test_admin_controls.py`, and the banner that reports it by
+`frontend/tests/adminControls.test.mjs`.
 """
 import os
 import time

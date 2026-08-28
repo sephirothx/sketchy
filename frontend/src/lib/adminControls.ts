@@ -6,7 +6,7 @@ granting a role. Kept in their own module for the same reason the panel keeps
 them in their own tab — a call that closes a room should not be one import away
 from a call that draws a chart. */
 
-import { apiRequest } from "./api";
+import { apiRequest } from "./api.ts";
 
 /** One runtime value, described well enough to build a control for it.
 
@@ -30,6 +30,8 @@ export interface Tunable {
   /** The variable that supplied the boot value, when one did. */
   envVar: string | null;
   source: "default" | "environment" | "stored";
+  /** A stored row this release refuses; `value` is what is actually running. */
+  overrideRejected: boolean;
 }
 
 export interface LiveSeat {
@@ -135,6 +137,27 @@ export function setPlayerRole(
     method: "PATCH",
     body: { role, reason },
   });
+}
+
+/** How the server describes its own admission state, for the overview banner.
+
+Pulled out of the page because it is the one thing on that banner that can be
+wrong in a way nobody notices: it read "accepting rooms" unconditionally, which
+is the opposite of the truth during a pause or a drain. A pure function is
+something a test can hold still. */
+export function admissionLabel(
+  maintenance: Pick<MaintenanceState, "paused" | "draining"> | null,
+): string {
+  if (maintenance?.draining) return "draining — no new rooms";
+  if (maintenance?.paused) return "paused — no new rooms";
+  return "accepting rooms";
+}
+
+/** Whether the server is taking new rooms, for the banner's tone and heading. */
+export function isAdmitting(
+  maintenance: Pick<MaintenanceState, "paused" | "draining"> | null,
+): boolean {
+  return admissionLabel(maintenance) === "accepting rooms";
 }
 
 /** The subsystem a setting belongs to, taken from its name.

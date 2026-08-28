@@ -189,6 +189,7 @@ def test_describe_reports_the_value_its_bounds_and_where_it_came_from():
         "description": "How many widgets.",
         "env_var": "WIDGET_LIMIT",
         "source": "environment",
+        "override_rejected": False,
     }
 
 
@@ -255,10 +256,51 @@ def test_a_stored_pair_that_cannot_hold_together_falls_back_to_boot(caplog):
     with caplog.at_level(logging.WARNING):
         settings.apply_stored({"frames": "180", "budget": "40"})
     assert (frames.value, budget.value) == (25, 100)
-    assert settings.source("frames") == "default"
+    # The rows stay visible so they can be cleared: refusing a value is not a
+    # reason to hide the override that holds it.
+    assert settings.source("frames") == "stored"
+    assert settings.is_rejected("frames") is True
 
 
 # ---------------------------------------------------------------- stored rows
+
+
+def test_a_refused_stored_row_is_remembered_so_it_can_be_cleared(caplog):
+    """Forgetting it is what made it dangerous.
+
+    A release that tightens a bound leaves an old number behind it. Dropping
+    the row from view left an override the panel called absent, that no reset
+    could reach, and that would come back into force the day a later release
+    widened that bound again.
+    """
+    cell = Cell()
+    settings = RuntimeSettings([a_tunable(cell)], environ={})
+    with caplog.at_level(logging.WARNING):
+        settings.apply_stored({"widgets": "5000"})
+
+    assert cell.value == 10, "the refused value is not in force"
+    assert settings.is_stored("widgets") is True, "but the row is still there"
+    assert settings.is_rejected("widgets") is True
+    (described,) = settings.describe()
+    assert described["source"] == "stored"
+    assert described["override_rejected"] is True
+
+
+def test_clearing_a_refused_row_forgets_it():
+    cell = Cell()
+    settings = RuntimeSettings([a_tunable(cell)], environ={})
+    settings.apply_stored({"widgets": "5000"})
+    settings.reset("widgets")
+    assert settings.is_stored("widgets") is False
+    assert settings.is_rejected("widgets") is False
+
+
+def test_a_pair_refused_together_leaves_both_rows_visible(caplog):
+    frames, budget = Cell(), Cell()
+    settings = _paired_registry(frames, budget)
+    with caplog.at_level(logging.WARNING):
+        settings.apply_stored({"frames": "180", "budget": "40"})
+    assert settings.is_rejected("frames") and settings.is_rejected("budget")
 
 
 def test_one_unusable_stored_row_does_not_cost_the_others(caplog):

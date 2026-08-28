@@ -157,7 +157,9 @@ again the next time the environment moved. The panel therefore reports a setting
 row as `stored` whatever its value, and a reset deletes the row even when no number
 changes.
 
-Reading them is a single prefix query at startup; writing one shares a transaction with
+A row whose value the running release refuses is kept and reported, not applied and not
+forgotten — otherwise it is an override nothing can reach and everything ignores, until a
+release widens the bound and it comes back. Reading them is a single prefix query at startup; writing one shares a transaction with
 the `audit_events` row that records who changed it, including when only the row changed.
 
 ### `room_code_reservations`

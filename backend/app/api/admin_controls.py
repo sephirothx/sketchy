@@ -366,12 +366,15 @@ def create_admin_controls_router(
                     ),
                 )
 
-        # Claimed before the first await. `is_draining` stays false from here
-        # until the signal lands and the runner actually begins, so without
-        # this a second click inside that gap is a second accepted request -
-        # two audit events for one shutdown, and a second chance to move the
-        # drain window after the first was written down.
-        if not shutdown.claim_shutdown():
+        # Claimed before the first await, carrying this shutdown's window with
+        # it. `is_draining` stays false from here until the signal lands and
+        # the runner actually begins, so without the claim a second click
+        # inside that gap is a second accepted request - two audit events for
+        # one shutdown, and a second chance to move the window after the first
+        # was written down. Carrying the window rather than writing it onto the
+        # configured value keeps it out of reach of the tuning panel, which can
+        # still change that value while this shutdown is pending.
+        if not shutdown.claim_shutdown(body.drain_seconds):
             raise HTTPException(
                 status_code=409, detail="A shutdown has already been requested."
             )
@@ -392,12 +395,6 @@ def create_admin_controls_router(
             shutdown.release_shutdown_claim()
             raise
 
-        # Only now, and only because the signal is next. Setting it earlier
-        # meant a request that failed its audit still changed the window the
-        # *next* shutdown would use - a one-shot override applied to a
-        # shutdown that never happened.
-        if body.drain_seconds is not None:
-            shutdown.set_drain_seconds(drain)
         request_process_exit()
         return {"draining": True, "drainSeconds": drain}
 

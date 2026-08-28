@@ -556,6 +556,12 @@ async def test_a_shutdown_asks_the_process_to_stop_rather_than_draining_here(env
 
 
 async def test_the_drain_window_can_be_set_for_this_shutdown(env):
+    """One shutdown's window, not a change to the configured one.
+
+    The configured value is a tunable the panel can still change, so writing
+    a one-shot window onto it would leave the shutdown's own window in reach
+    of anyone editing the setting while it is pending.
+    """
     _, _, _, coordinator, _, _ = env
     admin = await an_admin(env)
     coordinator.set_drain_seconds(30)
@@ -564,7 +570,41 @@ async def test_the_drain_window_can_be_set_for_this_shutdown(env):
         "/api/admin/shutdown", json={"reason": "quick restart", "drainSeconds": 5}
     )
     assert response.json()["drainSeconds"] == 5
-    assert coordinator.drain_seconds == 5
+    assert coordinator.drain_seconds == 30, "the configured default is untouched"
+
+    sio = AsyncMock()
+    await coordinator.begin_shutdown(sio)
+    (notice,) = [
+        call.args[1] for call in sio.emit.await_args_list
+        if call.args[0] == "server_shutdown"
+    ]
+    assert notice["drainSeconds"] == 5, "the drain ran on the window it was given"
+
+
+async def test_tuning_the_default_cannot_move_a_shutdown_already_asked_for(env):
+    """The window is fixed when the shutdown is claimed, and again when it starts.
+
+    The notice is emitted and the deadline computed either side of an await, so
+    a change landing between them could promise a minute and abandon the games
+    a second later.
+    """
+    _, _, _, coordinator, _, _ = env
+    admin = await an_admin(env)
+    coordinator.set_drain_seconds(30)
+    await admin.post(
+        "/api/admin/shutdown", json={"reason": "deploying", "drainSeconds": 60}
+    )
+
+    # As a tuning change would, while the shutdown is pending.
+    coordinator.set_drain_seconds(0)
+
+    sio = AsyncMock()
+    await coordinator.begin_shutdown(sio)
+    (notice,) = [
+        call.args[1] for call in sio.emit.await_args_list
+        if call.args[0] == "server_shutdown"
+    ]
+    assert notice["drainSeconds"] == 60
 
 
 async def test_omitting_the_window_uses_whatever_is_configured(env):

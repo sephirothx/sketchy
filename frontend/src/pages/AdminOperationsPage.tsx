@@ -5,6 +5,12 @@ import { SectionLabel } from "../components/ui/Card";
 import { RoundsIcon } from "../components/icons";
 
 import { ApiError } from "../lib/api";
+import {
+  admissionLabel,
+  isAdmitting,
+  readMaintenance,
+  type MaintenanceState,
+} from "../lib/adminControls";
 import { canAdminister } from "../lib/operatorAccess";
 import { useAuthStore } from "../store/authStore";
 import { ControlsPanel } from "./ops/ControlsPanel";
@@ -127,6 +133,10 @@ exact because one worker owns everything; the chart comes from permanent daily
 aggregates, which outlive the raw rows behind them. */
 export function AdminOperationsPage() {
   const [live, setLive] = useState<LiveMetrics | null>(null);
+  // Admission state, because the banner speaks for it. It used to say
+  // "accepting rooms" unconditionally, which is the opposite of the truth
+  // while a maintenance pause is on.
+  const [maintenance, setMaintenance] = useState<MaintenanceState | null>(null);
   const [days, setDays] = useState<DailyTotal[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [events, setEvents] = useState<RuntimeEventRow[]>([]);
@@ -163,11 +173,13 @@ export function AdminOperationsPage() {
       readLiveMetrics(),
       readDailyTotals(),
       readAuditLedger({ limit: 200 }),
+      readMaintenance(),
     ])
-      .then(([metrics, daily, ledger]) => {
+      .then(([metrics, daily, ledger, admission]) => {
         setLive(metrics);
         setDays(daily.days);
         setAudit(ledger.entries);
+        setMaintenance(admission);
         setCheckedAt(Date.now());
         setError(null);
       })
@@ -228,6 +240,8 @@ export function AdminOperationsPage() {
   const checkedAgo =
     checkedAt === null ? null : Math.max(0, Math.round((now - checkedAt) / 1000));
   const recorderHealthy = !live || live.recorder.dropped === 0;
+  const admission = admissionLabel(maintenance);
+  const admitting = isAdmitting(maintenance);
   if (hasResolved && !allowed) {
     // The same refusal the bug-report and moderation pages give. Without it a
     // non-administrator gets the page chrome and a load error, which reads as
@@ -267,17 +281,21 @@ export function AdminOperationsPage() {
       {live && (
         <>
           <div
-            className={`ops-status-banner${recorderHealthy ? "" : " is-warning"}`}
+            className={`ops-status-banner${
+              recorderHealthy && admitting ? "" : " is-warning"
+            }`}
             role="status"
           >
             <span className="ops-status-dot" aria-hidden="true" />
             <strong>
-              {recorderHealthy
-                ? "All systems operational"
-                : "Recorder dropped observations"}
+              {!recorderHealthy
+                ? "Recorder dropped observations"
+                : admitting
+                  ? "All systems operational"
+                  : "Not accepting new rooms"}
             </strong>
             <span>
-              Single worker · accepting rooms
+              Single worker · {admission}
               {checkedAgo !== null && ` · checked ${checkedAgo}s ago`}
             </span>
           </div>
