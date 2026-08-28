@@ -24,7 +24,7 @@ from app.auth.mail import (
     message_id_for,
     queue_email,
 )
-from app.db.models import Base, EmailOutboxEntry
+from app.db.models import Base, EmailOutboxEntry, generate_uuid
 from app.domain_values import EmailOutboxState
 
 
@@ -248,3 +248,21 @@ async def test_one_bad_recipient_does_not_hold_up_the_rest(tmp_path):
         assert refused.last_error == "relay refused this one"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "sender, domain",
+    [
+        ("no-reply@sketchy.example", "sketchy.example"),
+        ("Sketchy <no-reply@sketchy.example>", "sketchy.example"),
+        ("Sketchy Mailer <NO-REPLY@sketchy.example> ", "sketchy.example"),
+        ("not-an-address", "localhost"),
+    ],
+    ids=["bare", "display name", "display name and spacing", "nonsense"],
+)
+async def test_a_message_id_is_valid_however_the_sender_is_written(sender, domain):
+    """`SMTP_FROM` is allowed to carry a display name. Split on "@" rather
+    than parsed, that yields a domain ending in ">" - an invalid Message-ID a
+    relay may reject, and one that would defeat the deduplication it is for."""
+    entry_id = generate_uuid()
+    assert message_id_for(entry_id, sender) == f"<{entry_id}@{domain}>"

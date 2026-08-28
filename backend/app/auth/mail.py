@@ -25,6 +25,7 @@ import logging
 import os
 import smtplib
 from email.message import EmailMessage
+from email.utils import parseaddr
 from typing import Protocol
 from uuid import UUID
 
@@ -264,9 +265,18 @@ class _Claim:
 
 
 def message_id_for(entry_id: UUID, sender: str | None = None) -> str:
-    """A stable RFC 5322 identity for an outbox row."""
-    domain = (sender or sender_address()).rpartition("@")[2] or "localhost"
-    return f"<{entry_id}@{domain}>"
+    """A stable RFC 5322 identity for an outbox row.
+
+    The sender is parsed rather than split on "@": `SMTP_FROM` is allowed to
+    carry a display name, and `Sketchy <no-reply@example.test>` split naively
+    yields a domain ending in ">" - an invalid Message-ID, which a relay may
+    reject and which would defeat the deduplication this exists for.
+    """
+    address = parseaddr(sender or sender_address())[1]
+    # `rpartition` hands back the whole string when there is no "@" at all, so
+    # a misconfigured sender would otherwise become the domain.
+    _, at, domain = address.rpartition("@")
+    return f"<{entry_id}@{(domain.strip() if at else '') or 'localhost'}>"
 
 
 async def _claim_due(

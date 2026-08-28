@@ -172,11 +172,11 @@ async def _after_seating(ctx: HandlerContext, seated: list) -> None:
 
 
 async def _warm_block_filter(ctx: HandlerContext, player) -> None:
-    """Read this player's blockers now, so their first message does not.
+    """Read this player's blockers now, so no message of theirs has to.
 
-    The chat path filters every line by who has muted the sender, and it is
-    the one place where a cold read would be felt as the room going quiet.
-    Paid here instead, where waiting is what entering a room already does.
+    The chat path filters every line by who has muted the sender, and a cold
+    read there would be felt as the room going quiet. The cost is paid here
+    instead, where waiting is what entering a room already does.
     """
     if ctx.block_service is None or not player.user_id:
         return
