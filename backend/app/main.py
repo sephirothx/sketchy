@@ -167,10 +167,38 @@ async def _remove_account_from_live_rooms(
         await handler_context.evict_player(room, player.id, notice=notice)
 
 
+async def _close_every_socket_of(user_id: str, notice: tuple[str, dict]) -> None:
+    """Tell an account's sockets, then close them - seated or not.
+
+    Walking the rooms only reaches a socket that already holds a seat, and one
+    can be in flight: `create_room` and `join_room` await the database before
+    they seat anybody, so a socket that was mid-entry when the sweep passed
+    had no seat to be found and would have finished seating itself afterwards.
+    Every socket joins its account's broadcast room at the handshake, so that
+    is the list that has all of them.
+    """
+    account_room = f"user:{user_id}"
+    event, payload = notice
+    await sio.emit(event, payload, to=account_room)
+    sids = [sid for sid, _ in sio.manager.get_participants("/", account_room)]
+    # Marked before the first disconnect, not one at a time. Closing a socket
+    # waits at its seating gate, so an entry already holding one finishes
+    # first - and would otherwise finish by seating an account this sweep has
+    # already walked past. Marked, that entry refuses instead.
+    with handler_context.ending(sids):
+        for sid in sids:
+            await sio.disconnect(sid)
+
+
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
     block_service.clear()
     await _remove_account_from_live_rooms(
         user_id, reason="Your account was deleted."
+    )
+    # Deletion ends the account as thoroughly as a suspension does, so it ends
+    # the sockets the same way. This half was only ever done for bans.
+    await _close_every_socket_of(
+        user_id, ("session_superseded", {"reason": "Your account was deleted."})
     )
 
 
@@ -183,12 +211,9 @@ async def remove_banned_account_from_live_rooms(user_id: str) -> None:
     )
     # The eviction above only reaches a socket seated in a room. The account
     # broadcast room covers the rest - a player idling in the lobby learns
-    # now, not on their next refused request - and then every remaining
-    # socket of the suspended account is closed.
-    account_room = f"user:{user_id}"
-    await sio.emit("account_suspended", suspension, to=account_room)
-    for sid, _ in list(sio.manager.get_participants("/", account_room)):
-        await sio.disconnect(sid)
+    # now, not on their next refused request, and so does one whose entry was
+    # still in flight when the sweep walked its room.
+    await _close_every_socket_of(user_id, ("account_suspended", suspension))
 
 
 async def push_warning_to_account(user_id: str) -> None:

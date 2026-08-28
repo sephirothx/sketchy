@@ -75,6 +75,7 @@ claim that an arbitrary host will sustain it.
 | **R-ROOM-08** | A socket MUST hold at most one live seat. Creating or joining a room MUST first release any seat that connection already holds, by the same path an explicit leave takes: room state re-emitted, timers cancelled, empty-room teardown and code retirement run. Seats MUST be matched by socket, never by account — two tabs of one account may sit in two different rooms. |
 | **R-ROOM-09** | Opening a room MUST require a provisioned session. Joining, playing, and receiving a factual history seat MUST NOT — a visitor whose browser keeps no cookie can still play (R-HIST-10); they cannot host. |
 | **R-ROOM-10** | Room creation MUST be bounded on four axes: live rooms per account, room creations per account per hour, live rooms per process, and quick-prompt characters retained across every live room. Each MUST be configurable, and each refusal MUST say which ceiling was reached in terms a player can act on. |
+| **R-ROOM-14** | Database work on the way into a room MUST be bounded by a timeout and refuse the entry cleanly when it expires. Seat transitions hold the socket's seating gate and its disconnect queues at the same gate, so an entry that never returns is a seat that never reconciles — the leak R-ROOM-08 closed, reopened by a stall. |
 | **R-ROOM-11** | A ceiling MUST be re-checked at the instant the room is created, not only when the command arrives: everything in between awaits, and a refusal at that point MUST release the room code it had already claimed. |
 
 ### Turn structure
@@ -319,7 +320,7 @@ claim that an arbitrary host will sustain it.
 | # | Requirement |
 | --- | --- |
 | **R-BAN-01** | Moderators and administrators MUST be able to create temporary or permanent suspensions. Moderators MUST NOT suspend peers; administrators MUST NOT be targeted. |
-| **R-BAN-02** | Creating a suspension MUST revoke every signed-in device and remove any live room seat immediately. Login, authenticated HTTP requests, and Socket.IO handshakes MUST all reject an active suspension. |
+| **R-BAN-02** | Creating a suspension MUST revoke every signed-in device and remove any live room seat immediately. Ending an account — suspended or deleted — MUST close every **socket** it holds, not only the ones found holding a seat: an entry awaiting the database has no seat to find and would seat itself after the sweep had passed. Because closing a socket waits at that socket's seating gate, an entry holding it MUST also refuse to seat an account the sweep has reached. Login, authenticated HTTP requests, and Socket.IO handshakes MUST all reject an active suspension. |
 | **R-BAN-03** | A token revoked at ban time MUST stay recognizable until expiry, so its next request cannot be mistaken for a new cookieless guest. |
 | **R-BAN-04** | **Data export, account deletion, and logout MUST remain available** through that ban-time credential — moderation MUST NOT erase privacy rights. |
 | **R-BAN-05** | A suspension MAY carry an end date (24 h / 7 d / 30 d / none) and one with an end date MUST lift itself, because the list reports what is in force rather than trusting something to have run. Permanent MUST NOT be the default. |

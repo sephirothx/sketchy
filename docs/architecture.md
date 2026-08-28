@@ -386,6 +386,16 @@ dependency passes an argument.
 Seats are matched **by `sid`, never by account**: two tabs of one account sitting in
 two different rooms is ordinary, and only the connection that is moving is moved.
 
+The gate cuts the other way when an account loses access. Ending it closes every
+socket it holds, and closing one waits at that socket's gate — so an entry already
+holding the gate runs to completion first, and would complete by taking a seat the
+sweep has already walked past. `HandlerContext.ending` marks those sockets before the
+first is closed, and both entry paths read the mark at their last instant before
+seating and refuse. The retention write that used to follow seating now runs after the
+gate is released: it is not part of making the seat, and holding the gate for it kept
+every disconnect — a dropped connection, or that sweep — waiting behind a write with
+nothing to do with the seat.
+
 ### Room ceilings
 
 Creating a room is the only ordinary socket command that allocates unbounded process
@@ -452,6 +462,16 @@ awaits an answer to one and an error mid-stroke is worse than the frame it descr
 everything a person pressed a control for answers instead — including `undo_stroke`,
 which shares drawing's budget but is sent with an acknowledgement waiting on it. Exhaustion is recorded once per window, which
 is what separates a mistake from a flood without writing a row per refusal.
+
+Every database call on the way into a room is bounded by the same ten seconds a
+finished-game write allows, and a timeout refuses the entry rather than waiting. The
+gate is why: a disconnect queues behind the entry it interrupts, so an unbounded call
+is not a slow join but a seat that can never be reconciled. The cleanup writes an
+already-refused entry makes — giving back a room code, giving back a creation
+allowance — are bounded the same way but swallow their failures, because they run
+with a refusal on its way to the client and one of them runs in a `finally`, where
+raising would replace the reason the entry was refused. A reservation stranded that
+way is reclaimed by the same startup sweep that reclaims one stranded by a crash.
 
 Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
 introduces, every socket presents the proxy's address, and the forwarded header is
