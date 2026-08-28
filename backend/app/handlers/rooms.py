@@ -114,6 +114,30 @@ BUSY_ACKNOWLEDGEMENT = {
 }
 
 
+async def _seat_colour_preference(ctx: HandlerContext, player, requested: bool) -> bool:
+    """Resolve a returning seat's colour preference, keeping it on a stall.
+
+    Falling back to what the client asked for would let a payload set a
+    registered account's preference for as long as the database is slow, which
+    is the spoof `resolve_colorblind_safe_preference` exists to prevent. The
+    seat already carries the resolved value, so keeping it is both safe and
+    right. A guest has nothing stored - their payload is the authority, and
+    their resolution never reaches the database to stall in the first place.
+    """
+    try:
+        return await _bounded(
+            resolve_colorblind_safe_preference(
+                ctx,
+                user_id=player.user_id,
+                is_anonymous=player.is_anonymous,
+                requested=requested,
+            ),
+            "reading a colour preference",
+        )
+    except EntryTimedOut:
+        return requested if player.is_anonymous else player.colorblind_safe_colors
+
+
 async def _record_player_activity(ctx: HandlerContext, player) -> None:
     """Best-effort retention signal for a successfully seated player."""
     if (
@@ -469,18 +493,9 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
     # in this room, just confirm it rather than reprocessing the join.
     already_joined = await ctx.game_flow._existing_player_for_sid(sid, room.id)
     if already_joined:
-        try:
-            already_joined.colorblind_safe_colors = await _bounded(
-                resolve_colorblind_safe_preference(
-                    ctx,
-                    user_id=already_joined.user_id,
-                    is_anonymous=already_joined.is_anonymous,
-                    requested=payload.colorblind_safe_colors,
-                ),
-                "reading a colour preference",
-            )
-        except EntryTimedOut:
-            already_joined.colorblind_safe_colors = payload.colorblind_safe_colors
+        already_joined.colorblind_safe_colors = await _seat_colour_preference(
+            ctx, already_joined, payload.colorblind_safe_colors
+        )
         already_joined.sid = sid
         already_joined.connected = True
         ctx.timers.cancel_disconnect_timer(already_joined.id)
@@ -514,18 +529,9 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
         # the path a guest returns through after registering or logging in
         # mid-game, so the seat has to pick up the new name and status.
         await _refresh_seat_identity(ctx, player, name_color)
-        try:
-            player.colorblind_safe_colors = await _bounded(
-                resolve_colorblind_safe_preference(
-                    ctx,
-                    user_id=player.user_id,
-                    is_anonymous=player.is_anonymous,
-                    requested=payload.colorblind_safe_colors,
-                ),
-                "reading a colour preference",
-            )
-        except EntryTimedOut:
-            player.colorblind_safe_colors = payload.colorblind_safe_colors
+        player.colorblind_safe_colors = await _seat_colour_preference(
+            ctx, player, payload.colorblind_safe_colors
+        )
         if not player.is_anonymous:
             stored = await _account_name_color(ctx, player.user_id)
             if stored or name_color:

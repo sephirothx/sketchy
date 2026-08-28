@@ -237,3 +237,63 @@ async def test_an_account_ending_mid_entry_is_not_seated(monkeypatch, command):
     assert answer["error"] == "This account is no longer active."
     seats = [p for r in room_manager.rooms.values() for p in r.players.values()]
     assert seats == []
+
+
+def a_database_that_never_answers(monkeypatch):
+    """A settings read that hangs, which is what makes the fallback matter."""
+
+    class HangingSession:
+        async def get(self, *_args, **_kwargs):
+            await asyncio.sleep(3600)
+
+    class HangingFactory:
+        def __call__(self):
+            return self
+
+        async def __aenter__(self):
+            return HangingSession()
+
+        async def __aexit__(self, *_exc):
+            return False
+
+    monkeypatch.setattr("app.handlers.rooms.ENTRY_DB_TIMEOUT_SECONDS", 0.05)
+    return HangingFactory()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "is_anonymous, expected",
+    [(False, True), (True, False)],
+    ids=["a registered seat keeps its own", "a guest seat is its own authority"],
+)
+async def test_a_stalled_colour_read_does_not_let_a_payload_decide(
+    monkeypatch, is_anonymous, expected
+):
+    """A registered account's colour preference lives in the database
+    precisely so a Socket.IO payload cannot set it. A slow database must not
+    become the way to set it anyway."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.session_factory = a_database_that_never_answers(monkeypatch)
+    room = room_manager.create_room("Somewhere", code="CODE01")
+    player = room_manager.add_player(
+        room,
+        "Returning",
+        user_id="1e1a4c9c-6f52-4a37-9f28-2f7a1b0d5c11",
+        is_anonymous=is_anonymous,
+        colorblind_safe_colors=True,
+    )
+    player.sid = "seat-sid"
+    player.connected = True
+    await sessions.save("seat-sid", {"room_id": room.id, "player_id": player.id})
+
+    answer = await asyncio.wait_for(
+        sio.handlers["/"]["join_room"](
+            "seat-sid",
+            {"code": "CODE01", "nickname": "Returning", "colorblind_safe_colors": False},
+        ),
+        timeout=5,
+    )
+
+    assert answer["ok"] is True
+    assert player.colorblind_safe_colors is expected
