@@ -70,6 +70,7 @@ from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     BundledPromptDefinition,
     PinnedPromptSelection,
+    PromptSample,
     SampledPrompt,
     GameDetail,
     GameHistoryConflictError,
@@ -2628,34 +2629,43 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         *,
         limit: int,
         exclude_match_keys: Collection[str] = (),
-    ) -> tuple[SampledPrompt, ...]:
+    ) -> PromptSample:
         if limit <= 0 or not revision_ids:
-            return ()
+            return PromptSample()
         pinned = [_entity_id(revision_id) for revision_id in revision_ids]
         excluded = set(exclude_match_keys)
-        # Shadowed answers are dropped in Python rather than pushed into the
-        # query: quick prompts run to thousands, and SQLite caps how many bound
-        # parameters one statement may carry. Drawing a small surplus covers the
-        # usual handful of collisions without a second round trip.
-        margin = min(len(excluded), 64)
         async with self._session_factory() as session:
+            # Shadowed answers are excluded in the query rather than filtered
+            # afterwards, so a draw returns what was asked for however much of
+            # a list the room has claimed. Quick prompts are capped at
+            # MAX_CUSTOM_PROMPTS (2000), well inside what either backend binds.
+            eligible = [
+                PromptVersion.id.in_(
+                    select(PromptListRevisionItem.prompt_version_id).where(
+                        PromptListRevisionItem.revision_id.in_(pinned)
+                    )
+                ),
+                PromptVersion.moderation_state
+                == PromptContentModerationState.ACTIVE.value,
+            ]
+            if excluded:
+                eligible.append(PromptVersion.match_key.notin_(excluded))
+
+            drawable = await session.scalar(
+                select(func.count()).select_from(
+                    select(PromptVersion.id).where(*eligible).subquery()
+                )
+            )
+            if not drawable:
+                return PromptSample()
+
             versions = (
                 (
                     await session.execute(
                         select(PromptVersion)
-                        .where(
-                            PromptVersion.id.in_(
-                                select(
-                                    PromptListRevisionItem.prompt_version_id
-                                ).where(
-                                    PromptListRevisionItem.revision_id.in_(pinned)
-                                )
-                            ),
-                            PromptVersion.moderation_state
-                            == PromptContentModerationState.ACTIVE.value,
-                        )
+                        .where(*eligible)
                         .order_by(func.random())
-                        .limit(limit + margin)
+                        .limit(limit)
                         .options(
                             selectinload(PromptVersion.version_aliases).selectinload(
                                 PromptVersionAlias.alias
@@ -2666,14 +2676,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 .scalars()
                 .all()
             )
-            if not versions:
-                return ()
-
-            drawn = [
-                version for version in versions if version.match_key not in excluded
-            ][:limit]
-            if not drawn:
-                return ()
 
             # Which of the pinned revisions each drawn prompt came from: a
             # version can sit in several selected lists, and a turn records
@@ -2687,31 +2689,35 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 ).where(
                     PromptListRevisionItem.revision_id.in_(pinned),
                     PromptListRevisionItem.prompt_version_id.in_(
-                        [version.id for version in drawn]
+                        [version.id for version in versions]
                     ),
                 )
             )
             for version_id, revision_id in source_rows:
                 sources[version_id].append(revision_id)
 
-            return tuple(
-                SampledPrompt(
-                    answer=version.canonical_answer,
-                    match_key=version.match_key,
-                    aliases=tuple(
-                        sorted(
-                            link.alias.answer for link in version.version_aliases
-                        )
-                    ),
-                    prompt_version_id=_public_id(version.id),
-                    source_revision_ids=tuple(
-                        _public_id(revision_id)
-                        for revision_id in sorted(
-                            sources[version.id], key=lambda rid: order[rid]
-                        )
-                    ),
-                )
-                for version in drawn
+            return PromptSample(
+                prompts=tuple(
+                    SampledPrompt(
+                        answer=version.canonical_answer,
+                        match_key=version.match_key,
+                        aliases=tuple(
+                            sorted(
+                                link.alias.answer
+                                for link in version.version_aliases
+                            )
+                        ),
+                        prompt_version_id=_public_id(version.id),
+                        source_revision_ids=tuple(
+                            _public_id(revision_id)
+                            for revision_id in sorted(
+                                sources[version.id], key=lambda rid: order[rid]
+                            )
+                        ),
+                    )
+                    for version in versions
+                ),
+                drawable=int(drawable),
             )
 
     async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:

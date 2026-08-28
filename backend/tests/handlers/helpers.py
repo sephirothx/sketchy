@@ -1,6 +1,7 @@
 """Helpers shared by the handler test modules."""
 from __future__ import annotations
 
+import random
 from unittest.mock import AsyncMock
 
 import socketio
@@ -9,7 +10,11 @@ from app.game import Game
 from app.handlers import register_all_handlers as register_handlers
 from app.prompt_content import prompt_match_key
 from app.prompts import letter_histogram
-from app.repositories.interfaces import PinnedPromptSelection, SampledPrompt
+from app.repositories.interfaces import (
+    PinnedPromptSelection,
+    PromptSample,
+    SampledPrompt,
+)
 from app.rooms import RoomManager
 
 # Keys that identify a player to the server. None of them may appear in
@@ -191,17 +196,27 @@ class StubPromptListRepo:
     async def sample_prompts(self, revision_ids, *, limit, exclude_match_keys=()):
         self.draws += 1
         excluded = set(exclude_match_keys)
-        return tuple(
-            SampledPrompt(
-                answer=prompt,
-                match_key=self._match_key(prompt),
-                aliases=self.aliases.get(prompt, ()),
-                prompt_version_id=self.prompt_version_ids.get(prompt),
-                source_revision_ids=tuple(revision_ids),
-            )
+        drawable = [
+            prompt
             for prompt in self.prompts
             if self._match_key(prompt) not in excluded
-        )[:limit]
+        ]
+        # Shuffled for the same reason the real draw is random: a caller that
+        # only ever sees a stable prefix cannot show that it mixes properly.
+        random.shuffle(drawable)
+        return PromptSample(
+            prompts=tuple(
+                SampledPrompt(
+                    answer=prompt,
+                    match_key=self._match_key(prompt),
+                    aliases=self.aliases.get(prompt, ()),
+                    prompt_version_id=self.prompt_version_ids.get(prompt),
+                    source_revision_ids=tuple(revision_ids),
+                )
+                for prompt in drawable[:limit]
+            ),
+            drawable=len(drawable),
+        )
 
     async def record_prompt_usage(self, revision_ids, usage):
         return None

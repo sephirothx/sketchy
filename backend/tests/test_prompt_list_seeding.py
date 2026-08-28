@@ -238,17 +238,18 @@ async def test_sampling_draws_distinct_prompts_and_records_where_each_came_from(
         pinned = await repo.authorize_selection(["english_standard"])
         revisions = list(pinned.revision_ids)
 
-        drawn = await repo.sample_prompts(revisions, limit=72)
+        sample = await repo.sample_prompts(revisions, limit=72)
 
-        assert len(drawn) == 72
-        assert len({prompt.answer for prompt in drawn}) == 72
-        for prompt in drawn:
+        assert len(sample.prompts) == 72
+        assert sample.drawable == pinned.prompt_count
+        assert len({prompt.answer for prompt in sample.prompts}) == 72
+        for prompt in sample.prompts:
             assert prompt.prompt_version_id
             assert prompt.source_revision_ids == tuple(revisions)
 
         # Nothing is drawn without somewhere to draw from.
-        assert await repo.sample_prompts(revisions, limit=0) == ()
-        assert await repo.sample_prompts([], limit=5) == ()
+        assert (await repo.sample_prompts(revisions, limit=0)).prompts == ()
+        assert (await repo.sample_prompts([], limit=5)).prompts == ()
     finally:
         await engine.dispose()
 
@@ -264,14 +265,17 @@ async def test_sampling_skips_answers_a_room_has_already_shadowed():
 
         shadowed = {
             prompt.match_key
-            for prompt in await repo.sample_prompts(revisions, limit=10)
+            for prompt in (
+                await repo.sample_prompts(revisions, limit=10)
+            ).prompts
         }
-        drawn = await repo.sample_prompts(
+        sample = await repo.sample_prompts(
             revisions, limit=pinned.prompt_count, exclude_match_keys=shadowed
         )
 
-        assert not shadowed & {prompt.match_key for prompt in drawn}
-        assert len(drawn) == pinned.prompt_count - len(shadowed)
+        assert not shadowed & {prompt.match_key for prompt in sample.prompts}
+        assert sample.drawable == pinned.prompt_count - len(shadowed)
+        assert len(sample.prompts) == sample.drawable
     finally:
         await engine.dispose()
 
@@ -289,9 +293,43 @@ async def test_repeated_draws_reach_every_prompt_in_the_pool():
         for _ in range(40):
             seen |= {
                 prompt.answer
-                for prompt in await repo.sample_prompts(revisions, limit=50)
+                for prompt in (
+                    await repo.sample_prompts(revisions, limit=50)
+                ).prompts
             }
 
         assert len(seen) == pinned.prompt_count
+    finally:
+        await engine.dispose()
+
+
+async def test_a_draw_that_excludes_most_of_a_list_still_fills_from_the_rest():
+    """Asking for every drawable prompt must return every drawable prompt.
+
+    A room whose quick prompts shadow most of its lists still has the rest to
+    play. Drawing a small surplus and filtering afterwards silently returns
+    fewer than were asked for, and the game starts on a thinner pool that
+    repeats itself sooner.
+    """
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        pinned = await repo.authorize_selection(["english_standard"])
+        revisions = list(pinned.revision_ids)
+
+        everything = await repo.sample_prompts(
+            revisions, limit=pinned.prompt_count
+        )
+        shadowed = {prompt.match_key for prompt in everything.prompts[:200]}
+        drawable = pinned.prompt_count - len(shadowed)
+
+        sample = await repo.sample_prompts(
+            revisions, limit=drawable, exclude_match_keys=shadowed
+        )
+
+        assert sample.drawable == drawable
+        assert len(sample.prompts) == drawable
+        assert not shadowed & {prompt.match_key for prompt in sample.prompts}
     finally:
         await engine.dispose()

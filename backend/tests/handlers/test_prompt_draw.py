@@ -217,3 +217,62 @@ async def test_a_draw_that_never_answers_is_given_up_on():
             await ctx.game_flow._start_fresh_game(room, room.player_list())
 
     assert room.game is None
+
+
+async def test_shadowing_quick_prompts_keep_the_share_the_merged_pool_gave_them():
+    """Shadowed curated answers are not drawable, so they cannot dilute the mix.
+
+    The pool this replaces dropped a curated answer a quick prompt had already
+    claimed, *then* sampled. Weighting against the raw list size instead counts
+    prompts that can never be drawn, and hands the room's own prompts a much
+    smaller share of the game than the host arranged.
+    """
+    curated = [f"prompt{index}" for index in range(500)]
+    # Every one of these shadows a curated answer of the same name, so the
+    # merged pool is 400 quick prompts and the 100 curated ones left over.
+    custom = curated[:400]
+    drawn_custom = 0
+    trials = 30
+
+    for _ in range(trials):
+        room_manager, room, _ = build_room(rounds=2)
+        room.max_players = 4
+        room.custom_prompts = list(custom)
+        repo = StubPromptListRepo(curated)
+        pin(room, repo)
+        ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+        await ctx.game_flow._start_fresh_game(room, room.player_list())
+        # Shadowing means a shared answer in the pool is the room's own.
+        drawn_custom += sum(
+            1 for prompt in room.game.prompt_pool if prompt in set(custom)
+        )
+
+    share = drawn_custom / (trials * 2 * 4 * 3)
+    expected = len(custom) / (len(custom) + len(curated) - len(custom))
+    assert expected * 0.8 < share < min(1.0, expected * 1.2)
+
+
+async def test_a_custom_only_room_prices_the_wheel_from_its_own_prompts():
+    """Selecting lists and then playing only quick prompts must not price them.
+
+    `customPromptsOnly` leaves the picked lists pinned - the host can turn it
+    back off - but nothing in those lists can be drawn, so charging list-wide
+    letter frequencies bills players for content the game will never show.
+    """
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.custom_prompts = ["zzzz", "qqqq"]
+    room.custom_prompts_only = True
+    repo = StubPromptListRepo([f"prompt{index}" for index in range(500)])
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+    game = room.game
+
+    expected_counts, expected_total = letter_histogram(["zzzz", "qqqq"])
+    assert game.letter_total == expected_total
+    assert dict(game.letter_counts) == expected_counts
+    # "p", all over the pinned lists and in nothing being played, is worthless.
+    assert game._letter_frequencies()["p"] == 0.0

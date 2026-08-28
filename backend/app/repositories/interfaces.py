@@ -462,6 +462,21 @@ class SampledPrompt:
     source_revision_ids: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class PromptSample:
+    """A draw from pinned revisions, and how much there was to draw from.
+
+    `drawable` counts what the draw was actually eligible to return - active
+    versions the caller did not exclude - which is not the size of the lists.
+    A caller mixing these with prompts of its own needs that number to weight
+    the two halves: counting answers that cannot be drawn would give its own
+    prompts a smaller share of the game than they should have.
+    """
+
+    prompts: tuple[SampledPrompt, ...] = ()
+    drawable: int = 0
+
+
 class PromptListSelectionError(ValueError):
     """A selected list is missing or cannot be combined with the others."""
 
@@ -758,12 +773,13 @@ class PromptListRepository(ABC):
         *,
         limit: int,
         exclude_match_keys: Collection[str] = (),
-    ) -> tuple[SampledPrompt, ...]:
+    ) -> PromptSample:
         """Draw up to `limit` random prompts from pinned revisions.
 
         Skips versions that are no longer active and any answer whose match key
         is in `exclude_match_keys` - the room's own quick prompts, which shadow
-        curated content of the same name.
+        curated content of the same name. Returns `limit` prompts whenever that
+        many remain after those exclusions, along with how many remained.
         """
         ...
 

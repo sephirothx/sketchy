@@ -37,7 +37,11 @@ from app.presenters import (
     turn_payload,
 )
 from app.prompts import letter_histogram, parse_custom_prompt_list
-from app.repositories.interfaces import PromptListSelectionError, SampledPrompt
+from app.repositories.interfaces import (
+    PromptListSelectionError,
+    PromptSample,
+    SampledPrompt,
+)
 
 logger = logging.getLogger("sketchy.game_flow")
 
@@ -382,35 +386,32 @@ class GameFlowService:
         prompts used to be concatenated with the curated ones and sampled
         together, so five of them among five hundred were five in five hundred
         and five; splitting the two halves evenly would make them far likelier
-        than the host arranged.
+        than the host arranged. The curated half of that ratio is what the room
+        can actually *draw* - `PromptSample.drawable`, which excludes answers a
+        quick prompt has already claimed - and not the size of its lists, or a
+        room that shadowed most of its lists would find its own prompts rarer
+        than it asked for.
         """
         needed = room.rounds * room.max_players * PROMPT_CHOICES_PER_TURN
         custom = list(room.custom_prompts)
-        curated_available = (
-            room.prompt_pool_size if room.draws_from_prompt_lists() else 0
-        )
 
-        if not custom and not curated_available:
+        if not custom and not room.draws_from_prompt_lists():
             # Neither lists nor quick prompts: the built-in list, as before.
             return _PromptDraw()
 
-        total = len(custom) + curated_available
-        indices = random.sample(range(total), min(needed, total))
-        from_custom = sum(1 for index in indices if index < len(custom))
-        from_curated = len(indices) - from_custom
-
-        drawn: list[SampledPrompt] = []
-        if from_curated:
+        # Drawn before the split, because the split needs to know how much
+        # curated content there was to draw. `needed` is the most the curated
+        # half could ever claim, so a prefix of this always covers it.
+        sample = PromptSample()
+        if room.draws_from_prompt_lists():
             try:
-                drawn = list(
-                    await asyncio.wait_for(
-                        self._ctx.prompt_list_repo.sample_prompts(
-                            list(room.prompt_list_revision_ids),
-                            limit=from_curated,
-                            exclude_match_keys=room.custom_prompt_match_keys(),
-                        ),
-                        timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
-                    )
+                sample = await asyncio.wait_for(
+                    self._ctx.prompt_list_repo.sample_prompts(
+                        list(room.prompt_list_revision_ids),
+                        limit=needed,
+                        exclude_match_keys=room.custom_prompt_match_keys(),
+                    ),
+                    timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
                 )
             except Exception as error:
                 # Opening on the built-in list while the host is shown the
@@ -421,13 +422,29 @@ class GameFlowService:
                     "Prompt lists could not be loaded. Please try again."
                 ) from error
 
+        total = len(custom) + sample.drawable
+        if not total:
+            return _PromptDraw()
+        indices = random.sample(range(total), min(needed, total))
+        from_custom = sum(1 for index in indices if index < len(custom))
+        drawn: list[SampledPrompt] = list(
+            sample.prompts[: len(indices) - from_custom]
+        )
+
         pool = random.sample(custom, from_custom) + [
             prompt.answer for prompt in drawn
         ]
         random.shuffle(pool)
 
-        letter_counts = Counter(room.prompt_letter_counts)
-        letter_total = room.prompt_letter_total
+        # Only content the game can reach is priced. A room that selected lists
+        # and then turned on custom-only still has them pinned, and charging
+        # their letter frequencies would bill players for prompts no turn of
+        # this game can show.
+        letter_counts: Counter[str] = Counter()
+        letter_total = 0
+        if sample.drawable:
+            letter_counts.update(room.prompt_letter_counts)
+            letter_total += room.prompt_letter_total
         custom_counts, custom_total = letter_histogram(custom)
         letter_counts.update(custom_counts)
         letter_total += custom_total
