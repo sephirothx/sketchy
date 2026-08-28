@@ -437,8 +437,9 @@ one — `test_command_budgets.py` checks the two lists against each other. The n
 follow the client's own cadence rather than the size of the host: the drawer's flush
 timer fires every 40 ms, so drawing is allowed double the 25 frames a second that
 produces, while `request_sync_strokes` — a cheap request with a full canvas re-encode
-for an answer — gets a floor instead of a ceiling. Windows live in memory and are
-dropped when the socket goes.
+for an answer — gets one per window, which is a minimum spacing rather than an
+allowance a burst can spend at once. Windows live in memory and are dropped when the
+socket goes.
 
 They are grouped into five classes rather than set per command, and held in a policy
 object carrying each one's default, bounds and purpose — never read from the
