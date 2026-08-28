@@ -342,9 +342,11 @@ counters are that distinction.
    whole poll arrives in full the instant the cache expires, which is the load the cache
    exists to absorb
 
-The shutdown state is asked **twice** — before the checks and again after the database
-await. R-SHUT-01 is an ordering guarantee, and the probe yields for up to a second, so an
-answer computed before a drain must not be delivered after it.
+Steps 1 and 2 are asked **twice** — before the database and again after it. Both are
+cheap, and both can change while the probe is in flight: the await yields for up to a
+second, which is long enough for a drain to begin or a loop to stop. An answer computed
+a second ago must not be delivered as if it were current, and for the drain that is
+R-SHUT-01's ordering guarantee rather than a nicety.
 
 ### Planned shutdown ([`backend/app/services/shutdown.py`](../backend/app/services/shutdown.py))
 

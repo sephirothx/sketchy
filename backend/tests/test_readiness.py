@@ -174,6 +174,26 @@ async def test_a_drain_that_begins_mid_probe_still_answers_first(monkeypatch):
     assert response.json()["detail"]["reason"] == "draining"
 
 
+async def test_a_loop_that_stops_mid_probe_is_caught_on_the_way_out(monkeypatch):
+    """The probe is a scheduling point, so the loops can change under it too."""
+    stopping = asyncio.get_event_loop().create_task(asyncio.sleep(3600))
+    readiness_probe.supervise("mail_delivery", stopping, LoopHealth("mail_delivery"))
+
+    class _StopsALoopWhileAnswering(_CountingSessionFactory):
+        async def execute(self, _statement):
+            stopping.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await stopping
+
+    monkeypatch.setattr(readiness_probe, "session_factory", _StopsALoopWhileAnswering())
+    async with await _client() as client:
+        response = await client.get("/api/ready")
+    assert response.status_code == 503
+    assert response.json()["detail"]["reason"] == (
+        "background loop stopped: mail_delivery"
+    )
+
+
 async def test_liveness_never_fails_on_a_dependency(monkeypatch):
     """A restart cannot fix a database outage, so liveness must not ask for one."""
     monkeypatch.setattr(

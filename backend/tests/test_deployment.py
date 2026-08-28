@@ -147,7 +147,24 @@ def test_production_without_a_database_url_refuses_to_start(environ):
     ],
 )
 def test_production_refuses_sqlite_however_it_is_spelled(url):
-    with pytest.raises(RuntimeError, match="SQLite is not supported"):
+    with pytest.raises(RuntimeError, match="names a SQLite database"):
         validate_database_configuration(
             {"SKETCHY_ENV": "production", "DATABASE_URL": url}
         )
+
+
+def test_the_rejected_url_is_named_but_never_reproduced():
+    """This message goes straight into a deployment log.
+
+    A connection URL carries a password and whatever else is in its query
+    string, so the refusal says which variable was wrong, not what was in it.
+    """
+    secret = "sqlite:///./sketchy.db?key=hunter2"
+    with pytest.raises(RuntimeError) as refusal:
+        validate_database_configuration(
+            {"SKETCHY_ENV": "production", "DATABASE_URL": secret}
+        )
+    message = str(refusal.value)
+    assert "DATABASE_URL" in message
+    assert "hunter2" not in message
+    assert secret not in message

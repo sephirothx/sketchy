@@ -425,48 +425,45 @@ async def health():
 async def ready():
     """Whether this process can actually serve, not merely whether it is up.
 
-    The shutdown state is tested first and on its own: R-SHUT-01 requires
-    readiness to flip to 503 before any drain work begins, and a draining
-    process must not be held up - or contradicted - by a dependency check.
+    The process's own state is tested before the database and again after it.
+    Both are cheap and both can change while the probe is in flight - a drain
+    can begin, and a supervised loop can stop - so an answer computed a second
+    ago must not be delivered as if it were current. Checking the drain first
+    also keeps R-SHUT-01 true: a draining process answers from the drain
+    rather than being held up, or contradicted, by a dependency.
     """
-    def draining_now() -> HTTPException | None:
-        if shutdown_coordinator.is_ready:
-            return None
+    def blocked_by_this_process() -> str | None:
+        if not shutdown_coordinator.is_ready:
+            return shutdown_coordinator.state
+        # A loop that only errors stays in rotation: it is reported in
+        # `/api/health` and alerted on there. A loop whose task is *gone*
+        # cannot come back without a restart, so it fails readiness and
+        # invites a supervisor to replace this instance.
+        dead = readiness_probe.dead_loops()
+        if dead:
+            return "background loop stopped: " + ", ".join(dead)
+        return None
+
+    def not_ready(reason: str | None) -> HTTPException:
         return HTTPException(
-            status_code=503,
-            detail={"status": "not_ready", "reason": shutdown_coordinator.state},
-        )
-
-    drain = draining_now()
-    if drain is not None:
-        raise drain
-
-    # A loop that only errors stays in rotation: it is reported in
-    # `/api/health` and alerted on there. A loop whose task is *gone* cannot
-    # come back without a restart, so it fails readiness and invites a
-    # supervisor to replace this instance.
-    dead = readiness_probe.dead_loops()
-    if dead:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "status": "not_ready",
-                "reason": "background loop stopped: " + ", ".join(dead),
-            },
-        )
-
-    database_ready, reason = await readiness_probe.check_database()
-    # Asked again, because the probe yields for up to a second and a drain can
-    # begin inside that window. R-SHUT-01 is an ordering guarantee, so an
-    # answer computed before the drain must not be delivered after it.
-    drain = draining_now()
-    if drain is not None:
-        raise drain
-    if not database_ready:
-        raise HTTPException(
             status_code=503,
             detail={"status": "not_ready", "reason": reason},
         )
+
+    reason = blocked_by_this_process()
+    if reason is not None:
+        raise not_ready(reason)
+
+    database_ready, database_reason = await readiness_probe.check_database()
+
+    # Asked again: the probe yields for up to a second, and that window is
+    # long enough for a drain to begin or a loop to stop.
+    reason = blocked_by_this_process()
+    if reason is not None:
+        raise not_ready(reason)
+
+    if not database_ready:
+        raise not_ready(database_reason)
 
     return {"status": "ready"}
 

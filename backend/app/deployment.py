@@ -85,9 +85,12 @@ def validate_database_configuration(environ: Mapping[str, str] | None = None) ->
 
     url = get_database_url(raw_value)
     if url.startswith("sqlite"):
+        # The rejected value is named, never reproduced. A connection URL
+        # carries a password and whatever else is in its query string, and
+        # this message goes straight into a deployment log.
         raise RuntimeError(
-            f"SQLite is not supported when {ENVIRONMENT_VARIABLE}={PRODUCTION} "
-            f"(DATABASE_URL={raw_value.strip()!r}). Set DATABASE_URL to a "
+            f"DATABASE_URL names a SQLite database, which is not supported "
+            f"when {ENVIRONMENT_VARIABLE}={PRODUCTION}. Set it to a "
             "PostgreSQL URL, for example "
             "postgresql+asyncpg://user:password@host:5432/sketchy."
         )
