@@ -77,7 +77,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-48 tables in eight domains.
+50 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -90,6 +90,7 @@ erDiagram
     users ||--o{ room_presets : "owns"
     users ||--o{ user_bans : "suspended by"
     users ||--o{ user_warnings : "warned by"
+    users ||--o{ role_change_notices : "told about a role"
 
     game_records ||--o{ game_participants : "seats"
     game_records ||--o{ turn_records : "turns"
@@ -119,7 +120,7 @@ erDiagram
 | --- | --- |
 | **Server & rooms** | `app_config`, `room_code_reservations`, `room_presets`, `planned_shutdown_abandonments` |
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
-| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `user_blocks` |
+| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
 | **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_participant_outcomes`, `turn_guesses`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
@@ -560,6 +561,30 @@ about somebody else is refused for the same reason. Acknowledging sets
 actually landed. Issuing one writes a `warning.issued` audit event. A warning issued
 from a report **resolves that report in the same transaction**, and a report already
 decided refuses the warning - which is also what stops a retry from warning twice.
+
+### `role_change_notices`
+`id` · `user_id` (`SET NULL`) · `role` · `created_at` · `acknowledged_at`, with
+`ix_role_change_notices_user_pending` on (`user_id`, `acknowledged_at`).
+
+**Flow.** What an account still has to be told about its own role. Written by
+`PATCH /api/admin/players/{id}/role` in the same transaction as the change and the
+`admin.role_changed` audit event, so there can be no role nobody was told about and no
+notice about a role that was never granted; a no-op change writes neither. A connected
+player is told immediately over the socket (`role_changed`), and everybody else by
+`GET /api/role-notices/pending` on their next visit — the same two-route shape a warning
+uses, sharing one payload builder so they cannot drift.
+
+**Newest, not oldest** — the one place this parts company with `user_warnings`. Two
+warnings are two things a moderator said and both are worth reading; two role notices
+are one fact recorded twice, and the older is simply wrong. So the pending query orders
+by `created_at DESC`, and acknowledging one settles every older row with it: an account
+promoted and then demoted while it was away is told once, correctly, rather than
+congratulated and then contradicted.
+
+**No actor column, and no reason.** Who acted is in the ledger, in the same transaction.
+The reason is there too and stays there: it is text one administrator wrote for another
+and can name a report or a second account, so it deliberately has no route to the person
+it is about (R-ROLE-02).
 
 ### `user_blocks`
 `id` · `blocker_user_id` · `blocked_user_id` (both CASCADE) · `created_at`, with

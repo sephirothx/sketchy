@@ -128,6 +128,27 @@ export function endTurn(roomId: string): Promise<{ endedTurnIn: string }> {
   return apiRequest(`/api/admin/rooms/${roomId}/end-turn`, { method: "POST" });
 }
 
+/** One account the role control can act on.
+
+Deliberately thin: a name, the colour its owner chose, and the role being
+changed. The server returns nothing else, because a control for granting a role
+that also answers "who is this player" is a directory. */
+export interface PlayerCandidate {
+  id: string;
+  displayName: string;
+  nameColor: string | null;
+  role: "user" | "moderator" | "admin";
+}
+
+/** Find an account by part of its name, or by a full id.
+
+The id still works: an administrator arriving from the audit ledger or a report
+has one and not a name, and that is the workflow this search replaces rather
+than removes. */
+export function searchPlayers(q: string): Promise<{ players: PlayerCandidate[] }> {
+  return apiRequest(`/api/admin/players?q=${encodeURIComponent(q)}`);
+}
+
 export function setPlayerRole(
   userId: string,
   role: "user" | "moderator",
@@ -237,4 +258,76 @@ export function groupTunables(tunables: Tunable[]): [string, Tunable[]][] {
 export function tunableLabel(name: string): string {
   const tail = name.includes(".") ? name.slice(name.indexOf(".") + 1) : name;
   return tail.replace(/_/g, " ");
+}
+
+/** Whether the role control should refuse a click it knows will be refused.
+
+The same job `shutdownBlocked` does above, and for the same reason: an
+administrator selected in this list is a 400 from the server, and discovering
+that as an error message is exactly the clunkiness this control is being fixed
+for. Better a button that says no by looking disabled. */
+export function roleChangeBlocked({
+  busy,
+  selected,
+  reason,
+}: {
+  busy: boolean;
+  selected: Pick<PlayerCandidate, "role"> | null;
+  reason: string;
+}): boolean {
+  if (busy || selected === null) return true;
+  // Administrators are made by the guarded command on the server, and cannot
+  // be demoted over the network either.
+  if (selected.role === "admin") return true;
+  return reason.trim().length < 3;
+}
+
+/** The short piece of an account id that tells two identical names apart.
+
+The **tail**, not the head: account ids are time-ordered (UUIDv7), so their
+first half is a timestamp and every account registered in the same moment shares
+it. A leading fragment of two players called "Alex" reads the same twice, which
+is the one case this is here for. */
+export function accountFragment(id: string): string {
+  return id.slice(-8);
+}
+
+/** The line under the search box, which is where the rules explain themselves.
+
+An empty result is otherwise a control that has silently declined to help: the
+guest it will not offer, and the fact that a blank box is showing who holds a
+role rather than everybody, are both things an operator would otherwise have to
+work out from an absence. */
+export function roleSearchStatus({
+  query,
+  count,
+  failed,
+}: {
+  query: string;
+  count: number;
+  failed: boolean;
+}): string {
+  if (failed) return "Could not search for players.";
+  if (query.trim() === "") {
+    return count === 0
+      ? "Nobody holds a role yet. Type a name to find an account."
+      : "Who holds a role now. Type a name to find anybody else.";
+  }
+  if (count === 0) {
+    return "No registered account matches that. A guest cannot hold a role.";
+  }
+  return count === 1 ? "1 account matches." : `${count} accounts match.`;
+}
+
+/** What the administrator is told the moment the change lands.
+
+Named, because "That account is now a moderator" is the feedback #507 called
+too thin: the one thing an operator needs confirmed is *which* account. */
+export function roleChangeMessage(
+  displayName: string,
+  role: "user" | "moderator",
+): string {
+  return role === "moderator"
+    ? `${displayName} is now a moderator.`
+    : `${displayName} is no longer a moderator.`;
 }

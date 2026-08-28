@@ -380,6 +380,7 @@ the server resolves the seat against the live room and selects the evidence itse
 | `upgrade_required` | `{reason, expected, received}` — the socket stays open; the client reloads (§1) | one socket, at handshake |
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
 | `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |
+| `role_changed` | `{notice: {id, role, createdAt}}` — the same body `GET /api/role-notices/pending` returns. The new role and nothing else: the reason the administrator recorded is ledger text written for other administrators and can name a report or a second account | every socket of the account whose role changed |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
 | `server_paused` | `ServerPausedNotice` — an administrator stopped, or resumed, admitting new rooms | every socket on each toggle; one socket at handshake while paused |
 | `server_full` | `{reason}` — the socket is closed immediately afterwards | one socket, at handshake |
@@ -943,6 +944,8 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | `POST` | `/api/moderation/warnings` | moderator+ | Formal warning; same role boundaries as a suspension, restricts nothing. With `reportId`, resolves that report in the same transaction (`409` if already decided) |
 | `GET` | `/api/warnings/pending` | any signed-in | The caller's own oldest unacknowledged warning, with the reported messages behind it |
 | `POST` | `/api/warnings/{warning_id}/acknowledge` | any signed-in | Own warnings only (`404` otherwise); records that the notice landed |
+| `GET` | `/api/role-notices/pending` | any signed-in | The caller's own **newest** unacknowledged role-change notice. Newest rather than oldest: a role is one current fact, so an account promoted and then demoted while it was away is told once, correctly |
+| `POST` | `/api/role-notices/{notice_id}/acknowledge` | any signed-in | Own notices only (`404` otherwise); settles that notice and every older one, since the account has just been shown where it stands |
 
 ### Bug reports — [`backend/app/api/bug_reports.py`](../backend/app/api/bug_reports.py)
 
@@ -998,7 +1001,21 @@ which is the one thing the 404 exists to refuse.
 | `DELETE` | `/api/admin/rooms/{id}` | Close a room. **Writes `room.closed_by_admin`** |
 | `DELETE` | `/api/admin/rooms/{id}/players/{playerId}` | Remove one seat. **Writes `room.player_kicked`** |
 | `POST` | `/api/admin/rooms/{id}/end-turn` | End the drawing phase as its timer would. **Writes `room.turn_ended_by_admin`** |
-| `PATCH` | `/api/admin/players/{id}/role` | `{role, reason}`, `role` ∈ `user`/`moderator`. **Writes `admin.role_changed`** |
+| `GET` | `/api/admin/players?q=` | Find a registered account by part of its display name, or by a full id; a blank `q` lists who holds a role now. At most ten rows of `{id, displayName, nameColor, role}`. **Writes no audit event** |
+| `PATCH` | `/api/admin/players/{id}/role` | `{role, reason}`, `role` ∈ `user`/`moderator`. **Writes `admin.role_changed`**, records a `role_change_notices` row in the same transaction, and pushes `role_changed` to the account |
+
+`GET /api/admin/players` is the one read among those commands, and it writes nothing
+to the ledger while `GET /api/admin/players/{id}/activity` writes a row on every use.
+The line is what each answers. The activity view answers *how has this account
+behaved*, which is a surveillance surface on the game's own players (R-AUDIT-05). The
+search answers *which account is called this*, and returns nothing a room does not
+already show everybody seated in it — a display name and the colour its owner chose —
+plus the role about to change. An event per keystroke would also bury
+`admin.role_changed` under hundreds of rows in an append-only record that exists to
+make it findable. Nothing else is returned for the same reason: two players who chose
+the same name are both listed and told apart by an id fragment, and an operator who
+genuinely cannot tell which is which has the activity view, where that cost is
+recorded.
 
 Pausing refuses new rooms, game starts and restart votes while leaving live games
 to finish, and leaves readiness alone — `/api/ready` keeps answering 200, because a

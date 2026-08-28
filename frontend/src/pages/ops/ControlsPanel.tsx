@@ -4,11 +4,16 @@ import { Chip } from "../../components/ui/Chip";
 import { useAdmissionNotices } from "../../hooks/useAdmissionNotices";
 import { ApiError } from "../../lib/api";
 import {
+  accountFragment,
   closeRoom,
   endTurn,
   initiateShutdown,
   kickPlayer,
   mergeAdmission,
+  roleChangeBlocked,
+  roleChangeMessage,
+  roleSearchStatus,
+  searchPlayers,
   shutdownBlocked,
   readLiveRooms,
   readMaintenance,
@@ -16,7 +21,10 @@ import {
   setPlayerRole,
   type LiveRoom,
   type MaintenanceState,
+  type PlayerCandidate,
 } from "../../lib/adminControls";
+import { playerNameClass, playerNameStyle } from "../../lib/playerName";
+import { useToast } from "../../lib/toast";
 
 /** Commands, kept apart from the settings on purpose.
 
@@ -30,7 +38,10 @@ export function ControlsPanel() {
   const [shutdownReason, setShutdownReason] = useState("");
   const [drainSeconds, setDrainSeconds] = useState("");
   const [confirmingShutdown, setConfirmingShutdown] = useState(false);
-  const [roleUserId, setRoleUserId] = useState("");
+  const [roleQuery, setRoleQuery] = useState("");
+  const [candidates, setCandidates] = useState<PlayerCandidate[]>([]);
+  const [selected, setSelected] = useState<PlayerCandidate | null>(null);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [roleReason, setRoleReason] = useState("");
   const [role, setRole] = useState<"user" | "moderator">("moderator");
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +51,10 @@ export function ControlsPanel() {
   // What the server has announced since the last fetch, and which connection
   // said it: both the notices and the snapshot belong to one process.
   const notices = useAdmissionNotices();
+  // The panel's own confirmation renders at the top of a page an operator has
+  // scrolled to the bottom of, which is a confirmation nobody sees. The toast
+  // is where the command they just pressed answers them.
+  const { notify } = useToast();
   // Which room's seats are open. Collapsed by default: the table is for
   // finding a room, and a list of every player in every room would bury it.
   const [openSeats, setOpenSeats] = useState<string | null>(null);
@@ -62,12 +77,37 @@ export function ControlsPanel() {
   // snapshot describes a process that no longer exists.
   useEffect(load, [load, notices.connection]);
 
+  // Kept out of `load()` on purpose: that runs after every command in this
+  // panel, and closing a room should not re-run a player search. The timer
+  // debounces the typing, and the `cancelled` flag makes an answer that
+  // arrives after the next keystroke harmless instead of a result that flickers
+  // back to a term nobody is looking at any more.
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void searchPlayers(roleQuery.trim())
+        .then((result) => {
+          if (cancelled) return;
+          setCandidates(result.players);
+          setSearchFailed(false);
+        })
+        .catch(() => {
+          if (!cancelled) setSearchFailed(true);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [roleQuery]);
+
   function run(action: Promise<unknown>, message: string) {
     setBusy(true);
     setError(null);
     void action
       .then(() => {
         setDone(message);
+        notify(message, "success");
         load();
       })
       .catch((failure) => fail(failure, "That command was refused."))
@@ -397,13 +437,81 @@ export function ControlsPanel() {
           </div>
         </div>
         <div className="ops-filters">
-          <label htmlFor="ops-role-user">Account id</label>
+          <label htmlFor="ops-role-search">Find a player</label>
           <input
-            id="ops-role-user"
-            value={roleUserId}
-            placeholder="00000000-0000-0000-0000-000000000000"
-            onChange={(change) => setRoleUserId(change.target.value)}
+            id="ops-role-search"
+            className="ops-role-search"
+            value={roleQuery}
+            placeholder="part of a name, or a full account id"
+            onChange={(change) => setRoleQuery(change.target.value)}
           />
+        </div>
+        <p className="ops-empty" role="status">
+          {roleSearchStatus({
+            query: roleQuery,
+            count: candidates.length,
+            failed: searchFailed,
+          })}
+        </p>
+        {candidates.length > 0 && (
+          <ul className="ops-role-results">
+            {candidates.map((candidate) => (
+              <li
+                key={candidate.id}
+                className={candidate.id === selected?.id ? "is-selected" : undefined}
+              >
+                {/* The colour its owner chose, because that is how an operator
+                    recognises a name they were given in a report. */}
+                <span
+                  className={playerNameClass(false)}
+                  style={playerNameStyle(candidate.nameColor ?? undefined, false)}
+                >
+                  {candidate.displayName}
+                </span>
+                <Chip kind={candidate.role === "user" ? "neutral" : "primary"}>
+                  {candidate.role}
+                </Chip>
+                {/* Two players may have chosen the same name; this is what
+                    tells them apart without turning the card into a profile.
+                    The whole id is on the element, for a copy or a ledger
+                    search. */}
+                <span className="ops-role-id" title={candidate.id}>
+                  …{accountFragment(candidate.id)}
+                </span>
+                {candidate.role === "admin" ? (
+                  <span className="ops-empty">
+                    Administrators are changed only on the server.
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-compact"
+                    disabled={busy || candidate.id === selected?.id}
+                    onClick={() => setSelected(candidate)}
+                  >
+                    {candidate.id === selected?.id ? "Selected" : "Select"}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="ops-filters">
+          <span className="ops-role-selected">
+            {selected === null ? (
+              <span className="ops-empty">Nobody selected.</span>
+            ) : (
+              <>
+                <span>Selected</span>
+                <span
+                  className={playerNameClass(false)}
+                  style={playerNameStyle(selected.nameColor ?? undefined, false)}
+                >
+                  {selected.displayName}
+                </span>
+              </>
+            )}
+          </span>
           <label htmlFor="ops-role">Role</label>
           <select
             id="ops-role"
@@ -426,15 +534,26 @@ export function ControlsPanel() {
           <button
             type="button"
             className="btn btn-secondary btn-compact"
-            disabled={busy || roleUserId.trim() === "" || roleReason.trim().length < 3}
-            onClick={() =>
+            disabled={roleChangeBlocked({ busy, selected, reason: roleReason })}
+            onClick={() => {
+              if (selected === null) return;
+              const target = selected;
               run(
-                setPlayerRole(roleUserId.trim(), role, roleReason.trim()),
-                `That account is now a ${role}.`,
-              )
-            }
+                // The row the operator acted on changes in front of them: a
+                // message is a claim, a chip that has moved is the change.
+                setPlayerRole(target.id, role, roleReason.trim()).then((result) => {
+                  const changed = { ...target, role: result.role as PlayerCandidate["role"] };
+                  setSelected(changed);
+                  setCandidates((current) =>
+                    current.map((one) => (one.id === changed.id ? changed : one)),
+                  );
+                  setRoleReason("");
+                }),
+                roleChangeMessage(target.displayName, role),
+              );
+            }}
           >
-            Set role
+            {busy ? "Setting…" : "Set role"}
           </button>
         </div>
       </section>

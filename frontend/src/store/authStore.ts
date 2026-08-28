@@ -48,6 +48,21 @@ interface AuthStore {
    */
   ensureIdentity: () => Promise<AuthUser>;
   fetchMe: () => Promise<AuthUser | null>;
+  /**
+   * Adopt a role the account's own socket room just announced.
+   *
+   * What the menu offers, and nothing else: the role has never been the
+   * authorization here (R-ROLE-01), so this cannot open a door - it stops the
+   * app from hiding one that has just been opened, or offering one that has
+   * just been closed, until the next reload.
+   *
+   * Deliberately not an identity change. `installIdentity` bumps
+   * `identityVersion` and the callers around it bounce the socket, because the
+   * account underneath has changed; here it is the same account with a
+   * different role, and bouncing would drop the player out of whatever they
+   * are doing to learn something the socket already told them.
+   */
+  applyRole: (role: AuthUser["role"]) => void;
   setDisplayName: (displayName: string) => Promise<AuthUser>;
   setNameColor: (nameColor: string) => Promise<AuthUser>;
   register: (username: string, password: string, email?: string) => Promise<AuthUser>;
@@ -212,6 +227,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     })();
     return inFlightFetchMe;
   },
+
+  applyRole: (role) =>
+    set((state) => (state.user ? { user: { ...state.user, role } } : {})),
 
   setNameDraft: (nameDraft) => set({ nameDraft }),
 

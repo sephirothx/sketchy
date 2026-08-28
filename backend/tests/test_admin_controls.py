@@ -20,10 +20,14 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.api.admin_controls import create_admin_controls_router, read_paused
+from app.api.admin_controls import (
+    PLAYER_SEARCH_LIMIT,
+    create_admin_controls_router,
+    read_paused,
+)
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import AuditEvent, Base, User
+from app.db.models import AuditEvent, Base, RoleChangeNotice, User, generate_uuid
 from app.domain_values import AccountState, UserRole
 from app.game import Game, Phase
 from app.handlers import register_all_handlers
@@ -36,8 +40,19 @@ pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
 
+@pytest.fixture
+def role_pushes() -> list[str]:
+    """Every account the router asked to be told about its own role.
+
+    A sibling fixture rather than a seventh element of `env`: every test in
+    this file unpacks that tuple at a fixed arity, and growing it would be a
+    diff across all of them for the benefit of a handful.
+    """
+    return []
+
+
 @pytest_asyncio.fixture
-async def env(monkeypatch):
+async def env(monkeypatch, role_pushes):
     monkeypatch.setenv("IP_HASH_SECRET", "controls-test-secret")
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as connection:
@@ -58,6 +73,9 @@ async def env(monkeypatch):
     # process would stop the test runner.
     exit_requests: list[int] = []
 
+    async def record_role_push(user_id: str) -> None:
+        role_pushes.append(user_id)
+
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
@@ -67,6 +85,7 @@ async def env(monkeypatch):
             coordinator,
             rooms,
             context,
+            on_role_changed=record_role_push,
             request_process_exit=lambda: exit_requests.append(1),
         )
     )
@@ -457,6 +476,194 @@ async def test_every_room_command_names_the_room_in_the_ledger(env):
     assert event.request_id and event.ip_hash
 
 
+# ------------------------------------------------------------- finding a player
+
+
+async def _accounts(client, term: str) -> list[dict]:
+    response = await client.get("/api/admin/players", params={"q": term})
+    assert response.status_code == 200
+    return response.json()["players"]
+
+
+async def test_a_player_is_found_by_part_of_their_name(env):
+    """The point of the whole endpoint: a name is what an operator is given."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Marta")
+
+    found = await _accounts(admin, "art")
+    assert [row["id"] for row in found] == [subject["id"]]
+    assert found[0]["displayName"] == "Marta"
+    assert found[0]["role"] == "user"
+    assert "nameColor" in found[0]
+
+
+async def test_the_search_does_not_care_about_case(env):
+    new_client, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Marta")
+    assert [row["id"] for row in await _accounts(admin, "MARTA")] == [subject["id"]]
+
+
+async def test_a_full_account_id_still_finds_the_account(env):
+    """The workflow this replaces still has to work.
+
+    An administrator arriving from the audit ledger or a report has an id and
+    not a name, and being sent back to look up a name they were never given
+    would be a step added where one was meant to be removed.
+    """
+    new_client, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Elsewhere")
+    assert [row["id"] for row in await _accounts(admin, subject["id"])] == [
+        subject["id"]
+    ]
+
+
+async def test_something_that_is_not_an_id_is_simply_a_name_that_matches_nothing(env):
+    """A half-pasted id is a search term, not an error to explain."""
+    admin = await an_admin(env)
+    assert await _accounts(admin, "00000000-0000-0000") == []
+
+
+async def test_a_guest_is_not_offered_for_a_role_they_cannot_hold(env):
+    """Only a registered account can hold one, so a guest row is a refusal
+    in waiting - and this control exists to stop refusals being the way an
+    operator learns the rules."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    guest_client = new_client()
+    assert (await guest_client.get("/api/auth/me")).status_code == 200
+    await guest_client.post("/api/auth/display-name", json={"displayName": "Wanderer"})
+
+    assert await _accounts(admin, "Wanderer") == []
+
+
+async def test_a_wildcard_typed_into_the_box_is_matched_literally(env):
+    """A `%` somebody typed is a character, not a pattern.
+
+    Without escaping, this one keystroke turns a control for finding one
+    account into a listing of ten arbitrary players.
+    """
+    new_client, *_ = env
+    admin = await an_admin(env)
+    await register(new_client(), "Marta")
+    assert await _accounts(admin, "%") == []
+    assert await _accounts(admin, "_") == []
+
+
+async def test_an_empty_query_lists_who_holds_a_role_now(env):
+    """The question the card opens on, and the one revocation starts from."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    moderator = await register(new_client(), "Helper")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR.value)
+    ordinary = await register(new_client(), "Player")
+
+    found = {row["id"]: row["role"] for row in await _accounts(admin, "")}
+    assert found[moderator["id"]] == "moderator"
+    # Administrators are listed too: "who holds a role" that hides the top tier
+    # is not the picture it claims to be.
+    assert "admin" in found.values()
+    assert ordinary["id"] not in found
+
+
+async def _seed_registered(factory, names: list[str]) -> list[str]:
+    """Accounts straight into the database, past the registration limiter.
+
+    A dozen of them through `POST /api/auth/register` is a 429 well before the
+    twelfth - which is the limiter doing its job, not something to raise for a
+    test's convenience (R-CONF-08).
+    """
+    created: list[str] = []
+    async with factory() as session:
+        async with session.begin():
+            for name in names:
+                user = User(
+                    id=generate_uuid(),
+                    display_name=name,
+                    state=AccountState.REGISTERED.value,
+                    role=UserRole.USER.value,
+                )
+                session.add(user)
+                created.append(str(user.id))
+    return created
+
+
+async def test_the_search_is_capped(env):
+    """Ten rows is a list to scan; more is a directory to page through."""
+    _, factory, *_ = env
+    admin = await an_admin(env)
+    await _seed_registered(factory, [f"Crowd{index}" for index in range(12)])
+    assert len(await _accounts(admin, "Crowd")) == PLAYER_SEARCH_LIMIT
+
+
+async def test_two_players_with_the_same_name_are_both_offered(env):
+    """Display names are not unique, and pretending otherwise picks one at
+    random on the operator's behalf. Both are shown; the id fragment beside
+    each is what tells them apart."""
+    _, factory, *_ = env
+    admin = await an_admin(env)
+    both = await _seed_registered(factory, ["Alex", "Alex"])
+
+    assert {row["id"] for row in await _accounts(admin, "Alex")} == set(both)
+
+
+async def test_the_search_says_nothing_the_role_control_does_not_need(env):
+    """The bound that keeps this from becoming a player directory.
+
+    A name, the colour its owner chose and the role being changed - nothing a
+    room does not already show every player seated in it. Usernames, dates or
+    game counts here would be a surveillance surface, and those belong behind
+    the audited activity view.
+    """
+    new_client, *_ = env
+    admin = await an_admin(env)
+    await register(new_client(), "Marta")
+    row = (await _accounts(admin, "Marta"))[0]
+    assert set(row) == {"id", "displayName", "nameColor", "role"}
+
+
+async def test_looking_for_a_player_writes_nothing_to_the_ledger(env):
+    """R-AUDIT-05 records the per-player activity view because it answers how
+    an account has behaved. This answers which account is called this, and an
+    event per keystroke would bury `admin.role_changed` under hundreds of rows
+    in the append-only record that exists to make it findable."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    await register(new_client(), "Marta")
+    for term in ("", "M", "Ma", "Mar", "Mart", "Marta"):
+        await _accounts(admin, term)
+    assert await audit_rows(factory) == []
+
+
+async def test_a_term_too_long_to_match_is_not_a_different_answer(env):
+    """A bound declared on the parameter would be checked before the gate, and
+    an ordinary player told 422 has been told the endpoint is there. So a long
+    term is truncated and answers like any other term that matches nothing."""
+    new_client, *_ = env
+    admin = await an_admin(env)
+    assert await _accounts(admin, "z" * 200) == []
+
+    player = new_client()
+    await register(player, "Player")
+    response = await player.get("/api/admin/players", params={"q": "z" * 200})
+    assert response.status_code == 404
+
+
+async def test_the_search_is_invisible_to_anyone_who_is_not_an_administrator(env):
+    """R-ROLE-01, for a moderator as much as for an ordinary player."""
+    new_client, factory, *_ = env
+    player = new_client()
+    await register(player, "Player")
+    assert (await player.get("/api/admin/players")).status_code == 404
+
+    moderator = new_client()
+    account = await register(moderator, "Mod")
+    await set_role(factory, account["id"], UserRole.MODERATOR.value)
+    assert (await moderator.get("/api/admin/players")).status_code == 404
+
+
 # ----------------------------------------------------------------------- roles
 
 
@@ -486,6 +693,105 @@ async def test_a_moderator_can_be_put_back_to_an_ordinary_player(env):
     )
     async with factory() as session:
         assert (await session.get(User, UUID(subject["id"]))).role == "user"
+
+
+async def test_a_promotion_reaches_the_promoted_account(env, role_pushes):
+    """The other half of #507: the player is told, rather than discovering a
+    Moderation entry in their menu on some later load."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Told")
+
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+    assert role_pushes == [subject["id"]]
+    async with factory() as session:
+        notices = list(
+            (await session.scalars(select(RoleChangeNotice))).all()
+        )
+    assert [(str(row.user_id), row.role) for row in notices] == [
+        (subject["id"], "moderator")
+    ]
+    assert notices[0].acknowledged_at is None
+
+
+async def test_a_demotion_tells_the_account_too(env, role_pushes):
+    """A Moderation entry that vanishes with no explanation is worse than the
+    sentence saying why it went."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Stepping")
+    await set_role(factory, subject["id"], UserRole.MODERATOR.value)
+
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "user", "reason": "stepped down"},
+    )
+    assert role_pushes == [subject["id"]]
+    async with factory() as session:
+        notice = await session.scalar(select(RoleChangeNotice))
+    assert notice.role == "user"
+
+
+async def test_the_reason_never_leaves_the_ledger(env):
+    """It is text one administrator wrote for another and can name a report or
+    a second account. The notice carries the role and nothing else, so there is
+    no route from that sentence to the person it is about."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Subject")
+
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "cleaning up after report 41"},
+    )
+    async with factory() as session:
+        notice = await session.scalar(select(RoleChangeNotice))
+    assert "report" not in str(notice.__dict__.values())
+    event = (await audit_rows(factory))[0]
+    assert event.details["reason"] == "cleaning up after report 41"
+
+
+async def test_a_role_change_that_changes_nothing_tells_nobody(env, role_pushes):
+    """Pressing the button twice is not a second promotion."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Already")
+    await set_role(factory, subject["id"], UserRole.MODERATOR.value)
+
+    response = await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "again, for luck"},
+    )
+    assert response.status_code == 200
+    assert role_pushes == []
+    assert await audit_rows(factory) == []
+    async with factory() as session:
+        assert (await session.scalars(select(RoleChangeNotice))).all() == []
+
+
+async def test_a_refused_role_change_announces_nothing(env, role_pushes):
+    """Nothing half-done: no notice for a change that did not happen."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    me = (await admin.get("/api/auth/me")).json()
+    guest = await register(new_client(), "Fleeting")
+    async with factory() as session:
+        async with session.begin():
+            user = await session.get(User, UUID(guest["id"]))
+            user.state = AccountState.ANONYMOUS.value
+
+    for target, role in ((me["id"], "user"), (guest["id"], "moderator")):
+        response = await admin.patch(
+            f"/api/admin/players/{target}/role",
+            json={"role": role, "reason": "should be refused"},
+        )
+        assert response.status_code == 400
+    assert role_pushes == []
+    async with factory() as session:
+        assert (await session.scalars(select(RoleChangeNotice))).all() == []
 
 
 async def test_an_administrator_cannot_be_minted_over_the_network(env):
