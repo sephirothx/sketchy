@@ -61,6 +61,9 @@ PROMPT_USAGE_WRITE_TIMEOUT_SECONDS = 10
 # game start that cannot read its prompts must refuse rather than hang the
 # host, and an unbounded database call on a request path is its own finding.
 PROMPT_DRAW_TIMEOUT_SECONDS = 10
+# What both start paths require before setting a game up, and what has to
+# still hold once its prompts have been drawn.
+MIN_PLAYERS_TO_START = 2
 
 
 @dataclass(frozen=True)
@@ -506,6 +509,7 @@ class GameFlowService:
         active_players: list[Player],
         *,
         restarted: bool = False,
+        seated_before: set[str] | None = None,
     ) -> None:
         """Replace any prior game with a fresh, fully synchronized game.
 
@@ -516,9 +520,15 @@ class GameFlowService:
         playing one that does not exist, refusing every later start as already
         in progress.
         """
-        # Who was in the room before the draw, so that afterwards the arrivals
-        # can be told from the players the caller deliberately left out.
-        seated_before = set(room.players)
+        # Who was in the room when `active_players` was taken, so that arrivals
+        # can afterwards be told from the players the caller left out on
+        # purpose. It belongs to the caller because the window is theirs: the
+        # roster is captured, the lists are re-authorized, and only then are
+        # the prompts drawn - somebody arriving during that first await is
+        # missing from the roster and present in the room, so a snapshot taken
+        # here would see them as neither new nor included.
+        if seated_before is None:
+            seated_before = set(room.players)
         draw = await self._draw_prompt_sample(room)
         # Drawing is a database call, and seating is not held by `room.lock`,
         # so the roster the caller handed over can be stale by the time there
@@ -534,9 +544,12 @@ class GameFlowService:
             for player in room.players.values()
             if player.id not in seated_before and not player.is_spectator
         ]
-        if not active_players:
+        if len(active_players) < MIN_PLAYERS_TO_START:
+            # Both start paths check this before setting anything up. The draw
+            # is long enough that it can stop being true in between, and a game
+            # nobody checked for is not one either path agreed to start.
             raise RoomNoLongerStartableError(
-                "Everybody left before the game could start"
+                "Need at least 2 active non-AFK players to start"
             )
         room.restart_vote = None
         room.restart_vote_cooldown_until = 0

@@ -103,6 +103,7 @@ def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> Non
             return
 
         active_players = room.active_players()
+        seated_before = set(room.players)
         if len(active_players) < 2:
             await _cancel_restart(
                 ctx, room, "fewer than two active players remain"
@@ -114,6 +115,7 @@ def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> Non
                 room,
                 active_players,
                 restarted=True,
+                seated_before=seated_before,
             )
         except RoomPromptResolutionError:
             # Nothing here can answer a socket, and an exception raised in this

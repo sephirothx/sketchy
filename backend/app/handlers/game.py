@@ -29,6 +29,10 @@ async def start_game(ctx: HandlerContext, sid, data=None):
     # Waits out a settings change that is still being applied - see Room.lock.
     async with room.lock:
         active_players = room.active_players()
+        # Paired with the roster: everything from here to the game being built
+        # awaits at least twice, and this is what tells a player who arrives in
+        # that window from one deliberately left out of the roster above.
+        seated_before = set(room.players)
         if len(active_players) < 2:
             return {"ok": False, "error": "Need at least 2 active non-AFK players to start"}
         if room.state == "playing":
@@ -49,7 +53,9 @@ async def start_game(ctx: HandlerContext, sid, data=None):
             return ctx.shutdown.rejection_acknowledgement()
 
         try:
-            await ctx.game_flow._start_fresh_game(room, active_players)
+            await ctx.game_flow._start_fresh_game(
+                room, active_players, seated_before=seated_before
+            )
         except RoomNoLongerStartableError as error:
             # The roster emptied out while the prompts were being drawn.
             return {"ok": False, "error": str(error)}

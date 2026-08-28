@@ -27,7 +27,10 @@ from tests.fake_game_history_repo import FakeGameHistoryRepository
 from tests.handlers.helpers import StubPromptListRepo, build_context, build_room
 
 from app.services import game_flow
-from app.services.game_flow import RoomPromptResolutionError
+from app.services.game_flow import (
+    RoomNoLongerStartableError,
+    RoomPromptResolutionError,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -492,3 +495,65 @@ async def test_a_short_draw_is_believed_over_the_count():
     curated = [p for p in room.game.prompt_pool if p != "mine"]
     assert len(curated) <= 1
     assert room.game.prompt_pool
+
+
+async def test_a_player_who_joins_during_reauthorization_still_gets_a_turn():
+    """The startup window is two awaits long, not one.
+
+    `start_game` captures the roster, re-authorizes the lists, and only then
+    draws. Reconciling against the room as it stood at the *draw* misses
+    anybody who arrived during the re-authorization before it: they are absent
+    from the captured roster and already present in the room, so neither branch
+    picks them up and they sit out a game they joined in time for.
+    """
+    room_manager, room, players = build_room(rounds=1)
+    host = players["Ann"]
+    host.is_host = True
+    for player in players.values():
+        player.connected = True
+    repo = StubPromptListRepo(["apple", "banana", "castle"])
+    pin(room, repo)
+
+    latecomer = {}
+    original = repo.authorize_selection
+
+    async def join_during_reauthorization(*args, **kwargs):
+        latecomer["player"] = room_manager.add_player(room, "Cass")
+        return await original(*args, **kwargs)
+
+    repo.authorize_selection = join_during_reauthorization
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, prompt_list_repo=repo)
+    sio.emit = AsyncMock()
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": host.id}
+    )
+
+    result = await sio.handlers["/"]["start_game"](host.sid, None)
+
+    assert result == {"ok": True}
+    assert latecomer["player"].id in room.game.turn_order
+
+
+async def test_a_start_that_drops_below_two_players_is_refused():
+    """Both start paths require two players; the draw must not undo that."""
+    room_manager, room, players = build_room(rounds=1)
+    repo = StubPromptListRepo(["apple", "banana"])
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    original = repo.sample_prompts
+
+    async def leave_midway(*args, **kwargs):
+        for player in list(players.values())[1:]:
+            room.players.pop(player.id, None)
+        return await original(*args, **kwargs)
+
+    repo.sample_prompts = leave_midway
+
+    with pytest.raises(RoomNoLongerStartableError):
+        await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert room.state == "waiting"
+    assert room.game is None
