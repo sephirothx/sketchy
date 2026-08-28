@@ -241,8 +241,8 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
 
 
 def register(ctx: HandlerContext) -> None:
-    ctx.sio.on(
+    ctx.on(
         "propose_restart_vote",
         handler=partial(propose_restart_vote, ctx),
     )
-    ctx.sio.on("cast_restart_vote", handler=partial(cast_restart_vote, ctx))
+    ctx.on("cast_restart_vote", handler=partial(cast_restart_vote, ctx))

@@ -430,6 +430,28 @@ the room-state broadcast every join triggers is bounded rather than quadratic in
 attacker's patience; what remained was the payload's own quadratic term, and the kick
 and AFK vote lists are now carried only where somebody has actually voted.
 
+Every client command answers to a **per-caller budget** before it is parsed
+([`backend/app/handlers/budgets.py`](../backend/app/handlers/budgets.py)), registered
+through `HandlerContext.on` so that adding a command cannot quietly add an unbounded
+one — `test_command_budgets.py` checks the two lists against each other. The numbers
+follow the client's own cadence rather than the size of the host: the drawer's flush
+timer fires every 40 ms, so drawing is allowed double the 25 frames a second that
+produces, while `request_sync_strokes` — a cheap request with a full canvas re-encode
+for an answer — gets one per window, which is a minimum spacing rather than an
+allowance a burst can spend at once. Windows live in memory and are dropped when the
+socket goes.
+
+They are grouped into five classes rather than set per command, and held in a policy
+object carrying each one's default, bounds and purpose — never read from the
+environment, because [#446](https://github.com/sephirothx/sketchy/issues/446) tunes
+values like these from an admin panel without a deploy, and a value fixed at startup
+forecloses that. Windows are keyed by class, not by command, so two commands of one kind share the
+allowance that kind was given. A refused `draw` frame drops silently, since nobody
+awaits an answer to one and an error mid-stroke is worse than the frame it describes;
+everything a person pressed a control for answers instead — including `undo_stroke`,
+which shares drawing's budget but is sent with an acknowledgement waiting on it. Exhaustion is recorded once per window, which
+is what separates a mistake from a flood without writing a row per refusal.
+
 Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
 introduces, every socket presents the proxy's address, and the forwarded header is
 attacker-controlled — `auth/rate_limit.client_key` refuses to read it for exactly that
@@ -474,7 +496,8 @@ Two things are recorded, answering two different questions
   worker owns all of it and an in-process count is therefore the true count. They are
   meant to vanish on restart.
 - **Observations** (joins, disconnects, evictions after grace, games started/finished/
-  abandoned, timer overruns past 250 ms, stored drawing sizes, recap-budget drops) are
+  abandoned, timer overruns past 250 ms, stored drawing sizes, recap-budget drops,
+  callers held to a command budget) are
   buffered and written in batches, because a database round trip per join would be felt
   as lag inside a drawing. The buffer is bounded, drops oldest when full, and counts
   what it dropped so a gap is visible rather than silent.

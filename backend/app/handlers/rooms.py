@@ -430,7 +430,12 @@ async def _join_room(ctx: HandlerContext, sid, data):
     except RoomFullError:
         # Flagged rather than left for the client to recognise by its prose:
         # the "you can still spectate" offer hangs off this exact case.
+        ctx.room_capacity.refund_join(sid)
         return {"ok": False, "error": "Room is full", "roomFull": True}
+    except Exception:
+        # Any other way seating can fail is equally not a join.
+        ctx.room_capacity.refund_join(sid)
+        raise
 
     # A game already in progress keeps running its existing turn_order -
     # joining mid-game just enrolls the new player into future turns
@@ -681,23 +686,23 @@ async def leave_room(ctx: HandlerContext, sid, data=None):
 
 
 def register(ctx: HandlerContext) -> None:
-    ctx.sio.on("create_room", handler=partial(create_room, ctx))
-    ctx.sio.on("get_room_settings", handler=partial(get_room_settings, ctx))
-    ctx.sio.on("get_custom_prompts", handler=partial(get_custom_prompts, ctx))
-    ctx.sio.on("get_recap_drawing", handler=partial(get_recap_drawing, ctx))
-    ctx.sio.on("update_room_settings", handler=partial(update_room_settings, ctx))
-    ctx.sio.on("get_room_preview", handler=partial(get_room_preview, ctx))
-    ctx.sio.on("join_room", handler=partial(join_room, ctx))
-    ctx.sio.on("session_ping", handler=partial(session_ping, ctx))
-    ctx.sio.on("update_player_settings", handler=partial(update_player_settings, ctx))
-    ctx.sio.on(
+    ctx.on("create_room", handler=partial(create_room, ctx))
+    ctx.on("get_room_settings", handler=partial(get_room_settings, ctx))
+    ctx.on("get_custom_prompts", handler=partial(get_custom_prompts, ctx))
+    ctx.on("get_recap_drawing", handler=partial(get_recap_drawing, ctx))
+    ctx.on("update_room_settings", handler=partial(update_room_settings, ctx))
+    ctx.on("get_room_preview", handler=partial(get_room_preview, ctx))
+    ctx.on("join_room", handler=partial(join_room, ctx))
+    ctx.on("session_ping", handler=partial(session_ping, ctx))
+    ctx.on("update_player_settings", handler=partial(update_player_settings, ctx))
+    ctx.on(
         "dismiss_colorblind_suggestion",
         handler=partial(dismiss_colorblind_suggestion, ctx),
     )
-    ctx.sio.on(
+    ctx.on(
         "accept_colorblind_suggestion",
         handler=partial(accept_colorblind_suggestion, ctx),
     )
-    ctx.sio.on("rename_player", handler=partial(rename_player, ctx))
-    ctx.sio.on("become_player", handler=partial(become_player, ctx))
-    ctx.sio.on("leave_room", handler=partial(leave_room, ctx))
+    ctx.on("rename_player", handler=partial(rename_player, ctx))
+    ctx.on("become_player", handler=partial(become_player, ctx))
+    ctx.on("leave_room", handler=partial(leave_room, ctx))

@@ -339,7 +339,7 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
 
 
 def register(ctx: HandlerContext) -> None:
-    ctx.sio.on("send_chat", handler=partial(send_chat, ctx))
-    ctx.sio.on("guess", handler=partial(guess, ctx))
-    ctx.sio.on("buy_hint", handler=partial(buy_hint, ctx))
-    ctx.sio.on("buy_wheel_letter", handler=partial(buy_wheel_letter, ctx))
+    ctx.on("send_chat", handler=partial(send_chat, ctx))
+    ctx.on("guess", handler=partial(guess, ctx))
+    ctx.on("buy_hint", handler=partial(buy_hint, ctx))
+    ctx.on("buy_wheel_letter", handler=partial(buy_wheel_letter, ctx))

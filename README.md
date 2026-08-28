@@ -808,6 +808,12 @@ your players share one address:
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
 
+In-room commands answer to their own per-caller budgets, which are **not** environment
+variables: they follow the client's cadence rather than the size of the host, and they
+are held where an admin panel could change them without a deploy
+([`backend/app/handlers/budgets.py`](backend/app/handlers/budgets.py), and the table in
+[`docs/wire-protocol.md`](docs/wire-protocol.md)).
+
 Set the same high-entropy `IP_HASH_SECRET` on every deployment that shares the
 database if you manage secrets externally. Rotating it starts fresh buckets
 without exposing or re-identifying old keys.
@@ -1278,7 +1284,8 @@ rooms, players and running games live in memory: one worker owns all of it
 restart because a live count is not a historical fact. Observations - joins,
 disconnects, evictions after the reconnect grace window, games started,
 finished and abandoned, timer overruns past 250ms, stored drawing sizes,
-drawings dropped by the recap budget - are buffered and written in batches,
+callers held to a command budget, drawings dropped by the recap budget - are
+buffered and written in batches,
 because a database round trip per join would be felt as lag in a drawing. The
 buffer is bounded and drops oldest when full, counting what it dropped, so a
 gap is visible rather than silent.

@@ -218,6 +218,6 @@ async def request_sync_strokes(ctx: HandlerContext, sid, data=None):
 
 
 def register(ctx: HandlerContext) -> None:
-    ctx.sio.on("draw", handler=partial(draw, ctx))
-    ctx.sio.on("undo_stroke", handler=partial(undo_stroke, ctx))
-    ctx.sio.on("request_sync_strokes", handler=partial(request_sync_strokes, ctx))
+    ctx.on("draw", handler=partial(draw, ctx))
+    ctx.on("undo_stroke", handler=partial(undo_stroke, ctx))
+    ctx.on("request_sync_strokes", handler=partial(request_sync_strokes, ctx))

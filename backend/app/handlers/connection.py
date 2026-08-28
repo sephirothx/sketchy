@@ -97,6 +97,7 @@ async def disconnect(ctx: HandlerContext, sid):
     if not sid:
         return
     ctx.room_capacity.note_socket_closed(sid)
+    ctx.clear_command_budget(sid)
     if ctx.is_closing(sid):
         # We are closing this socket ourselves, from inside a seat transition
         # that has already moved its seat on - the tab a reconnect superseded.

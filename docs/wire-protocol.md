@@ -126,6 +126,30 @@ A payload that fails validation is refused by
 `PayloadError.acknowledgement()` ([`backend/app/handlers/payloads.py:71`](../backend/app/handlers/payloads.py))
 as `{"ok": false, "error": …, "field": …}` — before any authorization or mutation runs.
 
+**Earlier still, a command may be refused for its rate.** Every client command answers
+to a per-caller budget ([§ Command budgets](#command-budgets)) checked before the
+payload is even parsed, and answers `{"ok": false, "error": "You are doing that too
+quickly. Slow down a moment."}`. The one exception is `draw`: a frame is fire-and-forget
+at twenty-five a second, nobody awaits an answer to one, and an error surfacing
+mid-stroke is worse than the frame it describes — so a refused `draw` answers nothing at
+all. `undo_stroke` shares drawing's budget but **does** answer, because the client sends
+it with an acknowledgement waiting on it.
+
+### Command budgets
+
+| Kind | Commands | Budget |
+| --- | --- | --- |
+| `drawing` | `draw`, `undo_stroke` | 100 per 2 s |
+| `conversation` | `send_chat`, `guess` | 20 per 10 s |
+| `resync` | `request_sync_strokes` | 1 per 2 s |
+| `heartbeat` | `session_ping` | 20 per 10 s |
+| `action` | everything else | 30 per 10 s |
+
+Windows are per socket and per **kind**, not per command, so two commands of one kind
+share the allowance that kind was given. The numbers follow the client's own cadence:
+the drawer's flush timer fires every 40 ms, so drawing is allowed double the 25 frames a
+second that produces, while a full canvas replay is spaced rather than stockpiled.
+
 ### Client-side delivery guarantees
 
 `emitWithAckOn` ([`frontend/src/lib/socket.ts:139`](../frontend/src/lib/socket.ts))

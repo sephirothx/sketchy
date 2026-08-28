@@ -95,6 +95,19 @@ class RateLimiter:
         hits.append(now)
         return True
 
+    def refund(self, key: str) -> None:
+        """Give back the most recent attempt, for one that bought nothing.
+
+        A limit on an action that can still fail after the window is charged
+        would otherwise spend somebody's allowance on work that never
+        happened - and, worse, change the reason they are given for the
+        failure. Only the newest hit is dropped, so a refund cannot return
+        more than the attempt it is undoing.
+        """
+        hits = self._hits.get(key)
+        if hits:
+            hits.pop()
+
     def _drop_expired_buckets(self, now: float, cutoff: float) -> None:
         """Forget clients whose newest attempt has aged out of the window.
 
