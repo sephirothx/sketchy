@@ -97,6 +97,12 @@ class ReadinessProbe:
     clock: Callable[[], float] = time.monotonic
     _loops: dict[str, _Supervised] = field(default_factory=dict)
     _cached_database: tuple[float, bool, str | None] | None = None
+    # Held only across a cache *miss*. Without it, every probe arriving in the
+    # window between expiry and the first result stored sees a stale entry and
+    # opens its own session - so the moment the cache expires, the poll the
+    # cache exists to absorb arrives in full. Their completions could also
+    # land out of order and let an older failure overwrite a newer success.
+    _probing: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     # --- background loops ---------------------------------------------------
 
@@ -132,12 +138,31 @@ class ReadinessProbe:
     # --- database -----------------------------------------------------------
 
     async def check_database(self) -> tuple[bool, str | None]:
-        """Round-trip the database, answering from cache inside the TTL."""
-        now = self.clock()
-        cached = self._cached_database
-        if cached is not None and now - cached[0] < self.cache_seconds:
-            return cached[1], cached[2]
+        """Round-trip the database, answering from cache inside the TTL.
 
+        One round-trip at a time: concurrent misses queue on the lock and the
+        first result serves all of them, so a fleet of probes arriving
+        together costs the database one `SELECT 1` rather than one each.
+        Waiting is bounded by the probe's own timeout.
+        """
+        cached = self._fresh_result()
+        if cached is not None:
+            return cached
+
+        async with self._probing:
+            # Somebody else may have refreshed it while this probe queued.
+            cached = self._fresh_result()
+            if cached is not None:
+                return cached
+            return await self._probe()
+
+    def _fresh_result(self) -> tuple[bool, str | None] | None:
+        cached = self._cached_database
+        if cached is None or self.clock() - cached[0] >= self.cache_seconds:
+            return None
+        return cached[1], cached[2]
+
+    async def _probe(self) -> tuple[bool, str | None]:
         try:
             await asyncio.wait_for(self._select_one(), timeout=self.timeout_seconds)
         except asyncio.CancelledError:
@@ -153,7 +178,9 @@ class ReadinessProbe:
         else:
             result = (True, None)
 
-        self._cached_database = (now, result[0], result[1])
+        # Timed from when the answer was obtained, not from when this probe
+        # started queueing, so a slow round-trip does not shorten its own TTL.
+        self._cached_database = (self.clock(), result[0], result[1])
         return result
 
     async def _select_one(self) -> None:

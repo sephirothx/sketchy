@@ -338,7 +338,13 @@ counters are that distinction.
 3. a **database round-trip** — `SELECT 1` under a one-second timeout, cached about five
    seconds. Successes and failures are cached alike, so a load balancer polling every
    second cannot become the load, and a database already in trouble is not re-asked once
-   per probe
+   per probe. Concurrent misses queue on a lock and share one round-trip: otherwise the
+   whole poll arrives in full the instant the cache expires, which is the load the cache
+   exists to absorb
+
+The shutdown state is asked **twice** — before the checks and again after the database
+await. R-SHUT-01 is an ordering guarantee, and the probe yields for up to a second, so an
+answer computed before a drain must not be delivered after it.
 
 ### Planned shutdown ([`backend/app/services/shutdown.py`](../backend/app/services/shutdown.py))
 

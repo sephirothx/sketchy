@@ -429,11 +429,17 @@ async def ready():
     readiness to flip to 503 before any drain work begins, and a draining
     process must not be held up - or contradicted - by a dependency check.
     """
-    if not shutdown_coordinator.is_ready:
-        raise HTTPException(
+    def draining_now() -> HTTPException | None:
+        if shutdown_coordinator.is_ready:
+            return None
+        return HTTPException(
             status_code=503,
             detail={"status": "not_ready", "reason": shutdown_coordinator.state},
         )
+
+    drain = draining_now()
+    if drain is not None:
+        raise drain
 
     # A loop that only errors stays in rotation: it is reported in
     # `/api/health` and alerted on there. A loop whose task is *gone* cannot
@@ -450,6 +456,12 @@ async def ready():
         )
 
     database_ready, reason = await readiness_probe.check_database()
+    # Asked again, because the probe yields for up to a second and a drain can
+    # begin inside that window. R-SHUT-01 is an ordering guarantee, so an
+    # answer computed before the drain must not be delivered after it.
+    drain = draining_now()
+    if drain is not None:
+        raise drain
     if not database_ready:
         raise HTTPException(
             status_code=503,

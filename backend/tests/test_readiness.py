@@ -156,6 +156,24 @@ async def test_a_drain_answers_before_any_dependency_is_asked(monkeypatch):
     assert probing.calls == 0
 
 
+async def test_a_drain_that_begins_mid_probe_still_answers_first(monkeypatch):
+    """R-SHUT-01 is an ordering guarantee, and the probe yields for up to 1 s.
+
+    An answer computed before the drain must not be delivered after it.
+    """
+
+    class _DrainsWhileAnswering(_CountingSessionFactory):
+        async def execute(self, _statement):
+            shutdown_coordinator._state = "draining"
+            return None
+
+    monkeypatch.setattr(readiness_probe, "session_factory", _DrainsWhileAnswering())
+    async with await _client() as client:
+        response = await client.get("/api/ready")
+    assert response.status_code == 503
+    assert response.json()["detail"]["reason"] == "draining"
+
+
 async def test_liveness_never_fails_on_a_dependency(monkeypatch):
     """A restart cannot fix a database outage, so liveness must not ask for one."""
     monkeypatch.setattr(
@@ -183,6 +201,34 @@ async def test_the_database_check_is_cached_between_probes():
     now[0] += 5.0
     assert await probe.check_database() == (True, None)
     assert factory.calls == 2
+
+
+async def test_concurrent_probes_share_one_round_trip():
+    """The cache absorbs a poll only if a miss does not let the whole poll in.
+
+    Without a lock, every probe arriving between expiry and the first result
+    stored sees a stale entry and opens its own session - so the load the
+    cache exists to prevent arrives in full the instant it expires.
+    """
+    released = asyncio.Event()
+
+    class _WaitsToBeReleased(_CountingSessionFactory):
+        async def execute(self, _statement):
+            await released.wait()
+
+    factory = _WaitsToBeReleased()
+    probe = ReadinessProbe(factory, cache_seconds=5.0, clock=lambda: 1000.0)
+
+    probes = [
+        asyncio.get_event_loop().create_task(probe.check_database())
+        for _ in range(8)
+    ]
+    for _ in range(20):
+        await asyncio.sleep(0)
+    released.set()
+
+    assert all(result == (True, None) for result in await asyncio.gather(*probes))
+    assert factory.calls == 1
 
 
 async def test_a_failed_database_check_is_cached_too():
