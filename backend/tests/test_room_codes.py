@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import Base, RoomCodeReservation
-from app.services.room_codes import RoomCodeService
+from app.services.room_codes import RoomCodeAllocationError, RoomCodeService
 
 
 pytestmark = pytest.mark.asyncio
@@ -106,5 +106,87 @@ async def test_unpublished_code_can_be_released_without_retirement():
         assert await service.allocate() == "UNUSED"
         await service.release_unpublished("UNUSED")
         assert await service.allocate() == "UNUSED"
+    finally:
+        await engine.dispose()
+
+
+# --- allocation's own failure paths -----------------------------------------
+#
+# A collision here is two rooms sharing an identity, so the guards around
+# allocation matter more than the happy path they protect. None of them had a
+# test: the code factory is trusted in production, every allocation in the
+# suite succeeded on its first or second attempt, and no test ever asked about
+# a code nobody reserved.
+
+
+@pytest.mark.parametrize(
+    "bad_code",
+    [
+        "SHORT",        # too few characters
+        "TOOLONG7",     # too many
+        "ABC-12",       # outside the alphabet
+        "ABC 12",
+        "",
+    ],
+)
+async def test_a_code_factory_returning_an_invalid_code_is_refused(bad_code):
+    """The alphabet and length are a contract, and a silent breach of it would
+    put an unshareable code on a room."""
+    engine, factory = await _database()
+    # The service strips and upper-cases first, so a lowercase code is fine and
+    # is not in this list; only genuinely invalid shapes reach the raise.
+    service = RoomCodeService(factory, code_factory=lambda: bad_code)
+    try:
+        with pytest.raises(ValueError, match="invalid code"):
+            await service.allocate()
+        async with factory() as session:
+            assert (await session.scalars(select(RoomCodeReservation))).all() == []
+    finally:
+        await engine.dispose()
+
+
+async def test_allocation_gives_up_rather_than_looping_for_ever():
+    """Every attempt colliding is a real state - a full or wedged table - and
+    the caller needs an error rather than a hang."""
+    engine, factory = await _database()
+    service = RoomCodeService(factory, code_factory=lambda: "ABC123")
+    try:
+        assert await service.allocate() == "ABC123"
+        with pytest.raises(RoomCodeAllocationError):
+            await service.allocate()
+    finally:
+        await engine.dispose()
+
+
+async def test_the_expired_purge_runs_once_per_allocation_not_once_per_collision():
+    """The purge is the expensive half. Running it on every collision would
+    turn a busy table into a scan storm."""
+    engine, factory = await _database()
+    service = RoomCodeService(factory, code_factory=lambda: "ABC123")
+    purges = 0
+    original = service.purge_expired
+
+    async def counting_purge():
+        nonlocal purges
+        purges += 1
+        return await original()
+
+    service.purge_expired = counting_purge
+    try:
+        await service.allocate()
+        with pytest.raises(RoomCodeAllocationError):
+            await service.allocate()
+        assert purges == 1, f"purged {purges} times across 64 collisions"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_code_nobody_reserved_is_not_reported_as_retired():
+    """"Never existed" and "has ended" are different answers to an invite, and
+    only one of them is true for a typo."""
+    engine, factory = await _database()
+    service = RoomCodeService(factory)
+    try:
+        assert await service.is_retired("ZZZZZZ") is False
     finally:
         await engine.dispose()

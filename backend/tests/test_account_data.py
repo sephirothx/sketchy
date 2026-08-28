@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.account_data import (
+    AccountDataError,
+    anonymize_account,
     create_data_export,
     process_pending_data_exports,
 )
@@ -859,3 +861,80 @@ async def test_deletion_erases_drawings_made_under_a_merged_identity(env):
         assert rows, "the game should still have its drawing rows"
         assert all(row.status == "deleted" for row in rows)
         assert all(row.payload is None for row in rows)
+
+
+# --- the refusals on the privacy path ---------------------------------------
+#
+# Export and deletion have to be right the first time: there is no second
+# chance at data that has already left, and none at a row already gone. The
+# suite drove these through the HTTP surface, which never asks for an account
+# that is not there - so the guards that make these functions safe to call with
+# an unverified id had never been taken.
+
+
+async def test_an_export_cannot_be_requested_for_an_account_that_is_not_there(env):
+    _, _, _, factory = env
+    with pytest.raises(AccountDataError, match="account not found"):
+        await create_data_export(factory, user_id=generate_uuid())
+
+
+async def test_an_export_cannot_be_requested_for_a_deleted_account(env):
+    """A deleted account's data must not be re-assembled into a download."""
+    http, _, _, factory = env
+    registered = await register(http, "Departing")
+    user_id = UUID(registered["id"])
+    async with factory() as session:
+        account = await session.get(User, user_id)
+        account.state = AccountState.DELETED.value
+        await session.commit()
+
+    with pytest.raises(AccountDataError, match="account not found"):
+        await create_data_export(factory, user_id=user_id)
+
+
+async def test_anonymising_an_account_that_is_not_there_is_refused(env):
+    _, _, _, factory = env
+    with pytest.raises(AccountDataError, match="account not found"):
+        await anonymize_account(factory, user_id=generate_uuid())
+
+
+async def test_anonymising_an_already_deleted_account_is_refused(env):
+    """Idempotent-looking, but a second pass would rewrite the tombstone."""
+    http, _, _, factory = env
+    registered = await register(http, "Gone")
+    user_id = UUID(registered["id"])
+    async with factory() as session:
+        account = await session.get(User, user_id)
+        account.state = AccountState.DELETED.value
+        await session.commit()
+
+    with pytest.raises(AccountDataError, match="account not found"):
+        await anonymize_account(factory, user_id=user_id)
+
+
+async def test_a_merged_identity_must_be_deleted_through_its_own_account(env):
+    """Deleting the alias would leave the canonical account's data standing
+    while telling the player it was erased."""
+    http, _, _, factory = env
+    registered = await register(http, "Merged")
+    user_id = UUID(registered["id"])
+    async with factory() as session:
+        account = await session.get(User, user_id)
+        account.state = AccountState.MERGED.value
+        await session.commit()
+
+    with pytest.raises(AccountDataError, match="merged identities"):
+        await anonymize_account(factory, user_id=user_id)
+
+
+@pytest.mark.parametrize("limit", [0, -1, -100])
+async def test_a_non_positive_export_batch_is_refused(env, limit):
+    """A batch of zero is a worker that runs for ever and processes nothing."""
+    _, _, _, factory = env
+    with pytest.raises(ValueError, match="limit must be positive"):
+        await process_pending_data_exports(factory, limit=limit)
+
+
+async def test_an_empty_queue_processes_nothing_without_error(env):
+    _, _, _, factory = env
+    assert await process_pending_data_exports(factory) == 0
