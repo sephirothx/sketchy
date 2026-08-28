@@ -143,12 +143,22 @@ Keys are namespaced by what writes them:
 | `ip_hash_secret` | [`auth/rate_limit.py`](../backend/app/auth/rate_limit.py) | The generated HMAC key, when `IP_HASH_SECRET` is unset |
 | `tunable.` | [`api/admin_settings.py`](../backend/app/api/admin_settings.py) | One runtime tunable an administrator has changed |
 
-A `tunable.` row exists only while the value differs from what the process would
-otherwise boot at, so **absent means "whatever the default or the environment says"**.
-Setting a value back to its boot value deletes the row rather than writing it, because a
-row saying "the default" would pin the setting against a later change to the environment
-variable that supplies it. Reading them is a single prefix query at startup; writing one
-shares a transaction with the `audit_events` row that records who changed it.
+**Absent means "whatever the default or the environment says."** A write only creates a
+row when the value differs from what the process booted at, and setting a value back to
+its boot value deletes the row rather than storing it, because a row saying "the default"
+would pin the setting against a later change to the environment variable that supplies it.
+
+The converse does **not** hold: a row can exist while its value equals the current boot
+value, because the environment can change to match an override stored earlier. So
+"a row exists" and "the value differs from boot" are tracked as separate facts. Inferring
+the first from the second hid such a row instead of removing it — the panel reported the
+setting as environment-sourced and offered no way to clear it, and the forgotten row won
+again the next time the environment moved. The panel therefore reports a setting with a
+row as `stored` whatever its value, and a reset deletes the row even when no number
+changes.
+
+Reading them is a single prefix query at startup; writing one shares a transaction with
+the `audit_events` row that records who changed it, including when only the row changed.
 
 ### `room_code_reservations`
 The global claim on a six-character invite code. The reservation primary key makes

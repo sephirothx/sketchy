@@ -47,7 +47,14 @@ export function OpsTabs({
             role="tab"
             className="ops-tab"
             aria-selected={selected}
-            aria-controls={`${prefix}-panel-${tab.id}`}
+            // Only on the selected tab, because only its panel is in the DOM.
+            // The panels are mounted on demand - the activity table is an
+            // expensive read that the tab exists to defer, and the tuning and
+            // control panels each fetch on mount - so pointing every tab at a
+            // panel would leave four of the five references dangling, which is
+            // invalid ARIA and something axe flags. A reference that exists
+            // for the panel being shown says everything true here.
+            aria-controls={selected ? `${prefix}-panel-${tab.id}` : undefined}
             // Roving tabindex: one stop for the whole strip, then arrow keys
             // inside it. Five separate tab stops would put the audit ledger
             // four presses from the page for somebody who only uses a keyboard.

@@ -50,12 +50,22 @@ function reading(
   return value;
 }
 
-/** Read a `client_config` notice, keeping every field that makes sense. */
-export function parseClientConfig(payload: unknown): ClientConfig {
-  const record =
-    typeof payload === "object" && payload !== null
-      ? (payload as Record<string, unknown>)
-      : undefined;
+/** The notice shape this build understands. */
+export const CLIENT_CONFIG_CONTRACT_VERSION = 1;
+
+/** Read a `client_config` notice, or `null` if it is not one this build knows.
+
+The version is checked as a whole before any field is read, the same way the
+shutdown and pause notices are. A later server could give a field a different
+meaning rather than a different name — a window instead of an interval, say —
+and a client that took the fields it recognised would apply half of a contract
+it does not understand. Ignoring the notice leaves the cadences that have
+always worked, which is the safe direction and the one every field-level
+fallback below already takes. */
+export function parseClientConfig(payload: unknown): ClientConfig | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const record = payload as Record<string, unknown>;
+  if (record.contractVersion !== CLIENT_CONFIG_CONTRACT_VERSION) return null;
   return {
     flushIntervalMs: reading(record, "flushIntervalMs"),
     lobbyPollIntervalMs: reading(record, "lobbyPollIntervalMs"),
@@ -76,6 +86,7 @@ Silent when nothing moved, so a reconnect — which re-sends the same values —
 does not tear down and re-arm every timer that depends on them. */
 export function applyClientConfig(payload: unknown): ClientConfig {
   const next = parseClientConfig(payload);
+  if (next === null) return current;
   const unchanged = (
     Object.keys(next) as (keyof ClientConfig)[]
   ).every((key) => next[key] === current[key]);
