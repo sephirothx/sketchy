@@ -10,11 +10,17 @@ pinned to the revisions the room was authorized on.
 from __future__ import annotations
 
 import asyncio
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import socketio
 
+from app.flow_timing import timing
+from app.handlers import register_all_handlers as register_handlers
+from app.handlers import restart
 from app.prompts import PROMPTS, letter_histogram
+from app.rooms import RestartVote
 from tests.fake_game_history_repo import FakeGameHistoryRepository
 from tests.handlers.helpers import StubPromptListRepo, build_context, build_room
 
@@ -142,6 +148,36 @@ async def test_a_draw_that_cannot_be_made_refuses_the_start():
         await ctx.game_flow._start_fresh_game(room, room.player_list())
 
 
+async def test_a_refused_start_leaves_the_room_exactly_as_it_was():
+    """A start that cannot draw must not half-begin.
+
+    Starting a game clears the previous one - scores, recap, departed seats -
+    and marks the room as playing. If the draw fails after that, the room is
+    left claiming to play a game that does not exist, and every later start is
+    refused as one already in progress while nothing is running.
+    """
+    room_manager, room, players = build_room(rounds=1)
+    repo = StubPromptListRepo(["apple", "banana"])
+    pin(room, repo)
+    repo.sample_prompts = AsyncMock(side_effect=RuntimeError("store is down"))
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    room.last_game_scores = [{"nickname": "Ann", "score": 10}]
+    for index, player in enumerate(players.values()):
+        player.score = 10 * (index + 1)
+    scores_before = {player.id: player.score for player in players.values()}
+
+    with pytest.raises(RoomPromptResolutionError):
+        await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert room.state == "waiting"
+    assert room.game is None
+    assert room.last_game_scores == [{"nickname": "Ann", "score": 10}]
+    assert {
+        player.id: player.score for player in players.values()
+    } == scores_before
+
+
 async def test_wheel_prices_come_from_the_whole_pool_not_the_sample():
     """A 24-prompt sample would price rare letters off a handful of words.
 
@@ -217,6 +253,7 @@ async def test_a_draw_that_never_answers_is_given_up_on():
             await ctx.game_flow._start_fresh_game(room, room.player_list())
 
     assert room.game is None
+    assert room.state == "waiting"
 
 
 async def test_shadowing_quick_prompts_keep_the_share_the_merged_pool_gave_them():
@@ -276,3 +313,73 @@ async def test_a_custom_only_room_prices_the_wheel_from_its_own_prompts():
     assert dict(game.letter_counts) == expected_counts
     # "p", all over the pinned lists and in nothing being played, is worthless.
     assert game._letter_frequencies()["p"] == 0.0
+
+
+async def test_start_game_tells_the_host_when_the_draw_fails():
+    """The refusal has to reach the host, not escape the socket handler.
+
+    `refresh_room_prompt_selection` already answers this way when a list cannot
+    be read. Drawing the prompts is a second read on the same path and fails
+    for the same reasons, so it must be answered the same way.
+    """
+    room_manager, room, players = build_room(rounds=1)
+    host = players["Ann"]
+    host.is_host = True
+    repo = StubPromptListRepo(["apple", "banana"])
+    pin(room, repo)
+    repo.sample_prompts = AsyncMock(side_effect=RuntimeError("store is down"))
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, prompt_list_repo=repo)
+    sio.emit = AsyncMock()
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": host.id}
+    )
+
+    result = await sio.handlers["/"]["start_game"](host.sid, None)
+
+    assert result == {
+        "ok": False,
+        "error": "Prompt lists could not be loaded. Please try again.",
+        "field": "promptListSlugs",
+    }
+    # And the room is still startable once the store comes back.
+    assert room.state == "waiting"
+    assert room.game is None
+
+
+async def test_a_restart_whose_draw_fails_is_cancelled_rather_than_crashing():
+    """The restart runs in a timer task, where an exception is simply lost.
+
+    Players would sit watching a game that was already torn down, with no
+    restart arriving and nothing said about why.
+    """
+    room_manager, room, players = build_room(rounds=1)
+    repo = StubPromptListRepo(["apple", "banana"])
+    pin(room, repo)
+    repo.sample_prompts = AsyncMock(side_effect=RuntimeError("store is down"))
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+    room.state = "playing"
+
+    seats = list(players.values())
+    vote = RestartVote(
+        proposer_id=seats[0].id,
+        proposer_nickname=seats[0].nickname,
+        eligible_voter_ids=tuple(player.id for player in seats),
+        votes={player.id: True for player in seats},
+        expires_at=time.time() + 60,
+        status="approved",
+    )
+    room.restart_vote = vote
+
+    with patch.object(timing, "restart_delay_seconds", 0.01):
+        restart._schedule_restart(ctx, room, vote)
+        await asyncio.sleep(0.1)
+
+    assert room.state == "waiting"
+    assert room.game is None
+    assert room.restart_vote is None
+    announced = " ".join(
+        str(call.args) for call in ctx.sio.emit.await_args_list
+    )
+    assert "restart was cancelled" in announced

@@ -45,7 +45,18 @@ async def start_game(ctx: HandlerContext, sid, data=None):
         if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
             return ctx.shutdown.rejection_acknowledgement()
 
-        await ctx.game_flow._start_fresh_game(room, active_players)
+        try:
+            await ctx.game_flow._start_fresh_game(room, active_players)
+        except RoomPromptResolutionError as error:
+            # Drawing this game's prompts is a second read of the same lists
+            # the re-authorization above just made, and fails for the same
+            # reasons. It is answered the same way rather than escaping the
+            # handler, which would leave the host with no acknowledgement.
+            return {
+                "ok": False,
+                "error": str(error),
+                "field": "promptListSlugs",
+            }
     return {"ok": True}
 
 

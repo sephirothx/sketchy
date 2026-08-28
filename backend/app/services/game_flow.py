@@ -480,7 +480,14 @@ class GameFlowService:
         *,
         restarted: bool = False,
     ) -> None:
-        """Replace any prior game with a fresh, fully synchronized game."""
+        """Replace any prior game with a fresh, fully synchronized game.
+
+        Raises `RoomPromptResolutionError` if the prompts cannot be drawn, in
+        which case nothing here has run: everything below replaces the previous
+        game, and a room left half-started would report itself as playing one
+        that does not exist, refusing every later start as already in progress.
+        """
+        draw = await self._draw_prompt_sample(room)
         room.restart_vote = None
         room.restart_vote_cooldown_until = 0
         room.last_game_scores = []
@@ -492,7 +499,6 @@ class GameFlowService:
         for player in room.player_list():
             player.score = 0
         room.state = "playing"
-        draw = await self._draw_prompt_sample(room)
         room.game = Game(
             turn_order=[player.id for player in active_players],
             rounds_total=room.rounds,

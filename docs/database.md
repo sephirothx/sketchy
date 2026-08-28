@@ -834,7 +834,9 @@ Limits: an account may own at most **25** lists, and a saved list may contain at
 `letter_total` · `created_at`, unique on `(prompt_list_id, version)`.
 
 `letter_counts` (JSON) and `letter_total` are a **letter histogram** over the
-revision's active answers, written once when the revision is. Wheel pricing needs how
+revision's active answers, computed and stored at the moment the revision row is
+created — by `upsert_bundled` when seeding, and by `_write_owned_revision` when a
+player creates or edits an owned list. Wheel pricing needs how
 common each letter is among the prompts a game can draw (R-HINT-03), which is a
 distribution rather than the words — storing it is what lets a room price letters
 without keeping its prompt pool in memory. `letter_counts` tallies a–z, the only

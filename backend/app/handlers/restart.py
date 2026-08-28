@@ -13,8 +13,13 @@ from app.handlers.payloads import (
     parse_empty_payload,
     parse_payload,
 )
+import logging
+
 from app.flow_timing import timing
 from app.rooms import RestartVote, Room
+from app.services.game_flow import RoomPromptResolutionError
+
+logger = logging.getLogger("sketchy.restart")
 
 
 def _eligible_players(room: Room):
@@ -63,6 +68,23 @@ def _schedule_expiry(ctx: HandlerContext, room: Room, vote: RestartVote) -> None
     ctx.timers.replace_restart_timer(room.id, asyncio.create_task(_expire()))
 
 
+async def _cancel_restart(ctx: HandlerContext, room: Room, reason: str) -> None:
+    """Give up an approved restart, and say why.
+
+    The game it would have replaced is already gone by the time these run, so
+    the room has to be put back to waiting explicitly - leaving it "playing"
+    with no game refuses every later start as one already in progress.
+    """
+    room.restart_vote = None
+    room.restart_vote_cooldown_until = (
+        time.time() + timing.restart_vote_cooldown_seconds
+    )
+    room.state = "waiting"
+    room.game = None
+    await ctx.game_flow.announce(room, f"The restart was cancelled because {reason}.")
+    await ctx.game_flow._emit_room_state(room)
+
+
 def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> None:
     async def _restart() -> None:
         try:
@@ -73,38 +95,32 @@ def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> Non
             return
 
         if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
-            room.restart_vote = None
-            room.restart_vote_cooldown_until = (
-                time.time() + timing.restart_vote_cooldown_seconds
-            )
-            room.state = "waiting"
-            room.game = None
             ctx.shutdown.notify_game_state_changed()
-            await ctx.game_flow.announce(
-                room, "The restart was cancelled because a server update is in progress."
-            )
-            await ctx.game_flow._emit_room_state(room)
+            await _cancel_restart(ctx, room, "a server update is in progress")
             return
 
         active_players = room.active_players()
         if len(active_players) < 2:
-            room.restart_vote = None
-            room.restart_vote_cooldown_until = (
-                time.time() + timing.restart_vote_cooldown_seconds
+            await _cancel_restart(
+                ctx, room, "fewer than two active players remain"
             )
-            room.state = "waiting"
-            room.game = None
-            await ctx.game_flow.announce(
-                room, "The restart was cancelled because fewer than two active players remain."
-            )
-            await ctx.game_flow._emit_room_state(room)
             return
 
-        await ctx.game_flow._start_fresh_game(
-            room,
-            active_players,
-            restarted=True,
-        )
+        try:
+            await ctx.game_flow._start_fresh_game(
+                room,
+                active_players,
+                restarted=True,
+            )
+        except RoomPromptResolutionError:
+            # Nothing here can answer a socket, and an exception raised in this
+            # task would simply be dropped - leaving players watching a game
+            # that was already torn down, waiting for a restart that never
+            # arrives and never being told why.
+            logger.exception("Restart could not draw prompts for room %s", room.id)
+            await _cancel_restart(
+                ctx, room, "the prompt lists could not be loaded"
+            )
 
     ctx.timers.replace_restart_timer(room.id, asyncio.create_task(_restart()))
 
