@@ -89,11 +89,14 @@ async def test_canvas_replays_have_a_floor_between_them():
     """The cheap request with the expensive answer."""
     budgets = CommandBudgets()
     budget = CommandBudgetPolicy().for_command("request_sync_strokes")
-    assert budget.limit <= 3, "a resync floor this loose is not a floor"
+    assert budget.limit == 1, (
+        "a floor is a minimum spacing: more than one per window lets a burst "
+        "spend the whole allowance in a single tick"
+    )
 
-    verdicts = [budgets.check("sid:request_sync_strokes", budget) for _ in range(5)]
+    verdicts = [budgets.check("sid:resync", budget) for _ in range(5)]
 
-    assert verdicts.count(True) == budget.limit
+    assert verdicts == [True, False, False, False, False]
 
 
 @pytest.mark.asyncio

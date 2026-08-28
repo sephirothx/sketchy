@@ -78,12 +78,18 @@ CONVERSATION = BudgetClass(
 )
 RESYNC = BudgetClass(
     name="resync",
-    default=Budget(limit=3, window_seconds=10.0),
+    # One per window is what makes this a floor rather than a ceiling: three
+    # per ten seconds permitted three full re-encodes in the same tick, which
+    # is the burst the floor exists to prevent. The client's own retry sits
+    # behind an eight-second acknowledgement timeout, so two seconds between
+    # replays refuses nothing it would legitimately ask for.
+    default=Budget(limit=1, window_seconds=2.0),
     minimum=1,
-    maximum=30,
+    maximum=10,
     description=(
-        "Full canvas replays per ten seconds. A cheap request with an "
-        "expensive answer, so this is a floor rather than a ceiling."
+        "Full canvas replays. One per window is a minimum spacing between "
+        "expensive re-encodes; raising the limit turns the floor back into a "
+        "ceiling that a burst can spend at once."
     ),
 )
 HEARTBEAT = BudgetClass(
