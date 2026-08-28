@@ -64,7 +64,7 @@ async def _create_room(ctx: HandlerContext, sid, data):
         payload = parse_payload(CreateRoomPayload, data)
     except PayloadError as error:
         return error.acknowledgement()
-    if ctx.shutdown is not None and ctx.shutdown.is_draining:
+    if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
         return ctx.shutdown.rejection_acknowledgement()
     try:
         identity = await resolve_identity(
@@ -109,7 +109,7 @@ async def _create_room(ctx: HandlerContext, sid, data):
     # re-check losing its race. An attempt that opens no room gives it back.
     created = False
     try:
-        if ctx.shutdown is not None and ctx.shutdown.is_draining:
+        if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
             return ctx.shutdown.rejection_acknowledgement()
 
         if not settings["name"]:
@@ -121,10 +121,10 @@ async def _create_room(ctx: HandlerContext, sid, data):
             except Exception:
                 logger.exception("Failed to allocate a room code")
                 return {"ok": False, "error": "Could not create the room"}
-            if ctx.shutdown is not None and ctx.shutdown.is_draining:
+            if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
                 await ctx.room_codes.release_unpublished(code)
                 return ctx.shutdown.rejection_acknowledgement()
-        if ctx.shutdown is not None and ctx.shutdown.is_draining:
+        if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
             if code is not None and ctx.room_codes is not None:
                 await ctx.room_codes.release_unpublished(code)
             return ctx.shutdown.rejection_acknowledgement()

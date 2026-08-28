@@ -7,7 +7,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
-import math
 import time
 from uuid import UUID
 
@@ -20,8 +19,10 @@ from app.rooms import Room, RoomManager
 
 logger = logging.getLogger("sketchy.shutdown")
 SHUTDOWN_NOTICE_CONTRACT_VERSION = 1
+PAUSE_NOTICE_CONTRACT_VERSION = 1
 ABANDONMENT_RETENTION = timedelta(days=90)
 NEW_WORK_REJECTION = "Server update in progress; try again shortly"
+PAUSE_REJECTION = "New rooms are paused for maintenance; try again shortly"
 SHUTDOWN_NOTICE_TIMEOUT_SECONDS = 2.0
 ABANDONMENT_WRITE_TIMEOUT_SECONDS = 5.0
 
@@ -56,6 +57,11 @@ class ShutdownCoordinator:
         self._session_factory = session_factory
         self._room_manager = room_manager
         self._state = "starting"
+        self._paused = False
+        self._shutdown_claimed = False
+        self._claimed_drain: float | None = None
+        # The window this drain is actually running on, fixed when it starts.
+        self._drain_in_force: float | None = None
         self._drain_seconds = 0.0
         self._started_at: datetime | None = None
         self._game_state_changed = asyncio.Event()
@@ -70,7 +76,96 @@ class ShutdownCoordinator:
 
     @property
     def is_draining(self) -> bool:
+        """A bounded deployment drain is running. One-way, once per process."""
         return self._state == "draining"
+
+    @property
+    def is_paused(self) -> bool:
+        """An administrator has stopped this process taking new work."""
+        return self._paused
+
+    @property
+    def refuses_new_work(self) -> bool:
+        """Whether this process is taking new rooms, games and votes.
+
+        The one question every admission check actually asks. A drain and a
+        maintenance pause are different events with different notices, but
+        they are the same answer here, so the handlers consult this rather
+        than enumerating the reasons - which is what keeps a new reason from
+        having to be added in nine places.
+        """
+        return self._state == "draining" or self._paused
+
+    @property
+    def shutdown_requested(self) -> bool:
+        """Whether a stop has been asked for but has not begun draining yet."""
+        return self._shutdown_claimed
+
+    def claim_shutdown(self, drain_seconds: float | None = None) -> bool:
+        """Take the right to stop this process, once. False if already taken.
+
+        `drain_seconds` is the window for *this* shutdown, carried here rather
+        than written onto the configured value. Two reasons. The configured
+        default is a tunable an administrator can still change from the panel,
+        so a one-shot window stored there could be moved out from under the
+        shutdown it was chosen for. And a one-shot override that outlived a
+        request which then failed would be a window nobody set for a shutdown
+        nobody started.
+
+        There is a gap between asking the process to stop and the drain
+        actually starting, and `is_draining` is false for all of it - so
+        without a claim, two clicks a moment apart are two accepted requests,
+        two audit events for one shutdown, and a second chance to change the
+        drain window after the first was written down.
+
+        Check and set with no await between them, which on one event loop is
+        as atomic as it needs to be.
+        """
+        if self._shutdown_claimed:
+            return False
+        self._shutdown_claimed = True
+        self._claimed_drain = drain_seconds
+        return True
+
+    def release_shutdown_claim(self) -> None:
+        """Give the claim back, for a request that did not go through with it."""
+        self._shutdown_claimed = False
+        self._claimed_drain = None
+
+    def pause(self, paused: bool = True) -> None:
+        """Stop, or resume, admitting new work - without stopping the process.
+
+        Deliberately not `begin_shutdown` with a longer drain. That is one-way
+        by construction, records the games it outlives as abandoned, and ends
+        with a process that has to be restarted; a pause is none of those. It
+        also leaves `is_ready` alone on purpose, so `/api/ready` keeps
+        answering 200: a readiness failure invites an orchestrator to replace
+        the container, which is the opposite of what pausing it is for.
+        """
+        self._paused = paused
+
+    def pause_payload(self) -> dict:
+        """The `server_paused` notice, sent on each toggle."""
+        return {
+            "contractVersion": PAUSE_NOTICE_CONTRACT_VERSION,
+            "paused": self._paused,
+            "reason": "maintenance",
+        }
+
+    @property
+    def drain_seconds(self) -> float:
+        return self._drain_seconds
+
+    def set_drain_seconds(self, seconds: float) -> None:
+        """Change how long the next drain will wait for games to finish.
+
+        Read at the top of `begin_shutdown` rather than captured at startup,
+        so a value changed while the process is running is the one the next
+        deployment drain uses. Changing it *during* a drain does not move the
+        deadline already being waited on, which is the honest behaviour: the
+        clients were told a number in the shutdown notice.
+        """
+        self._drain_seconds = seconds
 
     def begin_startup(self, *, drain_seconds: float) -> None:
         self._state = "starting"
@@ -87,19 +182,50 @@ class ShutdownCoordinator:
         self._game_state_changed.set()
 
     def rejection_acknowledgement(self) -> dict:
+        """Why this command was refused, in words written for the player.
+
+        A drain and a pause are told apart on the wire rather than sharing one
+        flag: a drain means this server is going away and a reload will find
+        another, while a pause means it is still here and will take the room
+        shortly. A client that could not tell them apart would have to guess
+        which advice to give.
+        """
+        if self._state == "draining":
+            return {
+                "ok": False,
+                "error": NEW_WORK_REJECTION,
+                "serverDraining": True,
+            }
         return {
             "ok": False,
-            "error": NEW_WORK_REJECTION,
-            "serverDraining": True,
+            "error": PAUSE_REJECTION,
+            "serverPaused": True,
         }
 
     def notice_payload(self) -> dict:
+        """What the clients are told, from the window this drain is running on.
+
+        Read from the fixed value rather than the configured one, so a socket
+        arriving mid-drain is told the same number as everyone who was here
+        when it started - and so a tuning change during a drain cannot make
+        the notice disagree with the deadline.
+        """
         if self._started_at is None:
             raise RuntimeError("shutdown drain has not started")
+        drain = (
+            self._drain_in_force
+            if self._drain_in_force is not None
+            else self._drain_seconds
+        )
         return {
             "contractVersion": SHUTDOWN_NOTICE_CONTRACT_VERSION,
             "reason": "deployment",
-            "drainSeconds": math.ceil(self._drain_seconds),
+            # Exactly what will be waited, not a rounded-up version of it.
+            # Rounding here promised a client two seconds while the server
+            # stopped waiting after 1.25, so a countdown could still be
+            # running when the socket closed. Whole seconds are a question for
+            # whatever draws the countdown, not for the contract.
+            "drainSeconds": drain,
             "startedAt": self._started_at.isoformat(),
         }
 
@@ -150,6 +276,15 @@ class ShutdownCoordinator:
         # is needed to keep a half-finished room out of the drained process.
         self._state = "draining"
         self._started_at = datetime.now(timezone.utc)
+        # Fixed here, before anything is announced. The notice and the deadline
+        # both read it, and there is an await between them: without this, a
+        # tuning change landing in that gap could promise a minute and abandon
+        # the games a second later.
+        self._drain_in_force = (
+            self._claimed_drain
+            if self._claimed_drain is not None
+            else self._drain_seconds
+        )
         initial_game_ids = {str(game.id) for _, game in self._active_games()}
         try:
             await asyncio.wait_for(
@@ -162,10 +297,10 @@ class ShutdownCoordinator:
         abort = should_abort if should_abort is not None else _never_abort
         timed_out = False
         aborted = False
-        if initial_game_ids and self._drain_seconds > 0:
+        if initial_game_ids and self._drain_in_force > 0:
             try:
                 await self._wait_for_games(
-                    time.monotonic() + self._drain_seconds, abort
+                    time.monotonic() + self._drain_in_force, abort
                 )
             except _DrainAborted:
                 aborted = True

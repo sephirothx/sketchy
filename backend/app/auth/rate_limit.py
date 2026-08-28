@@ -82,6 +82,22 @@ class RateLimiter:
         self._hits: dict[str, deque[float]] = defaultdict(deque)
         self._swept_at = clock()
 
+    @property
+    def limit(self) -> int:
+        """How many attempts one key may spend inside the window."""
+        return self._limit
+
+    @limit.setter
+    def limit(self, value: int) -> None:
+        """Change the ceiling without discarding the windows already open.
+
+        Rebuilding the limiter would be the obvious alternative and is the
+        wrong one: it throws away every bucket in flight, so lowering a limit
+        would hand the caller who has just spent theirs a fresh allowance -
+        which is the opposite of what lowering it is for.
+        """
+        self._limit = value
+
     def check(self, key: str) -> bool:
         """Record an attempt, returning False once the window is saturated."""
         now = self._clock()
@@ -222,6 +238,18 @@ class PersistentRateLimiter:
         self._clock = clock
         self._secret: str | None = None
         self._checks = 0
+
+    @property
+    def limit(self) -> int:
+        """How many attempts one key may spend inside the window."""
+        return self._limit
+
+    @limit.setter
+    def limit(self, value: int) -> None:
+        """Change the ceiling. The stored buckets are counted, not capped, so
+        a new limit applies to every window already open rather than only to
+        the ones opened after it."""
+        self._limit = value
 
     async def _hash_secret(self) -> str:
         self._secret = await get_ip_hash_secret(

@@ -117,12 +117,28 @@
       "x": 0,
       "y": 5620,
       "w": 1100,
-      "h": 1180,
-      "title": "Server operations"
+      "h": 940,
+      "title": "Server operations — overview"
+    },
+    {
+      "file": "AdminOpsTuning.dc.html",
+      "x": 1190,
+      "y": 5620,
+      "w": 1100,
+      "h": 1000,
+      "title": "Server operations — tuning"
+    },
+    {
+      "file": "AdminOpsAudit.dc.html",
+      "x": 2380,
+      "y": 5620,
+      "w": 1100,
+      "h": 620,
+      "title": "Server operations — audit ledger"
     },
     {
       "file": "Moderation.dc.html",
-      "x": 1190,
+      "x": 3570,
       "y": 5620,
       "w": 1160,
       "h": 1040,
@@ -187,7 +203,7 @@
       "x": 0,
       "y": 5450,
       "w": 460,
-      "text": "OPERATOR PAGES — one admin workspace with a side rail. Server ops: status banner, metric cards, hourly chart, recorder health, append-only audit ledger. Moderation: queue/case master-detail with server-pinned evidence, account context, a required resolution note, and Suspend… opening the duration step."
+      "text": "OPERATOR PAGES — one admin workspace, now tabbed: Overview, Tuning, Controls, Activity, Audit ledger. Overview keeps the status banner, metric cards, hourly chart and recorder health. Tuning is #446 — every runtime value with its bounds, its unit, where the number in force came from, and the sentence saying what it trades off, changed without a deploy or a restart. Audit ledger is promoted out of the six-row preview it used to be, because every tuning change lands in it. Moderation: queue/case master-detail with server-pinned evidence, account context, a required resolution note, and Suspend… opening the duration step."
     },
     {
       "id": "note-bug-reports",

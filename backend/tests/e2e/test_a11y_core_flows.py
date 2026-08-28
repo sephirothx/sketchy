@@ -1,5 +1,12 @@
+import os
+
 import pytest
 from playwright.async_api import Page, async_playwright
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.db.models import User
+from app.domain_values import UserRole
 
 from tests.e2e.a11y import assert_no_axe_violations
 from tests.e2e.lobby_helpers import room_code, use_guest_name
@@ -17,6 +24,25 @@ async def _open_chromium(color_scheme="light", theme=None):
     page = await context.new_page()
     page.set_default_timeout(15000)
     return playwright, browser, context, page
+
+
+async def promote_to_admin_by_display_name(display_name: str) -> None:
+    """Make one account staff, through the server's own throwaway database."""
+    url = os.environ.get("SKETCHY_E2E_DATABASE_URL")
+    if not url:
+        pytest.skip("SKETCHY_E2E_DATABASE_URL is not set; run via scripts/test-e2e.sh")
+    engine = create_async_engine(url)
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            async with session.begin():
+                await session.execute(
+                    update(User)
+                    .where(User.display_name == display_name)
+                    .values(role=UserRole.ADMIN.value)
+                )
+    finally:
+        await engine.dispose()
 
 
 async def _close(playwright, browser, context):
@@ -235,3 +261,45 @@ async def test_guest_waiting_room_axe():
         await guest_context.close()
         await browser.close()
         await playwright.stop()
+
+
+@pytest.mark.asyncio
+async def test_the_operations_workspace_is_accessible_on_every_tab():
+    """The operator pages were outside this suite until #446 put controls on them.
+
+    Every tab is scanned rather than the page as it first loads, because they
+    are five different documents behind one URL - and a tab strip is exactly
+    the kind of markup that is easy to get subtly wrong: a dangling
+    `aria-controls`, a panel nothing names, a strip that is five tab stops
+    instead of one.
+    """
+    playwright, browser, context, page = await _open_chromium()
+    try:
+        await page.goto(BASE_URL)
+        await use_guest_name(page, "A11yOperator")
+        await promote_to_admin_by_display_name("A11yOperator")
+        await page.reload()
+
+        for tab in ("overview", "tuning", "controls", "activity", "audit"):
+            await page.goto(f"{BASE_URL}/admin/operations?tab={tab}")
+            await page.wait_for_selector(
+                '[role="tab"][aria-selected="true"]'
+            )
+            # The panel the selected tab names has to be the one on screen.
+            controls = await page.get_attribute(
+                '[role="tab"][aria-selected="true"]', "aria-controls"
+            )
+            assert controls, f"the selected {tab} tab names no panel"
+            assert await page.locator(f"#{controls}").count() == 1, (
+                f"the {tab} tab points at a panel that is not in the document"
+            )
+            # And no unselected tab may point at one that is not.
+            dangling = await page.evaluate(
+                """() => [...document.querySelectorAll('[role="tab"]')]
+                    .map((tab) => tab.getAttribute('aria-controls'))
+                    .filter((id) => id && !document.getElementById(id))"""
+            )
+            assert dangling == [], dangling
+            await assert_no_axe_violations(page, f"operations::{tab}")
+    finally:
+        await _close(playwright, browser, context)

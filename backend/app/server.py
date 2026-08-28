@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal
 import socket
 
 import uvicorn
@@ -12,12 +13,34 @@ from app.deployment import shutdown_drain_seconds
 from app.main import shutdown_coordinator, sio
 
 
+# What an operator or a supervisor sends to stop the process. A repeat of any
+# of them means "stop waiting", not "start again".
+_TERMINATION_SIGNALS = frozenset({signal.SIGINT, signal.SIGTERM})
+
+
 class DrainingServer(uvicorn.Server):
     """Stop listeners, drain existing games, then run normal Uvicorn shutdown."""
 
     def __init__(self, config: uvicorn.Config, *, coordinator=shutdown_coordinator):
         super().__init__(config)
         self.shutdown_coordinator = coordinator
+
+    def handle_exit(self, sig: int, frame) -> None:
+        """Let a *second* termination signal cut the drain short, whichever it is.
+
+        R-SHUT-03 says a second termination signal abandons the remaining
+        window, and an operator who has waited long enough sends the same
+        signal again rather than a different one. Uvicorn's own handler only
+        escalates on a repeated SIGINT, so a deployment sending SIGTERM twice -
+        which is what a supervisor and a container stop both do - would be held
+        for the rest of the window with no way to say otherwise.
+
+        Set before delegating, so the escalation is in place by the time the
+        drain next asks.
+        """
+        if self.should_exit and sig in _TERMINATION_SIGNALS:
+            self.force_exit = True
+        super().handle_exit(sig, frame)
 
     async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
         # Stock Uvicorn closes live WebSockets before sending ASGI lifespan

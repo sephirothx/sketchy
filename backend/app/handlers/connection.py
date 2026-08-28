@@ -12,13 +12,15 @@ from app.auth.sessions import (
     session_token_from_cookie_header,
 )
 from app.domain_values import RuntimeEventType
+from app.client_config import client_config
+from app.flow_timing import timing
 from app.handlers.context import HandlerContext
 from app.protocol import PROTOCOL_VERSION, client_protocol_version
 from app.rooms import Player, Room, _metrics_user_id as metrics_user_id
 from app.services.runtime_metrics import metrics
 
 logger = logging.getLogger("sketchy.handlers.connection")
-RECONNECT_GRACE_SECONDS = 30
+
 
 async def connect(ctx: HandlerContext, sid, environ, auth):
     """Bind the socket to whatever account the session cookie names.
@@ -81,11 +83,23 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             # level news (a suspension, a moderator warning) reaches a player in
             # the lobby as immediately as one seated in a game.
             await ctx.sio.enter_room(sid, f"user:{user_id}")
+        # Sent to every socket, including one that will be told to upgrade:
+        # a client running the current bundle needs these before it draws
+        # anything, and there is no acknowledgement on a handshake to put
+        # them in. Re-sent to everybody when an administrator changes one.
+        await ctx.sio.emit("client_config", client_config.payload(), to=sid)
         shutdown = getattr(ctx, "shutdown", None)
         if shutdown is not None and shutdown.is_draining:
             await ctx.sio.emit(
                 "server_shutdown", shutdown.notice_payload(), to=sid
             )
+        elif shutdown is not None and shutdown.is_paused:
+            # A pause outlives any one connection, so a socket opened during
+            # one has to be told on arrival rather than only by the broadcast
+            # it missed. Not `elif` for tidiness: a drain that begins while
+            # paused is the more urgent of the two, and saying both would put
+            # two banners on one screen.
+            await ctx.sio.emit("server_paused", shutdown.pause_payload(), to=sid)
         logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
         accepted = True
     finally:
@@ -153,7 +167,7 @@ async def _begin_reconnect_grace(
 
     async def _evict_after_grace() -> None:
         try:
-            await asyncio.sleep(RECONNECT_GRACE_SECONDS)
+            await asyncio.sleep(timing.reconnect_grace_seconds)
         except asyncio.CancelledError:
             return
         still_present = room.players.get(token)
@@ -165,7 +179,7 @@ async def _begin_reconnect_grace(
             RuntimeEventType.PLAYER_EVICTED,
             room_id=room.id,
             user_id=metrics_user_id(still_present.user_id),
-            value=int(RECONNECT_GRACE_SECONDS),
+            value=int(timing.reconnect_grace_seconds),
         )
         ctx.room_manager.remove_player(room, token)
         await ctx.sio.emit("player_left", {"playerId": token}, room=room.id)

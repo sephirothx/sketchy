@@ -6,6 +6,7 @@ import socketio
 
 from app.identifiers import generate_uuid7
 from app.canvas_history import encode_canvas_history
+from app.flow_timing import timing
 from app.game import Game, Phase
 from app.handlers import register_all_handlers as register_handlers
 from app.live_drawing import encode_live_drawing
@@ -134,7 +135,7 @@ async def test_restart_vote_snapshots_eligible_players_and_requires_strict_major
     assert duplicate["rejected"] is False
     assert vote.votes[voter.id] is False
 
-    with patch("app.handlers.restart.RESTART_DELAY_SECONDS", 60):
+    with patch.object(timing, "restart_delay_seconds", 60):
         changed = await cast(voter.sid, {"vote": True})
     assert changed["ok"] is True
     assert changed["approved"] is True
@@ -154,7 +155,7 @@ async def test_restart_vote_expiry_enforces_cooldown():
     sio, context, _ = registered_server(room_manager, room, players)
     propose = sio.handlers["/"]["propose_restart_vote"]
 
-    with patch("app.handlers.restart.RESTART_VOTE_SECONDS", 0.01):
+    with patch.object(timing, "restart_vote_seconds", 0.01):
         response = await propose(players[0].sid, {})
         assert response["ok"] is True
         await asyncio.sleep(0.03)
@@ -238,7 +239,7 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     context.timers.add_hint_timer(room.id, old_hint_timer)
 
     await sio.handlers["/"]["propose_restart_vote"](proposer.sid, {})
-    with patch("app.handlers.restart.RESTART_DELAY_SECONDS", 0.01):
+    with patch.object(timing, "restart_delay_seconds", 0.01):
         approved = await sio.handlers["/"]["cast_restart_vote"](
             voter.sid, {"vote": True}
         )
@@ -316,7 +317,7 @@ async def test_disconnected_snapshot_voter_can_vote_after_reconnect_only():
         "room_id": room.id,
         "player_id": reconnecting.id,
     }
-    with patch("app.handlers.restart.RESTART_DELAY_SECONDS", 60):
+    with patch.object(timing, "restart_delay_seconds", 60):
         response = await cast(reconnecting.sid, {"vote": True})
     assert response["ok"] is True
     assert response["approved"] is True
@@ -332,7 +333,7 @@ async def test_approved_restart_is_cancelled_if_too_few_players_remain():
     sio, context, _ = registered_server(room_manager, room, players)
 
     await sio.handlers["/"]["propose_restart_vote"](proposer.sid, {})
-    with patch("app.handlers.restart.RESTART_DELAY_SECONDS", 0.01):
+    with patch.object(timing, "restart_delay_seconds", 0.01):
         approved = await sio.handlers["/"]["cast_restart_vote"](
             voter.sid, {"vote": True}
         )

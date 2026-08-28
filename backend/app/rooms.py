@@ -30,6 +30,7 @@ DRAWING_TIME_OPTIONS = (15, 30, 60, 90, 120, 180, 240, 300)
 MAX_PLAYERS_MIN = 2
 MAX_PLAYERS_MAX = 16
 
+
 # How many recent guess ids a seat remembers per connection. The client retries
 # a guess once, about two seconds after sending it, so only the handful of
 # guesses typed inside that window can ever be retried - and the bound is what

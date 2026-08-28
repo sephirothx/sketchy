@@ -6,13 +6,8 @@ import time
 import logging
 from datetime import datetime, timezone
 
-from app.game import (
-    CHOOSE_PROMPT_SECONDS,
-    MAX_HINT_SPEND,
-    TURN_RESULTS_SECONDS,
-    Game,
-    Phase,
-)
+from app.flow_timing import timing
+from app.game import MAX_HINT_SPEND, Game, Phase
 from app.domain_values import (
     GameOutcome,
     RuntimeEventType,
@@ -48,7 +43,6 @@ logger = logging.getLogger("sketchy.game_flow")
 # every few-millisecond wobble would bury the overruns that matter.
 TIMER_OVERRUN_REPORT_MS = 250
 
-RECONNECT_GRACE_SECONDS = 30
 # Long enough for a healthy write on a loaded server, short enough that a hung
 # database cannot pin the coroutine that ends a game.
 HISTORY_WRITE_TIMEOUT_SECONDS = 10
@@ -684,7 +678,7 @@ class GameFlowService:
             afk_tokens,
             canvas_generation=room.allocate_canvas_generation(),
         )
-        game.set_phase_deadline(CHOOSE_PROMPT_SECONDS)
+        game.set_phase_deadline(timing.choose_prompt_seconds)
         drawer = room.players.get(game.current_drawer)
         await self._sio.emit(
             "canvas_reset",
@@ -704,17 +698,17 @@ class GameFlowService:
                 "drawerNameColor": drawer.name_color if drawer else "",
                 "roundNumber": game.round_number,
                 "totalRounds": game.rounds_total,
-                "seconds": CHOOSE_PROMPT_SECONDS,
+                "seconds": timing.choose_prompt_seconds,
             },
             room=room.id,
         )
         if drawer and drawer.sid:
             await self._sio.emit(
                 "your_prompt_choices",
-                {"choices": choices, "seconds": CHOOSE_PROMPT_SECONDS},
+                {"choices": choices, "seconds": timing.choose_prompt_seconds},
                 to=drawer.sid,
             )
-        self.schedule_phase_timer(room, CHOOSE_PROMPT_SECONDS)
+        self.schedule_phase_timer(room, timing.choose_prompt_seconds)
 
     async def _begin_drawing(self, room: Room) -> None:
         game = room.game
@@ -765,6 +759,17 @@ class GameFlowService:
             )
         self.schedule_phase_timer(room, game.drawing_seconds)
         self.schedule_hint_checkpoints(room)
+
+    async def end_turn_now(self, room: Room) -> bool:
+        """End the drawing phase as its own timer would have.
+
+        The public name for what the phase timeout does, so an administrator
+        command can finish a turn without reaching into a private method - and
+        so it stays the *ordinary* ending: the turn scores, the results screen
+        shows, and the game carries on. A room stuck behind a drawer who has
+        walked away wants its turn over, not its game.
+        """
+        return await self._end_turn(room)
 
     async def _end_turn(self, room: Room) -> bool:
         game = room.game
@@ -832,7 +837,7 @@ class GameFlowService:
             self._turn_ended_payload(room, drawer_bonus=drawer_bonus),
             room=room.id,
         )
-        self.schedule_phase_timer(room, TURN_RESULTS_SECONDS)
+        self.schedule_phase_timer(room, timing.turn_results_seconds)
         return True
 
     def _turn_ended_payload(self, room: Room, drawer_bonus: int | None = None) -> dict:

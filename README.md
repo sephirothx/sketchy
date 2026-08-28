@@ -1118,6 +1118,11 @@ backend/.venv/bin/python -m playwright install chromium firefox
 database, and runs the Playwright suite across as many xdist workers as the
 machine has cores, capped at eight — past that the browsers contend for CPU and
 timing-sensitive tests start to flake. Override with `E2E_WORKERS=<number>`.
+Several of the environment variables below now supply a **boot value** rather than
+a fixed one: an administrator can change them at runtime from the operations page,
+and a value changed there survives a restart and takes precedence over the variable
+until it is reset. The variable still decides what a fresh deployment starts at.
+
 The E2E server also runs with `TURN_RESULTS_SECONDS=0.5`, because the suite
 plays whole games end to end and the production five-second pause after every
 turn otherwise dominates the run. Clients read the phase length off the

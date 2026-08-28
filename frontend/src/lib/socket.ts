@@ -1,4 +1,5 @@
 import { io, Socket } from "socket.io-client";
+import { applyClientConfig } from "./clientConfig.ts";
 import { recordClientError } from "./clientErrorLog.ts";
 import { PROTOCOL_VERSION, handleUpgradeRequired } from "./protocol.ts";
 import type { UpgradeRequiredNotice } from "./protocol.ts";
@@ -76,6 +77,13 @@ socket.on("upgrade_required", (notice: UpgradeRequiredNotice | undefined) => {
       );
     },
   });
+});
+
+// Same reasoning as the two notices above: the cadences arrive at the
+// handshake, which is usually before anything that depends on them has
+// mounted, so they are read where the socket lives and handed on from there.
+socket.on("client_config", (payload: unknown) => {
+  applyClientConfig(payload);
 });
 
 let serverFullReason: string | null = null;

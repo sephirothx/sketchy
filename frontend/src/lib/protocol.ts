@@ -5,7 +5,7 @@ together, so the only client that ever sees a mismatch is one that was already
 open across a deploy - a tab left on a sleeping laptop, most often. The server
 answers such a socket with `upgrade_required` rather than refusing it, and the
 client reloads onto the build being served. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Where the last upgrade reload is remembered, so it can happen only once. */
 const RELOAD_MARKER_KEY = "sketchy:upgrade-reload";

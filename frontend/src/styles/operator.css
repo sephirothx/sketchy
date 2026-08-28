@@ -911,3 +911,212 @@
 }
 
 .bug-more-context .bug-context { margin-top: 8px; }
+
+/* ---------------------------------------------------------------- ops tabs */
+/* The operations page carries five surfaces now: the dashboard it always had,
+   the runtime settings and commands from #446, and the activity table and
+   audit ledger that used to sit below the fold as a disclosure and a
+   six-row preview. Tabs rather than one long scroll, because they are five
+   different jobs and only one of them is being done at a time. */
+
+.ops-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1.5px solid var(--line);
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.ops-tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  margin-bottom: -1.5px;
+  padding: 9px 14px;
+  font: inherit;
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ops-tab:hover { color: var(--ink); }
+
+.ops-tab[aria-selected="true"] {
+  color: var(--primary-ink);
+  border-bottom-color: var(--primary);
+}
+
+/* The panel takes focus when a tab is chosen, so it needs a visible ring -
+   but only from the keyboard, or clicking a tab would outline the whole page. */
+.ops-tabpanel:focus { outline: none; }
+.ops-tabpanel:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+/* -------------------------------------------------------------- ops tuning */
+
+.ops-tuning-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.ops-tuning-head .ops-card-sub { max-width: 60ch; }
+
+.ops-tuning-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.ops-pending {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--warm-ink);
+}
+
+.ops-saved {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--success-ink);
+  margin-bottom: 12px;
+}
+
+.ops-tuning .ops-card { margin-bottom: 12px; }
+
+.ops-tunable-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ops-tunable {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ops-tunable:last-child { border-bottom: none; }
+
+.ops-tunable-main { min-width: 0; }
+
+.ops-tunable-main label {
+  display: block;
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+.ops-tunable-why {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 3px;
+  max-width: 62ch;
+}
+
+.ops-tunable-bounds {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--faint);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ops-tunable-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.ops-tunable-control input {
+  width: 106px;
+  padding: 7px 9px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* An edited field that has not been applied yet, so "I typed it" and "the
+   server has it" are never the same thing on screen. */
+.ops-tunable-control input.is-changed {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* ------------------------------------------------------------ ops controls */
+
+.ops-controls .ops-card { margin-bottom: 12px; }
+.ops-controls .ops-card-sub { max-width: 66ch; }
+
+@media (max-width: 720px) {
+  .ops-tunable,
+  .ops-tuning-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ops-tunable-control { justify-content: flex-start; }
+}
+
+/* The one control on this page that ends the process. Marked out rather than
+   left to read like the cards above it: an operator scanning for the pause
+   should not land here by accident. */
+.ops-card.ops-danger {
+  border-color: var(--warm);
+}
+
+.ops-card.ops-danger .ops-empty {
+  background: var(--warm-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.ops-drain-input {
+  width: 92px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Seats inside a live room, revealed from the player count. Collapsed by
+   default because the table is for finding a room, and every player in every
+   room would bury the room you came to find. */
+.ops-seats-row td { background: var(--well); }
+
+.ops-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.ops-seats li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}

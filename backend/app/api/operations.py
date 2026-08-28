@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.admin_auth import admin_gate
 from app.auth.audit import audit_coordinates
 from app.db.models import (
     AuditEvent,
@@ -30,7 +31,7 @@ from app.db.models import (
     User,
     generate_uuid,
 )
-from app.domain_values import AuditTargetType, GameOutcome, UserRole
+from app.domain_values import AuditTargetType, GameOutcome
 from app.services.runtime_metrics import (
     daily_totals,
     metrics,
@@ -152,18 +153,7 @@ def create_operations_router(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> APIRouter:
     router = APIRouter()
-
-    async def require_admin(request: Request) -> User:
-        user_id = getattr(request.state, "user_id", None)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
-        async with session_factory() as session:
-            user = await session.get(User, UUID(user_id))
-        if user is None or user.role != UserRole.ADMIN.value:
-            # 404 rather than 403: whether this deployment has an admin page is
-            # not something an ordinary player needs to learn.
-            raise HTTPException(status_code=404, detail="Not found.")
-        return user
+    require_admin = admin_gate(session_factory)
 
     @router.get("/metrics")
     async def scrape(request: Request):

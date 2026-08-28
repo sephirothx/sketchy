@@ -22,10 +22,9 @@ import {
   encodePathStart,
   encodeShape,
 } from "../lib/liveDrawing";
+import { useClientConfig } from "./useClientConfig";
 import type { CanvasProtocol } from "./useCanvasProtocol";
 import type { DrawTool, StrokeFillPayload, StrokePoint } from "../types";
-
-const FLUSH_INTERVAL_MS = 40;
 
 interface DrawingSettings {
   isDrawer: boolean;
@@ -64,6 +63,9 @@ export function useCanvasPointerInput(
   // straight from the store: the handlers below are rebuilt every render, so
   // they always close over the current answer.
   const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
+  // Server-decided, so a deployment can tune the trade between bandwidth and
+  // how smooth a stroke looks to everyone who is not drawing it.
+  const { flushIntervalMs } = useClientConfig();
 
   const activePointerIdRef = useRef<number | null>(null);
   const pendingPointsRef = useRef<StrokePoint[]>([]);
@@ -278,6 +280,13 @@ export function useCanvasPointerInput(
 
   // Only the drawer ever queues points, so only the drawer needs the timer.
   // Guessers were waking a throttled CPU 25x a second to find nothing to send.
+  //
+  // The interval is in the dependency list rather than read inside the
+  // callback, because `setInterval` fixes its period when it is armed: reading
+  // a new value in the callback would change nothing until the timer was
+  // recreated anyway. Listing it tears the timer down and re-arms it, so an
+  // administrator moving the value reaches a drawer who is drawing right now
+  // — which is the only way anyone can judge whether the new value is right.
   useEffect(() => {
     if (!isDrawer) return;
     const flushTimer = setInterval(() => {
@@ -285,9 +294,9 @@ export function useCanvasPointerInput(
       const points = pendingPointsRef.current;
       pendingPointsRef.current = [];
       protocol.sendPathFrame(encodePathPoints({ points }));
-    }, FLUSH_INTERVAL_MS);
+    }, flushIntervalMs);
     return () => clearInterval(flushTimer);
-  }, [isDrawer, protocol]);
+  }, [isDrawer, protocol, flushIntervalMs]);
 
   useEffect(() => () => {
     if (!inputActiveRef.current) return;

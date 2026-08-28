@@ -2,8 +2,11 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import asyncio
 import hashlib
 import json
+import os
+import signal
 
 import socketio
 
@@ -19,6 +22,8 @@ from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
 from app.api.bug_reports import create_bug_report_router
 from app.api.moderation import create_moderation_router
+from app.api.admin_controls import create_admin_controls_router, read_paused
+from app.api.admin_settings import create_admin_settings_router
 from app.api.operations import create_operations_router
 from app.api.user_settings import create_user_settings_router
 from app.api.user_blocks import create_user_blocks_router
@@ -45,9 +50,14 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyUserRepository,
     SqlAlchemyPromptListRepository,
 )
+from app.client_config import client_config
+from app.flow_timing import timing as flow_timing
 from app.state import room_manager
 from app.services.message_retention import purge_expired_room_messages
 from app.services.room_presets import RoomPresetService
+from app.services.config_store import read_prefixed
+from app.services.runtime_settings import CONFIG_PREFIX
+from app.services.tunables import build_runtime_settings
 from app.services.shutdown import (
     ShutdownCoordinator,
     purge_expired_shutdown_abandonments,
@@ -111,6 +121,28 @@ handler_context = register_all_handlers(
     block_service=block_service,
     shutdown=shutdown_coordinator,
 )
+# Built here rather than at import so it can reach the live policy objects the
+# handlers consult: a change has to move the value the next command reads, not
+# a copy of it.
+runtime_settings = build_runtime_settings(
+    budgets=handler_context.command_budgets,
+    quotas=handler_context.room_quotas,
+    capacity=handler_context.room_capacity,
+    flow=flow_timing,
+    client=client_config,
+    shutdown=shutdown_coordinator,
+)
+
+
+async def announce_client_config(changed) -> None:
+    """Tell every connected client when one of *its* cadences moves.
+
+    Only when one actually moved. The notice is cheap, but a broadcast to
+    everybody in the building for a change to a server-side ceiling they
+    cannot observe is noise on the wire and noise in a network panel.
+    """
+    if any(settings_name.startswith("client.") for settings_name in changed):
+        await sio.emit("client_config", client_config.payload())
 
 
 async def _remove_account_from_live_rooms(
@@ -127,32 +159,12 @@ async def _remove_account_from_live_rooms(
         player = room_manager.get_player_by_user_id(room, user_id)
         if player is None:
             continue
-        player_id = player.id
-        player_sid = player.sid
-        handler_context.timers.cancel_disconnect_timer(player_id)
-        room_manager.remove_player(room, player_id)
-        if room.game and room.state == "playing":
-            await handler_context.game_flow._remove_player_from_game(room, player_id)
-        if player_sid:
-            if suspension is not None:
-                # Sent before the disconnect, so it arrives: a socket closed
-                # first delivers nothing.
-                await sio.emit("account_suspended", suspension, to=player_sid)
-            else:
-                await sio.emit(
-                    "session_superseded",
-                    {"reason": reason},
-                    to=player_sid,
-                )
-            await sio.leave_room(player_sid, room.id)
-            await sio.disconnect(player_sid)
-        if room.connected_players():
-            await handler_context.game_flow._emit_room_state(room)
-        else:
-            handler_context.timers.cancel_phase_timer(room.id)
-            handler_context.timers.cancel_hint_timers(room.id)
-            handler_context.timers.cancel_restart_timer(room.id)
-            await handler_context.remove_room_if_empty(room.id)
+        notice = (
+            ("account_suspended", suspension)
+            if suspension is not None
+            else ("session_superseded", {"reason": reason})
+        )
+        await handler_context.evict_player(room, player.id, notice=notice)
 
 
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
@@ -191,6 +203,47 @@ async def push_warning_to_account(user_id: str) -> None:
         await sio.emit("moderator_warning", payload, to=f"user:{user_id}")
 
 
+def request_process_exit() -> None:
+    """Ask this process to stop, the same way a deployment would.
+
+    A signal rather than a direct call into the coordinator, so the drain runs
+    exactly where it runs for a real deploy - `DrainingServer.shutdown`, or the
+    lifespan teardown when the app is served some other way. One path, so an
+    operator-initiated stop cannot behave differently from an operator typing
+    the same thing into a terminal.
+
+    Deferred by a tick so the acknowledgement reaches the browser that asked:
+    signalling inline races the response out of the door.
+    """
+    loop = asyncio.get_running_loop()
+    loop.call_later(0.25, os.kill, os.getpid(), signal.SIGTERM)
+
+
+async def announce_pause(payload: dict) -> None:
+    """Tell everyone the moment a maintenance pause starts or ends.
+
+    Sent to everybody rather than only to whoever tries something next: a
+    player staring at a lobby wants to know why the create button will refuse
+    them before they press it, and the banner has to clear on resume.
+    """
+    await sio.emit("server_paused", payload)
+
+
+async def adopt_stored_settings() -> None:
+    """Put an administrator's stored choices in force before anybody is admitted.
+
+    Ordered before readiness on purpose: a process that opens on its compiled
+    defaults and adopts the stored ones a moment later has served the first
+    players a configuration nobody chose.
+    """
+    runtime_settings.apply_stored(
+        await read_prefixed(async_session_factory, CONFIG_PREFIX)
+    )
+    # A pause is usually taken *because* a restart is coming, so it has to
+    # survive one - otherwise the deploy it was guarding reopens the doors.
+    shutdown_coordinator.pause(await read_paused(async_session_factory))
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     shutdown_coordinator.begin_startup(
@@ -210,6 +263,7 @@ async def lifespan(_app: FastAPI):
         await purge_expired_room_messages(async_session_factory)
         await purge_expired_shutdown_abandonments(async_session_factory)
         await seed_prompt_lists(prompt_list_repo)
+        await adopt_stored_settings()
         # One worker owns everything (#382), so the outbox needs no scheduler
         # and no second process that somebody has to remember to start.
         mail_delivery = start_delivery_loop(async_session_factory)
@@ -253,6 +307,21 @@ api.include_router(
 )
 api.include_router(create_operations_router(async_session_factory))
 api.include_router(
+    create_admin_settings_router(
+        async_session_factory, runtime_settings, on_change=announce_client_config
+    )
+)
+api.include_router(
+    create_admin_controls_router(
+        async_session_factory,
+        shutdown_coordinator,
+        room_manager,
+        handler_context,
+        on_change=announce_pause,
+        request_process_exit=request_process_exit,
+    )
+)
+api.include_router(
     create_bug_report_router(async_session_factory, room_manager)
 )
 api.include_router(create_profile_router(user_repo, game_history_repo))
@@ -273,7 +342,11 @@ api.include_router(
 
 @api.get("/api/health")
 async def health():
-    return {"status": "ok", "readiness": shutdown_coordinator.state}
+    return {
+        "status": "ok",
+        "readiness": shutdown_coordinator.state,
+        "paused": shutdown_coordinator.is_paused,
+    }
 
 
 @api.get("/api/ready")

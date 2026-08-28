@@ -112,18 +112,37 @@ class RoomQuotaService:
         self.prompt_characters = _ceiling(
             values, "ROOM_PROMPT_CHARACTER_LIMIT", DEFAULT_PROMPT_CHARACTERS
         )
+        self._creations_per_hour = _ceiling(
+            values, "ROOM_CREATE_LIMIT", DEFAULT_CREATIONS_PER_HOUR
+        )
         self._creations = (
             PersistentRateLimiter(
                 session_factory,
                 scope="room_create",
-                limit=_ceiling(
-                    values, "ROOM_CREATE_LIMIT", DEFAULT_CREATIONS_PER_HOUR
-                ),
+                limit=self._creations_per_hour,
                 window_seconds=3600,
             )
             if session_factory is not None
             else None
         )
+
+    @property
+    def creations_per_hour(self) -> int:
+        """The account-keyed room-creation ceiling.
+
+        Answered from the field rather than the limiter because the limiter is
+        absent without a database - the live-room ceilings are answered from
+        memory, and only the creation *rate* needs a persistent bucket. A
+        panel must still be able to read and set the number in that
+        configuration rather than being shown a zero.
+        """
+        return self._creations_per_hour
+
+    @creations_per_hour.setter
+    def creations_per_hour(self, value: int) -> None:
+        self._creations_per_hour = value
+        if self._creations is not None:
+            self._creations.limit = value
 
     def check_capacity(self, user_id: str) -> None:
         """Refuse a room the process, or this account, has no room for.
@@ -214,6 +233,24 @@ class RoomCapacityService:
         self._joins = RateLimiter(self.joins_per_socket, JOIN_WINDOW_SECONDS)
         self._takeovers = RateLimiter(self.takeovers_per_seat, JOIN_WINDOW_SECONDS)
         self._open_sockets: set[str] = set()
+
+    @property
+    def joins_per_socket_limit(self) -> int:
+        return self._joins.limit
+
+    @joins_per_socket_limit.setter
+    def joins_per_socket_limit(self, value: int) -> None:
+        self.joins_per_socket = value
+        self._joins.limit = value
+
+    @property
+    def takeovers_per_seat_limit(self) -> int:
+        return self._takeovers.limit
+
+    @takeovers_per_seat_limit.setter
+    def takeovers_per_seat_limit(self, value: int) -> None:
+        self.takeovers_per_seat = value
+        self._takeovers.limit = value
 
     @property
     def open_sockets(self) -> int:

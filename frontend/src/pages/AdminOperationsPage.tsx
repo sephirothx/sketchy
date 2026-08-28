@@ -6,6 +6,19 @@ import { RoundsIcon } from "../components/icons";
 
 import { ApiError } from "../lib/api";
 import {
+  admissionLabel,
+  isAdmitting,
+  mergeAdmission,
+  readMaintenance,
+  type MaintenanceState,
+} from "../lib/adminControls";
+import { useAdmissionNotices } from "../hooks/useAdmissionNotices";
+import { canAdminister } from "../lib/operatorAccess";
+import { useAuthStore } from "../store/authStore";
+import { ControlsPanel } from "./ops/ControlsPanel";
+import { OpsTabPanel, OpsTabs, type OpsTab } from "./ops/OpsTabs";
+import { TuningPanel } from "./ops/TuningPanel";
+import {
   abandonmentRate,
   readAuditLedger,
   readDailyTotals,
@@ -28,7 +41,22 @@ const TRENDS = [
 ];
 
 const CHART_DAYS = 14;
-const LEDGER_PREVIEW = 6;
+
+const TAB_IDS = "ops";
+
+/** Which tab a link asked for, defaulting to the dashboard. */
+function tabFromLocation(search: string): string {
+  const asked = new URLSearchParams(search).get("tab");
+  return TABS.some((candidate) => candidate.id === asked) ? asked! : "overview";
+}
+
+const TABS: readonly OpsTab[] = [
+  { id: "overview", label: "Overview" },
+  { id: "tuning", label: "Tuning" },
+  { id: "controls", label: "Controls" },
+  { id: "activity", label: "Activity" },
+  { id: "audit", label: "Audit ledger" },
+];
 
 function shortTime(iso: string): string {
   const then = new Date(iso);
@@ -57,7 +85,13 @@ function auditTag(eventType: string): { label: string; kind: "danger" | "success
   if (/retention|cleanup|rollup/.test(eventType)) {
     return { label: "Retention", kind: "success" };
   }
-  if (/admin/.test(eventType)) return { label: "Admin", kind: "primary" };
+  // `config.changed`, `maintenance.*` and the room commands are all things an
+  // administrator did to a running server, and none of them carries "admin" in
+  // its name - so without this they read as ordinary logged events beside a
+  // retention sweep, which is exactly the wrong company for them.
+  if (/admin|config|maintenance|^room\./.test(eventType)) {
+    return { label: "Admin", kind: "primary" };
+  }
   return { label: "Logged", kind: "neutral" };
 }
 
@@ -101,12 +135,15 @@ exact because one worker owns everything; the chart comes from permanent daily
 aggregates, which outlive the raw rows behind them. */
 export function AdminOperationsPage() {
   const [live, setLive] = useState<LiveMetrics | null>(null);
+  // Admission state, because the banner speaks for it. It used to say
+  // "accepting rooms" unconditionally, which is the opposite of the truth
+  // while a maintenance pause is on.
+  const [maintenance, setMaintenance] = useState<MaintenanceState | null>(null);
   const [days, setDays] = useState<DailyTotal[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [events, setEvents] = useState<RuntimeEventRow[]>([]);
   const [chartMetric, setChartMetric] = useState(TRENDS[0].metric);
-  const [ledgerExpanded, setLedgerExpanded] = useState(false);
-  const [activityOpen, setActivityOpen] = useState(false);
+  const [tab, setTab] = useState(() => tabFromLocation(window.location.search));
   const [eventFilter, setEventFilter] = useState("");
   const [roomFilter, setRoomFilter] = useState("");
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
@@ -117,6 +154,10 @@ export function AdminOperationsPage() {
     events: RuntimeEventRow[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const notices = useAdmissionNotices();
+  const user = useAuthStore((state) => state.user);
+  const hasResolved = useAuthStore((state) => state.hasResolved);
+  const allowed = hasResolved && canAdminister(user?.role);
 
   const fail = useCallback((problem: unknown) => {
     setError(
@@ -127,20 +168,26 @@ export function AdminOperationsPage() {
   }, []);
 
   const refresh = useCallback(() => {
+    // Not fetched before the role is known, or for somebody it would refuse:
+    // firing four requests that answer 404 is noise in the log and a
+    // confusing error on a page the visitor was never meant to see.
+    if (!allowed) return;
     void Promise.all([
       readLiveMetrics(),
       readDailyTotals(),
       readAuditLedger({ limit: 200 }),
+      readMaintenance(),
     ])
-      .then(([metrics, daily, ledger]) => {
+      .then(([metrics, daily, ledger, admission]) => {
         setLive(metrics);
         setDays(daily.days);
         setAudit(ledger.entries);
+        setMaintenance(admission);
         setCheckedAt(Date.now());
         setError(null);
       })
       .catch(fail);
-  }, [fail]);
+  }, [allowed, fail]);
 
   const loadEvents = useCallback(() => {
     void readRuntimeEvents({
@@ -155,7 +202,9 @@ export function AdminOperationsPage() {
       .catch(fail);
   }, [eventFilter, roomFilter, fail]);
 
-  useEffect(refresh, [refresh]);
+  // Re-read on every (re)connect as well as on mount: after a restart the
+  // numbers and the admission state both belong to a process that is gone.
+  useEffect(refresh, [refresh, notices.connection]);
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 10000);
@@ -171,6 +220,21 @@ export function AdminOperationsPage() {
       .catch(fail);
   }
 
+  // Activity is fetched when its tab is first opened, not with the dashboard.
+  // The raw event table is the expensive read on this page, and an operator
+  // who came to look at a chart should not pay for it.
+  useEffect(() => {
+    if (tab === "activity" && events.length === 0) loadEvents();
+  }, [tab, events.length, loadEvents]);
+
+  // In the query string so a link to one tab survives being sent or reloaded.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (tab === "overview") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tab);
+    window.history.replaceState(null, "", url);
+  }, [tab]);
+
   const rate = live ? abandonmentRate(live.games) : null;
   const chartLabel =
     TRENDS.find((trend) => trend.metric === chartMetric)?.label ?? chartMetric;
@@ -181,7 +245,24 @@ export function AdminOperationsPage() {
   const checkedAgo =
     checkedAt === null ? null : Math.max(0, Math.round((now - checkedAt) / 1000));
   const recorderHealthy = !live || live.recorder.dropped === 0;
-  const visibleAudit = ledgerExpanded ? audit : audit.slice(0, LEDGER_PREVIEW);
+  // Corrected by what the server has announced since the last fetch, so a
+  // pause or a drain started elsewhere does not leave this banner claiming
+  // the server is taking rooms.
+  const state = mergeAdmission(maintenance, notices);
+  const admission = admissionLabel(state);
+  const admitting = isAdmitting(state);
+  if (hasResolved && !allowed) {
+    // The same refusal the bug-report and moderation pages give. Without it a
+    // non-administrator gets the page chrome and a load error, which reads as
+    // a broken page rather than one that is not theirs - and this page now
+    // carries controls, so the door should look shut.
+    return (
+      <main className="ops-page">
+        <AppHeader backLabel="Back to lobby" />
+        <p className="ops-empty">This page is for administrators.</p>
+      </main>
+    );
+  }
 
   return (
     <main className="ops-page">
@@ -197,26 +278,33 @@ export function AdminOperationsPage() {
         </button>
       </header>
 
+      <OpsTabs tabs={TABS} current={tab} idPrefix={TAB_IDS} onSelect={setTab} />
+
       {error && (
         <p className="auth-error" role="alert">
           {error}
         </p>
       )}
 
+      <OpsTabPanel id="overview" current={tab} idPrefix={TAB_IDS}>
       {live && (
         <>
           <div
-            className={`ops-status-banner${recorderHealthy ? "" : " is-warning"}`}
+            className={`ops-status-banner${
+              recorderHealthy && admitting ? "" : " is-warning"
+            }`}
             role="status"
           >
             <span className="ops-status-dot" aria-hidden="true" />
             <strong>
-              {recorderHealthy
-                ? "All systems operational"
-                : "Recorder dropped observations"}
+              {!recorderHealthy
+                ? "Recorder dropped observations"
+                : admitting
+                  ? "All systems operational"
+                  : "Not accepting new rooms"}
             </strong>
             <span>
-              Single worker · accepting rooms
+              Single worker · {admission}
               {checkedAgo !== null && ` · checked ${checkedAgo}s ago`}
             </span>
           </div>
@@ -315,149 +403,155 @@ export function AdminOperationsPage() {
             </section>
           </div>
 
-          <section className="ops-card ops-ledger" aria-label="Audit ledger">
-            <div className="ops-card-head">
-              <div>
-                <h2>Audit ledger</h2>
-                <p className="ops-card-sub">
-                  Recent operator and automated actions · append-only
-                </p>
-              </div>
-              {audit.length > LEDGER_PREVIEW && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-compact"
-                  onClick={() => setLedgerExpanded((current) => !current)}
-                >
-                  {ledgerExpanded ? "Show recent" : "View all"}
-                </button>
-              )}
-            </div>
-            {ledgerExpanded && (
-              <div className="ops-filters">
-                <label className="ops-toggle">
-                  <input
-                    type="checkbox"
-                    checked={showIds}
-                    onChange={(change) => setShowIds(change.target.checked)}
-                  />
-                  Show ids instead of names
-                </label>
-              </div>
-            )}
-            {visibleAudit.length === 0 && (
-              <p className="ops-empty">Nothing recorded yet.</p>
-            )}
-            {visibleAudit.map((entry) => {
-              const tag = auditTag(entry.eventType);
-              const actor = showIds
-                ? (entry.actorUserId ?? "system")
-                : (entry.actorName ??
-                  (entry.actorUserId ? "Deleted player" : "system"));
-              const target = showIds
-                ? (entry.targetId ?? "")
-                : (entry.targetName ?? entry.targetId ?? "");
-              return (
-                <div key={entry.id} className="ops-audit-row">
-                  <time dateTime={entry.createdAt}>{shortTime(entry.createdAt)}</time>
-                  <span className="ops-audit-body">
-                    <strong className={showIds ? "ops-identifier" : undefined}>
-                      {actor}
-                    </strong>{" "}
-                    · {entry.eventType}
-                    {entry.targetType && target && (
-                      <>
-                        {" · "}
-                        <span className="ops-subject-kind">
-                          {entry.targetType.replace(/_/g, " ")}
-                        </span>{" "}
-                        <span className={showIds ? "ops-identifier" : undefined}>
-                          {target}
-                        </span>
-                      </>
-                    )}
-                  </span>
-                  <Chip kind={tag.kind}>{tag.label}</Chip>
-                </div>
-              );
-            })}
-          </section>
-
-          <details
-            className="ops-card ops-activity"
-            open={activityOpen}
-            onToggle={(toggle) => {
-              const open = (toggle.target as HTMLDetailsElement).open;
-              setActivityOpen(open);
-              if (open && events.length === 0) loadEvents();
-            }}
-          >
-            <summary>Recorded activity</summary>
-            <div className="ops-filters">
-              <label htmlFor="ops-event-type">Event</label>
-              <input
-                id="ops-event-type"
-                value={eventFilter}
-                onChange={(change) => setEventFilter(change.target.value)}
-                placeholder="player.disconnected"
-              />
-              <label htmlFor="ops-room">Room</label>
-              <input
-                id="ops-room"
-                value={roomFilter}
-                onChange={(change) => setRoomFilter(change.target.value)}
-                placeholder="room id"
-              />
-              <button
-                type="button"
-                className="btn btn-secondary btn-compact"
-                onClick={loadEvents}
-              >
-                Apply
-              </button>
-            </div>
-            <div className="ops-table-scroll">
-              <table className="ops-table">
-                <thead>
-                  <tr>
-                    <th scope="col">When</th>
-                    <th scope="col">Event</th>
-                    <th scope="col">Room</th>
-                    <th scope="col">Value</th>
-                    <th scope="col">Player</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((row) => (
-                    <tr key={row.id}>
-                      <td>{new Date(row.occurredAt).toLocaleString()}</td>
-                      <td>{row.eventType}</td>
-                      <td>{row.roomId ?? "—"}</td>
-                      <td className="ops-number">{row.value ?? "—"}</td>
-                      <td>
-                        {row.userId ? (
-                          <button
-                            type="button"
-                            className="auth-link"
-                            onClick={() => inspect(row.userId)}
-                          >
-                            Inspect
-                          </button>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {events.length === 0 && (
-              <p className="ops-empty">Nothing recorded yet.</p>
-            )}
-          </details>
         </>
       )}
+      </OpsTabPanel>
+
+      <OpsTabPanel id="tuning" current={tab} idPrefix={TAB_IDS}>
+        <TuningPanel />
+      </OpsTabPanel>
+
+      <OpsTabPanel id="controls" current={tab} idPrefix={TAB_IDS}>
+        <ControlsPanel />
+      </OpsTabPanel>
+
+      <OpsTabPanel id="activity" current={tab} idPrefix={TAB_IDS}>
+      <section className="ops-card ops-activity" aria-label="Recorded activity">
+        <div className="ops-card-head">
+          <div>
+            <h2>Recorded activity</h2>
+            <p className="ops-card-sub">
+              Raw observations, before they are rolled into the daily totals
+              the chart draws.
+            </p>
+          </div>
+        </div>
+        <div className="ops-filters">
+          <label htmlFor="ops-event-type">Event</label>
+          <input
+            id="ops-event-type"
+            value={eventFilter}
+            onChange={(change) => setEventFilter(change.target.value)}
+            placeholder="player.disconnected"
+          />
+          <label htmlFor="ops-room">Room</label>
+          <input
+            id="ops-room"
+            value={roomFilter}
+            onChange={(change) => setRoomFilter(change.target.value)}
+            placeholder="room id"
+          />
+          <button
+            type="button"
+            className="btn btn-secondary btn-compact"
+            onClick={loadEvents}
+          >
+            Apply
+          </button>
+        </div>
+        <div className="ops-table-scroll">
+          <table className="ops-table">
+            <thead>
+              <tr>
+                <th scope="col">When</th>
+                <th scope="col">Event</th>
+                <th scope="col">Room</th>
+                <th scope="col">Value</th>
+                <th scope="col">Player</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((row) => (
+                <tr key={row.id}>
+                  <td>{new Date(row.occurredAt).toLocaleString()}</td>
+                  <td>{row.eventType}</td>
+                  <td>{row.roomId ?? "—"}</td>
+                  <td className="ops-number">{row.value ?? "—"}</td>
+                  <td>
+                    {row.userId ? (
+                      <button
+                        type="button"
+                        className="auth-link"
+                        onClick={() => inspect(row.userId)}
+                      >
+                        Inspect
+                      </button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {events.length === 0 && (
+          <p className="ops-empty">Nothing recorded yet.</p>
+        )}
+      </section>
+      </OpsTabPanel>
+
+      <OpsTabPanel id="audit" current={tab} idPrefix={TAB_IDS}>
+      <section className="ops-card ops-ledger" aria-label="Audit ledger">
+        <div className="ops-card-head">
+          <div>
+            <h2>Audit ledger</h2>
+            <p className="ops-card-sub">
+              Every operator and automated action, newest first · append-only.
+              Names are resolved as the ledger is read, so a deleted account
+              reads as one while the entry stands exactly as it was.
+            </p>
+          </div>
+
+        </div>
+        <div className="ops-filters">
+          <label className="ops-toggle">
+            <input
+              type="checkbox"
+              checked={showIds}
+              onChange={(change) => setShowIds(change.target.checked)}
+            />
+            Show ids instead of names
+          </label>
+        </div>
+        {audit.length === 0 && (
+          <p className="ops-empty">Nothing recorded yet.</p>
+        )}
+        {audit.map((entry) => {
+          const tag = auditTag(entry.eventType);
+          const actor = showIds
+            ? (entry.actorUserId ?? "system")
+            : (entry.actorName ??
+              (entry.actorUserId ? "Deleted player" : "system"));
+          const target = showIds
+            ? (entry.targetId ?? "")
+            : (entry.targetName ?? entry.targetId ?? "");
+          return (
+            <div key={entry.id} className="ops-audit-row">
+              <time dateTime={entry.createdAt}>{shortTime(entry.createdAt)}</time>
+              <span className="ops-audit-body">
+                <strong className={showIds ? "ops-identifier" : undefined}>
+                  {actor}
+                </strong>{" "}
+                · {entry.eventType}
+                {entry.targetType && target && (
+                  <>
+                    {" · "}
+                    <span className="ops-subject-kind">
+                      {entry.targetType.replace(/_/g, " ")}
+                    </span>{" "}
+                    <span className={showIds ? "ops-identifier" : undefined}>
+                      {target}
+                    </span>
+                  </>
+                )}
+              </span>
+              <Chip kind={tag.kind}>{tag.label}</Chip>
+            </div>
+          );
+        })}
+      </section>
+      </OpsTabPanel>
 
       {player && (
         <div

@@ -3,7 +3,7 @@
 // the explorer build read this, so they cannot drift apart.
 import { MainPage, CreateRoomPage, AccountRecoveryPage, SettingsPage } from './pages-entry.mjs';
 import { WaitingRoomPage, PromptChoicePage, DrawingPage, GuessingPage, TurnResultsPage, GameOverPage, HighlightsPage } from './pages-room.mjs';
-import { PromptStatsPage, MyPromptListsPage, ProfilePage, AdminOpsPage, ModerationPage } from './pages-library.mjs';
+import { PromptStatsPage, MyPromptListsPage, ProfilePage, AdminOpsPage, AdminOpsTuningPage, AdminOpsAuditPage, ModerationPage } from './pages-library.mjs';
 import { BugReportMenuPage, BugReportDialogPage, BugReportsQueuePage } from './pages-support.mjs';
 
 export const SCREENS = [
@@ -26,8 +26,10 @@ export const SCREENS = [
   { name: 'MyPromptLists', page: MyPromptListsPage, w: 1020, h: 1080, x: 1010, y: 4180, title: 'My prompt lists', group: 'Library and profile' },
   { name: 'Profile', page: ProfilePage, w: 920, h: 1220, x: 2120, y: 4180, title: 'Profile', group: 'Library and profile' },
   // Row 5 — operator pages
-  { name: 'AdminOps', page: AdminOpsPage, w: 1100, h: 1180, x: 0, y: 5620, title: 'Server operations', group: 'Operator pages' },
-  { name: 'Moderation', page: ModerationPage, w: 1160, h: 1040, x: 1190, y: 5620, title: 'Moderation', group: 'Operator pages' },
+  { name: 'AdminOps', page: AdminOpsPage, w: 1100, h: 940, x: 0, y: 5620, title: 'Server operations — overview', group: 'Operator pages' },
+  { name: 'AdminOpsTuning', page: AdminOpsTuningPage, w: 1100, h: 1000, x: 1190, y: 5620, title: 'Server operations — tuning', group: 'Operator pages' },
+  { name: 'AdminOpsAudit', page: AdminOpsAuditPage, w: 1100, h: 620, x: 2380, y: 5620, title: 'Server operations — audit ledger', group: 'Operator pages' },
+  { name: 'Moderation', page: ModerationPage, w: 1160, h: 1040, x: 3570, y: 5620, title: 'Moderation', group: 'Operator pages' },
   // Row 6 — reporting a bug
   { name: 'BugReportMenu', page: BugReportMenuPage, w: 820, h: 600, x: 0, y: 7060, title: 'Report a bug — entry point', group: 'Reporting a bug' },
   { name: 'BugReportDialog', page: BugReportDialogPage, w: 760, h: 1330, x: 910, y: 7060, title: 'Report a bug — dialog', group: 'Reporting a bug' },

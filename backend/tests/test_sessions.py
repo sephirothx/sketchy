@@ -122,7 +122,9 @@ def test_device_label_is_coarse_and_drops_versions():
 async def test_socket_handshake_uses_the_same_revocation_record(database):
     factory, user = database
     issued = await create_session(factory, user_id=user.id, device_label="Browser")
-    sio = SimpleNamespace(save_session=AsyncMock(), enter_room=AsyncMock())
+    sio = SimpleNamespace(
+        save_session=AsyncMock(), enter_room=AsyncMock(), emit=AsyncMock()
+    )
     context = SimpleNamespace(
         sio=sio, session_factory=factory, room_capacity=RoomCapacityService()
     )
