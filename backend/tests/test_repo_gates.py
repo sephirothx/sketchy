@@ -18,6 +18,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COVERAGE_GATE = REPO_ROOT / "scripts" / "check-coverage.py"
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def load_gate(path: Path):
@@ -155,3 +156,36 @@ def test_the_floors_are_a_ratchet_not_a_wish():
         assert len(floors) == 2, f"{module} needs a statement and a branch floor"
         for floor in floors:
             assert 0 < floor <= 100, f"{module} has an impossible floor"
+
+
+# --- the workflow's own load-bearing flags -----------------------------------
+
+
+def test_the_credential_history_scan_asks_for_merge_diffs():
+    """`gitleaks git` runs `git log -p`, which skips merge commits by default.
+
+    A secret introduced only while resolving a conflict - in neither parent -
+    and removed in the next commit is then invisible to the history scan *and*
+    to the tree scan. Verified against a real evil merge: no leaks found
+    without `-m`, found with it. The flag is one character and its absence
+    looks exactly like success, which is why it is pinned here.
+    """
+    workflow = WORKFLOW.read_text()
+    assert "gitleaks git" in workflow
+    gitleaks_ranges = [line for line in workflow.splitlines() if "--log-opts=" in line]
+    assert gitleaks_ranges, "the credential history scan has lost its commit range"
+    for line in gitleaks_ranges:
+        assert '--log-opts="-m ' in line, (
+            f"merge diffs are not requested: {line.strip()}"
+        )
+
+
+def test_coverage_runs_with_branch_measurement():
+    """The floors read branch fields, which a plain --cov run does not produce."""
+    workflow = WORKFLOW.read_text()
+    coverage_runs = [
+        line for line in workflow.splitlines() if "--cov=app" in line
+    ]
+    assert coverage_runs, "the backend job no longer measures coverage"
+    for line in coverage_runs:
+        assert "--cov-branch" in line, f"branch measurement is off: {line.strip()}"

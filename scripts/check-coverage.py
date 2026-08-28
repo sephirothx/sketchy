@@ -30,7 +30,9 @@ Run it after a coverage run:
 
     cd backend && .venv/bin/pytest -q --cov=app --cov-branch \
         --cov-report=json:coverage.json
-    python3 ../scripts/check-coverage.py backend/coverage.json
+    python3 ../scripts/check-coverage.py coverage.json
+
+(The default path assumes the repository root, which is where CI runs it from.)
 """
 from __future__ import annotations
 

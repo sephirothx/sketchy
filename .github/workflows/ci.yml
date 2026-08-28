@@ -113,8 +113,16 @@ jobs:
             echo "Update HISTORY_BASELINE in scripts/check-tracked-artifacts.sh." >&2
             exit 1
           fi
+          # -m is load-bearing: `gitleaks git` runs `git log -p`, which emits
+          # no patch for a merge commit unless asked. A secret introduced only
+          # while resolving a conflict - present in neither parent - and
+          # removed in the next commit is invisible to both this scan and the
+          # tree scan without it. Verified against a real evil merge: no leaks
+          # found without the flag, found with it.
+          # scripts/check-tracked-artifacts.sh handles merges for the same
+          # reason, and has its own test for it.
           gitleaks git . --no-banner --redact --exit-code 1 \
-            --baseline-path .gitleaks-known.json --log-opts="${from}..HEAD"
+            --baseline-path .gitleaks-known.json --log-opts="-m ${from}..HEAD"
 
   backend:
     name: Backend lint & tests
