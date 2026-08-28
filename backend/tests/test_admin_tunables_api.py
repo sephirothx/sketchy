@@ -9,6 +9,7 @@ and audited in the same transaction as the change.
 """
 from __future__ import annotations
 
+import asyncio
 from uuid import UUID
 
 import pytest
@@ -23,8 +24,10 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import AppConfig, AuditEvent, Base, User
 from app.domain_values import AuditTargetType, UserRole
+from app.client_config import ClientConfig
 from app.handlers.budgets import CommandBudgetPolicy
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+from app.services import config_store
 from app.services.config_store import read_prefixed
 from app.services.tunables import build_runtime_settings
 
@@ -42,7 +45,11 @@ async def env(monkeypatch):
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     policy = CommandBudgetPolicy()
-    settings = build_runtime_settings(budgets=policy, environ={})
+    # With the client cadences, so the joint constraint between the flush
+    # interval and the drawing budget is present to be exercised.
+    settings = build_runtime_settings(
+        budgets=policy, client=ClientConfig(), environ={}
+    )
 
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
@@ -274,6 +281,92 @@ async def test_setting_a_value_back_to_the_default_stores_nothing(env):
     await admin.patch("/api/admin/tunables", json={"values": {"budget.drawing": 250}})
     await admin.patch("/api/admin/tunables", json={"values": {"budget.drawing": 100}})
     assert await stored_rows(factory) == {}
+
+
+async def test_resetting_drops_the_row_even_when_the_value_does_not_move(env):
+    """A reset is about the row, not the number.
+
+    If the stored value already equals what this process booted with, nothing
+    moves - and an implementation that decides what to write from the numeric
+    change alone does nothing at all, leaving the row in place. That row wins
+    again on the next restart, and keeps winning after the environment that
+    supplies the boot value is changed, which is the failure this guards: the
+    panel says "environment", and the database quietly says otherwise.
+    """
+    _, factory, _, settings = env
+    admin = await an_admin(env)
+
+    # A row whose value coincides with the boot value, as a redeploy that
+    # moved the environment onto the stored number would leave behind.
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, "tunable.budget.drawing", "100")
+    settings.apply_stored(await read_prefixed(factory, "tunable."))
+    assert settings.value("budget.drawing") == settings.boot_value("budget.drawing")
+
+    # The panel must offer the reset, or there is no way to reach the row.
+    body = (await admin.get("/api/admin/tunables")).json()
+    drawing = next(t for t in body["tunables"] if t["name"] == "budget.drawing")
+    assert drawing["source"] == "stored"
+
+    response = await admin.patch(
+        "/api/admin/tunables", json={"reset": ["budget.drawing"]}
+    )
+    assert response.status_code == 200
+    assert await stored_rows(factory) == {}
+
+
+async def test_a_row_matching_the_boot_value_is_still_reported_as_stored(env):
+    """Row existence and numeric equality are different facts.
+
+    Inferring "not stored" from "equals the boot value" hides the row rather
+    than removing it.
+    """
+    _, factory, _, settings = env
+    admin = await an_admin(env)
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, "tunable.budget.action", "30")
+    settings.apply_stored(await read_prefixed(factory, "tunable."))
+
+    body = (await admin.get("/api/admin/tunables")).json()
+    action = next(t for t in body["tunables"] if t["name"] == "budget.action")
+    assert action["value"] == action["default"]
+    assert action["source"] == "stored"
+
+
+async def test_two_changes_at_once_cannot_land_on_a_pair_neither_validated(env):
+    """Validation reads the live values, and there are awaits before the write.
+
+    Each of these passes against the state it starts from; applied without
+    serialising, together they leave a flush interval the drawing budget
+    refuses - which is exactly what the joint constraint exists to prevent.
+    """
+    _, _, policy, settings = env
+    admin = await an_admin(env)
+    await admin.patch(
+        "/api/admin/tunables",
+        json={"values": {"client.flush_interval_ms": 80, "budget.drawing": 400}},
+    )
+
+    first, second = await asyncio.gather(
+        admin.patch(
+            "/api/admin/tunables", json={"values": {"client.flush_interval_ms": 20}}
+        ),
+        admin.patch("/api/admin/tunables", json={"values": {"budget.drawing": 50}}),
+        return_exceptions=True,
+    )
+    assert not isinstance(first, BaseException), first
+    assert not isinstance(second, BaseException), second
+
+    # Whichever won, the pair in force must be one the validator would accept.
+    interval = settings.value("client.flush_interval_ms")
+    limit = policy.limit_of("drawing")
+    produced = 2 * 1000 / interval
+    assert limit >= produced * 2, (
+        f"{interval}ms produces {produced} frames per 2s, which needs a drawing "
+        f"budget of {produced * 2}; it is {limit}"
+    )
 
 
 # ---------------------------------------------------------------- the record

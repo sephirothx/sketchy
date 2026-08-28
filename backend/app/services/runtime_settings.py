@@ -28,6 +28,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 import logging
+import math
 import os
 
 logger = logging.getLogger("sketchy.runtime_settings")
@@ -80,6 +81,13 @@ class Tunable:
             number = float(value)
         except ValueError as error:
             raise TunableError(f"{self.name} must be a number") from error
+        # Before any arithmetic. `float()` accepts "nan" and "inf" happily, and
+        # every use after this point - the bounds comparison, the integer
+        # conversion, the frames-per-window division in a joint constraint -
+        # either raises or quietly answers nonsense on one of them. A refusal
+        # here is a bounded 400 rather than a traceback.
+        if not math.isfinite(number):
+            raise TunableError(f"{self.name} must be a finite number")
         if self.integral:
             if number != int(number):
                 raise TunableError(f"{self.name} must be a whole number")
@@ -197,6 +205,11 @@ class RuntimeSettings:
         self.tunable(name)
         return self._boot[name]
 
+    def is_stored(self, name: str) -> bool:
+        """Whether a persisted row is overriding this setting."""
+        self.tunable(name)
+        return name in self._stored
+
     def source(self, name: str) -> str:
         """Where the value in force came from, for a panel to show."""
         self.tunable(name)
@@ -264,14 +277,19 @@ class RuntimeSettings:
         *,
         stored: bool = True,
     ) -> None:
-        """Write values that have already been validated together."""
+        """Write values that have already been validated together.
+
+        `stored` records whether these names now have a persisted row, and it
+        is the caller's answer rather than something inferred here. Inferring
+        it from "the value differs from the boot value" was wrong in a way
+        that hid itself: a row whose value later coincided with a changed boot
+        value stopped being reported as stored, so the panel offered no way to
+        clear it - and the next time the environment moved, the forgotten row
+        won. Row existence and numeric equality are different facts.
+        """
         for name, number in values.items():
             self._tunables[name].write(number)
-            # A value set back to exactly what the process booted with is not
-            # an override, whether it arrived as a reset or as an operator
-            # typing the boot value back in. Treating it as one would quietly
-            # pin the setting against a later change to the environment.
-            if stored and number != self._boot[name]:
+            if stored:
                 self._stored.add(name)
             else:
                 self._stored.discard(name)
@@ -283,9 +301,9 @@ class RuntimeSettings:
         return wanted[name]
 
     def reset(self, name: str) -> float:
-        """Put a value back to what this process booted with."""
+        """Put a value back to what this process booted with, and unstore it."""
         wanted = self.validate(resets=[name])
-        self.apply(wanted)
+        self.apply(wanted, stored=False)
         return wanted[name]
 
     def apply_stored(self, rows: Mapping[str, str]) -> None:

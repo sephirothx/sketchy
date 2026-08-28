@@ -982,7 +982,7 @@ which is the one thing the 404 exists to refuse.
 | `GET` | `/api/admin/maintenance` | Whether this process is paused, draining, and its readiness |
 | `POST` | `/api/admin/maintenance` | `{paused, reason?}`. **Writes `maintenance.paused` / `maintenance.resumed`** |
 | `POST` | `/api/admin/shutdown` | `{reason, drainSeconds?}`, 0–300. **Writes `server.shutdown_requested`** |
-| `GET` | `/api/admin/rooms` | Live rooms: code, state, phase, seat and spectator counts. No prompts, chat or canvas |
+| `GET` | `/api/admin/rooms` | Live rooms: code, state, phase, counts, and seats by id and nickname. No prompts, chat or canvas |
 | `DELETE` | `/api/admin/rooms/{id}` | Close a room. **Writes `room.closed_by_admin`** |
 | `DELETE` | `/api/admin/rooms/{id}/players/{playerId}` | Remove one seat. **Writes `room.player_kicked`** |
 | `POST` | `/api/admin/rooms/{id}/end-turn` | End the drawing phase as its timer would. **Writes `room.turn_ended_by_admin`** |

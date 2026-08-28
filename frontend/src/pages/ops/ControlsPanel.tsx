@@ -6,6 +6,7 @@ import {
   closeRoom,
   endTurn,
   initiateShutdown,
+  kickPlayer,
   readLiveRooms,
   readMaintenance,
   setMaintenance,
@@ -33,6 +34,9 @@ export function ControlsPanel() {
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
+  // Which room's seats are open. Collapsed by default: the table is for
+  // finding a room, and a list of every player in every room would bury it.
+  const [openSeats, setOpenSeats] = useState<string | null>(null);
 
   const fail = useCallback((failure: unknown, fallback: string) => {
     setError(failure instanceof ApiError ? failure.message : fallback);
@@ -161,8 +165,19 @@ export function ControlsPanel() {
                       {room.phase && ` · ${room.phase}`}
                     </td>
                     <td className="ops-number">
-                      {room.players}
-                      {room.spectators > 0 && ` +${room.spectators}`}
+                      <button
+                        type="button"
+                        className="auth-link"
+                        aria-expanded={openSeats === room.id}
+                        onClick={() =>
+                          setOpenSeats((current) =>
+                            current === room.id ? null : room.id,
+                          )
+                        }
+                      >
+                        {room.players}
+                        {room.spectators > 0 && ` +${room.spectators}`}
+                      </button>
                     </td>
                     <td>
                       <button
@@ -208,6 +223,63 @@ export function ControlsPanel() {
                     </td>
                   </tr>
                 ))}
+                {rooms
+                  .filter((room) => room.id === openSeats)
+                  .map((room) => (
+                    <tr key={`${room.id}-seats`} className="ops-seats-row">
+                      <td colSpan={5}>
+                        {room.seats.length === 0 && (
+                          <span className="ops-empty">Nobody is seated.</span>
+                        )}
+                        <ul className="ops-seats">
+                          {room.seats.map((seat) => (
+                            <li key={seat.id}>
+                              <span>{seat.nickname}</span>
+                              {seat.isSpectator && (
+                                <Chip kind="neutral">Watching</Chip>
+                              )}
+                              {!seat.connected && (
+                                <Chip kind="neutral">Disconnected</Chip>
+                              )}
+                              {confirming === seat.id ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-danger-ghost btn-compact"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      run(
+                                        kickPlayer(room.id, seat.id),
+                                        `${seat.nickname} was removed.`,
+                                      )
+                                    }
+                                  >
+                                    Confirm kick
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-compact"
+                                    onClick={() => setConfirming(null)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-compact"
+                                  disabled={busy}
+                                  onClick={() => setConfirming(seat.id)}
+                                >
+                                  Kick
+                                </button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>

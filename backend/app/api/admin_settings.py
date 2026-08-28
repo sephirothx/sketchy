@@ -14,11 +14,12 @@ expensive enough that nobody does it twice.
 """
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Collection
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
@@ -49,7 +50,10 @@ class TunableChanges(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    values: dict[str, float | str] = Field(default_factory=dict)
+    # Strict on the numbers so a JSON `true` stays a boolean rather than
+    # arriving as 1.0: pydantic coerces it otherwise, and the registry's own
+    # "that is not a number" check would never see one.
+    values: dict[str, StrictInt | StrictFloat | str] = Field(default_factory=dict)
     reset: list[str] = Field(default_factory=list)
 
 
@@ -89,6 +93,13 @@ def create_admin_settings_router(
     broadcast is a router that needs a live server to test.
     """
     router = APIRouter()
+    # One change at a time. Validation reads the values in force, and there are
+    # several awaits between it and the write, so two requests could each pass
+    # against a state neither of them left behind: from a 80ms flush and a
+    # budget of 400, one request lowering only the interval and another
+    # lowering only the budget both validate, and together land on a pair the
+    # validator exists to refuse. One worker is not one request at a time.
+    changing = asyncio.Lock()
     # Taken as a dependency rather than awaited in the body, and that is not a
     # style choice: FastAPI validates the request body *before* the handler
     # runs, so a gate called inside one answers 422 to an ordinary player who
@@ -118,54 +129,77 @@ def create_admin_settings_router(
                 status_code=400,
                 detail=f"Cannot set and reset the same setting: {', '.join(overlap)}",
             )
-        try:
-            wanted = settings.validate(changes.values, resets=changes.reset)
-        except TunableError as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
 
-        # Only what is actually moving. A panel that submits its whole form
-        # would otherwise write a row and an audit event for every setting on
-        # the page, and bury the one change an operator made.
-        moving = {
-            name: number
-            for name, number in wanted.items()
-            if number != settings.value(name)
-        }
-        if not moving:
-            return {"tunables": [_wire(item) for item in settings.describe()]}
+        async with changing:
+            try:
+                wanted = settings.validate(changes.values, resets=changes.reset)
+            except TunableError as error:
+                raise HTTPException(status_code=400, detail=str(error)) from error
 
-        request_id, ip_hash = await audit_coordinates(request, session_factory)
-        previous = {name: settings.value(name) for name in moving}
-        now = datetime.now(timezone.utc)
-        async with session_factory() as session:
-            async with session.begin():
-                for name, number in moving.items():
-                    key = f"{CONFIG_PREFIX}{name}"
-                    if number == settings.boot_value(name):
+            # Two different questions, and conflating them was a bug. What is
+            # *audited* is the values that move, so a panel posting its whole
+            # form does not bury the one change an operator made. What is
+            # *persisted* is which settings should have a row - which changes
+            # even when the number does not, because resetting a setting whose
+            # live value already equals the boot value must still take the row
+            # away, or it comes back the next time the boot value moves.
+            moving = {
+                name: number
+                for name, number in wanted.items()
+                if number != settings.value(name)
+            }
+            persisted = {
+                name: number
+                for name, number in wanted.items()
+                if number != settings.boot_value(name)
+            }
+            dropped = {
+                name: number
+                for name, number in wanted.items()
+                if name not in persisted
+            }
+            rows_change = any(
+                settings.is_stored(name) is not (name in persisted)
+                for name in wanted
+            )
+            if not moving and not rows_change:
+                return {"tunables": [_wire(item) for item in settings.describe()]}
+
+            request_id, ip_hash = await audit_coordinates(request, session_factory)
+            previous = {name: settings.value(name) for name in moving}
+            now = datetime.now(timezone.utc)
+            async with session_factory() as session:
+                async with session.begin():
+                    for name in dropped:
                         # Back to what this process booted with, so there is
                         # nothing left to override - and a row saying so would
-                        # pin the setting against a later change to the
-                        # environment that set it.
-                        await config_store.drop(session, key)
-                    else:
-                        await config_store.put(session, key, _stored_form(number))
-                    session.add(
-                        AuditEvent(
-                            id=generate_uuid(),
-                            event_type=CONFIG_CHANGED,
-                            actor_user_id=admin.id,
-                            target_type=AuditTargetType.APP_CONFIG.value,
-                            target_id=name,
-                            request_id=request_id,
-                            ip_hash=ip_hash,
-                            details={"from": previous[name], "to": number},
-                            created_at=now,
+                        # pin the setting against a later change to whatever
+                        # supplies it.
+                        await config_store.drop(session, f"{CONFIG_PREFIX}{name}")
+                    for name, number in persisted.items():
+                        await config_store.put(
+                            session, f"{CONFIG_PREFIX}{name}", _stored_form(number)
                         )
-                    )
+                    for name, number in moving.items():
+                        session.add(
+                            AuditEvent(
+                                id=generate_uuid(),
+                                event_type=CONFIG_CHANGED,
+                                actor_user_id=admin.id,
+                                target_type=AuditTargetType.APP_CONFIG.value,
+                                target_id=name,
+                                request_id=request_id,
+                                ip_hash=ip_hash,
+                                details={"from": previous[name], "to": number},
+                                created_at=now,
+                            )
+                        )
 
-        # After the commit, so a process that failed to persist a change is not
-        # also running it. The window is one request wide and single-worker.
-        settings.apply(moving)
+            # After the commit, so a process that failed to persist a change is
+            # not also running it. The window is one request wide, and the lock
+            # above means no other change is inside it.
+            settings.apply(persisted, stored=True)
+            settings.apply(dropped, stored=False)
         if on_change is not None:
             await on_change(moving.keys())
         return {"tunables": [_wire(item) for item in settings.describe()]}

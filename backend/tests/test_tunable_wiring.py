@@ -17,7 +17,7 @@ from app.flow_timing import FlowTiming
 from app.handlers.budgets import CommandBudgetPolicy
 from app.game import Game
 from app.presenters import turn_ended_payload
-from app.rooms import RoomManager, room_defaults as live_room_defaults
+from app.rooms import RoomManager
 from app.services.room_quotas import (
     RoomCapacityService,
     RoomQuotaExceeded,
@@ -33,19 +33,6 @@ def a_registry(**parts):
         budgets=parts.pop("budgets", CommandBudgetPolicy()), environ={}, **parts
     )
 
-
-@pytest.fixture
-def tuned_room_defaults(monkeypatch):
-    """A registry wired to the process's own new-room defaults, then restored.
-
-    Deliberately the live object rather than a fresh one. `handlers/payloads`
-    and `rooms` both hold a reference to it, so a test that rebound the *name*
-    in one module would prove nothing about the other - which is the same
-    import-binding trap this whole registry exists to avoid.
-    """
-    for name, value in vars(live_room_defaults).items():
-        monkeypatch.setattr(live_room_defaults, name, value)
-    return a_registry(room_defaults=live_room_defaults)
 
 
 # ------------------------------------------------------------------- budgets
@@ -168,35 +155,6 @@ def test_the_turn_results_pause_is_still_configurable_by_environment():
     )
     assert flow.turn_results_seconds == 0.5
     assert settings.source("turn.results_seconds") == "environment"
-
-
-# --------------------------------------------------------------- room defaults
-
-
-def test_a_new_room_is_made_with_the_tuned_defaults(tuned_room_defaults):
-    """These were argument defaults, bound when the function was defined."""
-    tuned_room_defaults.set("room_defaults.drawing_seconds", 60)
-    tuned_room_defaults.set("room_defaults.max_players", 12)
-    tuned_room_defaults.set("room_defaults.rounds", 5)
-
-    room = RoomManager().create_room()
-    assert (room.drawing_seconds, room.max_players, room.rounds) == (60, 12, 5)
-
-
-def test_the_create_form_offers_the_tuned_defaults(tuned_room_defaults):
-    """A pydantic `default=` is evaluated when the model class is built."""
-    from app.handlers.payloads import RoomSettingsFields
-
-    tuned_room_defaults.set("room_defaults.rounds", 7)
-    assert RoomSettingsFields().rounds == 7
-
-
-def test_the_range_a_host_chooses_from_is_not_tunable():
-    """The frontend duplicates those bounds, which makes them a contract."""
-    settings = a_registry(room_defaults=live_room_defaults)
-    assert "room_defaults.max_players" in settings
-    for name in settings.names():
-        assert "options" not in name and "_min" not in name and "_max" not in name
 
 
 # -------------------------------------------------------------------- shutdown

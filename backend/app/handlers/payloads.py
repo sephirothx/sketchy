@@ -45,11 +45,11 @@ from app.live_drawing import LiveDrawingPacket, decode_live_drawing
 from app.auth.names import MAX_NAME_LENGTH, NAME_RULE_MESSAGE, NameError_, validate_name
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import (
+    DEFAULT_ROOM_DRAWING_SECONDS,
     DEFAULT_ROOM_HINT_MODE,
     DRAWING_TIME_OPTIONS,
     MAX_PLAYERS_MAX,
     MAX_PLAYERS_MIN,
-    room_defaults,
 )
 from app.prompts import MAX_RAW_INPUT_LENGTH, MAX_PROMPT_LENGTH
 
@@ -129,19 +129,9 @@ def _check_scoring_mode(value: str) -> str:
 class RoomSettingsFields(RequestModel):
     name: str = Field(default="", max_length=MAX_ROOM_NAME_LENGTH)
     is_public: bool = Field(default=True, alias="isPublic")
-    # `default_factory` rather than `default`: a plain default is evaluated
-    # when the model class is built, so a tuned new-room default would never
-    # reach a create form that left the field out (#446).
-    max_players: int = Field(
-        default_factory=lambda: room_defaults.max_players,
-        alias="maxPlayers",
-        ge=MAX_PLAYERS_MIN,
-        le=MAX_PLAYERS_MAX,
-    )
-    rounds: int = Field(default_factory=lambda: room_defaults.rounds, ge=1, le=10)
-    drawing_seconds: int = Field(
-        default_factory=lambda: room_defaults.drawing_seconds, alias="drawingSeconds"
-    )
+    max_players: int = Field(default=8, alias="maxPlayers", ge=MAX_PLAYERS_MIN, le=MAX_PLAYERS_MAX)
+    rounds: int = Field(default=3, ge=1, le=10)
+    drawing_seconds: int = Field(default=DEFAULT_ROOM_DRAWING_SECONDS, alias="drawingSeconds")
     custom_prompts: str = Field(default="", alias="customPrompts", max_length=MAX_RAW_INPUT_LENGTH)
     custom_prompts_only: bool = Field(default=False, alias="customPromptsOnly")
     hint_mode: str = Field(default=DEFAULT_ROOM_HINT_MODE, alias="hintMode")

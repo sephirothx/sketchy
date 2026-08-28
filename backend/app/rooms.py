@@ -31,30 +31,6 @@ MAX_PLAYERS_MIN = 2
 MAX_PLAYERS_MAX = 16
 
 
-@dataclass
-class RoomDefaults:
-    """What a new room is set to before its host changes anything.
-
-    Held on an object rather than left as the argument defaults they used to
-    be, because a default argument is evaluated once when the function is
-    defined: `drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS` binds 90
-    into the signature at import, and assigning the module constant afterwards
-    moves nothing. #446 tunes these, so they have to be read when a room is
-    made rather than when the module loads.
-
-    The *range* a host may choose from stays a constant. The frontend
-    duplicates those bounds to build the control, which makes them a wire
-    contract rather than a setting.
-    """
-
-    drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS
-    max_players: int = 8
-    rounds: int = 3
-
-
-# One process, one set of new-room defaults.
-room_defaults = RoomDefaults()
-
 # How many recent guess ids a seat remembers per connection. The client retries
 # a guess once, about two seconds after sending it, so only the handful of
 # guesses typed inside that window can ever be retried - and the bound is what
@@ -372,9 +348,7 @@ class Room:
     # only by `RoomManager.set_custom_prompts`, which is what keeps it true.
     custom_prompt_characters: int = field(default=0, repr=False)
     custom_prompts_only: bool = False
-    drawing_seconds: int = field(
-        default_factory=lambda: room_defaults.drawing_seconds
-    )
+    drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS
     hint_mode: str = DEFAULT_ROOM_HINT_MODE
     scoring_mode: str = "default"
     spectators_see_prompt: bool = False
@@ -649,11 +623,11 @@ class RoomManager:
         self,
         name: str | None = None,
         is_public: bool = True,
-        max_players: int | None = None,
-        rounds: int | None = None,
+        max_players: int = 8,
+        rounds: int = 3,
         custom_prompts: list[str] | None = None,
         custom_prompts_only: bool = False,
-        drawing_seconds: int | None = None,
+        drawing_seconds: int = DEFAULT_ROOM_DRAWING_SECONDS,
         hint_mode: str = DEFAULT_ROOM_HINT_MODE,
         scoring_mode: str = "default",
         spectators_see_prompt: bool = False,
@@ -672,15 +646,6 @@ class RoomManager:
         created_by_user_id: str | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
-        # Resolved here rather than in the signature: an argument default is
-        # bound when the function is defined, so a tuned value would never
-        # reach a room made after it changed.
-        if max_players is None:
-            max_players = room_defaults.max_players
-        if rounds is None:
-            rounds = room_defaults.rounds
-        if drawing_seconds is None:
-            drawing_seconds = room_defaults.drawing_seconds
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
         hint_mode = resolve_hint_mode(hint_mode, scoring_mode, hide_masked_prompt)
         final_code = code.strip().upper() if code else self._generate_unique_code()

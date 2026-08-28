@@ -1097,3 +1097,26 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+
+/* Seats inside a live room, revealed from the player count. Collapsed by
+   default because the table is for finding a room, and every player in every
+   room would bury the room you came to find. */
+.ops-seats-row td { background: var(--well); }
+
+.ops-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.ops-seats li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}

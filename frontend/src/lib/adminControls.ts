@@ -30,6 +30,13 @@ export interface Tunable {
   source: "default" | "environment" | "stored";
 }
 
+export interface LiveSeat {
+  id: string;
+  nickname: string;
+  isSpectator: boolean;
+  connected: boolean;
+}
+
 export interface LiveRoom {
   id: string;
   code: string;
@@ -41,6 +48,7 @@ export interface LiveRoom {
   players: number;
   spectators: number;
   connected: number;
+  seats: LiveSeat[];
 }
 
 export interface MaintenanceState {
@@ -141,7 +149,6 @@ const GROUP_LABELS: Record<string, string> = {
   rooms: "Room and connection ceilings",
   turn: "Turn timing",
   restart: "Restart votes",
-  room_defaults: "New-room defaults",
   shutdown: "Planned shutdown",
   client: "Client cadences",
 };

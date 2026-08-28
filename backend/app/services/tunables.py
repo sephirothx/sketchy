@@ -30,7 +30,6 @@ from app.client_config import ClientConfig
 from app.deployment import DEFAULT_SHUTDOWN_DRAIN_SECONDS, MAX_SHUTDOWN_DRAIN_SECONDS
 from app.flow_timing import FlowTiming
 from app.handlers.budgets import CommandBudgetPolicy
-from app.rooms import RoomDefaults
 from app.services.room_quotas import (
     DEFAULT_CREATIONS_PER_HOUR,
     DEFAULT_GLOBAL_ROOMS,
@@ -290,38 +289,6 @@ def flow_tunables(flow: FlowTiming) -> list[Tunable]:
     ]
 
 
-def room_default_tunables(defaults: RoomDefaults) -> list[Tunable]:
-    """What a new room is set to before its host changes anything.
-
-    The *range* a host may choose from is not here. The frontend duplicates
-    those bounds so it can build the control, which makes them a wire contract
-    rather than a setting: moving one side alone makes the two disagree.
-    """
-    return [
-        _number(
-            defaults, "drawing_seconds",
-            name="room_defaults.drawing_seconds", default=90,
-            minimum=15, maximum=300, unit="seconds",
-            description=(
-                "Drawing time a new room starts at. Must be one of the values "
-                "the host's control offers, or their first save moves it."
-            ),
-        ),
-        _number(
-            defaults, "max_players",
-            name="room_defaults.max_players", default=8,
-            minimum=2, maximum=16, unit="players",
-            description="Player cap a new room starts at.",
-        ),
-        _number(
-            defaults, "rounds",
-            name="room_defaults.rounds", default=3,
-            minimum=1, maximum=10, unit="rounds",
-            description="Rounds a new room starts at.",
-        ),
-    ]
-
-
 def shutdown_tunables(shutdown: ShutdownCoordinator) -> list[Tunable]:
     """The grace a planned deployment gives games already in progress."""
     def read() -> float:
@@ -419,7 +386,6 @@ def build_runtime_settings(
     budgets: CommandBudgetPolicy,
     quotas: RoomQuotaService | None = None,
     capacity: RoomCapacityService | None = None,
-    room_defaults: RoomDefaults | None = None,
     flow: FlowTiming | None = None,
     client: ClientConfig | None = None,
     shutdown: ShutdownCoordinator | None = None,
@@ -444,8 +410,6 @@ def build_runtime_settings(
         tunables.extend(ceiling_tunables(quotas, capacity))
     if flow is not None:
         tunables.extend(flow_tunables(flow))
-    if room_defaults is not None:
-        tunables.extend(room_default_tunables(room_defaults))
     if shutdown is not None:
         tunables.extend(shutdown_tunables(shutdown))
     return RuntimeSettings(tunables, constraints=constraints, environ=environ)

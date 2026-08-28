@@ -52,7 +52,6 @@ from app.repositories.sqlalchemy import (
 )
 from app.client_config import client_config
 from app.flow_timing import timing as flow_timing
-from app.rooms import room_defaults
 from app.state import room_manager
 from app.services.message_retention import purge_expired_room_messages
 from app.services.room_presets import RoomPresetService
@@ -129,7 +128,6 @@ runtime_settings = build_runtime_settings(
     budgets=handler_context.command_budgets,
     quotas=handler_context.room_quotas,
     capacity=handler_context.room_capacity,
-    room_defaults=room_defaults,
     flow=flow_timing,
     client=client_config,
     shutdown=shutdown_coordinator,

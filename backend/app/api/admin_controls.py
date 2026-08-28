@@ -197,10 +197,13 @@ def create_admin_controls_router(
     async def list_live_rooms(request: Request):
         """Every room this process is holding, and what it is doing.
 
-        No prompts, no chat, no canvas: an operator needs to find a room that
-        is stuck or being abused, not to read what is being said in it. The
-        moderation surfaces are where a report leads to content, with the
-        evidence trail that goes with it.
+        Seats are listed by id and nickname, which is the least that makes the
+        kick control usable - there is no way to remove one player from a room
+        without naming which. Nothing else about them: no prompts, no chat, no
+        canvas. An operator needs to find a room that is stuck or being abused,
+        not to read what is being said in it, and the moderation surfaces are
+        where a report leads to content with the evidence trail that goes with
+        it.
         """
         await require_admin(request)
         return {
@@ -220,6 +223,15 @@ def create_admin_controls_router(
                         [p for p in room.player_list() if p.is_spectator]
                     ),
                     "connected": len(room.connected_players()),
+                    "seats": [
+                        {
+                            "id": player.id,
+                            "nickname": player.nickname,
+                            "isSpectator": player.is_spectator,
+                            "connected": player.sid is not None,
+                        }
+                        for player in room.player_list()
+                    ],
                 }
                 for room in room_manager.rooms.values()
             ]

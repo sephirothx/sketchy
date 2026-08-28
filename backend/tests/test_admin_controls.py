@@ -268,6 +268,31 @@ async def test_the_room_listing_says_what_each_room_is_doing_and_no_more(env):
     assert not {"prompt", "chat", "canvas", "messages"} & set(listed)
 
 
+async def test_the_listing_names_the_seats_so_one_can_be_removed(env):
+    """A kick needs to say which player, so the listing has to name them.
+
+    The panel had the endpoint and the client helper and no way to reach
+    either, because the rows carried counts and nothing to act on.
+    """
+    _, _, rooms, _, _, _ = env
+    admin = await an_admin(env)
+    room = rooms.create_room(name="Studio")
+    marta = rooms.add_player(room, "Marta")
+    marta.sid = "marta-sid"
+
+    (listed,) = (await admin.get("/api/admin/rooms")).json()["rooms"]
+    assert listed["seats"] == [
+        {
+            "id": marta.id,
+            "nickname": "Marta",
+            "isSpectator": False,
+            "connected": True,
+        }
+    ]
+    # Enough to name a seat, and no more.
+    assert set(listed["seats"][0]) == {"id", "nickname", "isSpectator", "connected"}
+
+
 async def test_closing_a_room_tells_everyone_before_it_goes(env):
     _, _, rooms, _, context, _ = env
     admin = await an_admin(env)
