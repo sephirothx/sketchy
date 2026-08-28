@@ -389,9 +389,16 @@ two different rooms is ordinary, and only the connection that is moving is moved
 The gate cuts the other way when an account loses access. Ending it closes every
 socket it holds, and closing one waits at that socket's gate — so an entry already
 holding the gate runs to completion first, and would complete by taking a seat the
-sweep has already walked past. `HandlerContext.ending` marks those sockets before the
-first is closed, and both entry paths read the mark at their last instant before
-seating and refuse. The retention write that used to follow seating now runs after the
+sweep has already walked past. `HandlerContext.ending` marks those sockets, and the
+mark is taken **before the sweep's first await** and held across all of it: reading the
+suspension, walking the rooms, emitting the notice and closing each socket all yield,
+and an entry that reads the mark in one of those gaps and finds nothing is an entry
+that seats an account mid-ban. Both entry paths read it twice — at the last instant
+before seating, where they refuse, and again after joining the socket to its seat,
+where they give the seat back. The second read is not redundant: joining awaits, so the
+mark can arrive when the seat already exists, and refusing without removing it would
+leave the account seated until the queued disconnect ran it down through the reconnect
+grace. The retention write that used to follow seating now runs after the
 gate is released: it is not part of making the seat, and holding the gate for it kept
 every disconnect — a dropped connection, or that sweep — waiting behind a write with
 nothing to do with the seat.

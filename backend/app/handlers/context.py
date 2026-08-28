@@ -176,20 +176,25 @@ class HandlerContext:
         return sid in self._closing_sockets
 
     @contextmanager
-    def ending(self, sids: Iterable[str]) -> Iterator[None]:
+    def ending(self, sids: Iterable[str]) -> Iterator[list[str]]:
         """Mark an account's sockets while its access is being taken away.
 
-        The sweep that closes them has to wait at each socket's seating gate,
-        and an entry already holding one runs to completion first - so without
-        this the ban is applied to a seat created after the ban. The entry
-        checks this at its last instant before seating and refuses instead.
+        Held across the whole sweep, and taken before its first await: every
+        step of ending an account yields, closing a socket waits at that
+        socket's seating gate, and an entry already holding one runs to
+        completion first. Without the mark, the ban is applied to a seat
+        created after the ban. With it, the entry refuses - and if the mark
+        lands while it is already seating, it takes the seat back.
+
+        Yields the sids it marked, so the sweep closes the same sockets it
+        marked rather than a list re-read after several awaits.
         """
 
         marked = list(sids)
         for sid in marked:
             self._ending_sockets[sid] = self._ending_sockets.get(sid, 0) + 1
         try:
-            yield
+            yield marked
         finally:
             for sid in marked:
                 remaining = self._ending_sockets.get(sid, 1) - 1

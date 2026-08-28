@@ -178,15 +178,25 @@ async def test_a_broken_cleanup_still_answers_the_refusal(broken):
     assert room_manager.rooms == {}
 
 
-def held_at_the_database(monkeypatch):
-    """Stop an entry mid-flight, at a call every entry path makes.
+def held_before_seating(monkeypatch):
+    """Stop an entry at a call every path makes before it seats anybody.
 
     Deterministic on purpose: the window this is about is "the gate is held",
     not "0.05 seconds have passed".
     """
     from app.handlers import rooms
 
-    real = rooms.resolve_identity
+    return _gate(monkeypatch, rooms, "resolve_identity", rooms.resolve_identity)
+
+
+def held_while_seating(ctx, monkeypatch):
+    """Stop an entry after the seat exists, inside the last await it makes.
+
+    The harder window, and the one a check before seating cannot cover: the
+    mark arrives when the seat has already been added and the entry is part
+    way through joining the socket to it.
+    """
+    real = ctx.game_flow._join_socket_room
     reached, release = asyncio.Event(), asyncio.Event()
 
     async def gated(*args, **kwargs):
@@ -194,13 +204,26 @@ def held_at_the_database(monkeypatch):
         await release.wait()
         return await real(*args, **kwargs)
 
-    monkeypatch.setattr(rooms, "resolve_identity", gated)
+    ctx.game_flow._join_socket_room = gated
+    return reached, release
+
+
+def _gate(monkeypatch, module, name, real):
+    reached, release = asyncio.Event(), asyncio.Event()
+
+    async def gated(*args, **kwargs):
+        reached.set()
+        await release.wait()
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(module, name, gated)
     return reached, release
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("command", ["create_room", "join_room"])
-async def test_an_account_ending_mid_entry_is_not_seated(monkeypatch, command):
+@pytest.mark.parametrize("when", ["before seating", "while seating"])
+async def test_an_account_ending_mid_entry_is_not_seated(monkeypatch, command, when):
     """The sweep that closes an account's sockets waits at each seating gate,
     so an entry already holding one finishes first. R-BAN-02 says the account
     stops playing immediately; an entry that seats itself after the sweep has
@@ -219,7 +242,11 @@ async def test_an_account_ending_mid_entry_is_not_seated(monkeypatch, command):
         payload = {"code": "CODE01", "nickname": "Latecomer"}
     else:
         payload = {"nickname": "Host"}
-    reached, release = held_at_the_database(monkeypatch)
+    reached, release = (
+        held_before_seating(monkeypatch)
+        if when == "before seating"
+        else held_while_seating(ctx, monkeypatch)
+    )
 
     entry = asyncio.create_task(sio.handlers["/"][command]("host-sid", payload))
     await asyncio.wait_for(reached.wait(), timeout=5)

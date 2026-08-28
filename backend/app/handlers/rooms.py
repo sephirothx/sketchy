@@ -158,6 +158,19 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     except Exception:
         logger.exception("Failed to record activity for user %s", player.user_id)
 
+async def _unseat_an_ended_account(ctx: HandlerContext, room, player) -> dict:
+    """Take back a seat the account lost the right to while taking it.
+
+    The check before seating is not enough on its own: `_join_socket_room`
+    awaits, and the sweep marking this socket can land in one of those gaps.
+    Refusing without removing the seat would leave the account seated until
+    the disconnect queued at this gate ran it down through the reconnect
+    grace, which is the window R-BAN-02 exists to close.
+    """
+    await ctx.evict_player(room, player.id)
+    return ENDED_ACCOUNT_ACKNOWLEDGEMENT
+
+
 async def _after_seating(ctx: HandlerContext, seated: list) -> None:
     """The database work a new seat causes, once the gate has been released.
 
@@ -332,6 +345,8 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         colorblind_safe_colors=identity.colorblind_safe_colors,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
+    if ctx.is_ending(sid):
+        return await _unseat_an_ended_account(ctx, room, player)
     seated.append(player)
     return session_payload(room, player)
 
@@ -531,6 +546,8 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
             already_joined,
             sync_canvas=not payload.soft,
         )
+        if ctx.is_ending(sid):
+            return await _unseat_an_ended_account(ctx, room, already_joined)
         seated.append(already_joined)
         return session_payload(room, already_joined)
 
@@ -568,6 +585,8 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
         if ctx.is_ending(sid):
             return ENDED_ACCOUNT_ACKNOWLEDGEMENT
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        if ctx.is_ending(sid):
+            return await _unseat_an_ended_account(ctx, room, player)
         seated.append(player)
         return session_payload(room, player)
 
@@ -633,6 +652,8 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
         room.game.add_player_to_rotation(player.id)
 
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
+    if ctx.is_ending(sid):
+        return await _unseat_an_ended_account(ctx, room, player)
     seated.append(player)
     return session_payload(room, player)
 
