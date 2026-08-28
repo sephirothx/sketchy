@@ -160,7 +160,10 @@ report() {
 # substitution strips those - the magic cannot survive the round trip.
 #
 # 128 bytes is enough for both sniffs: 16 for the SQLite header, and one PEM
-# armour line, which is at most `-----BEGIN PGP PRIVATE KEY BLOCK-----`.
+# armour line, which is at most the 37 characters of a PGP private-key
+# header. Described rather than quoted: a secret scanner reads this file
+# too, and a contiguous armour string in a comment is a finding it cannot
+# tell from the real thing. The patterns that actually match are below.
 HEAD_BYTES="$(mktemp "${TMPDIR:-/tmp}/check-tracked-artifacts.XXXXXX")"
 trap 'rm -f "$HEAD_BYTES"' EXIT
 

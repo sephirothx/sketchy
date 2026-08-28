@@ -478,6 +478,10 @@ claim that an arbitrary host will sustain it.
 | **R-ENG-10** | Where a test must sit out a production interval, it MUST fast-forward the page's own clock (`page.clock`) rather than spend the time, keeping the interval a production constant instead of something bent for the tests. |
 | **R-ENG-11** | Benchmarks are **diagnostic baselines, not CI thresholds** — browser and machine timings vary. |
 | **R-ENG-12** | CI MUST run backend lint and tests, PostgreSQL migrations and repositories, frontend test/lint/build, and multi-browser E2E. |
+| **R-ENG-13** | CI MUST refuse a credential committed to the tree **or to any commit the change adds** — a value removed a commit later is burned just the same, and the tree it leaves behind looks clean. [`ci.yml`](../.github/workflows/ci.yml) |
+| **R-ENG-14** | CI MUST fail on a known advisory in either Python manifest or in the frontend lockfile. Build and test dependencies count: they run in CI with a checkout before anything they touched reaches a player. |
+| **R-ENG-15** | Coverage MUST be gated **per risk-critical module**, not only in total. A suite this size absorbs one module losing its tests without moving the total more than a rounding error. A module named in the floor table that disappears from the report MUST fail, so a rename cannot retire a floor silently. [`scripts/check-coverage.py`](../scripts/check-coverage.py) |
+| **R-ENG-16** | Every build MUST produce a CycloneDX SBOM for the shipped Python and frontend dependencies, generated from what resolves rather than from the manifest text, and that SBOM MUST be the input to the licence policy — one description of what ships, not two that can disagree. Strong-copyleft, source-available, and licence-undeclared components MUST fail. [`scripts/check-licenses.py`](../scripts/check-licenses.py) |
 
 ---
 
@@ -528,6 +532,7 @@ design, not a bug fix.
 | Shutdown drain | [`services/shutdown.py`](../backend/app/services/shutdown.py) | `tests/test_shutdown.py`, `tests/handlers/test_shutdown.py` |
 | Runtime analytics | [`services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | `tests/test_runtime_analytics.py` |
 | Runtime tuning | [`services/runtime_settings.py`](../backend/app/services/runtime_settings.py), [`services/tunables.py`](../backend/app/services/tunables.py), [`services/config_store.py`](../backend/app/services/config_store.py), [`api/admin_settings.py`](../backend/app/api/admin_settings.py) | `tests/test_runtime_settings.py`, `test_admin_tunables_api.py` |
+| CI supply-chain and quality gates | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`scripts/check-coverage.py`](../scripts/check-coverage.py), [`scripts/check-licenses.py`](../scripts/check-licenses.py) | the CI run itself |
 | Deployment, environment mode, static delivery, worker topology | [`deployment.py`](../backend/app/deployment.py) | `tests/test_deployment.py`, `test_static_delivery.py` |
 | Health, readiness, loop supervision | [`services/readiness.py`](../backend/app/services/readiness.py) | `tests/test_readiness.py` |
 | Connection resilience | [`handlers/connection.py`](../backend/app/handlers/connection.py) | `tests/handlers/test_connection.py`, `tests/e2e/test_network_resilience.py`, `test_player_afk_reconnect.py` |

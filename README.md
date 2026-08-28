@@ -1019,6 +1019,8 @@ scripts/
   serve.sh          Local development server
   test-e2e.sh       Frontend build + throwaway-database server + the Playwright suite
   check-tracked-artifacts.sh  Refuses a tracked database, env file, or private key
+  check-coverage.py   Per-module coverage floors on the risk-critical modules
+  check-licenses.py   Licence policy, read off the generated SBOMs
   brand/            Logo and icon sources, and the scripts that raster them
 .githooks/
   pre-push          Opt-in local copy of the artifact scan, before anything leaves the machine
@@ -1069,6 +1071,26 @@ does not sneak the blob into history.
 
 CI runs the same script, but a secret pushed to a public remote is already public by the
 time CI has an opinion. The hook is the one that actually protects anything.
+
+### What CI refuses
+
+Beyond lint, tests, PostgreSQL migrations, and multi-browser E2E:
+
+| Gate | What fails the build |
+| --- | --- |
+| Credential scan | A credential in the tree, or in **any commit the change adds** — a value removed a commit later is burned just the same, and the tree it leaves behind looks clean. Runs alongside the artifact scan, which catches file *shapes* by their bytes rather than secrets in source |
+| Dependency advisories | A known advisory in `requirements.txt`, `requirements-dev.txt`, or the frontend lockfile. Build and test dependencies count: they run in CI, with a checkout, before anything they touched reaches a player |
+| Coverage floors | A risk-critical module dropping below its floor in [`scripts/check-coverage.py`](scripts/check-coverage.py) — authentication, moderation, request limits, payload validation, drawing storage, deployment, readiness. Per module rather than in total, because a suite this size absorbs one module losing its tests without moving the total more than a rounding error. A module that vanishes from the report fails too, so a rename cannot retire a floor silently |
+| Licence policy | A strong-copyleft, source-available, or licence-undeclared dependency, read off the SBOMs rather than by walking the tree a second way |
+
+Every run publishes a CycloneDX SBOM for both ecosystems as a build artifact,
+generated from what actually resolves rather than from the manifest text.
+
+Not yet gated, and tracked rather than forgotten: artifact provenance and
+signing, deploy-by-digest, and deployment smoke/rollback checks all need a
+build artifact and a deployment that do not exist yet (#457); the
+migration-on-a-production-copy test needs the backup mechanism in #458; and
+the sustained-load gate is #461.
 
 ### Backend
 

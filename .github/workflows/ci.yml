@@ -62,6 +62,40 @@ jobs:
           fi
           bash scripts/check-tracked-artifacts.sh --range "${from}..HEAD"
 
+      # The scan above knows this project's own artifact shapes - a database,
+      # a key file - by magic bytes. It knows nothing about a credential
+      # pasted into source, which is a different failure with the same cost.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSLf -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          # Pinned by digest, not just by tag: a release asset can be replaced.
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive" gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan the tree for credentials
+        run: gitleaks dir . --no-banner --redact --exit-code 1
+
+      # The tree scan cannot see a credential that was committed and then
+      # removed a commit later, which is the case that matters most: the value
+      # is burned either way, and the tree looks clean.
+      - name: Scan every commit the change adds for credentials
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            from="$(git merge-base "$BASE" HEAD)"
+            gitleaks git . --no-banner --redact --exit-code 1 \
+              --log-opts="${from}..HEAD"
+          else
+            echo "No reachable base commit; the tree scan above stands alone."
+          fi
+
   backend:
     name: Backend lint & tests
     runs-on: ubuntu-latest
@@ -83,7 +117,14 @@ jobs:
 
       - run: ruff check app tests
 
-      - run: pytest -q
+      - run: pytest -q --cov=app --cov-report=term:skip-covered --cov-report=json:coverage.json
+
+      # A whole-suite percentage moves too little to catch one module losing
+      # its tests, which is the shape the audit called out. The floors are per
+      # module, on the ones where an unexecuted branch is a way in or a way to
+      # lose data.
+      - name: Check coverage floors
+        run: python3 ../scripts/check-coverage.py coverage.json
 
   postgresql:
     name: PostgreSQL migrations & repositories
@@ -155,6 +196,68 @@ jobs:
       - run: npm run lint
 
       - run: npm run build
+
+  supply-chain:
+    name: Dependencies, SBOM & licences
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: pip install -r requirements-dev.txt
+        working-directory: backend
+
+      # Both manifests, not only the shipped one: a compromised test or build
+      # dependency runs here, with a checkout and a token, before anything it
+      # touched reaches a user.
+      - name: Audit Python dependencies
+        working-directory: backend
+        run: |
+          pip-audit -r requirements.txt --progress-spinner off
+          pip-audit -r requirements-dev.txt --progress-spinner off
+
+      - run: npm ci
+        working-directory: frontend
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+      # The SBOM is generated from what actually resolves, not from the
+      # manifest text: the manifest says what was asked for, and an SBOM that
+      # answers "what is in this build" has to say what arrived.
+      - name: Generate SBOMs
+        run: |
+          pip install cyclonedx-bom==7.3.1
+          python -m venv /tmp/runtime
+          /tmp/runtime/bin/pip install -q -r backend/requirements.txt
+          cyclonedx-py environment /tmp/runtime -o sbom-backend.json
+          (cd frontend && npx --yes @cyclonedx/cyclonedx-npm@4.0.2 \
+            --omit dev --output-format json --output-file ../sbom-frontend.json)
+
+      - name: Check licences
+        run: python3 scripts/check-licenses.py sbom-backend.json sbom-frontend.json
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: sbom
+          path: |
+            sbom-backend.json
+            sbom-frontend.json
+          if-no-files-found: error
 
   e2e:
     name: E2E multi-browser tests
