@@ -67,10 +67,9 @@ docs/ui-mockups/sketchy-views.html
 docs/ui-mockups/sketchy-redesign.html
 docs/ui-mockups/sketchy-explorer.html
 
-# Coverage and SBOM output. Both are build products: the floors live in
-# scripts/check-coverage.py, and CI publishes the SBOM as an artifact.
+# Coverage output. A build product: the floors live in
+# scripts/check-coverage.py.
 .coverage
 .coverage.*
 coverage.json
 htmlcov/
-sbom-*.json

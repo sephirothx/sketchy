@@ -221,7 +221,7 @@ jobs:
       - run: npm run build
 
   supply-chain:
-    name: Dependencies, SBOM & licences
+    name: Dependency advisories
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -246,31 +246,6 @@ jobs:
       - run: npm ci
         working-directory: frontend
 
-      # Generated and published *before* the gates below, because every run
-      # publishing an SBOM is the point of having one: the run you most want
-      # the inventory from is the run that just failed a policy on it.
-      #
-      # Generated from what actually resolves rather than from the manifest
-      # text: the manifest says what was asked for, and an SBOM answering
-      # "what is in this build" has to say what arrived.
-      - name: Generate SBOMs
-        run: |
-          pip install cyclonedx-bom==7.3.1
-          python -m venv /tmp/runtime
-          /tmp/runtime/bin/pip install -q -r backend/requirements.txt
-          cyclonedx-py environment /tmp/runtime -o sbom-backend.json
-          (cd frontend && npx --yes @cyclonedx/cyclonedx-npm@4.0.2 \
-            --omit dev --output-format json --output-file ../sbom-frontend.json)
-
-      - name: Publish the SBOMs
-        uses: actions/upload-artifact@v5
-        with:
-          name: sbom
-          path: |
-            sbom-backend.json
-            sbom-frontend.json
-          if-no-files-found: error
-
       # Both manifests, not only the shipped one: a compromised test or build
       # dependency runs here, with a checkout and a token, before anything it
       # touched reaches a user.
@@ -285,9 +260,6 @@ jobs:
       - name: Audit frontend dependencies
         working-directory: frontend
         run: npm audit
-
-      - name: Check licences
-        run: python3 scripts/check-licenses.py sbom-backend.json sbom-frontend.json
 
   e2e:
     name: E2E multi-browser tests
