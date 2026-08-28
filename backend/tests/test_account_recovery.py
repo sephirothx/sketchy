@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.mail import MemoryTransport, deliver_pending
@@ -18,6 +18,16 @@ from app.auth.password_reset import (
     reset_password_as_operator,
 )
 from app.auth.routes import create_auth_router
+from app.auth.email import EmailAddressError
+from app.auth.recovery import (
+    EmailAlreadyInUse,
+    RecoveryError,
+    _aware,
+    email_state,
+    mark_reminder_shown,
+    request_email_verification,
+    request_password_reset,
+)
 from app.auth.tokens import AuthTokenPurpose
 from app.db.models import (
     AuditEvent,
@@ -26,6 +36,8 @@ from app.db.models import (
     Base,
     EmailOutboxEntry,
     User,
+    UserSettings,
+    generate_uuid,
 )
 from app.domain_values import EmailOutboxState
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
@@ -504,3 +516,90 @@ async def test_an_expired_link_is_known_to_be_expired_before_it_is_used(env):
     # the check.
     async with factory() as session:
         assert await session.scalar(select(func.count(AuthToken.token_hash))) == 1
+
+
+# --- the "account does not exist" and "already taken" paths ------------------
+#
+# Recovery is the authentication path a stranger can reach without credentials,
+# so its refusals matter more than its successes. The suite reached those
+# refusals through the HTTP surface, which answers identically either way by
+# design - so the branches that decide *why* nothing happened were never taken.
+
+
+async def test_email_state_for_an_account_that_is_not_there_is_simply_empty(env):
+    """Called with an id it did not verify itself; it must not raise."""
+    _, factory = env
+    state = await email_state(factory, user_id=generate_uuid())
+    assert (state.address, state.verified, state.pending_address) == (None, False, None)
+    assert state.reminder_due is False
+
+
+async def test_adding_an_email_to_an_account_that_is_not_there_is_refused(env):
+    _, factory = env
+    with pytest.raises(RecoveryError):
+        await request_email_verification(
+            factory, user_id=generate_uuid(), email="a@b.test"
+        )
+
+
+async def test_an_invalid_address_is_refused_before_any_lookup(env):
+    _, factory = env
+    with pytest.raises(EmailAddressError):
+        await request_email_verification(
+            factory, user_id=generate_uuid(), email="not-an-address"
+        )
+
+
+async def test_a_reminder_creates_settings_for_an_account_that_has_none(env):
+    """The row is made on demand; a missing one is not a reason to fail."""
+    new_client, factory = env
+    registered = await register(new_client(), "Reminded")
+    user_id = UUID(registered["id"])
+
+    async with factory() as session:
+        await session.execute(delete(UserSettings).where(UserSettings.user_id == user_id))
+        await session.commit()
+
+    await mark_reminder_shown(factory, user_id=user_id)
+    async with factory() as session:
+        settings = await session.get(UserSettings, user_id)
+    assert settings is not None
+    assert settings.email_reminder_last_shown_at is not None
+
+
+async def test_a_blank_identifier_never_reaches_the_database(env):
+    """An empty form field is not a lookup that could match anything."""
+    _, factory = env
+    for blank in ("", "   ", "\t"):
+        assert await request_password_reset(factory, identifier=blank) is False
+
+
+async def test_a_reset_for_an_unknown_identifier_sends_nothing(env):
+    """Answered identically to a real one at the HTTP layer; here we can look."""
+    _, factory = env
+    assert await request_password_reset(
+        factory, identifier="nobody@nowhere.test"
+    ) is False
+    assert await request_password_reset(factory, identifier="no-such-player") is False
+
+
+async def test_verification_is_refused_for_an_address_another_account_holds(env):
+    """Two verified accounts on one address is an account-takeover primitive."""
+    new_client, factory = env
+    first_client = new_client()
+    await register(first_client, "First", "shared@example.test")
+    await verify_via_email(first_client, factory)
+    second = await register(new_client(), "Second")
+
+    with pytest.raises(EmailAlreadyInUse):
+        await request_email_verification(
+            factory, user_id=UUID(second["id"]), email="shared@example.test"
+        )
+
+
+async def test_a_naive_stored_timestamp_is_read_as_utc():
+    """SQLite hands back naive datetimes; a bare one must not read as local."""
+    assert _aware(None) is None
+    aware = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    assert _aware(aware) is aware
+    assert _aware(datetime(2026, 9, 1)) == aware

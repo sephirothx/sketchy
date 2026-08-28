@@ -1,8 +1,9 @@
 """Persistent directional blocks, merge behavior, and live chat filtering."""
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
@@ -258,3 +259,123 @@ async def test_blocked_sender_chat_is_filtered_but_room_state_and_system_chat_ar
         and call.kwargs.get("room") == room.id
         for call in sio.emit.await_args_list
     )
+
+
+# --- the cache's own failure and eviction behaviour -------------------------
+#
+# Blocking is a presentation filter, not a security boundary, and the service
+# says so: when the lookup cannot answer it delivers the line unfiltered rather
+# than dropping it. That is a deliberate trade - silence is the worse failure,
+# and the one the sender cannot see - but nothing exercised it, so the branch
+# that makes the trade was never taken in a test.
+
+
+async def test_an_absent_sender_is_never_looked_up(env):
+    """No id means no query, not a query for nothing."""
+    _, factory, _, _ = env
+    looked_up = AsyncMock()
+    service = BlockService(factory)
+    service._read_blockers = looked_up
+
+    assert await service.blockers_of(None) == frozenset()
+    assert await service.blockers_of("") == frozenset()
+    looked_up.assert_not_awaited()
+
+
+async def test_a_cached_sender_is_answered_without_touching_the_database(env):
+    _, factory, _, _ = env
+    sender = str(generate_uuid())
+    blocker = str(generate_uuid())
+    service = BlockService(factory)
+    service._read_blockers = AsyncMock(return_value=frozenset({blocker}))
+
+    assert await service.blockers_of(sender) == frozenset({blocker})
+    assert await service.blockers_of(sender) == frozenset({blocker})
+    # One read for two lines: the point of the cache.
+    assert service._read_blockers.await_count == 1
+
+
+async def test_a_lookup_that_times_out_delivers_unfiltered(env):
+    """A room going quiet is worse than a line that should have been hidden."""
+    _, factory, _, _ = env
+    service = BlockService(factory)
+
+    async def never_answers(_db_user_id):
+        await asyncio.sleep(3600)
+
+    service._read_blockers = never_answers
+    monkeypatched_timeout = 0.01
+    with patch("app.auth.blocks.LOOKUP_TIMEOUT_SECONDS", monkeypatched_timeout):
+        assert await service.blockers_of(str(generate_uuid())) == frozenset()
+
+
+async def test_a_lookup_that_raises_delivers_unfiltered(env):
+    _, factory, _, _ = env
+    service = BlockService(factory)
+    service._read_blockers = AsyncMock(side_effect=RuntimeError("database is gone"))
+
+    assert await service.blockers_of(str(generate_uuid())) == frozenset()
+
+
+async def test_a_failed_lookup_is_not_remembered_as_an_answer(env):
+    """Caching the empty set a failure returned leaves a block broken for good."""
+    _, factory, _, _ = env
+    sender = str(generate_uuid())
+    blocker = str(generate_uuid())
+    service = BlockService(factory)
+    service._read_blockers = AsyncMock(side_effect=RuntimeError("transient"))
+
+    assert await service.blockers_of(sender) == frozenset()
+    assert service.cached_senders() == 0
+
+    service._read_blockers = AsyncMock(return_value=frozenset({blocker}))
+    assert await service.blockers_of(sender) == frozenset({blocker})
+
+
+async def test_a_malformed_sender_id_is_not_looked_up(env):
+    _, factory, _, _ = env
+    service = BlockService(factory)
+    service._read_blockers = AsyncMock()
+
+    assert await service.blockers_of("not-a-uuid") == frozenset()
+    service._read_blockers.assert_not_awaited()
+
+
+async def test_the_cache_evicts_the_least_recently_used_sender(env):
+    """The bound is what keeps a long-lived process from growing for ever."""
+    _, factory, _, _ = env
+    service = BlockService(factory, max_cached_senders=2)
+    first, second, third = (str(generate_uuid()) for _ in range(3))
+    service._read_blockers = AsyncMock(return_value=frozenset())
+
+    await service.blockers_of(first)
+    await service.blockers_of(second)
+    assert service.cached_senders() == 2
+
+    # Touching `first` makes `second` the least recently used.
+    await service.blockers_of(first)
+    await service.blockers_of(third)
+    assert service.cached_senders() == 2
+
+    reads_before = service._read_blockers.await_count
+    await service.blockers_of(second)
+    assert service._read_blockers.await_count == reads_before + 1, (
+        "the least recently used sender should have been evicted"
+    )
+
+
+async def test_invalidating_and_clearing_drop_what_was_cached(env):
+    _, factory, _, _ = env
+    sender = str(generate_uuid())
+    service = BlockService(factory)
+    service._read_blockers = AsyncMock(return_value=frozenset())
+
+    await service.warm(sender)
+    assert service.cached_senders() == 1
+
+    service.invalidate(sender)
+    assert service.cached_senders() == 0
+
+    await service.warm(sender)
+    service.clear()
+    assert service.cached_senders() == 0

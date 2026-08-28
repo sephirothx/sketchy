@@ -44,7 +44,7 @@ import sys
 # The whole-suite floors. Broad, and deliberately not the headline numbers:
 # they catch a change that deletes a lot of tests at once, and nothing subtler.
 TOTAL_STATEMENT_FLOOR = 89.0
-TOTAL_BRANCH_FLOOR = 75.0
+TOTAL_BRANCH_FLOOR = 76.0
 
 # module -> (statement floor, branch floor). On this list because an
 # unexercised path here is a way in, a way to lose data, or a way to serve
@@ -56,10 +56,10 @@ TOTAL_BRANCH_FLOOR = 75.0
 # goes unexecuted. Together they are hard to satisfy without actually running
 # the code.
 #
-# The branch numbers are low, and they are honest: several of these modules
-# genuinely exercise only half their conditions today. The floors are a ratchet
-# under where the suite stands, not a statement that this is enough - raising
-# them is the point of having them.
+# The floors are a ratchet under where the suite stands, not a statement that
+# this is enough. #505 raised five of them by covering the failure paths those
+# modules exist to get right - blocks.py and room_codes.py from 50% and 60%
+# branches to 100% - and the rest are still worth raising the same way.
 MODULE_FLOORS: dict[str, tuple[float, float]] = {
     # Authentication and session handling: the front door.
     "app/auth/rate_limit.py": (90.0, 71.0),
@@ -67,13 +67,13 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     "app/auth/tokens.py": (88.0, 78.0),
     "app/auth/password.py": (92.0, 78.0),
     "app/auth/middleware.py": (95.0, 73.0),
-    "app/auth/recovery.py": (88.0, 58.0),
+    "app/auth/recovery.py": (94.0, 80.0),
     "app/auth/bans.py": (85.0, 73.0),
-    "app/auth/blocks.py": (80.0, 48.0),
+    "app/auth/blocks.py": (98.0, 98.0),
     # Privacy: export and deletion have to be right the first time.
-    "app/auth/account_data.py": (79.0, 58.0),
+    "app/auth/account_data.py": (81.0, 73.0),
     # Moderation is the safety surface, and its API is the staff-facing one.
-    "app/api/moderation.py": (88.0, 67.0),
+    "app/api/moderation.py": (90.0, 73.0),
     # Abuse ceilings and payload validation - the untrusted-traffic boundary.
     "app/request_limits.py": (95.0, 89.0),
     "app/handlers/payloads.py": (92.0, 71.0),
@@ -86,7 +86,7 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     "app/services/shutdown.py": (88.0, 74.0),
     "app/db/__init__.py": (92.0, 78.0),
     # Room-code allocation: a collision is two rooms sharing an identity.
-    "app/services/room_codes.py": (93.0, 58.0),
+    "app/services/room_codes.py": (98.0, 98.0),
 }
 
 
