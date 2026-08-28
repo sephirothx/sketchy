@@ -160,6 +160,27 @@ export function isAdmitting(
   return admissionLabel(maintenance) === "accepting rooms";
 }
 
+/** What this admin believes about admission, and what the server has announced.
+
+The loaded half is a snapshot: it is read when the panel mounts and after a
+command this panel issued, so it knows nothing about a drain another operator
+started or a stop sent to the host. Those arrive on the socket, to every
+client, and this is where the two are reconciled.
+
+An announcement always wins over the snapshot, because it is strictly newer:
+`server_shutdown` and `server_paused` are broadcast at the moment the state
+changes, while the snapshot is however old the last fetch was. A drain is
+one-way, so once announced it stays. */
+export function mergeAdmission(
+  loaded: Pick<MaintenanceState, "paused" | "draining"> | null,
+  announced: { draining: boolean; paused: boolean | null },
+): { paused: boolean; draining: boolean } {
+  return {
+    paused: announced.paused ?? loaded?.paused ?? false,
+    draining: announced.draining || Boolean(loaded?.draining),
+  };
+}
+
 /** Whether the shutdown control should refuse the click it is about to get.
 
 Both steps of the confirm ask this, not just the first: the fields stay

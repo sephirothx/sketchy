@@ -8,9 +8,11 @@ import { ApiError } from "../lib/api";
 import {
   admissionLabel,
   isAdmitting,
+  mergeAdmission,
   readMaintenance,
   type MaintenanceState,
 } from "../lib/adminControls";
+import { useAdmissionNotices } from "../hooks/useAdmissionNotices";
 import { canAdminister } from "../lib/operatorAccess";
 import { useAuthStore } from "../store/authStore";
 import { ControlsPanel } from "./ops/ControlsPanel";
@@ -152,6 +154,7 @@ export function AdminOperationsPage() {
     events: RuntimeEventRow[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const notices = useAdmissionNotices();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
   const allowed = hasResolved && canAdminister(user?.role);
@@ -240,8 +243,12 @@ export function AdminOperationsPage() {
   const checkedAgo =
     checkedAt === null ? null : Math.max(0, Math.round((now - checkedAt) / 1000));
   const recorderHealthy = !live || live.recorder.dropped === 0;
-  const admission = admissionLabel(maintenance);
-  const admitting = isAdmitting(maintenance);
+  // Corrected by what the server has announced since the last fetch, so a
+  // pause or a drain started elsewhere does not leave this banner claiming
+  // the server is taking rooms.
+  const state = mergeAdmission(maintenance, notices);
+  const admission = admissionLabel(state);
+  const admitting = isAdmitting(state);
   if (hasResolved && !allowed) {
     // The same refusal the bug-report and moderation pages give. Without it a
     // non-administrator gets the page chrome and a load error, which reads as

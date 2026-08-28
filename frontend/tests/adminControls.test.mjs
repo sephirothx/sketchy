@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   admissionLabel,
   isAdmitting,
+  mergeAdmission,
   shutdownBlocked,
 } from "../src/lib/adminControls.ts";
 
@@ -52,4 +53,53 @@ test("the shutdown control refuses a click it knows will be refused", () => {
   assert.equal(shutdownBlocked({ ...ok, busy: true }), true);
   // Before the first load nothing is known; the reason still governs.
   assert.equal(shutdownBlocked({ ...ok, maintenance: null }), false);
+});
+
+test("an announcement outranks the snapshot the panel loaded", () => {
+  // The loaded value is read on mount and after this panel's own commands, so
+  // it is blind to a drain somebody else started - which is the case the
+  // shutdown guard exists for. The announcement is broadcast at the moment the
+  // state changes, so it is strictly newer.
+  const loaded = { paused: false, draining: false };
+  assert.deepEqual(
+    mergeAdmission(loaded, { draining: true, paused: null }),
+    { paused: false, draining: true },
+  );
+  assert.deepEqual(
+    mergeAdmission(loaded, { draining: false, paused: true }),
+    { paused: true, draining: false },
+  );
+});
+
+test("a resume announced elsewhere clears a pause the snapshot still shows", () => {
+  assert.deepEqual(
+    mergeAdmission({ paused: true, draining: false }, { draining: false, paused: false }),
+    { paused: false, draining: false },
+  );
+});
+
+test("hearing nothing leaves the snapshot alone", () => {
+  const quiet = { draining: false, paused: null };
+  assert.deepEqual(
+    mergeAdmission({ paused: true, draining: true }, quiet),
+    { paused: true, draining: true },
+  );
+  // And before anything is loaded, nothing is asserted.
+  assert.deepEqual(mergeAdmission(null, quiet), { paused: false, draining: false });
+});
+
+test("a drain announced elsewhere blocks the shutdown confirm", () => {
+  // The whole point: the snapshot says the server is idle, the socket says it
+  // is draining, and the button must believe the socket.
+  const stale = { paused: false, draining: false };
+  const admission = mergeAdmission(stale, { draining: true, paused: null });
+  assert.equal(
+    shutdownBlocked({ busy: false, maintenance: admission, reason: "deploying" }),
+    true,
+  );
+  assert.equal(
+    shutdownBlocked({ busy: false, maintenance: stale, reason: "deploying" }),
+    false,
+    "and would not have, without the merge",
+  );
 });

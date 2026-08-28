@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Chip } from "../../components/ui/Chip";
+import { useAdmissionNotices } from "../../hooks/useAdmissionNotices";
 import { ApiError } from "../../lib/api";
 import {
   closeRoom,
   endTurn,
   initiateShutdown,
   kickPlayer,
+  mergeAdmission,
   shutdownBlocked,
   readLiveRooms,
   readMaintenance,
@@ -70,11 +72,16 @@ export function ControlsPanel() {
       });
   }
 
-  const paused = maintenance?.paused ?? false;
+  // What was loaded, corrected by whatever the server has announced since.
+  // Without this the guard below reads a snapshot taken when the panel
+  // mounted, so a drain somebody else started - the case it exists for -
+  // would leave the button enabled.
+  const admission = mergeAdmission(maintenance, useAdmissionNotices());
+  const paused = admission.paused;
   // Both steps of the confirm ask this, not just the first.
   const blocked = shutdownBlocked({
     busy,
-    maintenance,
+    maintenance: admission,
     reason: shutdownReason,
   });
 
@@ -105,7 +112,7 @@ export function ControlsPanel() {
             {paused ? "Paused" : "Accepting rooms"}
           </Chip>
         </div>
-        {maintenance?.draining && (
+        {admission.draining && (
           <p className="ops-empty">
             A shutdown drain is already running; the pause control is not
             available while it finishes.
@@ -122,7 +129,7 @@ export function ControlsPanel() {
           <button
             type="button"
             className={paused ? "btn btn-primary btn-compact" : "btn btn-secondary btn-compact"}
-            disabled={busy || maintenance?.draining}
+            disabled={busy || admission.draining}
             onClick={() =>
               run(
                 setMaintenance(!paused, reason),
