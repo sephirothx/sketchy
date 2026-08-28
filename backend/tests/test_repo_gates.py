@@ -42,24 +42,39 @@ def run_gate(script: Path, *args: str) -> subprocess.CompletedProcess:
 # --- coverage floors --------------------------------------------------------
 
 
-def _coverage_report(tmp_path: Path, files: dict[str, float], total: float) -> Path:
+def _coverage_report(
+    tmp_path: Path,
+    files: dict[str, tuple[float, float]],
+    total: tuple[float, float] = (100.0, 100.0),
+    *,
+    with_branches: bool = True,
+) -> Path:
+    def summary(statements: float, branches: float) -> dict:
+        # percent_covered is coverage.py's *combined* ratio under --cov-branch.
+        # Deliberately set high here: a gate reading it instead of the two
+        # fields apart would pass these fixtures.
+        block = {"percent_covered": 99.0, "percent_statements_covered": statements}
+        if with_branches:
+            block["percent_branches_covered"] = branches
+        return block
+
     report = {
-        "totals": {"percent_covered": total},
-        "files": {
-            name: {"summary": {"percent_covered": pct}} for name, pct in files.items()
-        },
+        "totals": summary(*total),
+        "files": {name: {"summary": summary(*pair)} for name, pair in files.items()},
     }
     path = tmp_path / "coverage.json"
     path.write_text(json.dumps(report))
     return path
 
 
-def _every_floor_met(tmp_path: Path, **overrides: float) -> Path:
-    """A report where every gated module sits comfortably above its floor."""
+def _every_floor_met(
+    tmp_path: Path, overrides: dict[str, tuple[float, float]] | None = None, **kwargs
+) -> Path:
+    """A report where every gated module sits comfortably above both floors."""
     gate = load_gate(COVERAGE_GATE)
-    files = {module: 100.0 for module in gate.MODULE_FLOORS}
-    files.update(overrides)
-    return _coverage_report(tmp_path, files, total=100.0)
+    files = {module: (100.0, 100.0) for module in gate.MODULE_FLOORS}
+    files.update(overrides or {})
+    return _coverage_report(tmp_path, files, **kwargs)
 
 
 def test_a_passing_report_passes(tmp_path):
@@ -67,34 +82,60 @@ def test_a_passing_report_passes(tmp_path):
     assert result.returncode == 0, result.stderr
 
 
-def test_a_module_below_its_floor_fails(tmp_path):
-    report = _every_floor_met(tmp_path, **{"app/auth/rate_limit.py": 40.0})
+def test_a_module_below_its_statement_floor_fails(tmp_path):
+    report = _every_floor_met(tmp_path, {"app/auth/rate_limit.py": (40.0, 100.0)})
     result = run_gate(COVERAGE_GATE, str(report))
     assert result.returncode == 1
     assert "app/auth/rate_limit.py" in result.stderr
-    assert "below its" in result.stderr
+    assert "of statements is below" in result.stderr
+
+
+def test_a_module_below_only_its_branch_floor_fails(tmp_path):
+    """The case the combined ratio hides: statements fine, conditions not.
+
+    `percent_covered` in the fixture is 99%, so a gate reading that field
+    instead of the two apart would call this green.
+    """
+    report = _every_floor_met(tmp_path, {"app/auth/recovery.py": (100.0, 20.0)})
+    result = run_gate(COVERAGE_GATE, str(report))
+    assert result.returncode == 1
+    assert "app/auth/recovery.py" in result.stderr
+    assert "of branches is below" in result.stderr
+
+
+def test_a_report_without_branch_measurement_fails(tmp_path):
+    """A report from a plain --cov run must not be checked as if it had them."""
+    report = _every_floor_met(tmp_path, with_branches=False)
+    result = run_gate(COVERAGE_GATE, str(report))
+    assert result.returncode != 0
+    assert "--cov-branch" in result.stderr
 
 
 def test_a_renamed_module_fails_rather_than_retiring_its_floor(tmp_path):
     """Otherwise `git mv` is a way to delete a gate without saying so."""
     gate = load_gate(COVERAGE_GATE)
-    files = {module: 100.0 for module in gate.MODULE_FLOORS}
+    files = {module: (100.0, 100.0) for module in gate.MODULE_FLOORS}
     files["app/auth/rate_limiter.py"] = files.pop("app/auth/rate_limit.py")
-    report = _coverage_report(tmp_path, files, total=100.0)
+    report = _coverage_report(tmp_path, files)
 
     result = run_gate(COVERAGE_GATE, str(report))
     assert result.returncode == 1
     assert "not in the coverage report" in result.stderr
 
 
-def test_a_whole_suite_collapse_fails(tmp_path):
+@pytest.mark.parametrize(
+    ("total", "expected"),
+    [((12.0, 100.0), "of statements"), ((100.0, 12.0), "of branches")],
+)
+def test_a_whole_suite_collapse_fails(total, expected, tmp_path):
     gate = load_gate(COVERAGE_GATE)
-    files = {module: 100.0 for module in gate.MODULE_FLOORS}
-    report = _coverage_report(tmp_path, files, total=12.0)
+    files = {module: (100.0, 100.0) for module in gate.MODULE_FLOORS}
+    report = _coverage_report(tmp_path, files, total=total)
 
     result = run_gate(COVERAGE_GATE, str(report))
     assert result.returncode == 1
     assert "whole suite" in result.stderr
+    assert expected in result.stderr
 
 
 def test_a_missing_report_fails_rather_than_passing_vacuously(tmp_path):
@@ -112,8 +153,10 @@ def test_the_floors_are_a_ratchet_not_a_wish():
     """
     gate = load_gate(COVERAGE_GATE)
     assert gate.MODULE_FLOORS, "the floor table must not be empty"
-    for module, floor in gate.MODULE_FLOORS.items():
-        assert 0 < floor <= 100, f"{module} has an impossible floor"
+    for module, floors in gate.MODULE_FLOORS.items():
+        assert len(floors) == 2, f"{module} needs a statement and a branch floor"
+        for floor in floors:
+            assert 0 < floor <= 100, f"{module} has an impossible floor"
 
 
 # --- licence policy ---------------------------------------------------------
@@ -216,6 +259,10 @@ def test_an_undeclared_licence_fails(tmp_path):
         "(MIT OR )",
         "WITH",
         "Apache-2.0 WITH",       # exception named by nothing
+        "Apache-2.0 WITH OR",    # a grammar word standing in for a name
+        "Apache-2.0 WITH )",
+        "Apache-2.0 WITH WITH",
+        "Apache-2.0 WITH (",
     ],
 )
 def test_a_malformed_expression_fails_closed(expression, tmp_path):
@@ -247,13 +294,52 @@ def test_an_sbom_listing_nothing_fails_rather_than_passing_vacuously(
     assert "lists no components" in result.stderr
 
 
-def test_a_classifier_spelling_is_understood(tmp_path):
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache Software License",
+        "License :: OSI Approved :: BSD License",
+        # Brackets and an "or" inside the name. Resolving the name only after
+        # trying to parse it as an expression refused every one of these.
+        "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+        "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+        "ISC License (ISCL)",
+    ],
+)
+def test_a_classifier_spelling_is_understood(spelling, tmp_path):
     """cyclonedx-py emits Trove classifiers for packages without an SPDX id."""
-    sbom = _sbom(
-        tmp_path,
-        [_with_licence(license={"name": "License :: OSI Approved :: MIT License"})],
-    )
-    assert run_gate(LICENCE_GATE, str(sbom)).returncode == 0
+    sbom = _sbom(tmp_path, [_with_licence(license={"name": spelling})])
+    result = run_gate(LICENCE_GATE, str(sbom))
+    assert result.returncode == 0, f"{spelling!r}: {result.stderr}"
+
+
+def test_every_acknowledged_spelling_is_reachable(tmp_path):
+    """A spelling nobody can reach is a dependency that fails for no reason.
+
+    Five of them were unreachable at once, because the names people write are
+    full of the grammar's own words - brackets, and the word "or".
+    """
+    gate = load_gate(LICENCE_GATE)
+    unreachable = []
+    for spelling in gate.SPELLINGS:
+        try:
+            if not gate.is_allowed(spelling):
+                unreachable.append((spelling, "not allowed"))
+        except gate.SpdxError as error:
+            unreachable.append((spelling, str(error)))
+    assert not unreachable, unreachable
+
+
+def test_every_spelling_maps_onto_the_allowlist():
+    """A spelling pointing at a licence nobody allowed silently does nothing."""
+    gate = load_gate(LICENCE_GATE)
+    dangling = {
+        spelling: target
+        for spelling, target in gate.SPELLINGS.items()
+        if target not in gate.ALLOWED
+    }
+    assert not dangling, dangling
 
 
 def test_a_missing_sbom_fails_rather_than_passing_vacuously(tmp_path):

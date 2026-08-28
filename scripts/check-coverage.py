@@ -8,12 +8,18 @@ branches" - so the floors here are per module, and they are set on the modules
 where an unexecuted branch is a security or durability problem rather than a
 cosmetic one.
 
-The numbers are **branch** coverage, which is the half of that finding a
-statement count cannot see: a statement measure marks an `if` executed as soon
-as it is reached, whatever the condition did. Every module here reads lower
-under branch coverage than under statements, and `auth/recovery.py` reads six
-points lower - six points of conditions nothing exercises, which a statement
-floor would have called covered.
+Each module carries **two** floors, on statements and on branches, because
+either alone can be satisfied by a suite that is not exercising the code. A
+statement measure marks an `if` executed as soon as it is reached, whatever the
+condition did; `auth/blocks.py` reads 82% by statements and 50% by branches, so
+half its conditions have only ever gone one way. A branch measure on its own is
+trivially met by a module with three branches while most of its body never
+runs.
+
+Note that coverage.py's `percent_covered` is *not* branch coverage when
+`--cov-branch` is on - it is a combined lines-and-branches ratio, 88.6% against
+77.7% here. This reads the two fields apart, and refuses a report produced
+without branch measurement rather than quietly checking the wrong number.
 
 Each floor sits a point or two under what the module measures today. That is
 deliberate: the gate is a ratchet against regression, not a target to chase, and
@@ -33,40 +39,73 @@ from pathlib import Path
 import sys
 
 
-# The whole-suite floor. Broad, and deliberately not the headline number: it
-# catches a change that deletes a lot of tests at once, and nothing subtler.
-TOTAL_FLOOR = 86.0
+# The whole-suite floors. Broad, and deliberately not the headline numbers:
+# they catch a change that deletes a lot of tests at once, and nothing subtler.
+TOTAL_STATEMENT_FLOOR = 89.0
+TOTAL_BRANCH_FLOOR = 75.0
 
-# module -> floor. On this list because an unexercised branch here is a way in,
-# a way to lose data, or a way to serve traffic that cannot be served.
-MODULE_FLOORS: dict[str, float] = {
+# module -> (statement floor, branch floor). On this list because an
+# unexercised path here is a way in, a way to lose data, or a way to serve
+# traffic that cannot be served.
+#
+# Both numbers, because each alone has a blind spot. A statement floor calls an
+# `if` covered the moment it is reached, whatever the condition did. A branch
+# floor is trivially met by a module with three branches while most of its body
+# goes unexecuted. Together they are hard to satisfy without actually running
+# the code.
+#
+# The branch numbers are low, and they are honest: several of these modules
+# genuinely exercise only half their conditions today. The floors are a ratchet
+# under where the suite stands, not a statement that this is enough - raising
+# them is the point of having them.
+MODULE_FLOORS: dict[str, tuple[float, float]] = {
     # Authentication and session handling: the front door.
-    "app/auth/rate_limit.py": 86.0,
-    "app/auth/sessions.py": 88.0,
-    "app/auth/tokens.py": 86.0,
-    "app/auth/password.py": 90.0,
-    "app/auth/middleware.py": 92.0,
-    "app/auth/recovery.py": 82.0,
-    "app/auth/bans.py": 84.0,
-    "app/auth/blocks.py": 77.0,
+    "app/auth/rate_limit.py": (90.0, 71.0),
+    "app/auth/sessions.py": (90.0, 79.0),
+    "app/auth/tokens.py": (88.0, 78.0),
+    "app/auth/password.py": (92.0, 78.0),
+    "app/auth/middleware.py": (95.0, 73.0),
+    "app/auth/recovery.py": (88.0, 58.0),
+    "app/auth/bans.py": (85.0, 73.0),
+    "app/auth/blocks.py": (80.0, 48.0),
     # Privacy: export and deletion have to be right the first time.
-    "app/auth/account_data.py": 77.0,
+    "app/auth/account_data.py": (79.0, 58.0),
     # Moderation is the safety surface, and its API is the staff-facing one.
-    "app/api/moderation.py": 83.0,
+    "app/api/moderation.py": (88.0, 67.0),
     # Abuse ceilings and payload validation - the untrusted-traffic boundary.
-    "app/request_limits.py": 94.0,
-    "app/handlers/payloads.py": 89.0,
+    "app/request_limits.py": (95.0, 89.0),
+    "app/handlers/payloads.py": (92.0, 71.0),
     # Durability of what players drew, and the rules that bound it.
-    "app/canvas_storage.py": 93.0,
-    "app/drawing_rules.py": 98.0,
+    "app/canvas_storage.py": (95.0, 85.0),
+    "app/drawing_rules.py": (98.0, 98.0),
     # Deployment invariants and the readiness contract an orchestrator acts on.
-    "app/deployment.py": 98.0,
-    "app/services/readiness.py": 96.0,
-    "app/services/shutdown.py": 86.0,
-    "app/db/__init__.py": 89.0,
+    "app/deployment.py": (98.0, 98.0),
+    "app/services/readiness.py": (96.0, 98.0),
+    "app/services/shutdown.py": (88.0, 74.0),
+    "app/db/__init__.py": (92.0, 78.0),
     # Room-code allocation: a collision is two rooms sharing an identity.
-    "app/services/room_codes.py": 89.0,
+    "app/services/room_codes.py": (93.0, 58.0),
 }
+
+
+def _percentages(summary: dict, where: str) -> tuple[float, float]:
+    """Pull statement and branch percentages out of one coverage summary.
+
+    `percent_covered` is deliberately not used. Under `--cov-branch` it is a
+    *combined* lines-and-branches ratio, which reads far higher than branch
+    coverage alone - 88.6% against 77.7% for this suite - so a floor set
+    against it would be checking something nobody asked for.
+    """
+    try:
+        return (
+            float(summary["percent_statements_covered"]),
+            float(summary["percent_branches_covered"]),
+        )
+    except KeyError as missing:
+        raise SystemExit(
+            f"{where} has no {missing} - the report was produced without "
+            "branch measurement. Re-run pytest with --cov-branch."
+        )
 
 
 def main() -> int:
@@ -74,7 +113,7 @@ def main() -> int:
     if not report_path.exists():
         print(f"No coverage report at {report_path}.", file=sys.stderr)
         print(
-            "Run: cd backend && .venv/bin/pytest -q --cov=app "
+            "Run: cd backend && .venv/bin/pytest -q --cov=app --cov-branch "
             "--cov-report=json:coverage.json",
             file=sys.stderr,
         )
@@ -82,17 +121,24 @@ def main() -> int:
 
     report = json.loads(report_path.read_text())
     measured = {
-        path.replace("\\", "/"): info["summary"]["percent_covered"]
-        for path, info in report["files"].items()
+        path.replace("\\", "/"): info["summary"] for path, info in report["files"].items()
     }
 
     failures: list[str] = []
 
-    total = report["totals"]["percent_covered"]
-    if total < TOTAL_FLOOR:
-        failures.append(f"whole suite {total:.1f}% is below the {TOTAL_FLOOR:.0f}% floor")
+    statements, branches = _percentages(report["totals"], "the whole suite")
+    if statements < TOTAL_STATEMENT_FLOOR:
+        failures.append(
+            f"whole suite {statements:.1f}% of statements is below the "
+            f"{TOTAL_STATEMENT_FLOOR:.0f}% floor"
+        )
+    if branches < TOTAL_BRANCH_FLOOR:
+        failures.append(
+            f"whole suite {branches:.1f}% of branches is below the "
+            f"{TOTAL_BRANCH_FLOOR:.0f}% floor"
+        )
 
-    for module, floor in sorted(MODULE_FLOORS.items()):
+    for module, (statement_floor, branch_floor) in sorted(MODULE_FLOORS.items()):
         if module not in measured:
             # A rename must not silently retire a floor. If the module moved,
             # move its entry; if it is gone, delete the entry deliberately.
@@ -101,10 +147,16 @@ def main() -> int:
                 "- if it moved, move its entry too"
             )
             continue
-        actual = measured[module]
-        if actual < floor:
+        statements, branches = _percentages(measured[module], module)
+        if statements < statement_floor:
             failures.append(
-                f"{module} {actual:.1f}% is below its {floor:.0f}% floor"
+                f"{module} {statements:.1f}% of statements is below its "
+                f"{statement_floor:.0f}% floor"
+            )
+        if branches < branch_floor:
+            failures.append(
+                f"{module} {branches:.1f}% of branches is below its "
+                f"{branch_floor:.0f}% floor"
             )
 
     if failures:
@@ -112,15 +164,17 @@ def main() -> int:
         for failure in failures:
             print(f"  - {failure}", file=sys.stderr)
         print(
-            "\nAdd tests for the uncovered branches. Lower a floor only with a "
+            "\nAdd tests for the uncovered paths. Lower a floor only with a "
             "reason in the commit message.",
             file=sys.stderr,
         )
         return 1
 
+    total_statements, total_branches = _percentages(report["totals"], "the whole suite")
     print(
-        f"Coverage floors met: whole suite {total:.1f}% "
-        f"(floor {TOTAL_FLOOR:.0f}%), {len(MODULE_FLOORS)} risk-critical modules."
+        f"Coverage floors met: whole suite {total_statements:.1f}% of statements "
+        f"and {total_branches:.1f}% of branches, "
+        f"{len(MODULE_FLOORS)} risk-critical modules."
     )
     return 0
 

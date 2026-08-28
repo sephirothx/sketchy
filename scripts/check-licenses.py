@@ -86,6 +86,11 @@ SPELLINGS = {
 ACKNOWLEDGED_WITHOUT_LICENCE: set[str] = set()
 
 
+# The words the grammar spends on structure. None of them can stand in for a
+# licence or an exception name.
+RESERVED = frozenset({"AND", "OR", "WITH", "(", ")"})
+
+
 class SpdxError(ValueError):
     """An expression that cannot be parsed. Unparseable means unreviewed."""
 
@@ -174,29 +179,43 @@ class _Parser:
                 raise SpdxError(f"expected ')', found {closing!r}")
             return value
 
-        if upper in ("AND", "OR", "WITH", ")"):
+        if upper in RESERVED:
             raise SpdxError(f"expected a licence, found {token!r}")
 
         value = normalise(token) in ALLOWED
 
         # "Apache-2.0 WITH LLVM-exception": an exception only ever grants extra
-        # permission, so the base licence decides - but the name must be there.
+        # permission, so the base licence decides - but it has to be an actual
+        # name. Without this check `Apache-2.0 WITH OR` consumes the operator
+        # as the exception and comes out true.
         if (following := self.peek()) is not None and following.upper() == "WITH":
             self.take()
-            self.take("an exception name")
+            exception = self.take("an exception name")
+            if exception.upper() in RESERVED:
+                raise SpdxError(
+                    f"expected an exception name, found {exception!r}"
+                )
 
         return value
 
 
 def is_allowed(text: str) -> bool:
-    """Whether one licence string - id, name, or SPDX expression - is shippable."""
+    """Whether one licence string - id, name, or SPDX expression - is shippable.
+
+    The whole string is resolved as a single name **first**, because the names
+    people actually write are full of the grammar's own words: "GNU Lesser
+    General Public License v2 or later (LGPLv2+)" has an `or` and a pair of
+    brackets in it, and "Mozilla Public License 2.0 (MPL 2.0)" has brackets
+    too. Parsing before looking those up refuses every one of them.
+    """
+    if normalise(text) in ALLOWED:
+        return True
+
     tokens = _tokenise(text)
-    # A bare identifier can contain spaces - "BSD License", and every Trove
-    # classifier - so only parse as an expression when the grammar is actually
-    # in use. Otherwise "GNU Lesser General Public License v2 or later" would
-    # be read as an expression with an OR in the middle of it.
-    if not any(t.upper() in ("AND", "OR", "WITH", "(", ")") for t in tokens):
-        return normalise(text) in ALLOWED
+    # Not a name this project knows. If it does not use the grammar either,
+    # there is nothing left to try, and unrecognised fails closed.
+    if not any(token.upper() in RESERVED for token in tokens):
+        return False
     return _Parser(tokens).parse()
 
 
