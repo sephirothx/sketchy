@@ -1,6 +1,7 @@
 """Socket.IO handlers for the rooms domain."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from functools import partial
 
@@ -39,6 +40,42 @@ from app.rooms import (
 
 logger = logging.getLogger("sketchy.handlers.rooms")
 
+# Nothing bounded the database work on the way into a room, and since #480
+# that is worse than a slow join: seat transitions hold the socket's seating
+# gate, and its disconnect queues at the same gate so that a socket dropping
+# mid-entry reconciles against a seat that already exists. An entry that never
+# returns therefore holds the gate for ever, and a socket that drops during it
+# never reconciles - the seat keeps `connected` and its sid, its room never
+# counts as empty, and the leak #480 closed is open again by way of a stall.
+#
+# The same ten seconds the finished-game write already allows: long enough for
+# a healthy write on a loaded server, short enough that a hung database cannot
+# pin the coroutine that seats a player.
+ENTRY_DB_TIMEOUT_SECONDS = 10
+
+
+class EntryTimedOut(RuntimeError):
+    """A database call on the way into a room did not answer in time."""
+
+
+async def _bounded(awaitable, what: str):
+    """Await one entry-path call, or give up and let the entry refuse."""
+    try:
+        return await asyncio.wait_for(awaitable, timeout=ENTRY_DB_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        logger.error(
+            "Timed out on %s after %ss while seating a player",
+            what,
+            ENTRY_DB_TIMEOUT_SECONDS,
+        )
+        raise EntryTimedOut(what) from None
+
+
+BUSY_ACKNOWLEDGEMENT = {
+    "ok": False,
+    "error": "Sketchy is having trouble reaching its database. Please try again.",
+}
+
 
 async def _record_player_activity(ctx: HandlerContext, player) -> None:
     """Best-effort retention signal for a successfully seated player."""
@@ -49,7 +86,14 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     ):
         return
     try:
-        await ctx.user_repo.touch_last_active(player.user_id)
+        # Bounded like the rest of the entry path: this runs after the seat
+        # exists but still inside the socket's seating gate, so a hang here
+        # is a seat whose disconnect can never reconcile it.
+        await _bounded(
+            ctx.user_repo.touch_last_active(player.user_id), "recording activity"
+        )
+    except EntryTimedOut:
+        pass
     except Exception:
         logger.exception("Failed to record activity for user %s", player.user_id)
 
@@ -92,18 +136,28 @@ async def _create_room(ctx: HandlerContext, sid, data):
     except RoomQuotaExceeded as error:
         return {"ok": False, "error": str(error)}
     try:
-        settings = await ctx.game_flow.room_settings_from_payload(
-            payload, requesting_user_id=identity.user_id
+        settings = await _bounded(
+            ctx.game_flow.room_settings_from_payload(
+                payload, requesting_user_id=identity.user_id
+            ),
+            "resolving the room's prompt lists",
         )
     except RoomPromptResolutionError as error:
         return {"ok": False, "error": str(error), "field": "promptListSlugs"}
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
     try:
         ctx.room_quotas.check_retained_prompts(settings["custom_prompts"])
         # Last of the four, because it is the only one that writes: an attempt
         # refused by a ceiling above should not also spend an allowance.
-        await ctx.room_quotas.check_creation_rate(identity.user_id)
+        await _bounded(
+            ctx.room_quotas.check_creation_rate(identity.user_id),
+            "checking the room-creation allowance",
+        )
     except RoomQuotaExceeded as error:
         return {"ok": False, "error": str(error)}
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
     # From here on the allowance has been spent, and everything below can
     # still refuse: a drain beginning, an allocation failing, the capacity
     # re-check losing its race. An attempt that opens no room gives it back.
@@ -117,7 +171,15 @@ async def _create_room(ctx: HandlerContext, sid, data):
         code = None
         if ctx.room_codes is not None:
             try:
-                code = await ctx.room_codes.allocate()
+                code = await _bounded(
+                    ctx.room_codes.allocate(), "allocating a room code"
+                )
+            except EntryTimedOut:
+                # The reservation may or may not have committed before the
+                # wait was cut short. `retire_orphaned_ephemeral` at startup
+                # is what reclaims a code left claimed this way, exactly as it
+                # does for one left claimed by a crash.
+                return BUSY_ACKNOWLEDGEMENT
             except Exception:
                 logger.exception("Failed to allocate a room code")
                 return {"ok": False, "error": "Could not create the room"}
@@ -274,7 +336,9 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     room = ctx.room_manager.get_room_by_code(payload.code)
     if not room:
-        if ctx.room_codes is not None and await ctx.room_codes.is_retired(payload.code):
+        if ctx.room_codes is not None and await _bounded(
+            ctx.room_codes.is_retired(payload.code), "reading the room code"
+        ):
             return {
                 "ok": False,
                 "error": "This room has ended",
@@ -304,7 +368,9 @@ async def _join_room(ctx: HandlerContext, sid, data):
         if (
             payload.code
             and ctx.room_codes is not None
-            and await ctx.room_codes.is_retired(payload.code)
+            and await _bounded(
+                ctx.room_codes.is_retired(payload.code), "reading the room code"
+            )
         ):
             return {
                 "ok": False,

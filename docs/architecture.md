@@ -453,6 +453,11 @@ everything a person pressed a control for answers instead — including `undo_st
 which shares drawing's budget but is sent with an acknowledgement waiting on it. Exhaustion is recorded once per window, which
 is what separates a mistake from a flood without writing a row per refusal.
 
+Every database call on the way into a room is bounded by the same ten seconds a
+finished-game write allows, and a timeout refuses the entry rather than waiting. The
+gate is why: a disconnect queues behind the entry it interrupts, so an unbounded call
+is not a slow join but a seat that can never be reconciled.
+
 Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
 introduces, every socket presents the proxy's address, and the forwarded header is
 attacker-controlled — `auth/rate_limit.client_key` refuses to read it for exactly that
