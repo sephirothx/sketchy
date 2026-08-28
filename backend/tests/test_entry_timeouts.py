@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 import socketio
@@ -18,6 +18,7 @@ import socketio
 from app.handlers import register_all_handlers as register_handlers
 from app.handlers.rooms import ENTRY_DB_TIMEOUT_SECONDS
 from app.rooms import RoomManager
+from app.services.room_quotas import RoomQuotaExceeded
 from tests.handlers.helpers import SessionStore
 
 
@@ -123,3 +124,55 @@ async def test_a_hung_code_lookup_refuses_rather_than_raising(monkeypatch, comma
 
     assert answer["ok"] is False
     assert "database" in answer["error"]
+
+
+def quotas_that_refuse_the_second_capacity_check(**overrides):
+    """Quotas that let the room through, then refuse it after the code exists.
+
+    That is the one refusal reachable with a reservation already made, so it is
+    how the cleanup paths are entered.
+    """
+    quotas = SimpleNamespace(
+        check_capacity=Mock(
+            side_effect=[None, RoomQuotaExceeded("You already have too many rooms")]
+        ),
+        check_retained_prompts=Mock(return_value=None),
+        check_creation_rate=AsyncMock(),
+        refund_creation=AsyncMock(),
+    )
+    for name, value in overrides.items():
+        setattr(quotas, name, value)
+    return quotas
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "broken",
+    ["release_unpublished", "refund_creation"],
+    ids=["releasing the code", "returning the allowance"],
+)
+async def test_a_broken_cleanup_still_answers_the_refusal(broken):
+    """Cleanup runs while a refusal is already on its way to the client. A
+    database error there must not replace it - the refund runs in a `finally`,
+    where a raise would swallow the reason the entry was refused, and both
+    would leave the socket waiting out an acknowledgement that never comes."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    exploding = AsyncMock(side_effect=RuntimeError("database is gone"))
+    ctx.room_codes = SimpleNamespace(
+        allocate=AsyncMock(return_value="CODE01"),
+        release_unpublished=exploding if broken == "release_unpublished" else AsyncMock(),
+        retire_ephemeral=AsyncMock(),
+        is_retired=AsyncMock(return_value=False),
+    )
+    ctx.room_quotas = quotas_that_refuse_the_second_capacity_check(
+        **({"refund_creation": exploding} if broken == "refund_creation" else {})
+    )
+    await sessions.save("host-sid", {"user_id": "user-1"})
+
+    answer = await asyncio.wait_for(
+        sio.handlers["/"]["create_room"]("host-sid", {"nickname": "Host"}), timeout=5
+    )
+
+    assert answer == {"ok": False, "error": "You already have too many rooms"}
+    assert room_manager.rooms == {}

@@ -81,6 +81,25 @@ async def _give_back_code(ctx: HandlerContext, code: str | None) -> None:
         await _bounded(ctx.room_codes.release_unpublished(code), "releasing a room code")
     except EntryTimedOut:
         pass
+    except Exception:
+        # Best-effort, like every cleanup here: this one runs while an earlier
+        # failure is still on its way up, and raising over it would lose the
+        # real error and leave the client with no acknowledgement at all.
+        logger.exception("Failed to release room code %s", code)
+
+
+async def _give_back_allowance(ctx: HandlerContext, user_id) -> None:
+    """Return a creation allowance the room never used, best-effort."""
+    if not user_id:
+        return
+    try:
+        await _bounded(
+            ctx.room_quotas.refund_creation(user_id), "returning a creation allowance"
+        )
+    except EntryTimedOut:
+        pass
+    except Exception:
+        logger.exception("Failed to refund a creation allowance for user %s", user_id)
 
 
 BUSY_ACKNOWLEDGEMENT = {
@@ -231,13 +250,9 @@ async def _create_room(ctx: HandlerContext, sid, data):
         created = True
     finally:
         if not created:
-            try:
-                await _bounded(
-                    ctx.room_quotas.refund_creation(identity.user_id),
-                    "returning a creation allowance",
-                )
-            except EntryTimedOut:
-                pass
+            # In a `finally`, so a raise here would replace whatever sent us
+            # down this path; the helper swallows and logs instead.
+            await _give_back_allowance(ctx, identity.user_id)
     player = ctx.room_manager.add_player(
         room,
         identity.nickname,

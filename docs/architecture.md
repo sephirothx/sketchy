@@ -456,7 +456,12 @@ is what separates a mistake from a flood without writing a row per refusal.
 Every database call on the way into a room is bounded by the same ten seconds a
 finished-game write allows, and a timeout refuses the entry rather than waiting. The
 gate is why: a disconnect queues behind the entry it interrupts, so an unbounded call
-is not a slow join but a seat that can never be reconciled.
+is not a slow join but a seat that can never be reconciled. The cleanup writes an
+already-refused entry makes — giving back a room code, giving back a creation
+allowance — are bounded the same way but swallow their failures, because they run
+with a refusal on its way to the client and one of them runs in a `finally`, where
+raising would replace the reason the entry was refused. A reservation stranded that
+way is reclaimed by the same startup sweep that reclaims one stranded by a crash.
 
 Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
 introduces, every socket presents the proxy's address, and the forwarded header is
