@@ -63,12 +63,24 @@ async def _bounded(awaitable, what: str):
     try:
         return await asyncio.wait_for(awaitable, timeout=ENTRY_DB_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        logger.error(
-            "Timed out on %s after %ss while seating a player",
-            what,
-            ENTRY_DB_TIMEOUT_SECONDS,
-        )
+        logger.error("Timed out on %s after %ss", what, ENTRY_DB_TIMEOUT_SECONDS)
         raise EntryTimedOut(what) from None
+
+
+async def _give_back_code(ctx: HandlerContext, code: str | None) -> None:
+    """Release a reservation the room never used, without hanging on it.
+
+    On the failure path, and still inside the seating gate: a cleanup that
+    hangs turns a refused entry into a pinned one. A reservation left behind
+    because this timed out is reclaimed by `retire_orphaned_ephemeral` at
+    startup, the same sweep that handles one left claimed by a crash.
+    """
+    if code is None or ctx.room_codes is None:
+        return
+    try:
+        await _bounded(ctx.room_codes.release_unpublished(code), "releasing a room code")
+    except EntryTimedOut:
+        pass
 
 
 BUSY_ACKNOWLEDGEMENT = {
@@ -111,14 +123,19 @@ async def _create_room(ctx: HandlerContext, sid, data):
     if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
         return ctx.shutdown.rejection_acknowledgement()
     try:
-        identity = await resolve_identity(
-            ctx,
-            sid,
-            payload.nickname,
-            payload.colorblind_safe_colors,
+        identity = await _bounded(
+            resolve_identity(
+                ctx,
+                sid,
+                payload.nickname,
+                payload.colorblind_safe_colors,
+            ),
+            "resolving who is entering",
         )
     except IdentityError as error:
         return {"ok": False, "error": str(error), "field": "nickname"}
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
     if not identity.user_id:
         # Joining stays open to a socket with no account - R-HIST-10 gives it
         # a factual seat - but creating is the command that allocates a room,
@@ -189,11 +206,10 @@ async def _create_room(ctx: HandlerContext, sid, data):
                 logger.exception("Failed to allocate a room code")
                 return {"ok": False, "error": "Could not create the room"}
             if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
-                await ctx.room_codes.release_unpublished(code)
+                await _give_back_code(ctx, code)
                 return ctx.shutdown.rejection_acknowledgement()
         if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
-            if code is not None and ctx.room_codes is not None:
-                await ctx.room_codes.release_unpublished(code)
+            await _give_back_code(ctx, code)
             return ctx.shutdown.rejection_acknowledgement()
         try:
             # Everything above this line awaited, and a second create_room from
@@ -201,8 +217,7 @@ async def _create_room(ctx: HandlerContext, sid, data):
             # instant where the answer and the room are not separated by an await.
             ctx.room_quotas.check_capacity(identity.user_id)
         except RoomQuotaExceeded as error:
-            if code is not None and ctx.room_codes is not None:
-                await ctx.room_codes.release_unpublished(code)
+            await _give_back_code(ctx, code)
             return {"ok": False, "error": str(error)}
         try:
             room = ctx.room_manager.create_room(
@@ -211,13 +226,18 @@ async def _create_room(ctx: HandlerContext, sid, data):
                 created_by_user_id=identity.user_id,
             )
         except Exception:
-            if code is not None and ctx.room_codes is not None:
-                await ctx.room_codes.release_unpublished(code)
+            await _give_back_code(ctx, code)
             raise
         created = True
     finally:
         if not created:
-            await ctx.room_quotas.refund_creation(identity.user_id)
+            try:
+                await _bounded(
+                    ctx.room_quotas.refund_creation(identity.user_id),
+                    "returning a creation allowance",
+                )
+            except EntryTimedOut:
+                pass
     player = ctx.room_manager.add_player(
         room,
         identity.nickname,
@@ -402,14 +422,18 @@ async def _join_room(ctx: HandlerContext, sid, data):
     # in this room, just confirm it rather than reprocessing the join.
     already_joined = await ctx.game_flow._existing_player_for_sid(sid, room.id)
     if already_joined:
-        already_joined.colorblind_safe_colors = (
-            await resolve_colorblind_safe_preference(
-                ctx,
-                user_id=already_joined.user_id,
-                is_anonymous=already_joined.is_anonymous,
-                requested=payload.colorblind_safe_colors,
+        try:
+            already_joined.colorblind_safe_colors = await _bounded(
+                resolve_colorblind_safe_preference(
+                    ctx,
+                    user_id=already_joined.user_id,
+                    is_anonymous=already_joined.is_anonymous,
+                    requested=payload.colorblind_safe_colors,
+                ),
+                "reading a colour preference",
             )
-        )
+        except EntryTimedOut:
+            already_joined.colorblind_safe_colors = payload.colorblind_safe_colors
         already_joined.sid = sid
         already_joined.connected = True
         ctx.timers.cancel_disconnect_timer(already_joined.id)
@@ -443,12 +467,18 @@ async def _join_room(ctx: HandlerContext, sid, data):
         # the path a guest returns through after registering or logging in
         # mid-game, so the seat has to pick up the new name and status.
         await _refresh_seat_identity(ctx, player, name_color)
-        player.colorblind_safe_colors = await resolve_colorblind_safe_preference(
-            ctx,
-            user_id=player.user_id,
-            is_anonymous=player.is_anonymous,
-            requested=payload.colorblind_safe_colors,
-        )
+        try:
+            player.colorblind_safe_colors = await _bounded(
+                resolve_colorblind_safe_preference(
+                    ctx,
+                    user_id=player.user_id,
+                    is_anonymous=player.is_anonymous,
+                    requested=payload.colorblind_safe_colors,
+                ),
+                "reading a colour preference",
+            )
+        except EntryTimedOut:
+            player.colorblind_safe_colors = payload.colorblind_safe_colors
         if not player.is_anonymous:
             stored = await _account_name_color(ctx, player.user_id)
             if stored or name_color:
@@ -473,14 +503,19 @@ async def _join_room(ctx: HandlerContext, sid, data):
         return {"ok": False, "error": "No existing session in this room"}
 
     try:
-        identity = await resolve_identity(
-            ctx,
-            sid,
-            payload.nickname,
-            payload.colorblind_safe_colors,
+        identity = await _bounded(
+            resolve_identity(
+                ctx,
+                sid,
+                payload.nickname,
+                payload.colorblind_safe_colors,
+            ),
+            "resolving who is entering",
         )
     except IdentityError as error:
         return {"ok": False, "error": str(error), "field": "nickname"}
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
 
     if payload.as_spectator and not ctx.room_capacity.admits_a_spectator(room):
         # Deliberately without `roomFull`: that flag is what makes the client
@@ -532,7 +567,12 @@ async def _account_name_color(ctx: HandlerContext, user_id: str | None) -> str |
     """The color stored on an account, if it has one."""
     if ctx.user_repo is None or not user_id:
         return None
-    account = await ctx.user_repo.get_by_id(user_id)
+    try:
+        account = await _bounded(
+            ctx.user_repo.get_by_id(user_id), "reading an account's colour"
+        )
+    except EntryTimedOut:
+        return None
     return normalize_name_color(account.name_color) if account else None
 
 
@@ -547,7 +587,14 @@ async def _refresh_seat_identity(
     """
     if ctx.user_repo is None or not player.user_id or not player.is_anonymous:
         return
-    account = await ctx.user_repo.get_by_id(player.user_id)
+    try:
+        account = await _bounded(
+            ctx.user_repo.get_by_id(player.user_id), "refreshing a seat's identity"
+        )
+    except EntryTimedOut:
+        # The seat keeps the name it has. Worth less than the entry it would
+        # otherwise hold up.
+        return
     if account is None or account.is_anonymous or not account.username:
         return
     player.nickname = account.username
