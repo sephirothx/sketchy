@@ -42,6 +42,7 @@ export function ControlsPanel() {
   const [candidates, setCandidates] = useState<PlayerCandidate[]>([]);
   const [selected, setSelected] = useState<PlayerCandidate | null>(null);
   const [searchFailed, setSearchFailed] = useState(false);
+  const [searching, setSearching] = useState(true);
   const [roleReason, setRoleReason] = useState("");
   const [role, setRole] = useState<"user" | "moderator">("moderator");
   const [error, setError] = useState<string | null>(null);
@@ -85,14 +86,24 @@ export function ControlsPanel() {
   useEffect(() => {
     let cancelled = false;
     const timer = window.setTimeout(() => {
+      // Emptied as the request goes out, and emptied again if it fails. Rows
+      // left standing under a term they do not answer are rows somebody can
+      // click: the list must never show accounts the query no longer found,
+      // and a failed search has learned nothing to show.
+      setCandidates([]);
+      setSearchFailed(false);
+      setSearching(true);
       void searchPlayers(roleQuery.trim())
         .then((result) => {
-          if (cancelled) return;
-          setCandidates(result.players);
-          setSearchFailed(false);
+          if (!cancelled) setCandidates(result.players);
         })
         .catch(() => {
-          if (!cancelled) setSearchFailed(true);
+          if (cancelled) return;
+          setCandidates([]);
+          setSearchFailed(true);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
         });
     }, 250);
     return () => {
@@ -451,6 +462,7 @@ export function ControlsPanel() {
             query: roleQuery,
             count: candidates.length,
             failed: searchFailed,
+            searching,
           })}
         </p>
         {candidates.length > 0 && (

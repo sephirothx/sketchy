@@ -65,6 +65,7 @@ from app.domain_values import (
     TURN_END_REASONS,
     TURN_PARTICIPANT_OUTCOMES,
     TURN_PARTICIPANT_STATES,
+    GRANTABLE_ROLES,
     USER_ROLES,
     USER_THEMES,
     AccountState,
@@ -1297,7 +1298,11 @@ class RoleChangeNotice(Base):
 
     __tablename__ = "role_change_notices"
     __table_args__ = (
-        _values_check("role", USER_ROLES, "ck_role_change_notices_role"),
+        # The grantable roles, not every role: `admin` is never set over the
+        # network, so a notice about one is a row that could only arrive by
+        # mistake - and the client drops what it cannot explain rather than
+        # showing a player a pop-up about a role nobody gave them.
+        _values_check("role", GRANTABLE_ROLES, "ck_role_change_notices_role"),
         Index("ix_role_change_notices_user_pending", "user_id", "acknowledged_at"),
     )
 

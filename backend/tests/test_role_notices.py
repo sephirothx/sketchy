@@ -15,6 +15,7 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.role_notices import (
@@ -227,3 +228,58 @@ async def test_a_deleted_account_leaves_nothing_readable_behind(env):
             user.state = AccountState.DELETED.value
 
     assert await pending_role_notice_payload(factory, account["id"]) == {"notice": None}
+
+
+async def test_acknowledging_twice_is_the_same_answer(env):
+    """A receipt, not a state machine.
+
+    The same account can be looking at this pop-up in two tabs - every socket of
+    an account is told - and the second **Understood** must not fail. The
+    component leaves the notice up when the request is refused, so a 404 for
+    "already settled" would strand a dialog nobody can close. `acknowledge_warning`
+    answers the same way for the same reason.
+    """
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Twice")
+    notice_id = await add_notice(factory, account["id"], UserRole.MODERATOR.value)
+
+    first = await client.post(f"/api/role-notices/{notice_id}/acknowledge")
+    second = await client.post(f"/api/role-notices/{notice_id}/acknowledge")
+    assert (first.status_code, second.status_code) == (200, 200)
+    async with factory() as session:
+        notice = await session.scalar(select(RoleChangeNotice))
+    settled_at = notice.acknowledged_at
+    assert settled_at is not None
+    # And the second one does not move the receipt's time: the notice landed
+    # when it landed.
+    assert settled_at == notice.acknowledged_at
+
+
+async def test_settling_an_old_notice_leaves_a_promotion_that_came_after(env):
+    """The `created_at` bound, from the other direction: acknowledging a notice
+    the account has already seen must not swallow one it has not."""
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Ordered")
+    older = await add_notice(
+        factory, account["id"], UserRole.USER.value, ago_seconds=120
+    )
+    await client.post(f"/api/role-notices/{older}/acknowledge")
+    newer = await add_notice(factory, account["id"], UserRole.MODERATOR.value)
+
+    await client.post(f"/api/role-notices/{older}/acknowledge")
+    body = (await client.get("/api/role-notices/pending")).json()["notice"]
+    assert body["id"] == newer
+
+
+async def test_a_notice_cannot_be_about_a_role_nobody_can_grant(env):
+    """`admin` is never set over the network, so a notice about one could only
+    arrive by mistake - and the client drops what it cannot explain rather than
+    telling a player about a role nobody gave them. The database refuses it
+    first, which is where a mistake should stop."""
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Impossible")
+    with pytest.raises(IntegrityError):
+        await add_notice(factory, account["id"], UserRole.ADMIN.value)

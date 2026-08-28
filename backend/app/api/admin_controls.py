@@ -27,7 +27,7 @@ from app.db.models import AuditEvent, RoleChangeNotice, generate_uuid
 from app.domain_values import AuditTargetType
 from app.db.models import User
 from app.deployment import MAX_SHUTDOWN_DRAIN_SECONDS
-from app.domain_values import AccountState, UserRole
+from app.domain_values import AccountState, GRANTABLE_ROLES, UserRole
 from app.game import Phase
 from app.rooms import RoomManager
 from app.services import config_store
@@ -44,14 +44,15 @@ TURN_ENDED_EVENT = "room.turn_ended_by_admin"
 ROLE_CHANGED_EVENT = "admin.role_changed"
 SHUTDOWN_REQUESTED_EVENT = "server.shutdown_requested"
 
-# What an administrator may set a role to. Promotion to `admin` is deliberately
-# absent: `auth/admin.py` bootstraps the first one from a guarded command that
-# refuses to run once an administrator exists, and its own error message points
-# at "an authorized moderation flow" - this is that flow, for the tier it can
-# safely serve. Minting an administrator over the network would mean one
-# compromised session could mint more, which is the reasoning R-AUTH-14 applies
-# to remote password reset.
-GRANTABLE_ROLES = (UserRole.USER.value, UserRole.MODERATOR.value)
+# What an administrator may set a role to, from `domain_values` because the
+# `role_change_notices` check constraint is the same statement: a notice can
+# only ever be about a role this endpoint can set. Promotion to `admin` is
+# deliberately absent: `auth/admin.py` bootstraps the first one from a guarded
+# command that refuses to run once an administrator exists, and its own error
+# message points at "an authorized moderation flow" - this is that flow, for the
+# tier it can safely serve. Minting an administrator over the network would mean
+# one compromised session could mint more, which is the reasoning R-AUTH-14
+# applies to remote password reset.
 
 # A list to scan rather than a page to read. The search exists to turn a name
 # into the one account being promoted; an operator who cannot see their target

@@ -302,12 +302,17 @@ export function roleSearchStatus({
   query,
   count,
   failed,
+  searching,
 }: {
   query: string;
   count: number;
   failed: boolean;
+  searching: boolean;
 }): string {
   if (failed) return "Could not search for players.";
+  // The list is emptied while a search is in flight, so without this the line
+  // under it would report "no match" about a question still being asked.
+  if (searching) return "Looking…";
   if (query.trim() === "") {
     return count === 0
       ? "Nobody holds a role yet. Type a name to find an account."

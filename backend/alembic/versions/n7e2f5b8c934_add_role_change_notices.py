@@ -31,7 +31,7 @@ def upgrade() -> None:
         ),
         sa.Column("acknowledged_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
-            "role IN ('user', 'moderator', 'admin')",
+            "role IN ('user', 'moderator')",
             name="ck_role_change_notices_role",
         ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),

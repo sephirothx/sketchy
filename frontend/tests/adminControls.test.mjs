@@ -144,32 +144,33 @@ test("the confirmation names the account it was about", () => {
 });
 
 test("the line under the search box explains the rules the list obeys", () => {
+  const searching = false;
   // An empty result is otherwise a control that has quietly declined to help.
   assert.match(
-    roleSearchStatus({ query: "Marta", count: 0, failed: false }),
+    roleSearchStatus({ query: "Marta", count: 0, failed: false, searching }),
     /guest cannot hold a role/,
   );
   // A blank box is not "no matches" - it is who holds a role now, which is
   // the question revoking one starts from.
   assert.match(
-    roleSearchStatus({ query: "  ", count: 2, failed: false }),
+    roleSearchStatus({ query: "  ", count: 2, failed: false, searching }),
     /Who holds a role now/,
   );
   assert.match(
-    roleSearchStatus({ query: "", count: 0, failed: false }),
+    roleSearchStatus({ query: "", count: 0, failed: false, searching }),
     /Nobody holds a role yet/,
   );
   assert.equal(
-    roleSearchStatus({ query: "Marta", count: 1, failed: false }),
+    roleSearchStatus({ query: "Marta", count: 1, failed: false, searching }),
     "1 account matches.",
   );
   assert.equal(
-    roleSearchStatus({ query: "Mar", count: 3, failed: false }),
+    roleSearchStatus({ query: "Mar", count: 3, failed: false, searching }),
     "3 accounts match.",
   );
   // A failed lookup must not read as an empty one: nothing was learned.
   assert.match(
-    roleSearchStatus({ query: "Marta", count: 0, failed: true }),
+    roleSearchStatus({ query: "Marta", count: 0, failed: true, searching }),
     /Could not search/,
   );
 });
@@ -182,4 +183,19 @@ test("the id fragment tells two accounts apart, not two timestamps", () => {
   const second = "01a04a8f-02c9-7073-9c5d-f2bd064bfbe0";
   assert.notEqual(accountFragment(first), accountFragment(second));
   assert.equal(accountFragment(first), "30690997");
+});
+
+test("a search still in flight does not report that nothing matched", () => {
+  // The list is emptied when the request goes out, so that an old term's rows
+  // cannot be clicked under a new one. The line must not read the empty list
+  // as an answer while the question is still being asked.
+  assert.equal(
+    roleSearchStatus({ query: "Mar", count: 0, failed: false, searching: true }),
+    "Looking…",
+  );
+  // A failure outranks it: the search is over, and it learned nothing.
+  assert.match(
+    roleSearchStatus({ query: "Mar", count: 0, failed: true, searching: true }),
+    /Could not search/,
+  );
 });

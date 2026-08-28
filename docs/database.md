@@ -563,8 +563,11 @@ from a report **resolves that report in the same transaction**, and a report alr
 decided refuses the warning - which is also what stops a retry from warning twice.
 
 ### `role_change_notices`
-`id` · `user_id` (`SET NULL`) · `role` · `created_at` · `acknowledged_at`, with
-`ix_role_change_notices_user_pending` on (`user_id`, `acknowledged_at`).
+`id` · `user_id` (`SET NULL`) · `role` (`user`/`moderator`, checked) · `created_at` ·
+`acknowledged_at`, with `ix_role_change_notices_user_pending` on (`user_id`,
+`acknowledged_at`). The check is the *grantable* roles rather than every role:
+`admin` is never set over the network, so a notice about one could only arrive
+by mistake, and the database is where that mistake should stop.
 
 **Flow.** What an account still has to be told about its own role. Written by
 `PATCH /api/admin/players/{id}/role` in the same transaction as the change and the
