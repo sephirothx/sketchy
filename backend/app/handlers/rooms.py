@@ -157,6 +157,11 @@ async def _create_room(ctx: HandlerContext, sid, data):
     except RoomQuotaExceeded as error:
         return {"ok": False, "error": str(error)}
     except EntryTimedOut:
+        # Deliberately not refunded. The attempt may have been recorded before
+        # the wait was cut short, and a refund that guesses wrong hands back
+        # an allowance nobody spent - which raises a ceiling rather than
+        # lowering one. Costing this caller one of their own hourly attempts
+        # is the cheaper mistake.
         return BUSY_ACKNOWLEDGEMENT
     # From here on the allowance has been spent, and everything below can
     # still refuse: a drain beginning, an allocation failing, the capacity
@@ -336,9 +341,13 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     room = ctx.room_manager.get_room_by_code(payload.code)
     if not room:
-        if ctx.room_codes is not None and await _bounded(
-            ctx.room_codes.is_retired(payload.code), "reading the room code"
-        ):
+        try:
+            retired = ctx.room_codes is not None and await _bounded(
+                ctx.room_codes.is_retired(payload.code), "reading the room code"
+            )
+        except EntryTimedOut:
+            return BUSY_ACKNOWLEDGEMENT
+        if retired:
             return {
                 "ok": False,
                 "error": "This room has ended",
@@ -365,13 +374,17 @@ async def _join_room(ctx: HandlerContext, sid, data):
     if room is None and payload.code:
         room = ctx.room_manager.get_room_by_code(payload.code)
     if not room:
-        if (
-            payload.code
-            and ctx.room_codes is not None
-            and await _bounded(
-                ctx.room_codes.is_retired(payload.code), "reading the room code"
+        try:
+            retired = (
+                payload.code
+                and ctx.room_codes is not None
+                and await _bounded(
+                    ctx.room_codes.is_retired(payload.code), "reading the room code"
+                )
             )
-        ):
+        except EntryTimedOut:
+            return BUSY_ACKNOWLEDGEMENT
+        if retired:
             return {
                 "ok": False,
                 "error": "This room has ended",

@@ -98,3 +98,28 @@ def test_the_bound_matches_the_one_the_history_write_already_uses():
     from app.services.game_flow import HISTORY_WRITE_TIMEOUT_SECONDS
 
     assert ENTRY_DB_TIMEOUT_SECONDS == HISTORY_WRITE_TIMEOUT_SECONDS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", ["join_room", "get_room_preview"])
+async def test_a_hung_code_lookup_refuses_rather_than_raising(monkeypatch, command):
+    """Both paths that ask whether a code has been retired reach the database,
+    and a handler that raises answers nothing at all: the client waits out its
+    acknowledgement instead of being told."""
+    monkeypatch.setattr("app.handlers.rooms.ENTRY_DB_TIMEOUT_SECONDS", 0.05)
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_codes = SimpleNamespace(
+        allocate=AsyncMock(return_value="CODE01"),
+        release_unpublished=AsyncMock(),
+        retire_ephemeral=AsyncMock(),
+        is_retired=never_answers(),
+    )
+    await sessions.save("visitor-sid", {"user_id": "user-1"})
+
+    answer = await asyncio.wait_for(
+        sio.handlers["/"][command]("visitor-sid", {"code": "ABC123"}), timeout=5
+    )
+
+    assert answer["ok"] is False
+    assert "database" in answer["error"]
