@@ -1065,3 +1065,88 @@ async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
         assert empty[1] == 0
     finally:
         await engine.dispose()
+
+
+async def test_letter_histogram_migration_pages_past_the_first_batch(tmp_path):
+    """More revisions than one slice holds, so the walk has to continue.
+
+    The backfill pages by keyset rather than reading every revision ID, so a
+    corpus larger than one batch is exactly where a wrong cursor shows up: it
+    would stop after the first page and leave the rest unpriced.
+    """
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'letter-histogram-paging.db'}"
+    )
+    script = ScriptDirectory.from_config(get_alembic_config())
+    previous = script.get_revision("m6d1e7a4b829").down_revision
+    assert isinstance(previous, str)
+
+    # Loaded from the migration itself: the point is to exceed whatever it
+    # pages by, not whatever this test guessed it pages by.
+    batch_size = ScriptDirectory.from_config(get_alembic_config()).get_revision(
+        "m6d1e7a4b829"
+    ).module.BACKFILL_BATCH_SIZE
+    total_revisions = batch_size * 2 + 3
+    list_id = uuid.uuid4().hex
+    concept_id = uuid.uuid4().hex
+    version_id = uuid.uuid4().hex
+    revision_ids = [uuid.uuid4().hex for _ in range(total_revisions)]
+    try:
+        await _migrate(engine, alembic_command.upgrade, previous)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_lists "
+                    "(id, slug, name, language, is_bundled, visibility, "
+                    "moderation_state, version) VALUES "
+                    "(:id, 'paged', 'Paged', 'en', 1, 'public', 'active', 1)"
+                ),
+                {"id": list_id},
+            )
+            await connection.execute(
+                text("INSERT INTO prompt_concepts (id) VALUES (:id)"),
+                {"id": concept_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_versions "
+                    "(id, concept_id, language, version, canonical_answer, "
+                    "match_key, moderation_state) VALUES "
+                    "(:id, :concept, 'en', 1, 'ox', 'ox', 'active')"
+                ),
+                {"id": version_id, "concept": concept_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revisions "
+                    "(id, prompt_list_id, version, language, content_hash) "
+                    "VALUES (:id, :list, :version, 'en', '')"
+                ),
+                [
+                    {"id": rid, "list": list_id, "version": index + 1}
+                    for index, rid in enumerate(revision_ids)
+                ],
+            )
+            # Every revision holds the same one-prompt membership, so each must
+            # come back priced - including the ones past the first page.
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revision_items "
+                    "(revision_id, prompt_version_id, position) "
+                    "VALUES (:id, :version, 0)"
+                ),
+                [{"id": rid, "version": version_id} for rid in revision_ids],
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.connect() as connection:
+            priced = await connection.scalar(
+                text(
+                    "SELECT count(*) FROM prompt_list_revisions "
+                    "WHERE letter_total = 2"
+                )
+            )
+
+        assert priced == total_revisions
+    finally:
+        await engine.dispose()

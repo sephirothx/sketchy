@@ -13,6 +13,7 @@ resident to count it again per game.
 *every* alphabetic character, including those outside a-z, because it is the
 divisor and a language with such letters must keep the ratios it has today.
 """
+import uuid
 from collections import Counter
 from collections.abc import Sequence
 from string import ascii_lowercase
@@ -26,10 +27,13 @@ down_revision: str | Sequence[str] | None = "l5b9d4f2a613"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Revisions per slice. Small enough that the answers of one slice are a
-# bounded allocation however large the corpus has grown, large enough that
-# the walk is a handful of queries rather than one per revision.
+# Revisions per slice. Small enough that one slice - its IDs and its answers
+# - is a bounded allocation however large the corpus has grown, large enough
+# that the walk is a handful of queries rather than one per revision.
 BACKFILL_BATCH_SIZE = 500
+# The type `prompt_list_revisions.id` is declared with, so the paging
+# cursor compares as the column sorts on either backend.
+_REVISION_ID = sa.Uuid(as_uuid=True, native_uuid=True)
 
 
 def upgrade() -> None:
@@ -62,16 +66,30 @@ def upgrade() -> None:
     # resident to start is one that gets worse as the corpus does.
     bind = op.get_bind()
 
-    revision_ids = [
-        row[0]
-        for row in bind.execute(
-            sa.text("SELECT id FROM prompt_list_revisions ORDER BY id")
-        )
-    ]
     encode = sa.JSON().bind_processor(bind.dialect)
+    cursor = None
 
-    for start in range(0, len(revision_ids), BACKFILL_BATCH_SIZE):
-        batch = revision_ids[start : start + BACKFILL_BATCH_SIZE]
+    while True:
+        # Keyset pagination rather than a list of every revision ID: history is
+        # unbounded, and reading all of it just to slice it locally is the same
+        # allocation this batching exists to avoid, only in cheaper units.
+        page = sa.text(
+            "SELECT id FROM prompt_list_revisions "
+            + ("WHERE id > :cursor " if cursor is not None else "")
+            + "ORDER BY id LIMIT :limit"
+        )
+        parameters = {"limit": BACKFILL_BATCH_SIZE}
+        if cursor is not None:
+            # Bound as the column's own type: SQLite stores these as hex text
+            # and PostgreSQL as native uuid, and an untyped parameter compares
+            # the way the driver guesses rather than the way the column sorts.
+            page = page.bindparams(sa.bindparam("cursor", type_=_REVISION_ID))
+            parameters["cursor"] = cursor
+        batch = [row[0] for row in bind.execute(page, parameters)]
+        if not batch:
+            break
+        cursor = batch[-1] if isinstance(batch[-1], uuid.UUID) else uuid.UUID(batch[-1])
+
         answers: dict[object, list[str]] = {revision_id: [] for revision_id in batch}
         rows = bind.execute(
             sa.text(

@@ -280,8 +280,16 @@ async def test_sampling_skips_answers_a_room_has_already_shadowed():
         await engine.dispose()
 
 
-async def test_repeated_draws_reach_every_prompt_in_the_pool():
-    """The draw has to be random across the whole revision, not a stable prefix."""
+async def test_repeated_draws_reach_across_the_whole_pool():
+    """The draw has to be random across the whole revision, not a stable prefix.
+
+    Asserting *total* coverage would be asserting a coin lands heads enough
+    times: 40 draws of 50 from 260 leave at least one prompt untouched about
+    5% of the time, so that test fails for a correct implementation once every
+    twenty runs. The margin below is far outside anything sampling produces
+    (20,000 simulated runs never missed more than 2) while still being nowhere
+    near the 50 a fixed prefix would reach.
+    """
     factory, engine = await create_test_db()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
@@ -298,7 +306,9 @@ async def test_repeated_draws_reach_every_prompt_in_the_pool():
                 ).prompts
             }
 
-        assert len(seen) == pinned.prompt_count
+        assert len(seen) >= pinned.prompt_count - 20
+        # A stable prefix would stop at one draw's worth however many we take.
+        assert len(seen) > 50
     finally:
         await engine.dispose()
 

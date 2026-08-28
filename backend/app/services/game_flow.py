@@ -452,6 +452,15 @@ class GameFlowService:
         pool = random.sample(custom, from_custom) + [
             prompt.answer for prompt in drawn
         ]
+        if not pool:
+            # Whatever the arithmetic said, this is the state that matters: a
+            # room that asked for content and has none to play. `Game` reads an
+            # empty pool as the built-in list, so this is the last place the
+            # forbidden substitution can be stopped.
+            logger.warning("Room %s drew an empty prompt pool", room.id)
+            raise RoomPromptResolutionError(
+                "Prompt lists could not be loaded. Please try again."
+            )
         random.shuffle(pool)
 
         # Only content the game can reach is priced. A room that selected lists

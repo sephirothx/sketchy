@@ -2651,14 +2651,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             if excluded:
                 eligible.append(PromptVersion.match_key.notin_(excluded))
 
-            drawable = await session.scalar(
-                select(func.count()).select_from(
-                    select(PromptVersion.id).where(*eligible).subquery()
-                )
-            )
-            if not drawable:
-                return PromptSample()
-
             versions = (
                 (
                     await session.execute(
@@ -2676,6 +2668,29 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 .scalars()
                 .all()
             )
+            if not versions:
+                return PromptSample()
+
+            # The draw comes first and the count second, so a `drawable` this
+            # draw already disproved is never reported. Postgres reads each
+            # statement at its own snapshot, so a takedown committing between
+            # the two would otherwise leave a count saying there is content and
+            # a draw holding none - and a caller weighting on that count, or
+            # trusting it to mean the lists are playable, would be wrong in the
+            # one direction that matters. Fewer rows than asked for means there
+            # are no more; only a full draw needs asking.
+            if len(versions) < limit:
+                drawable = len(versions)
+            else:
+                drawable = max(
+                    await session.scalar(
+                        select(func.count()).select_from(
+                            select(PromptVersion.id).where(*eligible).subquery()
+                        )
+                    )
+                    or 0,
+                    len(versions),
+                )
 
             # Which of the pinned revisions each drawn prompt came from: a
             # version can sit in several selected lists, and a turn records
@@ -2717,7 +2732,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     )
                     for version in versions
                 ),
-                drawable=int(drawable),
+                drawable=drawable,
             )
 
     async def get_prompts_by_slugs(self, slugs: list[str]) -> list[str]:

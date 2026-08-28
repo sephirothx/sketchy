@@ -21,6 +21,7 @@ from app.handlers import register_all_handlers as register_handlers
 from app.handlers import restart
 from app.prompts import PROMPTS, letter_histogram
 from app.rooms import RestartVote
+from app.repositories.interfaces import PromptSample
 from tests.fake_game_history_repo import FakeGameHistoryRepository
 from tests.handlers.helpers import StubPromptListRepo, build_context, build_room
 
@@ -434,3 +435,53 @@ async def test_the_roster_is_read_after_the_draw_not_before_it():
 
     assert latecomer["player"].id in room.game.turn_order
     assert len(room.game.turn_order) == len(players) + 1
+
+
+async def test_a_takedown_between_counting_and_drawing_still_refuses():
+    """The count and the draw are two statements, and Postgres reads each fresh.
+
+    A takedown committing between them leaves a count saying there is content
+    and a draw returning none. Trusting the count would hand `Game` an empty
+    pool, which it reads as the built-in list - the same forbidden fallback,
+    reached by a narrower door.
+    """
+    room_manager, room, _ = build_room(rounds=1)
+    repo = StubPromptListRepo(["apple", "banana"])
+    pin(room, repo)
+
+    async def counted_but_gone(*_args, **_kwargs):
+        return PromptSample(prompts=(), drawable=2)
+
+    repo.sample_prompts = counted_but_gone
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    with pytest.raises(RoomPromptResolutionError):
+        await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert room.state == "waiting"
+    assert room.game is None
+
+
+async def test_a_short_draw_is_believed_over_the_count():
+    """Fewer rows than asked for means fewer exist, whatever the count said."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.custom_prompts = ["mine"]
+    repo = StubPromptListRepo(["apple", "banana", "castle"])
+    pin(room, repo)
+
+    async def one_row_only(*_args, **_kwargs):
+        drawn = await StubPromptListRepo.sample_prompts(
+            repo, list(room.prompt_list_revision_ids), limit=1
+        )
+        return PromptSample(prompts=drawn.prompts, drawable=500)
+
+    repo.sample_prompts = one_row_only
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    # Whatever the count claimed, the game may only hold what came back.
+    curated = [p for p in room.game.prompt_pool if p != "mine"]
+    assert len(curated) <= 1
+    assert room.game.prompt_pool
