@@ -165,6 +165,20 @@ def create_admin_controls_router(
                 status_code=409,
                 detail="A shutdown drain is already running.",
             )
+        if shutdown.shutdown_requested:
+            # `is_draining` is false until the signal lands, so without this
+            # the moments after a shutdown is asked for are the one window
+            # where this endpoint answers a question it refuses either side
+            # of. Nothing good comes of the answer: the change cannot be
+            # observed on a process that is stopping, its audit event
+            # describes an effect this server never had, and the broadcast
+            # goes to clients about to be disconnected - while the stored row
+            # quietly decides what the *next* process starts as. Pausing
+            # before a deploy is the supported order, and it still works.
+            raise HTTPException(
+                status_code=409,
+                detail="A shutdown has been requested; this server is stopping.",
+            )
         if body.paused == shutdown.is_paused:
             return _state(shutdown)
 

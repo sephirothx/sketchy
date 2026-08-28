@@ -221,6 +221,44 @@ async def test_a_pause_survives_the_restart_it_was_taken_for(env):
     assert await read_paused(factory) is True
 
 
+async def test_maintenance_is_refused_once_a_shutdown_has_been_asked_for(env):
+    """The window between asking and draining is not a window for toggling.
+
+    `is_draining` is false until the signal lands, so this endpoint used to
+    answer here while refusing the same call a moment later. The change cannot
+    be observed on a process that is stopping, and the row it writes decides
+    what the *next* one starts as - a state nobody watched being set.
+    """
+    _, factory, _, coordinator, _, _ = env
+    admin = await an_admin(env)
+    await admin.post("/api/admin/shutdown", json={"reason": "deploying"})
+    assert coordinator.shutdown_requested and not coordinator.is_draining
+
+    response = await admin.post(
+        "/api/admin/maintenance", json={"paused": True, "reason": "too late"}
+    )
+    assert response.status_code == 409
+    assert not coordinator.is_paused
+    assert await read_paused(factory) is False
+    # Only the shutdown is on the record; no pause was applied to write down.
+    assert [event.event_type for event in await audit_rows(factory)] == [
+        "server.shutdown_requested"
+    ]
+
+
+async def test_pausing_before_asking_for_a_shutdown_still_carries_over(env):
+    """The supported order, and the reason the pause is persisted at all."""
+    _, factory, _, coordinator, _, _ = env
+    admin = await an_admin(env)
+    await admin.post(
+        "/api/admin/maintenance", json={"paused": True, "reason": "draining first"}
+    )
+    assert (
+        await admin.post("/api/admin/shutdown", json={"reason": "now stopping"})
+    ).status_code == 200
+    assert await read_paused(factory) is True
+
+
 async def test_a_shutdown_still_drains_from_a_paused_process(env):
     """A deploy issued during a pause must not be refused by the pause."""
     _, _, rooms, coordinator, _, _ = env

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import "./App.css";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
@@ -50,6 +50,9 @@ function App() {
   const [paused, setPaused] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [restarted, setRestarted] = useState(false);
+  // Whether a drain was on screen when the connection dropped, so the "we are
+  // back" line can be shown once - after the notice itself has been cleared.
+  const sawShutdownRef = useRef(false);
 
   useEffect(() => {
     const onServerShutdown = (payload: unknown) => {
@@ -59,14 +62,30 @@ function App() {
       setSecondsLeft(shutdownSecondsRemaining(notice));
       setRestarted(false);
     };
-    // Connecting while a shutdown notice is up can only be a reconnection, and
-    // the process that sent it is gone: the drain it described is over however
-    // it ended. The notice is replaced rather than dropped, because a player
-    // whose game vanished mid-round is owed the reason.
-    const onConnect = () => {
+    // Both notices describe the connection that carried them, and are dropped
+    // when it ends rather than when the next one opens. A server that is
+    // paused or draining says so at the handshake, and socket.io delivers
+    // those buffered events *before* `connect` - so clearing there would erase
+    // what the new server had just said. It also fixes the other direction: a
+    // pause lifted while this client was away sends no notice on reconnect,
+    // so a cached `true` would otherwise claim for ever that rooms are paused.
+    const onDisconnect = () => {
       setShutdownNotice((current) => {
-        if (current) setRestarted(true);
+        if (current) sawShutdownRef.current = true;
         return null;
+      });
+      setPaused(false);
+    };
+    // A player whose game vanished mid-round is owed the reason, so a drain
+    // that ended in a restart is reported once the server is back - unless it
+    // is back and *still* draining, which the handshake will have said just
+    // above and which is not a "we are back" story.
+    const onConnect = () => {
+      if (!sawShutdownRef.current) return;
+      sawShutdownRef.current = false;
+      setShutdownNotice((current) => {
+        if (!current) setRestarted(true);
+        return current;
       });
     };
     // A pause is not a version skew and not a drain: the server is still
@@ -77,10 +96,12 @@ function App() {
     };
     socket.on("server_shutdown", onServerShutdown);
     socket.on("server_paused", onServerPaused);
+    socket.on("disconnect", onDisconnect);
     socket.on("connect", onConnect);
     return () => {
       socket.off("server_shutdown", onServerShutdown);
       socket.off("server_paused", onServerPaused);
+      socket.off("disconnect", onDisconnect);
       socket.off("connect", onConnect);
     };
   }, []);

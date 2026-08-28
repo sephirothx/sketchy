@@ -16,9 +16,11 @@ exists for: a drain another operator started, or a stop sent to the host. Both
 are already broadcast to every socket, so the panel can be told rather than
 asked — no polling, and no re-read racing the click it is meant to gate.
 
-Everything here belongs to one connection, and `App.tsx` reads a reconnect the
-same way: as the replacement server being up. The transitions live in
-`lib/admissionAnnouncements.ts` so they are covered; this is the wiring.
+Everything here belongs to one connection, and is cleared when that connection
+ends rather than when the next one opens — the new server's handshake notices
+arrive before its `connect` event, so the later reset would erase them. The
+transitions live in `lib/admissionAnnouncements.ts` so they are covered; this
+is the wiring.
 
 The server stays the authority: a click that slips through the millisecond
 between the announcement and the button is still refused with a 409. This is
@@ -37,13 +39,19 @@ export function useAdmissionNotices(): AdmissionAnnouncements {
       const notice = parsePausedNotice(payload);
       if (notice) announce({ type: "paused", paused: notice.paused });
     };
+    // Cleared when the connection ends, not when the next one opens: the
+    // handshake notices of the new server are delivered *before* its
+    // `connect` event, so resetting there would erase them.
+    const onDisconnect = () => announce({ type: "disconnect" });
     const onConnect = () => announce({ type: "connect" });
     socket.on("server_shutdown", onShutdown);
     socket.on("server_paused", onPaused);
+    socket.on("disconnect", onDisconnect);
     socket.on("connect", onConnect);
     return () => {
       socket.off("server_shutdown", onShutdown);
       socket.off("server_paused", onPaused);
+      socket.off("disconnect", onDisconnect);
       socket.off("connect", onConnect);
     };
   }, []);

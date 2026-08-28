@@ -24,28 +24,36 @@ export const NO_ANNOUNCEMENTS: AdmissionAnnouncements = {
 
 export type AdmissionEvent =
   | { type: "connect" }
+  | { type: "disconnect" }
   | { type: "draining" }
   | { type: "paused"; paused: boolean };
 
 /** Fold one announcement into what is known.
 
-A `connect` resets everything the previous process said. That is the whole
-point of tracking the connection: an announcement describes the process that
-made it, and a drain is precisely the thing that ends one — so carrying it
-across a reconnect would be the old server's last words about the new one. A
-server that is paused or draining says so at the handshake, so the true state
-arrives immediately behind the reset rather than being lost to it. */
+An announcement describes the process that made it, and a drain is precisely
+the thing that ends one — so it must not survive into the next connection,
+where it would be the old server's last words about the new one.
+
+**The clearing happens on `disconnect`, not on `connect`, and that ordering is
+load-bearing.** A server that is paused or draining says so from inside its
+connection handler, before the namespace acknowledgement; socket.io-client
+buffers those events and, in `onconnect`, flushes them *and then* emits
+`connect` (`onevent` → `receiveBuffer`, `onconnect` → `emitBuffered()` →
+`emitReserved("connect")`). Resetting on `connect` therefore erases the
+authoritative state the new server had just sent. Resetting when the previous
+connection ends leaves nothing to erase.
+
+`connect` still counts the connection, because a snapshot fetched over the old
+one describes a process that is gone. */
 export function announcementsAfter(
   state: AdmissionAnnouncements,
   event: AdmissionEvent,
 ): AdmissionAnnouncements {
   switch (event.type) {
+    case "disconnect":
+      return { ...state, draining: false, paused: null };
     case "connect":
-      return {
-        draining: false,
-        paused: null,
-        connection: state.connection + 1,
-      };
+      return { ...state, connection: state.connection + 1 };
     case "draining":
       return { ...state, draining: true };
     case "paused":
