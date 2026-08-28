@@ -607,14 +607,50 @@ async def test_tuning_the_default_cannot_move_a_shutdown_already_asked_for(env):
     assert notice["drainSeconds"] == 60
 
 
-async def test_omitting_the_window_uses_whatever_is_configured(env):
-    _, _, _, coordinator, _, _ = env
+async def test_omitting_the_window_freezes_the_configured_one(env):
+    """"Use the configured window" has to mean the one that was configured *then*.
+
+    The configured value is a tunable the panel can change, so resolving it
+    and leaving the claim empty would let a change between the accepted
+    request and the drain starting make the server wait a different length
+    from the one the response and the audit both recorded.
+    """
+    _, factory, _, coordinator, _, _ = env
     admin = await an_admin(env)
     coordinator.set_drain_seconds(42)
 
     response = await admin.post("/api/admin/shutdown", json={"reason": "as configured"})
     assert response.json()["drainSeconds"] == 42
-    assert coordinator.drain_seconds == 42
+
+    # As a tuning change would, after the request was accepted.
+    coordinator.set_drain_seconds(0)
+
+    sio = AsyncMock()
+    await coordinator.begin_shutdown(sio)
+    (notice,) = [
+        call.args[1] for call in sio.emit.await_args_list
+        if call.args[0] == "server_shutdown"
+    ]
+    assert notice["drainSeconds"] == 42, "the drain ran on the window it promised"
+
+    (event,) = await audit_rows(factory)
+    assert event.details["drainSeconds"] == 42
+
+
+async def test_the_notice_promises_exactly_what_will_be_waited(env):
+    """Rounding up let a countdown still be running when the socket closed."""
+    _, _, _, coordinator, _, _ = env
+    admin = await an_admin(env)
+    await admin.post(
+        "/api/admin/shutdown", json={"reason": "precise", "drainSeconds": 1.25}
+    )
+    sio = AsyncMock()
+    await coordinator.begin_shutdown(sio)
+    (notice,) = [
+        call.args[1] for call in sio.emit.await_args_list
+        if call.args[0] == "server_shutdown"
+    ]
+    assert notice["drainSeconds"] == 1.25
 
 
 @pytest.mark.parametrize("seconds", [-1, 301, 1000])

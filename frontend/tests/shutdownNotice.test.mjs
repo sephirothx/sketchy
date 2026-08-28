@@ -75,3 +75,18 @@ test("an unparseable timestamp falls back to the announced window", () => {
     45,
   );
 });
+
+test("a fractional window is displayed as whole seconds, never as more time", () => {
+  // The server announces exactly what it will wait, fractions included, so a
+  // countdown cannot outlive the socket. Rounding for display belongs here -
+  // and rounds the *bound*, so it can never show more than is being given.
+  const notice = {
+    contractVersion: 1,
+    reason: "deployment",
+    drainSeconds: 1.25,
+    startedAt: new Date(1000).toISOString(),
+  };
+  assert.equal(shutdownSecondsRemaining(notice, 1000), 2);
+  assert.equal(shutdownSecondsRemaining(notice, 1500), 1);
+  assert.equal(shutdownSecondsRemaining(notice, 3000), 0);
+});

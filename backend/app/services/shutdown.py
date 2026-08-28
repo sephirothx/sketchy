@@ -7,7 +7,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
-import math
 import time
 from uuid import UUID
 
@@ -221,7 +220,12 @@ class ShutdownCoordinator:
         return {
             "contractVersion": SHUTDOWN_NOTICE_CONTRACT_VERSION,
             "reason": "deployment",
-            "drainSeconds": math.ceil(drain),
+            # Exactly what will be waited, not a rounded-up version of it.
+            # Rounding here promised a client two seconds while the server
+            # stopped waiting after 1.25, so a countdown could still be
+            # running when the socket closed. Whole seconds are a question for
+            # whatever draws the countdown, not for the contract.
+            "drainSeconds": drain,
             "startedAt": self._started_at.isoformat(),
         }
 

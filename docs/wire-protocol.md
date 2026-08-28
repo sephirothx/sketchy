@@ -452,6 +452,14 @@ the recorded standings so the final screen and the history row can never disagre
 { contractVersion: 1, reason: "deployment", drainSeconds: number, startedAt: string }
 ```
 
+`drainSeconds` is **exactly** what the server will wait, fractions included — it
+used to be rounded up, which promised a client two seconds while the server
+stopped waiting after 1.25 and left a countdown running past the socket closing.
+Presenting it as whole seconds is the client's job
+([`shutdownNotice.ts`](../frontend/src/lib/shutdownNotice.ts) ceils the bound, so
+a display can never show more time than is being given). The window is fixed when
+the drain starts, so a change to the configured default cannot move it.
+
 **`server_paused`**:
 
 ```ts

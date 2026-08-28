@@ -34,6 +34,12 @@ export function parseShutdownNotice(
  * measured against a clock this browser does not share, and a skewed one must
  * not be able to promise more time than was ever offered - or count into
  * negatives after the window has closed.
+ *
+ * The announced window is the exact one the server will wait, fractions and
+ * all, because that is what the contract is for. Rounding it up is a display
+ * decision and belongs here: the clamp ceils the bound so a 1.25-second window
+ * reads as "1 second" rather than "1.25 seconds", and never as more time than
+ * the server is actually giving.
  */
 export function shutdownSecondsRemaining(
   notice: ServerShutdownNotice,
@@ -42,7 +48,7 @@ export function shutdownSecondsRemaining(
   const startedAt = Date.parse(notice.startedAt);
   if (Number.isNaN(startedAt)) return notice.drainSeconds;
   const remaining = (startedAt + notice.drainSeconds * 1000 - now) / 1000;
-  return Math.min(notice.drainSeconds, Math.max(0, Math.ceil(remaining)));
+  return Math.min(Math.ceil(notice.drainSeconds), Math.max(0, Math.ceil(remaining)));
 }
 
 /**

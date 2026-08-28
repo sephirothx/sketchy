@@ -374,7 +374,12 @@ def create_admin_controls_router(
         # was written down. Carrying the window rather than writing it onto the
         # configured value keeps it out of reach of the tuning panel, which can
         # still change that value while this shutdown is pending.
-        if not shutdown.claim_shutdown(body.drain_seconds):
+        # `drain`, not `body.drain_seconds`: omitting a window means "use the
+        # configured one", and that value is a tunable the panel can change
+        # while this shutdown is pending. Resolving it here and freezing it on
+        # the claim is what makes the number in the response and the audit the
+        # number the drain actually runs on.
+        if not shutdown.claim_shutdown(drain):
             raise HTTPException(
                 status_code=409, detail="A shutdown has already been requested."
             )
