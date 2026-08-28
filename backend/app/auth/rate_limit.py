@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable
 
 from starlette.requests import Request
-from sqlalchemy import delete, select, tuple_
+from sqlalchemy import delete, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -216,96 +216,136 @@ class PersistentRateLimiter:
         )
         return self._secret
 
-    async def check(self, key: str) -> bool:
-        """Record one attempt without ever storing the raw client address."""
+    async def _key_hash(self, key: str) -> str:
+        """The bucket this caller belongs to, never their raw address."""
         secret = await self._hash_secret()
-        key_hash = hmac.new(
+        return hmac.new(
             secret.encode("utf-8"),
             key.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
 
+    async def check(self, key: str) -> bool:
+        """Record one attempt without ever storing the raw client address.
+
+        Every decision is a single conditional statement the database
+        evaluates, rather than a read, a decision here, and a write back.
+        `SELECT … FOR UPDATE` made that safe on PostgreSQL and nothing at all
+        on SQLite, which ignores row locks - and SQLite is the documented
+        default, so the ceiling every limit rests on was soft by however many
+        attempts were in flight together.
+        """
+        key_hash = await self._key_hash(key)
+
         for _ in range(3):
             checked_at = self._clock()
+            async with self._session_factory() as session:
+                async with session.begin():
+                    # Spend one from a live window that still has room. The
+                    # `attempt_count <` is the ceiling, evaluated where the
+                    # row is locked rather than where it was last read.
+                    taken = await session.execute(
+                        update(AuthRateLimitBucket)
+                        .where(
+                            AuthRateLimitBucket.scope == self._scope,
+                            AuthRateLimitBucket.key_hash == key_hash,
+                            AuthRateLimitBucket.window_expires_at > checked_at,
+                            AuthRateLimitBucket.attempt_count < self._limit,
+                        )
+                        .values(
+                            attempt_count=AuthRateLimitBucket.attempt_count + 1,
+                            updated_at=checked_at,
+                        )
+                    )
+                    if taken.rowcount:
+                        return await self._finish(True)
+
+                    # Or start a fresh window over one that has expired.
+                    rolled = await session.execute(
+                        update(AuthRateLimitBucket)
+                        .where(
+                            AuthRateLimitBucket.scope == self._scope,
+                            AuthRateLimitBucket.key_hash == key_hash,
+                            AuthRateLimitBucket.window_expires_at <= checked_at,
+                        )
+                        .values(
+                            attempt_count=1,
+                            window_started_at=checked_at,
+                            window_expires_at=checked_at + self._window,
+                            updated_at=checked_at,
+                        )
+                    )
+                    if rolled.rowcount:
+                        return await self._finish(True)
+
+                    # Neither matched: the bucket is either full or absent,
+                    # and only one of those is worth trying to create.
+                    present = await session.scalar(
+                        select(AuthRateLimitBucket.key_hash).where(
+                            AuthRateLimitBucket.scope == self._scope,
+                            AuthRateLimitBucket.key_hash == key_hash,
+                        )
+                    )
+                    if present is not None:
+                        return await self._finish(False)
+
             try:
                 async with self._session_factory() as session:
                     async with session.begin():
-                        bucket = await session.scalar(
-                            select(AuthRateLimitBucket)
-                            .where(
-                                AuthRateLimitBucket.scope == self._scope,
-                                AuthRateLimitBucket.key_hash == key_hash,
+                        session.add(
+                            AuthRateLimitBucket(
+                                scope=self._scope,
+                                key_hash=key_hash,
+                                attempt_count=1,
+                                window_started_at=checked_at,
+                                window_expires_at=checked_at + self._window,
+                                updated_at=checked_at,
                             )
-                            .with_for_update()
                         )
-                        if bucket is None:
-                            session.add(
-                                AuthRateLimitBucket(
-                                    scope=self._scope,
-                                    key_hash=key_hash,
-                                    attempt_count=1,
-                                    window_started_at=checked_at,
-                                    window_expires_at=checked_at + self._window,
-                                    updated_at=checked_at,
-                                )
-                            )
-                            await session.flush()
-                            allowed = True
-                        elif bucket.window_expires_at <= checked_at:
-                            bucket.attempt_count = 1
-                            bucket.window_started_at = checked_at
-                            bucket.window_expires_at = checked_at + self._window
-                            bucket.updated_at = checked_at
-                            allowed = True
-                        elif bucket.attempt_count >= self._limit:
-                            allowed = False
-                        else:
-                            bucket.attempt_count += 1
-                            bucket.updated_at = checked_at
-                            allowed = True
-                break
+                return await self._finish(True)
             except IntegrityError:
+                # Somebody opened the window between the read and the insert.
+                # Go round: the first statement will find it and either spend
+                # from it or refuse.
                 await asyncio.sleep(0)
-        else:
-            # If replicas cannot agree on the bucket, fail closed.
-            return False
 
+        # If callers cannot agree on the bucket, fail closed.
+        return False
+
+    async def _finish(self, allowed: bool) -> bool:
+        """Count the check and occasionally take out the expired buckets."""
         self._checks += 1
         if self._checks % PERSISTENT_CLEANUP_INTERVAL == 0:
             await cleanup_expired_rate_limit_buckets(self._session_factory)
         return allowed
-
 
     async def refund(self, key: str) -> None:
         """Give back an attempt that did not buy the thing it paid for.
 
         A limit on an action that can still fail after the bucket is charged
         would otherwise spend somebody's allowance on work that never
-        happened. Only ever called by the code that took the attempt, and
-        only when it knows the action did not occur; an expired or missing
-        bucket is nothing to give back to.
+        happened. One conditional statement, for the same reason `check` is:
+        two refunds in flight together must not take the count below what was
+        actually spent. An expired or missing bucket is nothing to give back
+        to.
         """
-        secret = await self._hash_secret()
-        key_hash = hmac.new(
-            secret.encode("utf-8"),
-            key.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        key_hash = await self._key_hash(key)
         refunded_at = self._clock()
         async with self._session_factory() as session:
             async with session.begin():
-                bucket = await session.scalar(
-                    select(AuthRateLimitBucket)
+                await session.execute(
+                    update(AuthRateLimitBucket)
                     .where(
                         AuthRateLimitBucket.scope == self._scope,
                         AuthRateLimitBucket.key_hash == key_hash,
+                        AuthRateLimitBucket.window_expires_at > refunded_at,
+                        AuthRateLimitBucket.attempt_count > 0,
                     )
-                    .with_for_update()
+                    .values(
+                        attempt_count=AuthRateLimitBucket.attempt_count - 1,
+                        updated_at=refunded_at,
+                    )
                 )
-                if bucket is None or bucket.window_expires_at <= refunded_at:
-                    return
-                bucket.attempt_count = max(0, bucket.attempt_count - 1)
-                bucket.updated_at = refunded_at
 
 
 def client_key(request: Request) -> str:

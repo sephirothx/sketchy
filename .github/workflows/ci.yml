@@ -131,7 +131,7 @@ jobs:
         run: pytest -q tests/test_repositories.py
 
       - name: Run row-locking services against PostgreSQL
-        run: pytest -q tests/test_room_presets.py tests/test_room_codes.py
+        run: pytest -q tests/test_room_presets.py tests/test_room_codes.py tests/test_rate_limit_atomicity.py
 
   frontend:
     name: Frontend test, lint & build
