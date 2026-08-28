@@ -585,8 +585,14 @@ def create_admin_controls_router(
         # After the commit, so a socket can never announce a role a rolled-back
         # transaction never granted. The no-op above returns before reaching
         # here, so an administrator re-pressing the button tells nobody twice.
+        #
+        # The parsed id, not the path string: every socket joins its account's
+        # broadcast room as `user:{id}` built from the session's canonical UUID,
+        # so a request that spelled the id in upper case - which `UUID()` parses
+        # perfectly well - would emit to a room nobody is in, and the push would
+        # be lost with nothing to show for it.
         if on_role_changed is not None:
-            await on_role_changed(user_id)
+            await on_role_changed(str(target_id))
         # No session revocation: the gate loads the role fresh on every
         # request, so a demotion is in force on the target's very next call.
         return {"id": user_id, "role": body.role}

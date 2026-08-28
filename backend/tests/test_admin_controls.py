@@ -717,6 +717,25 @@ async def test_a_promotion_reaches_the_promoted_account(env, role_pushes):
     assert notices[0].acknowledged_at is None
 
 
+async def test_the_push_names_the_account_the_way_its_sockets_do(env, role_pushes):
+    """`UUID()` parses an id in upper case, and the path is whatever was typed.
+
+    Every socket joins its account's room as `user:{id}` built from the
+    session's canonical UUID, so a push addressed with the string as written
+    would go to a room nobody is in - a notice lost with nothing to show for it.
+    """
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Shouted")
+
+    response = await admin.patch(
+        f"/api/admin/players/{subject['id'].upper()}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+    assert response.status_code == 200
+    assert role_pushes == [subject["id"]]
+
+
 async def test_a_demotion_tells_the_account_too(env, role_pushes):
     """A Moderation entry that vanishes with no explanation is worse than the
     sentence saying why it went."""

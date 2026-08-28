@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { noticeAfterAcknowledgement } from "../src/lib/roleNotices.ts";
 import {
   canAdminister,
   canModerate,
@@ -92,4 +93,16 @@ test("the notice explains the change without quoting the ledger", () => {
   assert.match(promoted.body, /Moderation/);
   assert.match(removed.title, /no longer a moderator/);
   assert.ok(!/reason/i.test(promoted.body + removed.body));
+});
+
+test("acknowledging one notice does not close a newer one that just arrived", () => {
+  // An administrator can act twice, and the second push lands on the socket
+  // while the receipt for the first is still in flight. Clearing whatever is
+  // on screen would take the newer notice down unread; the server settles by
+  // age for the same reason.
+  const promoted = { id: "n-1", role: "moderator", createdAt: "" };
+  const demoted = { id: "n-2", role: "user", createdAt: "" };
+  assert.equal(noticeAfterAcknowledgement(promoted, "n-1"), null);
+  assert.deepEqual(noticeAfterAcknowledgement(demoted, "n-1"), demoted);
+  assert.equal(noticeAfterAcknowledgement(null, "n-1"), null);
 });

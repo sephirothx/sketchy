@@ -4,6 +4,7 @@ import { roleNoticeFromPayload, roleNoticeText } from "../lib/operatorAccess";
 import {
   acknowledgeRoleNotice,
   fetchPendingRoleNotice,
+  noticeAfterAcknowledgement,
   type PendingRoleNotice,
 } from "../lib/roleNotices";
 import { socket } from "../lib/socket";
@@ -73,10 +74,14 @@ export function RoleChangeNotice() {
 
   async function dismiss() {
     if (busy || !notice) return;
+    const settling = notice.id;
     setBusy(true);
     try {
-      await acknowledgeRoleNotice(notice.id);
-      setNotice(null);
+      await acknowledgeRoleNotice(settling);
+      // Only the notice that was acknowledged. A second change can land on the
+      // socket while this request is in flight, and closing over "whatever is
+      // showing" would take that newer one down unread.
+      setNotice((current) => noticeAfterAcknowledgement(current, settling));
     } catch {
       // Leave the notice up: closing it without the receipt landing would
       // bring it back on the next visit, and the button can simply be pressed
