@@ -202,7 +202,9 @@ export function AdminOperationsPage() {
       .catch(fail);
   }, [eventFilter, roomFilter, fail]);
 
-  useEffect(refresh, [refresh]);
+  // Re-read on every (re)connect as well as on mount: after a restart the
+  // numbers and the admission state both belong to a process that is gone.
+  useEffect(refresh, [refresh, notices.connection]);
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 10000);

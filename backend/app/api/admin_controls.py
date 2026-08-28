@@ -78,7 +78,11 @@ class RoleRequest(BaseModel):
 
 
 class MaintenanceRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # Stripped like the two above it. The reason is optional here, so without
+    # this a handful of spaces counts as "given" and is written to the ledger
+    # as a reason that says nothing - worse than the absence it is recorded
+    # instead of, because it reads as though somebody explained themselves.
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     paused: bool
     reason: str = Field(default="", max_length=200)

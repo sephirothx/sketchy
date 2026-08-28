@@ -37,6 +37,9 @@ export function ControlsPanel() {
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
+  // What the server has announced since the last fetch, and which connection
+  // said it: both the notices and the snapshot belong to one process.
+  const notices = useAdmissionNotices();
   // Which room's seats are open. Collapsed by default: the table is for
   // finding a room, and a list of every player in every room would bury it.
   const [openSeats, setOpenSeats] = useState<string | null>(null);
@@ -55,7 +58,9 @@ export function ControlsPanel() {
       .catch((failure) => fail(failure, "Could not list the live rooms."));
   }, [fail]);
 
-  useEffect(load, [load]);
+  // Re-read on every (re)connect as well as on mount: after a restart the
+  // snapshot describes a process that no longer exists.
+  useEffect(load, [load, notices.connection]);
 
   function run(action: Promise<unknown>, message: string) {
     setBusy(true);
@@ -76,7 +81,7 @@ export function ControlsPanel() {
   // Without this the guard below reads a snapshot taken when the panel
   // mounted, so a drain somebody else started - the case it exists for -
   // would leave the button enabled.
-  const admission = mergeAdmission(maintenance, useAdmissionNotices());
+  const admission = mergeAdmission(maintenance, notices);
   const paused = admission.paused;
   // Both steps of the confirm ask this, not just the first.
   const blocked = shutdownBlocked({

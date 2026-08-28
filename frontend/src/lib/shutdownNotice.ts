@@ -52,7 +52,10 @@ export function shutdownSecondsRemaining(
   now: number = Date.now(),
 ): number {
   const startedAt = Date.parse(notice.startedAt);
-  if (Number.isNaN(startedAt)) return notice.drainSeconds;
+  // Whole seconds on this path too. A server that sent an unreadable
+  // `startedAt` is no reason to start showing "1.25 seconds" in a banner that
+  // counts in whole ones everywhere else.
+  if (Number.isNaN(startedAt)) return Math.ceil(notice.drainSeconds);
   const remaining = (startedAt + notice.drainSeconds * 1000 - now) / 1000;
   return Math.min(Math.ceil(notice.drainSeconds), Math.max(0, Math.ceil(remaining)));
 }

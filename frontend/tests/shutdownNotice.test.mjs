@@ -111,3 +111,16 @@ test("a clock running behind cannot show more than the announced window", () => 
   };
   assert.equal(shutdownSecondsRemaining(notice, 0), 2);
 });
+
+test("an unreadable start time still yields whole seconds", () => {
+  // The fallback is the announced window, because there is no way to tell how
+  // much of it has gone - but it goes through the same rounding as every other
+  // path, or a banner that counts in whole seconds suddenly says "1.25".
+  const notice = {
+    contractVersion: 1,
+    reason: "deployment",
+    drainSeconds: 1.25,
+    startedAt: "not a date",
+  };
+  assert.equal(shutdownSecondsRemaining(notice, 1000), 2);
+});

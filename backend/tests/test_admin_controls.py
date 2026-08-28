@@ -242,6 +242,15 @@ async def test_pausing_records_who_paused_it_and_why(env):
     assert event.details == {"reason": "database migration"}
 
 
+async def test_a_reason_of_only_spaces_is_no_reason(env):
+    """Recorded whitespace reads as though somebody explained themselves."""
+    _, factory, _, _, _, _ = env
+    admin = await an_admin(env)
+    await admin.post("/api/admin/maintenance", json={"paused": True, "reason": "   "})
+    (event,) = await audit_rows(factory)
+    assert event.details == {}
+
+
 async def test_pausing_an_already_paused_server_records_nothing(env):
     _, factory, _, _, _, _ = env
     admin = await an_admin(env)
