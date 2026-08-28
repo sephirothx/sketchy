@@ -273,14 +273,18 @@ async def run_metrics_loop(
     while True:
         try:
             await flush_events(session_factory)
-            if health is not None:
-                health.record_success()
             since_purge += interval
             if since_purge >= 3600:
                 since_purge = 0.0
                 removed = await purge_expired_events(session_factory)
                 if removed:
                     logger.info("runtime metrics: purged %d expired events", removed)
+            # Last, so an iteration whose purge failed does not also report a
+            # success. On a purge cycle the earlier placement recorded both,
+            # and `last_success` advancing past a failed iteration is worse
+            # than useless - it is the number an alert would trust.
+            if health is not None:
+                health.record_success()
         except asyncio.CancelledError:
             raise
         except Exception:

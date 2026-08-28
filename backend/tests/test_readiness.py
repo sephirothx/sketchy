@@ -351,3 +351,30 @@ async def test_a_sweep_that_raises_is_counted_rather_than_only_logged(
     assert health.consecutive_failures == 1
     assert health.total_failures == 1
     assert health.last_success is None
+
+
+async def test_a_purge_failure_does_not_also_report_the_flush_as_a_success(monkeypatch):
+    """`last_success` is what an alert trusts, so it must not pass a failure.
+
+    The metrics loop purges on some iterations and not others. Recording the
+    success right after the flush marked those iterations successful before
+    the purge had a chance to fail, so one iteration reported both.
+    """
+    metrics = importlib.import_module("app.services.runtime_metrics")
+    health = LoopHealth("runtime_metrics")
+
+    async def flushed(*_args, **_kwargs):
+        return None
+
+    async def purge_fails(*_args, **_kwargs):
+        raise RuntimeError("the purge broke")
+
+    monkeypatch.setattr(metrics, "flush_events", flushed)
+    monkeypatch.setattr(metrics, "purge_expired_events", purge_fails)
+    # An interval this long makes the first iteration a purge iteration.
+    await _one_iteration(
+        metrics.run_metrics_loop(None, interval_seconds=3600, health=health)
+    )
+
+    assert health.last_success is None
+    assert health.consecutive_failures == 1
