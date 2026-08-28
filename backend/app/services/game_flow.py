@@ -82,6 +82,14 @@ class _PromptDraw:
     letter_total: int = 0
 
 
+class RoomNoLongerStartableError(RuntimeError):
+    """The room stopped being able to start a game while one was being set up.
+
+    Drawing the prompts is a database call, and seating is not held by
+    `room.lock`, so the roster a caller checked can empty out underneath it.
+    """
+
+
 class RoomPromptResolutionError(ValueError):
     """A safe room-configuration failure for selected prompt content."""
 
@@ -424,7 +432,17 @@ class GameFlowService:
 
         total = len(custom) + sample.drawable
         if not total:
-            return _PromptDraw()
+            # Authorization proved these lists held prompts, but moderation can
+            # take the last of them away before the draw lands. Falling through
+            # to the built-in list would open the room on content the host
+            # never chose, and file the game as curated while it played
+            # defaults - the substitution R-LIST-06a and R-LIST-08 forbid.
+            logger.warning(
+                "Room %s authorized prompt lists that drew nothing", room.id
+            )
+            raise RoomPromptResolutionError(
+                "Prompt lists could not be loaded. Please try again."
+            )
         indices = random.sample(range(total), min(needed, total))
         from_custom = sum(1 for index in indices if index < len(custom))
         drawn: list[SampledPrompt] = list(
@@ -482,12 +500,35 @@ class GameFlowService:
     ) -> None:
         """Replace any prior game with a fresh, fully synchronized game.
 
-        Raises `RoomPromptResolutionError` if the prompts cannot be drawn, in
-        which case nothing here has run: everything below replaces the previous
-        game, and a room left half-started would report itself as playing one
-        that does not exist, refusing every later start as already in progress.
+        Raises `RoomPromptResolutionError` if the prompts cannot be drawn, or
+        `RoomNoLongerStartableError` if the room emptied while they were being
+        drawn. In either case nothing here has run: everything below replaces
+        the previous game, and a room left half-started would report itself as
+        playing one that does not exist, refusing every later start as already
+        in progress.
         """
+        # Who was in the room before the draw, so that afterwards the arrivals
+        # can be told from the players the caller deliberately left out.
+        seated_before = set(room.players)
         draw = await self._draw_prompt_sample(room)
+        # Drawing is a database call, and seating is not held by `room.lock`,
+        # so the roster the caller handed over can be stale by the time there
+        # is a game to put it in. Somebody who joined in that window was seated
+        # while `room.game` was still None, so nothing enrolled them; somebody
+        # who left was never taken out. Reconciling here covers both, while
+        # leaving out whoever the caller excluded on purpose - a player already
+        # AFK is not an arrival.
+        active_players = [
+            player for player in active_players if player.id in room.players
+        ] + [
+            player
+            for player in room.players.values()
+            if player.id not in seated_before and not player.is_spectator
+        ]
+        if not active_players:
+            raise RoomNoLongerStartableError(
+                "Everybody left before the game could start"
+            )
         room.restart_vote = None
         room.restart_vote_cooldown_until = 0
         room.last_game_scores = []

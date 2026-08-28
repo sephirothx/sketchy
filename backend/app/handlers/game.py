@@ -10,7 +10,10 @@ from app.handlers.payloads import (
     parse_empty_payload,
     parse_payload,
 )
-from app.services.game_flow import RoomPromptResolutionError
+from app.services.game_flow import (
+    RoomNoLongerStartableError,
+    RoomPromptResolutionError,
+)
 
 async def start_game(ctx: HandlerContext, sid, data=None):
     try:
@@ -47,6 +50,9 @@ async def start_game(ctx: HandlerContext, sid, data=None):
 
         try:
             await ctx.game_flow._start_fresh_game(room, active_players)
+        except RoomNoLongerStartableError as error:
+            # The roster emptied out while the prompts were being drawn.
+            return {"ok": False, "error": str(error)}
         except RoomPromptResolutionError as error:
             # Drawing this game's prompts is a second read of the same lists
             # the re-authorization above just made, and fails for the same

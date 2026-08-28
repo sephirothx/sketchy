@@ -383,3 +383,54 @@ async def test_a_restart_whose_draw_fails_is_cancelled_rather_than_crashing():
         str(call.args) for call in ctx.sio.emit.await_args_list
     )
     assert "restart was cancelled" in announced
+
+
+async def test_a_list_room_whose_content_vanished_is_refused_not_quietly_rebuilt():
+    """R-LIST-06a and R-LIST-08: an empty list fails visibly.
+
+    Authorization proves the lists hold prompts, but moderation can take the
+    last of them away between then and the draw. Falling through to the
+    built-in list would open the room on content the host never chose, which
+    is the exact substitution those rules exist to prevent.
+    """
+    room_manager, room, _ = build_room(rounds=1)
+    repo = StubPromptListRepo(["apple", "banana"])
+    pin(room, repo)
+    # Authorized on two prompts; both hidden by the time the draw lands.
+    repo.prompts = []
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    with pytest.raises(RoomPromptResolutionError):
+        await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert room.state == "waiting"
+    assert room.game is None
+
+
+async def test_the_roster_is_read_after_the_draw_not_before_it():
+    """Seating is not held by `room.lock`, and the draw is a database call.
+
+    A player who joins while it is in flight is seated, but finds no game to
+    enrol in; building the rotation from the roster captured beforehand would
+    seat them for a game they can never take a turn in.
+    """
+    room_manager, room, players = build_room(rounds=1)
+    repo = StubPromptListRepo(["apple", "banana", "castle"])
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    stale_roster = room.player_list()
+    latecomer = {}
+
+    original = repo.sample_prompts
+
+    async def join_midway(*args, **kwargs):
+        latecomer["player"] = room_manager.add_player(room, "Cass")
+        return await original(*args, **kwargs)
+
+    repo.sample_prompts = join_midway
+
+    await ctx.game_flow._start_fresh_game(room, stale_roster)
+
+    assert latecomer["player"].id in room.game.turn_order
+    assert len(room.game.turn_order) == len(players) + 1

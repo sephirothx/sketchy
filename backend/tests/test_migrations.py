@@ -956,6 +956,9 @@ async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
     identifiers = {
         "list": uuid.uuid4().hex,
         "revision": uuid.uuid4().hex,
+        # A second revision holding nothing active, to show the walk covers
+        # more than one and leaves an unpriceable revision at its defaults.
+        "empty_revision": uuid.uuid4().hex,
         "active_concept": uuid.uuid4().hex,
         "hidden_concept": uuid.uuid4().hex,
         "active": uuid.uuid4().hex,
@@ -979,6 +982,14 @@ async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
                     "INSERT INTO prompt_list_revisions "
                     "(id, prompt_list_id, version, language, content_hash) "
                     "VALUES (:revision, :list, 1, 'en', '')"
+                ),
+                identifiers,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revisions "
+                    "(id, prompt_list_id, version, language, content_hash) "
+                    "VALUES (:empty_revision, :list, 2, 'en', '')"
                 ),
                 identifiers,
             )
@@ -1011,6 +1022,14 @@ async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
                     ),
                     identifiers,
                 )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revision_items "
+                    "(revision_id, prompt_version_id, position) VALUES "
+                    "(:empty_revision, :hidden, 0)"
+                ),
+                identifiers,
+            )
 
         await _migrate(engine, alembic_command.upgrade, "head")
         async with engine.connect() as connection:
@@ -1029,5 +1048,20 @@ async def test_letter_histogram_migration_counts_only_active_answers(tmp_path):
         # without being priceable. "zzz" is hidden and contributes nothing.
         assert counts == {"a": 1, "c": 1, "f": 1}
         assert row[1] == 4
+
+        async with engine.connect() as connection:
+            empty = (
+                await connection.execute(
+                    text(
+                        "SELECT letter_counts, letter_total "
+                        "FROM prompt_list_revisions WHERE id = :empty_revision"
+                    ),
+                    identifiers,
+                )
+            ).one()
+
+        empty_counts = empty[0] if isinstance(empty[0], dict) else json.loads(empty[0])
+        assert empty_counts == {}
+        assert empty[1] == 0
     finally:
         await engine.dispose()

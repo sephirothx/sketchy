@@ -17,7 +17,10 @@ import logging
 
 from app.flow_timing import timing
 from app.rooms import RestartVote, Room
-from app.services.game_flow import RoomPromptResolutionError
+from app.services.game_flow import (
+    RoomNoLongerStartableError,
+    RoomPromptResolutionError,
+)
 
 logger = logging.getLogger("sketchy.restart")
 
@@ -120,6 +123,10 @@ def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> Non
             logger.exception("Restart could not draw prompts for room %s", room.id)
             await _cancel_restart(
                 ctx, room, "the prompt lists could not be loaded"
+            )
+        except RoomNoLongerStartableError:
+            await _cancel_restart(
+                ctx, room, "everybody left before it could begin"
             )
 
     ctx.timers.replace_restart_timer(room.id, asyncio.create_task(_restart()))

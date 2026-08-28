@@ -26,6 +26,11 @@ down_revision: str | Sequence[str] | None = "l5b9d4f2a613"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+# Revisions per slice. Small enough that the answers of one slice are a
+# bounded allocation however large the corpus has grown, large enough that
+# the walk is a handful of queries rather than one per revision.
+BACKFILL_BATCH_SIZE = 500
+
 
 def upgrade() -> None:
     with op.batch_alter_table("prompt_list_revisions") as batch_op:
@@ -49,47 +54,68 @@ def upgrade() -> None:
     # Backfill from the same answers `resolve_selection` would have offered:
     # active versions only, so a hidden prompt is not priced into a revision it
     # can no longer be drawn from.
+    #
+    # Revision history grows without bound - every edit of every owned list
+    # leaves one behind - so this walks it a slice at a time rather than
+    # materialising every answer in the corpus at once. The migration lock is
+    # held for the whole of this, and an upgrade that needs the whole corpus
+    # resident to start is one that gets worse as the corpus does.
     bind = op.get_bind()
-    rows = bind.execute(
-        sa.text(
-            """
-            SELECT i.revision_id AS revision_id, v.canonical_answer AS answer
-            FROM prompt_list_revision_items AS i
-            JOIN prompt_versions AS v ON v.id = i.prompt_version_id
-            WHERE v.moderation_state = 'active'
-            """
-        )
-    ).all()
 
-    answers: dict[object, list[str]] = {}
-    for revision_id, answer in rows:
-        answers.setdefault(revision_id, []).append(answer)
-
-    for revision_id, revision_answers in answers.items():
-        counts = Counter(
-            char
-            for answer in revision_answers
-            for char in answer.lower()
-            if char.isalpha()
+    revision_ids = [
+        row[0]
+        for row in bind.execute(
+            sa.text("SELECT id FROM prompt_list_revisions ORDER BY id")
         )
-        bind.execute(
+    ]
+    encode = sa.JSON().bind_processor(bind.dialect)
+
+    for start in range(0, len(revision_ids), BACKFILL_BATCH_SIZE):
+        batch = revision_ids[start : start + BACKFILL_BATCH_SIZE]
+        answers: dict[object, list[str]] = {revision_id: [] for revision_id in batch}
+        rows = bind.execute(
             sa.text(
-                "UPDATE prompt_list_revisions "
-                "SET letter_counts = :counts, letter_total = :total "
-                "WHERE id = :id"
-            ),
-            {
-                "counts": sa.JSON().bind_processor(bind.dialect)(
-                    {
-                        letter: counts[letter]
-                        for letter in ascii_lowercase
-                        if counts[letter]
-                    }
-                ),
-                "total": sum(counts.values()),
-                "id": revision_id,
-            },
+                """
+                SELECT i.revision_id AS revision_id, v.canonical_answer AS answer
+                FROM prompt_list_revision_items AS i
+                JOIN prompt_versions AS v ON v.id = i.prompt_version_id
+                WHERE v.moderation_state = 'active'
+                  AND i.revision_id IN :revision_ids
+                """
+            ).bindparams(sa.bindparam("revision_ids", expanding=True)),
+            {"revision_ids": batch},
         )
+        for revision_id, answer in rows:
+            answers[revision_id].append(answer)
+
+        for revision_id, revision_answers in answers.items():
+            if not revision_answers:
+                # No active answers: the columns' defaults already say so.
+                continue
+            counts = Counter(
+                char
+                for answer in revision_answers
+                for char in answer.lower()
+                if char.isalpha()
+            )
+            bind.execute(
+                sa.text(
+                    "UPDATE prompt_list_revisions "
+                    "SET letter_counts = :counts, letter_total = :total "
+                    "WHERE id = :id"
+                ),
+                {
+                    "counts": encode(
+                        {
+                            letter: counts[letter]
+                            for letter in ascii_lowercase
+                            if counts[letter]
+                        }
+                    ),
+                    "total": sum(counts.values()),
+                    "id": revision_id,
+                },
+            )
 
 
 def downgrade() -> None:
