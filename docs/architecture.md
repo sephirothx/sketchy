@@ -478,6 +478,36 @@ introduces, every socket presents the proxy's address, and the forwarded header 
 attacker-controlled — `auth/rate_limit.client_key` refuses to read it for exactly that
 reason. The key arrives when an address worth keying on does.
 
+### Chat delivery and the database
+
+**A message is delivered without waiting for the database.** Two things used to sit
+between a player pressing enter and the room seeing the line, and both were database
+reads or writes on the hot path — so a lock, a slow disk, or a stalled connection was
+felt as every room going quiet at once.
+
+Retention is now a hand-off. `MessageRetentionService.record` composes the row on the
+spot — every field on it is a snapshot of live state that a moment later is gone — and
+puts it on a bounded queue that a single worker drains in batches
+([`backend/app/services/message_retention.py`](../backend/app/services/message_retention.py)).
+The caller gets the message's UUIDv7 back immediately; what it does not get is a
+promise that the row landed. That identifier is what lets a player pin the line as
+report evidence, and a report naming a message the database does not have is refused
+with the same "unavailable" answer the moderation API already gives for one past its
+retention window. When the queue is full the identifier is withheld instead, exactly as
+it was when a failed write returned nothing — the line still goes out, it simply
+cannot be cited. The queue is drained on the way out of a planned shutdown, after the
+sockets, so the last thing anybody said is written rather than abandoned.
+
+The block filter is answered from memory. `BlockService` caches who has muted a sender
+and is invalidated on every change, and the entry path warms a player's entry when they
+take a seat — where waiting is what entering a room already does — so the chat path is
+left with a cache hit. A miss is a read bounded at two seconds, and a read that does not
+come back answers "nobody": the line goes out unfiltered rather than late. That is a
+deliberate ranking of one failure over another. Blocking is a presentation filter, not a
+security boundary — the sender is in the room either way, in the player list and on the
+scoreboard — while a message silently withheld is a failure the sender cannot see and
+the room cannot distinguish from being ignored.
+
 ### Authorization
 
 Two independent axes:

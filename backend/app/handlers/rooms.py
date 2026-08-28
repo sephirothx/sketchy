@@ -158,17 +158,34 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     except Exception:
         logger.exception("Failed to record activity for user %s", player.user_id)
 
-async def _record_activity_of(ctx: HandlerContext, seated: list) -> None:
-    """Write the retention signal for a seated player, outside the gate.
+async def _after_seating(ctx: HandlerContext, seated: list) -> None:
+    """The database work a new seat causes, once the gate has been released.
 
-    Deliberately after the gate is released rather than before: the seat
-    already exists by then, and this write is not part of making it. Held
-    inside, it would keep a disconnect - a dropped connection, or the sweep
-    closing this socket after a ban - waiting behind a write that has nothing
-    to do with the seat.
+    Deliberately after the gate rather than before: the seat already exists by
+    then, and none of this is part of making it. Held inside, it would keep a
+    disconnect - a dropped connection, or the sweep closing this socket after
+    a ban - waiting behind writes that have nothing to do with the seat.
     """
     for player in seated:
         await _record_player_activity(ctx, player)
+        await _warm_block_filter(ctx, player)
+
+
+async def _warm_block_filter(ctx: HandlerContext, player) -> None:
+    """Read this player's blockers now, so their first message does not.
+
+    The chat path filters every line by who has muted the sender, and it is
+    the one place where a cold read would be felt as the room going quiet.
+    Paid here instead, where waiting is what entering a room already does.
+    """
+    if ctx.block_service is None or not player.user_id:
+        return
+    try:
+        await _bounded(ctx.block_service.warm(player.user_id), "reading blocks")
+    except EntryTimedOut:
+        pass
+    except Exception:
+        logger.exception("Failed to warm the block filter for user %s", player.user_id)
 
 
 async def create_room(ctx: HandlerContext, sid, data):
@@ -176,7 +193,7 @@ async def create_room(ctx: HandlerContext, sid, data):
     seated: list = []
     async with ctx.seating(sid):
         answer = await _create_room(ctx, sid, data, seated)
-    await _record_activity_of(ctx, seated)
+    await _after_seating(ctx, seated)
     return answer
 
 
@@ -450,7 +467,7 @@ async def join_room(ctx: HandlerContext, sid, data):
     seated: list = []
     async with ctx.seating(sid):
         answer = await _join_room(ctx, sid, data, seated)
-    await _record_activity_of(ctx, seated)
+    await _after_seating(ctx, seated)
     return answer
 
 

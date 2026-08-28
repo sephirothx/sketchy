@@ -310,6 +310,7 @@ claim that an arbitrary host will sustain it.
 | **R-MOD-06** | Reporting MUST require an account, because a report a moderator cannot follow up on helps nobody. |
 | **R-MOD-07** | Review MUST be one-way: a pending report receives one resolution and cannot later be silently rewritten. |
 | **R-MOD-08** | Submitted context MUST be preserved as **reporter-supplied evidence**, and MUST NOT be treated as a server-verified fact merely because it was stored. |
+| **R-MOD-08a** | Message retention MUST NOT sit on the delivery path. A message's identifier is issued before its row is written, so live chat never waits for the database; a report naming a message that was never retained MUST be refused as unavailable rather than accepted without its evidence. Retention that cannot keep up MUST withhold the identifier rather than delay the message or grow without bound. |
 | **R-MOD-09** | Player-authored prompt content MUST have a separate, target-specific report flow against a list or an exact prompt version. Official bundled content, inaccessible content, and self-reports MUST be rejected. |
 | **R-MOD-10** | Prompt-content moderation MUST be **post-moderation**: a report alone never changes availability. Resolution explicitly chooses Active or Hidden; a dismissal MUST NOT mutate content. |
 | **R-MOD-11** | Hidden prompts MUST be filtered from future selection. Owners see moderation state in *My prompt lists*, and editing MUST NOT silently override a moderator decision. |
@@ -336,6 +337,7 @@ claim that an arbitrary host will sustain it.
 | **R-BLOCK-02** | Blocking MUST filter **only ordinary player-authored chat**, and only for the player who created the block. The sender still sees their own line. |
 | **R-BLOCK-03** | Room state, players, scores, turns, correct-guess events, votes, and room-authored announcements MUST NEVER be hidden by a block. A block MUST NOT change gameplay facts or create a different game state per player. |
 | **R-BLOCK-04** | Login MUST merge both incoming and outgoing blocks without creating duplicates or a self-block; a historical guest alias resolves to its registered account. |
+| **R-BLOCK-06** | The block filter MUST be answerable from memory on the chat path: it is warmed when a player takes a seat and invalidated on every change. A lookup that cannot be answered in time MUST deliver the line **unfiltered** rather than delay or withhold it — a block is a presentation filter, and a message silently withheld is a failure its sender cannot see. |
 | **R-BLOCK-05** | Any future direct-invite feature MUST consult `user_blocks` before delivery. A room link obtained independently remains usable, because a Block is not a service-wide Suspension. |
 
 ### Roles and audit

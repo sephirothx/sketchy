@@ -303,6 +303,10 @@ async def lifespan(_app: FastAPI):
         await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
+        # After the sockets are drained, so the last thing anybody said is
+        # written rather than left in the queue.
+        if handler_context.message_retention is not None:
+            await handler_context.message_retention.aclose()
         await handler_context.timers.close()
         await async_engine.dispose()
 
