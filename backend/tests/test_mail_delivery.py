@@ -12,7 +12,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from app.db import create_db_engine
 
 from app.auth.mail import (
     CLAIM_LEASE,
@@ -59,7 +61,12 @@ class _TrackedSession:
 
 
 async def outbox(tmp_path, count: int = 1, template=EmailTemplate.VERIFY_EMAIL):
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    # A file, which is what `tmp_path` was always here for. An in-memory
+    # SQLite engine gets a StaticPool, handing every session the *same*
+    # connection - so two sweeps running "at once" would share one real
+    # transaction, and the claim this file exists to test would never be
+    # contended. `create_db_engine` also applies the deployment's pragmas.
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'outbox.db'}")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
