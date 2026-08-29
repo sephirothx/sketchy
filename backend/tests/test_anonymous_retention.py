@@ -215,20 +215,40 @@ async def test_a_suspended_account_keeps_its_route_to_export_and_deletion():
         async with factory() as session:
             async with session.begin():
                 banned = User(id=generate_uuid(), display_name="Suspended")
+                # More than one, so the protected set is genuinely a set: with
+                # a single row a broken membership test still looks right.
+                also_banned = User(id=generate_uuid(), display_name="AlsoSuspended")
                 lapsed = User(id=generate_uuid(), display_name="ServedTheirTime")
-                session.add_all([banned, lapsed])
+                session.add_all([banned, also_banned, lapsed])
                 await session.flush()
                 banned_row = await _session_row(
                     session, banned.id, expires_at=now - timedelta(days=400)
                 )
+                also_banned_row = await _session_row(
+                    session, also_banned.id, expires_at=now - timedelta(days=400)
+                )
                 lapsed_row = await _session_row(
                     session, lapsed.id, expires_at=now - timedelta(days=400)
                 )
+                for suspended in (banned, also_banned):
+                    session.add(
+                        UserBan(
+                            id=generate_uuid(),
+                            user_id=suspended.id,
+                            reason="harassment",
+                            is_active=True,
+                            expires_at=None,
+                        )
+                    )
+                # A ban whose subject was deleted keeps the row and drops the
+                # link (SET NULL). One NULL on the right of NOT IN makes the
+                # predicate never true, so without the is_not(None) filter the
+                # sweep would silently stop removing anything at all.
                 session.add(
                     UserBan(
                         id=generate_uuid(),
-                        user_id=banned.id,
-                        reason="harassment",
+                        user_id=None,
+                        reason="account deleted",
                         is_active=True,
                         expires_at=None,
                     )
@@ -251,6 +271,7 @@ async def test_a_suspended_account_keeps_its_route_to_export_and_deletion():
                 (await session.scalars(select(AuthSession.id))).all()
             )
         assert banned_row.id in surviving, "the suspension is still in force"
+        assert also_banned_row.id in surviving, "so is this one"
         assert lapsed_row.id not in surviving, "the suspension has lapsed"
     finally:
         await engine.dispose()

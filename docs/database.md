@@ -360,9 +360,10 @@ rather than a migration, the same rule `canvas_storage` applies to drawings.
 says how to read itself, and a row with no document claims no encoding. The download
 endpoint decodes and serves the JSON bytes without reparsing them.
 
-Expired jobs are purged at startup and hourly. Until then one went only when its
-owner asked for another, so a document generated and never collected outlived its
-seven days indefinitely.
+Expired jobs are purged at startup and hourly. Before that sweep existed, an expired
+row was removed only when its owner requested another export or a worker re-processed
+the job — so a document that was generated and never collected outlived its seven-day
+window indefinitely.
 
 Jobs are stored **before** work begins, so a crash leaves a retryable row:
 

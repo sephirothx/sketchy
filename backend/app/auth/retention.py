@@ -86,17 +86,17 @@ async def purge_expired_auth_sessions(
     while True:
         async with session_factory() as session:
             async with session.begin():
-                protected = (
-                    select(UserBan.user_id)
-                    .where(
-                        UserBan.user_id.is_not(None),
-                        UserBan.is_active.is_(True),
-                        or_(
-                            UserBan.expires_at.is_(None),
-                            UserBan.expires_at > checked_at,
-                        ),
-                    )
-                    .scalar_subquery()
+                # A set, not a scalar: the selectable says so, and the
+                # is_not(None) matters as much - a single NULL on the right of
+                # NOT IN makes the whole predicate never true, which would
+                # silently purge nothing at all.
+                protected = select(UserBan.user_id).where(
+                    UserBan.user_id.is_not(None),
+                    UserBan.is_active.is_(True),
+                    or_(
+                        UserBan.expires_at.is_(None),
+                        UserBan.expires_at > checked_at,
+                    ),
                 )
                 doomed = (
                     await session.scalars(
