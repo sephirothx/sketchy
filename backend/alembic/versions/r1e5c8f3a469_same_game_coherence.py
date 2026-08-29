@@ -535,11 +535,15 @@ def upgrade() -> None:
 
     if op.get_bind().dialect.name == "sqlite":
         # Two phases for outcomes: copy_from's INSERT..SELECT reads the old
-        # table, so the new column must exist before the coherent rebuild.
-        # Nullable here; the rebuild below makes it NOT NULL over the empty
-        # table (pre-production premise, enforced by p8c3a6d9e147's guard).
+        # table, so the new column must exist (and be backfilled from the
+        # owning turn) before the coherent rebuild tightens it to NOT NULL.
         with op.batch_alter_table("turn_participant_outcomes") as batch_op:
             batch_op.add_column(sa.Column("game_id", _UUID, nullable=True))
+        op.execute(
+            "UPDATE turn_participant_outcomes SET game_id = "
+            "(SELECT game_id FROM turn_records "
+            "WHERE turn_records.id = turn_participant_outcomes.turn_id)"
+        )
         _rebuild("turn_records", _turn_records_table, coherent=True)
         _rebuild("score_events", _score_events_table, coherent=True)
         _rebuild("turn_participant_outcomes", _outcomes_table, coherent=True)
@@ -593,9 +597,22 @@ def upgrade() -> None:
             ondelete="RESTRICT",
         )
 
+        # Nullable first, backfilled from the turn that owns each outcome -
+        # the game is derived truth, not fabricated - then tightened.
         op.add_column(
             "turn_participant_outcomes",
-            sa.Column("game_id", _UUID, nullable=False),
+            sa.Column("game_id", _UUID, nullable=True),
+        )
+        op.execute(
+            "UPDATE turn_participant_outcomes SET game_id = turn_records.game_id "
+            "FROM turn_records "
+            "WHERE turn_participant_outcomes.turn_id = turn_records.id"
+        )
+        op.alter_column(
+            "turn_participant_outcomes",
+            "game_id",
+            existing_type=_UUID,
+            nullable=False,
         )
         op.create_unique_constraint(
             "uq_turn_participant_outcomes_turn_id_id",

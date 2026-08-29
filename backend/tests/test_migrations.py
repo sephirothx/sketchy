@@ -1189,3 +1189,66 @@ async def test_the_tightening_refuses_a_database_with_legacy_rows(tmp_path):
             await _migrate(engine, alembic_command.upgrade, "head")
     finally:
         await engine.dispose()
+
+
+async def test_coherence_migration_backfills_outcome_game_ids(tmp_path):
+    """r1e5c8f3a469 adds outcomes' game_id over live rows: the value is copied
+    from the turn that owns each outcome, never invented, and the composite
+    constraints only tighten after every row carries it."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'backfill.db'}")
+    game_id = uuid.uuid4().hex
+    seat_id = uuid.uuid4().hex
+    turn_id = uuid.uuid4().hex
+    try:
+        await _migrate(engine, alembic_command.upgrade, "q9d4b7e2f358")
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO game_records (id, payload_hash, room_name, "
+                    "scoring_mode, hint_mode, drawing_seconds, total_rounds, "
+                    "player_count, started_at, finished_at, outcome, "
+                    "prompt_source_mode) VALUES (:id, '', 'Backfill', 'default', "
+                    "'none', 90, 1, 1, '2026-08-24 12:00:00', "
+                    "'2026-08-24 12:10:00', 'finished', 'custom')"
+                ),
+                {"id": game_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_participants (id, game_id, final_score, "
+                    "final_rank, is_anonymous_snapshot, display_name_snapshot) "
+                    "VALUES (:id, :game_id, 10, 1, 1, 'Seat')"
+                ),
+                {"id": seat_id, "game_id": game_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO turn_records (id, game_id, round_number, "
+                    "turn_number, drawer_participant_id, "
+                    "drawer_display_name_snapshot, drawer_is_anonymous_snapshot, "
+                    "prompt, prompt_source_kind, duration_seconds) VALUES "
+                    "(:id, :game_id, 1, 1, :seat, 'Seat', 1, 'anchor', "
+                    "'custom', 10)"
+                ),
+                {"id": turn_id, "game_id": game_id, "seat": seat_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO turn_participant_outcomes (id, turn_id, "
+                    "participant_id, eligible, eligibility_reason, outcome, "
+                    "terminal_state) VALUES (:id, :turn, :seat, 1, 'eligible', "
+                    "'no_attempt', 'active')"
+                ),
+                {"id": uuid.uuid4().hex, "turn": turn_id, "seat": seat_id},
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.begin() as connection:
+            backfilled = (
+                await connection.execute(
+                    text("SELECT game_id FROM turn_participant_outcomes")
+                )
+            ).scalar_one()
+        assert backfilled == game_id
+    finally:
+        await engine.dispose()
