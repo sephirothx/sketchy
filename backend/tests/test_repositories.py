@@ -811,6 +811,9 @@ async def test_prompt_list_repository():
                     match_key="dragonfruit",
                 )
                 session.add(dragonfruit_version)
+                # Explicit flush: nothing relates Prompt to its concept at the
+                # ORM level, so PostgreSQL needs the parents inserted first.
+                await session.flush()
                 session.add(
                     Prompt(
                         id=generate_uuid(),
