@@ -347,7 +347,6 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
             session.add(
                 UserBlock(
-                    id=generate_uuid(),
                     blocker_user_id=owner_row.id,
                     blocked_user_id=other_row.id,
                 )
@@ -730,7 +729,7 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert evidence.sender_is_anonymous_snapshot is True
         assert await session.get(DataExport, UUID(export_status["id"])) is None
         assert await session.get(UserSettings, account.id) is None
-        assert await session.scalar(select(func.count(UserBlock.id))) == 0
+        assert await session.scalar(select(func.count(UserBlock.blocked_user_id))) == 0
         assert await session.scalar(select(func.count(PromptList.id))) == 0
         assert await session.scalar(select(func.count(RoomPreset.id))) == 0
         assert await session.scalar(select(func.count(PromptConcept.id))) == 0
@@ -841,7 +840,6 @@ async def test_deletion_erases_drawings_made_under_a_merged_identity(env):
         async with session.begin():
             session.add(
                 IdentityAlias(
-                    id=generate_uuid(),
                     source_user_id=UUID(guest.id),
                     target_user_id=UUID(owner["id"]),
                 )

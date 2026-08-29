@@ -1,7 +1,6 @@
 import { apiRequest } from "./api";
 
 export interface UserBlock {
-  id: string;
   userId: string;
   username: string | null;
   displayName: string;

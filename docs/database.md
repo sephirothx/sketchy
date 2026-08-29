@@ -285,8 +285,9 @@ buckets are cleaned in bounded batches. Rotating the secret starts fresh buckets
 exposing or re-identifying old keys.
 
 ### `identity_aliases`
-`id` · `source_user_id` **unique** (FK RESTRICT) · `target_user_id` (FK RESTRICT) ·
-`created_at`, with `ck_identity_alias_distinct`.
+`source_user_id` **PK** (FK RESTRICT) · `target_user_id` (FK RESTRICT) ·
+`created_at`, with `ck_identity_alias_distinct` — the merged guest is the row's
+identity, so the column that was unique anyway is the key.
 
 The immutable mapping from a merged guest identity to its account. **Chains are a
 load-bearing application invariant**: a merge target is never itself a source, so
@@ -604,8 +605,9 @@ and can name a report or a second account, so it deliberately has no route to th
 it is about (R-ROLE-02).
 
 ### `user_blocks`
-`id` · `blocker_user_id` · `blocked_user_id` (both CASCADE) · `created_at`, with
-`uq_user_block` and `chk_no_self_block`.
+`blocker_user_id` + `blocked_user_id` composite **PK** (both CASCADE) · `created_at`,
+with `chk_no_self_block` — the pair is the identity; nothing references a block by
+anything else.
 
 Directional, available to every account including a guest. A historical guest alias
 resolves to its registered account, and login merges both incoming and outgoing blocks
@@ -754,10 +756,10 @@ invent hypothetical score awards.
 The **optional scoring child** of a correct outcome.
 
 `id` · `turn_id` (CASCADE) · `user_id` / `participant_id` (`SET NULL`) ·
-`outcome_id` (FK → `turn_participant_outcomes`, CASCADE, **unique**) · frozen
-presentation · `points_awarded` · `guess_time_seconds` · `hints_used` ·
-`points_spent_on_hints` · `wrong_guesses_before` · `created_at`, with
-`uq_turn_guesses_turn_participant`.
+`outcome_id` (same-turn composite FK → `turn_participant_outcomes`, CASCADE,
+**unique**) · frozen presentation · `points_awarded` · `guess_time_seconds` ·
+`created_at`, with `uq_turn_guesses_turn_participant`. Attempt and hint facts live on
+the parent outcome row alone — two records of one fact were two chances to disagree.
 
 One correct guess per participant seat and turn, at the database layer. Finished-game
 guesses reference the UUID of their turn **explicitly** — persistence never infers that
@@ -939,10 +941,10 @@ referencing the old wording.
 ### `prompt_usage_facts`
 Append-only per-game usage totals, **not** mutable counters on a display row.
 
-`id` · `batch_id` · `prompt_list_revision_id` (CASCADE) · `prompt_version_id`
-(RESTRICT) · `occurred_at` · `scoring_mode` · `hint_mode` · `offer_count` ·
-`pick_count` · `correct_guess_count` · `total_guesser_count` · `created_at`, unique on
-`(batch_id, prompt_list_revision_id, prompt_version_id)`.
+`batch_id` + `prompt_list_revision_id` (CASCADE) + `prompt_version_id` (RESTRICT)
+composite **PK** · `occurred_at` · `scoring_mode` · `hint_mode` · `offer_count` ·
+`pick_count` · `correct_guess_count` · `total_guesser_count` · `created_at` — the
+idempotency triple is the identity, so it is the key.
 
 **Flow.** Each finished game appends one idempotent fact per used prompt/version and
 pinned list revision, with the authoritative occurrence time plus scoring and hint modes
@@ -991,8 +993,10 @@ by [`backend/app/db/seed.py`](../backend/app/db/seed.py). The checked-in shape i
 ## 9. Runtime analytics
 
 ### `runtime_events`
-One raw observation. `id` · `event_type` · `occurred_at` · `room_id` · `user_id`
-(`SET NULL`) · `value` · `details` (JSON).
+One raw observation. `id` (integer — the highest-churn table in the schema, purged
+after 30 days, referenced by nothing; on SQLite an `INTEGER PRIMARY KEY` is the rowid
+itself) · `event_type` · `occurred_at` · `room_id` · `user_id` (`SET NULL`) · `value` ·
+`details` (JSON, null when an observation carries none).
 
 Types: `room.created`, `room.closed`, `player.joined`, `player.left`,
 `player.disconnected`, `player.reconnected`, `player.evicted`, `command.throttled`, `game.started`,

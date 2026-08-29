@@ -110,7 +110,7 @@ async def _identity_rows(
                 select(IdentityAlias, User)
                 .join(User, User.id == IdentityAlias.source_user_id)
                 .where(IdentityAlias.target_user_id == canonical.id)
-                .order_by(IdentityAlias.created_at, IdentityAlias.id)
+                .order_by(IdentityAlias.created_at, IdentityAlias.source_user_id)
             )
         ).all()
     )
@@ -207,8 +207,14 @@ async def _build_export_artifact(
     guesses = list(
         (
             await session.execute(
-                select(TurnGuess, TurnRecord)
+                # The attempt/hint numbers live on the outcome row alone now;
+                # the export keeps its fields by reading them through the join.
+                select(TurnGuess, TurnRecord, TurnParticipantOutcome)
                 .join(TurnRecord, TurnRecord.id == TurnGuess.turn_id)
+                .join(
+                    TurnParticipantOutcome,
+                    TurnParticipantOutcome.id == TurnGuess.outcome_id,
+                )
                 .where(TurnGuess.user_id.in_(identity_ids))
                 .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number)
             )
@@ -313,7 +319,7 @@ async def _build_export_artifact(
             await session.scalars(
                 select(UserBlock)
                 .where(UserBlock.blocker_user_id.in_(identity_ids))
-                .order_by(UserBlock.created_at, UserBlock.id)
+                .order_by(UserBlock.created_at, UserBlock.blocked_user_id)
             )
         ).all()
     )
@@ -568,11 +574,11 @@ async def _build_export_artifact(
                 "prompt": turn.prompt,
                 "pointsAwarded": guess.points_awarded,
                 "guessTimeSeconds": guess.guess_time_seconds,
-                "hintsUsed": guess.hints_used,
-                "pointsSpentOnHints": guess.points_spent_on_hints,
-                "wrongGuessesBefore": guess.wrong_guesses_before,
+                "hintsUsed": outcome.hints_used,
+                "pointsSpentOnHints": outcome.points_spent_on_hints,
+                "wrongGuessesBefore": outcome.wrong_guess_count,
             }
-            for guess, turn in guesses
+            for guess, turn, outcome in guesses
         ],
         "turnOutcomes": [
             {
@@ -748,7 +754,6 @@ async def _build_export_artifact(
         ],
         "blocks": [
             {
-                "id": str(block.id),
                 "blockedUserId": str(block.blocked_user_id),
                 "createdAt": _timestamp(block.created_at),
             }

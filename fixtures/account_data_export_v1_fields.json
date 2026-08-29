@@ -262,7 +262,6 @@
     "suspensions[].createdAt",
     "suspensions[].revokedAt",
     "blocks",
-    "blocks[].id",
     "blocks[].blockedUserId",
     "blocks[].createdAt",
     "accountEvents",

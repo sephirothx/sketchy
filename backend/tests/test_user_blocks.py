@@ -92,7 +92,7 @@ async def test_block_list_is_idempotent_persistent_and_audited(env):
         "/api/users/me/blocks", json={"userId": target["id"]}
     )
     assert duplicate.status_code == 200
-    assert duplicate.json()["id"] == created.json()["id"]
+    assert duplicate.json()["userId"] == created.json()["userId"]
     listing = await blocker_http.get("/api/users/me/blocks")
     assert listing.status_code == 200
     assert listing.json()["blocks"] == [created.json()]
@@ -105,7 +105,7 @@ async def test_block_list_is_idempotent_persistent_and_audited(env):
     ).status_code == 204
 
     async with factory() as session:
-        assert await session.scalar(select(func.count(UserBlock.id))) == 0
+        assert await session.scalar(select(func.count(UserBlock.blocked_user_id))) == 0
         events = list(
             await session.scalars(
                 select(AuditEvent).where(
@@ -147,7 +147,6 @@ async def test_self_unknown_and_database_duplicate_blocks_are_rejected(env):
             async with session.begin():
                 session.add(
                     UserBlock(
-                        id=generate_uuid(),
                         blocker_user_id=UUID(owner["id"]),
                         blocked_user_id=UUID(owner["id"]),
                     )
@@ -157,7 +156,6 @@ async def test_self_unknown_and_database_duplicate_blocks_are_rejected(env):
         async with session.begin():
             session.add(
                 UserBlock(
-                    id=generate_uuid(),
                     blocker_user_id=UUID(owner["id"]),
                     blocked_user_id=UUID(target["id"]),
                 )
@@ -167,7 +165,6 @@ async def test_self_unknown_and_database_duplicate_blocks_are_rejected(env):
             async with session.begin():
                 session.add(
                     UserBlock(
-                        id=generate_uuid(),
                         blocker_user_id=UUID(owner["id"]),
                         blocked_user_id=UUID(target["id"]),
                     )
@@ -192,7 +189,6 @@ async def test_guest_merge_carries_and_deduplicates_both_block_directions(env):
             ):
                 session.add(
                     UserBlock(
-                        id=generate_uuid(),
                         blocker_user_id=UUID(blocker_id),
                         blocked_user_id=UUID(blocked_id),
                     )
