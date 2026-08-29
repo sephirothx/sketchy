@@ -69,25 +69,20 @@ def downgrade() -> None:
     # Restoring NOT NULL needs the abandoned rows' placings back; a score-order
     # rank is the value the pre-change writer stored for them.
     bind = op.get_bind()
-    abandoned_games = sa.text(
+    # Every non-finished outcome, not only 'abandoned' - anything unranked.
+    unfinished_games = sa.text(
         "SELECT id FROM game_records WHERE outcome != 'finished'"
     )
-    rank_rows = sa.text(
-        "SELECT id FROM game_participants WHERE game_id = :game_id "
-        "ORDER BY final_score DESC"
+    seat_rows = sa.text(
+        "SELECT id, final_score FROM game_participants "
+        "WHERE game_id = :game_id ORDER BY final_score DESC"
     )
-    for (game_id,) in bind.execute(abandoned_games):
+    for (game_id,) in bind.execute(unfinished_games):
         rank = 0
         previous_score = None
-        for position, (participant_id,) in enumerate(
-            bind.execute(rank_rows, {"game_id": game_id}), start=1
+        for position, (participant_id, score) in enumerate(
+            bind.execute(seat_rows, {"game_id": game_id}), start=1
         ):
-            score = bind.execute(
-                sa.text(
-                    "SELECT final_score FROM game_participants WHERE id = :id"
-                ),
-                {"id": participant_id},
-            ).scalar()
             if score != previous_score:
                 rank = position
                 previous_score = score

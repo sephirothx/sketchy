@@ -242,13 +242,14 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
                 final_score=p.final_score,
                 final_rank=p.final_rank,
             )
-            # Unranked (abandoned) seats order by score; ranked ones by rank.
+            # Ranked seats first by rank, then unranked (abandoned) seats by
+            # score; None sorts via the boolean, never compared as a rank.
             for p in sorted(
                 game.participants,
                 key=lambda x: (
-                    (x.final_rank, -x.final_score)
-                    if x.final_rank is not None
-                    else (1 << 30, -x.final_score)
+                    x.final_rank is None,
+                    x.final_rank or 0,
+                    -x.final_score,
                 ),
             )
         ],

@@ -117,7 +117,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
           }`}
           aria-hidden="true"
         >
-          {seat && game.outcome === "finished" ? `#${seat.finalRank}` : "—"}
+          {seat?.finalRank != null && game.outcome === "finished" ? `#${seat.finalRank}` : "—"}
         </span>
         <span className="profile-game-title">
           <span className="profile-game-room">{game.roomName}</span>

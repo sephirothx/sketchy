@@ -1539,7 +1539,10 @@ class GameRecord(Base):
         # The same bounds the room-settings tables pin, minus the exact
         # drawing-seconds value set: a recorded duration is a historical fact,
         # and pinning today's permitted values here would make changing that
-        # set fail writes with no migration.
+        # set fail writes with no migration. Table-level, unlike `outcome`'s
+        # column-attached check below: the cascade risk that placement dodged
+        # applies to a rebuild with foreign keys ON, and migrations run with
+        # them OFF - and the time-order check spans two columns anyway.
         CheckConstraint("player_count >= 1", name="ck_game_records_player_count"),
         CheckConstraint("total_rounds >= 1", name="ck_game_records_total_rounds"),
         CheckConstraint(
