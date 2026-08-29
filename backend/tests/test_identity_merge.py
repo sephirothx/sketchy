@@ -21,6 +21,7 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     TurnGuessInput,
+    TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
 from app.repositories.sqlalchemy import (
@@ -43,6 +44,8 @@ async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
         guest = await users.create_anonymous("RoadPlayer")
         first_turn = str(generate_uuid())
         second_turn = str(generate_uuid())
+        account_seat = str(generate_uuid())
+        guest_seat = str(generate_uuid())
         started = datetime(2026, 8, 1, tzinfo=timezone.utc)
         game_id = await history.save_game(
             GameRecordInput(
@@ -57,10 +60,18 @@ async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
             ),
             [
                 GameParticipantInput(
-                    user_id=account.id, final_score=100, final_rank=2
+                    user_id=account.id,
+                    final_score=100,
+                    final_rank=2,
+                    seat_id=account_seat,
+                    display_name="Account",
                 ),
                 GameParticipantInput(
-                    user_id=guest.id, final_score=300, final_rank=1
+                    user_id=guest.id,
+                    final_score=300,
+                    final_rank=1,
+                    seat_id=guest_seat,
+                    display_name="RoadPlayer",
                 ),
             ],
             [
@@ -69,22 +80,48 @@ async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
                     round_number=1,
                     turn_number=1,
                     drawer_user_id=guest.id,
+                    drawer_seat_id=guest_seat,
                     prompt="bridge",
                     duration_seconds=20,
+                    guesser_count=1,
+                    participant_outcomes=(
+                        TurnParticipantOutcomeInput(
+                            seat_id=account_seat,
+                            user_id=account.id,
+                            eligible=True,
+                            eligibility_reason="eligible",
+                            outcome="correct",
+                            terminal_state="active",
+                            correct_guess_time_seconds=10,
+                        ),
+                    ),
                 ),
                 TurnRecordInput(
                     id=second_turn,
                     round_number=1,
                     turn_number=2,
                     drawer_user_id=account.id,
+                    drawer_seat_id=account_seat,
                     prompt="tower",
                     duration_seconds=25,
+                    guesser_count=1,
+                    participant_outcomes=(
+                        TurnParticipantOutcomeInput(
+                            seat_id=guest_seat,
+                            user_id=guest.id,
+                            eligible=True,
+                            eligibility_reason="eligible",
+                            outcome="no_attempt",
+                            terminal_state="active",
+                        ),
+                    ),
                 ),
             ],
             [
                 TurnGuessInput(
                     turn_id=first_turn,
                     user_id=account.id,
+                    seat_id=account_seat,
                     points_awarded=100,
                     guess_time_seconds=10,
                 )

@@ -1,3 +1,4 @@
+import pytest
 from uuid import UUID
 
 from app.canvas_history import (
@@ -1462,3 +1463,14 @@ def test_default_scoring_is_unchanged_by_the_constant_refactor():
         game.start_next_turn(canvas_generation=game.canvas.generation + 1)
         game.choose_prompt(game.current_drawer, game.prompt_choices[0])
         assert guess_at(game, "guesser", elapsed) == expected
+
+
+def test_end_turn_refuses_a_missing_terminal_state():
+    """A frozen seat with no reported end state is a caller bug, surfaced as a
+    clear error instead of a KeyError mid-persistence."""
+    game = make_game(n_players=2, rounds=1)
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    game.choose_prompt(game.current_drawer, game.prompt_choices[0])
+    game.snapshot_turn_participants({"p2": "eligible"})
+    with pytest.raises(ValueError, match="terminal state"):
+        game.end_turn(terminal_states={})

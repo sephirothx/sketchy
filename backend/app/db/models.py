@@ -108,13 +108,11 @@ class AppConfig(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
-    # Nullable only for rows created before timestamp coverage existed. New
-    # database writes receive both values from the server clock.
-    created_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=True
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=True
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
 
@@ -1561,11 +1559,11 @@ class GameRecord(Base):
     rule_snapshot: Mapped[dict] = mapped_column(
         JSON, default=dict, server_default=text("'{}'"), nullable=False
     )
+    # Python-side default only, mirroring the writer-facing dataclasses: a
+    # game whose pool carries no curated identity is custom by definition.
+    # No server default - a raw insert must say what it stored.
     prompt_source_mode: Mapped[str] = mapped_column(
-        String(24),
-        default="legacy_unknown",
-        server_default="legacy_unknown",
-        nullable=False,
+        String(24), default="custom", nullable=False
     )
     hint_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     drawing_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -1596,11 +1594,10 @@ class GameRecord(Base):
         server_default=text("'finished'"),
         nullable=False,
     )
-    # Deliberately distinct from game event time. This supports save-lag and
-    # retry diagnosis; legacy rows remain null rather than receiving a false
-    # migration timestamp.
-    persisted_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=True
+    # Deliberately distinct from game event time; supports save-lag and
+    # retry diagnosis.
+    persisted_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
 
     participants: Mapped[list[GameParticipant]] = relationship(
@@ -1734,8 +1731,8 @@ class GameParticipant(Base):
     turns_played: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
-    created_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=True
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
 
     game: Mapped[GameRecord] = relationship(back_populates="participants")
@@ -1789,12 +1786,15 @@ class TurnRecord(Base):
         nullable=True,
         index=True,
     )
-    # The factual game seat is authoritative. Nullable only for legacy rows
-    # written before seat identity existed; account linkage may always be null.
-    drawer_participant_id: Mapped[uuid.UUID | None] = mapped_column(
+    # The factual game seat is authoritative; account linkage may be null,
+    # the seat itself never is.
+    drawer_participant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("game_participants.id", ondelete="SET NULL"),
-        nullable=True,
+        # CASCADE, not RESTRICT: a seat only ever goes with its whole game,
+        # whose own cascade removes these turns anyway - RESTRICT would make
+        # that delete depend on which child the cascade reaches first.
+        ForeignKey("game_participants.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     drawer_display_name_snapshot: Mapped[str] = mapped_column(
@@ -1814,10 +1814,7 @@ class TurnRecord(Base):
         index=True,
     )
     prompt_source_kind: Mapped[str] = mapped_column(
-        String(24),
-        default="legacy_unknown",
-        server_default="legacy_unknown",
-        nullable=False,
+        String(24), default="custom", nullable=False
     )
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     # How many player seats were eligible when drawing began. Correct-guess
@@ -1849,8 +1846,8 @@ class TurnRecord(Base):
     near_miss_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
-    created_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=True
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
 
     game: Mapped[GameRecord] = relationship(back_populates="turns")
@@ -2108,8 +2105,8 @@ class TurnParticipantOutcome(Base):
     points_spent_on_hints: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
-    created_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=True
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
 
     turn_record: Mapped[TurnRecord] = relationship(
@@ -2227,10 +2224,10 @@ class TurnGuess(Base):
         nullable=True,
         index=True,
     )
-    outcome_id: Mapped[uuid.UUID | None] = mapped_column(
+    outcome_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("turn_participant_outcomes.id", ondelete="CASCADE"),
-        nullable=True,
+        nullable=False,
     )
     display_name_snapshot: Mapped[str] = mapped_column(
         String(32), default="Unknown", nullable=False
@@ -2252,8 +2249,8 @@ class TurnGuess(Base):
     wrong_guesses_before: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
-    created_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=True
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
 
     turn_record: Mapped[TurnRecord] = relationship(back_populates="guesses")
@@ -2773,11 +2770,9 @@ class PromptUsageFact(Base):
         ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    # Legacy counter imports have no truthful occurrence time or rules. New
-    # writes always populate all three nullable dimensions.
-    occurred_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    scoring_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    hint_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    scoring_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    hint_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     offer_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=sql_text("0"), nullable=False
     )
@@ -2816,22 +2811,22 @@ class Prompt(Base):
         nullable=False,
         index=True,
     )
-    concept_id: Mapped[uuid.UUID | None] = mapped_column(
+    concept_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_concepts.id", ondelete="RESTRICT"),
-        nullable=True,
+        nullable=False,
         index=True,
     )
-    prompt_version_id: Mapped[uuid.UUID | None] = mapped_column(
+    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
-        nullable=True,
+        nullable=False,
         index=True,
     )
     text: Mapped[str] = mapped_column(String(64), nullable=False)
-    # This is when the current prompt membership entered the list, not the
-    # immutable concept/version creation time. Legacy memberships are unknown.
-    created_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=True
+    # When the current prompt membership entered the list, not the immutable
+    # concept/version creation time.
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
     prompt_list: Mapped[PromptList] = relationship(back_populates="prompts")

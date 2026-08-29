@@ -114,7 +114,11 @@ def downgrade() -> None:
             "turn_guesses",
             type_="foreignkey",
         )
-    op.drop_column("turn_guesses", "participant_id")
+    # Batch, not plain: the FK arrived inline with the column, but any later
+    # batch rebuild of the table re-emits it as a table-level clause that a
+    # plain DROP COLUMN leaves dangling on SQLite.
+    with op.batch_alter_table("turn_guesses") as batch_op:
+        batch_op.drop_column("participant_id")
     op.drop_index(
         "ix_turn_records_drawer_participant_id", table_name="turn_records"
     )
@@ -124,4 +128,22 @@ def downgrade() -> None:
             "turn_records",
             type_="foreignkey",
         )
-    op.drop_column("turn_records", "drawer_participant_id")
+    # A batch rebuild is DROP TABLE + rename underneath, and DROP TABLE
+    # takes the table's triggers with it - at this point in the chain the
+    # prompt-identity triggers a later revision replaced with real checks
+    # have been restored by that revision's downgrade, and the next
+    # downgrade below expects to drop them. Save and re-create them.
+    trigger_ddl = []
+    if op.get_bind().dialect.name == "sqlite":
+        trigger_ddl = [
+            row[0]
+            for row in op.get_bind().exec_driver_sql(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type='trigger' AND tbl_name='turn_records'"
+            )
+            if row[0]
+        ]
+    with op.batch_alter_table("turn_records") as batch_op:
+        batch_op.drop_column("drawer_participant_id")
+    for ddl in trigger_ddl:
+        op.get_bind().exec_driver_sql(ddl)

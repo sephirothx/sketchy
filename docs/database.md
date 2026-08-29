@@ -53,8 +53,9 @@ Every persisted timestamp uses `UTCDateTime`
 raise on a naive value, and reads are normalized to aware UTC. SQLite and PostgreSQL
 therefore behave identically and application code never infers a local timezone.
 
-Rows predating timestamp coverage keep a **null** write time rather than receiving a
-fabricated migration timestamp.
+Write timestamps are `NOT NULL` everywhere: the schema was tightened before the
+first deployment, so no row predates timestamp coverage (revision
+`p8c3a6d9e147` refuses to upgrade a database that still holds one — see §13).
 
 ### Enum discipline
 
@@ -673,7 +674,7 @@ contributes those turns but **not** a game played, a game won, or a score.
 
 ### `turn_records`
 `id` · `game_id` (CASCADE) · `round_number` · `turn_number` · `drawer_user_id` /
-`drawer_participant_id` (`SET NULL`) · frozen drawer presentation · `prompt` ·
+`drawer_participant_id` (`CASCADE`, NOT NULL) · frozen drawer presentation · `prompt` ·
 `prompt_version_id` (FK → `prompt_versions`, RESTRICT) · `prompt_source_kind` ·
 `duration_seconds` · `guesser_count` · `prompt_auto_picked` · `stroke_count` ·
 `end_reason` (`all_guessed \| timeout`) · `wrong_guess_count` · `near_miss_count` ·
@@ -683,8 +684,10 @@ contributes those turns but **not** a game played, a game won, or a score.
 `ck_turn_records_prompt_identity` enforces that `curated` turns have a version ID and
 non-curated turns do not — so curated turns are joinable **without text
 normalization**, while custom and fallback turns retain only their factual text
-snapshot. Rows from before provenance coverage use `legacy_unknown`, never a fabricated
-source.
+snapshot. The `legacy_unknown` provenance sentinel was removed with the rest of the
+pre-v1 accommodations; every turn names a real source kind, and the drawer's seat
+(`drawer_participant_id`) is `NOT NULL` with `ON DELETE CASCADE` — a seat only ever
+goes with its whole game.
 
 ### `turn_drawings`
 `turn_id` **PK** (CASCADE) · `game_id` (CASCADE) · `status` · `format_magic` ·
@@ -928,10 +931,9 @@ without matching on display text.
 
 The indexes support time-window and rule filters; the Prompt stats page offers all-time,
 30-day, and 90-day windows plus scoring/hint segmentation, and the minimum-guesser
-ranking floor applies independently to the selected slice. Pre-cutover counters migrated
-in with **null** time/rule dimensions rather than fabricated metadata: all-time
-unfiltered reads retain them, while bounded or segmented reads deliberately exclude what
-cannot be attributed truthfully.
+ranking floor applies independently to the selected slice. `occurred_at`, `scoring_mode`, and `hint_mode` are
+`NOT NULL`: every fact carries its authoritative occurrence time and rule dimensions,
+so bounded and segmented reads never have to exclude unattributable rows.
 
 **Runtime attribution observes the durable/live boundary.** Completed turns
 snapshot nullable prompt-version source IDs, and usage writes intersect those IDs with
@@ -1075,9 +1077,10 @@ and rebuilt without changing any of it.
 algorithm, season identity, achievement definitions, competitive-mode eligibility
 policy, or server-wide standings. Those require a later product decision and a versioned
 projection of the retained facts; they must not be introduced as mutable counters or
-inferred by rewriting finished games. Legacy facts with unknown rule/provenance versions
-stay explicitly unknown so a future projection can exclude or classify them under its
-own declared policy rather than treating invented metadata as truth.
+inferred by rewriting finished games. The version columns (`scoring_version`,
+`score_ledger_version`, `rule_snapshot_version`) remain the mechanism by which a future
+projection classifies facts by provenance; version `0` with an empty snapshot stays the
+declared encoding for "rules unknown", though no current writer produces it.
 
 ---
 
@@ -1127,3 +1130,10 @@ HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
 The UUID change **rewrote** the pre-v1 initial migration rather than converting old text
 keys. Databases created before that baseline must be rebuilt; preserve no production
 data on a preproduction schema.
+
+Revision `p8c3a6d9e147` applied the same policy to the legacy-accommodation layer:
+nullable-only-for-legacy columns became `NOT NULL`, the `legacy_unknown` enum members
+were removed, and the migration **refuses** to upgrade a database still holding
+pre-feature rows — filling a null write time or renaming a sentinel would fabricate
+exactly the metadata those accommodations existed to avoid fabricating. Rebuild such a
+database instead.

@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.models import (
     GameParticipant,
+    PromptConcept,
     GamePromptSource,
     GameRecord,
     Prompt,
@@ -170,9 +171,25 @@ async def test_game_history_repository():
             started_at=now,
             finished_at=now,
         )
+        u1_seat = str(generate_uuid())
+        u2_seat = str(generate_uuid())
         participants = [
-            GameParticipantInput(user_id=u1.id, final_score=350, final_rank=1),
-            GameParticipantInput(user_id=u2.id, final_score=200, final_rank=2),
+            GameParticipantInput(
+                user_id=u1.id,
+                final_score=350,
+                final_rank=1,
+                seat_id=u1_seat,
+                display_name="Player1",
+                name_color="#112233",
+            ),
+            GameParticipantInput(
+                user_id=u2.id,
+                final_score=200,
+                final_rank=2,
+                seat_id=u2_seat,
+                display_name="Player2",
+                name_color="#223344",
+            ),
         ]
         turn_id = str(generate_uuid())
         rounds = [
@@ -181,14 +198,28 @@ async def test_game_history_repository():
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=u1.id,
+                drawer_seat_id=u1_seat,
                 prompt="guitar",
                 duration_seconds=30.0,
+                guesser_count=1,
+                participant_outcomes=(
+                    TurnParticipantOutcomeInput(
+                        seat_id=u2_seat,
+                        user_id=u2.id,
+                        eligible=True,
+                        eligibility_reason="eligible",
+                        outcome="correct",
+                        terminal_state="active",
+                        correct_guess_time_seconds=10.0,
+                    ),
+                ),
             )
         ]
         guesses = [
             TurnGuessInput(
                 turn_id=turn_id,
                 user_id=u2.id,
+                seat_id=u2_seat,
                 points_awarded=200,
                 guess_time_seconds=10.0,
             )
@@ -769,10 +800,26 @@ async def test_prompt_list_repository():
         # A write outside the bundled-list helper cannot make the count stale.
         async with factory() as session:
             async with session.begin():
+                dragonfruit_concept = PromptConcept(id=generate_uuid())
+                session.add(dragonfruit_concept)
+                dragonfruit_version = PromptVersion(
+                    id=generate_uuid(),
+                    concept_id=dragonfruit_concept.id,
+                    language="en",
+                    version=1,
+                    canonical_answer="dragonfruit",
+                    match_key="dragonfruit",
+                )
+                session.add(dragonfruit_version)
+                # Explicit flush: nothing relates Prompt to its concept at the
+                # ORM level, so PostgreSQL needs the parents inserted first.
+                await session.flush()
                 session.add(
                     Prompt(
                         id=generate_uuid(),
                         prompt_list_id=UUID(wl.id),
+                        concept_id=dragonfruit_concept.id,
+                        prompt_version_id=dragonfruit_version.id,
                         text="dragonfruit",
                     )
                 )
@@ -942,6 +989,8 @@ async def test_save_game_persists_the_analytics_columns():
 
         now = datetime.now(timezone.utc)
         turn_id = str(generate_uuid())
+        drawer_seat = str(generate_uuid())
+        guesser_seat = str(generate_uuid())
         game_id = await history_repo.save_game(
             GameRecordInput(
                 room_name="Analytics Room",
@@ -955,10 +1004,20 @@ async def test_save_game_persists_the_analytics_columns():
             ),
             [
                 GameParticipantInput(
-                    user_id=drawer.id, final_score=350, final_rank=1, turns_played=2
+                    user_id=drawer.id,
+                    final_score=350,
+                    final_rank=1,
+                    turns_played=2,
+                    seat_id=drawer_seat,
+                    display_name="Drawer",
                 ),
                 GameParticipantInput(
-                    user_id=guesser.id, final_score=200, final_rank=2, turns_played=1
+                    user_id=guesser.id,
+                    final_score=200,
+                    final_rank=2,
+                    turns_played=1,
+                    seat_id=guesser_seat,
+                    display_name="Guesser",
                 ),
             ],
             [
@@ -967,20 +1026,37 @@ async def test_save_game_persists_the_analytics_columns():
                     round_number=1,
                     turn_number=1,
                     drawer_user_id=drawer.id,
+                    drawer_seat_id=drawer_seat,
                     prompt="guitar",
                     duration_seconds=30.0,
-                    guesser_count=4,
+                    guesser_count=1,
                     prompt_auto_picked=True,
                     stroke_count=23,
                     end_reason="all_guessed",
-                    wrong_guess_count=7,
+                    wrong_guess_count=5,
                     near_miss_count=3,
+                    participant_outcomes=(
+                        TurnParticipantOutcomeInput(
+                            seat_id=guesser_seat,
+                            user_id=guesser.id,
+                            eligible=True,
+                            eligibility_reason="eligible",
+                            outcome="correct",
+                            terminal_state="active",
+                            correct_guess_time_seconds=12.5,
+                            wrong_guess_count=5,
+                            near_miss_count=3,
+                            hints_used=2,
+                            points_spent_on_hints=36,
+                        ),
+                    ),
                 )
             ],
             [
                 TurnGuessInput(
                     turn_id=turn_id,
                     user_id=guesser.id,
+                    seat_id=guesser_seat,
                     points_awarded=200,
                     guess_time_seconds=12.5,
                     hints_used=2,
@@ -996,11 +1072,11 @@ async def test_save_game_persists_the_analytics_columns():
                     select(TurnRecord).where(TurnRecord.game_id == UUID(game_id))
                 )
             ).scalar_one()
-            assert round_row.guesser_count == 4
+            assert round_row.guesser_count == 1
             assert round_row.prompt_auto_picked is True
             assert round_row.stroke_count == 23
             assert round_row.end_reason == "all_guessed"
-            assert round_row.wrong_guess_count == 7
+            assert round_row.wrong_guess_count == 5
             assert round_row.near_miss_count == 3
 
             guess_row = (

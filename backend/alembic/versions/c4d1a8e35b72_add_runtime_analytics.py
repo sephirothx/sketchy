@@ -145,5 +145,17 @@ def downgrade() -> None:
         op.drop_constraint(
             "ck_game_records_outcome", "game_records", type_="check"
         )
-    # On SQLite the constraint is part of the column and leaves with it.
+    else:
+        # As written above, the constraint rides on the column and leaves with
+        # it. But any later batch rebuild of game_records re-emits it as a
+        # table-level constraint, and SQLite then refuses to drop a column a
+        # surviving CHECK still names - so drop it explicitly when reflection
+        # can see it, whichever shape it is in by the time we downgrade.
+        inspector = sa.inspect(op.get_bind())
+        if any(
+            constraint.get("name") == "ck_game_records_outcome"
+            for constraint in inspector.get_check_constraints("game_records")
+        ):
+            with op.batch_alter_table("game_records") as batch_op:
+                batch_op.drop_constraint("ck_game_records_outcome", type_="check")
     op.drop_column("game_records", "outcome")

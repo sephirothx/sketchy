@@ -148,6 +148,13 @@ async def _sqlite_inline_reference_actions(engine: AsyncEngine) -> dict[tuple[st
     return actions
 
 
+# The last revision whose schema still admits pre-feature ("legacy") rows.
+# p8c3a6d9e147 tightened the schema to what current writers produce and
+# refuses to upgrade a database still holding such rows, so the tests that
+# prove older migrations preserved legacy data honestly now stop here.
+LAST_LEGACY_TOLERANT_REVISION = "n7e2f5b8c934"
+
+
 async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
@@ -161,7 +168,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     if engine.dialect.name == "sqlite":
         assert await _sqlite_inline_reference_actions(engine) == {
             ("turn_records", "prompt_version_id"): "RESTRICT",
-            ("turn_records", "drawer_participant_id"): "SET NULL",
+            ("turn_records", "drawer_participant_id"): "CASCADE",
             ("turn_guesses", "participant_id"): "SET NULL",
             ("turn_guesses", "outcome_id"): "CASCADE",
             # A suspension outlives the report it was decided from.
@@ -233,7 +240,7 @@ async def test_write_timestamp_migration_preserves_unknown_legacy_times(tmp_path
                 )
             )
 
-        await _migrate(engine, alembic_command.upgrade, "head")
+        await _migrate(engine, alembic_command.upgrade, LAST_LEGACY_TOLERANT_REVISION)
         async with engine.begin() as connection:
             legacy = (
                 await connection.execute(
@@ -329,7 +336,7 @@ async def test_prompt_identity_migration_marks_legacy_provenance_unknown(tmp_pat
                 identifiers,
             )
 
-        await _migrate(engine, alembic_command.upgrade, "head")
+        await _migrate(engine, alembic_command.upgrade, LAST_LEGACY_TOLERANT_REVISION)
         async with engine.connect() as connection:
             game_mode = await connection.scalar(
                 text(
@@ -454,7 +461,7 @@ async def test_score_ledger_migration_does_not_invent_legacy_events(tmp_path):
                 identifiers,
             )
 
-        await _migrate(engine, alembic_command.upgrade, "head")
+        await _migrate(engine, alembic_command.upgrade, LAST_LEGACY_TOLERANT_REVISION)
         async with engine.begin() as connection:
             assert await connection.scalar(
                 text(
@@ -580,7 +587,7 @@ async def test_daily_user_stats_migration_backfills_canonical_identity_totals(
                 identifiers,
             )
 
-        await _migrate(engine, alembic_command.upgrade, "head")
+        await _migrate(engine, alembic_command.upgrade, LAST_LEGACY_TOLERANT_REVISION)
         async with engine.connect() as connection:
             projection = (
                 await connection.execute(
@@ -607,7 +614,7 @@ async def test_daily_user_stats_migration_backfills_canonical_identity_totals(
             assert await connection.scalar(
                 text("SELECT count(*) FROM game_records")
             ) == 1
-        await _migrate(engine, alembic_command.upgrade, "head")
+        await _migrate(engine, alembic_command.upgrade, LAST_LEGACY_TOLERANT_REVISION)
         async with engine.connect() as connection:
             assert await connection.scalar(
                 text("SELECT games_played FROM user_stats_daily")
@@ -675,7 +682,7 @@ async def test_prompt_counter_migration_preserves_lifetime_totals(tmp_path):
                 identifiers,
             )
 
-        await _migrate(engine, alembic_command.upgrade, "head")
+        await _migrate(engine, alembic_command.upgrade, LAST_LEGACY_TOLERANT_REVISION)
         async with engine.connect() as connection:
             fact = (
                 await connection.execute(
@@ -818,9 +825,11 @@ async def test_a_migrated_sqlite_database_refuses_an_invented_outcome(tmp_path):
                 text(
                     "INSERT INTO game_records (id, payload_hash, room_name, "
                     "scoring_mode, hint_mode, drawing_seconds, total_rounds, "
-                    "player_count, started_at, finished_at, outcome) VALUES "
+                    "player_count, started_at, finished_at, outcome, "
+                    "prompt_source_mode) VALUES "
                     "(:id, '', 'Room', 'default', 'none', 90, 1, 2, "
-                    "'2026-08-24 12:00:00', '2026-08-24 12:10:00', 'abandoned')"
+                    "'2026-08-24 12:00:00', '2026-08-24 12:10:00', 'abandoned', "
+                    "'custom')"
                 ),
                 {"id": uuid.uuid4().hex},
             )
@@ -830,9 +839,11 @@ async def test_a_migrated_sqlite_database_refuses_an_invented_outcome(tmp_path):
                     text(
                         "INSERT INTO game_records (id, payload_hash, room_name, "
                         "scoring_mode, hint_mode, drawing_seconds, total_rounds, "
-                        "player_count, started_at, finished_at, outcome) VALUES "
+                        "player_count, started_at, finished_at, outcome, "
+                        "prompt_source_mode) VALUES "
                         "(:id, '', 'Room', 'default', 'none', 90, 1, 2, "
-                        "'2026-08-24 12:00:00', '2026-08-24 12:10:00', 'invented')"
+                        "'2026-08-24 12:00:00', '2026-08-24 12:10:00', 'invented', "
+                        "'custom')"
                     ),
                     {"id": uuid.uuid4().hex},
                 )
@@ -1153,5 +1164,28 @@ async def test_letter_histogram_migration_pages_past_the_first_batch(tmp_path):
             )
 
         assert priced == total_revisions
+    finally:
+        await engine.dispose()
+
+
+async def test_the_tightening_refuses_a_database_with_legacy_rows(tmp_path):
+    """p8c3a6d9e147 assumes a pre-production database. One that still holds
+    pre-feature rows must be rebuilt (docs/database.md, Pre-v1 note), and the
+    migration says so instead of fabricating timestamps or deleting history."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'refuse.db'}")
+    try:
+        script = ScriptDirectory.from_config(get_alembic_config())
+        before_timestamps = script.get_revision("a1e4c7d9b632").down_revision
+        assert isinstance(before_timestamps, str)
+        await _migrate(engine, alembic_command.upgrade, before_timestamps)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO app_config (key, value) "
+                    "VALUES ('legacy_secret', 'legacy')"
+                )
+            )
+        with pytest.raises(Exception, match="rebuild this pre-production database"):
+            await _migrate(engine, alembic_command.upgrade, "head")
     finally:
         await engine.dispose()

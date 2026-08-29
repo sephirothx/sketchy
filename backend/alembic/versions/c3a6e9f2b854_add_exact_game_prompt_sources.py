@@ -163,4 +163,17 @@ def downgrade() -> None:
             "game_records",
             type_="check",
         )
+    else:
+        # Originally column-level and gone with the column; a later batch
+        # rebuild of game_records re-emits it as a table-level constraint,
+        # which SQLite refuses to leave dangling over a dropped column.
+        inspector = sa.inspect(op.get_bind())
+        if any(
+            constraint.get("name") == "ck_game_records_prompt_source_mode"
+            for constraint in inspector.get_check_constraints("game_records")
+        ):
+            with op.batch_alter_table("game_records") as batch_op:
+                batch_op.drop_constraint(
+                    "ck_game_records_prompt_source_mode", type_="check"
+                )
     op.drop_column("game_records", "prompt_source_mode")

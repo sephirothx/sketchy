@@ -280,11 +280,11 @@ async def test_participants_see_the_turn_by_turn_detail(env):
         if event["participantUserId"] == ann.id
     ) == 300
     assert body["scoreEvents"][2]["correctsEventId"] == body["scoreEvents"][1]["id"]
-    assert body["promptSourceMode"] == "legacy_unknown"
+    assert body["promptSourceMode"] == "custom"
     assert len(body["turns"]) == 1
     assert body["turns"][0]["prompt"] == "jackpot"
     assert body["turns"][0]["promptVersionId"] is None
-    assert body["turns"][0]["promptSourceKind"] == "legacy_unknown"
+    assert body["turns"][0]["promptSourceKind"] == "custom"
     assert body["turns"][0]["promptOffers"] == []
     assert body["turns"][0]["drawerDisplayName"] == "Ann"
     assert body["turns"][0]["drawerNameColor"] is None
