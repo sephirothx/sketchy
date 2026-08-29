@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
@@ -164,7 +165,6 @@ export function Toolbar({
   const labelPrefix = tool === "eraser" ? "Eraser" : "Brush";
   const sizePickerId = "brush-size-popover";
   const mobileToolPanelId = "toolbar-mobile-tool-panel";
-  const mobileColorPanelId = "toolbar-mobile-color-panel";
   const mobileSizePanelId = "toolbar-mobile-size-panel";
   const currentIdx = PRESET_WIDTHS.indexOf(brushWidth);
   const defaultIdx = tool === "eraser" ? 6 : 2;
@@ -309,8 +309,43 @@ export function Toolbar({
   );
 
   if (isMobile) {
-    return (
+    const dock = typeof document !== "undefined"
+      ? document.getElementById("room-shell-dock")
+      : null;
+    const mobileToolbar = (
+      /* The palette is out, permanently, in two scrollable rows. It used to
+         live behind a chevron whose popover covered the entire canvas, so
+         every colour change cost two taps and a look away from the drawing
+         being coloured. Tools and size keep their popovers - both are small,
+         and neither is reached anywhere near as often as a colour. */
       <div className="toolbar-container toolbar-mobile" ref={mobileToolbarRef} data-testid="toolbar-mobile">
+          <div className="toolbar-mobile-palette" role="group" aria-label="Color palette">
+            {colors.map((c) => (
+              <ColorSwatch
+                key={c}
+                color={c}
+                selected={isSelectedColor(c)}
+                variant="toolbar-mobile-swatch-btn"
+                label={`color ${c}`}
+                onSelect={() => handleSelectColor(c)}
+              />
+            ))}
+            {customColorsAllowed && (
+              <label
+                className={`color-swatch color-swatch-custom toolbar-mobile-swatch-btn${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
+                style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
+                title="Choose custom color"
+              >
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => handleSelectColor(e.target.value)}
+                  aria-label="Choose custom color"
+                />
+              </label>
+            )}
+          </div>
+
           <div className="toolbar toolbar-mobile-strip" role="toolbar" aria-label="Drawing tools">
             <button
               type="button"
@@ -323,20 +358,6 @@ export function Toolbar({
               onClick={() => toggleMobilePanel("tool")}
             >
               <span className="tool-glyph">{activeTool.glyph}</span>
-              <span className="toolbar-mobile-chip-caret" aria-hidden="true"><ChevronDownIcon size={12} /></span>
-            </button>
-
-            <button
-              type="button"
-              className={`toolbar-mobile-chip toolbar-mobile-color-chip${mobilePanel === "color" ? " active" : ""}`}
-              aria-label={`Choose color, current ${color}`}
-              aria-expanded={mobilePanel === "color"}
-              aria-haspopup="true"
-              aria-controls={mobileColorPanelId}
-              title="Choose color"
-              onClick={() => toggleMobilePanel("color")}
-            >
-              <span className="toolbar-mobile-swatch" style={{ backgroundColor: activeColor }} />
               <span className="toolbar-mobile-chip-caret" aria-hidden="true"><ChevronDownIcon size={12} /></span>
             </button>
 
@@ -378,76 +399,41 @@ export function Toolbar({
           {mobilePanel === "tool" && (
             <div id={mobileToolPanelId} className="toolbar-mobile-popover" role="group" aria-label="Choose tool">
               <div className="toolbar-mobile-tools">
-                {tools.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    className={`tool-button toolbar-mobile-tool${t.value === tool ? " selected" : ""}`}
-                    disabled={disabledReason(t.value) !== null}
-                    aria-label={disabledReason(t.value) ?? t.name}
-                    onClick={() => {
-                      onToolChange(t.value);
-                      setMobilePanel(null);
-                    }}
-                  >
-                    <span className="tool-glyph">{t.glyph}</span>
-                  </button>
-                ))}
+                {tools.map((t) => {
+                  const unavailable = disabledReason(t.value);
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      className={`tool-button toolbar-mobile-tool${t.value === tool ? " selected" : ""}`}
+                      onClick={() => {
+                        onToolChange(t.value);
+                        setMobilePanel(null);
+                      }}
+                      disabled={Boolean(unavailable)}
+                      aria-label={unavailable ?? getToolLabel(t.value, t.name)}
+                      title={unavailable ?? t.name}
+                    >
+                      {t.glyph}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {mobilePanel === "color" && (
-            <div id={mobileColorPanelId} className="toolbar-mobile-popover" role="group" aria-label="Choose color">
-              <div className="toolbar-mobile-colors">
-                {colors.map((c) => (
-                  <ColorSwatch
-                    key={c}
-                    color={c}
-                    selected={isSelectedColor(c)}
-                    variant="toolbar-mobile-swatch-btn"
-                    label={`color ${c}`}
-                    onSelect={() => {
-                      handleSelectColor(c);
-                      setMobilePanel(null);
-                    }}
-                  />
-                ))}
-                {customColorsAllowed && (
-                  <label
-                    className={`color-swatch color-swatch-custom toolbar-mobile-swatch-btn${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
-                    style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
-                    title="Choose custom color"
-                  >
-                    <input
-                      type="color"
-                      value={color}
-                      onChange={(e) => {
-                        handleSelectColor(e.target.value);
-                        setMobilePanel(null);
-                      }}
-                      aria-label="Choose custom color"
-                    />
-                  </label>
-                )}
-              </div>
-              {shownRecentColors.length > 0 && (
-                <div className="toolbar-mobile-recent" aria-label="Recent colors">
-                  {shownRecentColors.map((c) => (
-                    <ColorSwatch
-                      key={c}
-                      color={c}
-                      selected={isSelectedColor(c)}
-                      variant="toolbar-mobile-swatch-btn"
-                      label={`Recent color ${c}`}
-                      onSelect={() => {
-                        handleSelectColor(c);
-                        setMobilePanel(null);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
+          {shownRecentColors.length > 0 && mobilePanel === "size" && (
+            <div className="toolbar-mobile-recent" aria-label="Recent colors">
+              {shownRecentColors.map((c) => (
+                <ColorSwatch
+                  key={c}
+                  color={c}
+                  selected={isSelectedColor(c)}
+                  variant="toolbar-mobile-swatch-btn"
+                  label={`Recent color ${c}`}
+                  onSelect={() => handleSelectColor(c)}
+                />
+              ))}
             </div>
           )}
 
@@ -458,6 +444,10 @@ export function Toolbar({
           )}
       </div>
     );
+    // The dock lives after the chat region in the shell, so the palette ends
+    // up at the bottom of the screen. Rendering in place is the fallback for
+    // the first paint, before the shell's node exists.
+    return dock ? createPortal(mobileToolbar, dock) : mobileToolbar;
   }
 
   return (

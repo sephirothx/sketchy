@@ -158,6 +158,9 @@
   padding-top: 10px;
 }
 
+/* The verdict on your own guess. It floats above the field rather than sitting
+   in the feed, because on a phone the feed is one line — and with the keyboard
+   up it is the only report you get. It stays until you type again. */
 .guess-focus-flash {
   display: none;
   position: absolute;
@@ -255,4 +258,58 @@
   background: var(--faint);
   box-shadow: none;
   cursor: not-allowed;
+}
+
+/* Shown on phones whether or not the keyboard is up: the desktop feed carries
+   the same information in the message list, which a phone does not have room
+   for. */
+@media (max-width: 900px) {
+  .guess-focus-flash {
+    display: block;
+  }
+}
+
+/* ── The correct guess ──────────────────────────────────────────────────
+   The dock itself becomes the confirmation, where the eye already is. What
+   this replaces was the same one-line flash a wrong guess got, after which
+   the keyboard was dismissed and the layout reflowed underneath you. */
+.guess-verdict-hit {
+  align-items: baseline;
+  background: var(--success-soft);
+  border: 1.5px solid var(--success);
+  border-radius: var(--radius-sm);
+  color: var(--success-ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0 0 8px;
+  padding: 9px 12px;
+}
+
+.guess-verdict-hit-head {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+.guess-verdict-hit-word {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+.guess-verdict-hit-points {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Once you have the word the field is for talking to the room, not guessing. */
+.chat-input.has-guessed .chat-input-box input {
+  border-color: var(--success);
 }

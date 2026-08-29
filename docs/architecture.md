@@ -9,7 +9,7 @@ Companion documents:
 - [`wire-protocol.md`](wire-protocol.md) — the exact Socket.IO and REST contract between the two halves.
 - [`database.md`](database.md) — every table, its columns, and the flows that write them.
 - [`requirements.md`](requirements.md) — what the system is required to do, and what it deliberately does not do.
-- [`ui-mockups/`](ui-mockups/) — an artboard per screen, matched to the shipped styles, plus the redesign rationale. What the frontend described here actually looks like. [`ui-mockups/mobile/`](ui-mockups/mobile/README.md) is the portrait-phone counterpart: a measured review of the same screens at 390 × 844, and proposed layouts answering it. Those are proposals, not a record of what ships.
+- [`ui-mockups/`](ui-mockups/) — an artboard per screen, matched to the shipped styles, plus the redesign rationale. What the frontend described here actually looks like. [`ui-mockups/mobile/`](ui-mockups/mobile/README.md) is the portrait-phone counterpart: a measured review of the same screens at 390 × 844, and the layouts that answer it. Those have shipped; the artboards are the reference for the phone build the way the desktop set is for the wide one.
 - [`../GLOSSARY.md`](../GLOSSARY.md) — the one agreed name per concept. Read it before naming anything a player can see.
 - [`../README.md`](../README.md) — the operator- and player-facing narrative; this document is the structural one.
 
@@ -947,12 +947,39 @@ Files are named for their single concern; the directory says the role.
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `gameStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `gameHighlights.ts`, `liveDrawing.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSettingsAutosave.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `InviteEntryPage.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomSetupControls.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSettingsAutosave.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomSetupControls.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).
 `frontend/src/styles/` is one CSS file per surface.
+
+### The phone layout
+
+Below the 900px breakpoint a room in play is a fixed shell of three bands —
+status, stage, dock — rather than a page that scrolls. Its height is
+`min(var(--vv-height), 100dvh)`, taking whichever of the two viewport signals is
+smaller: iOS resizes the visual viewport but not the layout one, so `dvh` stays
+tall while the soft keyboard is up and `--vv-height` (written by
+`useVisualViewportCssVars`) is the accurate one; if a `visualViewport` resize is
+ever missed, `--vv-height` goes stale tall and `dvh` is. The minimum means the
+guess field cannot be pushed off the bottom by either.
+
+The canvas is 4:3 because 800 × 600 is baked into the wire protocol, so on a
+portrait phone it can never exceed about a third of the height. It is sized from
+whichever cap binds first — the column's width, or the height the other bands
+leave, via `100cqh` on `.canvas-wrapper` — with `aspect-ratio` deriving the
+other side. A definite `height` would stop `aspect-ratio` applying and stretch
+the drawing.
+
+`.game-room-playing` deliberately carries no `z-index`: a positioned element
+with one creates a stacking context, which would trap every overlay inside the
+shell below the confetti canvas at the root. Overlays are bottom sheets
+(`BottomSheet`, which the stylesheet centres as an ordinary dialog above the
+breakpoint), and the drawing dock renders through a portal into
+`#room-shell-dock` in `RoomShell` so the palette lands after the chat region,
+at the bottom of the screen. [`ui-mockups/mobile/`](ui-mockups/mobile/README.md)
+is the reference for all of it.
 
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 

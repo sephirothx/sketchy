@@ -26,3 +26,53 @@
   .drawing-recap-header { align-items: stretch; flex-direction: column; }
   .drawing-recap-header-actions { align-self: stretch; flex-wrap: wrap; }
 }
+
+/* Dot pager beside the count: on a phone the count alone makes you do
+   arithmetic to know how much is left. */
+.drawing-recap-pager {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.drawing-recap-dots {
+  display: none;
+  gap: 5px;
+}
+
+.drawing-recap-dots i {
+  background: var(--line-strong);
+  border-radius: 4px;
+  display: block;
+  height: 6px;
+  transition: width 140ms ease, background-color 140ms ease;
+  width: 6px;
+}
+
+.drawing-recap-dots i.is-current {
+  background: var(--primary);
+  width: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawing-recap-dots i { transition: none; }
+}
+
+@media (max-width: 900px) {
+  .drawing-recap-dots { display: flex; }
+  .drawing-recap-position { font-size: 12px; color: var(--muted); }
+
+  /* Chrome first, picture second is the wrong order on a screen this size. */
+  .drawing-recap-header {
+    align-items: flex-start;
+  }
+
+  .drawing-recap-header-actions {
+    flex: 0 0 auto;
+  }
+
+  .drawing-recap-canvas {
+    touch-action: pan-y;
+  }
+}

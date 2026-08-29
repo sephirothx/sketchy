@@ -30,6 +30,12 @@ export function RoomShell({ mode, players, main, chat }: RoomShellProps) {
       <aside className="sidebar-right room-shell-chat" data-testid="room-chat-region">
         <div className="sidebar-box room-shell-panel">{chat}</div>
       </aside>
+
+      {/* Where the phone's drawing dock lands. The toolbar renders itself in
+          here (see Toolbar), so the palette sits at the bottom of the screen
+          under the thumb rather than in a strip between canvas and chat.
+          Empty and inert on desktop, where the toolbar stays in the column. */}
+      <div className="room-shell-dock" id="room-shell-dock" />
     </div>
   );
 }

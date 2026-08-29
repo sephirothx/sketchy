@@ -90,76 +90,30 @@
   flex: 0 0 auto;
 }
 
-/* Mobile players slide-out */
-.players-drawer-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  background: var(--scrim);
-  display: flex;
-  justify-content: flex-start;
-}
-
-.players-drawer {
-  box-sizing: border-box;
-  width: min(320px, 88vw);
-  height: 100%;
-  background: var(--paper);
-  border-right: 1.5px solid var(--line);
-  box-shadow: 8px 0 28px rgba(20, 16, 10, 0.18);
-  display: flex;
-  flex-direction: column;
-  animation: playersDrawerIn 0.2s ease-out;
-  overflow: hidden;
-}
-
-@keyframes playersDrawerIn {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .players-drawer {
-    animation: none;
-  }
-}
-
-.players-drawer-header {
-  display: flex;
+/* The phone's status band: room code, round + countdown ring, and one way in
+   to everything else. What it replaces lined up eight icon buttons in a 44px
+   strip, with a red Leave one thumb-width from Settings. */
+.game-header-mobile {
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1.5px solid var(--line);
-  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  grid-template-columns: none;
+  margin-bottom: 8px;
+  min-height: 56px;
 }
 
-.players-drawer-header h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--ink);
-}
-
-.players-drawer-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1.5px solid var(--line-strong);
-  background: var(--card);
-  color: var(--muted);
-  border-radius: var(--radius-sm);
-  width: 36px;
-  height: 36px;
-  cursor: pointer;
-}
-
-.players-drawer-body {
+.game-header-mobile .game-header-status {
+  display: flex;
   flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  margin: 12px;
+  grid-column: auto;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.game-header-menu-button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* The code pill doubles as the invite-copy control. */
@@ -485,7 +439,18 @@
   }
 }
 
-.waiting-room { display: grid; gap: 14px; margin: 0; padding: 0 0 32px; width: 100%; }
+/* minmax(0, 1fr) rather than the implicit `auto`, for the same reason as
+   .create-room-sections: an auto track sizes to its widest item's max-content,
+   so one wide child (a nowrap chip row, a long code row) drags the whole
+   column past the viewport and scrolls the page sideways. */
+.waiting-room {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0 0 32px;
+  width: 100%;
+}
 .waiting-card {
   background: var(--card);
   border: 1.5px solid var(--line);
@@ -732,28 +697,11 @@
     gap: 4px;
   }
 
-  .sidebar-right {
-    order: 2;
-    width: 100%;
-  }
-
-  .sidebar-left {
-    order: 3;
-    width: 100%;
-  }
-
-  .room-shell-main {
-    order: 1;
-    width: 100%;
-  }
-
-  .room-shell-chat {
-    order: 2;
-  }
-
-  .room-shell-players {
-    order: 3;
-  }
+  .sidebar-right { order: 2; width: 100%; }
+  .sidebar-left { order: 3; width: 100%; }
+  .room-shell-main { order: 1; width: 100%; }
+  .room-shell-chat { order: 2; }
+  .room-shell-players { order: 3; }
 
   .room-shell-players,
   .room-shell-chat {
@@ -761,16 +709,56 @@
     width: 100%;
   }
 
+  /* ── Waiting room ─────────────────────────────────────────────────────
+     Who is here comes before chat: it is what you actually watch while you
+     wait, and it used to be the last thing on a 1376px page. */
+  .room-shell-waiting .room-shell-players { order: 2; }
+  .room-shell-waiting .room-shell-chat { order: 3; }
+
+  /* Start is the host's whole reason for being on this screen, and it sat at
+     y=822 on an 844px viewport — clipped by the fold. Pinned to the bottom,
+     it is always one thumb away, and the invite and settings scroll under. */
+  .waiting-start-card {
+    background: var(--card);
+    border-radius: var(--radius) var(--radius) 0 0;
+    bottom: 0;
+    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.08);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    position: sticky;
+    z-index: 2;
+  }
+
+  .waiting-start-button {
+    width: 100%;
+  }
+
+  /* One scrollable row rather than a 250px wrap restating what the host
+     chose ten seconds ago. */
+  .waiting-settings-chips {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .waiting-settings-chips::-webkit-scrollbar { display: none; }
+  .waiting-settings-chips > * { flex: 0 0 auto; }
+
   .guess-chat {
     display: flex;
     flex-direction: column;
     height: auto !important;
   }
 
+  /* The input reads below the messages, as it does in every other messaging
+     surface. It used to be order:-1 - you typed at the top and read below,
+     and each new message travelled away from the caret. */
   .chat-input {
-    order: -1;
-    margin-top: 0;
-    margin-bottom: 4px;
+    order: 0;
+    margin-top: 6px;
+    margin-bottom: 0;
   }
 
   .chat-messages-container {
@@ -784,97 +772,228 @@
     max-height: 200px;
   }
 
-  .round-info {
-    font-size: 13px;
-    padding: 2px 4px;
-    margin-bottom: 2px;
-  }
-
   /*
-   * Stable mobile playing shell: always pinned to visualViewport.
-   * Guess-focused only changes density — never position scheme — so focus/blur
-   * does not remount layout or fight keyboard scroll.
+   * ── The playing shell on a phone ───────────────────────────────────────
    *
-   * Unfocused: scroll the shell; canvas keeps a width-based 4:3 size so drawing
-   * stays usable. Focused: lock overflow and let canvas fill freed space.
+   * Three bands, pinned to visualViewport and never page-scrolled:
+   *
+   *   status band   the room, the round, the countdown ring, the ⋯ sheet
+   *   stage         prompt + clock, canvas, guessed pips
+   *   dock          the last of the feed, and the guess field
+   *
+   * Guess-focused (the soft keyboard is up) changes density, never the
+   * position scheme, so focus and blur cannot remount layout or fight the
+   * keyboard's own scrolling.
    */
   .game-room.game-room-playing {
     position: fixed;
     top: var(--vv-offset-top, 0px);
     left: var(--vv-offset-left, 0px);
     width: var(--vv-width, 100%);
-    height: var(--vv-height, 100dvh);
+    /* Whichever of the two signals is smaller. They disagree in both
+       directions: iOS resizes the visual viewport but not the layout one, so
+       dvh stays tall with the keyboard up and --vv-height is right; and if a
+       visualViewport resize is ever missed, --vv-height goes stale tall and
+       dvh is right. Taking the minimum means the dock can never be pushed
+       off the bottom of the screen by either. */
+    height: min(var(--vv-height, 100dvh), 100dvh);
     max-width: none;
     margin: 0;
     box-sizing: border-box;
-    padding: 8px 10px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
     overscroll-behavior: none;
-    z-index: 1;
+    /* Deliberately no z-index. A positioned element with one creates a
+       stacking context, which trapped every overlay inside this shell below
+       the confetti canvas at the root - the turn recap included, which is
+       exactly when confetti fires. Fixed positioning already lifts the shell
+       above the page. */
   }
 
-  .game-room.game-room-playing .game-header {
+  /* Status band. */
+  .game-room.game-room-playing .game-header-mobile {
     flex: 0 0 auto;
-    margin-bottom: 8px;
+    margin-bottom: 0;
+    padding: 6px 10px;
+    border-bottom: 1.5px solid var(--line);
+    background: var(--card);
+    min-height: 56px;
   }
 
   .game-room.game-room-playing .room-shell {
-    flex: 0 0 auto;
-    gap: 8px;
+    flex: 1 1 auto;
     min-height: 0;
+    gap: 6px;
+    padding: 6px 0 0;
+    display: flex;
+    flex-direction: column;
   }
 
+  /* Stage. Takes the height the dock does not need; the canvas centres in it. */
   .game-room.game-room-playing .room-shell-main {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-height: 0;
     width: 100%;
     display: flex;
     flex-direction: column;
   }
 
   .game-room.game-room-playing .room-shell-main-transition {
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
 
   .game-room.game-room-playing .canvas-area {
-    gap: 4px;
-    align-items: center;
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 5px;
+    align-items: stretch;
+    overflow: hidden;
   }
 
-  .game-room.game-room-playing .round-info,
-  .game-room.game-room-playing .prompt-display {
+  /* The canvas is full-bleed; the bands around it carry their own gutter. */
+  .game-room.game-room-playing .turn-bar,
+  .game-room.game-room-playing .guess-timer-bar,
+  .game-room.game-room-playing .guess-pips {
+    padding-inline: 12px;
+  }
+
+  /* Masked letters at a size worth reading. 19x26 was below the floor for a
+     glyph, and in the buy-a-letter and Wheel modes each tile is also a
+     button. */
+  .masked-tile {
+    width: 29px;
+    height: 38px;
+    font-size: 20px;
+  }
+
+  /* ── Picking a prompt ──────────────────────────────────────────────
+     Fifteen seconds, decided from the bottom of the screen rather than from
+     three small tiles above an empty canvas that has nothing to show yet. */
+  .game-room.game-room-playing .prompt-display.choosing {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 0;
+    padding: 0 12px;
+  }
+
+  .prompt-choice-card {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    width: 100%;
+  }
+
+  .prompt-choices {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .prompt-choices button {
+    min-height: 76px;
+    width: 100%;
+  }
+
+  /* Nothing to draw on yet, so the canvas gives its space to the choices. */
+  .game-room.game-room-playing:has(.prompt-display.choosing) .canvas-wrapper {
+    display: none;
+  }
+
+  .game-room.game-room-playing .turn-bar,
+  .game-room.game-room-playing .guess-timer-bar,
+  .game-room.game-room-playing .guess-pips {
     flex: 0 0 auto;
   }
 
-  /* Width-first 4:3 — do not flex-shrink against chat/players */
+  /* The drawing dock sits at the bottom of the screen, under the thumb,
+     rather than in a strip halfway up between canvas and chat. */
+  .game-room.game-room-playing .room-shell-dock {
+    flex: 0 0 auto;
+    order: 8;
+  }
+
+  .game-room.game-room-playing .room-shell-dock .toolbar-container.toolbar-mobile {
+    background: var(--card);
+    border-top: 1.5px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    position: relative;
+  }
+
+  /* The canvas takes the height the bands leave and gives up width to keep
+     4:3, rather than being sized from the width and letting the leftover
+     become dead space at the bottom of the screen. */
+  /* The canvas takes whichever cap binds first — the column's width, or the
+     height the other bands leave — and derives the other side from 4:3. Both
+     regimes matter on a phone: width binds with the keyboard down (390px of
+     width is 293px of 4:3), height binds with it up. Sizing from width alone
+     would push the guess field off the bottom the moment the keyboard opened;
+     a definite `height` would stop aspect-ratio applying and stretch the
+     drawing. The wrapper centres whatever is left over. */
+  .game-room.game-room-playing .canvas-wrapper {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    container-type: size;
+  }
+
   .game-room.game-room-playing .canvas-stack {
-    width: 100%;
+    flex: 0 0 auto;
+    width: min(100%, calc(100cqh * 4 / 3));
     max-width: 100%;
     height: auto;
     aspect-ratio: 4 / 3;
     margin-inline: auto;
   }
 
-  .game-room.game-room-playing .toolbar-container {
+  /* Dock. Absorbs the height the canvas did not need, and spends it on the
+     guesses arriving — which is what the drawer wants to watch, and what a
+     guesser needs to see the race. The field stays pinned to the bottom. */
+  .game-room.game-room-playing .room-shell-chat {
+    display: flex;
     flex: 0 0 auto;
-    width: 100%;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 0;
+    margin-top: 0;
   }
 
-  .game-room.game-room-playing .room-shell-chat,
-  .game-room.game-room-playing .room-shell-players {
-    flex: 0 0 auto;
+  .game-room.game-room-playing .room-shell-chat .sidebar-box,
+  .game-room.game-room-playing .room-chat-panel {
+    display: flex;
+    flex-direction: column;
     min-height: 0;
   }
 
-  /* Players are secondary during play — reclaim vertical space for canvas */
-  .game-room.game-room-playing .room-shell-players {
-    display: none;
+  .game-room.game-room-playing .room-shell-chat .sidebar-box {
+    flex: 0 0 auto;
+    justify-content: flex-end;
   }
 
-  /* Kill desktop chat height so it cannot steal the canvas */
+  .game-room.game-room-playing .room-shell-chat .sidebar-box {
+    background: var(--card);
+    border: 0;
+    border-top: 1.5px solid var(--line);
+    border-radius: 0;
+    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.05);
+    margin: 0;
+    padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
   .game-room.game-room-playing .room-chat-panel.guess-chat,
   .game-room.game-room-playing .guess-chat {
     height: auto !important;
@@ -882,117 +1001,77 @@
     flex: 0 0 auto;
   }
 
-  .game-room.game-room-playing .chat-messages-container {
-    flex: 0 1 auto;
-    max-height: 140px;
-    min-height: 0;
+  .game-room.game-room-playing .room-chat-heading {
+    display: none;
   }
 
+  .game-room.game-room-playing .chat-messages-container,
   .game-room.game-room-playing .chat-messages {
     flex: 0 1 auto;
-    max-height: 140px;
+    max-height: 150px;
     min-height: 0;
   }
 
-  /* Density mode: hide chrome; fill vv with canvas + prompt + input */
-  .game-room.guess-focused {
-    padding: 4px 6px;
-    overflow: hidden;
+  /* Newest message against the field. A short feed otherwise floats at the
+     top of the space the canvas did not use, with the gap underneath it. */
+  .game-room.game-room-playing .chat-messages {
+    justify-content: flex-end;
   }
 
+  /* Players are a sheet during play, not a column. */
+  .game-room.game-room-playing .room-shell-players {
+    display: none;
+  }
+
+  /* ── Density mode: the soft keyboard is up ─────────────────────────── */
   .game-room.guess-focused .game-header,
   .game-room.guess-focused .sidebar-left,
   .game-room.guess-focused .room-chat-heading,
-  .game-room.guess-focused .chat-messages-container,
-  .game-room.guess-focused .chat-messages,
   .game-room.guess-focused .chat-scroll-bottom-button {
     display: none !important;
   }
 
-  /* Guess-focused strips the round/timer line entirely; the depleting bar
-     below the tiles carries the remaining time instead. */
-  .game-room.guess-focused .round-info {
-    display: none !important;
-  }
-
-  .game-room.guess-focused .guess-timer-bar {
-    display: block;
-  }
-
-  .game-room.guess-focused .room-shell {
-    flex: 1 1 auto;
-    min-height: 0;
-    gap: 4px;
-    overflow: visible;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .game-room.guess-focused .room-shell-main {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .game-room.guess-focused .room-shell-main-transition {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .game-room.guess-focused .canvas-area {
-    flex: 1 1 auto;
-    min-height: 0;
-    gap: 2px;
-    overflow: hidden;
-    container-type: size;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .game-room.guess-focused .canvas-stack {
-    flex: 0 1 auto;
-    min-height: 0;
-    width: min(100%, calc(100cqh * 4 / 3));
-    max-width: 100%;
-    max-height: 100%;
-    height: auto;
-    aspect-ratio: 4 / 3;
-    margin-inline: auto;
+  /* One line of feed survives, so the race is still legible while typing. */
+  .game-room.guess-focused .chat-messages-container,
+  .game-room.guess-focused .chat-messages {
+    flex: 0 0 auto;
+    max-height: 26px;
   }
 
   .game-room.guess-focused .room-shell-chat {
     flex: 0 0 auto;
-    margin-top: 0;
-    overflow: visible;
+  }
+
+  .game-room.guess-focused .room-shell {
+    padding-top: 4px;
+    gap: 4px;
+  }
+
+  .game-room.guess-focused .canvas-area {
+    gap: 4px;
+  }
+
+  /* The feed gives its height back to the canvas while the keyboard is up. */
+  .game-room.guess-focused .chat-messages-container {
+    max-height: 26px;
   }
 
   .game-room.guess-focused .guess-chat {
     max-height: none;
     height: auto !important;
-    gap: 6px;
+    gap: 4px;
     overflow: visible;
   }
 
-  .game-room.guess-focused .guess-focus-flash {
-    display: block;
+  .game-room.guess-focused .room-shell-chat .sidebar-box {
+    padding-top: 6px;
   }
+}
 
-  .game-room.guess-focused .sidebar-right .sidebar-box {
-    padding: 4px 6px;
-    border-radius: 8px;
-    background: var(--card);
-    border: 1px solid var(--line-strong);
-    margin: 0;
-    overflow: visible;
-  }
 
-  .game-room.guess-focused .chat-input {
-    margin-bottom: 0;
-    margin-top: 0;
-  }
+/* Empty on desktop: the toolbar stays in the gameplay column there. */
+.room-shell-dock:empty {
+  display: none;
 }
 
 .sidebar-left,
@@ -1153,12 +1232,32 @@
   align-items: center;
 }
 
-.round-info {
+/* Prompt and clock on one row. The clock is a numeral rather than only a
+   ring, because the ring lives in the status band and the soft keyboard
+   takes that band away at exactly the moment the seconds matter most. */
+.turn-bar {
+  align-items: center;
   display: flex;
-  justify-content: space-between;
+  gap: 10px;
   width: 100%;
-  color: var(--muted);
-  font-weight: 700;
+}
+
+.turn-bar .prompt-display {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.turn-bar-clock {
+  flex: 0 0 auto;
+  font-size: 19px;
+  font-weight: 900;
+  color: var(--warm-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.turn-bar-clock .timer.urgent {
+  color: var(--danger);
 }
 
 .timer {
@@ -1171,9 +1270,10 @@
   color: var(--danger);
 }
 
-/* The depleting time bar shown while guessing on mobile. */
+/* The depleting time bar under the prompt row on mobile: a peripheral read
+   of the same countdown the numeral states exactly. */
 .guess-timer-bar {
-  display: none;
+  display: block;
   width: 100%;
   flex: 0 0 auto;
 }
@@ -1389,9 +1489,14 @@
   cursor: help;
 }
 
-/* A blank the player can buy: the tile itself is the button. */
+/* A blank the player can buy: the tile itself is the button, so it carries a
+   real touch target rather than the 19x26 a decorative tile can get away with.
+   The extra height is padding, so the glyph box still lines up with its
+   unbuyable neighbours. */
 .masked-tile.hint-blank {
   cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .masked-tile.hint-blank:hover:not(:disabled) {
@@ -1420,19 +1525,20 @@
    aligned columns read far better than a ragged centred last row. */
 .wheel-letter-grid {
   display: grid;
-  gap: 4px;
-  grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+  gap: 5px;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
   margin-inline: auto;
   max-width: 560px;
 }
 
 .wheel-letter-btn {
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: normal;
-  min-width: 28px;
-  padding: 3px 4px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px;
   border: 1.5px solid var(--primary-edge-soft);
   border-radius: 6px;
   background: var(--card);
@@ -1593,4 +1699,193 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+
+
+/* ── Who has already guessed ────────────────────────────────────────────
+   The turn's live scoreboard. Frozen eligibility (R-GUESS-05) and the drawer
+   bonus (R-SCORE-08) both turn on this, and during play on a phone it used to
+   be invisible: the players column is hidden, so the only way to see it was a
+   drawer over the canvas. The row is also the way into that panel. */
+.guess-pips {
+  align-items: center;
+  background: none;
+  border: 0;
+  display: flex;
+  gap: 8px;
+  min-height: 34px;
+  padding: 2px 2px;
+  text-align: left;
+  width: 100%;
+}
+
+button.guess-pips {
+  cursor: pointer;
+}
+
+.guess-pip-row {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.guess-pip {
+  border-radius: 50%;
+  display: inline-flex;
+  flex: 0 0 auto;
+  position: relative;
+}
+
+/* Not-yet-guessed players read as outlines, so the row scans as a progress
+   bar of people rather than a row of avatars. */
+.guess-pip .avatar {
+  opacity: 0.42;
+  filter: grayscale(1);
+}
+
+.guess-pip.has-guessed .avatar {
+  opacity: 1;
+  filter: none;
+  box-shadow: 0 0 0 2px var(--success);
+}
+
+.guess-pip.is-me .avatar {
+  outline: 2px dashed var(--line-strong);
+  outline-offset: 2px;
+}
+
+.guess-pip.is-me.has-guessed .avatar {
+  outline: none;
+}
+
+.guess-pip-place {
+  align-items: center;
+  background: var(--success-button);
+  border: 1.5px solid var(--card);
+  border-radius: 50%;
+  bottom: -3px;
+  color: #fff;
+  display: flex;
+  font-size: 9px;
+  font-weight: 900;
+  height: 15px;
+  justify-content: center;
+  position: absolute;
+  right: -4px;
+  width: 15px;
+}
+
+.guess-pip-summary {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ── Landscape, on a phone ──────────────────────────────────────────────
+   A 4:3 canvas is baked into the wire protocol (800x600), so in portrait it
+   can never be more than about a third of a phone's height however good the
+   layout is. Turned sideways the same canvas gets roughly twice the area, so
+   landscape is treated as a real drawing mode rather than a broken portrait:
+   the palette becomes a rail on the holding side, the feed a narrow column,
+   and the canvas takes everything between them. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .game-room.game-room-playing {
+    padding: 0;
+  }
+
+  .game-room.game-room-playing .game-header-mobile {
+    min-height: 44px;
+    padding: 4px 10px;
+  }
+
+  .game-room.game-room-playing .room-shell {
+    align-items: stretch;
+    flex-direction: row;
+    gap: 0;
+    min-height: 0;
+    padding: 0;
+  }
+
+  /* Row children need their own minimums cleared, or each one's content
+     floors its size and the whole strip overflows the viewport. */
+  .game-room.game-room-playing .room-shell > * {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .game-room.game-room-playing .room-shell-dock {
+    display: flex;
+    flex: 0 0 auto;
+    order: 0;
+    width: auto;
+  }
+
+  .game-room.game-room-playing .room-shell-dock .toolbar-container.toolbar-mobile {
+    border-right: 1.5px solid var(--line);
+    border-top: 0;
+    flex-direction: row;
+    height: 100%;
+    min-height: 0;
+    padding: 6px;
+  }
+
+  .game-room.game-room-playing .toolbar-mobile-palette {
+    grid-auto-flow: row;
+    grid-auto-rows: 34px;
+    grid-template-columns: repeat(1, 34px);
+    grid-template-rows: none;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    width: auto;
+  }
+
+  .game-room.game-room-playing .toolbar-mobile-palette .toolbar-mobile-swatch-btn {
+    height: 34px;
+    min-height: 34px;
+    min-width: 34px;
+    width: 34px;
+  }
+
+  .game-room.game-room-playing .toolbar-mobile-strip {
+    flex-direction: column;
+  }
+
+  .game-room.game-room-playing .room-shell-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    order: 1;
+  }
+
+  /* The side columns are kept tight on purpose: every pixel they take comes
+     straight off the canvas, and the whole point of turning the phone is to
+     make the drawing bigger. */
+  .game-room.game-room-playing .room-shell-chat {
+    border-left: 1.5px solid var(--line);
+    flex: 0 0 auto;
+    max-width: 180px;
+    order: 2;
+    width: 26%;
+  }
+
+  .game-room.game-room-playing .room-shell-chat .sidebar-box {
+    border-top: 0;
+    box-shadow: none;
+    height: 100%;
+  }
+
+  .game-room.game-room-playing .chat-messages-container,
+  .game-room.game-room-playing .chat-messages {
+    max-height: none;
+  }
+
+  /* The turn bar rides above the canvas rather than across the whole width,
+     so the prompt and clock stay out of the drawing hand's way. */
+  .game-room.game-room-playing .turn-bar {
+    padding-inline: 8px;
+  }
 }

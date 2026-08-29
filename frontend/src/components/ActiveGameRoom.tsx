@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { CanvasRef } from "../components/Canvas";
 import { GameEndOverlay } from "../components/GameEndOverlay";
@@ -11,6 +11,8 @@ import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
+import { RoomMenuSheet } from "../components/RoomMenuSheet";
+import { BottomSheet } from "../components/ui/BottomSheet";
 import {
   ConnectedRoomChatPanel,
   ConnectedRoomPlayersPanel,
@@ -18,19 +20,17 @@ import {
   GameplayRegion,
 } from "../components/GameRoomRegions";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import {
   CopyIcon,
+  DotsIcon,
   DownloadIcon,
   GearIcon,
   LeaveIcon,
   MoonIcon,
   RoundsIcon,
-  UsersIcon,
-  XIcon,
 } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
@@ -45,9 +45,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   const canvasRef = useRef<CanvasRef | null>(null);
   const exitingRoomRef = useRef(false);
-  const playersDrawerRef = useRef<HTMLElement | null>(null);
-  const playersDrawerCloseRef = useRef<HTMLButtonElement | null>(null);
-  const playersDrawerTitleId = useId();
 
   const playerId = useGameStore((s) => s.playerId);
   const clearSession = useGameStore((s) => s.clearSession);
@@ -78,19 +75,14 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const [startError, setStartError] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
   const [highlightsOpen, setHighlightsOpen] = useState(false);
-  const [playersDrawerOpen, setPlayersDrawerOpen] = useState(false);
+  const [playersSheetOpen, setPlayersSheetOpen] = useState(false);
+  const [roomMenuOpen, setRoomMenuOpen] = useState(false);
   const [restartBusy, setRestartBusy] = useState(false);
   const [colorSuggestionBusy, setColorSuggestionBusy] = useState(false);
   const [restartClock, setRestartClock] = useState(() => Date.now());
   const isMobile = useMediaQuery("(max-width: 900px)");
 
   useVisualViewportCssVars();
-
-  useFocusTrap(playersDrawerRef, {
-    active: playersDrawerOpen,
-    onEscape: () => setPlayersDrawerOpen(false),
-    initialFocusRef: playersDrawerCloseRef,
-  });
 
   useEffect(() => {
     if (restartVoteCooldownUntil <= Date.now()) return;
@@ -267,8 +259,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const roomView: RoomShellMode =
     phase === "game_end" && finalScores ? "game-end" : roomState;
 
-  if (playersDrawerOpen && (roomView !== "playing" || !isMobile)) {
-    setPlayersDrawerOpen(false);
+  if (playersSheetOpen && (roomView !== "playing" || !isMobile)) {
+    setPlayersSheetOpen(false);
+  }
+  if (roomMenuOpen && !isMobile) {
+    setRoomMenuOpen(false);
   }
 
   // Both post-game panels are about the *last* game, so a game starting
@@ -304,100 +299,119 @@ export function ActiveGameRoom({ code }: { code: string }) {
           }}
         />
       )}
-      <header className="game-header">
-        <div className="game-header-start">
-          {roomName && <span className="game-header-room-name">{roomName}</span>}
+      {isMobile ? (
+        /* Phone status band: what the room is, how long is left, and one way
+           in to everything else. The eight-icon strip this replaces put a red
+           Leave a thumb-width from Settings; those live in the ⋯ sheet now. */
+        <header className="game-header game-header-mobile">
           <button
             type="button"
             className="room-copy-button"
             data-room-code={code}
             onClick={() => void handleCopyLink()}
+            aria-label="Copy the room invite link"
             title="Click to copy room invite link"
           >
             <span>{code}</span>
             <CopyIcon size={13} />
           </button>
-          {roomView === "playing" && isMobile && (
-            <button
-              type="button"
-              className="btn btn-icon btn-compact game-header-players-button"
-              onClick={() => setPlayersDrawerOpen(true)}
-              aria-label="View players"
-              title="View players"
-              data-testid="open-players-drawer"
-            >
-              <UsersIcon size={16} />
-            </button>
-          )}
-        </div>
-        <GameHeaderStatus />
-        <div className="game-header-actions">
-          {roomView === "playing" && canProposeRestart && !restartVote && (
-            <button
-              type="button"
-              className="btn btn-icon btn-compact game-header-restart-button"
-              disabled={restartBusy || restartCooldownSeconds > 0}
-              onClick={() => void handleProposeRestart()}
-              aria-label={restartCooldownSeconds > 0
-                ? `Restart vote available in ${restartCooldownSeconds} seconds`
-                : "Propose restarting the game"}
-              title={restartCooldownSeconds > 0
-                ? `Restart vote available in ${restartCooldownSeconds}s`
-                : "Propose a vote to restart the game"}
-            >
-              <RoundsIcon size={16} />
-              {restartCooldownSeconds > 0 && (
-                <span className="game-header-restart-count" aria-hidden="true">
-                  {restartCooldownSeconds}
-                </span>
-              )}
-            </button>
-          )}
-          <AccountMenu compact />
+          <GameHeaderStatus />
           <button
             type="button"
-            className={`game-header-afk-button${isAfk ? " is-afk" : ""}`}
-            aria-pressed={isAfk}
-            onClick={handleToggleAfk}
-            aria-label={isAfk ? "Back from AFK" : "Go AFK"}
-            title={isAfk ? "Back from AFK" : "Go AFK"}
+            className="btn btn-icon game-header-menu-button"
+            onClick={() => setRoomMenuOpen(true)}
+            aria-label="Room menu"
+            aria-haspopup="dialog"
+            title="Room menu"
+            data-testid="open-room-menu"
           >
-            <MoonIcon size={14} />
-            <span className="header-action-label">AFK</span>
+            <DotsIcon size={18} />
           </button>
-          {roomView === "playing" && (
+        </header>
+      ) : (
+        <header className="game-header">
+          <div className="game-header-start">
+            {roomName && <span className="game-header-room-name">{roomName}</span>}
             <button
               type="button"
-              className="btn btn-icon btn-compact save-image-button game-header-save-button"
-              onClick={() => canvasRef.current?.saveImage()}
-              aria-label="Save image"
-              title="Save drawn image to file"
+              className="room-copy-button"
+              data-room-code={code}
+              onClick={() => void handleCopyLink()}
+              title="Click to copy room invite link"
             >
-              <DownloadIcon size={16} />
+              <span>{code}</span>
+              <CopyIcon size={13} />
             </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-icon btn-compact header-settings-button"
-            onClick={openSettings}
-            title="Player settings"
-            aria-label="Player settings"
-          >
-            <GearIcon size={16} />
-          </button>
-          <span className="game-header-divider" aria-hidden="true" />
-          <button
-            type="button"
-            className="btn btn-danger-ghost btn-compact game-header-leave-button"
-            onClick={handleLeave}
-            aria-label="Leave room"
-            title="Leave room"
-          >
-            <LeaveIcon size={14} />
-            <span className="header-action-label">Leave</span>
-          </button>
-        </div>
-      </header>
+          </div>
+          <GameHeaderStatus />
+          <div className="game-header-actions">
+            {roomView === "playing" && canProposeRestart && !restartVote && (
+              <button
+                type="button"
+                className="btn btn-icon btn-compact game-header-restart-button"
+                disabled={restartBusy || restartCooldownSeconds > 0}
+                onClick={() => void handleProposeRestart()}
+                aria-label={restartCooldownSeconds > 0
+                  ? `Restart vote available in ${restartCooldownSeconds} seconds`
+                  : "Propose restarting the game"}
+                title={restartCooldownSeconds > 0
+                  ? `Restart vote available in ${restartCooldownSeconds}s`
+                  : "Propose a vote to restart the game"}
+              >
+                <RoundsIcon size={16} />
+                {restartCooldownSeconds > 0 && (
+                  <span className="game-header-restart-count" aria-hidden="true">
+                    {restartCooldownSeconds}
+                  </span>
+                )}
+              </button>
+            )}
+            <AccountMenu compact />
+            <button
+              type="button"
+              className={`game-header-afk-button${isAfk ? " is-afk" : ""}`}
+              aria-pressed={isAfk}
+              onClick={handleToggleAfk}
+              aria-label={isAfk ? "Back from AFK" : "Go AFK"}
+              title={isAfk ? "Back from AFK" : "Go AFK"}
+            >
+              <MoonIcon size={14} />
+              <span className="header-action-label">AFK</span>
+            </button>
+            {roomView === "playing" && (
+              <button
+                type="button"
+                className="btn btn-icon btn-compact save-image-button game-header-save-button"
+                onClick={() => canvasRef.current?.saveImage()}
+                aria-label="Save image"
+                title="Save drawn image to file"
+              >
+                <DownloadIcon size={16} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-icon btn-compact header-settings-button"
+              onClick={openSettings}
+              title="Player settings"
+              aria-label="Player settings"
+            >
+              <GearIcon size={16} />
+            </button>
+            <span className="game-header-divider" aria-hidden="true" />
+            <button
+              type="button"
+              className="btn btn-danger-ghost btn-compact game-header-leave-button"
+              onClick={handleLeave}
+              aria-label="Leave room"
+              title="Leave room"
+            >
+              <LeaveIcon size={14} />
+              <span className="header-action-label">Leave</span>
+            </button>
+          </div>
+        </header>
+      )}
 
       {roomView === "playing" && restartVote && (
         <RestartVoteBanner
@@ -416,39 +430,38 @@ export function ActiveGameRoom({ code }: { code: string }) {
         />
       )}
 
-      {playersDrawerOpen && (
-        <div
-          className="players-drawer-overlay"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setPlayersDrawerOpen(false);
-          }}
+      {/* A sheet rather than the old full-height left drawer: the canvas stays
+          visible above it, so checking the score no longer means covering the
+          drawing you are trying to guess. */}
+      {playersSheetOpen && (
+        <BottomSheet
+          title="Players"
+          height="55%"
+          className="players-sheet"
+          testId="players-drawer"
+          closeLabel="Close players"
+          onDismiss={() => setPlayersSheetOpen(false)}
         >
-          <aside
-            ref={playersDrawerRef}
-            className="players-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={playersDrawerTitleId}
-            tabIndex={-1}
-            data-testid="players-drawer"
-          >
-            <div className="players-drawer-header">
-              <h2 id={playersDrawerTitleId}>Players</h2>
-              <button
-                ref={playersDrawerCloseRef}
-                type="button"
-                className="players-drawer-close"
-                onClick={() => setPlayersDrawerOpen(false)}
-                aria-label="Close players"
-              >
-                <XIcon size={16} />
-              </button>
-            </div>
-            <div className="players-drawer-body sidebar-box">
-              <ConnectedRoomPlayersPanel mode={roomView} />
-            </div>
-          </aside>
-        </div>
+          <ConnectedRoomPlayersPanel mode={roomView} />
+        </BottomSheet>
+      )}
+
+      {roomMenuOpen && (
+        <RoomMenuSheet
+          isPlaying={roomView === "playing"}
+          isAfk={isAfk}
+          canProposeRestart={canProposeRestart && !restartVote}
+          restartBusy={restartBusy}
+          restartCooldownSeconds={restartCooldownSeconds}
+          onDismiss={() => setRoomMenuOpen(false)}
+          onCopyLink={() => void handleCopyLink()}
+          onOpenPlayers={() => setPlayersSheetOpen(true)}
+          onToggleAfk={handleToggleAfk}
+          onSaveImage={() => canvasRef.current?.saveImage()}
+          onOpenSettings={openSettings}
+          onProposeRestart={() => void handleProposeRestart()}
+          onLeave={handleLeave}
+        />
       )}
 
       <RoomShell
@@ -491,7 +504,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
               onViewHighlights={() => setHighlightsOpen(true)}
             />
           ) : (
-            <GameplayRegion canvasRef={canvasRef} />
+            <GameplayRegion
+              canvasRef={canvasRef}
+              onOpenPlayers={isMobile ? () => setPlayersSheetOpen(true) : undefined}
+            />
           )
         }
         chat={

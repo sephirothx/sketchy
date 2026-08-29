@@ -20,6 +20,11 @@ import type {
   ScoringMode,
 } from "../types";
 
+/* A list of 592 prompts rendered whole is a 25 496px page on a phone -
+   thirty screens of scroll. Paged, with the count stated, so nothing is
+   silently dropped either. */
+const PAGE_SIZE = 40;
+
 const WINDOWS = [
   { value: "all", label: "All time", days: null },
   { value: "30d", label: "Last 30 days", days: 30 },
@@ -48,6 +53,7 @@ export function PromptStatsPage() {
   const [stats, setStats] = useState<PromptStatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [query, setQuery] = useState("");
 
   // No slug in the path means "whichever list comes first", which is only
@@ -133,6 +139,15 @@ export function PromptStatsPage() {
   const list = lists.find((entry) => entry.slug === slug) ?? null;
   const matches = stats ? matchingPrompts(stats.prompts, query) : [];
   const rows = statsRows(matches);
+
+  // Any change to what is being listed starts the paging over; keeping an old
+  // offset across a new filter would show a slice of something else.
+  const rowsKey = `${searchParams.toString()}|${slug}|${query}`;
+  const [pagedKey, setPagedKey] = useState(rowsKey);
+  if (pagedKey !== rowsKey) {
+    setPagedKey(rowsKey);
+    setVisibleCount(PAGE_SIZE);
+  }
   const coverage = stats
     ? coverageNote(stats.ratedCount, stats.unratedCount, stats.minRatedGuessers)
     : null;
@@ -250,7 +265,7 @@ export function PromptStatsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {rows.slice(0, visibleCount).map((row) => (
                 <tr key={row.text} className={row.isRated ? "" : "is-unrated"}>
                   <th scope="row">{row.text}</th>
                   <td>
@@ -266,13 +281,27 @@ export function PromptStatsPage() {
                       )}
                     </span>
                   </td>
-                  <td>{row.guessedLabel}</td>
-                  <td>{row.pickedLabel}</td>
-                  <td>{row.drawnLabel}</td>
+                  <td data-label="Guessed">{row.guessedLabel}</td>
+                  <td data-label="Picked">{row.pickedLabel}</td>
+                  <td data-label="Drawn">{row.drawnLabel}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {rows.length > visibleCount && (
+            <div className="prompt-stats-more">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+              >
+                Show {Math.min(PAGE_SIZE, rows.length - visibleCount)} more
+              </button>
+              <p className="prompt-stats-note">
+                Showing {visibleCount} of {rows.length}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

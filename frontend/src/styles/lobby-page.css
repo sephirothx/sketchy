@@ -568,3 +568,52 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 720px) {
+  /* ── The lobby, on a phone ─────────────────────────────────────────────
+     Open rooms are the page. They used to be the fourth of four stacked
+     cards on a 1386px page — a screen and a half below the fold, under the
+     account card, the create card and the code card — so the one thing that
+     answers "can I play right now" was the last thing anyone saw. */
+  .lobby-page {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The masthead and the first-run name prompt keep their place at the top;
+     only the rooms jump the entry cards. */
+  .lobby-page > .lobby-header,
+  .lobby-page > .first-run {
+    order: -2;
+  }
+
+  .lobby-rooms-panel {
+    order: -1;
+  }
+
+  /* Copy that reassures on a wide screen is just scroll on a narrow one. */
+  .lobby-entry-panel .create-room-lobby-copy {
+    display: none;
+  }
+
+  .lobby-entry-panel .btn-big,
+  .lobby-entry-actions > .btn-primary {
+    width: 100%;
+  }
+
+  /* Spectating is a real choice, just not the common one, and it should not
+     read as the twin of the button next to it. */
+  .lobby-entry-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lobby-entry-actions > .btn-secondary {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    min-height: 44px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}

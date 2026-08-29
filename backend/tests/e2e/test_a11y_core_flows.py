@@ -184,8 +184,12 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         await dialog.wait_for(state="hidden")
 
         await host_page.set_viewport_size({"width": 800, "height": 900})
-        open_drawer = host_page.get_by_test_id("open-players-drawer")
-        await open_drawer.click()
+        open_menu = host_page.get_by_test_id("open-room-menu")
+        await open_menu.click()
+        await host_page.get_by_test_id("room-menu-sheet").wait_for()
+        await host_page.get_by_test_id("room-menu-sheet").get_by_role(
+            "button", name="Players and scores"
+        ).click()
         drawer = host_page.get_by_test_id("players-drawer")
         await drawer.wait_for()
         assert await drawer.get_attribute("aria-modal") == "true"
@@ -215,8 +219,10 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         )
         await host_page.keyboard.press("Escape")
         await drawer.wait_for(state="hidden")
+        # Focus returns to whatever opened the sheet. The row that did is gone
+        # with its own sheet, so it lands on the menu button behind it.
         assert await host_page.evaluate(
-            "() => document.activeElement?.getAttribute('data-testid') === 'open-players-drawer'"
+            "() => document.activeElement?.getAttribute('data-testid') === 'open-room-menu'"
         )
 
         await host_page.set_viewport_size({"width": 1280, "height": 720})

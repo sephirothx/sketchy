@@ -77,10 +77,13 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                 })
                 """
             )
+            # Who is in the room comes before chat while waiting: it is what
+            # the host is actually watching, and it used to be the last thing
+            # on the page, below the chat card.
             assert (
                 waiting_mobile_order["main"]
-                < waiting_mobile_order["chat"]
                 < waiting_mobile_order["players"]
+                < waiting_mobile_order["chat"]
             )
             await page1.set_viewport_size({"width": 1280, "height": 720})
 
@@ -146,10 +149,15 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                 playing_mobile_layout["headerActionsWidth"]
                 <= playing_mobile_layout["headerActionsClient"] + 1
             )
-            await page1.click('[data-testid="open-players-drawer"]')
+            # Players and scores are a sheet reached from the room menu, so the
+            # canvas stays visible above them rather than being covered by a
+            # full-height drawer.
+            await page1.click('[data-testid="open-room-menu"]')
+            await page1.wait_for_selector('[data-testid="room-menu-sheet"]')
+            await page1.click('.sheet-menu-item:has-text("Players and scores")')
             await page1.wait_for_selector('[data-testid="players-drawer"]')
             assert await page1.is_visible('[data-testid="players-drawer"] .player-list')
-            await page1.click('.players-drawer-close')
+            await page1.click('.bottom-sheet-close')
             await page1.wait_for_selector('[data-testid="players-drawer"]', state="detached")
             await page1.set_viewport_size({"width": 1280, "height": 720})
 
@@ -205,16 +213,34 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                       return { width: box.width, height: box.height };
                     }),
                     saveInHeader: Boolean(document.querySelector('.game-header-save-button')),
+                    menuButton: Boolean(document.querySelector('[data-testid="open-room-menu"]')),
+                    swatches: strip.querySelectorAll('.toolbar-mobile-palette .color-swatch').length,
+                    swatchSizes: [...strip.querySelectorAll('.toolbar-mobile-palette .color-swatch')]
+                      .slice(0, 4)
+                      .map((swatch) => {
+                        const box = swatch.getBoundingClientRect();
+                        return { width: box.width, height: box.height };
+                      }),
                   };
                 }
                 """
             )
             assert mobile_toolbar is not None
-            assert mobile_toolbar["saveInHeader"]
-            assert len(mobile_toolbar["chipSizes"]) >= 5
+            # Saving the drawing is in the room menu on a phone, not a seventh
+            # icon in a 44px band beside a red Leave.
+            assert not mobile_toolbar["saveInHeader"]
+            assert mobile_toolbar["menuButton"]
+            assert len(mobile_toolbar["chipSizes"]) >= 4
             assert all(
                 size["width"] >= 40 and size["height"] >= 40
                 for size in mobile_toolbar["chipSizes"]
+            )
+            # The palette is out rather than behind a chevron whose popover
+            # covered the whole canvas, and its swatches are touch-sized.
+            assert mobile_toolbar["swatches"] >= 12
+            assert all(
+                size["width"] >= 34 and size["height"] >= 34
+                for size in mobile_toolbar["swatchSizes"]
             )
             await drawer_page.set_viewport_size({"width": 844, "height": 390})
             await drawer_page.wait_for_selector('[data-testid="toolbar-mobile"]')

@@ -21,13 +21,21 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             await page.wait_for_url("**/prompt-lists")
             await page.get_by_role("heading", name="Prompt stats").wait_for()
 
-            # Every prompt in the list is listed, not just the ranked ones.
+            # Every prompt in the list is reachable, not just the ranked ones.
+            # The list is paged - rendering 592 rows is thirty screens of
+            # scroll on a phone - so the count is asserted through the
+            # "showing N of M" note and by paging to the end, which also
+            # proves nothing is silently dropped.
             table = page.locator(".prompt-stats-table")
             await table.wait_for()
             rows = page.locator(".prompt-stats-table tbody tr")
-            listed = await rows.count()
             selected = await page.locator("#prompt-stats-list").input_value()
             expected = 592 if selected == "english_extended" else 260
+
+            more = page.locator(".prompt-stats-more button")
+            while await more.count() > 0:
+                await more.click()
+            listed = await rows.count()
             assert listed == expected, f"listed {listed} of {expected} prompts"
 
             # Which rows are ranked is not ours to predict - the suite shares

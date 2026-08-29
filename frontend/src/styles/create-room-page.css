@@ -54,6 +54,11 @@
 /* ------------------------------------------------------------ form sections */
 .create-room-sections {
   display: grid;
+  /* minmax(0, 1fr) rather than the implicit `auto`: an auto track sizes to its
+     widest item's max-content, so a 402px section (358px of content plus 22px
+     of padding a side) widened the track past the viewport and scrolled the
+     whole page sideways below ~420px. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 

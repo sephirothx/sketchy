@@ -387,7 +387,7 @@ export function LobbyBrowserPage() {
         </section>
       </div>
 
-      <section className="panel">
+      <section className="panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
           <h2>Public rooms</h2>
           <span className="lobby-rooms-count">

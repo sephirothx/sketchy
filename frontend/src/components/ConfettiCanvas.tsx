@@ -15,6 +15,11 @@ interface Particle {
   shape: "rect" | "circle";
 }
 
+// ~2.5s at 60fps. The old 0.004 ran past four seconds, and a shower's
+// particles start above the viewport, so celebration was still crossing the
+// screen most of a turn later - on a phone, over a third of the readable area.
+const FADE_PER_FRAME = 1 / 150;
+
 const CONFETTI_COLORS = [
   "#ef4444",
   "#3b82f6",
@@ -113,7 +118,7 @@ export function ConfettiCanvas() {
         p.x += p.vx;
         p.y += p.vy;
         p.rotation += p.rotationSpeed;
-        p.opacity -= 0.004;
+        p.opacity -= FADE_PER_FRAME;
 
         if (p.opacity <= 0) return;
 
@@ -167,9 +172,14 @@ export function ConfettiCanvas() {
         position: "fixed",
         inset: 0,
         width: "100vw",
-        height: "100vh",
+        height: "100dvh",
         pointerEvents: "none",
-        zIndex: 9999,
+        // Above the page (which tops out around 120) and below every dialog,
+        // drawer, sheet and toast (all >= 1000). At 9999 it painted over the
+        // turn-results panel, the players drawer and the settings dialog -
+        // worst on a phone, where the same particle count lands on a third of
+        // the area and the text underneath is unreadable.
+        zIndex: 999,
       }}
     />
   );
