@@ -18,7 +18,7 @@ import socketio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.api.admin_controls import (
     PLAYER_SEARCH_LIMIT,
@@ -27,6 +27,7 @@ from app.api.admin_controls import (
 )
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
+from app.db import create_db_engine
 from app.db.models import AuditEvent, Base, RoleChangeNotice, User, generate_uuid
 from app.domain_values import AccountState, UserRole
 from app.game import Game, Phase
@@ -52,9 +53,19 @@ def role_pushes() -> list[str]:
 
 
 @pytest_asyncio.fixture
-async def env(monkeypatch, role_pushes):
+async def env(monkeypatch, role_pushes, tmp_path):
     monkeypatch.setenv("IP_HASH_SECRET", "controls-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    # A file, not ":memory:", and the application's own engine factory. An
+    # in-memory SQLite engine gets a StaticPool: every session is handed the
+    # *same* DBAPI connection, so concurrent requests - four shutdown posts
+    # plus the auth middleware's own session for each - interleave on one real
+    # transaction, and one session's commit or rollback lands on another's
+    # uncommitted work. `create_db_engine` also applies the pragmas the
+    # deployment runs with, so the concurrency this file tests is the
+    # concurrency the server actually has.
+    engine = create_db_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'admin-controls.db'}"
+    )
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
