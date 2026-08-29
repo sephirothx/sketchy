@@ -102,16 +102,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
     return () => window.clearInterval(interval);
   }, [restartVoteCooldownUntil]);
 
-  useEffect(() => {
-    function closeRecapForNewGame() {
-      setRecapOpen(false);
-    }
-    socket.on("game_started", closeRecapForNewGame);
-    return () => {
-      socket.off("game_started", closeRecapForNewGame);
-    };
-  }, []);
-
   async function handleCopyLink() {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
@@ -179,7 +169,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
   }
 
   async function handleStartGame() {
-    setRecapOpen(false);
     setStartBusy(true);
     setStartError(null);
     try {
@@ -280,6 +269,21 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   if (playersDrawerOpen && (roomView !== "playing" || !isMobile)) {
     setPlayersDrawerOpen(false);
+  }
+
+  // Both post-game panels are about the *last* game, so a game starting
+  // underneath one has to close it - otherwise the player reads last game's
+  // screen over live gameplay and misses the start. Keyed on the room going
+  // back to playing rather than on `game_started`, so it also covers a player
+  // who was disconnected while the rematch began and is synced into it.
+  // Nothing can legitimately open either panel while playing: the buttons live
+  // on the game over screen and the waiting room, and both leave the room in
+  // "waiting". Highlights matter most - room state drops `lastGameHighlights`
+  // once the room is playing, so the panel would sit there telling the player
+  // the game underway was too short to say anything about.
+  if (roomState === "playing" && (recapOpen || highlightsOpen)) {
+    setRecapOpen(false);
+    setHighlightsOpen(false);
   }
 
   return (

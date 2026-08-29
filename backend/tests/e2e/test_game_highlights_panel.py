@@ -24,7 +24,7 @@ async def choose_prompt(pages: list[Page]):
 
 
 @pytest.mark.asyncio
-async def test_highlights_open_from_game_over_and_again_from_the_waiting_room():
+async def test_highlights_open_from_game_over_and_close_when_a_rematch_starts():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
         host_context = await browser.new_context()
@@ -84,6 +84,23 @@ async def test_highlights_open_from_game_over_and_again_from_the_waiting_room():
             await host.get_by_role("button", name="View highlights").click()
             await panel.wait_for()
             assert await panel.get_by_text("Fastest guess").count() == 1
+            await host.get_by_role("button", name="Back").click()
+            await host.locator('[data-testid="waiting-room"]').wait_for()
+
+            # A player reading the highlights when a rematch begins must be
+            # handed the new game, not left on last game's screen. Only the
+            # non-host can get here: the Rematch button is on the waiting room,
+            # behind the panel.
+            guest_panel = guest.locator(".game-highlights")
+            await guest.get_by_role("button", name="View highlights").click()
+            await guest_panel.wait_for()
+
+            await host.get_by_role("button", name="Rematch").click()
+            await guest_panel.wait_for(state="detached")
+            # And the new game is what replaced it, not an empty room.
+            await guest.locator(
+                "canvas.drawing-canvas, .prompt-choices",
+            ).first.wait_for(timeout=15_000)
         finally:
             await host_context.close()
             await guest_context.close()
