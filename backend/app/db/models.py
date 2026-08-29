@@ -191,7 +191,6 @@ class RoomPreset(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     name_key: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -521,7 +520,6 @@ class RuntimeStatsDaily(Base):
         CheckConstraint(
             "occurrences >= 0 AND value_sum >= 0", name="ck_runtime_stats_nonnegative"
         ),
-        Index("ix_runtime_stats_daily_stat_date", "stat_date"),
     )
 
     stat_date: Mapped[date] = mapped_column(Date(), primary_key=True)
@@ -1221,7 +1219,6 @@ class UserBan(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     banned_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -1278,7 +1275,6 @@ class UserWarning(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     issued_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -1337,7 +1333,6 @@ class RoleChangeNotice(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     # The role the account holds now, not the step it took: a notice read late
     # should describe where the account stands, and `users.role` is the only
@@ -1523,7 +1518,6 @@ class DataExport(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     status: Mapped[str] = mapped_column(
         String(16),
@@ -1775,7 +1769,6 @@ class GameParticipant(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("game_records.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -1860,7 +1853,6 @@ class TurnRecord(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("game_records.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     round_number: Mapped[int] = mapped_column(Integer, nullable=False)
     turn_number: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -2096,7 +2088,6 @@ class ScoreEvent(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("game_records.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     participant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
@@ -2200,7 +2191,7 @@ class TurnParticipantOutcome(Base):
         Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
     turn_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
     participant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
@@ -2277,7 +2268,6 @@ class TurnPromptOffer(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("turn_records.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     prompt_version_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -2347,7 +2337,6 @@ class TurnGuess(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("turn_records.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -2452,7 +2441,6 @@ class PromptVersion(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_concepts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     language: Mapped[str] = mapped_column(String(16), nullable=False)
     version: Mapped[int] = mapped_column(
@@ -2522,7 +2510,6 @@ class PromptAlias(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_concepts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     language: Mapped[str] = mapped_column(String(16), nullable=False)
     answer: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -2723,7 +2710,6 @@ class PromptListRevision(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     forked_from_revision_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -2837,7 +2823,6 @@ class PromptListLocalization(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     locale: Mapped[str] = mapped_column(String(16), nullable=False)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -2936,7 +2921,6 @@ class Prompt(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     concept_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),

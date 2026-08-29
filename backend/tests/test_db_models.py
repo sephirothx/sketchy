@@ -8,7 +8,7 @@ import uuid
 import warnings
 
 import pytest
-from sqlalchemy import Uuid, select, text
+from sqlalchemy import UniqueConstraint, Uuid, select, text
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.exc import IntegrityError, SAWarning, StatementError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -1605,3 +1605,67 @@ async def test_absent_json_is_sql_null_not_a_stored_token():
         assert event.details is None
     finally:
         await engine.dispose()
+
+
+async def test_no_index_duplicates_the_leading_column_of_a_composite():
+    """The convention, executable.
+
+    A composite key already serves every lookup and range scan on its own
+    prefix, so a standalone index on that leading column is a second B-tree
+    covering a strict subset of the first: storage, plus one more index to
+    maintain on every write. This census has drifted three times - twelve
+    entries originally, nineteen once an audit found the pairs it had missed
+    and two new tables arrived carrying the same shape, seventeen after two
+    became primary keys - which is why the rule is asserted here rather than
+    only written down.
+
+    Two kinds of single-column index are **not** redundant and are skipped:
+    one that is unique or partial enforces an invariant rather than
+    accelerating a lookup, and a composite prefix cannot replace it; and a
+    partner that is itself partial covers only the rows matching its
+    predicate, so it serves no lookup across the rest.
+    """
+
+    def is_partial(index):
+        return (
+            index.dialect_options.get("postgresql", {}).get("where") is not None
+            or index.dialect_options.get("sqlite", {}).get("where") is not None
+        )
+
+    offenders = []
+    for table in Base.metadata.sorted_tables:
+        leading = {}
+        for index in table.indexes:
+            columns = list(index.columns)
+            if len(columns) > 1:
+                leading.setdefault(
+                    columns[0].name, (f"index {index.name}", is_partial(index))
+                )
+        for constraint in table.constraints:
+            if (
+                isinstance(constraint, UniqueConstraint)
+                and len(constraint.columns) > 1
+            ):
+                leading.setdefault(
+                    list(constraint.columns)[0].name,
+                    (f"unique constraint {constraint.name}", False),
+                )
+        primary_key = list(table.primary_key.columns)
+        if len(primary_key) > 1:
+            leading.setdefault(primary_key[0].name, ("the primary key", False))
+
+        for index in table.indexes:
+            columns = list(index.columns)
+            if len(columns) != 1 or index.unique or is_partial(index):
+                continue
+            covered_by = leading.get(columns[0].name)
+            if covered_by is not None and not covered_by[1]:
+                offenders.append(
+                    f"{table.name}.{columns[0].name} ({index.name}) "
+                    f"duplicates the leading column of {covered_by[0]}"
+                )
+
+    assert offenders == [], (
+        "these indexes cover a strict subset of a composite that already "
+        "leads with the same column: " + "; ".join(offenders)
+    )
