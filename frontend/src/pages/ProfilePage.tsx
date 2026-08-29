@@ -111,7 +111,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
       >
         <span
           className={`profile-game-place${
-            seat && game.outcome === "finished" && seat.finalRank <= 3
+            seat?.finalRank != null && game.outcome === "finished" && seat.finalRank <= 3
               ? ` is-place-${seat.finalRank}`
               : ""
           }`}

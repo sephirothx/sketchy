@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from app.domain_values import DRAWING_UNAVAILABLE_RECAP_BUDGET
+from app.domain_values import DRAWING_UNAVAILABLE_RECAP_BUDGET, GameOutcome
 from app.game import CompletedTurnStats, Game, TurnGuessRecord
 from app.identifiers import generate_uuid7
 from app.rooms import DrawingRecapEntry, RoomManager
@@ -393,3 +393,23 @@ def test_a_game_with_no_recap_records_no_drawings():
     history = build_game_history(room, game, finished_at=FINISHED_AT)
 
     assert history.drawings == []
+
+
+def test_an_abandoned_game_carries_no_placing_in_the_row():
+    """R-HIST-06: a rank is a claim about how a game ended, and this one did
+    not end. The row says so - null, not a score-order artifact readers must
+    know to suppress. The scores stay, because points earned are a fact."""
+    _, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+    )
+    game.completed_turns = [turn(players["Ann"].id)]
+
+    history = build_game_history(
+        room, game, finished_at=FINISHED_AT, outcome=GameOutcome.ABANDONED.value
+    )
+
+    assert history.record.outcome == "abandoned"
+    assert all(p.final_rank is None for p in history.participants)
+    scores = {p.user_id: p.final_score for p in history.participants}
+    assert scores == {"user-ann": 300, "user-bob": 100}

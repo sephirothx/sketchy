@@ -649,8 +649,10 @@ class AuditEvent(Base):
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Indexed because the admin ledger reads newest-first on the authoritative
+    # event time rather than on the (merely time-ordered) UUIDv7 id.
     created_at: Mapped[datetime] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=False
+        UTCDateTime(), server_default=func.now(), nullable=False, index=True
     )
 
 
@@ -1534,6 +1536,18 @@ class GameRecord(Base):
             GAME_PROMPT_SOURCE_MODES,
             "ck_game_records_prompt_source_mode",
         ),
+        # The same bounds the room-settings tables pin, minus the exact
+        # drawing-seconds value set: a recorded duration is a historical fact,
+        # and pinning today's permitted values here would make changing that
+        # set fail writes with no migration.
+        CheckConstraint("player_count >= 1", name="ck_game_records_player_count"),
+        CheckConstraint("total_rounds >= 1", name="ck_game_records_total_rounds"),
+        CheckConstraint(
+            "drawing_seconds > 0", name="ck_game_records_drawing_seconds"
+        ),
+        CheckConstraint(
+            "started_at <= finished_at", name="ck_game_records_time_order"
+        ),
         Index("ix_game_records_outcome_finished_at", "outcome", "finished_at"),
     )
 
@@ -1700,6 +1714,10 @@ class GameParticipant(Base):
     __tablename__ = "game_participants"
     __table_args__ = (
         Index("uq_game_participants_game_user", "game_id", "user_id", unique=True),
+        CheckConstraint(
+            "final_rank IS NULL OR final_rank >= 1",
+            name="ck_game_participants_final_rank",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1725,7 +1743,10 @@ class GameParticipant(Base):
         Boolean, default=True, nullable=False
     )
     final_score: Mapped[int] = mapped_column(Integer, nullable=False)
-    final_rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Null for a game that did not finish: a rank is a claim about how a game
+    # ended, and an abandoned one did not end (R-HIST-06). The score stays -
+    # points earned in the turns that were played are a fact.
+    final_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Turns this player was still in the rotation for. A one-round walkout and
     # a full game otherwise look identical, which skews win rate and averages.
     turns_played: Mapped[int] = mapped_column(
@@ -1766,6 +1787,15 @@ class TurnRecord(Base):
             "(prompt_source_kind = 'curated' AND prompt_version_id IS NOT NULL) "
             "OR (prompt_source_kind != 'curated' AND prompt_version_id IS NULL)",
             name="ck_turn_records_prompt_identity",
+        ),
+        CheckConstraint(
+            "duration_seconds > 0", name="ck_turn_records_duration"
+        ),
+        CheckConstraint(
+            "round_number >= 1 AND turn_number >= 1 AND guesser_count >= 0 "
+            "AND wrong_guess_count >= 0 AND near_miss_count >= 0 "
+            "AND stroke_count >= 0",
+            name="ck_turn_records_counts_nonnegative",
         ),
     )
 
