@@ -1607,7 +1607,7 @@ async def test_absent_json_is_sql_null_not_a_stored_token():
         await engine.dispose()
 
 
-def test_no_index_duplicates_the_leading_column_of_a_composite():
+async def test_no_index_duplicates_the_leading_column_of_a_composite():
     """The convention, executable.
 
     A composite key already serves every lookup and range scan on its own
