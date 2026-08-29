@@ -1488,7 +1488,11 @@ class AuthSession(Base):
     last_used_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
-    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    # Indexed for the retention sweep and for every resolution path, all of
+    # which filter on it.
+    expires_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, index=True
+    )
     revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 

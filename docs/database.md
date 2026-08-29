@@ -253,6 +253,13 @@ One revocable signed-in device.
 `rotated_from_id` (self-FK, unique, `SET NULL`) · `created_at` · `last_used_at` ·
 `expires_at` · `revoked_at`.
 
+Expired rows are purged 30 days past `expires_at`, at startup and hourly. The
+condition is **expiry, not revocation**: a revoked but unexpired row still keeps a
+ban-time token recognisable rather than looking like a new cookieless guest, and
+rotation leaves a revoked predecessor behind deliberately. Sessions of an account
+under an **active suspension are never purged** — it cannot sign in to make another,
+so that row is its only route to the export and deletion R-BAN-04 keeps available.
+
 Cookies carry opaque 256-bit random tokens; **only SHA-256 hashes are stored**, so the
 database never contains a credential that can be replayed. Tokens rotate halfway
 through their one-year maximum lifetime. Socket.IO handshakes resolve the same record as
@@ -352,6 +359,11 @@ rather than a migration, the same rule `canvas_storage` applies to drawings.
 `ck_data_exports_artifact_encoding_present` keeps the pair honest: a stored document
 says how to read itself, and a row with no document claims no encoding. The download
 endpoint decodes and serves the JSON bytes without reparsing them.
+
+Expired jobs are purged at startup and hourly. Before that sweep existed, an expired
+row was removed only when its owner requested another export or a worker re-processed
+the job — so a document that was generated and never collected outlived its seven-day
+window indefinitely.
 
 Jobs are stored **before** work begins, so a crash leaves a retryable row:
 
@@ -1051,7 +1063,8 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Shutdown abandonments | 90 days | Purged at startup |
 | Bug report rows | Indefinite | — |
 | Bug report screenshots | Until the report is decided | Erased in the deciding transaction; `ck_bug_reports_screenshot_erased` |
-| Data exports | 7 days (format v1) | `expires_at` |
+| Data exports | 7 days (format v1) | `expires_at`; startup purge + hourly retention sweep |
+| Expired sessions | 30 days past `expires_at` | Startup purge + hourly retention sweep; rows of a suspended account are kept |
 | Ephemeral room codes | 30 days retirement, then reusable | `retired_until` |
 | Codes from the removed persistent-room feature | Permanent | Never enter the reuse pool |
 | Guests with no completed game | 30 inactive days (default) | `app.auth.retention` |

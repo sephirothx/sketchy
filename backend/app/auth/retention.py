@@ -9,11 +9,19 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, exists, select
+from sqlalchemy import delete, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db import async_engine, async_session_factory, init_db
-from app.db.models import AuditEvent, GameParticipant, User, generate_uuid
+from app.db.models import (
+    AuditEvent,
+    AuthSession,
+    DataExport,
+    GameParticipant,
+    User,
+    UserBan,
+    generate_uuid,
+)
 from app.domain_values import AccountState
 from app.services.readiness import LoopHealth
 
@@ -24,6 +32,12 @@ logger = logging.getLogger(__name__)
 # do and keeps up when there is; daily would let a bad afternoon sit until
 # tomorrow.
 DEFAULT_SWEEP_SECONDS = 3600.0
+
+# How long a session row is kept after the moment every code path stops
+# honouring it. Nothing reads an expired session - resolution rejects one
+# outright - so this window exists only to keep a just-expired row available
+# for diagnosis, and could defensibly be zero.
+SESSION_GRACE_DAYS = 30
 
 DEFAULT_UNUSED_RETENTION_DAYS = 30
 DEFAULT_PLAYER_RETENTION_DAYS = 365
@@ -39,6 +53,104 @@ class AnonymousRetentionResult:
     @property
     def total(self) -> int:
         return self.unused_accounts + self.player_accounts
+
+
+async def purge_expired_auth_sessions(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    grace_days: int = SESSION_GRACE_DAYS,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> int:
+    """Remove sessions that every code path has already stopped honouring.
+
+    The condition is **expiry, not revocation**. A revoked but unexpired row
+    still has work to do: a token revoked when a ban landed stays recognisable
+    so its next request is not mistaken for a new cookieless guest, and
+    rotation leaves a revoked predecessor behind on purpose.
+
+    Sessions belonging to an account under an active suspension are kept
+    whatever their age. A banned account cannot log in to make a new one, so
+    that row is its only route to the export and deletion that R-BAN-04 keeps
+    available - moderation must not erase privacy rights, and neither must
+    retention. Once the suspension lapses the account can sign in again, and
+    its dead rows become ordinary.
+    """
+    if grace_days < 0:
+        raise ValueError("grace window cannot be negative")
+    if batch_size < 1:
+        raise ValueError("batch size must be positive")
+    checked_at = now or datetime.now(timezone.utc)
+    cutoff = checked_at - timedelta(days=grace_days)
+    removed = 0
+    while True:
+        async with session_factory() as session:
+            async with session.begin():
+                # A set, not a scalar: the selectable says so, and the
+                # is_not(None) matters as much - a single NULL on the right of
+                # NOT IN makes the whole predicate never true, which would
+                # silently purge nothing at all.
+                protected = select(UserBan.user_id).where(
+                    UserBan.user_id.is_not(None),
+                    UserBan.is_active.is_(True),
+                    or_(
+                        UserBan.expires_at.is_(None),
+                        UserBan.expires_at > checked_at,
+                    ),
+                )
+                doomed = (
+                    await session.scalars(
+                        select(AuthSession.id)
+                        .where(
+                            AuthSession.expires_at <= cutoff,
+                            AuthSession.user_id.not_in(protected),
+                        )
+                        .limit(batch_size)
+                    )
+                ).all()
+                if doomed:
+                    await session.execute(
+                        delete(AuthSession).where(AuthSession.id.in_(doomed))
+                    )
+        removed += len(doomed)
+        if len(doomed) < batch_size:
+            return removed
+
+
+async def purge_expired_data_exports(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> int:
+    """Remove exports past the window their own row declares.
+
+    Until now an expired export only went when its owner asked for another one
+    or a worker happened to pick the job up again, so a document generated once
+    and never collected outlived its seven days indefinitely - carrying the
+    largest single non-blob value in the schema with it.
+    """
+    if batch_size < 1:
+        raise ValueError("batch size must be positive")
+    checked_at = now or datetime.now(timezone.utc)
+    removed = 0
+    while True:
+        async with session_factory() as session:
+            async with session.begin():
+                doomed = (
+                    await session.scalars(
+                        select(DataExport.id)
+                        .where(DataExport.expires_at <= checked_at)
+                        .limit(batch_size)
+                    )
+                ).all()
+                if doomed:
+                    await session.execute(
+                        delete(DataExport).where(DataExport.id.in_(doomed))
+                    )
+        removed += len(doomed)
+        if len(doomed) < batch_size:
+            return removed
 
 
 async def purge_stale_anonymous_accounts(
@@ -164,8 +276,17 @@ async def run_retention_loop(
     while True:
         try:
             result = await purge_stale_anonymous_accounts(session_factory, apply=True)
+            sessions = await purge_expired_auth_sessions(session_factory)
+            exports = await purge_expired_data_exports(session_factory)
             if health is not None:
                 health.record_success()
+            if sessions or exports:
+                logger.info(
+                    "retention sweep: removed %d expired sessions and %d "
+                    "expired exports",
+                    sessions,
+                    exports,
+                )
             if result.total:
                 logger.info(
                     "retention sweep: removed %d anonymous accounts "

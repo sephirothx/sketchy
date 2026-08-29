@@ -47,7 +47,12 @@ from app.deployment import (
 )
 from app.handlers import register_all_handlers
 from app.logging_config import configure_logging
-from app.auth.retention import start_retention_loop, stop_retention_loop
+from app.auth.retention import (
+    purge_expired_auth_sessions,
+    purge_expired_data_exports,
+    start_retention_loop,
+    stop_retention_loop,
+)
 from app.auth.mail import purge_expired_outbox_entries
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
@@ -327,6 +332,8 @@ async def lifespan(_app: FastAPI):
             await handler_context.room_codes.retire_orphaned_ephemeral()
         await purge_expired_room_messages(async_session_factory)
         await purge_expired_outbox_entries(async_session_factory)
+        await purge_expired_auth_sessions(async_session_factory)
+        await purge_expired_data_exports(async_session_factory)
         await purge_expired_shutdown_abandonments(async_session_factory)
         await seed_prompt_lists(prompt_list_repo)
         await adopt_stored_settings()
