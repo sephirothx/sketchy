@@ -154,7 +154,12 @@ if ! port_listeners | grep -qx "$SERVER_PID"; then
   fail_startup "port $PORT is answering from PID $(port_listeners | tr '\n' ' ')rather than the server this run started ($SERVER_PID)"
 fi
 
-if (( E2E_SHARD_COUNT > 1 )); then
+# Compared as text rather than with (( )), which under `set -u` reads a
+# non-numeric value as a variable name and kills the script with "two:
+# unbound variable" before pytest can say what is actually wrong. The
+# validation belongs to tests/e2e/conftest.py, which owns these variables;
+# all this decides is what to print.
+if [[ "$E2E_SHARD_COUNT" != "1" ]]; then
   log "Running Playwright Multi-Browser E2E Tests (shard $E2E_SHARD of $E2E_SHARD_COUNT, $E2E_WORKERS workers)"
 else
   log "Running Playwright Multi-Browser E2E Tests ($E2E_WORKERS workers)"

@@ -18,6 +18,35 @@ def _shard_setting(name: str, default: int) -> int:
         raise pytest.UsageError(f"{name} must be a whole number, not {raw!r}") from error
 
 
+def _shard() -> tuple[int, int]:
+    """This run's (share, of how many), validated."""
+    count = _shard_setting(SHARD_COUNT_VAR, 1)
+    if count < 1:
+        # Not "no sharding": a zero or a minus sign is a typo in something
+        # that decides how much of the suite runs, and running all of it on
+        # every runner while saying nothing is how that typo survives.
+        raise pytest.UsageError(f"{SHARD_COUNT_VAR} must be at least 1, got {count}")
+
+    shard = _shard_setting(SHARD_VAR, 1)
+    if not 1 <= shard <= count:
+        raise pytest.UsageError(
+            f"{SHARD_VAR} must be between 1 and {SHARD_COUNT_VAR} ({count}), got {shard}"
+        )
+    return shard, count
+
+
+def pytest_configure(config):
+    """Refuse an unusable shard here rather than during collection.
+
+    Collection happens in every xdist worker, and a worker that raises dies as
+    an INTERNALERROR with a traceback wrapped around the message instead of
+    reporting it. This hook runs on the controller before any worker exists,
+    so a typo in either variable ends the run with the one line that says what
+    is wrong with it.
+    """
+    _shard()
+
+
 def pytest_collection_modifyitems(config, items):
     """Keep only this shard's share of the suite.
 
@@ -37,15 +66,9 @@ def pytest_collection_modifyitems(config, items):
     or they disagree about which tests exist and the run dies before it starts.
     Hence the sort by node id rather than trusting collection order.
     """
-    count = _shard_setting(SHARD_COUNT_VAR, 1)
-    if count <= 1:
+    shard, count = _shard()
+    if count == 1:
         return
-
-    shard = _shard_setting(SHARD_VAR, 1)
-    if not 1 <= shard <= count:
-        raise pytest.UsageError(
-            f"{SHARD_VAR} must be between 1 and {SHARD_COUNT_VAR} ({count}), got {shard}"
-        )
 
     # Dealt round-robin over a stable order, then filtered back into collection
     # order, which is the order xdist and the reporters expect.
