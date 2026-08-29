@@ -36,7 +36,7 @@ and conversation.
 | **Turn results** | The short phase after each turn: the prompt is revealed and scores update. | round end, round results, intermission |
 | **Turn eligibility** | The frozen set of non-drawer seats allowed to guess when **Drawing** begins. AFK or disconnected seats at that instant and seats joining later are recorded as ineligible until the next turn. | currently connected players, final guesser count |
 | **Turn outcome** | One durable per-seat result for a **Turn**: eligibility/reason, correct, incorrect, no attempt, or ineligible outcome, terminal participation state, timing when correct, and numeric attempt/hint facts. It never contains guess text. | correct guess, chat message, score event |
-| **Terminal participation state** | A seat's state when its **Turn** ends: Active, AFK, Disconnected, or Left. Legacy rows whose final state was never captured use Legacy unknown. It is a final snapshot, not a connection-event transcript. | eligibility, account state |
+| **Terminal participation state** | A seat's state when its **Turn** ends: Active, AFK, Disconnected, or Left. It is a final snapshot, not a connection-event transcript. | eligibility, account state |
 | **Game over** | The final screen: full standings, and the way through to the highlights and the drawing recap. | game end screen, results screen |
 | **Highlights** | The short list of superlatives from the last game — hardest prompt, fastest guess, best drawer, quickest on average. Shown on a screen of their own, reached from the game over screen or the waiting room, rather than crowded onto either. Each is dropped when the game gives it nothing to say, so the list is often shorter than four. Never derived from points, so it reads the same in a no-scoring game. | awards, MVP, trophies, achievements |
 | **Rematch** | Starting a new game with the players already in the room. | replay, new game |
@@ -170,7 +170,7 @@ Three different things, never used for one another:
 | **Score ledger** | The complete sequence of **Score events** for a game. Its per-seat sums must reconcile exactly to cached final scores; legacy games explicitly have ledger version zero. | final score, audit log, score history |
 | **Prompt source mode** | The actual origin mix in a **Game** after deduplication and custom-prompt shadowing: Curated, Custom, Mixed, or Built-in fallback. It describes the pool used, not merely the lists configured. | list setting, prompt type |
 | **Prompt offer** | One ordered prompt option shown to a drawer, frozen with its text, whether it was selected, exact prompt version, and every source revision containing it. | choice counter, prompt stat |
-| **Legacy unknown** | The explicit provenance marker for history written before exact prompt-source identity existed. It never means Custom or Built-in fallback. | fallback, missing, inferred source |
+| **Legacy unknown** | Retired provenance marker for history written before exact prompt-source identity existed. Removed from the schema before the first deployment; no stored row may carry it. | fallback, missing, inferred source |
 | **Default** | A correct guess is worth 100–300 points, falling steadily as the timer runs down. | normal, standard, classic |
 | **Pressure** | A correct guess decays from 300 points, and decays faster for everyone once the first player gets the prompt. | hardcore, fast, decay |
 | **No scoring** | Guesses are still detected and turns still end, but everyone stays on zero and no standings are shown. | casual, fun mode, unscored |

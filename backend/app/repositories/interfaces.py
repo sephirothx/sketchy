@@ -99,7 +99,7 @@ class GameRecordInput:
     score_ledger_version: int = 0
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
-    prompt_source_mode: str = "legacy_unknown"
+    prompt_source_mode: str = "custom"
     prompt_source_revision_ids: tuple[str, ...] = ()
     # How the game ended. Defaulted so every existing caller keeps meaning what
     # it meant: reaching the writer used to be proof a game had finished.
@@ -148,7 +148,7 @@ class TurnRecordInput:
     prompt: str
     duration_seconds: float
     prompt_version_id: str | None = None
-    prompt_source_kind: str = "legacy_unknown"
+    prompt_source_kind: str = "custom"
     guesser_count: int = 0
     prompt_auto_picked: bool = False
     stroke_count: int = 0
@@ -242,7 +242,7 @@ class GameSummary:
     score_ledger_version: int = 0
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
-    prompt_source_mode: str = "legacy_unknown"
+    prompt_source_mode: str = "custom"
     outcome: str = "finished"
 
 
@@ -308,7 +308,7 @@ class TurnDetail:
     prompt: str
     duration_seconds: float
     prompt_version_id: str | None = None
-    prompt_source_kind: str = "legacy_unknown"
+    prompt_source_kind: str = "custom"
     stroke_count: int = 0
     # None when no drawing row exists at all, which is every turn played
     # before drawings were persisted.

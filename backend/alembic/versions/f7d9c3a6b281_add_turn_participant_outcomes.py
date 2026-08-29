@@ -156,7 +156,15 @@ def downgrade() -> None:
             "turn_guesses",
             type_="foreignkey",
         )
-    op.drop_column("turn_guesses", "outcome_id")
+        op.drop_column("turn_guesses", "outcome_id")
+    else:
+        # Originally an inline REFERENCES that left with the column; a later
+        # batch rebuild of turn_guesses re-emits it as a table-level FOREIGN
+        # KEY clause, which a plain DROP COLUMN leaves dangling. A batch drop
+        # rebuilds the table without the column and without any constraint
+        # that named it.
+        with op.batch_alter_table("turn_guesses") as batch_op:
+            batch_op.drop_column("outcome_id")
     op.drop_index(
         "ix_turn_participant_outcomes_participant_id",
         table_name="turn_participant_outcomes",

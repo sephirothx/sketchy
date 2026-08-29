@@ -28,7 +28,6 @@ from app.domain_values import (
     TurnEligibilityReason,
     TurnEndReason,
     TurnParticipantOutcome,
-    TurnParticipantState,
 )
 from app.identifiers import generate_uuid7
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS
@@ -1082,9 +1081,7 @@ class Game:
                         eligible=eligible,
                         eligibility_reason=eligibility_reason,
                         outcome=outcome,
-                        terminal_state=states.get(
-                            token, TurnParticipantState.LEGACY_UNKNOWN.value
-                        ),
+                        terminal_state=states[token],
                         correct_guess_time_seconds=(
                             self.guess_times.get(token) if correct else None
                         ),

@@ -1262,31 +1262,33 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     guess_inputs_by_key[outcome_key] = g
                     outcome_input = outcome_inputs_by_key.get(outcome_key)
-                    if target_turn_id in turns_with_outcomes:
-                        if outcome_input is None or outcome_input.outcome != "correct":
-                            raise ValueError(
-                                "Correct guess lacks its participant outcome"
-                            )
-                        if (
-                            outcome_input.correct_guess_time_seconds
-                            != g.guess_time_seconds
-                            or outcome_input.hints_used != g.hints_used
-                            or outcome_input.points_spent_on_hints
-                            != g.points_spent_on_hints
-                            or outcome_input.wrong_guess_count
-                            != g.wrong_guesses_before
-                        ):
-                            raise ValueError(
-                                "Correct guess and participant outcome disagree"
-                            )
-                        guess_outcome_keys.add(outcome_key)
+                    # Unconditional: a guess is the scoring child of a correct
+                    # outcome, and turns without outcome rows are no longer a
+                    # writable shape now that pre-outcome history cannot exist.
+                    if outcome_input is None or outcome_input.outcome != "correct":
+                        raise ValueError(
+                            "Correct guess lacks its participant outcome"
+                        )
+                    if (
+                        outcome_input.correct_guess_time_seconds
+                        != g.guess_time_seconds
+                        or outcome_input.hints_used != g.hints_used
+                        or outcome_input.points_spent_on_hints
+                        != g.points_spent_on_hints
+                        or outcome_input.wrong_guess_count
+                        != g.wrong_guesses_before
+                    ):
+                        raise ValueError(
+                            "Correct guess and participant outcome disagree"
+                        )
+                    guess_outcome_keys.add(outcome_key)
                     session.add(
                         TurnGuess(
                             id=generate_uuid(),
                             turn_id=target_turn_id,
                             user_id=guess_user_id,
                             participant_id=guess_participant_id,
-                            outcome_id=outcome_ids_by_key.get(outcome_key),
+                            outcome_id=outcome_ids_by_key[outcome_key],
                             display_name_snapshot=guess_snapshot[0],
                             name_color_snapshot=guess_snapshot[1],
                             is_anonymous_snapshot=guess_snapshot[2],
@@ -2346,6 +2348,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     id=generate_uuid(),
                     prompt_list_id=prompt_list.id,
                     concept_id=concept_id,
+                    prompt_version_id=prompt_version.id,
+                    text=entry.answer,
                 )
                 session.add(row)
             row.prompt_version_id = prompt_version.id
@@ -2899,6 +2903,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                             prompt_row = Prompt(
                                 id=generate_uuid(),
                                 prompt_list_id=wl.id,
+                                concept_id=concept_id,
+                                prompt_version_id=prompt_version.id,
                                 text=definition.answer,
                             )
                             session.add(prompt_row)

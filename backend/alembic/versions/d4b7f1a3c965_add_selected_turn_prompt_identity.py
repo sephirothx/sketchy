@@ -114,5 +114,23 @@ def downgrade() -> None:
             "turn_records",
             type_="foreignkey",
         )
-    op.drop_column("turn_records", "prompt_source_kind")
-    op.drop_column("turn_records", "prompt_version_id")
+    # Batch, not plain: a later batch rebuild of turn_records re-emits this
+    # column's inline FK (and any surviving named check) as table-level
+    # clauses that a plain DROP COLUMN leaves dangling on SQLite.
+    if op.get_bind().dialect.name == "sqlite":
+        # Originally column-level and gone with the column; any later batch
+        # rebuild re-emits it as a table-level constraint the rebuild below
+        # would otherwise copy over the dropped column.
+        inspector = sa.inspect(op.get_bind())
+        if any(
+            constraint.get("name") == "ck_turn_records_prompt_source_kind"
+            for constraint in inspector.get_check_constraints("turn_records")
+        ):
+            with op.batch_alter_table("turn_records") as batch_op:
+                batch_op.drop_constraint(
+                    "ck_turn_records_prompt_source_kind", type_="check"
+                )
+    with op.batch_alter_table("turn_records") as batch_op:
+        batch_op.drop_column("prompt_source_kind")
+    with op.batch_alter_table("turn_records") as batch_op:
+        batch_op.drop_column("prompt_version_id")

@@ -30,7 +30,9 @@ from app.db.models import (
     UserBan,
     UserBlock,
     Prompt,
+    PromptConcept,
     PromptList,
+    PromptVersion,
     ScoreEvent,
     generate_uuid,
 )
@@ -482,9 +484,10 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                         finished_at=datetime.now(timezone.utc),
                     )
                 )
+                seat_id = generate_uuid()
                 session.add(
                     GameParticipant(
-                        id=generate_uuid(),
+                        id=seat_id,
                         game_id=game_id,
                         user_id=user_id,
                         display_name_snapshot="Cascade test",
@@ -499,9 +502,23 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                         round_number=1,
                         turn_number=1,
                         drawer_user_id=user_id,
+                        drawer_participant_id=seat_id,
                         drawer_display_name_snapshot="Cascade test",
                         prompt="anchor",
                         duration_seconds=10,
+                    )
+                )
+                outcome_id = generate_uuid()
+                session.add(
+                    TurnParticipantOutcome(
+                        id=outcome_id,
+                        turn_id=turn_id,
+                        participant_id=seat_id,
+                        eligible=True,
+                        eligibility_reason="eligible",
+                        outcome="correct",
+                        terminal_state="active",
+                        correct_guess_time_seconds=5,
                     )
                 )
                 session.add(
@@ -509,6 +526,8 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                         id=generate_uuid(),
                         turn_id=turn_id,
                         user_id=user_id,
+                        participant_id=seat_id,
+                        outcome_id=outcome_id,
                         display_name_snapshot="Cascade test",
                         points_awarded=10,
                         guess_time_seconds=5,
@@ -597,15 +616,29 @@ async def test_game_record_cascade_and_relationships():
                     round_number=1,
                     turn_number=1,
                     drawer_user_id=u1_id,
+                    drawer_participant_id=p1.id,
                     prompt="banana",
                     duration_seconds=45.5,
                 )
                 session.add(r1)
 
+                o1 = TurnParticipantOutcome(
+                    id=generate_uuid(),
+                    turn_id=r1.id,
+                    participant_id=p2.id,
+                    eligible=True,
+                    eligibility_reason="eligible",
+                    outcome="correct",
+                    terminal_state="active",
+                    correct_guess_time_seconds=12.3,
+                )
+                session.add(o1)
                 g1 = TurnGuess(
                     id=generate_uuid(),
                     turn_id=r1.id,
                     user_id=u2_id,
+                    participant_id=p2.id,
+                    outcome_id=o1.id,
                     points_awarded=250,
                     guess_time_seconds=12.3,
                 )
@@ -628,6 +661,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
     drawer_seat_id = generate_uuid()
     guesser_seat_id = generate_uuid()
     turn_id = generate_uuid()
+    outcome_id = generate_uuid()
     now = datetime.now(timezone.utc)
 
     try:
@@ -672,11 +706,22 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                             prompt="anchor",
                             duration_seconds=30,
                         ),
+                        TurnParticipantOutcome(
+                            id=outcome_id,
+                            turn_id=turn_id,
+                            participant_id=guesser_seat_id,
+                            eligible=True,
+                            eligibility_reason="eligible",
+                            outcome="correct",
+                            terminal_state="active",
+                            correct_guess_time_seconds=10,
+                        ),
                         TurnGuess(
                             id=generate_uuid(),
                             turn_id=turn_id,
                             user_id=guesser_id,
                             participant_id=guesser_seat_id,
+                            outcome_id=outcome_id,
                             points_awarded=200,
                             guess_time_seconds=10,
                         ),
@@ -697,14 +742,18 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                 round_number=1,
                 turn_number=1,
                 drawer_user_id=drawer_id,
+                drawer_participant_id=drawer_seat_id,
                 prompt="duplicate",
                 duration_seconds=20,
             ),
+            # Reuses the original outcome: one correct outcome cannot have two
+            # scoring children, and the same seat cannot guess twice in a turn.
             TurnGuess(
                 id=generate_uuid(),
                 turn_id=turn_id,
                 user_id=guesser_id,
                 participant_id=guesser_seat_id,
+                outcome_id=outcome_id,
                 points_awarded=999,
                 guess_time_seconds=1,
             ),
@@ -1041,9 +1090,28 @@ async def test_word_list_and_word_uniqueness():
                 )
                 session.add(wl)
 
-                w1 = Prompt(id=generate_uuid(), prompt_list_id=wl_id, text="dog")
-                w2 = Prompt(id=generate_uuid(), prompt_list_id=wl_id, text="cat")
-                session.add_all([w1, w2])
+                def _identified(text_value):
+                    concept = PromptConcept(id=generate_uuid())
+                    version = PromptVersion(
+                        id=generate_uuid(),
+                        concept_id=concept.id,
+                        language="en",
+                        version=1,
+                        canonical_answer=text_value,
+                        match_key=text_value,
+                    )
+                    prompt = Prompt(
+                        id=generate_uuid(),
+                        prompt_list_id=wl_id,
+                        concept_id=concept.id,
+                        prompt_version_id=version.id,
+                        text=text_value,
+                    )
+                    return concept, version, prompt
+
+                c1, v1, w1 = _identified("dog")
+                c2, v2, w2 = _identified("cat")
+                session.add_all([c1, v1, w1, c2, v2, w2])
 
         async with factory() as session:
             stmt = select(Prompt).where(Prompt.prompt_list_id == wl_id)
@@ -1054,8 +1122,23 @@ async def test_word_list_and_word_uniqueness():
         with pytest.raises(IntegrityError):
             async with factory() as session:
                 async with session.begin():
-                    dup = Prompt(id=generate_uuid(), prompt_list_id=wl_id, text="dog")
-                    session.add(dup)
+                    dup_concept = PromptConcept(id=generate_uuid())
+                    dup_version = PromptVersion(
+                        id=generate_uuid(),
+                        concept_id=dup_concept.id,
+                        language="en",
+                        version=1,
+                        canonical_answer="dog",
+                        match_key="dog-2",
+                    )
+                    dup = Prompt(
+                        id=generate_uuid(),
+                        prompt_list_id=wl_id,
+                        concept_id=dup_concept.id,
+                        prompt_version_id=dup_version.id,
+                        text="dog",
+                    )
+                    session.add_all([dup_concept, dup_version, dup])
     finally:
         await engine.dispose()
 
@@ -1064,6 +1147,8 @@ async def test_prompt_server_defaults_apply_to_raw_inserts():
     factory, engine = await create_test_db()
     prompt_list_id = generate_uuid()
     prompt_id = generate_uuid()
+    concept_id = generate_uuid()
+    version_id = generate_uuid()
 
     try:
         async with engine.begin() as connection:
@@ -1079,13 +1164,28 @@ async def test_prompt_server_defaults_apply_to_raw_inserts():
                 },
             )
             await connection.execute(
+                text("INSERT INTO prompt_concepts (id) VALUES (:id)"),
+                {"id": concept_id.hex},
+            )
+            await connection.execute(
                 text(
-                    "INSERT INTO prompts (id, prompt_list_id, text) "
-                    "VALUES (:id, :prompt_list_id, :text)"
+                    "INSERT INTO prompt_versions (id, concept_id, language, "
+                    "version, canonical_answer, match_key) VALUES "
+                    "(:id, :concept_id, 'en', 1, 'anchor', 'anchor')"
+                ),
+                {"id": version_id.hex, "concept_id": concept_id.hex},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompts (id, prompt_list_id, concept_id, "
+                    "prompt_version_id, text) "
+                    "VALUES (:id, :prompt_list_id, :concept_id, :version_id, :text)"
                 ),
                 {
                     "id": prompt_id.hex,
                     "prompt_list_id": prompt_list_id.hex,
+                    "concept_id": concept_id.hex,
+                    "version_id": version_id.hex,
                     "text": "anchor",
                 },
             )

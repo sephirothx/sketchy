@@ -15,6 +15,7 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     TurnGuessInput,
+    TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
 from app.repositories.sqlalchemy import (
@@ -41,16 +42,20 @@ async def _save_game(history, *, finished_at, first, second, first_wins):
         started_at=finished_at - timedelta(minutes=5),
         finished_at=finished_at,
     )
+    first_seat = str(generate_uuid())
+    second_seat = str(generate_uuid())
     participants = [
         GameParticipantInput(
             user_id=first,
             final_score=100 if first_wins else 50,
             final_rank=1 if first_wins else 2,
+            seat_id=first_seat,
         ),
         GameParticipantInput(
             user_id=second,
             final_score=50 if first_wins else 100,
             final_rank=2 if first_wins else 1,
+            seat_id=second_seat,
         ),
     ]
     turns = [
@@ -59,22 +64,48 @@ async def _save_game(history, *, finished_at, first, second, first_wins):
             round_number=1,
             turn_number=1,
             drawer_user_id=first,
+            drawer_seat_id=first_seat,
             prompt="anchor",
             duration_seconds=20,
+            guesser_count=1,
+            participant_outcomes=(
+                TurnParticipantOutcomeInput(
+                    seat_id=second_seat,
+                    user_id=second,
+                    eligible=True,
+                    eligibility_reason="eligible",
+                    outcome="no_attempt",
+                    terminal_state="active",
+                ),
+            ),
         ),
         TurnRecordInput(
             id=second_turn,
             round_number=1,
             turn_number=2,
             drawer_user_id=second,
+            drawer_seat_id=second_seat,
             prompt="bridge",
             duration_seconds=25,
+            guesser_count=1,
+            participant_outcomes=(
+                TurnParticipantOutcomeInput(
+                    seat_id=first_seat,
+                    user_id=first,
+                    eligible=True,
+                    eligibility_reason="eligible",
+                    outcome="correct",
+                    terminal_state="active",
+                    correct_guess_time_seconds=10,
+                ),
+            ),
         ),
     ]
     guesses = [
         TurnGuessInput(
             turn_id=second_turn,
             user_id=first,
+            seat_id=first_seat,
             points_awarded=50,
             guess_time_seconds=10,
         )

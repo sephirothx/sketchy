@@ -185,7 +185,6 @@ def _turn_participant_outcomes(
         "correct": 3,
     }
     terminal_priority = {
-        "legacy_unknown": 0,
         "left": 1,
         "disconnected": 2,
         "afk": 3,

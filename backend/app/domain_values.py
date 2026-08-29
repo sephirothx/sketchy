@@ -41,7 +41,6 @@ class TurnParticipantState(StrEnum):
     AFK = "afk"
     DISCONNECTED = "disconnected"
     LEFT = "left"
-    LEGACY_UNKNOWN = "legacy_unknown"
 
 
 class ScoreEventType(StrEnum):
@@ -70,14 +69,12 @@ class NearMissKind(StrEnum):
 
 
 class PromptSourceKind(StrEnum):
-    LEGACY_UNKNOWN = "legacy_unknown"
     CURATED = "curated"
     CUSTOM = "custom"
     BUILTIN_FALLBACK = "builtin_fallback"
 
 
 class GamePromptSourceMode(StrEnum):
-    LEGACY_UNKNOWN = "legacy_unknown"
     CURATED = "curated"
     CUSTOM = "custom"
     MIXED = "mixed"
@@ -329,9 +326,7 @@ class AuditTargetType(StrEnum):
 
 SCORING_MODES = tuple(mode.value for mode in ScoringMode)
 PROMPT_SOURCE_KINDS = tuple(kind.value for kind in PromptSourceKind)
-PROMPT_OFFER_SOURCE_KINDS = tuple(
-    kind.value for kind in PromptSourceKind if kind is not PromptSourceKind.LEGACY_UNKNOWN
-)
+PROMPT_OFFER_SOURCE_KINDS = tuple(kind.value for kind in PromptSourceKind)
 GAME_PROMPT_SOURCE_MODES = tuple(mode.value for mode in GamePromptSourceMode)
 HINT_MODES = tuple(mode.value for mode in HintMode)
 TURN_END_REASONS = tuple(reason.value for reason in TurnEndReason)
