@@ -464,8 +464,14 @@ class RuntimeEvent(Base):
         Index("ix_runtime_events_type_occurred", "event_type", "occurred_at"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    # An integer, not a UUIDv7: the highest-churn table in the schema, purged
+    # after thirty days, and nothing anywhere references an event. On SQLite
+    # an INTEGER PRIMARY KEY is the rowid itself - no shadow key, no second
+    # index.
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
     )
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(
@@ -483,7 +489,8 @@ class RuntimeEvent(Base):
     # milliseconds for an overrun, seconds for a room's lifetime. Kept separate
     # from `details` so it can be summed and averaged without parsing JSON.
     value: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Null, not '{}', for the common eventless observation.
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class RuntimeStatsDaily(Base):
@@ -1333,26 +1340,24 @@ class UserBlock(Base):
 
     __tablename__ = "user_blocks"
     __table_args__ = (
-        UniqueConstraint("blocker_user_id", "blocked_user_id", name="uq_user_block"),
         CheckConstraint(
             "blocker_user_id != blocked_user_id", name="chk_no_self_block"
         ),
         Index("ix_user_blocks_blocked_user_id", "blocked_user_id"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
-    )
+    # The pair is the identity: nothing references a block by anything else,
+    # and a surrogate id was one more column, one more index, and one more
+    # thing for the merge path to deduplicate around.
     blocker_user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        primary_key=True,
     )
     blocked_user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        primary_key=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
@@ -1369,14 +1374,12 @@ class IdentityAlias(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
-    )
+    # The merged guest is the identity: one row per source, so the column
+    # that was unique anyway is the key.
     source_user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
-        nullable=False,
-        unique=True,
+        primary_key=True,
     )
     target_user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -2333,17 +2336,8 @@ class TurnGuess(Base):
     )
     points_awarded: Mapped[int] = mapped_column(Integer, nullable=False)
     guess_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
-    # Compatibility copies of the parent outcome's attempt/hint facts. The
-    # complete outcome table also records players who never guessed correctly.
-    hints_used: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=text("0"), nullable=False
-    )
-    points_spent_on_hints: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=text("0"), nullable=False
-    )
-    wrong_guesses_before: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=text("0"), nullable=False
-    )
+    # Attempt and hint facts live on the parent outcome row alone - two
+    # records of one fact were two chances to disagree.
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
@@ -2822,12 +2816,6 @@ class PromptUsageFact(Base):
 
     __tablename__ = "prompt_usage_facts"
     __table_args__ = (
-        UniqueConstraint(
-            "batch_id",
-            "prompt_list_revision_id",
-            "prompt_version_id",
-            name="uq_prompt_usage_fact_batch_revision_version",
-        ),
         CheckConstraint("offer_count >= 0", name="ck_prompt_usage_facts_offers"),
         CheckConstraint("pick_count >= 0", name="ck_prompt_usage_facts_picks"),
         CheckConstraint(
@@ -2856,21 +2844,21 @@ class PromptUsageFact(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
-    )
+    # The idempotency triple is the identity - it is what makes a retried
+    # finished game a no-op - so it is the key, and the surrogate id and its
+    # two extra indexes are gone.
     batch_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True
     )
     prompt_list_revision_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_list_revisions.id", ondelete="CASCADE"),
-        nullable=False,
+        primary_key=True,
     )
     prompt_version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
-        nullable=False,
+        primary_key=True,
     )
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     scoring_mode: Mapped[str] = mapped_column(String(16), nullable=False)

@@ -37,7 +37,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.logging_config import configure_logging
-from app.db.models import RuntimeEvent, RuntimeStatsDaily, generate_uuid
+from app.db.models import RuntimeEvent, RuntimeStatsDaily
 from app.domain_values import RuntimeEventType
 from app.services.readiness import LoopHealth
 
@@ -195,13 +195,12 @@ async def flush_events(
         async with session.begin():
             session.add_all(
                 RuntimeEvent(
-                    id=generate_uuid(),
                     event_type=event.event_type,
                     occurred_at=event.occurred_at,
                     room_id=event.room_id,
                     user_id=event.user_id,
                     value=event.value,
-                    details=event.details,
+                    details=event.details or None,
                 )
                 for event in pending
             )

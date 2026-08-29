@@ -531,7 +531,6 @@ class SqlAlchemyUserRepository(UserRepository):
                 source.state = AccountState.MERGED.value
                 session.add(
                     IdentityAlias(
-                        id=generate_uuid(),
                         source_user_id=source.id,
                         target_user_id=target.id,
                     )
@@ -575,9 +574,16 @@ class SqlAlchemyUserRepository(UserRepository):
                     if blocker_id == blocked_id:
                         await session.delete(block)
                         continue
+                    if (blocker_id, blocked_id) == (
+                        block.blocker_user_id,
+                        block.blocked_user_id,
+                    ):
+                        continue
+                    # The pair is the primary key now, so a remap that lands
+                    # on an existing pair is a duplicate to drop, not a row
+                    # to rewrite.
                     duplicate = await session.scalar(
-                        select(UserBlock.id).where(
-                            UserBlock.id != block.id,
+                        select(UserBlock.blocker_user_id).where(
                             UserBlock.blocker_user_id == blocker_id,
                             UserBlock.blocked_user_id == blocked_id,
                         )
@@ -1302,9 +1308,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             is_anonymous_snapshot=guess_snapshot[2],
                             points_awarded=g.points_awarded,
                             guess_time_seconds=g.guess_time_seconds,
-                            hints_used=g.hints_used,
-                            points_spent_on_hints=g.points_spent_on_hints,
-                            wrong_guesses_before=g.wrong_guesses_before,
                         )
                     )
 
@@ -3155,7 +3158,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         async with self._session_factory() as session:
             async with session.begin():
                 if await session.scalar(
-                    select(PromptUsageFact.id).where(
+                    select(PromptUsageFact.batch_id).where(
                         PromptUsageFact.batch_id == batch_id
                     ).limit(1)
                 ):
@@ -3181,7 +3184,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         continue
                     facts.append(
                         PromptUsageFact(
-                            id=generate_uuid(),
                             batch_id=batch_id,
                             prompt_list_revision_id=revision_id,
                             prompt_version_id=prompt_version_id,

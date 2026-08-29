@@ -334,7 +334,6 @@ async def test_entity_ids_are_time_ordered_uuidv7_with_native_postgresql_type():
         UserBan.user_id,
         UserBan.banned_by_user_id,
         UserBan.revoked_by_user_id,
-        UserBlock.id,
         UserBlock.blocker_user_id,
         UserBlock.blocked_user_id,
         GameRecord.id,

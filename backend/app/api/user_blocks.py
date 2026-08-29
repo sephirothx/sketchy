@@ -33,7 +33,6 @@ class BlockBody(BaseModel):
 
 def _block_payload(block: UserBlock, target: User) -> dict:
     return {
-        "id": str(block.id),
         "userId": str(target.id),
         "username": target.username,
         "displayName": target.display_name,
@@ -77,7 +76,7 @@ def create_user_blocks_router(
                     select(UserBlock, User)
                     .join(User, User.id == UserBlock.blocked_user_id)
                     .where(UserBlock.blocker_user_id == current_id)
-                    .order_by(UserBlock.created_at, UserBlock.id)
+                    .order_by(UserBlock.created_at, UserBlock.blocked_user_id)
                 )
             ).all()
             return {"blocks": [_block_payload(block, target) for block, target in rows]}
@@ -108,7 +107,7 @@ def create_user_blocks_router(
                         response.status_code = 200
                         return _block_payload(existing, target)
                     count = await session.scalar(
-                        select(func.count(UserBlock.id)).where(
+                        select(func.count(UserBlock.blocked_user_id)).where(
                             UserBlock.blocker_user_id == current_id
                         )
                     )
@@ -117,7 +116,6 @@ def create_user_blocks_router(
                             status_code=409, detail="Your block list is full."
                         )
                     block = UserBlock(
-                        id=generate_uuid(),
                         blocker_user_id=current_id,
                         blocked_user_id=target.id,
                     )
@@ -132,7 +130,6 @@ def create_user_blocks_router(
                             target_id=str(target.id),
                             request_id=request_id,
                             ip_hash=ip_hash,
-                            details={"block_id": str(block.id)},
                         )
                     )
                     await session.flush()
@@ -176,9 +173,11 @@ def create_user_blocks_router(
                 if block is None:
                     response.status_code = 204
                     return None
-                block_id = block.id
                 await session.execute(
-                    delete(UserBlock).where(UserBlock.id == block.id)
+                    delete(UserBlock).where(
+                        UserBlock.blocker_user_id == current_id,
+                        UserBlock.blocked_user_id == target_id,
+                    )
                 )
                 session.add(
                     AuditEvent(
@@ -190,7 +189,6 @@ def create_user_blocks_router(
                         target_id=str(target_id),
                         request_id=request_id,
                         ip_hash=ip_hash,
-                        details={"block_id": str(block_id)},
                     )
                 )
         block_service.invalidate(str(target_id))

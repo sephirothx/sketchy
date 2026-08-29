@@ -1084,9 +1084,16 @@ async def test_save_game_persists_the_analytics_columns():
                     select(TurnGuess).where(TurnGuess.turn_id == round_row.id)
                 )
             ).scalar_one()
-            assert guess_row.hints_used == 2
-            assert guess_row.points_spent_on_hints == 36
-            assert guess_row.wrong_guesses_before == 5
+            outcome_row = (
+                await session.execute(
+                    select(TurnParticipantOutcome).where(
+                        TurnParticipantOutcome.id == guess_row.outcome_id
+                    )
+                )
+            ).scalar_one()
+            assert outcome_row.hints_used == 2
+            assert outcome_row.points_spent_on_hints == 36
+            assert outcome_row.wrong_guess_count == 5
 
             played = {
                 row.user_id: row.turns_played
