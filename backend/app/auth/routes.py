@@ -644,8 +644,21 @@ def create_auth_router(
             raise HTTPException(status_code=409, detail="Export is not ready.")
         # The stored document is already JSON; decoding it here and serving the
         # bytes avoids parsing it only to re-serialize the same text.
+        try:
+            document = decode_export_artifact(job)
+        except AccountDataError as error:
+            # A row flagged ready whose document cannot be read is the server's
+            # fault, not the caller's, and the remedy is a fresh export rather
+            # than a retry of this one.
+            logger.exception(
+                "Data export %s is ready but its document is unreadable", job.id
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Export document could not be read. Request a new export.",
+            ) from error
         return Response(
-            content=decode_export_artifact(job),
+            content=document,
             media_type="application/json",
             headers={
                 "Content-Disposition": (

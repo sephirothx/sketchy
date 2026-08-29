@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import gzip
 import json
+import zlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
@@ -184,11 +185,22 @@ def decode_export_artifact(job: DataExport) -> bytes:
     """The stored document as the JSON bytes a download should serve."""
     if job.artifact is None:
         raise AccountDataError("export has no stored document")
-    if job.artifact_encoding == DataExportArtifactEncoding.GZIP_JSON.value:
-        return gzip.decompress(job.artifact)
-    raise AccountDataError(
-        f"export document has unreadable encoding {job.artifact_encoding!r}"
-    )
+    if job.artifact_encoding != DataExportArtifactEncoding.GZIP_JSON.value:
+        raise AccountDataError(
+            f"export document has unreadable encoding {job.artifact_encoding!r}"
+        )
+    try:
+        document = gzip.decompress(job.artifact)
+    except (OSError, EOFError, zlib.error) as error:
+        # Truncated or corrupt bytes: a stored document the server cannot read
+        # is a server fault, and the caller needs it as one rather than as an
+        # unhandled crash.
+        raise AccountDataError("export document could not be decompressed") from error
+    if not document:
+        # gzip decompresses empty input to empty output without complaint, and
+        # an empty body is not the JSON this claims to be.
+        raise AccountDataError("export document decoded to nothing")
+    return document
 
 
 async def _build_export_artifact(
