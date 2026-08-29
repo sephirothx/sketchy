@@ -9,7 +9,7 @@ Companion documents:
 - [`wire-protocol.md`](wire-protocol.md) — the exact Socket.IO and REST contract between the two halves.
 - [`database.md`](database.md) — every table, its columns, and the flows that write them.
 - [`requirements.md`](requirements.md) — what the system is required to do, and what it deliberately does not do.
-- [`ui-mockups/`](ui-mockups/) — an artboard per screen, matched to the shipped styles, plus the redesign rationale. What the frontend described here actually looks like.
+- [`ui-mockups/`](ui-mockups/) — an artboard per screen, matched to the shipped styles, plus the redesign rationale. What the frontend described here actually looks like. [`ui-mockups/mobile/`](ui-mockups/mobile/README.md) is the portrait-phone counterpart: a measured review of the same screens at 390 × 844, and proposed layouts answering it. Those are proposals, not a record of what ships.
 - [`../GLOSSARY.md`](../GLOSSARY.md) — the one agreed name per concept. Read it before naming anything a player can see.
 - [`../README.md`](../README.md) — the operator- and player-facing narrative; this document is the structural one.
 

@@ -15,6 +15,10 @@ redesigned mockups that answer it.
 - Both canvases tell the same story (room *Coffee break doodles*, code
   `BQ7F2K`, round 2, Marta drawing *lighthouse*), so every screen can be
   compared side by side. Reviewed against `0e48d50`, 2026-08-25.
+- **Phones are a separate set.** This review is desktop-width only (§5); the
+  portrait-phone review and its proposed layouts live in
+  [`mobile/`](mobile/README.md), told with the same story so the two can be read
+  side by side.
 
 The redesign has shipped: these artboards are the living reference for the
 interface, kept in sync with the frontend (see §4b for the documented
@@ -472,6 +476,9 @@ artboards, kept for stability or clarity rather than drift:
   have.
 - Desktop widths only, matching the existing canvas's documented deviation.
   (The light-only deviation is gone: dark ships as a token swap, above.)
+  Portrait phones are reviewed separately in [`mobile/`](mobile/README.md),
+  which is where the keyboard-open guesser, the 4:3 canvas ceiling and the
+  thumb-zone rules are worked out.
 
 ## Sources
 
