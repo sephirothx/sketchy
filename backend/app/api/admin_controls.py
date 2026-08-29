@@ -16,17 +16,18 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
 from app.auth.audit import audit_coordinates
-from app.db.models import AuditEvent, generate_uuid
+from app.db.models import AuditEvent, RoleChangeNotice, generate_uuid
 from app.domain_values import AuditTargetType
 from app.db.models import User
 from app.deployment import MAX_SHUTDOWN_DRAIN_SECONDS
-from app.domain_values import AccountState, UserRole
+from app.domain_values import AccountState, GRANTABLE_ROLES, UserRole
 from app.game import Phase
 from app.rooms import RoomManager
 from app.services import config_store
@@ -43,14 +44,27 @@ TURN_ENDED_EVENT = "room.turn_ended_by_admin"
 ROLE_CHANGED_EVENT = "admin.role_changed"
 SHUTDOWN_REQUESTED_EVENT = "server.shutdown_requested"
 
-# What an administrator may set a role to. Promotion to `admin` is deliberately
-# absent: `auth/admin.py` bootstraps the first one from a guarded command that
-# refuses to run once an administrator exists, and its own error message points
-# at "an authorized moderation flow" - this is that flow, for the tier it can
-# safely serve. Minting an administrator over the network would mean one
-# compromised session could mint more, which is the reasoning R-AUTH-14 applies
-# to remote password reset.
-GRANTABLE_ROLES = (UserRole.USER.value, UserRole.MODERATOR.value)
+# What an administrator may set a role to, from `domain_values` because the
+# `role_change_notices` check constraint is the same statement: a notice can
+# only ever be about a role this endpoint can set. Promotion to `admin` is
+# deliberately absent: `auth/admin.py` bootstraps the first one from a guarded
+# command that refuses to run once an administrator exists, and its own error
+# message points at "an authorized moderation flow" - this is that flow, for the
+# tier it can safely serve. Minting an administrator over the network would mean
+# one compromised session could mint more, which is the reasoning R-AUTH-14
+# applies to remote password reset.
+
+# A list to scan rather than a page to read. The search exists to turn a name
+# into the one account being promoted; an operator who cannot see their target
+# in ten rows should type more of the name, not page through the players.
+PLAYER_SEARCH_LIMIT = 10
+
+# The widest term that can mean anything: `display_name` is 32 characters, and
+# an account id is 36. Enforced by truncation rather than by a `Query`
+# constraint, because FastAPI validates parameters *before* the handler runs -
+# so a bound declared there would answer 422 to an ordinary player sending a
+# long one, which is the confirmation the 404 in `admin_auth` exists to refuse.
+MAX_SEARCH_TERM = 36
 
 
 class ShutdownRequest(BaseModel):
@@ -100,6 +114,7 @@ def create_admin_controls_router(
     context,
     *,
     on_change=None,
+    on_role_changed=None,
     request_process_exit=None,
 ) -> APIRouter:
     """`context` is the live `HandlerContext`; rooms are process-owned.
@@ -423,6 +438,71 @@ def create_admin_controls_router(
 
     # ------------------------------------------------------------------ roles
 
+    @router.get("/api/admin/players")
+    async def search_players(
+        request: Request,
+        q: str = Query(default=""),
+    ):
+        """Find the account a role is about, by name rather than by pasted id.
+
+        A read among the commands, for the reason `list_live_rooms` gives just
+        above: it is the least that makes the control below usable. Granting a
+        role used to mean pasting a UUID somebody had to already have, which is
+        a lookup done by hand, badly, in another window.
+
+        Registered accounts only - a guest cannot hold a role, so an
+        unpromotable row is a refusal in waiting - most recently active first,
+        and capped. An empty `q` answers with whoever holds a role now, which
+        is the question the card opens on.
+
+        **This writes nothing to the ledger, and that is deliberate.**
+        R-AUDIT-05 records every use of the per-player activity view because
+        that view answers *how has this account behaved*. This one answers
+        *which account is called this*, and returns nothing a room does not
+        already show every player seated in it - a display name and the colour
+        its owner chose - plus the role that is about to change. An event per
+        keystroke would also bury `admin.role_changed` under hundreds of rows
+        in an append-only ledger that exists to make it findable.
+
+        For the same reason nothing else is returned. No username, no dates,
+        no game counts: two players who chose the same name are both listed and
+        told apart by the id fragment beside them, and an operator who genuinely
+        cannot tell which is which has the activity view - where that cost is
+        recorded, which is where it belongs.
+        """
+        await require_admin(request)
+        term = q.strip()[:MAX_SEARCH_TERM]
+        statement = select(User).where(User.state == AccountState.REGISTERED.value)
+        if term == "":
+            statement = statement.where(User.role != UserRole.USER.value)
+        else:
+            matches = [User.display_name.ilike(_escaped_like(term), escape="\\")]
+            # An operator arriving from the audit ledger or a report has an id
+            # and not a name; the workflow this replaces still has to work.
+            found = _maybe_uuid(term)
+            if found is not None:
+                matches.append(User.id == found)
+            statement = statement.where(or_(*matches))
+        async with session_factory() as session:
+            rows = (
+                await session.scalars(
+                    statement.order_by(User.last_active_at.desc()).limit(
+                        PLAYER_SEARCH_LIMIT
+                    )
+                )
+            ).all()
+        return {
+            "players": [
+                {
+                    "id": str(row.id),
+                    "displayName": row.display_name,
+                    "nameColor": row.name_color,
+                    "role": row.role,
+                }
+                for row in rows
+            ]
+        }
+
     @router.patch("/api/admin/players/{user_id}/role")
     async def set_role(
         user_id: str,
@@ -490,11 +570,53 @@ def create_admin_controls_router(
                         created_at=datetime.now(timezone.utc),
                     )
                 )
+                # In the same transaction as the change it describes, so there
+                # can be no role nobody was told about and no notice about a
+                # role that was never granted. The reason stays in the ledger
+                # above: it is text one administrator wrote for another.
+                session.add(
+                    RoleChangeNotice(
+                        id=generate_uuid(),
+                        user_id=target_id,
+                        role=body.role,
+                        created_at=datetime.now(timezone.utc),
+                    )
+                )
+        # After the commit, so a socket can never announce a role a rolled-back
+        # transaction never granted. The no-op above returns before reaching
+        # here, so an administrator re-pressing the button tells nobody twice.
+        #
+        # The parsed id, not the path string: every socket joins its account's
+        # broadcast room as `user:{id}` built from the session's canonical UUID,
+        # so a request that spelled the id in upper case - which `UUID()` parses
+        # perfectly well - would emit to a room nobody is in, and the push would
+        # be lost with nothing to show for it.
+        if on_role_changed is not None:
+            await on_role_changed(str(target_id))
         # No session revocation: the gate loads the role fresh on every
         # request, so a demotion is in force on the target's very next call.
         return {"id": user_id, "role": body.role}
 
     return router
+
+
+def _escaped_like(term: str) -> str:
+    """A search term as a LIKE pattern, with its metacharacters neutralised.
+
+    A `%` typed into a search box is a character somebody typed, not a pattern
+    they wrote: without this, `?q=%` answers with ten arbitrary accounts, which
+    is the difference between a lookup and a directory.
+    """
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _maybe_uuid(term: str) -> UUID | None:
+    """The term as an account id, when it is one."""
+    try:
+        return UUID(term)
+    except ValueError:
+        return None
 
 
 def _state(shutdown: ShutdownCoordinator) -> dict:

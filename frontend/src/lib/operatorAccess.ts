@@ -50,3 +50,55 @@ export function operatorEntries(
   if (canAdminister(role)) entries.push(OPERATIONS, BUG_REPORTS);
   return entries;
 }
+
+
+/** Keep only a payload shaped like a role notice.
+
+Anything else is dropped rather than rendered as "undefined" in front of a
+player, the way `WarningNotice` drops a malformed warning. `admin` is
+deliberately not accepted: it can never be granted over the network, so a push
+claiming it is a payload that should never have existed. */
+export function roleNoticeFromPayload(payload: unknown): {
+  id: string;
+  role: "user" | "moderator";
+  createdAt: string;
+} | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = (payload as { notice?: unknown }).notice;
+  if (!body || typeof body !== "object") return null;
+  const notice = body as Record<string, unknown>;
+  if (typeof notice.id !== "string") return null;
+  if (notice.role !== "user" && notice.role !== "moderator") return null;
+  return {
+    id: notice.id,
+    role: notice.role,
+    createdAt: typeof notice.createdAt === "string" ? notice.createdAt : "",
+  };
+}
+
+/** What the account is told, in its own words rather than the ledger's.
+
+The reason an administrator recorded is never shown here - it was written for
+other administrators and can name a report or somebody else. What the player
+needs is what changed and what it means for them. */
+export function roleNoticeText(role: "user" | "moderator"): {
+  title: string;
+  body: string;
+} {
+  if (role === "moderator") {
+    return {
+      title: "You are now a moderator",
+      body:
+        "An administrator gave you the moderator role. A Moderation entry has " +
+        "appeared in your account menu: it is where reports about players and " +
+        "prompts are reviewed. Nothing about how you play changes.",
+    };
+  }
+  return {
+    title: "You are no longer a moderator",
+    body:
+      "An administrator removed the moderator role from your account. The " +
+      "Moderation entry has gone from your menu. Nothing else about your " +
+      "account or your games is affected.",
+  };
+}

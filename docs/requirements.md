@@ -348,12 +348,14 @@ claim that an arbitrary host will sustain it.
 | # | Requirement |
 | --- | --- |
 | **R-ROLE-01** | The account payload carries the role so the menu knows what to **show**. It MUST NEVER be what grants access. Every endpoint behind those entries MUST re-check the role and answer **404** to anyone else — **including for a malformed request**. A gate that runs after body validation answers 422 to an ordinary player, which confirms the endpoint exists. |
+| **R-ROLE-02** | An account MUST be told when its own service-wide role changes — over its socket if it is connected, and from a pending notice on its next visit otherwise. The notice carries the new role and **nothing else**: the reason recorded with the change is written for other administrators and can name a report or a second account. Acknowledging it MUST record that it landed and settle every older notice, since a role is one current fact rather than a queue of events. Applying the pushed role to what the menu offers MUST remain a display decision (R-ROLE-01), never an authorization one. |
 | **R-AUDIT-01** | Report submission and review, suspension, and revocation MUST each append an audit event recording who acted, the request it belonged to, a hashed client address, and what was acted on. |
 | **R-AUDIT-02** | The audit table MUST be append-only. Names MUST NOT be written into it — a stored name would be personal data that erasing an account could not reach. The admin view resolves names when the ledger is read, so a deleted account reads *Deleted player* while the entry stands exactly as it was. |
 | **R-AUDIT-03** | An action on no single row MUST record no target and say so by leaving both target fields empty, rather than inventing a subject. |
 | **R-AUDIT-04** | Raw addresses, report text, and context evidence MUST NOT be copied into ordinary request logs or into public player, room, preview, or lobby payloads. |
 | **R-AUDIT-06** | An administrative command whose effect lives in process memory rather than the database cannot share a transaction with its audit event. Those MUST record **before** acting: a ledger that can name an action which then failed is a smaller harm than one that can miss an irreversible action that happened. |
 | **R-AUDIT-05** | Every use of the per-player operations view MUST write an audit event naming both who looked and who was looked at, because it is a surveillance surface on the game's own players. |
+| **R-AUDIT-07** | The administrator's player search MUST stay bounded to what a room already shows every player seated in it, plus the role being changed — administrator-only, capped, and writing nothing to the ledger. Anything about how an account has *behaved* stays behind the audited per-player view (R-AUDIT-05); a search that grows into a player directory would be a surveillance surface with no record of its use. |
 
 ---
 

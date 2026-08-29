@@ -674,6 +674,16 @@ role so the menu knows what to offer; it is never what grants access. Every
 endpoint behind those entries checks the role again for itself and answers 404
 to anyone else, so the menu decides what is *shown* and nothing more.
 
+Later moderators are promoted from **Server operations**, by name: the search
+behind that box finds a registered account by part of its display name (or by a
+full id, for an administrator arriving from the ledger with one), shows it in the
+colour its owner chose, and returns nothing a room does not already show every
+player seated in it - which is why, unlike the per-player activity view, it writes
+nothing to the audit log. The account is told what happened: immediately over its
+own socket if it is connected anywhere, and from a pending notice on its next visit
+if it was not. A **Moderation** entry that simply appears - or vanishes - is a
+change nobody can ask about.
+
 A player is reported from the same menu on their row that carries the kick and
 AFK votes. The report names their **seat**, never their account: room payloads
 deliberately carry no account ids, and wanting to complain about somebody is

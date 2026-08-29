@@ -25,6 +25,10 @@ from app.api.moderation import create_moderation_router
 from app.api.admin_controls import create_admin_controls_router, read_paused
 from app.api.admin_settings import create_admin_settings_router
 from app.api.operations import create_operations_router
+from app.api.role_notices import (
+    create_role_notice_router,
+    pending_role_notice_payload,
+)
 from app.api.user_settings import create_user_settings_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.bans import suspension_payload
@@ -243,6 +247,20 @@ async def push_warning_to_account(user_id: str) -> None:
         await sio.emit("moderator_warning", payload, to=f"user:{user_id}")
 
 
+async def push_role_change_to_account(user_id: str) -> None:
+    """Tell an account its role changed, if any of its sockets is connected.
+
+    The pop-up otherwise waits for their next visit's
+    ``GET /api/role-notices/pending``; both routes share one payload builder so
+    they cannot say different things. The account's broadcast room is what makes
+    "wherever they are" true - a player idling in the lobby learns now rather
+    than on some later page load, and so does one seated in a game.
+    """
+    payload = await pending_role_notice_payload(async_session_factory, user_id)
+    if payload.get("notice") is not None:
+        await sio.emit("role_changed", payload, to=f"user:{user_id}")
+
+
 def request_process_exit() -> None:
     """Ask this process to stop, the same way a deployment would.
 
@@ -381,6 +399,7 @@ api.include_router(
         room_manager,
         handler_context,
         on_change=announce_pause,
+        on_role_changed=push_role_change_to_account,
         request_process_exit=request_process_exit,
     )
 )
@@ -394,6 +413,7 @@ api.include_router(create_room_preset_router(room_preset_service))
 api.include_router(
     create_user_blocks_router(async_session_factory, block_service)
 )
+api.include_router(create_role_notice_router(async_session_factory))
 api.include_router(
     create_moderation_router(
         async_session_factory,

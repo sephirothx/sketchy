@@ -360,6 +360,11 @@ PROMPT_CONTENT_REPORT_REASONS = tuple(
 )
 ACCOUNT_STATES = tuple(state.value for state in AccountState)
 USER_ROLES = tuple(role.value for role in UserRole)
+# The roles an administrator may set over the network, and so the only ones a
+# role-change notice can ever be about. `admin` is deliberately absent: the
+# first one is made by a guarded server-side command, and `api/admin_controls`
+# carries the reasoning where the refusal is enforced.
+GRANTABLE_ROLES = (UserRole.USER.value, UserRole.MODERATOR.value)
 DATA_EXPORT_STATUSES = tuple(status.value for status in DataExportStatus)
 USER_THEMES = tuple(theme.value for theme in UserTheme)
 BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)

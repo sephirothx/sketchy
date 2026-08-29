@@ -1120,3 +1120,48 @@
   font-weight: 700;
   color: var(--ink);
 }
+
+/* The role control's search results. The name is drawn in the colour its
+   owner chose, because that is how an operator recognises somebody they were
+   given a name for; the id fragment beside it is for the case two players
+   chose the same one. */
+.ops-role-search { min-width: 240px; }
+
+.ops-role-results {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ops-role-results li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.ops-role-results li.is-selected { background: var(--well); }
+
+.ops-role-id {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ops-role-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--faint);
+}

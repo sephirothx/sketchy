@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { noticeAfterAcknowledgement } from "../src/lib/roleNotices.ts";
 import {
   canAdminister,
   canModerate,
   operatorEntries,
+  roleNoticeFromPayload,
+  roleNoticeText,
 } from "../src/lib/operatorAccess.ts";
 
 test("a moderator reviews reports; an administrator also runs the server", () => {
@@ -42,4 +45,64 @@ test("an unknown or missing role hides rather than reveals", () => {
 
 test("a guest is never staff, whatever the payload claims", () => {
   assert.deepEqual(operatorEntries("admin", { isAnonymous: true }), []);
+});
+
+test("a pushed role notice is read out of the payload the server sends", () => {
+  const notice = roleNoticeFromPayload({
+    notice: { id: "n-1", role: "moderator", createdAt: "2026-08-29T00:00:00+00:00" },
+  });
+  assert.deepEqual(notice, {
+    id: "n-1",
+    role: "moderator",
+    createdAt: "2026-08-29T00:00:00+00:00",
+  });
+  assert.equal(roleNoticeFromPayload({ notice: { id: "n-2", role: "user" } }).role, "user");
+});
+
+test("a malformed notice is dropped rather than shown to a player", () => {
+  // The alternative is a pop-up reading "undefined", in front of somebody who
+  // did nothing but be online at the wrong moment.
+  for (const payload of [null, undefined, {}, "moderator", { notice: null }, { notice: {} }]) {
+    assert.equal(roleNoticeFromPayload(payload), null);
+  }
+  assert.equal(roleNoticeFromPayload({ notice: { id: 42, role: "moderator" } }), null);
+  assert.equal(roleNoticeFromPayload({ notice: { id: "n-3", role: "wizard" } }), null);
+});
+
+test("a notice cannot announce an administrator", () => {
+  // `admin` is never granted over the network, so a push claiming it is a
+  // payload that should not exist - and the menu must not act on one.
+  assert.equal(roleNoticeFromPayload({ notice: { id: "n-4", role: "admin" } }), null);
+});
+
+test("the two halves of a promotion agree: told, then offered Moderation", () => {
+  const notice = roleNoticeFromPayload({ notice: { id: "n-5", role: "moderator" } });
+  assert.deepEqual(
+    operatorEntries(notice.role).map((entry) => entry.path),
+    ["/moderation"],
+  );
+  assert.deepEqual(operatorEntries(roleNoticeFromPayload({ notice: { id: "n-6", role: "user" } }).role), []);
+});
+
+test("the notice explains the change without quoting the ledger", () => {
+  // The reason an administrator recorded was written for other administrators
+  // and can name a report or a second account; it never reaches this text.
+  const promoted = roleNoticeText("moderator");
+  const removed = roleNoticeText("user");
+  assert.match(promoted.title, /now a moderator/);
+  assert.match(promoted.body, /Moderation/);
+  assert.match(removed.title, /no longer a moderator/);
+  assert.ok(!/reason/i.test(promoted.body + removed.body));
+});
+
+test("acknowledging one notice does not close a newer one that just arrived", () => {
+  // An administrator can act twice, and the second push lands on the socket
+  // while the receipt for the first is still in flight. Clearing whatever is
+  // on screen would take the newer notice down unread; the server settles by
+  // age for the same reason.
+  const promoted = { id: "n-1", role: "moderator", createdAt: "" };
+  const demoted = { id: "n-2", role: "user", createdAt: "" };
+  assert.equal(noticeAfterAcknowledgement(promoted, "n-1"), null);
+  assert.deepEqual(noticeAfterAcknowledgement(demoted, "n-1"), demoted);
+  assert.equal(noticeAfterAcknowledgement(null, "n-1"), null);
 });

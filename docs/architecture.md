@@ -597,7 +597,14 @@ where "no such page" would be the worse answer. The moderator role can be grante
 revoked from the operations page with a recorded reason; `admin` cannot — the first
 one comes from a guarded server-side command that refuses to run once an
 administrator exists, and minting more over the network would let one compromised
-session make itself company.
+session make itself company. The account is found by name rather than by a pasted
+id: the search behind that box is administrator-only, capped, and returns nothing a
+room does not already show every player seated in it, which is why it writes nothing
+to the ledger where the per-player activity view writes a row on every use. The
+player is then told over the same `user:{id}` broadcast room a suspension and a
+warning use, and from a pending notice on their next visit if nobody was connected —
+a **Moderation** entry that appears, or vanishes, with no explanation is a change
+nobody can ask about.
 
 An administrator can also start a planned shutdown from that page, with a window
 for that shutdown alone. It signals the process rather than draining in the

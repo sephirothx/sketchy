@@ -19,6 +19,7 @@ import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
 import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { SuspensionNotice } from "./components/SuspensionNotice";
+import { RoleChangeNotice } from "./components/RoleChangeNotice";
 import { WarningNotice } from "./components/WarningNotice";
 import { XIcon } from "./components/icons";
 import { useAuthStore } from "./store/authStore";
@@ -164,6 +165,7 @@ function App() {
       <EmailRecoveryReminder />
       <SuspensionNotice />
       <WarningNotice />
+      <RoleChangeNotice />
       <BrowserRouter>
         <ScrollToTop />
         <Routes>

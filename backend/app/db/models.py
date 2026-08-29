@@ -65,6 +65,7 @@ from app.domain_values import (
     TURN_END_REASONS,
     TURN_PARTICIPANT_OUTCOMES,
     TURN_PARTICIPANT_STATES,
+    GRANTABLE_ROLES,
     USER_ROLES,
     USER_THEMES,
     AccountState,
@@ -1270,6 +1271,54 @@ class UserWarning(Base):
         nullable=True,
         index=True,
     )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
+
+
+class RoleChangeNotice(Base):
+    """What an account still has to be told about its own role.
+
+    The role itself lives on `users.role`; this is only the message. It exists
+    for the same reason `user_warnings` does: an administrator acts while the
+    player is asleep, and a **Moderation** entry that appears - or vanishes -
+    with no explanation is a change nobody can ask about. A connected account
+    hears it on the socket, everybody else on their next visit, and
+    acknowledging records that the notice actually landed.
+
+    No actor column. Who acted, and the reason they gave, are the audit
+    ledger's job and are written there in the same transaction; the reason in
+    particular is text one administrator wrote for another and can name a
+    report or a second account, so it deliberately has no route to the person
+    it is about.
+    """
+
+    __tablename__ = "role_change_notices"
+    __table_args__ = (
+        # The grantable roles, not every role: `admin` is never set over the
+        # network, so a notice about one is a row that could only arrive by
+        # mistake - and the client drops what it cannot explain rather than
+        # showing a player a pop-up about a role nobody gave them.
+        _values_check("role", GRANTABLE_ROLES, "ck_role_change_notices_role"),
+        Index("ix_role_change_notices_user_pending", "user_id", "acknowledged_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # The role the account holds now, not the step it took: a notice read late
+    # should describe where the account stands, and `users.role` is the only
+    # thing that can contradict it.
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
