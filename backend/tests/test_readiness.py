@@ -323,6 +323,15 @@ async def test_every_loop_records_the_sweep_it_just_did(
         return value
 
     monkeypatch.setattr(module, worker, succeed)
+    # The retention loop performs three sweeps per iteration; the parametrized
+    # worker is the one under test, and its siblings are stubbed so this stays
+    # a test about health recording rather than about a database.
+    async def swept_nothing(*_args, **_kwargs):
+        return 0
+
+    for sibling in ("purge_expired_auth_sessions", "purge_expired_data_exports"):
+        if hasattr(module, sibling):
+            monkeypatch.setattr(module, sibling, swept_nothing)
     await _one_iteration(
         getattr(module, runner)(None, interval_seconds=1, health=health)
     )
