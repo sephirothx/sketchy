@@ -1309,3 +1309,29 @@ async def test_rank_migration_nulls_placings_of_unfinished_games(tmp_path):
         assert ranks[finished_seat] == 1
     finally:
         await engine.dispose()
+
+
+async def test_runtime_event_key_swap_refuses_a_populated_dev_database(tmp_path):
+    """s2f6d9a4b571 renumbers runtime_events onto an integer key, which the
+    rebuild cannot do over existing rows: the new INTEGER PRIMARY KEY is a
+    rowid alias, which applies no type affinity and rejects the copied UUID
+    text outright. SQLite databases are regenerated rather than upgraded, so
+    the revision says so plainly instead of carrying a second intermediate
+    rebuild for a database nobody keeps."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'events.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "r1e5c8f3a469")
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO runtime_events "
+                    "(id, event_type, occurred_at, room_id, value, details) "
+                    "VALUES (:id, 'room.created', '2026-08-24 12:00:00', "
+                    "'room-1', 7, '{}')"
+                ),
+                {"id": uuid.uuid4().hex},
+            )
+        with pytest.raises(Exception, match="regenerate the database"):
+            await _migrate(engine, alembic_command.upgrade, "head")
+    finally:
+        await engine.dispose()

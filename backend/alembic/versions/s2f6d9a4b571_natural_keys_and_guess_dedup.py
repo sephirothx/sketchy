@@ -321,15 +321,25 @@ def _drop_unique_on(table: str, columns: list[str]) -> None:
 
 def upgrade() -> None:
     if op.get_bind().dialect.name == "sqlite":
-        op.execute(
-            "UPDATE runtime_events SET details = NULL WHERE details = '{}'"
-        )
-    else:
-        # PostgreSQL's json type has no equality operator; compare as text.
-        op.execute(
-            "UPDATE runtime_events SET details = NULL WHERE details::text = '{}'"
-        )
-    if op.get_bind().dialect.name == "sqlite":
+        # SQLite is a development-and-test engine (#503) whose databases are
+        # regenerated rather than upgraded, so this refuses the one case it
+        # cannot handle instead of carrying machinery for it. The rebuild
+        # copies the old column into the new INTEGER PRIMARY KEY, which is a
+        # rowid alias: unlike an ordinary INTEGER column it applies no type
+        # affinity, so the UUID text is rejected with "datatype mismatch"
+        # rather than converted. Renumbering the rows would mean a second
+        # intermediate rebuild to drop the column first, which is machinery
+        # for a database nobody keeps.
+        observations = op.get_bind().exec_driver_sql(
+            "SELECT COUNT(*) FROM runtime_events"
+        ).scalar()
+        if observations:
+            raise RuntimeError(
+                f"runtime_events holds {observations} rows, which this "
+                "revision cannot renumber onto its integer key. These are "
+                "30-day development observations: regenerate the database "
+                "(docs/database.md, Pre-v1 note) rather than upgrading it."
+            )
         _rebuild("user_blocks", _user_blocks_table(sa.MetaData(), natural=True))
         _rebuild(
             "identity_aliases", _identity_aliases_table(sa.MetaData(), natural=True)
@@ -381,6 +391,11 @@ def upgrade() -> None:
         op.create_primary_key("pk_runtime_events", "runtime_events", ["id"])
         op.alter_column(
             "runtime_events", "details", existing_type=sa.JSON(), nullable=True
+        )
+        # Only now that the column admits them: json has no equality operator
+        # on PostgreSQL, so the empty object is recognised as text.
+        op.execute(
+            "UPDATE runtime_events SET details = NULL WHERE details::text = '{}'"
         )
 
         op.drop_column("turn_guesses", "hints_used")
