@@ -288,7 +288,10 @@ exposing or re-identifying old keys.
 `id` · `source_user_id` **unique** (FK RESTRICT) · `target_user_id` (FK RESTRICT) ·
 `created_at`, with `ck_identity_alias_distinct`.
 
-The immutable mapping from a merged guest identity to its account. Historical
+The immutable mapping from a merged guest identity to its account. **Chains are a
+load-bearing application invariant**: a merge target is never itself a source, so
+resolution never depends on traversal order — the schema cannot express this without a
+trigger, so the merge path enforces it. Historical
 participant, drawer, and guess rows keep their original IDs and presentation, so a game
 containing both identities keeps **two factual seats** rather than violating a
 uniqueness rule or losing a player. Account history and statistics resolve the account
@@ -404,6 +407,10 @@ The subject is named **twice, on purpose**:
   single prompt version, a room, a configuration key. `ck_audit_events_target_pair`
   requires both or neither, so an action on no single row (a bulk retention purge)
   records neither and **says so by leaving both empty rather than inventing a subject**.
+
+The admin ledger reads newest-first on `created_at`, which is indexed for that read —
+the UUIDv7 `id` is merely time-ordered, while `created_at` is the authoritative event
+time.
 
 **Names are never written into this table.** The admin view resolves them when the
 ledger is read: the table is append-only, so a stored name would be personal data that
@@ -624,7 +631,7 @@ and [`backend/app/repositories/sqlalchemy.py`](../backend/app/repositories/sqlal
 | --- | --- |
 | `id` | The live game's UUIDv7, reused for the history row and the prompt-usage batch |
 | `payload_hash` | Canonical SHA-256 digest of the content. Retrying the same ID **and** content is idempotent even if collection order changed; a different payload under the same ID raises an operator-visible conflict |
-| `room_name`, `player_count`, `total_rounds`, `drawing_seconds` | |
+| `room_name`, `player_count`, `total_rounds`, `drawing_seconds` | Bounds-checked: at least one player and round, a positive duration, and `started_at <= finished_at` |
 | `scoring_mode`, `hint_mode` | Enum-checked |
 | `scoring_version`, `score_ledger_version`, `rule_snapshot_version` | Legacy rows use `0` |
 | `rule_snapshot` (JSON) | The frozen exact rules — see below |
@@ -647,16 +654,17 @@ its end, so a room everyone walked out of left no trace — the games most worth
 at were the only invisible ones. An abandoned game is an ordinary row with
 `outcome = 'abandoned'`; `finished_at` keeps meaning *when the game stopped*, not that
 it finished. Player history shows finished games unless `?includeAbandoned=true`. One
-that is shown carries **no placing** — not in the row and not in its standings — because
-a rank is a claim about how a game ended, and this one did not end. The scores stay,
+that is shown carries **no placing** — `final_rank` is **null** in the row, not merely
+suppressed in presentation — because a rank is a claim about how a game ended, and this
+one did not end. The scores stay,
 since points earned in the turns that were played are a fact. An abandoned game
 contributes those turns but **not** a game played, a game won, or a score.
 
 ### `game_participants`
 `id` (the **participant seat**) · `game_id` (CASCADE) · `user_id` (`SET NULL`) ·
 `display_name_snapshot` · `name_color_snapshot` · `is_anonymous_snapshot` ·
-`final_score` · `final_rank` · `turns_played` · `created_at`, with
-`uq_game_participants_game_user`.
+`final_score` · `final_rank` (nullable; null for abandoned games, `>= 1` otherwise) ·
+`turns_played` · `created_at`, with `uq_game_participants_game_user`.
 
 - At most **one participant seat per linked account** per game; multiple accountless
   seats remain distinct.

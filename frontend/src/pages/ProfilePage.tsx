@@ -111,13 +111,13 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
       >
         <span
           className={`profile-game-place${
-            seat && game.outcome === "finished" && seat.finalRank <= 3
+            seat?.finalRank != null && game.outcome === "finished" && seat.finalRank <= 3
               ? ` is-place-${seat.finalRank}`
               : ""
           }`}
           aria-hidden="true"
         >
-          {seat && game.outcome === "finished" ? `#${seat.finalRank}` : "—"}
+          {seat?.finalRank != null && game.outcome === "finished" ? `#${seat.finalRank}` : "—"}
         </span>
         <span className="profile-game-title">
           <span className="profile-game-room">{game.roomName}</span>

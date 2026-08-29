@@ -19,7 +19,8 @@ export interface GameParticipant {
   nameColor: string | null;
   isAnonymous: boolean;
   finalScore: number;
-  finalRank: number;
+  // Null for abandoned games: no placing in a game that never ended.
+  finalRank: number | null;
 }
 
 export interface GameSummary {

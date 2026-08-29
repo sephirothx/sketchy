@@ -1356,3 +1356,79 @@ async def test_migrations_match_the_models(tmp_path):
         )
     ]
     assert differences == [], f"models and migrations have drifted: {differences}"
+
+
+async def test_history_bounds_reject_impossible_rows():
+    """game_records and turn_records carry the same numeric floors the
+    room-settings tables have always pinned, plus event-time ordering."""
+    factory, engine = await create_test_db()
+    now = datetime.now(timezone.utc)
+
+    def game_row(**overrides):
+        values = dict(
+            id=generate_uuid(),
+            room_name="Bounds room",
+            scoring_mode="default",
+            hint_mode="none",
+            drawing_seconds=90,
+            total_rounds=1,
+            player_count=2,
+            started_at=now,
+            finished_at=now,
+        )
+        values.update(overrides)
+        return GameRecord(**values)
+
+    try:
+        for bad in (
+            game_row(player_count=0),
+            game_row(total_rounds=0),
+            game_row(drawing_seconds=0),
+            game_row(started_at=now, finished_at=now - timedelta(seconds=1)),
+        ):
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(bad)
+
+        game_id = generate_uuid()
+        seat_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(game_row(id=game_id))
+                session.add(
+                    GameParticipant(
+                        id=seat_id,
+                        game_id=game_id,
+                        final_score=100,
+                        # Null is the abandoned-game shape and must be legal.
+                        final_rank=None,
+                    )
+                )
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    session.add(
+                        TurnRecord(
+                            id=generate_uuid(),
+                            game_id=game_id,
+                            round_number=1,
+                            turn_number=1,
+                            drawer_participant_id=seat_id,
+                            prompt="anchor",
+                            duration_seconds=0,
+                        )
+                    )
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    session.add(
+                        GameParticipant(
+                            id=generate_uuid(),
+                            game_id=game_id,
+                            final_score=0,
+                            final_rank=0,
+                        )
+                    )
+    finally:
+        await engine.dispose()

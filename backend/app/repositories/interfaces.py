@@ -112,7 +112,7 @@ class GameParticipantInput:
 
     user_id: str | None
     final_score: int
-    final_rank: int
+    final_rank: int | None
     turns_played: int = 0
     seat_id: str | None = None
     display_name: str = "Unknown"
@@ -221,7 +221,7 @@ class GameParticipantSummary:
     name_color: str | None
     is_anonymous: bool
     final_score: int
-    final_rank: int
+    final_rank: int | None
 
 
 @dataclass(frozen=True)

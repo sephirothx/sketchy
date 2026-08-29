@@ -117,7 +117,9 @@ def _count_turns_played(seats: dict[str, _Seat], game: Game) -> None:
                 seat.turns_played += 1
 
 
-def _participants(seats: dict[str, _Seat]) -> list[GameParticipantInput]:
+def _participants(
+    seats: dict[str, _Seat], *, ranked: bool
+) -> list[GameParticipantInput]:
     """Rank every factual seat, coalescing only duplicate tokens for one account.
 
     An account that left and rejoined mid-game holds two tokens; the seat it
@@ -149,7 +151,14 @@ def _participants(seats: dict[str, _Seat]) -> list[GameParticipantInput]:
                 seat.participant_id = winner.seat_id
 
     ordered = sorted(by_identity.values(), key=lambda seat: -seat.score)
-    ranks = competition_ranks([seat.score for seat in ordered])
+    # A rank is a claim about how a game ended; a game that did not end gets
+    # none (R-HIST-06). The row says so, rather than storing a score-order
+    # artifact every reader has to know to suppress.
+    ranks = (
+        competition_ranks([seat.score for seat in ordered])
+        if ranked
+        else [None] * len(ordered)
+    )
     participants: list[GameParticipantInput] = []
     for seat, rank in zip(ordered, ranks, strict=True):
         participants.append(
@@ -291,7 +300,9 @@ def build_game_history(
     """
     seats = _resolve_seats(room, game)
     _count_turns_played(seats, game)
-    participants = _participants(seats)
+    participants = _participants(
+        seats, ranked=outcome == GameOutcome.FINISHED.value
+    )
     if len(participants) < MIN_RECORDED_PARTICIPANTS:
         return None
 
