@@ -729,10 +729,11 @@ cd backend && .venv/bin/python -m app.services.drawing_storage --batch-size 2000
 ### `turn_participant_outcomes`
 One row per current or late-arriving non-drawer seat, per turn.
 
-`id` · `turn_id` (CASCADE) · `participant_id` (CASCADE) · `eligible` ·
+`id` · `game_id` · `turn_id` · `participant_id` (same-game composite FKs, CASCADE) ·
+`eligible` ·
 `eligibility_reason` (`eligible \| afk \| disconnected \| joined_late`) ·
 `outcome` (`correct \| incorrect \| no_attempt \| ineligible`) ·
-`terminal_state` (`active \| afk \| disconnected \| left \| legacy_unknown`) ·
+`terminal_state` (`active \| afk \| disconnected \| left`) ·
 `correct_guess_time_seconds` · `wrong_guess_count` · `near_miss_count` ·
 `hints_used` · `points_spent_on_hints` · `created_at`.
 
@@ -777,6 +778,18 @@ else may. `uq_score_events_game_order` keeps the order unique per game.
 **Corrections append; prior events are never rewritten.** The history writer proves the
 gameplay events agree with the correct guesses and hint spend, then requires every
 participant's ledger sum to equal the cached final score **in the same transaction**.
+
+**Same-game coherence is structural.** Composite foreign keys pair cross-row
+references with their `game_id` (or `turn_id`): an event cannot award to a seat, charge
+a turn, or correct an entry belonging to another game; a turn's drawer seat must belong
+to the turn's game; an outcome's turn and seat must share a game
+(`turn_participant_outcomes` carries a denormalized `game_id` precisely so that is
+expressible); and a guess's outcome must belong to the guess's turn. The one reference
+left single-column is `turn_guesses.participant_id`: its `ON DELETE SET NULL` in a
+composite form would null the turn alongside the seat, and the guess's seat is already
+same-turn-constrained transitively through its outcome. The writer's
+transactional proofs cover the arithmetic; these constraints cover the addressing, so
+a second writer, a repair script, or a partial restore cannot silently disagree.
 
 Legacy games explicitly use ledger version `0`, because gross awards and drawer bonuses
 cannot be reconstructed from their net totals. No-scoring games use the current version

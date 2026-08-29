@@ -225,6 +225,7 @@ async def test_wrong_guess_text_expires_but_per_seat_outcomes_remain():
                         ),
                         TurnParticipantOutcome(
                             id=generate_uuid(),
+                            game_id=game_id,
                             turn_id=turn_id,
                             participant_id=guesser_seat_id,
                             eligible=True,

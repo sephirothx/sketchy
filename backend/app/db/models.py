@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     JSON,
@@ -1721,6 +1722,10 @@ class GameParticipant(Base):
             "final_rank IS NULL OR final_rank >= 1",
             name="ck_game_participants_final_rank",
         ),
+        # Lets children reference the seat *together with its game*, so a row
+        # naming a seat from another game is a constraint violation instead of
+        # a plausible-looking lie (see score_events, turn_records, outcomes).
+        UniqueConstraint("game_id", "id", name="uq_game_participants_game_id_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1761,9 +1766,6 @@ class GameParticipant(Base):
 
     game: Mapped[GameRecord] = relationship(back_populates="participants")
     user: Mapped[User | None] = relationship()
-    score_events: Mapped[list[ScoreEvent]] = relationship(
-        back_populates="participant"
-    )
 
 
 class TurnRecord(Base):
@@ -1800,6 +1802,15 @@ class TurnRecord(Base):
             "AND stroke_count >= 0",
             name="ck_turn_records_counts_nonnegative",
         ),
+        UniqueConstraint("game_id", "id", name="uq_turn_records_game_id_id"),
+        # The drawer's seat must belong to this turn's game. CASCADE for the
+        # same reason as before: a seat only ever goes with its whole game.
+        ForeignKeyConstraint(
+            ["game_id", "drawer_participant_id"],
+            ["game_participants.game_id", "game_participants.id"],
+            name="fk_turn_records_drawer_seat_same_game",
+            ondelete="CASCADE",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1820,15 +1831,10 @@ class TurnRecord(Base):
         index=True,
     )
     # The factual game seat is authoritative; account linkage may be null,
-    # the seat itself never is.
+    # the seat itself never is. Referenced together with game_id by the
+    # same-game constraint in __table_args__.
     drawer_participant_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        # CASCADE, not RESTRICT: a seat only ever goes with its whole game,
-        # whose own cascade removes these turns anyway - RESTRICT would make
-        # that delete depend on which child the cascade reaches first.
-        ForeignKey("game_participants.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
     )
     drawer_display_name_snapshot: Mapped[str] = mapped_column(
         String(32), default="Unknown", nullable=False
@@ -1898,8 +1904,12 @@ class TurnRecord(Base):
         back_populates="turn_record",
         cascade="all, delete-orphan",
     )
-    score_events: Mapped[list[ScoreEvent]] = relationship(
-        back_populates="turn_record"
+    # The relationships below exist for the unit of work as much as for
+    # reads: composite table-level constraints alone give the flush no
+    # ordering edge, so each references its parent through an explicit join.
+    drawer_seat: Mapped[GameParticipant] = relationship(
+        primaryjoin="GameParticipant.id == foreign(TurnRecord.drawer_participant_id)",
+        viewonly=False,
     )
     drawing: Mapped[TurnDrawing | None] = relationship(
         back_populates="turn_record",
@@ -1989,6 +1999,28 @@ class ScoreEvent(Base):
     __tablename__ = "score_events"
     __table_args__ = (
         UniqueConstraint("game_id", "event_order", name="uq_score_events_game_order"),
+        UniqueConstraint("game_id", "id", name="uq_score_events_game_id_id"),
+        # Same-game coherence, structurally: an event cannot award points to a
+        # seat, charge a turn, or correct an entry that belongs to another
+        # game. The writer proves the arithmetic; these prove the addressing.
+        ForeignKeyConstraint(
+            ["game_id", "participant_id"],
+            ["game_participants.game_id", "game_participants.id"],
+            name="fk_score_events_seat_same_game",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["game_id", "turn_id"],
+            ["turn_records.game_id", "turn_records.id"],
+            name="fk_score_events_turn_same_game",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["game_id", "corrects_event_id"],
+            ["score_events.game_id", "score_events.id"],
+            name="fk_score_events_correction_same_game",
+            ondelete="RESTRICT",
+        ),
         _values_check("event_type", SCORE_EVENT_TYPES, "ck_score_events_event_type"),
         CheckConstraint("event_order > 0", name="ck_score_events_order_positive"),
         CheckConstraint("points_delta != 0", name="ck_score_events_delta_nonzero"),
@@ -2027,16 +2059,10 @@ class ScoreEvent(Base):
         index=True,
     )
     participant_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("game_participants.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
     )
     turn_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("turn_records.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
+        Uuid(as_uuid=True, native_uuid=True), nullable=True, index=True
     )
     event_order: Mapped[int] = mapped_column(Integer, nullable=False)
     event_type: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -2044,19 +2070,24 @@ class ScoreEvent(Base):
     scoring_version: Mapped[int] = mapped_column(Integer, nullable=False)
     rule_snapshot_version: Mapped[int] = mapped_column(Integer, nullable=False)
     corrects_event_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("score_events.id", ondelete="RESTRICT"),
-        nullable=True,
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
 
-    game: Mapped[GameRecord] = relationship(back_populates="score_events")
-    participant: Mapped[GameParticipant] = relationship(back_populates="score_events")
-    turn_record: Mapped[TurnRecord | None] = relationship(back_populates="score_events")
+    game: Mapped[GameRecord] = relationship(
+        back_populates="score_events", foreign_keys=[game_id]
+    )
+    # Flush-ordering edges (see TurnRecord.drawer_seat).
+    participant: Mapped[GameParticipant] = relationship(
+        primaryjoin="GameParticipant.id == foreign(ScoreEvent.participant_id)",
+    )
+    turn_record: Mapped[TurnRecord | None] = relationship(
+        primaryjoin="TurnRecord.id == foreign(ScoreEvent.turn_id)",
+    )
     corrected_event: Mapped[ScoreEvent | None] = relationship(
-        remote_side="ScoreEvent.id", foreign_keys=[corrects_event_id]
+        primaryjoin="remote(ScoreEvent.id) == foreign(ScoreEvent.corrects_event_id)",
     )
 
 
@@ -2069,6 +2100,24 @@ class TurnParticipantOutcome(Base):
             "turn_id",
             "participant_id",
             name="uq_turn_participant_outcomes_turn_participant",
+        ),
+        UniqueConstraint(
+            "turn_id", "id", name="uq_turn_participant_outcomes_turn_id_id"
+        ),
+        # game_id is denormalized precisely so these can exist: the turn and
+        # the seat must belong to the same game as the outcome that joins
+        # them, and each other by transitivity.
+        ForeignKeyConstraint(
+            ["game_id", "turn_id"],
+            ["turn_records.game_id", "turn_records.id"],
+            name="fk_turn_participant_outcomes_turn_same_game",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["game_id", "participant_id"],
+            ["game_participants.game_id", "game_participants.id"],
+            name="fk_turn_participant_outcomes_seat_same_game",
+            ondelete="CASCADE",
         ),
         _values_check(
             "eligibility_reason",
@@ -2107,17 +2156,14 @@ class TurnParticipantOutcome(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
     )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
     turn_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("turn_records.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
     )
     participant_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("game_participants.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
     )
     eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
     eligibility_reason: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -2143,10 +2189,21 @@ class TurnParticipantOutcome(Base):
     )
 
     turn_record: Mapped[TurnRecord] = relationship(
-        back_populates="participant_outcomes"
+        back_populates="participant_outcomes",
+        foreign_keys=[game_id, turn_id],
+    )
+    # Flush-ordering edge (see TurnRecord.drawer_seat).
+    participant: Mapped[GameParticipant] = relationship(
+        primaryjoin=(
+            "GameParticipant.id == foreign(TurnParticipantOutcome.participant_id)"
+        ),
     )
     correct_guess: Mapped[TurnGuess | None] = relationship(
-        back_populates="outcome", uselist=False
+        back_populates="outcome",
+        uselist=False,
+        primaryjoin=(
+            "TurnParticipantOutcome.id == foreign(TurnGuess.outcome_id)"
+        ),
     )
 
 
@@ -2234,6 +2291,13 @@ class TurnGuess(Base):
             unique=True,
         ),
         Index("uq_turn_guesses_outcome", "outcome_id", unique=True),
+        # The outcome must belong to the same turn as the guess it scores.
+        ForeignKeyConstraint(
+            ["turn_id", "outcome_id"],
+            ["turn_participant_outcomes.turn_id", "turn_participant_outcomes.id"],
+            name="fk_turn_guesses_outcome_same_turn",
+            ondelete="CASCADE",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -2258,9 +2322,7 @@ class TurnGuess(Base):
         index=True,
     )
     outcome_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("turn_participant_outcomes.id", ondelete="CASCADE"),
-        nullable=False,
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
     display_name_snapshot: Mapped[str] = mapped_column(
         String(32), default="Unknown", nullable=False
@@ -2286,9 +2348,16 @@ class TurnGuess(Base):
         UTCDateTime(), server_default=func.now(), nullable=False
     )
 
-    turn_record: Mapped[TurnRecord] = relationship(back_populates="guesses")
-    outcome: Mapped[TurnParticipantOutcome | None] = relationship(
-        back_populates="correct_guess"
+    turn_record: Mapped[TurnRecord] = relationship(
+        back_populates="guesses", foreign_keys=[turn_id]
+    )
+    # Flush-ordering edge (see TurnRecord.drawer_seat): outcomes must land
+    # before the guesses that reference them.
+    outcome: Mapped[TurnParticipantOutcome] = relationship(
+        back_populates="correct_guess",
+        primaryjoin=(
+            "TurnParticipantOutcome.id == foreign(TurnGuess.outcome_id)"
+        ),
     )
     user: Mapped[User | None] = relationship()
 
