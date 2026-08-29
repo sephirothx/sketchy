@@ -221,6 +221,8 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                 return `${outcome.wrongGuessCount} wrong`;
               }
               if (outcome.outcome === "no_attempt") return "no attempt";
+              // Only games finished before a mid-turn arrival became an
+              // ordinary guesser carry this reason.
               if (outcome.eligibilityReason === "joined_late") return "joined late";
               return `not eligible (${outcome.eligibilityReason})`;
             };

@@ -160,8 +160,9 @@ async def guess(ctx: HandlerContext, sid, data):
     # messages for the round visible only to the drawer and other
     # players who've also already guessed correctly, flagged so the
     # client can render a clear "restricted visibility" indicator.
-    # Spectators, late/ineligible seats, and players who already guessed can
-    # chat, but only the prompt-aware audience may see those messages.
+    # Spectators, seats the turn froze out (AFK or disconnected when drawing
+    # began), and players who already guessed can chat, but only the
+    # prompt-aware audience may see those messages.
     if (
         player.is_spectator
         or player.id in game.correct_guessers

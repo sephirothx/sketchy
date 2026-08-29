@@ -526,8 +526,14 @@ class Game:
             and self.turn_eligibility_reasons is not None
             and token != self.current_drawer
         ):
+            # A seat that arrives mid-drawing joins the turn's guesser
+            # population rather than sitting the turn out: it can see the
+            # canvas and the masked prompt, so refusing its guesses would only
+            # mean typing into a chat nobody but the drawer reads. The turn
+            # therefore also waits on it, and its outcome is recorded like any
+            # other guesser's - late arrival is not a reason to be ineligible.
             self.turn_eligibility_reasons.setdefault(
-                token, TurnEligibilityReason.JOINED_LATE.value
+                token, TurnEligibilityReason.ELIGIBLE.value
             )
         current_round = self.round_number
         current_drawer = self.current_drawer
@@ -699,13 +705,21 @@ class Game:
         self.phase = Phase.DRAWING
 
     def snapshot_turn_participants(self, reasons: Mapping[str, str]) -> None:
-        """Freeze who may guess and why every other current seat may not."""
+        """Freeze who may guess and why every other current seat may not.
+
+        Seats arriving after this point are added by `add_player_to_rotation`.
+        """
         if self.phase != Phase.DRAWING:
             raise ValueError("Turn participation can only be snapshotted while drawing")
         self.turn_eligibility_reasons = dict(reasons)
 
     def is_turn_eligible(self, token: str) -> bool:
-        """Whether this seat belonged to the guesser population at draw start."""
+        """Whether this seat may guess this turn.
+
+        The population is frozen when drawing begins and only ever grows, by
+        seats that join mid-turn (`add_player_to_rotation`). Seats that were
+        AFK or disconnected at that instant stay out for the rest of the turn.
+        """
         if self.turn_eligibility_reasons is None:
             return token != self.current_drawer
         return (

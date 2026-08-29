@@ -1187,8 +1187,7 @@ def test_turn_outcomes_preserve_non_success_and_ineligible_states():
     )
     assert game.buy_hint_letter(eligible, 0) is True
     game.submit_guess(eligible, "testng")
-    game.add_player_to_rotation("late-player")
-    assert game.submit_guess("late-player", "testing") == (False, 0)
+    assert game.submit_guess(afk, "testing") == (False, 0)
 
     game.end_turn(
         total_guesser_count=1,
@@ -1196,7 +1195,6 @@ def test_turn_outcomes_preserve_non_success_and_ineligible_states():
             eligible: "left",
             afk: "afk",
             disconnected: "disconnected",
-            "late-player": "active",
         },
     )
 
@@ -1215,8 +1213,65 @@ def test_turn_outcomes_preserve_non_success_and_ineligible_states():
     assert outcomes[afk].eligibility_reason == "afk"
     assert outcomes[afk].outcome == "ineligible"
     assert outcomes[disconnected].terminal_state == "disconnected"
-    assert outcomes["late-player"].eligibility_reason == "joined_late"
-    assert outcomes["late-player"].outcome == "ineligible"
+
+
+def test_a_seat_joining_mid_turn_may_still_guess():
+    """Arriving after the drawing started is not a reason to sit the turn out:
+    the canvas and the masked prompt are already on screen."""
+    game = make_hint_game("testing", "purchase", n_players=3)
+    eligible, other = [
+        token for token in game.turn_order if token != game.current_drawer
+    ]
+    game.snapshot_turn_participants({eligible: "eligible", other: "eligible"})
+
+    game.add_player_to_rotation("late-player")
+
+    assert game.is_turn_eligible("late-player") is True
+    correct, points = game.submit_guess("late-player", "testing")
+    assert correct is True
+    assert points > 0
+
+
+def test_a_seat_joining_mid_turn_is_recorded_as_a_guesser():
+    game = make_hint_game("testing", "purchase", n_players=2)
+    eligible = next(
+        token for token in game.turn_order if token != game.current_drawer
+    )
+    game.snapshot_turn_participants({eligible: "eligible"})
+
+    game.add_player_to_rotation("late-player")
+    game.submit_guess("late-player", "testing")
+
+    game.end_turn(
+        total_guesser_count=2,
+        terminal_states={eligible: "active", "late-player": "active"},
+    )
+
+    outcomes = {
+        outcome.token: outcome
+        for outcome in game.completed_turns[-1].participant_outcomes
+    }
+    late = outcomes["late-player"]
+    assert late.eligible is True
+    assert late.eligibility_reason == "eligible"
+    assert late.outcome == "correct"
+    assert late.correct_guess_time_seconds is not None
+
+
+def test_a_seat_joining_mid_turn_holds_the_turn_open():
+    """The turn waits on the seats that may guess, and a late arrival is one."""
+    game = make_hint_game("testing", "none", n_players=2)
+    eligible = next(
+        token for token in game.turn_order if token != game.current_drawer
+    )
+    game.snapshot_turn_participants({eligible: "eligible"})
+    game.add_player_to_rotation("late-player")
+
+    game.submit_guess(eligible, "testing")
+    assert game.all_guessed(2) is False
+
+    game.submit_guess("late-player", "testing")
+    assert game.all_guessed(2) is True
 
 
 def test_a_word_the_drawer_chose_is_not_marked_auto_picked():
