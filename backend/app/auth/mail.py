@@ -498,6 +498,8 @@ async def purge_expired_outbox_entries(
     then trails the give-up by at most the backoff ladder, hours against a
     thirty-day window.
     """
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
     cutoff = (now or datetime.now(timezone.utc)) - OUTBOX_RETENTION
     removed = 0
     while True:

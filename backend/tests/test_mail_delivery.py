@@ -391,3 +391,14 @@ async def test_purge_removes_old_terminal_rows_and_keeps_the_rest(tmp_path):
         )
     finally:
         await engine.dispose()
+
+
+async def test_purge_refuses_a_batch_size_that_cannot_finish(tmp_path):
+    """LIMIT 0 returns nothing for ever, so a non-positive batch is an
+    infinite loop, not a smaller sweep."""
+    engine, factory = await outbox(tmp_path)
+    try:
+        with pytest.raises(ValueError):
+            await purge_expired_outbox_entries(factory, batch_size=0)
+    finally:
+        await engine.dispose()
