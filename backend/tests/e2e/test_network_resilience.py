@@ -16,12 +16,33 @@ async def test_room_list_failure_retry_and_connection_banner():
         context = await browser.new_context()
         page = await context.new_page()
         attempts = 0
+        refusing = True
+        # Nothing is answered until the test has seen the loading state, and
+        # then everything is refused until the test stops refusing. Both halves
+        # are load-bearing, and neither was true before.
+        #
+        # Sleeping in the handler instead - "hold the first one 250ms" - reads
+        # the loading state against a clock: `page.goto` returns on `load`,
+        # which is after the fonts, while the lobby's first request goes out as
+        # soon as React mounts. On a busy machine the refusal has landed and
+        # the loading state is gone by the time the assertion runs.
+        #
+        # Refusing only the *first* request has a second failure of its own.
+        # The lobby polls, and it re-polls immediately whenever the poll
+        # interval the server ships differs from the client's built-in 4000 -
+        # which is the state another test on this same server leaves it in
+        # while it proves a tuned cadence reaches a running browser. A second
+        # request answered 200 before the first refusal landed loads the list,
+        # and the refusal then renders as the "a refresh failed" warning rather
+        # than the "never loaded" error this test is about. Measured against
+        # that other test running alongside: 21 failures out of 21.
+        answering = asyncio.Event()
 
         async def handle_rooms(route):
             nonlocal attempts
             attempts += 1
-            if attempts == 1:
-                await asyncio.sleep(0.25)
+            if refusing:
+                await answering.wait()
                 await route.fulfill(status=503, json={"error": "unavailable"})
             else:
                 await route.fulfill(status=200, json=[])
@@ -29,9 +50,11 @@ async def test_room_list_failure_retry_and_connection_banner():
         await page.route("**/api/rooms", handle_rooms)
         try:
             await page.goto(BASE_URL)
-            assert await page.is_visible("text=Loading public rooms…")
+            await page.wait_for_selector("text=Loading public rooms…")
+            answering.set()
             await page.wait_for_selector('.room-list-error:has-text("Could not load public rooms")')
 
+            refusing = False
             await page.click('.room-list-error button:has-text("Retry")')
             await page.wait_for_selector('text=No public rooms yet. Create one!')
             assert attempts >= 2
