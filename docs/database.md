@@ -25,6 +25,7 @@ cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for
 | Default engine | Embedded SQLite at `./sketchy.db`, zero configuration — **development and test only** | [`db/__init__.py:23`](../backend/app/db/__init__.py) |
 | Alternative | PostgreSQL via `DATABASE_URL` (`postgresql+asyncpg://…`) | [`db/__init__.py:47`](../backend/app/db/__init__.py) |
 | Production | With `SKETCHY_ENV=production`, startup **refuses** a missing, blank, or SQLite `DATABASE_URL`. The zero-config default is a *relative* file, so a production deploy that forgot the variable would look healthy while writing accounts, moderation evidence, and history to storage the next container replacement discards. SQLite also serializes every writer, which caps such a server at one write at a time | [`deployment.py`](../backend/app/deployment.py) |
+| JSON columns | `jsonb` on PostgreSQL (parsed form, comparable, GIN-indexable), text on SQLite. A Python `None` stores as SQL `NULL`, never the JSON token `null` | [`db/models.py`](../backend/app/db/models.py) (`PortableJSON`) |
 | SQLite pragmas | `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000` on **every** connection | [`db/__init__.py:36`](../backend/app/db/__init__.py) |
 | SQLite migrations | Run automatically on startup | [`db/__init__.py`](../backend/app/db/__init__.py) |
 | PostgreSQL migrations | An **explicit deploy step**, protected by an advisory lock (`POSTGRES_MIGRATION_LOCK_ID`). Startup only *verifies* the revision and fails with a direct instruction if the step was missed | [`db/migrate.py`](../backend/app/db/migrate.py) |
@@ -341,8 +342,16 @@ turn, or guess fact tables.**
 
 ### `data_exports`
 `id` · `user_id` (CASCADE) · `status` (`pending \| processing \| ready \| failed`) ·
-`schema_version` · `artifact` (JSON) · `failure_code` · `created_at` · `started_at` ·
-`completed_at` · `expires_at`.
+`schema_version` · `artifact` (compressed bytes) · `artifact_encoding` (`gzip+json`) ·
+`failure_code` · `created_at` · `started_at` · `completed_at` · `expires_at`.
+
+The document is stored **compressed** — around 3× smaller on a representative
+export, and it is the largest single non-blob value in the schema. The encoding is
+recorded beside it rather than assumed, so a later format is a new discriminator
+rather than a migration, the same rule `canvas_storage` applies to drawings.
+`ck_data_exports_artifact_encoding_present` keeps the pair honest: a stored document
+says how to read itself, and a row with no document claims no encoding. The download
+endpoint decodes and serves the JSON bytes without reparsing them.
 
 Jobs are stored **before** work begins, so a crash leaves a retryable row:
 
@@ -996,7 +1005,9 @@ by [`backend/app/db/seed.py`](../backend/app/db/seed.py). The checked-in shape i
 One raw observation. `id` (integer — the highest-churn table in the schema, purged
 after 30 days, referenced by nothing; on SQLite an `INTEGER PRIMARY KEY` is the rowid
 itself) · `event_type` · `occurred_at` · `room_id` · `user_id` (`SET NULL`) · `value` ·
-`details` (JSON, null when an observation carries none).
+`details` (JSON, SQL `NULL` when an observation carries none — not the JSON token
+`null`, which is what the type stored before `PortableJSON` declared
+`none_as_null`).
 
 Types: `room.created`, `room.closed`, `player.joined`, `player.left`,
 `player.disconnected`, `player.reconnected`, `player.evicted`, `command.throttled`, `game.started`,

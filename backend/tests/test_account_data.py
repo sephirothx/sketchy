@@ -1,6 +1,7 @@
 """Requester-only exports and history-safe account deletion."""
 from __future__ import annotations
 
+import gzip
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -526,7 +527,12 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         job = await session.get(DataExport, UUID(status["id"]))
         assert job is not None
         assert job.status == DataExportStatus.READY.value
-        assert job.artifact == artifact
+        # Stored compressed, and the row says how to read itself.
+        assert job.artifact_encoding == "gzip+json"
+        assert json.loads(gzip.decompress(job.artifact)) == artifact
+        assert len(job.artifact) < len(json.dumps(artifact).encode()), (
+            "the stored document is smaller than the text it encodes"
+        )
 
 
 async def test_export_cannot_be_read_by_another_account(env):
@@ -936,3 +942,55 @@ async def test_a_non_positive_export_batch_is_refused(env, limit):
 async def test_an_empty_queue_processes_nothing_without_error(env):
     _, _, _, factory = env
     assert await process_pending_data_exports(factory) == 0
+
+
+async def test_a_stored_export_must_say_how_to_read_itself(env):
+    """The encoding travels with the document so a later format needs no
+    migration - which only works if an unreadable one is refused rather than
+    guessed at."""
+    from app.auth.account_data import decode_export_artifact
+
+    http, _, _, factory = env
+    await register(http)
+    status, _ = await request_ready_export(http)
+
+    async with factory() as session:
+        job = await session.get(DataExport, UUID(status["id"]))
+        assert decode_export_artifact(job), "the real document decodes"
+
+        job.artifact_encoding = "brotli+cbor"
+        with pytest.raises(AccountDataError, match="unreadable encoding"):
+            decode_export_artifact(job)
+
+        job.artifact = None
+        with pytest.raises(AccountDataError, match="no stored document"):
+            decode_export_artifact(job)
+
+
+async def test_a_corrupt_export_document_is_refused_not_served(env):
+    """Truncated bytes decompress to an exception, and an empty result is not
+    the JSON the row claims to hold. Either way the download answers with a
+    controlled error instead of crashing or serving a malformed body."""
+    from app.auth.account_data import decode_export_artifact
+
+    http, _, _, factory = env
+    await register(http)
+    status, _ = await request_ready_export(http)
+
+    async with factory() as session:
+        async with session.begin():
+            job = await session.get(DataExport, UUID(status["id"]))
+            job.artifact = job.artifact[:8]
+
+    download = await http.get(f"/api/auth/data-exports/{status['id']}/download")
+    assert download.status_code == 500
+    assert "new export" in download.json()["detail"]
+
+    async with factory() as session:
+        job = await session.get(DataExport, UUID(status["id"]))
+        with pytest.raises(AccountDataError, match="could not be decompressed"):
+            decode_export_artifact(job)
+        # gzip decompresses empty input without complaint; the decoder does not.
+        job.artifact = gzip.compress(b"")
+        with pytest.raises(AccountDataError, match="decoded to nothing"):
+            decode_export_artifact(job)

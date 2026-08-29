@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import gzip
+import json
+import zlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
@@ -49,6 +52,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.domain_values import (
+    DataExportArtifactEncoding,
     AccountState,
     EmailOutboxState,
     AuditTargetType,
@@ -161,6 +165,42 @@ async def create_data_export(
                 )
             )
         return job
+
+
+def encode_export_artifact(document: dict) -> tuple[bytes, str]:
+    """Compress a finished export, returning the bytes and their encoding.
+
+    Export documents are long, repetitive JSON and live for seven days; the
+    compressed form is what gets stored, and the encoding travels with it so a
+    later format needs no migration.
+    """
+    payload = json.dumps(document, separators=(",", ":")).encode("utf-8")
+    return (
+        gzip.compress(payload),
+        DataExportArtifactEncoding.GZIP_JSON.value,
+    )
+
+
+def decode_export_artifact(job: DataExport) -> bytes:
+    """The stored document as the JSON bytes a download should serve."""
+    if job.artifact is None:
+        raise AccountDataError("export has no stored document")
+    if job.artifact_encoding != DataExportArtifactEncoding.GZIP_JSON.value:
+        raise AccountDataError(
+            f"export document has unreadable encoding {job.artifact_encoding!r}"
+        )
+    try:
+        document = gzip.decompress(job.artifact)
+    except (OSError, EOFError, zlib.error) as error:
+        # Truncated or corrupt bytes: a stored document the server cannot read
+        # is a server fault, and the caller needs it as one rather than as an
+        # unhandled crash.
+        raise AccountDataError("export document could not be decompressed") from error
+    if not document:
+        # gzip decompresses empty input to empty output without complaint, and
+        # an empty body is not the JSON this claims to be.
+        raise AccountDataError("export document decoded to nothing")
+    return document
 
 
 async def _build_export_artifact(
@@ -841,7 +881,9 @@ async def process_data_export(
                 completed_at = (
                     processed_at if now is not None else datetime.now(timezone.utc)
                 )
-                job.artifact = artifact
+                job.artifact, job.artifact_encoding = encode_export_artifact(
+                    artifact
+                )
                 job.status = DataExportStatus.READY.value
                 job.completed_at = completed_at
                 job.failure_code = None
@@ -853,6 +895,7 @@ async def process_data_export(
                 job = await session.get(DataExport, db_export_id)
                 if job is not None and job.status == DataExportStatus.PROCESSING.value:
                     job.artifact = None
+                    job.artifact_encoding = None
                     job.status = DataExportStatus.FAILED.value
                     job.completed_at = (
                         processed_at if now is not None else datetime.now(timezone.utc)
