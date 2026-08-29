@@ -150,6 +150,7 @@ async def test_the_application_sweeps_stale_guests_without_being_asked(monkeypat
     """An unrun retention policy is not a policy, and the rows it would have
     removed are exactly the ones provisioning creates."""
     import asyncio
+    import time
     from datetime import datetime, timedelta, timezone
 
     from app.auth.retention import run_retention_loop
@@ -170,12 +171,30 @@ async def test_the_application_sweeps_stale_guests_without_being_asked(monkeypat
                 assert stale.state == AccountState.ANONYMOUS.value
 
         sweep = asyncio.create_task(run_retention_loop(factory, interval_seconds=3600))
+        swept = False
         try:
             # Polled on the condition rather than slept through: the driver
             # runs its queries on a thread, so yielding alone never lets the
             # sweep finish.
-            for _ in range(200):
+            #
+            # The answer is recorded here, before the loop is cancelled, and
+            # nothing after the cancel touches the database. An in-memory
+            # SQLite engine pools exactly one connection (StaticPool), the
+            # loop purges sessions and exports after the accounts this test
+            # watches for, and cancelling it mid-query invalidates that one
+            # connection - after which the next query opens a *fresh, empty*
+            # database and fails with "no such table: users" rather than
+            # saying what actually went wrong. Reproduced directly, and seen
+            # in CI once the suite started running four tests at a time.
+            #
+            # A wall-clock budget rather than a fixed iteration count for the
+            # same reason: the sweep takes milliseconds when it works, so the
+            # budget is only ever spent when something is wrong, and a loaded
+            # machine must not be able to mistake slowness for failure.
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
                 if await count(factory, User) == 0:
+                    swept = True
                     break
                 await asyncio.sleep(0.01)
         finally:
@@ -183,7 +202,7 @@ async def test_the_application_sweeps_stale_guests_without_being_asked(monkeypat
             with contextlib.suppress(asyncio.CancelledError):
                 await sweep
 
-        assert await count(factory, User) == 0, "the sweep left the stale guest behind"
+        assert swept, "the sweep left the stale guest behind"
 
 
 @pytest.mark.asyncio
