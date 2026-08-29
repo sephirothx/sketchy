@@ -6,6 +6,7 @@ import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
+from tests.handlers.helpers import build_context
 from app.game import DRAWING_SECONDS, MAX_GUESS_POINTS, MAX_HINT_SPEND, Game
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import RoomManager
@@ -775,3 +776,106 @@ async def test_an_invalid_guess_payload_is_refused_in_the_acknowledgement():
     assert response["ok"] is False
     assert response["field"] == "id"
     assert not _guess_lines(sio, "otter")
+
+# ---------------------------------------------------------------------------
+# Spectators and the hint economy (#334)
+# ---------------------------------------------------------------------------
+#
+# A spectator has no seat in the guesser population, so it can never settle a
+# hint debt against points it will never earn - which would make every reveal
+# free, and would hand the prompt to a watcher in a room that deliberately
+# keeps it from them.
+#
+# The guard is `is_turn_eligible`, and it holds because `_begin_drawing`
+# snapshots the turn's participants from `room.seated_players()` only. That is
+# an indirect guarantee: nothing in either purchase handler names spectators,
+# so these tests exist to fail if the snapshot ever widens. They go through
+# `_begin_drawing` rather than `Game.choose_prompt` for exactly that reason -
+# without the snapshot, eligibility falls back to "anyone who is not the
+# drawer", which a spectator passes.
+
+
+async def _room_at_drawing_phase(hint_mode: str, prompt: str):
+    """A room mid-turn with a drawer, a guesser, and a watcher who may not see."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(
+        name="Room",
+        is_public=True,
+        hint_mode=hint_mode,
+        custom_prompts=[prompt],
+        custom_prompts_only=True,
+        spectators_see_prompt=False,
+    )
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    spectator = room_manager.add_player(room, "Watcher", is_spectator=True)
+    for player in (drawer, guesser, spectator):
+        player.sid = f"{player.nickname.lower()}-sid"
+
+    ctx = build_context(room_manager, None)
+    sessions = {
+        player.sid: {"room_id": room.id, "player_id": player.id}
+        for player in (drawer, guesser, spectator)
+    }
+    ctx.sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+    room.game.hint_mode = hint_mode
+    room.game.force_prompt_choice()
+    await ctx.game_flow._begin_drawing(room)
+    # The seat the game is drawing for, not the one this helper happened to
+    # create first: the turn order decides.
+    drawer, guesser = (
+        room.players[room.game.current_drawer],
+        next(
+            p
+            for p in room.seated_players()
+            if p.id != room.game.current_drawer
+        ),
+    )
+    return ctx, room, drawer, guesser, spectator
+
+
+@pytest.mark.asyncio
+async def test_a_spectator_cannot_buy_a_hint_letter():
+    ctx, room, _drawer, guesser, spectator = await _room_at_drawing_phase(
+        "purchase", "volleyball"
+    )
+    buy_hint = ctx.sio.handlers["/"]["buy_hint"]
+
+    assert (await buy_hint(guesser.sid, {"slot": 0}))["ok"] is True
+
+    result = await buy_hint(spectator.sid, {"slot": 1})
+    assert result == {"ok": False, "error": "Hint unavailable"}
+    # The refusal has to leave no trace: an unpaid debt would settle against
+    # points a spectator never earns, and a revealed slot is the prompt.
+    assert spectator.id not in room.game.purchased_hints
+    assert spectator.id not in room.game.hint_spend
+    # Nothing revealed: what the spectator sees is what a stranger sees, while
+    # the guesser's paid-for slot does show through - so the comparison is
+    # testing the reveal machinery, not an inert prompt.
+    assert room.game.masked_prompt(spectator.id) == room.game.masked_prompt("nobody")
+    assert room.game.masked_prompt(guesser.id) != room.game.masked_prompt("nobody")
+
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
+
+
+@pytest.mark.asyncio
+async def test_a_spectator_cannot_buy_a_wheel_letter():
+    ctx, room, _drawer, guesser, spectator = await _room_at_drawing_phase(
+        "wheel", "volleyball"
+    )
+    buy_wheel_letter = ctx.sio.handlers["/"]["buy_wheel_letter"]
+
+    assert (await buy_wheel_letter(guesser.sid, {"letter": "l"}))["ok"] is True
+
+    result = await buy_wheel_letter(spectator.sid, {"letter": "v"})
+    assert result == {"ok": False, "error": "Letter unavailable"}
+    assert spectator.id not in room.game.purchased_letters
+    assert spectator.id not in room.game.hint_spend
+    assert room.game.masked_prompt(spectator.id) == room.game.masked_prompt("nobody")
+    assert room.game.masked_prompt(guesser.id) != room.game.masked_prompt("nobody")
+
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
