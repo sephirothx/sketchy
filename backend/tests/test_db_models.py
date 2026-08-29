@@ -512,6 +512,7 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                 session.add(
                     TurnParticipantOutcome(
                         id=outcome_id,
+                        game_id=game_id,
                         turn_id=turn_id,
                         participant_id=seat_id,
                         eligible=True,
@@ -624,6 +625,7 @@ async def test_game_record_cascade_and_relationships():
 
                 o1 = TurnParticipantOutcome(
                     id=generate_uuid(),
+                    game_id=game_id,
                     turn_id=r1.id,
                     participant_id=p2.id,
                     eligible=True,
@@ -708,6 +710,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                         ),
                         TurnParticipantOutcome(
                             id=outcome_id,
+                            game_id=game_id,
                             turn_id=turn_id,
                             participant_id=guesser_seat_id,
                             eligible=True,
@@ -820,6 +823,7 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
                         ),
                         TurnParticipantOutcome(
                             id=generate_uuid(),
+                            game_id=game_id,
                             turn_id=turn_id,
                             participant_id=guesser_seat_id,
                             eligible=True,
@@ -834,6 +838,7 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
         invalid_rows = (
             TurnParticipantOutcome(
                 id=generate_uuid(),
+                game_id=game_id,
                 turn_id=turn_id,
                 participant_id=guesser_seat_id,
                 eligible=True,
@@ -843,6 +848,7 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
             ),
             TurnParticipantOutcome(
                 id=generate_uuid(),
+                game_id=game_id,
                 turn_id=turn_id,
                 participant_id=drawer_seat_id,
                 eligible=True,
@@ -1430,5 +1436,140 @@ async def test_history_bounds_reject_impossible_rows():
                             final_rank=0,
                         )
                     )
+    finally:
+        await engine.dispose()
+
+
+async def test_history_rows_cannot_reference_another_game(tmp_path):
+    """The same-game constraints, exercised: a score event, outcome, or guess
+    naming a row from a different game is a violation, not a plausible lie.
+
+    Uses the real engine factory so SQLite actually enforces foreign keys -
+    the plain fixture engine leaves them off.
+    """
+    from app.db import create_db_engine
+
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'coherence.db'}")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    now = datetime.now(timezone.utc)
+
+    def game_row(gid):
+        return GameRecord(
+            id=gid,
+            room_name="Coherence room",
+            scoring_mode="default",
+            hint_mode="none",
+            drawing_seconds=90,
+            total_rounds=1,
+            player_count=1,
+            started_at=now,
+            finished_at=now,
+        )
+
+    game_a, game_b = generate_uuid(), generate_uuid()
+    seat_a, seat_b = generate_uuid(), generate_uuid()
+    turn_a, turn_b = generate_uuid(), generate_uuid()
+    outcome_a = generate_uuid()
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all([game_row(game_a), game_row(game_b)])
+                for gid, sid, tid in (
+                    (game_a, seat_a, turn_a),
+                    (game_b, seat_b, turn_b),
+                ):
+                    session.add(
+                        GameParticipant(
+                            id=sid, game_id=gid, final_score=0, final_rank=1
+                        )
+                    )
+                    session.add(
+                        TurnRecord(
+                            id=tid,
+                            game_id=gid,
+                            round_number=1,
+                            turn_number=1,
+                            drawer_participant_id=sid,
+                            prompt="anchor",
+                            duration_seconds=10,
+                        )
+                    )
+                session.add(
+                    TurnParticipantOutcome(
+                        id=outcome_a,
+                        game_id=game_a,
+                        turn_id=turn_a,
+                        participant_id=seat_a,
+                        eligible=True,
+                        eligibility_reason="eligible",
+                        outcome="correct",
+                        terminal_state="active",
+                        correct_guess_time_seconds=5,
+                    )
+                )
+
+        incoherent_rows = (
+            # A turn whose drawer seat belongs to the other game.
+            TurnRecord(
+                id=generate_uuid(),
+                game_id=game_a,
+                round_number=1,
+                turn_number=2,
+                drawer_participant_id=seat_b,
+                prompt="bridge",
+                duration_seconds=10,
+            ),
+            # An award to a seat from the other game.
+            ScoreEvent(
+                id=generate_uuid(),
+                game_id=game_a,
+                participant_id=seat_b,
+                turn_id=turn_a,
+                event_order=1,
+                event_type="guess_award",
+                points_delta=10,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            # A charge against the other game's turn.
+            ScoreEvent(
+                id=generate_uuid(),
+                game_id=game_a,
+                participant_id=seat_a,
+                turn_id=turn_b,
+                event_order=1,
+                event_type="guess_award",
+                points_delta=10,
+                scoring_version=1,
+                rule_snapshot_version=1,
+            ),
+            # An outcome whose seat belongs to the other game.
+            TurnParticipantOutcome(
+                id=generate_uuid(),
+                game_id=game_a,
+                turn_id=turn_a,
+                participant_id=seat_b,
+                eligible=True,
+                eligibility_reason="eligible",
+                outcome="no_attempt",
+                terminal_state="active",
+            ),
+            # A guess scoring an outcome from a different turn.
+            TurnGuess(
+                id=generate_uuid(),
+                turn_id=turn_b,
+                participant_id=seat_b,
+                outcome_id=outcome_a,
+                points_awarded=10,
+                guess_time_seconds=5,
+            ),
+        )
+        for incoherent in incoherent_rows:
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(incoherent)
     finally:
         await engine.dispose()

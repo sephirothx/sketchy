@@ -1192,6 +1192,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         session.add(
                             TurnParticipantOutcome(
                                 id=outcome_id,
+                                game_id=record_id,
                                 turn_id=rid,
                                 participant_id=participant_id,
                                 eligible=outcome.eligible,
