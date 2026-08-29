@@ -313,7 +313,7 @@ revocation applies uniformly without a shared signing secret.
 4. `validate_database_configuration()` — with `SKETCHY_ENV=production`, refuses a missing, blank, or SQLite `DATABASE_URL`. Ordered before `init_db()` on purpose: a production process pointed at the zero-config *relative* file must refuse to start, not migrate one and serve from it
 5. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
 6. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
-7. `purge_expired_room_messages()` and `purge_expired_shutdown_abandonments()`
+7. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
 8. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
 9. Start the mail-delivery, runtime-metrics, and retention loops, and hand each one to `readiness_probe.supervise()`
 10. `mark_ready()` — `GET /api/ready` starts answering 200
@@ -384,7 +384,8 @@ crawler, a link preview, an uptime check — and each of those used to cost a `u
 and an `auth_sessions` row. It still writes for a caller who *has* an account (recording
 activity, rotating a due session); the rule is about creation, which is the part an
 anonymous flood can force. Provisioning is bounded per address and by a process-wide
-daily ceiling, and stale guest rows are purged by a loop the application starts itself.
+daily ceiling, and stale guest rows are purged by a loop the application starts itself
+— the same hourly loop that removes expired sessions and expired data exports.
 
 The socket resolves its account once, at the handshake, so a visitor who names
 themselves after connecting re-handshakes rather than spending that connection
