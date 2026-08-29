@@ -819,10 +819,20 @@ async def _room_at_drawing_phase(hint_mode: str, prompt: str):
     }
     ctx.sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
 
-    await ctx.game_flow._start_fresh_game(room, room.player_list())
+    # `room.active_players()`, which is what both production start paths pass.
+    # `_start_fresh_game` puts the caller's roster straight into `turn_order`
+    # and only filters spectators out of the arrivals it reconciles, so handing
+    # it `player_list()` would seat the watcher in the rotation.
+    await ctx.game_flow._start_fresh_game(room, room.active_players())
     room.game.hint_mode = hint_mode
     room.game.force_prompt_choice()
     await ctx.game_flow._begin_drawing(room)
+    # The precondition these tests rest on, stated rather than assumed: a
+    # spectator that reached the rotation could be picked as drawer, and would
+    # then be refused for being the drawer even under a widened snapshot -
+    # passing for the wrong reason and covering nothing.
+    assert spectator.id not in room.game.turn_order
+    assert spectator.id != room.game.current_drawer
     # The seat the game is drawing for, not the one this helper happened to
     # create first: the turn order decides.
     drawer, guesser = (
