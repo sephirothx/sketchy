@@ -320,7 +320,15 @@ def _drop_unique_on(table: str, columns: list[str]) -> None:
 
 
 def upgrade() -> None:
-    op.execute("UPDATE runtime_events SET details = NULL WHERE details = '{}'")
+    if op.get_bind().dialect.name == "sqlite":
+        op.execute(
+            "UPDATE runtime_events SET details = NULL WHERE details = '{}'"
+        )
+    else:
+        # PostgreSQL's json type has no equality operator; compare as text.
+        op.execute(
+            "UPDATE runtime_events SET details = NULL WHERE details::text = '{}'"
+        )
     if op.get_bind().dialect.name == "sqlite":
         _rebuild("user_blocks", _user_blocks_table(sa.MetaData(), natural=True))
         _rebuild(
