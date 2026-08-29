@@ -29,6 +29,7 @@ from app.db.models import (
     UserSettings,
     UserBan,
     UserBlock,
+    RuntimeEvent,
     Prompt,
     PromptConcept,
     PromptList,
@@ -1570,5 +1571,37 @@ async def test_history_rows_cannot_reference_another_game(tmp_path):
                 async with factory() as session:
                     async with session.begin():
                         session.add(incoherent)
+    finally:
+        await engine.dispose()
+
+
+async def test_absent_json_is_sql_null_not_a_stored_token():
+    """A Python None must reach the database as SQL NULL. SQLAlchemy's JSON
+    type persists it as the JSON value `null` by default - a four-character
+    token in a column that reads back as absent, and larger than the `{}` it
+    was meant to replace."""
+    factory, engine = await create_test_db()
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    RuntimeEvent(
+                        event_type="room.created",
+                        occurred_at=datetime.now(timezone.utc),
+                        details=None,
+                    )
+                )
+        async with engine.begin() as connection:
+            stored = (
+                await connection.execute(
+                    text(
+                        "SELECT details IS NULL FROM runtime_events"
+                    )
+                )
+            ).scalar_one()
+        assert stored, "absent details is SQL NULL, not the token 'null'"
+        async with factory() as session:
+            event = await session.scalar(select(RuntimeEvent))
+        assert event.details is None
     finally:
         await engine.dispose()

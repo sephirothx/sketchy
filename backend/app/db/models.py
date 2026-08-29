@@ -26,6 +26,7 @@ from sqlalchemy import (
     true,
 )
 from sqlalchemy import text as sql_text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.auth.avatars import BUILT_IN_AVATAR_KEYS
@@ -42,6 +43,7 @@ from app.domain_values import (
     BUG_REPORT_AREAS,
     BUG_REPORT_SCREENSHOT_STATUSES,
     BUG_REPORT_SEVERITIES,
+    DATA_EXPORT_ARTIFACT_ENCODINGS,
     DATA_EXPORT_STATUSES,
     DEFAULT_USER_KEY_BINDINGS,
     GAME_PROMPT_SOURCE_MODES,
@@ -85,6 +87,20 @@ from app.domain_values import (
     UserTheme,
 )
 from app.identifiers import generate_uuid7
+
+
+# PostgreSQL's `json` is a text type: it re-parses on every read, keeps
+# insignificant whitespace, and has no operator class, so it can be neither
+# compared nor GIN-indexed. `jsonb` stores a parsed form and does all three.
+# SQLite is unaffected - it holds JSON as text either way.
+#
+# `none_as_null` is the other half: without it SQLAlchemy persists a Python
+# None as the JSON value `null` - the four-character string - rather than SQL
+# NULL, so a column that reads as "absent" is really storing a token, and one
+# declared NOT NULL silently accepts it.
+PortableJSON = JSON(none_as_null=True).with_variant(
+    postgresql.JSONB(none_as_null=True), "postgresql"
+)
 
 
 def _values_check(column: str, values: tuple[str, ...], name: str) -> CheckConstraint:
@@ -188,9 +204,9 @@ class RoomPreset(Base):
     scoring_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     spectators_see_prompt: Mapped[bool] = mapped_column(Boolean, nullable=False)
     hide_masked_prompt: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    allowed_tools: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    allowed_tools: Mapped[list[str]] = mapped_column(PortableJSON, nullable=False)
     color_mode: Mapped[str] = mapped_column(String(24), nullable=False)
-    prompt_list_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    prompt_list_ids: Mapped[list[str]] = mapped_column(PortableJSON, nullable=False)
     version: Mapped[int] = mapped_column(
         Integer, default=1, server_default=text("1"), nullable=False
     )
@@ -409,7 +425,7 @@ class UserSettings(Base):
         nullable=False,
     )
     key_bindings: Mapped[dict] = mapped_column(
-        JSON,
+        PortableJSON,
         default=lambda: {
             key: list(value) for key, value in DEFAULT_USER_KEY_BINDINGS.items()
         },
@@ -429,7 +445,7 @@ class UserSettings(Base):
         Boolean, default=True, server_default=true(), nullable=False
     )
     custom_brush_presets: Mapped[list] = mapped_column(
-        JSON, default=list, server_default=text("'[]'"), nullable=False
+        PortableJSON, default=list, server_default=text("'[]'"), nullable=False
     )
     # When the account was last told it has no way back in. Stored per account
     # rather than in the browser so the reminder does not restart on every new
@@ -490,7 +506,7 @@ class RuntimeEvent(Base):
     # from `details` so it can be summed and averaged without parsing JSON.
     value: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Null, not '{}', for the common eventless observation.
-    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    details: Mapped[dict | None] = mapped_column(PortableJSON, nullable=True)
 
 
 class RuntimeStatsDaily(Base):
@@ -598,7 +614,7 @@ class EmailOutboxEntry(Base):
         index=True,
     )
     template: Mapped[str] = mapped_column(String(64), nullable=False)
-    payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    payload: Mapped[dict] = mapped_column(PortableJSON, default=dict, nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False)
     attempts: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
@@ -656,7 +672,7 @@ class AuditEvent(Base):
     target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    details: Mapped[dict] = mapped_column(PortableJSON, default=dict, nullable=False)
     # Indexed because the admin ledger reads newest-first on the authoritative
     # event time rather than on the (merely time-ordered) UUIDv7 id.
     created_at: Mapped[datetime] = mapped_column(
@@ -726,7 +742,7 @@ class PlayerReport(Base):
     )
     details: Mapped[str] = mapped_column(Text, nullable=False)
     context_snapshot: Mapped[dict] = mapped_column(
-        JSON, default=dict, server_default=text("'{}'"), nullable=False
+        PortableJSON, default=dict, server_default=text("'{}'"), nullable=False
     )
     status: Mapped[str] = mapped_column(
         String(16),
@@ -833,7 +849,7 @@ class RoomMessage(Base):
     # Exact account recipients at send time, after Blocks are applied. Kept
     # only for the same short retention window and used to authorize evidence
     # selection without exposing a transcript API.
-    audience_user_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    audience_user_ids: Mapped[list] = mapped_column(PortableJSON, default=list, nullable=False)
     near_miss_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
@@ -1141,8 +1157,8 @@ class BugReport(Base):
         Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
 
-    client_context: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-    server_context: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    client_context: Mapped[dict] = mapped_column(PortableJSON, default=dict, nullable=False)
+    server_context: Mapped[dict] = mapped_column(PortableJSON, default=dict, nullable=False)
 
     screenshot_status: Mapped[str] = mapped_column(
         String(16),
@@ -1482,6 +1498,17 @@ class DataExport(Base):
     __tablename__ = "data_exports"
     __table_args__ = (
         _values_check("status", DATA_EXPORT_STATUSES, "ck_data_exports_status"),
+        _values_check(
+            "artifact_encoding",
+            DATA_EXPORT_ARTIFACT_ENCODINGS,
+            "ck_data_exports_artifact_encoding",
+        ),
+        # A stored document says how to read itself, and a row with no
+        # document claims no encoding.
+        CheckConstraint(
+            "(artifact IS NULL) = (artifact_encoding IS NULL)",
+            name="ck_data_exports_artifact_encoding_present",
+        ),
         Index("ix_data_exports_user_created_at", "user_id", "created_at"),
     )
 
@@ -1503,7 +1530,13 @@ class DataExport(Base):
     schema_version: Mapped[int] = mapped_column(
         Integer, default=1, server_default=text("1"), nullable=False
     )
-    artifact: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # The finished document, compressed: it is the largest single non-blob
+    # value in the schema and is highly repetitive JSON. The encoding is stored
+    # beside it rather than assumed, so a later format is a new discriminator
+    # rather than a migration - the same rule `canvas_storage` applies to
+    # drawings.
+    artifact: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    artifact_encoding: Mapped[str | None] = mapped_column(String(16), nullable=True)
     failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
@@ -1578,7 +1611,7 @@ class GameRecord(Base):
         Integer, default=0, server_default=text("0"), nullable=False
     )
     rule_snapshot: Mapped[dict] = mapped_column(
-        JSON, default=dict, server_default=text("'{}'"), nullable=False
+        PortableJSON, default=dict, server_default=text("'{}'"), nullable=False
     )
     # Python-side default only, mirroring the writer-facing dataclasses: a
     # game whose pool carries no curated identity is custom by definition.
@@ -2707,7 +2740,7 @@ class PromptListRevision(Base):
     # first time a version was hidden or restored. Hidden content is therefore
     # priced without being drawable - an approximation R-HINT-03 records.
     letter_counts: Mapped[dict] = mapped_column(
-        JSON, default=dict, server_default=text("'{}'"), nullable=False
+        PortableJSON, default=dict, server_default=text("'{}'"), nullable=False
     )
     letter_total: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False

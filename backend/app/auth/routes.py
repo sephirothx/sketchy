@@ -9,12 +9,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from starlette.responses import JSONResponse
 
 from app.auth.account_data import (
     AccountDataError,
     anonymize_account,
     create_data_export,
+    decode_export_artifact,
     export_status_payload,
     get_data_export,
     list_data_exports,
@@ -642,8 +642,10 @@ def create_auth_router(
             raise HTTPException(status_code=410, detail="Export has expired.")
         if job.status != "ready" or job.artifact is None:
             raise HTTPException(status_code=409, detail="Export is not ready.")
-        return JSONResponse(
-            content=job.artifact,
+        # The stored document is already JSON; decoding it here and serving the
+        # bytes avoids parsing it only to re-serialize the same text.
+        return Response(
+            content=decode_export_artifact(job),
             media_type="application/json",
             headers={
                 "Content-Disposition": (

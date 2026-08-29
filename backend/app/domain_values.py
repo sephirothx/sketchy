@@ -142,6 +142,12 @@ class UserRole(StrEnum):
     ADMIN = "admin"
 
 
+class DataExportArtifactEncoding(StrEnum):
+    """How a stored export document is encoded, read from the row itself."""
+
+    GZIP_JSON = "gzip+json"
+
+
 class DataExportStatus(StrEnum):
     """Lifecycle of a durable asynchronous account-data export."""
 
@@ -361,6 +367,9 @@ USER_ROLES = tuple(role.value for role in UserRole)
 # carries the reasoning where the refusal is enforced.
 GRANTABLE_ROLES = (UserRole.USER.value, UserRole.MODERATOR.value)
 DATA_EXPORT_STATUSES = tuple(status.value for status in DataExportStatus)
+DATA_EXPORT_ARTIFACT_ENCODINGS = tuple(
+    encoding.value for encoding in DataExportArtifactEncoding
+)
 USER_THEMES = tuple(theme.value for theme in UserTheme)
 BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)
 REPORT_REASONS = tuple(reason.value for reason in ReportReason)
