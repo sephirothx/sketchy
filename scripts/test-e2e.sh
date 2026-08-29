@@ -16,6 +16,12 @@ PORT="${PORT:-8000}"
 # their own count.
 cpu_count="$( (sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null) || echo 2)"
 E2E_WORKERS="${E2E_WORKERS:-$(( cpu_count > 8 ? 8 : cpu_count ))}"
+# CI runs this script once per shard, on a runner of its own. Everything the
+# shard needs is decided in tests/e2e/conftest.py; the two variables only have
+# to reach pytest, and default to "the whole suite" so a local run is unchanged.
+E2E_SHARD_COUNT="${E2E_SHARD_COUNT:-1}"
+E2E_SHARD="${E2E_SHARD:-1}"
+export E2E_SHARD_COUNT E2E_SHARD
 SERVER_LOG=""
 E2E_DB=""
 SERVER_PID=""
@@ -148,7 +154,16 @@ if ! port_listeners | grep -qx "$SERVER_PID"; then
   fail_startup "port $PORT is answering from PID $(port_listeners | tr '\n' ' ')rather than the server this run started ($SERVER_PID)"
 fi
 
-log "Running Playwright Multi-Browser E2E Tests ($E2E_WORKERS workers)"
+# Compared as text rather than with (( )), which under `set -u` reads a
+# non-numeric value as a variable name and kills the script with "two:
+# unbound variable" before pytest can say what is actually wrong. The
+# validation belongs to tests/e2e/conftest.py, which owns these variables;
+# all this decides is what to print.
+if [[ "$E2E_SHARD_COUNT" != "1" ]]; then
+  log "Running Playwright Multi-Browser E2E Tests (shard $E2E_SHARD of $E2E_SHARD_COUNT, $E2E_WORKERS workers)"
+else
+  log "Running Playwright Multi-Browser E2E Tests ($E2E_WORKERS workers)"
+fi
 # --dist=load spreads individual tests rather than whole files, so one slow file
 # no longer sets the floor for the whole run. Each test builds its own room and
 # its own browser, so nothing in a file depends on its neighbours.

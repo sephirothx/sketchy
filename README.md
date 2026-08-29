@@ -1151,6 +1151,11 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 # Unit & integration tests
 .venv/bin/pytest
 
+# The same suite across every core, which is how CI runs it. Nothing in it is
+# shared between tests, so this is the same run about three times faster; drop
+# to `-n0` when you want live progress, `-s`, or a debugger.
+.venv/bin/pytest -n auto --dist=worksteal
+
 # Lint (undefined/unused names, mutable defaults, truncating zips, async sleeps)
 .venv/bin/ruff check app tests
 
@@ -1186,6 +1191,17 @@ backend/.venv/bin/python -m playwright install chromium firefox
 database, and runs the Playwright suite across as many xdist workers as the
 machine has cores, capped at eight — past that the browsers contend for CPU and
 timing-sensitive tests start to flake. Override with `E2E_WORKERS=<number>`.
+
+The cap is why CI splits the suite over two runners rather than raising it. The
+suite is browser-bound, not server-bound — one run leaves the server using well
+under a third of a core — so the ceiling is how much browser one machine can
+drive, and a second machine with its own server and database is the only thing
+that lifts it. `E2E_SHARD_COUNT=<n> E2E_SHARD=<i>` runs the *i*th share of the
+suite, dividing it per test rather than per file so the halves stay balanced;
+both default to running everything, so a local run is unchanged. Two shards on
+one machine would fight over port 8000, so run them on separate machines or one
+after the other.
+
 Several of the environment variables below now supply a **boot value** rather than
 a fixed one: an administrator can change them at runtime from the operations page,
 and a value changed there survives a restart and takes precedence over the variable

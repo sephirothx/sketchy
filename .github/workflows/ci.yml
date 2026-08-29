@@ -148,7 +148,20 @@ jobs:
       # --cov-branch, because "unexecuted branches" is the finding: a statement
       # measure marks an `if` covered the moment it is reached, whatever the
       # condition did.
-      - run: pytest -q --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
+      #
+      # -n auto, because this suite was spending ~171s using one of the
+      # runner's four cores: the serial run sits at 74% of a single CPU, the
+      # rest of it waiting on asyncio and subprocesses. Nothing here is shared
+      # between tests - each builds its own in-memory SQLite database or its
+      # own fakes - so there is nothing for the workers to contend over.
+      # pytest-xdist is already a dev dependency; this only starts using it.
+      #
+      # --dist=worksteal rather than the default per-file split, because the
+      # files are very unevenly sized: a per-file split leaves the longest file
+      # setting the floor for the whole run, and measured 30s here against
+      # worksteal's 23s from the same 81s serial baseline. pytest-cov combines
+      # the workers' data itself, and the coverage totals come out identical.
+      - run: pytest -q -n auto --dist=worksteal --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
 
       # A whole-suite percentage moves too little to catch one module losing
       # its tests, which is the shape the audit called out. The floors are per
@@ -270,8 +283,23 @@ jobs:
         run: npm audit
 
   e2e:
-    name: E2E multi-browser tests
+    # One runner's cores are the ceiling here: the suite is browser-bound, the
+    # server it drives uses well under a third of a core, and past the core
+    # count the browsers contend until tests waiting on a game phase start
+    # timing out. So the second half of the suite gets a second runner, with a
+    # server and a throwaway database of its own, rather than more workers on
+    # this one. tests/e2e/conftest.py decides which tests belong to a shard.
+    name: E2E multi-browser tests (shard ${{ matrix.shard }} of 2)
     runs-on: ubuntu-latest
+    strategy:
+      # A failure in one half says nothing about the other, and cancelling the
+      # other half would hide half the failures from whoever has to fix them.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      E2E_SHARD_COUNT: 2
+      E2E_SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@v7
 

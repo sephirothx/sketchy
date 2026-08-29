@@ -793,9 +793,23 @@ production interval it fast-forwards the page's own clock with Playwright's
 `page.clock` rather than spending the time — which keeps the interval a production
 constant instead of something bent for the tests.
 
-CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs five jobs: the
+CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs six jobs: the
 repository artifact scan, backend lint and tests, PostgreSQL migrations and
-repositories, frontend test/lint/build, and the multi-browser E2E suite.
+repositories, frontend test/lint/build, dependency advisories, and the
+multi-browser E2E suite.
+
+Two of them are parallelised, for opposite reasons. The backend suite runs under
+`pytest -n auto --dist=worksteal`: nothing in it is shared - each test builds its own
+in-memory SQLite database or its own fakes - so the only thing a serial run bought was
+three idle cores. `worksteal` rather than the default per-file split, because the files
+differ by an order of magnitude in length and a per-file split lets the longest one set
+the floor. The E2E suite is the opposite case: it is browser-bound, its server uses
+well under a third of a core, and past the runner's core count the browsers contend
+until tests waiting on a game phase start timing out. More workers there make the run
+slower *and* flakier, so it is split across two runners instead, each with its own
+server and its own throwaway database. `E2E_SHARD_COUNT`/`E2E_SHARD` say which half a
+run owns, and `backend/tests/e2e/conftest.py` does the dividing - per test, not per
+file, because the files are as uneven as the backend's.
 
 The artifact scan
 ([`scripts/check-tracked-artifacts.sh`](../scripts/check-tracked-artifacts.sh)) is the

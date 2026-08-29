@@ -1,5 +1,5 @@
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import close_room_settings, open_room_settings
 from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
@@ -50,9 +50,15 @@ async def test_players_approve_restart_without_losing_room_context():
             await host_page.wait_for_selector(
                 '.app-toast:has-text("Max players cannot be below the 3 players")'
             )
-            assert await host_page.input_value(
-                '.room-settings-editor label:has-text("Max players") input'
-            ) != "2"
+            # The toast and the snap-back are two renders, not one, so reading
+            # the field once races the second of them: under load this saw the
+            # refused "2" still in the box and failed. expect() re-reads until
+            # the value changes, which is the thing being asserted anyway.
+            await expect(
+                host_page.locator(
+                    '.room-settings-editor label:has-text("Max players") input'
+                )
+            ).not_to_have_value("2")
 
             await player_page.fill(".waiting-chat-form input", "Keep this message")
             await player_page.click(".waiting-chat-form button")
