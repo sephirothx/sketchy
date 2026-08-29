@@ -1252,3 +1252,60 @@ async def test_coherence_migration_backfills_outcome_game_ids(tmp_path):
         assert backfilled == game_id
     finally:
         await engine.dispose()
+
+
+async def test_rank_migration_nulls_placings_of_unfinished_games(tmp_path):
+    """q9d4b7e2f358's downgrade re-derives score-order ranks for unfinished
+    games, so its upgrade must perform the inverse: a pre-existing abandoned
+    seat loses its stored placing, matching what the writer stores from then
+    on (R-HIST-06). Finished games keep theirs."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'ranknull.db'}")
+    abandoned_game = uuid.uuid4().hex
+    finished_game = uuid.uuid4().hex
+    abandoned_seat = uuid.uuid4().hex
+    finished_seat = uuid.uuid4().hex
+    try:
+        await _migrate(engine, alembic_command.upgrade, "p8c3a6d9e147")
+        async with engine.begin() as connection:
+            for game_id, outcome in (
+                (abandoned_game, "abandoned"),
+                (finished_game, "finished"),
+            ):
+                await connection.execute(
+                    text(
+                        "INSERT INTO game_records (id, payload_hash, room_name, "
+                        "scoring_mode, hint_mode, drawing_seconds, total_rounds, "
+                        "player_count, started_at, finished_at, outcome, "
+                        "prompt_source_mode) VALUES (:id, '', 'Ranked', "
+                        "'default', 'none', 90, 1, 1, '2026-08-24 12:00:00', "
+                        "'2026-08-24 12:10:00', :outcome, 'custom')"
+                    ),
+                    {"id": game_id, "outcome": outcome},
+                )
+            for seat_id, game_id in (
+                (abandoned_seat, abandoned_game),
+                (finished_seat, finished_game),
+            ):
+                await connection.execute(
+                    text(
+                        "INSERT INTO game_participants (id, game_id, "
+                        "final_score, final_rank, is_anonymous_snapshot, "
+                        "display_name_snapshot) "
+                        "VALUES (:id, :game_id, 10, 1, 1, 'Seat')"
+                    ),
+                    {"id": seat_id, "game_id": game_id},
+                )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.begin() as connection:
+            ranks = dict(
+                (
+                    await connection.execute(
+                        text("SELECT id, final_rank FROM game_participants")
+                    )
+                ).all()
+            )
+        assert ranks[abandoned_seat] is None
+        assert ranks[finished_seat] == 1
+    finally:
+        await engine.dispose()

@@ -389,6 +389,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # First, before any step recreates the NOT NULL shape: upgrade() nulled
+    # empty details, and both the SQLite rebuild and the PostgreSQL
+    # nullable=False alteration would trip over those rows.
+    op.execute("UPDATE runtime_events SET details = '{}' WHERE details IS NULL")
     if op.get_bind().dialect.name == "sqlite":
         # copy_from's INSERT..SELECT reads the old table, so every restored
         # column is staged (and filled) before the shape-restoring rebuild.
@@ -547,4 +551,3 @@ def downgrade() -> None:
             "ix_user_blocks_blocker_user_id", "user_blocks", ["blocker_user_id"]
         )
 
-    op.execute("UPDATE runtime_events SET details = '{}' WHERE details IS NULL")

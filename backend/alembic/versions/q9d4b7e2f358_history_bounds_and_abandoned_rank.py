@@ -57,6 +57,14 @@ def upgrade() -> None:
             "ck_game_participants_final_rank",
             "final_rank IS NULL OR final_rank >= 1",
         )
+    # Existing seats on games that never finished lose their stored score-order
+    # ranks, matching what the writer stores from now on (R-HIST-06: no placing
+    # in the row). The downgrade below re-derives exactly these values, so the
+    # two directions are honest inverses.
+    op.execute(
+        "UPDATE game_participants SET final_rank = NULL WHERE game_id IN "
+        "(SELECT id FROM game_records WHERE outcome != 'finished')"
+    )
 
     op.create_index("ix_audit_events_created_at", "audit_events", ["created_at"])
 
