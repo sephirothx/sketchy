@@ -645,9 +645,10 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
         raise
 
     # A game already in progress keeps running its existing turn_order -
-    # joining mid-game just enrolls the new player into future turns
-    # (appended to the end, so everyone already playing keeps their
-    # relative order) rather than blocking the join entirely.
+    # joining mid-game enrolls the new player into future turns (appended to
+    # the end, so everyone already playing keeps their relative order) rather
+    # than blocking the join entirely, and into the turn already being drawn,
+    # which they can see and may guess at.
     if room.game and not player.is_spectator:
         room.game.add_player_to_rotation(player.id)
 

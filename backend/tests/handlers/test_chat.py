@@ -6,7 +6,7 @@ import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
-from tests.handlers.helpers import build_context
+from tests.handlers.helpers import SessionStore, build_context
 from app.game import DRAWING_SECONDS, MAX_GUESS_POINTS, MAX_HINT_SPEND, Game
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import RoomManager
@@ -886,6 +886,119 @@ async def test_a_spectator_cannot_buy_a_wheel_letter():
     assert spectator.id not in room.game.hint_spend
     assert room.game.masked_prompt(spectator.id) == room.game.masked_prompt("nobody")
     assert room.game.masked_prompt(guesser.id) != room.game.masked_prompt("nobody")
+
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
+
+
+# ---------------------------------------------------------------------------
+# Joining while the drawing is underway (#523)
+# ---------------------------------------------------------------------------
+
+
+async def _room_with_a_turn_in_progress():
+    """A room drawing "volleyball", ready for one more socket to walk in."""
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sessions = SessionStore()
+    sio.get_session = AsyncMock(side_effect=sessions.get)
+    sio.save_session = AsyncMock(side_effect=sessions.save)
+    sio.enter_room = AsyncMock()
+    sio.leave_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    created = await sio.handlers["/"]["create_room"](
+        "host-sid",
+        {
+            "nickname": "Host",
+            "name": "Room",
+            "customPrompts": "volleyball",
+            "customPromptsOnly": True,
+        },
+    )
+    assert created["ok"] is True
+    room = room_manager.get_room(created["roomId"])
+    joined = await sio.handlers["/"]["join_room"](
+        "regular-sid", {"roomId": room.id, "nickname": "Regular"}
+    )
+    assert joined["ok"] is True
+    assert (await sio.handlers["/"]["start_game"]("host-sid"))["ok"] is True
+
+    drawer = room.players[room.game.current_drawer]
+    selected = await sio.handlers["/"]["select_prompt"](
+        drawer.sid, {"prompt": "volleyball"}
+    )
+    assert selected == {"ok": True}
+    # The freeze this issue is about: everyone seated now is a guesser, and
+    # nobody who arrives from here on used to be.
+    assert room.game.turn_eligibility_reasons is not None
+    return ctx, sio, room, drawer
+
+
+@pytest.mark.asyncio
+async def test_a_player_who_joins_mid_turn_may_still_guess():
+    """The turn's frozen population records who was here, and it used to be
+    read as a gag order: a seat that arrived after drawing began had its
+    guesses quietly demoted to chat only the drawer could read."""
+    ctx, sio, room, _drawer = await _room_with_a_turn_in_progress()
+
+    joined = await sio.handlers["/"]["join_room"](
+        "latecomer-sid", {"roomId": room.id, "nickname": "Latecomer"}
+    )
+    assert joined["ok"] is True
+    latecomer = room.players[joined["playerId"]]
+    assert room.game.is_turn_eligible(latecomer.id) is True
+
+    await sio.handlers["/"]["guess"]("latecomer-sid", {"text": "vollyball"})
+    await sio.handlers["/"]["guess"]("latecomer-sid", {"text": "volleyball"})
+
+    assert room.game.wrong_guesses[latecomer.id] == 1
+    assert latecomer.id in room.game.correct_guessers
+    assert latecomer.score > 0
+    correct = [
+        call
+        for call in sio.emit.await_args_list
+        if call.args[0] == "correct_guess"
+        and call.args[1]["playerId"] == latecomer.id
+    ]
+    assert len(correct) == 1
+    # Announced to the room, not whispered to the prompt-aware few.
+    assert correct[0].kwargs.get("room") == room.id
+    # And the seat that has not guessed yet still holds the turn open.
+    assert room.game.phase.value == "drawing"
+
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
+
+
+@pytest.mark.asyncio
+async def test_a_turn_waits_for_the_player_who_joined_mid_turn():
+    """Every eligible guesser ends the turn early, and the latecomer is one."""
+    ctx, sio, room, drawer = await _room_with_a_turn_in_progress()
+    guesser = next(
+        player for player in room.seated_players() if player.id != drawer.id
+    )
+
+    joined = await sio.handlers["/"]["join_room"](
+        "latecomer-sid", {"roomId": room.id, "nickname": "Latecomer"}
+    )
+    latecomer = room.players[joined["playerId"]]
+
+    await sio.handlers["/"]["guess"](guesser.sid, {"text": "volleyball"})
+    assert room.game.phase.value == "drawing"
+
+    await sio.handlers["/"]["guess"]("latecomer-sid", {"text": "volleyball"})
+    assert room.game.phase.value == "turn_results"
+
+    turn = room.game.completed_turns[-1]
+    assert turn.total_guesser_count == 2
+    assert turn.correct_guess_count == 2
+    outcomes = {
+        outcome.token: outcome for outcome in turn.participant_outcomes
+    }
+    assert outcomes[latecomer.id].eligible is True
+    assert outcomes[latecomer.id].outcome == "correct"
 
     ctx.timers.cancel_phase_timer(room.id)
     await ctx.timers.close()

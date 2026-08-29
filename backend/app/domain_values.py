@@ -26,6 +26,8 @@ class TurnEligibilityReason(StrEnum):
     ELIGIBLE = "eligible"
     AFK = "afk"
     DISCONNECTED = "disconnected"
+    # No longer recorded: a seat that joins mid-turn is an eligible guesser
+    # like any other. Kept because finished games still carry the value.
     JOINED_LATE = "joined_late"
 
 
