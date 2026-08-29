@@ -17,7 +17,9 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from app.db import create_db_engine
 
 from app.api.admin_settings import create_admin_settings_router
 from app.auth.middleware import SessionAuthMiddleware
@@ -38,9 +40,12 @@ PASSWORD = "a-good-password"
 
 
 @pytest_asyncio.fixture
-async def env(monkeypatch):
+async def env(monkeypatch, tmp_path):
     monkeypatch.setenv("IP_HASH_SECRET", "tunables-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    # A file, not ":memory:": an in-memory engine gets a StaticPool and hands
+    # every session the same connection, so the two "simultaneous" writes this
+    # file tests would never actually contend.
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'tunables.db'}")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
