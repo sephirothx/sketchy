@@ -970,7 +970,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 outcome_inputs_by_key: dict[
                     tuple[UUID, UUID], TurnParticipantOutcomeInput
                 ] = {}
-                turns_with_outcomes: set[UUID] = set()
                 for r in turns:
                     if r.prompt_source_kind not in PROMPT_SOURCE_KINDS:
                         raise ValueError(
@@ -1106,7 +1105,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
 
                     if r.participant_outcomes:
-                        turns_with_outcomes.add(rid)
                         if r.guesser_count != sum(
                             outcome.eligible for outcome in r.participant_outcomes
                         ):

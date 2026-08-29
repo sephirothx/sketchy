@@ -1061,6 +1061,15 @@ class Game:
         participant_outcomes: tuple[TurnParticipantOutcomeRecord, ...] = ()
         if self.turn_eligibility_reasons is not None:
             states = terminal_states or {}
+            # Every frozen seat must be told how it ended; a missing token is
+            # a caller bug, and a KeyError mid-write is a worse way to learn
+            # about it than this.
+            missing = self.turn_eligibility_reasons.keys() - states.keys()
+            if missing:
+                raise ValueError(
+                    "end_turn requires a terminal state for every seat frozen "
+                    f"at turn start; missing {sorted(missing)}"
+                )
             rows: list[TurnParticipantOutcomeRecord] = []
             for token, eligibility_reason in self.turn_eligibility_reasons.items():
                 eligible = eligibility_reason == TurnEligibilityReason.ELIGIBLE.value
