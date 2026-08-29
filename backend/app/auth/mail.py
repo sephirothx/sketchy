@@ -29,7 +29,7 @@ from email.utils import parseaddr
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import EmailOutboxEntry, generate_uuid
@@ -46,6 +46,12 @@ RETRY_BACKOFF = (
     timedelta(hours=2),
 )
 DEFAULT_BATCH_SIZE = 50
+# How long a delivered or given-up row is kept as a delivery record. Long
+# enough to answer "did the mail go out" for any dispute that is still live,
+# and aligned with the 30-day window retained messages already use. A row
+# past it is a list of addresses, not evidence.
+OUTBOX_RETENTION = timedelta(days=30)
+PURGE_BATCH_SIZE = 500
 # How long a claimed message is left alone before another sweep may take it.
 # Comfortably longer than a send, so a lease only expires when the process
 # carrying it did not come back.
@@ -340,6 +346,18 @@ async def _claim_due(
     return claims
 
 
+def _scrubbed(payload: Mapping[str, object]) -> dict:
+    """The payload minus its secret, for a row no sweep will render again.
+
+    `auth_tokens` stores only hashes precisely so the database never holds a
+    replayable credential; the raw token has to ride the outbox row so a retry
+    can rebuild the link, and this is where the ride ends. Scrubbing happens
+    in the same update that makes the row terminal, so there is no state in
+    which a row both says it is done and still carries the secret.
+    """
+    return {key: value for key, value in payload.items() if key != "token"}
+
+
 async def _record_sent(
     session_factory: async_sessionmaker[AsyncSession],
     claim: _Claim,
@@ -355,6 +373,7 @@ async def _record_sent(
                     state=EmailOutboxState.SENT.value,
                     sent_at=checked_at,
                     last_error=None,
+                    payload=_scrubbed(claim.payload),
                 )
                 .execution_options(synchronize_session=False)
             )
@@ -372,6 +391,10 @@ async def _record_failure(
     values: dict[str, object] = {"last_error": error}
     if given_up:
         values["state"] = EmailOutboxState.FAILED.value
+        # As terminal as sent: nothing will render this payload again, so a
+        # kept token could only leak. A deferred row keeps its token, or the
+        # retry the backoff promises would send a dead link.
+        values["payload"] = _scrubbed(claim.payload)
     else:
         backoff = RETRY_BACKOFF[min(claim.attempts - 1, len(RETRY_BACKOFF) - 1)]
         values["next_attempt_at"] = checked_at + backoff
@@ -458,3 +481,53 @@ async def deliver_pending(
     return DeliveryResult(
         attempted=len(claimed), sent=sent, failed=failed, deferred=deferred
     )
+
+
+async def purge_expired_outbox_entries(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    batch_size: int = PURGE_BATCH_SIZE,
+) -> int:
+    """Remove delivered and given-up rows past retention, in bounded batches.
+
+    Only terminal rows: a pending row is still owed a delivery attempt or a
+    give-up, however old it is, and purging one would silently drop mail.
+    Sent rows age from the moment they were sent; failed rows have no
+    terminal timestamp of their own, so they age from creation - which by
+    then trails the give-up by at most the backoff ladder, hours against a
+    thirty-day window.
+    """
+    cutoff = (now or datetime.now(timezone.utc)) - OUTBOX_RETENTION
+    removed = 0
+    while True:
+        async with session_factory() as session:
+            async with session.begin():
+                expired = (
+                    await session.scalars(
+                        select(EmailOutboxEntry.id)
+                        .where(
+                            EmailOutboxEntry.state.in_(
+                                (
+                                    EmailOutboxState.SENT.value,
+                                    EmailOutboxState.FAILED.value,
+                                )
+                            ),
+                            func.coalesce(
+                                EmailOutboxEntry.sent_at,
+                                EmailOutboxEntry.created_at,
+                            )
+                            <= cutoff,
+                        )
+                        .limit(batch_size)
+                    )
+                ).all()
+                if expired:
+                    await session.execute(
+                        delete(EmailOutboxEntry).where(
+                            EmailOutboxEntry.id.in_(expired)
+                        )
+                    )
+        removed += len(expired)
+        if len(expired) < batch_size:
+            return removed

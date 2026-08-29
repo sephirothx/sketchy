@@ -368,6 +368,12 @@ then recorded as failed rather than disappearing. With no `SMTP_HOST` the messag
 **logged instead of sent**, which is the only way the confirmation and reset flows can
 be completed on a deployment without mail.
 
+A verification or reset payload carries the **raw link token** only while the row is
+`pending` — a retry has to rebuild the link, and the token is unrecoverable from the
+hash `auth_tokens` keeps. The same update that makes a row `sent` or `failed` scrubs
+it, so a terminal row is a delivery record, never a credential. Terminal rows are kept
+**30 days** (`OUTBOX_RETENTION`) and then purged, at startup and hourly by the sweeper.
+
 ```bash
 cd backend && .venv/bin/python -m app.services.mail_delivery   # flush by hand
 ```
@@ -1000,6 +1006,7 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Data | Retention | Mechanism |
 | --- | --- | --- |
 | Retained messages | 30 days | `expires_at`; startup purge + bounded hourly cleanup |
+| Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | Startup purge + hourly purge in the delivery sweep |
 | Pinned report evidence | Protected report policy (outlives the message) | Copied on report submission |
 | Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | Rolled up first, then purged |
 | Daily runtime roll-ups | Permanent | — |
