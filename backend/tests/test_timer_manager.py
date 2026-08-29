@@ -138,6 +138,8 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     monkeypatch.setattr(
         main, "purge_expired_shutdown_abandonments", purge_abandonments
     )
+    purge_outbox = AsyncMock()
+    monkeypatch.setattr(main, "purge_expired_outbox_entries", purge_outbox)
     monkeypatch.setattr(main, "seed_prompt_lists", AsyncMock())
     monkeypatch.setattr(main, "adopt_stored_settings", AsyncMock())
     retire_room_codes = AsyncMock()
@@ -169,6 +171,7 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     assert timers.restart_timers == {}
     purge_messages.assert_awaited_once_with(main.async_session_factory)
     purge_abandonments.assert_awaited_once_with(main.async_session_factory)
+    purge_outbox.assert_awaited_once_with(main.async_session_factory)
     retire_room_codes.assert_awaited_once_with()
     dispose.assert_awaited_once_with()
     assert main.shutdown_coordinator.state == "stopped"

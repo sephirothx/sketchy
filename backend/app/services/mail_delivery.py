@@ -19,11 +19,17 @@ import os
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.logging_config import configure_logging
-from app.auth.mail import DeliveryResult, deliver_pending
+from app.auth.mail import (
+    DeliveryResult,
+    deliver_pending,
+    purge_expired_outbox_entries,
+)
 from app.services.readiness import LoopHealth
 
 
 logger = logging.getLogger(__name__)
+
+PURGE_INTERVAL_SECONDS = 3600.0
 
 DEFAULT_INTERVAL_SECONDS = 30.0
 
@@ -48,9 +54,19 @@ async def run_delivery_loop(
 ) -> None:
     """Deliver due messages for ever, surviving every failure but cancellation."""
     interval = interval_seconds or sweep_interval_seconds()
+    since_purge = 0.0
     while True:
         try:
             result = await deliver_pending(session_factory)
+            # Hourly, not per sweep: retention has day-scale precision and the
+            # sweep runs every half minute. Rides the delivery loop so nobody
+            # has to remember to start a second one.
+            since_purge += interval
+            if since_purge >= PURGE_INTERVAL_SECONDS:
+                since_purge = 0.0
+                removed = await purge_expired_outbox_entries(session_factory)
+                if removed:
+                    logger.info("email sweep: purged %d expired rows", removed)
             if health is not None:
                 health.record_success()
             if result.attempted:

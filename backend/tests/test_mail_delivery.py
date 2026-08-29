@@ -21,6 +21,8 @@ from app.auth.mail import (
     EmailTemplate,
     OutgoingMessage,
     deliver_pending,
+    OUTBOX_RETENTION,
+    purge_expired_outbox_entries,
     message_id_for,
     queue_email,
 )
@@ -266,3 +268,137 @@ async def test_a_message_id_is_valid_however_the_sender_is_written(sender, domai
     relay may reject, and one that would defeat the deduplication it is for."""
     entry_id = generate_uuid()
     assert message_id_for(entry_id, sender) == f"<{entry_id}@{domain}>"
+
+
+async def test_a_delivered_message_no_longer_holds_its_token(tmp_path):
+    """The row outlives the send; the credential must not. `auth_tokens` keeps
+    only hashes so the database never holds a replayable secret - a delivered
+    outbox row keeping the raw link token would quietly undo that."""
+    engine, factory = await outbox(tmp_path)
+
+    class QuietTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            pass
+
+    try:
+        result = await deliver_pending(factory, transport=QuietTransport())
+        assert result.sent == 1
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.SENT.value
+        assert "token" not in entry.payload
+        # Only the secret goes; the rest of the payload is delivery record.
+        assert entry.payload.get("displayName") == "Player 0"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_given_up_message_no_longer_holds_its_token(tmp_path):
+    """`failed` is as terminal as `sent`: no later sweep renders this payload
+    again, so the token has nothing left to do but leak."""
+    engine, factory = await outbox(tmp_path)
+
+    class BrokenTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise RuntimeError("relay refused")
+
+    try:
+        at = datetime.now(timezone.utc)
+        for _ in range(MAX_ATTEMPTS):
+            await deliver_pending(factory, transport=BrokenTransport(), now=at)
+            at += timedelta(hours=3)
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        assert "token" not in entry.payload
+    finally:
+        await engine.dispose()
+
+
+async def test_a_deferred_message_keeps_its_token_for_the_retry(tmp_path):
+    """A retry renders the link from the stored payload, so scrubbing early
+    would turn every transient relay error into a dead reset link."""
+    engine, factory = await outbox(tmp_path)
+
+    class FlakyTransport:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.bodies: list[str] = []
+
+        async def send(self, message: OutgoingMessage) -> None:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("relay blinked")
+            self.bodies.append(message.body)
+
+    transport = FlakyTransport()
+    try:
+        at = datetime.now(timezone.utc)
+        await deliver_pending(factory, transport=transport, now=at)
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.PENDING.value
+        assert entry.payload.get("token") == "t"
+        result = await deliver_pending(
+            factory, transport=transport, now=at + timedelta(hours=1)
+        )
+        assert result.sent == 1
+        # The retried message carried a working link, then the row let go.
+        assert "token=t" in transport.bodies[0]
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert "token" not in entry.payload
+    finally:
+        await engine.dispose()
+
+
+async def test_purge_removes_old_terminal_rows_and_keeps_the_rest(tmp_path):
+    """Terminal rows past retention go; a pending row is never purged however
+    old it is, because it is still owed a delivery attempt or a give-up."""
+    engine, factory = await outbox(tmp_path, count=4)
+    now = datetime.now(timezone.utc)
+    old = now - OUTBOX_RETENTION - timedelta(days=1)
+    fresh = now - timedelta(days=1)
+    try:
+        async with factory() as session:
+            async with session.begin():
+                entries = (
+                    await session.scalars(
+                        select(EmailOutboxEntry).order_by(
+                            EmailOutboxEntry.to_address
+                        )
+                    )
+                ).all()
+                old_sent, fresh_sent, old_failed, old_pending = entries
+                old_sent.state = EmailOutboxState.SENT.value
+                old_sent.sent_at = old
+                fresh_sent.state = EmailOutboxState.SENT.value
+                fresh_sent.sent_at = fresh
+                old_failed.state = EmailOutboxState.FAILED.value
+                old_failed.created_at = old
+                old_pending.created_at = old
+
+        removed = await purge_expired_outbox_entries(
+            factory, now=now, batch_size=1
+        )
+        assert removed == 2
+        async with factory() as session:
+            kept = (
+                await session.scalars(select(EmailOutboxEntry.to_address))
+            ).all()
+        assert sorted(kept) == sorted(
+            [fresh_sent.to_address, old_pending.to_address]
+        )
+    finally:
+        await engine.dispose()
+
+
+async def test_purge_refuses_a_batch_size_that_cannot_finish(tmp_path):
+    """LIMIT 0 returns nothing for ever, so a non-positive batch is an
+    infinite loop, not a smaller sweep."""
+    engine, factory = await outbox(tmp_path)
+    try:
+        with pytest.raises(ValueError):
+            await purge_expired_outbox_entries(factory, batch_size=0)
+    finally:
+        await engine.dispose()
