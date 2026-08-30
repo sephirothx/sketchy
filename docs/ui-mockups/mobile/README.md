@@ -124,15 +124,16 @@ Sorted by how much it cost a player.
     commits a typed name** — the two-step was never required.
 13. **The first landing led with an account decision.** A visitor who has
     never seen the game met *"Play as yourself · Keep your username and your
-    stats on every device"* first, with **nothing on the screen saying what
-    Sketchy is**, and the fastest path — type a name, play — lowest and
-    quietest, under a divider and a label reading "Just playing once?".
-    → On phones the block leads with one line of what the game is, then one
-    field and one loud **Play**; Create an account and Log in become a single
-    quiet line underneath. The account offer is made again at the end of the
-    first game, where the game-over screen already asks it and there is
-    finally something worth keeping. Wide screens keep the shipped order,
-    which was a considered decision for a surface with room for both.
+    stats on every device"* first, with the fastest path — type a name, play —
+    lowest and quietest, under a divider and a label reading "Just playing
+    once?".
+    → On phones the block is one field and one loud **Play**, with Create an
+    account and Log in as a single quiet line underneath. The account offer is
+    made again at the end of the first game, where the game-over screen already
+    asks it and there is finally something worth keeping. Wide screens keep the
+    shipped order, which was a considered decision for a surface with room for
+    both. An earlier draft of this screen opened with a tagline; it was cut, so
+    the screen is one decision tall and the rooms below say what the game is.
 
 Alongside those: the eight-icon header strip — which put a red **Leave** one
 thumb-width from **Settings** — is now a code chip, the round and countdown
@@ -202,12 +203,11 @@ them:
 
 ## Where the build departs from the artboards
 
-- **First landing ships variant A**, the safer of the two: the pitch, one
-  field, one Play, and the account offer as a quiet line, with the rooms list
-  below it. Variant B — browse freely with a sticky name dock — is not built;
-  it trades a visitor being able to scroll a long way without ever learning
-  they need a name against a much lower barrier to looking, and that is a
-  product call rather than a layout one.
+- **First landing ships variant A**: one field, one Play, and the account offer
+  as a quiet line, with the rooms list below it. Variant B — browse freely with
+  a sticky name dock — is not built; it trades a visitor being able to scroll a
+  long way without ever learning they need a name against a much lower barrier
+  to looking, and that is a product call rather than a layout one.
 
 - **The lobby keeps its existing structure**, reordered rather than rebuilt:
   open rooms move to the top, the entry copy is hidden, and Spectate becomes a
@@ -223,18 +223,20 @@ them:
 
 ## The screens
 
+**Bold** is the variant that ships; the viewer marks the same ones *built*.
+
 | # | Screen | Artboard variants |
 | --- | --- | --- |
-| 01 | First landing | A · name and go · B · browse first · C · naming, keyboard up |
+| 01 | First landing | **A · name and go** · B · browse first · C · naming, keyboard up |
 | 02 | Arriving from an invite | invite landing |
-| 03 | Lobby | A · rooms first · B · one big play |
+| 03 | Lobby | **A · rooms first** · B · one big play |
 | 04 | Join with a code | sheet over the keyboard |
 | 05 | Create a room | basics + presets, rest behind *More options* |
 | 06 | Waiting room | invite-first, docked start |
 | 07 | Pick a prompt | choices in the thumb zone |
-| 08 | Drawing | A · palette always out · B · landscape focus |
+| 08 | Drawing | **A · palette always out** · **B · landscape focus** (both) |
 | 09 | Guessing | keyboard closed |
-| 10 | Guessing, keyboard up | A · nothing overlaps · B · HUD over the drawing · C · correct guess |
+| 10 | Guessing, keyboard up | **A · nothing overlaps** · B · HUD over the drawing · **C · correct guess** |
 | 11 | Turn results | bottom sheet |
 | 12 | Game over | podium, one primary, highlights and drawings as tabs |
 | 13 | The drawings | swipe gallery |

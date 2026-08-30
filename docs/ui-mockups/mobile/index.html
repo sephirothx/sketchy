@@ -123,6 +123,15 @@ button{font:inherit;color:inherit}
   padding:6px 14px;font-size:12.5px;font-weight:800;cursor:pointer;color:var(--ink-2)
 }
 .vtab[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.vtab .ships{
+  font-family:var(--mono);font-size:9.5px;font-style:normal;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ok);margin-left:5px
+}
+.vtab[aria-pressed="true"] .ships{color:var(--bg);opacity:.72}
+.verdict{
+  font-family:var(--mono);font-size:11.5px;color:var(--ink-3);
+  margin:20px 0 0;letter-spacing:.02em
+}
 
 /* ── phone deck ───────────────────────────────────────────────── */
 .deck{display:flex;gap:34px;flex-wrap:wrap;margin:26px 0 0;align-items:flex-start}
@@ -620,17 +629,16 @@ const roomRow = (name, host, n, max, chips, live) => `
 S({ id:'firstrun', n:'01', group:'Arriving', title:'First landing',
   lede:'Someone who has never played, opening the site cold. They have not seen the game, they have no account, and they have not chosen a name. Today the first thing the screen asks them is which kind of account they would like.',
   variants:[
-  { name:'A · Name and go',
+  { name:'A · Name and go', ships:true,
     bad:[
       'The page opens on <b>“Play as yourself · Keep your username and your stats on every device”</b> — an account decision, made before the visitor has seen a single thing the product does.',
-      '<b>Nothing on the screen says what Sketchy is.</b> No tagline, no picture, no example. A party game gets a few seconds to be worth pulling friends into, and spends them on account admin.',
       'The fastest path — type a name, play — is the <b>lowest, quietest control</b>: below two account buttons, below an “or” divider, below a label reading “Just playing once?”, which frames it as the lesser choice before you have decided anything.',
       'Measured cold at 390 × 844: the identity block is <span class="m">328 px</span> and the page is <span class="m">1 152 px</span>. Rooms and the create/join cards are below the fold.',
       'Two account buttons of near-equal weight (<b>Create an account</b>, <b>Log in</b>) for two different people — the one who has never been here and the one who has.'
     ],
     good:[
-      '<b>One line saying what this is</b>, in the display face, above everything. It costs 40 px and it is the only reason a stranger stays.',
-      '<b>One field, one loud button.</b> Name, then Play. That is the whole first decision, and it is the one that leads somewhere.',
+      '<b>One field, one loud button.</b> Name, then Play. That is the whole first decision, it is the one that leads somewhere, and it is the first thing on the screen.',
+      'No tagline: the rooms below say what the game is better than a line of copy would, and the screen stays one decision tall.',
       '<b>Log in is a single quiet link</b> for the person coming back — they know what they are looking for, and they do not need a button the same size as the new player’s.',
       'Creating an account moves <b>after</b> the first game, where the artboard for game over already offers it: by then the name is worth keeping.',
       'Browsing stays ungated — the rooms list is right below, and the shipped component is deliberately inline rather than modal for exactly that reason.'
@@ -642,14 +650,7 @@ S({ id:'firstrun', n:'01', group:'Arriving', title:'First landing',
         <span class="sb-sp"></span>
         <button class="iconbtn ghost"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 4.5l1.7 1.7M17.8 17.8l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.5 19.5l1.7-1.7M17.8 6.2l1.7-1.7"/></svg></button>
       </div>
-      <div class="stagearea" style="padding:4px 14px 12px;gap:14px;overflow-y:auto">
-        <div style="flex:0 0 auto;padding:2px 2px 0">
-          <div class="disp" style="font-size:29px;line-height:1.12">Draw badly.<br>Guess faster.</div>
-          <div class="muted" style="font-size:14px;font-weight:600;margin-top:8px">
-            One of you draws, everyone else races to type what it is. Three rounds, about ten minutes.
-          </div>
-        </div>
-
+      <div class="stagearea" style="padding:10px 14px 12px;gap:14px;overflow-y:auto">
         <div class="card" style="flex:0 0 auto;padding:14px">
           <label class="kick" style="display:block;margin-bottom:8px">What should we call you?</label>
           <div class="gfield" style="margin-bottom:10px;color:var(--ink)">Kit<span class="caret"></span></div>
@@ -805,7 +806,7 @@ S({ id:'invite', n:'02', group:'Arriving', title:'Arriving from an invite',
 S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
   lede:'The lobby is where a phone user decides whether this game is worth pulling friends into. Today it opens on an account-signup card and buries the rooms four cards down, 1.4 screens below the fold.',
   variants:[
-  { name:'A · Rooms first',
+  { name:'A · Rooms first', ships:true,
     bad:[
       'The page is <b>1 386 px tall on an 844 px screen</b> — four equal-weight cards stacked: identity, create, join-by-code, then public rooms last.',
       'A returning player meets <b>“Create an account / Log in / Play as guest”</b> before anything playable. Identity is a prerequisite, not a decision.',
@@ -1155,7 +1156,7 @@ S({ id:'choice', n:'07', group:'In the room', title:'Pick a prompt',
 /* ─────────────────────────── 06 · DRAWING ─────────────────────────── */
 S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
   lede:'A 4:3 canvas is baked into the wire protocol (800×600), so on a portrait phone it can never be more than about a third of the screen. The redesign stops fighting that and spends the remaining two thirds on the two things a drawer actually wants: full tools under the thumb, and the guesses arriving.',
-  variants:[{ name:'A · Palette always out',
+  variants:[{ name:'A · Palette always out', ships:true,
     bad:[
       'Canvas measures <b>370 × 278 — 33% of the viewport</b>, while <b>164 px at the bottom is left completely empty</b>.',
       'The <b>colour palette is behind a chevron</b>, and its popover <b>covers the entire canvas</b>: you cannot see the drawing you are colouring. Every colour change costs two taps and a look-away.',
@@ -1213,7 +1214,7 @@ S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
       </div>
     </div>` },
 
-  { name:'B · Landscape focus',
+  { name:'B · Landscape focus', ships:true,
     bad:[
       'Portrait is a hard ceiling: with a protocol-fixed 4:3 canvas, a 390 px-wide phone gives the drawer <b>292 px of drawing height</b>, no matter how good the layout is.'
     ],
@@ -1324,7 +1325,7 @@ S({ id:'guessing', n:'09', group:'In the room', title:'Guessing',
 /* ─────────────────────────── 08 · GUESSING + KEYBOARD ─────────────────────────── */
 S({ id:'keyboard', n:'10', group:'In the room', title:'Guessing with the keyboard up',
   lede:'The scenario the whole redesign turns on. With a soft keyboard open the guesser has about 510 px of app. Today that budget buys a 6 px hairline, ten tiny tiles, the drawing, and nothing else — every other player, every guess and the clock are gone from the moment you start typing.',
-  variants:[{ name:'A · Nothing overlaps the drawing',
+  variants:[{ name:'A · Nothing overlaps the drawing', ships:true,
     bad:[
       'Focusing the field adds <code>.guess-focused</code>, which sets <code>display:none</code> on the header, the round line, the chat heading and <b>the entire message list</b>. You cannot see other players’ guesses, who just got it, or the score while you type — which is most of the turn.',
       '<b>The clock becomes a 6 px rule</b> at y 49–55, with <b>49 px of empty space above it</b>. No number anywhere. In a game where points decay per second.',
@@ -1417,7 +1418,7 @@ S({ id:'keyboard', n:'10', group:'In the room', title:'Guessing with the keyboar
       </div>
     </div>` },
 
-  { name:'C · Correct guess',
+  { name:'C · Correct guess', ships:true,
     bad:[
       'Today a correct guess while focused produces the same one-line flash as a wrong one, then the keyboard is blurred and the layout re-flows underneath you.'
     ],
@@ -1936,9 +1937,12 @@ function render(){
     </div>
     <p class="lede">${s.lede}</p>
     ${s.variants.length>1 ? `<div class="vtabs" role="group" aria-label="Proposals">${
-      s.variants.map((x,j)=>`<button class="vtab" data-v="${j}" aria-pressed="${j===curVar}">${x.name}</button>`).join('')
+      s.variants.map((x,j)=>`<button class="vtab" data-v="${j}" aria-pressed="${j===curVar}">${x.name}${x.ships?' <i class="ships">built</i>':''}</button>`).join('')
     }</div>` : ''}
     <div class="deck">${deck}</div>
+    ${s.variants.length>1 ? `<p class="verdict">${v.ships
+      ? 'This is the one that ships.'
+      : 'Drawn as an alternative; the build went the other way.'}</p>` : ''}
     <div class="notes">
       <div class="note bad"><h3>What breaks today</h3><ul>${v.bad.map(b=>`<li>${b}</li>`).join('')}</ul></div>
       <div class="note good"><h3>What this does instead</h3><ul>${v.good.map(b=>`<li>${b}</li>`).join('')}</ul></div>

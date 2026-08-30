@@ -652,12 +652,10 @@
 
 /* ── First landing ─────────────────────────────────────────────────────
    Wide screens keep the shipped order: the account is the headline, the
-   guest name the quieter path below a divider. A phone reverses it. A
-   visitor there has seen nothing yet, so the screen leads with what the
-   game is and one field that starts one, and the account offer becomes a
-   single quiet line — it is made again at the end of the first game, where
+   guest name the quieter path below a divider. A phone reverses it — one
+   field and one loud Play first, the account offer as a single quiet line
+   under it. That offer is made again at the end of the first game, where
    there is finally something worth keeping. */
-.first-run-pitch { display: none; }
 
 @media (max-width: 900px) {
   .first-run {
@@ -665,27 +663,6 @@
     flex-direction: column;
     gap: 14px;
     padding: 16px;
-  }
-
-  .first-run-pitch {
-    display: block;
-  }
-
-  .first-run-pitch-line {
-    color: var(--ink);
-    font-family: var(--font-display);
-    font-size: 26px;
-    font-weight: 600;
-    line-height: 1.12;
-    margin: 0;
-  }
-
-  .first-run-pitch-copy {
-    color: var(--muted);
-    font-size: 13.5px;
-    font-weight: 600;
-    line-height: 1.4;
-    margin: 6px 0 0;
   }
 
   .first-run-guest-label {

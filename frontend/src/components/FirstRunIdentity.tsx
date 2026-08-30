@@ -12,13 +12,13 @@ import { ApiError } from "../lib/api";
  * guest is one field and one click below a divider - easy, but plainly the
  * lesser path.
  *
- * On a phone that order is reversed, and the pitch below appears. The visitor
- * has not seen the game yet, so an account decision is being asked
- * for before there is anything to keep; naming yourself and playing is both the
- * faster path and the one that produces something worth an account. The offer
- * moves to the end of the first game, where the game-over screen already makes
- * it ("Keep this name and your points?"). Nothing is removed - Create an
- * account and Log in stay on screen, as one quiet line.
+ * On a phone that order is reversed. The visitor has not seen the game yet, so
+ * an account decision is being asked for before there is anything to keep;
+ * naming yourself and playing is both the faster path and the one that produces
+ * something worth an account. The offer moves to the end of the first game,
+ * where the game-over screen already makes it ("Keep this name and your
+ * points?"). Nothing is removed - Create an account and Log in stay on screen,
+ * as one quiet line under the field.
  *
  * Inline rather than modal, so browsing and logging in are never gated, and
  * nothing interrupts a click the player has already made. A returning player on
@@ -78,18 +78,6 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
       setBusy(false);
     }
   }
-
-  const pitch = !compact && (
-    /* What the game is, for someone who has never seen it. Not shown on wide
-       screens, where the lobby has room for rooms and settings at once, nor
-       inside the invite card, where the room itself is the pitch. */
-    <div className="first-run-pitch" key="pitch">
-      <p className="first-run-pitch-line">Draw badly. Guess faster.</p>
-      <p className="first-run-pitch-copy">
-        One of you draws, everyone else races to type what it is.
-      </p>
-    </div>
-  );
 
   const account = (
     <div className="first-run-primary" key="account">
@@ -168,7 +156,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
       className={compact ? "first-run is-compact" : "first-run"}
       aria-labelledby={`${fieldId}-heading`}
     >
-      {isNarrow ? [pitch, guest, account] : [account, divider, guest]}
+      {isNarrow ? [guest, account] : [account, divider, guest]}
       {mode && (
         <AuthDialog
           mode={mode}
