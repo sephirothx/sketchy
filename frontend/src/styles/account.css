@@ -648,3 +648,123 @@
   margin-top: 0;
   padding-top: 6px;
 }
+
+
+/* ── First landing ─────────────────────────────────────────────────────
+   Wide screens keep the shipped order: the account is the headline, the
+   guest name the quieter path below a divider. A phone reverses it. A
+   visitor there has seen nothing yet, so the screen leads with what the
+   game is and one field that starts one, and the account offer becomes a
+   single quiet line — it is made again at the end of the first game, where
+   there is finally something worth keeping. */
+.first-run-pitch { display: none; }
+
+@media (max-width: 900px) {
+  .first-run {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .first-run-pitch {
+    display: block;
+  }
+
+  .first-run-pitch-line {
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.12;
+    margin: 0;
+  }
+
+  .first-run-pitch-copy {
+    color: var(--muted);
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin: 6px 0 0;
+  }
+
+  .first-run-guest-label {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .first-run-guest-row {
+    flex-direction: column;
+  }
+
+  .first-run-guest-row input {
+    flex: 0 0 auto;
+    min-height: 50px;
+    width: 100%;
+  }
+
+  /* The loud one here: it is the action that leads somewhere. */
+  .first-run-guest-submit {
+    background: var(--primary);
+    border: 0;
+    box-shadow: 0 3px 0 var(--primary-edge);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 900;
+    min-height: 50px;
+    width: 100%;
+  }
+
+  /* Inside the invite card it is not: Join game is the action there, and two
+     controls that both look like the answer is one too many. Saving the name
+     is a step on the way, so it steps back a level. */
+  .first-run.is-compact .first-run-guest-submit {
+    background: var(--card);
+    border: 1.5px solid var(--line-strong);
+    box-shadow: none;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 800;
+    min-height: 46px;
+  }
+
+  .first-run-primary {
+    align-items: baseline;
+    border-top: 1.5px solid var(--line);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding-top: 12px;
+  }
+
+  .first-run-heading {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .first-run-actions {
+    display: flex;
+    gap: 14px;
+    margin: 0;
+  }
+
+  .first-run-signup,
+  .first-run-login {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    color: var(--primary-ink);
+    font-size: 13px;
+    font-weight: 800;
+    min-height: 44px;
+    padding: 0;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}

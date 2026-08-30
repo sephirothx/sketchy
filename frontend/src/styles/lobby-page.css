@@ -617,3 +617,77 @@
     text-underline-offset: 3px;
   }
 }
+
+
+/* ── Arriving from an invite ────────────────────────────────────────────
+   The most common way anyone first meets this game is a link in a group
+   chat. Cold at 390 x 844 the Join button used to sit at y 839 — below the
+   fold, under 380px of room configuration and a 315px account decision. */
+.invite-room-headline {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.invite-room-headline strong {
+  color: var(--ink);
+}
+
+.invite-details > summary {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  min-height: 44px;
+  padding: 4px 2px;
+}
+
+.invite-details > summary::-webkit-details-marker { display: none; }
+
+.invite-details > summary::after {
+  color: var(--faint);
+  content: "▸";
+  margin-left: auto;
+  transition: transform 140ms ease;
+}
+
+.invite-details[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invite-details > summary::after { transition: none; }
+}
+
+.invite-details-summary {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  /* Spectating is a real choice for someone arriving mid-game, just not the
+     one the link was sent for. */
+  .invite-actions {
+    align-items: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .invite-actions > .invite-primary-button {
+    width: 100%;
+  }
+
+  .invite-actions > .invite-secondary-button {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    min-height: 44px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}

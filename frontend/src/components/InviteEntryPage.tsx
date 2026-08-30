@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useRoomEntry } from "../hooks/useRoomEntry";
 import { describeDrawingRules } from "../lib/drawingRules";
 import type { RoomSummary } from "../types";
@@ -37,6 +38,7 @@ function DelayedInviteLoader() {
 
 export function InviteEntryPage({ code }: { code: string }) {
   const navigate = useNavigate();
+  const isMobile = useMediaQuery("(max-width: 900px)");
   const { state, join } = useRoomEntry(code);
   const room = state.status === "preview" || state.status === "joining" ? state.room : null;
   const busy = state.status === "joining";
@@ -69,23 +71,39 @@ export function InviteEntryPage({ code }: { code: string }) {
             </span>
           </div>
 
-          <dl className="invite-room-facts">
-            <div><dt>Players</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? " · Full" : ""}</dd></div>
-            <div><dt>Rounds</dt><dd>{room.rounds}</dd></div>
-            <div><dt>Draw time</dt><dd>{room.drawingSeconds}s</dd></div>
-            <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</dd></div>
-          </dl>
+          <p className="invite-room-headline">
+            <strong>{room.playerCount}/{room.maxPlayers}</strong> here
+            {room.isFull ? " · full" : ""}
+          </p>
 
-          <ul className="invite-rule-list" aria-label="Room settings">
-            <li>{hintModeLabel(room)}</li>
-            <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? "Every tool and color"}</li>
-            <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators guess along"}</li>
-            <li>
-              {room.customPromptCount > 0
-                ? `${room.customPromptCount} custom prompts${room.customPromptsOnly ? " only" : " plus defaults"}`
-                : "Default prompt list"}
-            </li>
-          </ul>
+          {/* The settings matter to the host who chose them, and to nobody
+              tapping a friend's link. Open by default on a wide screen, where
+              there is room for them; folded on a phone, where 380px of them
+              pushed the Join button off the bottom of the screen. */}
+          <details className="invite-details" open={!isMobile}>
+            <summary>
+              <span className="invite-details-summary">
+                {room.rounds} rounds · {room.drawingSeconds}s · {hintModeLabel(room).toLowerCase()}
+              </span>
+            </summary>
+            <dl className="invite-room-facts">
+              <div><dt>Players</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? " · Full" : ""}</dd></div>
+              <div><dt>Rounds</dt><dd>{room.rounds}</dd></div>
+              <div><dt>Draw time</dt><dd>{room.drawingSeconds}s</dd></div>
+              <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</dd></div>
+            </dl>
+
+            <ul className="invite-rule-list" aria-label="Room settings">
+              <li>{hintModeLabel(room)}</li>
+              <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? "Every tool and color"}</li>
+              <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators guess along"}</li>
+              <li>
+                {room.customPromptCount > 0
+                  ? `${room.customPromptCount} custom prompts${room.customPromptsOnly ? " only" : " plus defaults"}`
+                  : "Default prompt list"}
+              </li>
+            </ul>
+          </details>
 
           {room.state === "playing" && (
             <p className="invite-callout">This game is already in progress. Joining as a player adds you to a future turn.</p>

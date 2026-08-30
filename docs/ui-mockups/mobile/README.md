@@ -5,7 +5,7 @@ the layouts that answer it. The desktop set one directory up
 ([`../sketchy-redesign-rationale.md`](../sketchy-redesign-rationale.md)) is
 explicitly "desktop widths only"; this is the other half.
 
-- **The artboards** — 15 screens, 19 of them, each rendered as a light/dark pair
+- **The artboards** — 17 screens, 23 of them, each rendered as a light/dark pair
   at a true 390 × 844, with a real soft keyboard drawn where the keyboard is part
   of the problem:
   <https://claude.ai/code/artifact/afdba7d2-a8b0-4374-80e1-af68510f72ff>
@@ -25,8 +25,11 @@ claims in the original review that did not survive contact with the code.
 The app was run at a genuine 390 px viewport (inside a sized iframe, since the
 usual emulation left `window.innerWidth` at the pane's own width and the
 breakpoints never fired) with a headless Socket.IO client as the second player,
-and a full three-round game was played through. Every measurement below is from
-that session, not estimated.
+and a full three-round game was played through. The two cold-arrival states —
+opening the site with no account and no name, and tapping an invite link in the
+same condition — were measured separately, by clearing the session through
+`POST /api/auth/logout` and reloading. Every measurement below is from those
+sessions, not estimated.
 
 ## What it got wrong, and what it does now
 
@@ -108,6 +111,28 @@ Sorted by how much it cost a player.
     → Full-screen sheet below 900 px, and the Shortcuts tab is hidden when
     `(pointer: fine)` does not match — keyed on the pointer rather than the
     width, so a tablet with a keyboard keeps it.
+12. **Arriving from an invite put Join below the fold.** Cold at 390 × 844 the
+    actions sat at **y 839–937** on an 844 px screen, under 380 px of room
+    configuration (a 2×2 table of Players / Rounds / Draw time / Scoring, then
+    four chips) and 315 px of account decision — on a screen reached by
+    somebody who had already decided to play. The page was 990 px for what is
+    fundamentally a yes.
+    → The settings fold behind one summary line on phones (open by default on
+    a wide screen, where there is room). Join moves to **y 604** and the page
+    fits in 844. Spectate becomes a link, and the name field's own button
+    steps back to secondary inside the invite card, since **Join already
+    commits a typed name** — the two-step was never required.
+13. **The first landing led with an account decision.** A visitor who has
+    never seen the game met *"Play as yourself · Keep your username and your
+    stats on every device"* first, with **nothing on the screen saying what
+    Sketchy is**, and the fastest path — type a name, play — lowest and
+    quietest, under a divider and a label reading "Just playing once?".
+    → On phones the block leads with one line of what the game is, then one
+    field and one loud **Play**; Create an account and Log in become a single
+    quiet line underneath. The account offer is made again at the end of the
+    first game, where the game-over screen already asks it and there is
+    finally something worth keeping. Wide screens keep the shipped order,
+    which was a considered decision for a surface with room for both.
 
 Alongside those: the eight-icon header strip — which put a red **Leave** one
 thumb-width from **Settings** — is now a code chip, the round and countdown
@@ -177,6 +202,13 @@ them:
 
 ## Where the build departs from the artboards
 
+- **First landing ships variant A**, the safer of the two: the pitch, one
+  field, one Play, and the account offer as a quiet line, with the rooms list
+  below it. Variant B — browse freely with a sticky name dock — is not built;
+  it trades a visitor being able to scroll a long way without ever learning
+  they need a name against a much lower barrier to looking, and that is a
+  product call rather than a layout one.
+
 - **The lobby keeps its existing structure**, reordered rather than rebuilt:
   open rooms move to the top, the entry copy is hidden, and Spectate becomes a
   link. The docked create/join bar and the join-code sheet (artboards 01–02)
@@ -193,21 +225,23 @@ them:
 
 | # | Screen | Artboard variants |
 | --- | --- | --- |
-| 01 | Lobby | A · rooms first · B · one big play |
-| 02 | Join with a code | sheet over the keyboard |
-| 03 | Create a room | basics + presets, rest behind *More options* |
-| 04 | Waiting room | invite-first, docked start |
-| 05 | Pick a prompt | choices in the thumb zone |
-| 06 | Drawing | A · palette always out · B · landscape focus |
-| 07 | Guessing | keyboard closed |
-| 08 | Guessing, keyboard up | A · nothing overlaps · B · HUD over the drawing · C · correct guess |
-| 09 | Turn results | bottom sheet |
-| 10 | Game over | podium, one primary, highlights and drawings as tabs |
-| 11 | The drawings | swipe gallery |
-| 12 | Players & score | bottom sheet |
-| 13 | Settings | full-screen grouped rows |
-| 14 | Profile | stat tiles and a guess-speed sparkline |
-| 15 | Prompt stats | cards, one *Filters* sheet, paged |
+| 01 | First landing | A · name and go · B · browse first · C · naming, keyboard up |
+| 02 | Arriving from an invite | invite landing |
+| 03 | Lobby | A · rooms first · B · one big play |
+| 04 | Join with a code | sheet over the keyboard |
+| 05 | Create a room | basics + presets, rest behind *More options* |
+| 06 | Waiting room | invite-first, docked start |
+| 07 | Pick a prompt | choices in the thumb zone |
+| 08 | Drawing | A · palette always out · B · landscape focus |
+| 09 | Guessing | keyboard closed |
+| 10 | Guessing, keyboard up | A · nothing overlaps · B · HUD over the drawing · C · correct guess |
+| 11 | Turn results | bottom sheet |
+| 12 | Game over | podium, one primary, highlights and drawings as tabs |
+| 13 | The drawings | swipe gallery |
+| 14 | Players & score | bottom sheet |
+| 15 | Settings | full-screen grouped rows |
+| 16 | Profile | stat tiles and a guess-speed sparkline |
+| 17 | Prompt stats | cards, one *Filters* sheet, paged |
 
 The admin, moderation and bug-report surfaces are deliberately absent: they are
 operator tools, and the desktop artboards remain their reference.

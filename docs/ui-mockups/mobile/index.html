@@ -500,7 +500,7 @@ button{font:inherit;color:inherit}
 
 <div class="mast">
   <h1>Sketchy <em>on phones</em></h1>
-  <span class="sub" id="crumb">01 / 15 · Lobby</span>
+  <span class="sub" id="crumb">01 / 17 · First landing</span>
   <span class="mast-sp"></span>
   <div class="tools">
     <div class="seg" role="group" aria-label="Theme pairing">
@@ -598,7 +598,6 @@ const ic = {
 const SCREENS = [];
 const S = (o) => SCREENS.push(o);
 
-/* ─────────────────────────── 01 · LOBBY ─────────────────────────── */
 const roomRow = (name, host, n, max, chips, live) => `
   <div class="roomrow">
     <div style="flex:1;min-width:0">
@@ -616,7 +615,194 @@ const roomRow = (name, host, n, max, chips, live) => `
     <span class="btn sm" style="width:auto;padding:0 18px;min-height:44px">Join</span>
   </div>`;
 
-S({ id:'lobby', n:'01', group:'Entry', title:'Lobby',
+
+/* ───────────────── 01 · FIRST LANDING (no account, no name) ───────────────── */
+S({ id:'firstrun', n:'01', group:'Arriving', title:'First landing',
+  lede:'Someone who has never played, opening the site cold. They have not seen the game, they have no account, and they have not chosen a name. Today the first thing the screen asks them is which kind of account they would like.',
+  variants:[
+  { name:'A · Name and go',
+    bad:[
+      'The page opens on <b>“Play as yourself · Keep your username and your stats on every device”</b> — an account decision, made before the visitor has seen a single thing the product does.',
+      '<b>Nothing on the screen says what Sketchy is.</b> No tagline, no picture, no example. A party game gets a few seconds to be worth pulling friends into, and spends them on account admin.',
+      'The fastest path — type a name, play — is the <b>lowest, quietest control</b>: below two account buttons, below an “or” divider, below a label reading “Just playing once?”, which frames it as the lesser choice before you have decided anything.',
+      'Measured cold at 390 × 844: the identity block is <span class="m">328 px</span> and the page is <span class="m">1 152 px</span>. Rooms and the create/join cards are below the fold.',
+      'Two account buttons of near-equal weight (<b>Create an account</b>, <b>Log in</b>) for two different people — the one who has never been here and the one who has.'
+    ],
+    good:[
+      '<b>One line saying what this is</b>, in the display face, above everything. It costs 40 px and it is the only reason a stranger stays.',
+      '<b>One field, one loud button.</b> Name, then Play. That is the whole first decision, and it is the one that leads somewhere.',
+      '<b>Log in is a single quiet link</b> for the person coming back — they know what they are looking for, and they do not need a button the same size as the new player’s.',
+      'Creating an account moves <b>after</b> the first game, where the artboard for game over already offers it: by then the name is worth keeping.',
+      'Browsing stays ungated — the rooms list is right below, and the shipped component is deliberately inline rather than modal for exactly that reason.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band" style="border-bottom:0;background:none">
+        ${wordmark(26)}
+        <span class="sb-sp"></span>
+        <button class="iconbtn ghost"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 4.5l1.7 1.7M17.8 17.8l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.5 19.5l1.7-1.7M17.8 6.2l1.7-1.7"/></svg></button>
+      </div>
+      <div class="stagearea" style="padding:4px 14px 12px;gap:14px;overflow-y:auto">
+        <div style="flex:0 0 auto;padding:2px 2px 0">
+          <div class="disp" style="font-size:29px;line-height:1.12">Draw badly.<br>Guess faster.</div>
+          <div class="muted" style="font-size:14px;font-weight:600;margin-top:8px">
+            One of you draws, everyone else races to type what it is. Three rounds, about ten minutes.
+          </div>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;padding:14px">
+          <label class="kick" style="display:block;margin-bottom:8px">What should we call you?</label>
+          <div class="gfield" style="margin-bottom:10px;color:var(--ink)">Kit<span class="caret"></span></div>
+          <button class="btn">Play</button>
+          <div class="muted" style="font-size:13px;font-weight:700;text-align:center;margin-top:12px">
+            Been here before? <b style="color:var(--primary-ink);text-decoration:underline">Log in</b>
+          </div>
+        </div>
+
+        <div style="flex:0 0 auto">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px;padding:0 2px">
+            <span class="kick">Open rooms</span>
+            <span class="kick" style="color:var(--success-ink)">● 4 live</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            ${roomRow('Coffee break doodles',[['J','p'],['P','w'],['K','']],3,8,'3 rounds · 90s',true)}
+            ${roomRow('sketch &amp; chill',[['A','w'],['R','']],2,6,'5 rounds · 60s',false)}
+          </div>
+        </div>
+      </div>
+    </div>` },
+
+  { name:'B · Browse first',
+    bad:[
+      'Same source problem: the visitor is asked to identify themselves before they have any reason to.'
+    ],
+    good:[
+      '<b>The game is on screen first.</b> Live rooms, with real people in them, are the most persuasive thing the product has, and they need no account to look at.',
+      'The name prompt becomes a <b>dock in the thumb zone</b> — permanently reachable, never in the way of scrolling, and the same shape as every other dock in this set.',
+      'Tapping a room focuses the dock rather than throwing up a dialog: the answer to “I want in” is a keyboard, not a modal.',
+      '<b>“14 people are drawing right now”</b> does the work the tagline does in A, with evidence instead of a claim. It falls back to the tagline when the server is quiet.',
+      'The riskier of the two: a visitor can scroll a long way without ever being told they need a name. The dock is what stops that, so it must never scroll away.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band" style="border-bottom:0;background:none">
+        ${wordmark(26)}
+        <span class="sb-sp"></span>
+        <button class="chip" style="min-height:40px">Log in</button>
+      </div>
+      <div class="stagearea" style="padding:0 14px 10px;gap:12px;overflow-y:auto">
+        <div style="flex:0 0 auto;padding:0 2px">
+          <div class="disp" style="font-size:22px;line-height:1.15">14 people are drawing right now</div>
+          <div class="muted" style="font-size:13px;font-weight:600;margin-top:5px">Jump into any of them — pick a name when you do.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px;flex:0 0 auto">
+          ${roomRow('Coffee break doodles',[['J','p'],['P','w'],['K','']],3,8,'3 rounds · 90s',true)}
+          ${roomRow('sketch &amp; chill',[['A','w'],['R','']],2,6,'5 rounds · 60s',false)}
+          ${roomRow('Pictionary but worse',[['D','p'],['M',''],['S','g'],['B','w']],6,8,'3 rounds · 45s',true)}
+          ${roomRow('quiet drawing room',[['N','']],1,4,'No scoring · 120s',false)}
+        </div>
+      </div>
+      <div class="dock">
+        <div class="kick">Pick a name to play</div>
+        <div class="guessrow">
+          <span class="gfield">Your name…</span>
+          <span class="gsend" style="width:auto;padding:0 18px;font-weight:900;font-size:15px">Play</span>
+        </div>
+      </div>
+    </div>` },
+
+  { name:'C · Naming, keyboard up',
+    bad:[
+      'The name field is the first text input a visitor ever meets, and the shipped page has no layout for the keyboard being open: the field sits mid-page and the rest of the screen keeps its full height behind it.'
+    ],
+    good:[
+      'The dock rides the keyboard exactly as the guess field does in play — same contract, so the first thing a player learns about this interface still holds an hour later.',
+      'The rooms stay visible above, so the reason for typing a name is still on screen while you type it.',
+      '<b>Go</b> submits; there is nothing else to reach for.',
+      'The identity block is the one place where a name is required rather than optional, so it is the one dock with no dismiss — but scrolling still works behind it.'
+    ],
+    kb:true, goLabel:'play',
+    html:`
+    <div class="app">
+      <div class="stagearea" style="padding:8px 14px 10px;gap:10px;overflow:hidden">
+        <div style="flex:0 0 auto;padding:0 2px">
+          <div class="disp" style="font-size:19px;line-height:1.15">14 people are drawing right now</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px;flex:0 0 auto">
+          ${roomRow('Coffee break doodles',[['J','p'],['P','w'],['K','']],3,8,'3 rounds · 90s',true)}
+          ${roomRow('sketch &amp; chill',[['A','w'],['R','']],2,6,'5 rounds · 60s',false)}
+        </div>
+      </div>
+      <div class="dock">
+        <div class="kick">Pick a name to play</div>
+        <div class="guessrow">
+          <span class="gfield focus" style="color:var(--ink)">Kit<span class="caret"></span></span>
+          <span class="gsend" style="width:auto;padding:0 18px;font-weight:900;font-size:15px">Play</span>
+        </div>
+      </div>
+    </div>` }
+]});
+
+/* ───────────────── 02 · ARRIVING FROM AN INVITE ───────────────── */
+S({ id:'invite', n:'02', group:'Arriving', title:'Arriving from an invite',
+  lede:'The most common first landing a party game has: a friend pastes a link into a group chat and you tap it. This is a different screen from the lobby, and it is the one where the cold-arrival problem costs the most.',
+  variants:[{ name:'Invite landing',
+    bad:[
+      '<b>The Join button is below the fold.</b> Measured cold at 390 × 844: the actions sit at <span class="m">y 839–937</span> on an 844 px screen. You tap a friend’s link and the one thing you came to do is off screen.',
+      '<b>380 px of room configuration comes first</b> — a 2×2 table of Players / Rounds / Draw time / Scoring, then four chips for hint mode, tools, spectators and prompt list. None of it is why anyone taps an invite.',
+      'Then <b>315 px of account decision</b> before the button, on a screen reached by someone who has already decided to play.',
+      '<b>Join game</b> and <b>Spectate</b> are twins again, so the screen ends on a question rather than an answer.',
+      'The page is <span class="m">990 px</span> tall for what is fundamentally a yes.'
+    ],
+    good:[
+      '<b>Who invited you and who is already there</b> is the top of the screen: the room’s name, its state, and the faces in it. That is the whole reason the link got tapped.',
+      '<b>The name field and Join are one docked block.</b> Type, tap, you are in — and the field is pre-filled from the last name this device used, so a returning guest just taps.',
+      '<b>Room settings collapse behind one line.</b> They matter to the host who set them and nobody else at this moment; the summary stays for anyone who wants it.',
+      '<b>Spectate is a link.</b> It is a real choice for someone arriving mid-game, just not the one the link was sent for.',
+      'Everything above the dock scrolls; the dock does not.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <button class="iconbtn ghost">${ic.back}</button>
+        <span class="codechip">6CR2TQ</span>
+        <span class="sb-sp"></span>
+        <span class="chip warm">Waiting</span>
+      </div>
+      <div class="stagearea" style="padding:14px;gap:14px;overflow-y:auto">
+        <div style="flex:0 0 auto">
+          <div class="kick">You’ve been invited to</div>
+          <div class="disp" style="font-size:27px;line-height:1.12;margin-top:3px">Coffee break doodles</div>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;padding:14px">
+          <div class="kick" style="margin-bottom:10px">Already here · 3 of 8</div>
+          <div style="display:flex;gap:14px">
+            ${[['J','p','Jonas'],['P','w','Priya'],['K','','Kit']].map(([l,c,nm])=>`
+              <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+                <span class="av lg ${c}">${l}</span>
+                <span style="font-size:11.5px;font-weight:800">${nm}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <button class="row card" style="flex:0 0 auto;display:flex;align-items:center;gap:11px;min-height:56px;width:100%;text-align:left;border-radius:16px">
+          <span class="lbl">3 rounds · 90s · timed hints</span>
+          <span class="val faint">${ic.chev}</span>
+        </button>
+      </div>
+      <div class="dock" style="gap:10px">
+        <div>
+          <div class="kick" style="margin-bottom:7px">Play as</div>
+          <div class="gfield" style="color:var(--ink)">Kit<span class="caret"></span></div>
+        </div>
+        <button class="btn go">Join the game</button>
+        <button class="linkbtn">Watch without playing</button>
+      </div>
+    </div>` }]});
+
+/* ─────────────────────────── 03 · LOBBY ─────────────────────────── */
+S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
   lede:'The lobby is where a phone user decides whether this game is worth pulling friends into. Today it opens on an account-signup card and buries the rooms four cards down, 1.4 screens below the fold.',
   variants:[
   { name:'A · Rooms first',
@@ -726,7 +912,7 @@ S({ id:'lobby', n:'01', group:'Entry', title:'Lobby',
 ]});
 
 /* ─────────────────────────── 02 · JOIN SHEET ─────────────────────────── */
-S({ id:'join', n:'02', group:'Entry', title:'Join with a code',
+S({ id:'join', n:'04', group:'Entry', title:'Join with a code',
   lede:'A code is almost always arriving from a message thread, so the sheet leads with paste and keeps the field in the thumb zone above the keyboard.',
   variants:[{ name:'Sheet',
     bad:[
@@ -766,7 +952,7 @@ S({ id:'join', n:'02', group:'Entry', title:'Join with a code',
     </div>`, kb:true, goLabel:'join' }]});
 
 /* ─────────────────────────── 03 · CREATE ─────────────────────────── */
-S({ id:'create', n:'03', group:'Entry', title:'Create a room',
+S({ id:'create', n:'05', group:'Entry', title:'Create a room',
   lede:'The one page with a confirmed layout bug: at 390 px the form is 419 px wide and every control is clipped on the right.',
   variants:[{ name:'Basics + presets',
     bad:[
@@ -852,7 +1038,7 @@ const feedLine = (who,txt,kind) =>
     : `<span class="nm">${who}</span><span style="color:var(--ink);font-weight:600">${txt}</span>`}</div>`;
 
 /* ─────────────────────────── 04 · WAITING ROOM ─────────────────────────── */
-S({ id:'waiting', n:'04', group:'In the room', title:'Waiting room',
+S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
   lede:'The host has exactly two jobs here — get people in, then start. Today both are below the fold.',
   variants:[{ name:'Host view',
     bad:[
@@ -920,7 +1106,7 @@ S({ id:'waiting', n:'04', group:'In the room', title:'Waiting room',
     </div>` }]});
 
 /* ─────────────────────────── 05 · PROMPT CHOICE ─────────────────────────── */
-S({ id:'choice', n:'05', group:'In the room', title:'Pick a prompt',
+S({ id:'choice', n:'07', group:'In the room', title:'Pick a prompt',
   lede:'A fifteen-second decision, currently made from three small tiles at the top of the screen above an empty white canvas.',
   variants:[{ name:'Drawer',
     bad:[
@@ -967,7 +1153,7 @@ S({ id:'choice', n:'05', group:'In the room', title:'Pick a prompt',
     </div>` }]});
 
 /* ─────────────────────────── 06 · DRAWING ─────────────────────────── */
-S({ id:'drawing', n:'06', group:'In the room', title:'Drawing',
+S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
   lede:'A 4:3 canvas is baked into the wire protocol (800×600), so on a portrait phone it can never be more than about a third of the screen. The redesign stops fighting that and spends the remaining two thirds on the two things a drawer actually wants: full tools under the thumb, and the guesses arriving.',
   variants:[{ name:'A · Palette always out',
     bad:[
@@ -1077,7 +1263,7 @@ S({ id:'drawing', n:'06', group:'In the room', title:'Drawing',
 </script>
 <script>
 /* ─────────────────────────── 07 · GUESSING (idle) ─────────────────────────── */
-S({ id:'guessing', n:'07', group:'In the room', title:'Guessing',
+S({ id:'guessing', n:'09', group:'In the room', title:'Guessing',
   lede:'The guesser’s screen before the keyboard opens. Everything here has to survive the keyboard opening — see the next screen.',
   variants:[{ name:'Guesser',
     bad:[
@@ -1136,7 +1322,7 @@ S({ id:'guessing', n:'07', group:'In the room', title:'Guessing',
     </div>` }]});
 
 /* ─────────────────────────── 08 · GUESSING + KEYBOARD ─────────────────────────── */
-S({ id:'keyboard', n:'08', group:'In the room', title:'Guessing with the keyboard up',
+S({ id:'keyboard', n:'10', group:'In the room', title:'Guessing with the keyboard up',
   lede:'The scenario the whole redesign turns on. With a soft keyboard open the guesser has about 510 px of app. Today that budget buys a 6 px hairline, ten tiny tiles, the drawing, and nothing else — every other player, every guess and the clock are gone from the moment you start typing.',
   variants:[{ name:'A · Nothing overlaps the drawing',
     bad:[
@@ -1301,7 +1487,7 @@ const finalRow = (rk,l,c,nm,you,total,note) => `
   </div>`;
 
 /* ─────────────────────────── 09 · TURN RESULTS ─────────────────────────── */
-S({ id:'results', n:'09', group:'Between turns', title:'Turn results',
+S({ id:'results', n:'11', group:'Between turns', title:'Turn results',
   lede:'Six seconds of payoff, currently delivered inside a 250 px box floating on the canvas while confetti paints over the text.',
   variants:[{ name:'Sheet',
     bad:[
@@ -1355,7 +1541,7 @@ S({ id:'results', n:'09', group:'Between turns', title:'Turn results',
     </div>` }]});
 
 /* ─────────────────────────── 10 · GAME OVER ─────────────────────────── */
-S({ id:'gameover', n:'10', group:'Between turns', title:'Game over',
+S({ id:'gameover', n:'12', group:'Between turns', title:'Game over',
   lede:'The moment that decides whether the group plays another round — currently five competing buttons under confetti that makes half the text unreadable.',
   variants:[{ name:'Podium + tabs',
     bad:[
@@ -1415,7 +1601,7 @@ S({ id:'gameover', n:'10', group:'Between turns', title:'Game over',
     </div>` }]});
 
 /* ─────────────────────────── 11 · DRAWINGS ─────────────────────────── */
-S({ id:'recap', n:'11', group:'Between turns', title:'The drawings',
+S({ id:'recap', n:'13', group:'Between turns', title:'The drawings',
   lede:'Six drawings from the game, currently paged one at a time by two text buttons.',
   variants:[{ name:'Swipe gallery',
     bad:[
@@ -1462,7 +1648,7 @@ S({ id:'recap', n:'11', group:'Between turns', title:'The drawings',
     </div>` }]});
 
 /* ─────────────────────────── 12 · PLAYERS ─────────────────────────── */
-S({ id:'players', n:'12', group:'Overlays', title:'Players & score',
+S({ id:'players', n:'14', group:'Overlays', title:'Players & score',
   lede:'The live scoreboard during a turn.',
   variants:[{ name:'Bottom sheet',
     bad:[
@@ -1524,7 +1710,7 @@ S({ id:'players', n:'12', group:'Overlays', title:'Players & score',
 </script>
 <script>
 /* ─────────────────────────── 13 · SETTINGS ─────────────────────────── */
-S({ id:'settings', n:'13', group:'Overlays', title:'Settings',
+S({ id:'settings', n:'15', group:'Overlays', title:'Settings',
   lede:'A desktop dialog rendered on a phone.',
   variants:[{ name:'Full-screen sheet',
     bad:[
@@ -1587,7 +1773,7 @@ S({ id:'settings', n:'13', group:'Overlays', title:'Settings',
     </div>` }]});
 
 /* ─────────────────────────── 14 · PROFILE ─────────────────────────── */
-S({ id:'profile', n:'14', group:'Elsewhere', title:'Profile',
+S({ id:'profile', n:'16', group:'Elsewhere', title:'Profile',
   lede:'A player’s record, sized for a phone rather than reflowed from a desktop table.',
   variants:[{ name:'Profile',
     bad:[
@@ -1642,7 +1828,7 @@ S({ id:'profile', n:'14', group:'Elsewhere', title:'Profile',
     </div>` }]});
 
 /* ─────────────────────────── 15 · PROMPT STATS ─────────────────────────── */
-S({ id:'stats', n:'15', group:'Elsewhere', title:'Prompt stats',
+S({ id:'stats', n:'17', group:'Elsewhere', title:'Prompt stats',
   lede:'A 592-row data table, delivered to a phone in full.',
   variants:[{ name:'Cards + filter sheet',
     bad:[
