@@ -1153,8 +1153,51 @@
     overflow: visible;
   }
 
+  /* No panel, just the controls. With the feed gone the box below the canvas
+     held nothing but a field, and its surface, top border and shadow drew a
+     widget around that emptiness. What is left is the composer: the letter
+     counts, the field, the send button. */
   .game-room.guess-focused .room-shell-chat .sidebar-box {
-    padding-top: 6px;
+    padding: 0 12px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: none;
+    border: 0;
+    box-shadow: none;
+    /* The verdict hangs above the composer, outside this box. `hidden` here is
+       what made it invisible: it clipped 21px off a 36px chip. Nothing can
+       overflow now that the feed is display:none. */
+    overflow: visible;
+  }
+
+  .game-room.guess-focused .chat-input {
+    padding-top: 0;
+  }
+
+  /* The verdict on the guess being typed is the one thing worth interrupting
+     the drawing for, so it goes over the canvas rather than beside it, and
+     stays translucent enough to keep the strokes underneath readable. */
+  .game-room.guess-focused .guess-focus-flash {
+    bottom: calc(100% + 6px);
+    /* Over a white canvas the kind tints alone are unreadable — in dark they
+       are 13-35% alpha, meant to sit on a panel. The chip gets its own nearly
+       opaque ground and wears the tint on top; the kind still reads from the
+       border and the text, which are already per-kind. */
+    background-color: color-mix(in srgb, var(--card) 88%, transparent);
+    background-image: linear-gradient(var(--flash-tint), var(--flash-tint));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .game-room.guess-focused .guess-focus-flash-close {
+    --flash-tint: var(--warning-soft);
+  }
+
+  .game-room.guess-focused .guess-focus-flash-miss {
+    --flash-tint: var(--well);
+  }
+
+  .game-room.guess-focused .guess-focus-flash-info,
+  .game-room.guess-focused .guess-focus-flash-error {
+    --flash-tint: var(--danger-soft);
   }
 }
 

@@ -50,9 +50,13 @@ Sorted by how much it cost a player.
    type into goes: the clock numeral, the pip row and the feed are all things a
    guesser reads *between* guesses, and the depleting rule alone says "running
    out" without costing a line. What survives is the letter tiles, that rule,
-   the canvas, and the composer — where the verdict on your own guess is a chip
-   above the field, the one piece of feedback that is about the guess being
-   typed. Measured against keeping the pips and a line of feed: **390 × 293 vs
+   the canvas, and the composer — which is the letter counts, the field and the
+   send button, with no panel drawn around them, because a surface, a border
+   and a shadow around a single text field is chrome around emptiness. The
+   verdict on your own guess is a chip above the field, the one piece of
+   feedback that is about the guess being typed; it hangs over the canvas when
+   the canvas reaches that far, translucent over a blur so the strokes stay
+   readable through it. Measured against keeping the pips and a line of feed: **390 × 293 vs
    349 × 262** at a 480 px viewport, **387 × 290 vs 296 × 222** at 440. At 520
    and up both reach 390 × 293, which is the protocol ceiling at this width.
 2. **`/create` overflowed horizontally on every common phone.**
