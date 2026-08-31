@@ -33,7 +33,9 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await room_code_input.fill("ab-c12")
             assert await room_code_input.input_value() == "ABC12"
             await room_code_input.fill("")
-            await page.locator(".bottom-sheet-close").click()
+            # The code sheet spends its header slot on Paste, so the grab
+            # handle is what closes it.
+            await page.locator(".bottom-sheet-grab").click()
             await page.locator('[data-testid="lobby-code-sheet"]').wait_for(state="detached")
 
             # The first-run name field carries the app's input contract, except

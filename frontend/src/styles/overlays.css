@@ -481,6 +481,7 @@
 
 .bottom-sheet {
   background: var(--card);
+  transition: transform 180ms ease;
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-raised);
@@ -493,7 +494,32 @@
   width: 100%;
 }
 
-.bottom-sheet-grab { display: none; }
+/* A real control, not an ornament: it takes a tap and follows a downward
+   drag, which is what a thumb tries first and what carries the dismiss when
+   the header slot is spent on something else. */
+.bottom-sheet-grab {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: none;
+  flex: 0 0 auto;
+  padding: 6px 0 4px;
+  touch-action: none;
+  width: 100%;
+}
+
+.bottom-sheet-grab-bar {
+  background: var(--line-strong);
+  border-radius: 3px;
+  display: block;
+  height: 5px;
+  margin: 0 auto;
+  width: 44px;
+}
+
+.bottom-sheet-grab:hover .bottom-sheet-grab-bar {
+  background: var(--faint);
+}
 
 .bottom-sheet-head {
   align-items: center;
@@ -554,13 +580,7 @@
   }
 
   .bottom-sheet-grab {
-    background: var(--line-strong);
-    border-radius: 3px;
     display: block;
-    flex: 0 0 auto;
-    height: 5px;
-    margin: 2px auto 2px;
-    width: 44px;
   }
 }
 
@@ -655,4 +675,8 @@
      top of the sheet; the standings scroll under them. */
   .turn-results-panel h3 { font-size: 11px; }
   .turn-results-prompt { font-size: 1.35rem; margin-bottom: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-sheet { transition: none; }
 }

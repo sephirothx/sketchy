@@ -61,6 +61,25 @@
   margin-bottom: 0;
 }
 
+/* In the sheet the title already says what the field is for, and the cells
+   take the whole width rather than huddling at one end of it. */
+.room-code-label.is-unlabelled,
+.panel .room-code-label.is-unlabelled {
+  gap: 0;
+  width: 100%;
+}
+
+.room-code-label.is-unlabelled .room-code-cells {
+  width: 100%;
+}
+
+.room-code-label.is-unlabelled .room-code-cell {
+  flex: 1 1 0;
+  height: 56px;
+  min-width: 0;
+  width: auto;
+}
+
 .room-code-cells {
   position: relative;
   display: flex;
@@ -913,4 +932,17 @@
   font-size: 13px;
   font-weight: 700;
   margin: 0;
+}
+
+/* Paste sits where the ✕ was: a room code is almost always arriving from
+   somewhere else, and the grab handle above it is what closes the sheet. */
+.room-code-paste {
+  cursor: pointer;
+  flex: 0 0 auto;
+  min-height: 40px;
+}
+
+.room-code-paste:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
 }

@@ -69,19 +69,25 @@ function RoomCodeInput({
   onChange,
   onSubmit,
   inputRef,
+  hideLabel = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
   /** So the code sheet can open with the caret already in the field. */
   inputRef?: React.Ref<HTMLInputElement>;
+  /** The sheet's own title already says what the field is for. */
+  hideLabel?: boolean;
 }) {
   const fieldId = useId();
   const activeIndex = Math.min(value.length, ROOM_CODE_LENGTH - 1);
 
   return (
-    <label className="room-code-label" htmlFor={fieldId}>
-      Room code
+    <label
+      className={`room-code-label${hideLabel ? " is-unlabelled" : ""}`}
+      htmlFor={fieldId}
+    >
+      <span className={hideLabel ? "visually-hidden" : undefined}>Room code</span>
       <span className="room-code-cells">
         {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
         <input
@@ -147,6 +153,26 @@ export function LobbyBrowserPage() {
   const [joinCode, setJoinCode] = useState("");
   const [codeSheetOpen, setCodeSheetOpen] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+
+  /** A room code arrives from a message thread, so reading the clipboard is
+   *  the shortest path. Where that is refused — no permission, an insecure
+   *  origin, a browser that does not implement it — the field is focused so
+   *  the platform's own paste is one long-press away. */
+  async function pasteCode() {
+    try {
+      const text = await navigator.clipboard?.readText();
+      const cleaned = normalizeRoomCodeInput(text ?? "");
+      if (cleaned) {
+        setJoinCode(cleaned);
+        setError(null);
+      } else {
+        setError("There is no room code on the clipboard.");
+      }
+    } catch {
+      setError("Sketchy could not read the clipboard. Paste into the boxes instead.");
+    }
+    codeFieldRef.current?.focus();
+  }
   const codeFieldRef = useRef<HTMLInputElement | null>(null);
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const [error, setError] = useState<string | null>(null);
@@ -594,6 +620,11 @@ export function LobbyBrowserPage() {
           closeLabel="Close"
           onDismiss={() => setCodeSheetOpen(false)}
           initialFocusRef={codeFieldRef}
+          headerAction={
+            <button type="button" className="chip room-code-paste" onClick={() => void pasteCode()}>
+              Paste
+            </button>
+          }
           footer={
             <>
               {error && <p className="lobby-action-error" role="alert">{error}</p>}
@@ -622,6 +653,7 @@ export function LobbyBrowserPage() {
             onChange={setJoinCode}
             onSubmit={() => void handleJoinByCode(false)}
             inputRef={codeFieldRef}
+            hideLabel
           />
         </BottomSheet>
       )}
