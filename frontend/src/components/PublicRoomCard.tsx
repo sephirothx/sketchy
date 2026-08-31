@@ -27,14 +27,18 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
   return (
     <article className="public-room-card" data-testid="public-room-card">
       <div className="public-room-card-main">
-        <h3 className="public-room-name">{room.name}</h3>
-        <p className="public-room-facts">
-          {/* The flag carries the language; the name of it is for anyone who
-              cannot see the flag, or is not sure which one it is. */}
+        {/* The flag rides on the name's line: it is part of what the room is
+            rather than one of the numbers describing it, and it buys the
+            facts row back a slot. The language's name is read out rather than
+            printed, for anyone who cannot see the flag or is unsure of it. */}
+        <h3 className="public-room-name">
+          <span className="public-room-name-text">{room.name}</span>
           <span className="public-room-language" title={`Prompt language: ${languageLabel}`}>
             <Flag language={room.promptLanguage} />
             <span className="visually-hidden">{languageLabel}</span>
           </span>
+        </h3>
+        <p className="public-room-facts">
           <span title="Players">
             <UsersIcon size={14} />
             {room.playerCount}/{room.maxPlayers}

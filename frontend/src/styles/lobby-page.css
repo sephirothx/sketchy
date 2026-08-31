@@ -253,12 +253,25 @@
 }
 
 .public-room-name {
+  align-items: center;
   color: var(--ink);
+  display: flex;
   font-family: var(--font-display);
   font-size: 17px;
   font-weight: 600;
+  gap: 8px;
   margin: 0 0 6px;
+}
+
+.public-room-name-text {
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.public-room-language {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
 }
 
 /* The flag alone; the language's name is read out rather than printed, so the
@@ -715,5 +728,100 @@
     min-height: 44px;
     text-decoration: underline;
     text-underline-offset: 3px;
+  }
+}
+
+/* ── Filters behind one chip ────────────────────────────────────────────
+   The bar's three controls wrapped to three rows on a phone — about 110px of
+   filtering above the first room. */
+.lobby-filter-sheet-button.has-filters {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.lobby-filter-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.lobby-filter-row {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-top: 1.5px solid var(--line);
+  color: var(--ink);
+  display: flex;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 800;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 2px;
+  text-align: left;
+  width: 100%;
+}
+
+.lobby-filter-row:first-child {
+  border-top: 0;
+}
+
+.lobby-filter-row.is-toggle {
+  cursor: pointer;
+}
+
+.lobby-filter-switch {
+  background: var(--line-strong);
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: 29px;
+  position: relative;
+  width: 48px;
+}
+
+.lobby-filter-switch::after {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  content: "";
+  height: 23px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: left 140ms ease;
+  width: 23px;
+}
+
+.lobby-filter-switch.is-on {
+  background: var(--primary);
+}
+
+.lobby-filter-switch.is-on::after {
+  left: 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-filter-switch::after { transition: none; }
+}
+
+@media (max-width: 720px) {
+  /* Search and the chip share one row. */
+  .lobby-filter-bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .lobby-room-search {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .lobby-filter-sheet-button {
+    flex: 0 0 auto;
+    min-height: 44px;
+    white-space: nowrap;
   }
 }

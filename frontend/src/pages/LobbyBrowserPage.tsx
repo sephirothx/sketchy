@@ -146,6 +146,7 @@ export function LobbyBrowserPage() {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [codeSheetOpen, setCodeSheetOpen] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const codeFieldRef = useRef<HTMLInputElement | null>(null);
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const [error, setError] = useState<string | null>(null);
@@ -164,6 +165,10 @@ export function LobbyBrowserPage() {
   const [languageFilter, setLanguageFilter] = useState("all");
   const [hideFullRooms, setHideFullRooms] = useState(false);
   const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
+  // Drives the chip's badge, so a list narrowed by filters that are out of
+  // sight in a sheet never looks like a list with nothing in it.
+  const activeFilterCount =
+    (languageFilter !== "all" ? 1 : 0) + (hideFullRooms ? 1 : 0) + (hideInProgressRooms ? 1 : 0);
   // Nothing here works without a name: the server provisions on naming,
   // needs an account to open a room, and needs a valid nickname to seat
   // anybody. The first-run block above asks for it.
@@ -420,36 +425,117 @@ export function LobbyBrowserPage() {
                 enterKeyHint="search"
               />
             </span>
-            <span className="lobby-language-filter">
-              <select
-                aria-label="Filter by prompt language"
-                value={languageFilter}
-                onChange={(e) => setLanguageFilter(e.target.value)}
+            {/* Three controls in a row is three rows on a phone, and 110px of
+                filtering before the first room. Behind one chip they cost a
+                slot beside the search field, and the chip says how many are
+                on so a filtered-looking list is never a mystery. */}
+            {isNarrow ? (
+              <button
+                type="button"
+                className={`lobby-filter-toggle lobby-filter-sheet-button${activeFilterCount > 0 ? " has-filters" : ""}`}
+                aria-pressed={activeFilterCount > 0}
+                onClick={() => setFilterSheetOpen(true)}
               >
-                <option value="all">All languages</option>
-                {roomLanguages.map((language) => (
-                  <option key={language} value={language}>{promptLanguageLabel(language)}</option>
-                ))}
-              </select>
-              <ChevronDownIcon size={14} />
-            </span>
-            <button
-              type="button"
-              className="lobby-filter-toggle"
-              aria-pressed={hideFullRooms}
-              onClick={() => setHideFullRooms((v) => !v)}
-            >
-              Hide full
-            </button>
-            <button
-              type="button"
-              className="lobby-filter-toggle"
-              aria-pressed={hideInProgressRooms}
-              onClick={() => setHideInProgressRooms((v) => !v)}
-            >
-              Hide in progress
-            </button>
+                Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+              </button>
+            ) : (
+              <>
+                <span className="lobby-language-filter">
+                  <select
+                    aria-label="Filter by prompt language"
+                    value={languageFilter}
+                    onChange={(e) => setLanguageFilter(e.target.value)}
+                  >
+                    <option value="all">All languages</option>
+                    {roomLanguages.map((language) => (
+                      <option key={language} value={language}>{promptLanguageLabel(language)}</option>
+                    ))}
+                  </select>
+                  <ChevronDownIcon size={14} />
+                </span>
+                <button
+                  type="button"
+                  className="lobby-filter-toggle"
+                  aria-pressed={hideFullRooms}
+                  onClick={() => setHideFullRooms((v) => !v)}
+                >
+                  Hide full
+                </button>
+                <button
+                  type="button"
+                  className="lobby-filter-toggle"
+                  aria-pressed={hideInProgressRooms}
+                  onClick={() => setHideInProgressRooms((v) => !v)}
+                >
+                  Hide in progress
+                </button>
+              </>
+            )}
           </div>
+        )}
+
+        {filterSheetOpen && (
+          <BottomSheet
+            title="Filters"
+            testId="lobby-filter-sheet"
+            onDismiss={() => setFilterSheetOpen(false)}
+            footer={
+              <>
+                {activeFilterCount > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setLanguageFilter("all");
+                      setHideFullRooms(false);
+                      setHideInProgressRooms(false);
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                )}
+                <Button variant="primary" onClick={() => setFilterSheetOpen(false)}>
+                  Show {filteredRooms.length} {filteredRooms.length === 1 ? "room" : "rooms"}
+                </Button>
+              </>
+            }
+          >
+            <div className="lobby-filter-sheet">
+              <label className="lobby-filter-row">
+                <span>Prompt language</span>
+                <span className="lobby-language-filter">
+                  <select
+                    value={languageFilter}
+                    onChange={(e) => setLanguageFilter(e.target.value)}
+                  >
+                    <option value="all">All languages</option>
+                    {roomLanguages.map((language) => (
+                      <option key={language} value={language}>{promptLanguageLabel(language)}</option>
+                    ))}
+                  </select>
+                  <ChevronDownIcon size={14} />
+                </span>
+              </label>
+              <button
+                type="button"
+                className="lobby-filter-row is-toggle"
+                aria-pressed={hideFullRooms}
+                onClick={() => setHideFullRooms((v) => !v)}
+              >
+                <span>Hide full rooms</span>
+                <span className={`lobby-filter-switch${hideFullRooms ? " is-on" : ""}`} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="lobby-filter-row is-toggle"
+                aria-pressed={hideInProgressRooms}
+                onClick={() => setHideInProgressRooms((v) => !v)}
+              >
+                <span>Hide games in progress</span>
+                <span className={`lobby-filter-switch${hideInProgressRooms ? " is-on" : ""}`} aria-hidden="true" />
+              </button>
+            </div>
+          </BottomSheet>
         )}
 
         {roomRefreshError && <div className="room-list-warning" role="status"><span>{roomRefreshError}</span><button type="button" onClick={retryRoomList}>Retry</button></div>}
