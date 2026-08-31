@@ -116,6 +116,20 @@
   min-width: 44px;
 }
 
+.game-header-mark {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* The code is the one thing here that has to stay readable, so the mark is
+   what gives ground first when the room name and the round chip crowd it. */
+@media (max-width: 380px) {
+  .game-header-mark {
+    display: none;
+  }
+}
+
 /* The code pill doubles as the invite-copy control. */
 .room-copy-button {
   background: var(--card);
@@ -829,6 +843,9 @@
     padding: 6px 0 0;
     display: flex;
     flex-direction: column;
+    /* Without this the bands shrink-wrap their content: the dock came out
+       318px wide in a 375px shell, an island with a gap either side. */
+    align-items: stretch;
   }
 
   /* Stage. Takes exactly what the canvas and its two bands need — the canvas
@@ -862,6 +879,22 @@
   .game-room.game-room-playing .guess-timer-bar,
   .game-room.game-room-playing .guess-pips {
     padding-inline: 12px;
+  }
+
+  /* One clock. The ring in the status band carries it — the numeral beside the
+     prompt and the depleting rule under it are the same number a second and a
+     third time. They come back only when the keyboard takes the band away. */
+  .game-room.game-room-playing .turn-bar-clock,
+  .game-room.game-room-playing .guess-timer-bar {
+    display: none;
+  }
+
+  .game-room.guess-focused .turn-bar-clock {
+    display: inline-flex;
+  }
+
+  .game-room.guess-focused .guess-timer-bar {
+    display: block;
   }
 
   /* Masked letters at a size worth reading. 19x26 was below the floor for a
@@ -927,6 +960,18 @@
     margin: 0;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
     position: relative;
+    width: 100%;
+  }
+
+  /* The strip fills the dock rather than sitting as an island in the middle
+     of it: the same five controls, each with more of a target. */
+  .game-room.game-room-playing .toolbar-mobile-strip {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .game-room.game-room-playing .toolbar-mobile-strip .toolbar-mobile-chip {
+    flex: 1 1 0;
   }
 
   /* The canvas takes the height the bands leave and gives up width to keep
@@ -984,9 +1029,19 @@
     min-height: 0;
   }
 
+  /* Both must be allowed to shrink. A `flex: 0 0 auto` panel taller than its
+     box does not scroll — with `justify-content: flex-end` the excess leaves
+     through the *top*, unclipped, and paints over the canvas. A long enough
+     game turned the drawing into a wall of chat. */
   .game-room.game-room-playing .room-shell-chat .sidebar-box {
     flex: 1 1 auto;
     justify-content: flex-end;
+    overflow: hidden;
+  }
+
+  .game-room.game-room-playing .room-chat-panel {
+    flex: 1 1 auto;
+    overflow: hidden;
   }
 
   .game-room.game-room-playing .room-shell-chat .sidebar-box {
@@ -999,11 +1054,15 @@
     padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
   }
 
+  /* Kills the desktop chat's fixed height without pinning the panel: this
+     used to say `flex: 0 0 auto`, which outranked every attempt to let the
+     panel shrink and was what sent the feed out through the top of its box. */
   .game-room.game-room-playing .room-chat-panel.guess-chat,
   .game-room.game-room-playing .guess-chat {
     height: auto !important;
     max-height: none;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .game-room.game-room-playing .room-chat-heading {

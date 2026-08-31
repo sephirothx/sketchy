@@ -26,6 +26,7 @@ import { useToast } from "../lib/toast";
 import {
   CopyIcon,
   DotsIcon,
+  Wordmark,
   DownloadIcon,
   GearIcon,
   LeaveIcon,
@@ -304,6 +305,12 @@ export function ActiveGameRoom({ code }: { code: string }) {
            in to everything else. The eight-icon strip this replaces put a red
            Leave a thumb-width from Settings; those live in the ⋯ sheet now. */
         <header className="game-header game-header-mobile">
+          {/* The mark earns its place even here: this is the only screen a
+              player is on for ten minutes at a stretch, and it is what says
+              which game they are in when they come back to the tab. */}
+          <span className="game-header-mark" aria-hidden="true">
+            <Wordmark size={22} />
+          </span>
           <button
             type="button"
             className="room-copy-button"
