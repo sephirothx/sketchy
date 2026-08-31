@@ -889,10 +889,9 @@
     display: none;
   }
 
-  .game-room.guess-focused .turn-bar-clock {
-    display: inline-flex;
-  }
-
+  /* The bar comes back when the keyboard takes the band away; the number does
+     not. A depleting rule says "running out" at a glance, which is the whole
+     of what a guesser does with it — and the digits cost a line of canvas. */
   .game-room.guess-focused .guess-timer-bar {
     display: block;
   }
@@ -1103,11 +1102,12 @@
     display: none !important;
   }
 
-  /* One line of feed survives, so the race is still legible while typing. */
+  /* Everything that is not the drawing or the box you type into goes. The feed,
+     the pips and the clock are all read *between* guesses, not during one, and
+     while the keyboard is up the canvas is what the typing is about. */
   .game-room.guess-focused .chat-messages-container,
-  .game-room.guess-focused .chat-messages {
-    flex: 0 0 auto;
-    max-height: 26px;
+  .game-room.guess-focused .guess-pips {
+    display: none;
   }
 
   .game-room.guess-focused .room-shell-chat {
@@ -1121,13 +1121,6 @@
 
   .game-room.guess-focused .canvas-area {
     gap: 4px;
-  }
-
-  /* The feed gives its height back to the canvas while the keyboard is up,
-     and there the height is what runs out first — so the canvas is sized from
-     it and gives up width to keep 4:3. */
-  .game-room.guess-focused .chat-messages-container {
-    max-height: 26px;
   }
 
   /* With the keyboard up the stage grows again, so the wrapper has a definite
@@ -1888,8 +1881,15 @@ button.guess-pips {
    layout is. Turned sideways the same canvas gets more of it, so landscape is
    treated as a real drawing mode rather than a broken portrait: the controls
    become a rail on the holding side, the feed a narrow column, and the canvas
-   takes everything between them. */
-@media (orientation: landscape) and (max-height: 520px) {
+   takes everything between them.
+
+   `min-width: 600px` is what makes this landscape rather than merely wide.
+   `orientation` is a property of the viewport, not of the phone: a portrait
+   handset whose soft keyboard eats half the screen reports landscape too, and
+   without the width floor a 360x340 Android with the keyboard up got the
+   two-column rail layout and a 76px-wide guess field. No phone is under 600px
+   across when it is actually turned sideways, and none is over it in portrait. */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 600px) {
   .game-room.game-room-playing {
     padding: 0;
   }

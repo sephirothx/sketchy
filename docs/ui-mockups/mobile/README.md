@@ -44,12 +44,17 @@ Sorted by how much it cost a player.
    per second. A further 49 px sat unused between canvas and field.
    → The playing shell is three bands pinned to the visible viewport, and the
    canvas takes whichever cap binds first — the column's width, or the height
-   the other bands leave — deriving the other side from 4:3. The clock is a
-   numeral beside the letter tiles with the depleting rule under it; the pip row
-   and one line of feed survive; the verdict on your own guess is a chip above
-   the field that stays until you type again. Measured at a 508 px viewport:
-   canvas **375 × 281** against the old 378 × 284, so none of it is paid for out
-   of the drawing.
+   the other bands leave — deriving the other side from 4:3.
+
+   With the keyboard up, everything that is not the drawing or the field you
+   type into goes: the clock numeral, the pip row and the feed are all things a
+   guesser reads *between* guesses, and the depleting rule alone says "running
+   out" without costing a line. What survives is the letter tiles, that rule,
+   the canvas, and the composer — where the verdict on your own guess is a chip
+   above the field, the one piece of feedback that is about the guess being
+   typed. Measured against keeping the pips and a line of feed: **390 × 293 vs
+   349 × 262** at a 480 px viewport, **387 × 290 vs 296 × 222** at 440. At 520
+   and up both reach 390 × 293, which is the protocol ceiling at this width.
 2. **`/create` overflowed horizontally on every common phone.**
    `.create-room-sections` was a bare `display:grid`, so its implicit `auto`
    column sized to a 402 px card inside a 358 px track: `scrollWidth 419`
@@ -168,12 +173,19 @@ never page-scrolled:
   stale tall and `dvh` is right. The minimum means the dock cannot be pushed off
   the bottom by either. `interactive-widget=resizes-content` was already in the
   viewport meta.
-- **The clock is always a number.** The countdown ring runs in the status band
-  on phones too; when the keyboard hides that band, the numeral beside the
-  letter tiles carries it, with the depleting rule beneath for peripheral read.
-- **The race stays visible.** The pip row shows who has guessed and in what
-  order — the state that frozen eligibility (R-GUESS-05) and the drawer bonus
-  (R-SCORE-08) both turn on.
+- **The clock is a number, until the keyboard is up.** The countdown ring runs
+  in the status band on phones; with the keyboard up the band goes and only the
+  depleting rule beneath the letter tiles remains, because a rule reads at a
+  glance and digits cost a line of canvas.
+- **The race is visible between guesses.** The pip row shows who has guessed and
+  in what order — the state that frozen eligibility (R-GUESS-05) and the drawer
+  bonus (R-SCORE-08) both turn on. It is hidden while typing, along with the
+  feed, and comes back the moment the keyboard does.
+- **`orientation: landscape` is not a phone lying on its side.** It is a
+  viewport wider than it is tall, which a portrait handset with a big soft
+  keyboard also is. Every landscape rule carries `min-width: 600px` for that
+  reason; without it a 360 × 340 Android with the keyboard up got the two-column
+  rail layout and a 76 px-wide guess field.
 - **One loud control per screen**; destructive actions live behind a sheet or a
   confirm, never beside routine ones.
 - **44 px minimum targets**, including buyable hint tiles and wheel letters.
