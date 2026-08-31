@@ -502,36 +502,3 @@
     max-height: min(40vh, 200px);
   }
 }
-
-
-/* ── The phone's drawing dock ──────────────────────────────────────────
-   Two scrollable rows of palette, then tools. Always out: the popover this
-   replaces covered the whole canvas, so the drawer could not see what they
-   were colouring. */
-.toolbar-mobile-palette {
-  display: grid;
-  grid-auto-columns: 40px;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(2, 40px);
-  gap: 6px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  padding: 2px 0;
-  scrollbar-width: none;
-  width: 100%;
-}
-
-.toolbar-mobile-palette::-webkit-scrollbar { display: none; }
-
-.toolbar-mobile-palette .toolbar-mobile-swatch-btn {
-  border-radius: 50%;
-  height: 40px;
-  min-height: 40px;
-  min-width: 40px;
-  width: 40px;
-}
-
-/* The chosen colour reads as chosen at a glance, across both themes. */
-.toolbar-mobile-palette .color-swatch.selected {
-  box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--primary);
-}

@@ -831,9 +831,11 @@
     flex-direction: column;
   }
 
-  /* Stage. Takes the height the dock does not need; the canvas centres in it. */
+  /* Stage. Takes exactly what the canvas and its two bands need — the canvas
+     is width-bound in portrait, so stretching this only opens a gap under it.
+     What is left over goes to the feed below. */
   .game-room.game-room-playing .room-shell-main {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
     width: 100%;
     display: flex;
@@ -922,9 +924,6 @@
   .game-room.game-room-playing .room-shell-dock .toolbar-container.toolbar-mobile {
     background: var(--card);
     border-top: 1.5px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
     margin: 0;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
     position: relative;
@@ -933,31 +932,37 @@
   /* The canvas takes the height the bands leave and gives up width to keep
      4:3, rather than being sized from the width and letting the leftover
      become dead space at the bottom of the screen. */
-  /* The canvas takes whichever cap binds first — the column's width, or the
-     height the other bands leave — and derives the other side from 4:3. Both
-     regimes matter on a phone: width binds with the keyboard down (390px of
-     width is 293px of 4:3), height binds with it up. Sizing from width alone
-     would push the guess field off the bottom the moment the keyboard opened;
-     a definite `height` would stop aspect-ratio applying and stretch the
-     drawing. The wrapper centres whatever is left over. */
+  /* The canvas is the point of the screen, so it takes whichever cap binds
+     first — the column's full width, or the height the other bands leave —
+     and derives the other side from 4:3. Both regimes matter on a phone:
+     width binds with the keyboard down (390px of width is 293px of 4:3),
+     height binds with it up. Sizing from width alone would push the guess
+     field off the bottom the moment the keyboard opened; a definite `height`
+     would stop aspect-ratio applying and stretch the drawing.
+
+     It sits hard against the bar above it rather than floating in the middle
+     of the leftover: whatever the canvas cannot use belongs to the feed. */
   .game-room.game-room-playing .canvas-wrapper {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
     max-width: none;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     overflow: hidden;
-    container-type: size;
   }
 
   .game-room.game-room-playing .canvas-stack {
     flex: 0 0 auto;
-    width: min(100%, calc(100cqh * 4 / 3));
+    width: 100%;
     max-width: 100%;
     height: auto;
     aspect-ratio: 4 / 3;
     margin-inline: auto;
+    /* Full-bleed: the 12px a side the bands keep is 24px of drawing. */
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
   }
 
   /* Dock. Absorbs the height the canvas did not need, and spends it on the
@@ -965,7 +970,7 @@
      guesser needs to see the race. The field stays pinned to the bottom. */
   .game-room.game-room-playing .room-shell-chat {
     display: flex;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     flex-direction: column;
     justify-content: flex-end;
     min-height: 0;
@@ -980,7 +985,7 @@
   }
 
   .game-room.game-room-playing .room-shell-chat .sidebar-box {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     justify-content: flex-end;
   }
 
@@ -1007,8 +1012,8 @@
 
   .game-room.game-room-playing .chat-messages-container,
   .game-room.game-room-playing .chat-messages {
-    flex: 0 1 auto;
-    max-height: 150px;
+    flex: 1 1 auto;
+    max-height: none;
     min-height: 0;
   }
 
@@ -1051,9 +1056,34 @@
     gap: 4px;
   }
 
-  /* The feed gives its height back to the canvas while the keyboard is up. */
+  /* The feed gives its height back to the canvas while the keyboard is up,
+     and there the height is what runs out first — so the canvas is sized from
+     it and gives up width to keep 4:3. */
   .game-room.guess-focused .chat-messages-container {
     max-height: 26px;
+  }
+
+  /* With the keyboard up the stage grows again, so the wrapper has a definite
+     height for the canvas to be sized from. Without this the query resolves
+     against a shrink-to-fit parent whose height comes from the canvas — and a
+     canvas sized from its own height is a canvas 0px wide. */
+  .game-room.guess-focused .room-shell-main {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .game-room.guess-focused .room-shell-chat .sidebar-box {
+    flex: 0 0 auto;
+  }
+
+  .game-room.guess-focused .canvas-wrapper {
+    flex: 1 1 auto;
+    align-items: center;
+    container-type: size;
+  }
+
+  .game-room.guess-focused .canvas-stack {
+    width: min(100%, calc(100cqh * 4 / 3));
   }
 
   .game-room.guess-focused .guess-chat {

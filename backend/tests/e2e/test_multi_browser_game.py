@@ -214,13 +214,6 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                     }),
                     saveInHeader: Boolean(document.querySelector('.game-header-save-button')),
                     menuButton: Boolean(document.querySelector('[data-testid="open-room-menu"]')),
-                    swatches: strip.querySelectorAll('.toolbar-mobile-palette .color-swatch').length,
-                    swatchSizes: [...strip.querySelectorAll('.toolbar-mobile-palette .color-swatch')]
-                      .slice(0, 4)
-                      .map((swatch) => {
-                        const box = swatch.getBoundingClientRect();
-                        return { width: box.width, height: box.height };
-                      }),
                   };
                 }
                 """
@@ -235,13 +228,27 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                 size["width"] >= 40 and size["height"] >= 40
                 for size in mobile_toolbar["chipSizes"]
             )
-            # The palette is out rather than behind a chevron whose popover
-            # covered the whole canvas, and its swatches are touch-sized.
-            assert mobile_toolbar["swatches"] >= 12
-            assert all(
-                size["width"] >= 34 and size["height"] >= 34
-                for size in mobile_toolbar["swatchSizes"]
+
+            # The controls stay collapsed behind chips, and the dock they live
+            # in sits below the canvas — so the panel a chip opens rises into
+            # the feed rather than over the drawing being coloured, which is
+            # what made the popover unusable when the strip was mid-screen.
+            await drawer_page.click(".toolbar-mobile-color-chip")
+            await drawer_page.wait_for_selector(".toolbar-mobile-popover")
+            overlap = await drawer_page.evaluate(
+                """
+                () => {
+                  const pop = document.querySelector('.toolbar-mobile-popover');
+                  const canvas = document.querySelector('.canvas-stack');
+                  if (!pop || !canvas) return null;
+                  const p = pop.getBoundingClientRect();
+                  const c = canvas.getBoundingClientRect();
+                  return Math.max(0, Math.min(p.bottom, c.bottom) - Math.max(p.top, c.top));
+                }
+                """
             )
+            assert overlap == 0, f"colour panel covers {overlap}px of the canvas"
+            await drawer_page.click(".toolbar-mobile-color-chip")
             await drawer_page.set_viewport_size({"width": 844, "height": 390})
             await drawer_page.wait_for_selector('[data-testid="toolbar-mobile"]')
             await drawer_page.set_viewport_size({"width": 1280, "height": 720})
