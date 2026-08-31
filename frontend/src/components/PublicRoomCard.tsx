@@ -1,6 +1,17 @@
+import { useState } from "react";
 import { promptLanguageLabel } from "../lib/promptLanguages";
-import { ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from "./icons";
+import { emitWithAck } from "../lib/socket";
+import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { Avatar } from "./ui/Avatar";
+import { ChevronDownIcon, ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from "./icons";
 import type { RoomSummary } from "../types";
+
+interface RosterEntry {
+  nickname: string;
+  nameColor?: string;
+  isAnonymous?: boolean;
+  isHost?: boolean;
+}
 
 interface PublicRoomCardProps {
   room: RoomSummary;
@@ -24,6 +35,34 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
   const playing = room.state === "playing";
   const languageLabel = promptLanguageLabel(room.promptLanguage);
 
+  // Who is in there is fetched for this room when it is asked for, never
+  // carried by the room list - see Room.to_public_roster.
+  const [roster, setRoster] = useState<RosterEntry[] | null>(null);
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+
+  async function toggleRoster() {
+    if (rosterOpen) {
+      setRosterOpen(false);
+      return;
+    }
+    setRosterOpen(true);
+    setRosterError(null);
+    try {
+      const ack = await emitWithAck<{ ok: boolean; players?: RosterEntry[] }>(
+        "get_room_preview",
+        { code: room.code },
+      );
+      if (ack?.ok && Array.isArray(ack.players)) {
+        setRoster(ack.players);
+      } else {
+        setRosterError("Could not read who is in this room.");
+      }
+    } catch {
+      setRosterError("Could not read who is in this room.");
+    }
+  }
+
   return (
     <article className="public-room-card" data-testid="public-room-card">
       <div className="public-room-card-main">
@@ -39,10 +78,19 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
           </span>
         </h3>
         <p className="public-room-facts">
-          <span title="Players">
+          {/* The count is the control: tapping it is how you find out who
+              those players are. */}
+          <button
+            type="button"
+            className={`public-room-roster-toggle${rosterOpen ? " is-open" : ""}`}
+            aria-expanded={rosterOpen}
+            onClick={() => void toggleRoster()}
+            title="See who is in this room"
+          >
             <UsersIcon size={14} />
             {room.playerCount}/{room.maxPlayers}
-          </span>
+            <ChevronDownIcon size={12} />
+          </button>
           <span title="Rounds">
             <RoundsIcon size={14} />
             {room.rounds} {room.rounds === 1 ? "round" : "rounds"}
@@ -56,6 +104,38 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
           {full && <strong className="public-room-flag">Full</strong>}
           {!full && playing && <strong className="public-room-flag is-playing">In progress</strong>}
         </p>
+        {rosterOpen && (
+          <div className="public-room-roster">
+            {rosterError && <p className="public-room-roster-note" role="alert">{rosterError}</p>}
+            {!rosterError && roster === null && (
+              <p className="public-room-roster-note">Looking…</p>
+            )}
+            {!rosterError && roster !== null && roster.length === 0 && (
+              <p className="public-room-roster-note">Nobody is seated yet.</p>
+            )}
+            {!rosterError && roster !== null && roster.length > 0 && (
+              <ul>
+                {roster.map((player, index) => (
+                  <li key={`${player.nickname}-${index}`}>
+                    <Avatar
+                      name={player.nickname}
+                      nameColor={player.nameColor}
+                      isAnonymous={player.isAnonymous}
+                      size={22}
+                    />
+                    <span
+                      className={playerNameClass(player.isAnonymous)}
+                      style={playerNameStyle(player.nameColor, player.isAnonymous)}
+                    >
+                      {player.nickname}
+                    </span>
+                    {player.isHost && <span className="public-room-roster-host">host</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
       <div className="public-room-actions">
         {!full && (

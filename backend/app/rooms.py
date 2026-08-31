@@ -495,6 +495,29 @@ class Room:
             return GamePromptSourceMode.CUSTOM.value
         return GamePromptSourceMode.BUILTIN_FALLBACK.value
 
+    def to_public_roster(self) -> list[dict]:
+        """Who is holding a seat, for the lobby card a visitor has opened.
+
+        Deliberately not part of `to_public_summary()`: that is polled for
+        every public room every few seconds, and putting names in it would make
+        the lobby a live directory of who is playing where. This is only ever
+        answered for one room, and only when somebody asks for it.
+
+        Nicknames and their colours, nothing else. No seat id, no account id
+        (room payloads carry none anywhere), no score, no connection or AFK
+        state - none of it helps someone decide whether to join, and each one
+        would say more about a stranger than the question needs.
+        """
+        return [
+            {
+                "nickname": player.nickname,
+                "nameColor": player.name_color,
+                "isAnonymous": player.is_anonymous,
+                "isHost": player.is_host,
+            }
+            for player in self.seated_players()
+        ]
+
     def to_public_summary(self) -> dict:
         active_players = self.seated_players()
         spectators = [p for p in self.players.values() if p.is_spectator]

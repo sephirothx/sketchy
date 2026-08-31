@@ -137,32 +137,46 @@
   margin-bottom: 14px;
 }
 
+/* The icon and the field are one control, so the wrapper carries the whole
+   field treatment and the input inside it is bare. */
 .lobby-room-search {
-  flex: 1 1 240px;
-  display: flex;
   align-items: center;
-  gap: 9px;
-  background: var(--well);
-  border: 1.5px solid var(--line);
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  padding: 10px 13px;
+  color: var(--faint);
+  display: flex;
+  flex: 1 1 240px;
+  gap: 9px;
   min-height: 44px;
+  padding: 0 13px;
+}
+
+/* Matches `.panel input[type="search"]` in layout-primitives.css rather than
+   losing to it, which is what drew a second bordered box inside this one. */
+.lobby-room-search input[type="search"] {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 15px;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+}
+
+.lobby-room-search input[type="search"]::placeholder {
   color: var(--faint);
 }
 
-.lobby-room-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  font-family: var(--font-body);
-  font-size: 14px;
-  color: var(--ink);
+.lobby-room-search:focus-within {
+  border-color: var(--focus-field-border, var(--primary));
 }
 
-.lobby-room-search:focus-within {
-  border-color: var(--primary);
+.lobby-room-search > svg {
+  flex: 0 0 auto;
 }
 
 .lobby-language-filter {
@@ -824,4 +838,79 @@
     min-height: 44px;
     white-space: nowrap;
   }
+}
+
+/* ── Who is in a room ───────────────────────────────────────────────────
+   The player count doubles as the control. The names are fetched for this
+   room when asked for rather than carried by the polled list, so browsing
+   the lobby is not the same as reading every roster on the server. */
+.public-room-roster-toggle {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 6px;
+  margin: -6px -8px;
+  min-height: 32px;
+  padding: 6px 8px;
+}
+
+.public-room-roster-toggle:hover {
+  background: var(--well);
+  color: var(--ink);
+}
+
+.public-room-roster-toggle > svg:last-child {
+  transition: transform 140ms ease;
+}
+
+.public-room-roster-toggle.is-open > svg:last-child {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-room-roster-toggle > svg:last-child { transition: none; }
+}
+
+.public-room-roster {
+  border-top: 1.5px solid var(--line);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.public-room-roster ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.public-room-roster li {
+  align-items: center;
+  display: flex;
+  font-size: 13.5px;
+  font-weight: 700;
+  gap: 7px;
+  min-width: 0;
+}
+
+.public-room-roster-host {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.public-room-roster-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
 }
