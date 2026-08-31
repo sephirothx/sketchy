@@ -621,7 +621,11 @@ export function LobbyBrowserPage() {
           onDismiss={() => setCodeSheetOpen(false)}
           initialFocusRef={codeFieldRef}
           headerAction={
-            <button type="button" className="chip room-code-paste" onClick={() => void pasteCode()}>
+            <button
+              type="button"
+              className="chip chip-neutral room-code-paste"
+              onClick={() => void pasteCode()}
+            >
               Paste
             </button>
           }

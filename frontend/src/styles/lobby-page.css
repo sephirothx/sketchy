@@ -935,14 +935,22 @@
 }
 
 /* Paste sits where the ✕ was: a room code is almost always arriving from
-   somewhere else, and the grab handle above it is what closes the sheet. */
+   somewhere else, and the grab handle above it is what closes the sheet.
+   `.chip` is only the shape — the paint comes from `.chip-neutral`, without
+   which this rendered as a transparent border in the UA's own font. */
 .room-code-paste {
   cursor: pointer;
   flex: 0 0 auto;
+  font-family: var(--font-body);
   min-height: 40px;
+  padding: 7px 14px;
 }
 
 .room-code-paste:hover {
   border-color: var(--line-strong);
   color: var(--ink);
+}
+
+.room-code-paste:active {
+  background: var(--track);
 }
