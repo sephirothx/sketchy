@@ -1,6 +1,4 @@
-import { describeDrawingRules } from "../lib/drawingRules";
 import { promptLanguageLabel } from "../lib/promptLanguages";
-import { Chip } from "./ui/Chip";
 import { ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from "./icons";
 import type { RoomSummary } from "../types";
 
@@ -11,58 +9,35 @@ interface PublicRoomCardProps {
   onJoin: (asSpectator: boolean) => void;
 }
 
-/* The tag chips carry every rule that differs from the defaults, so a card
-   needs no expandable settings list. */
-function exceptionalRules(room: RoomSummary) {
-  const rules: string[] = [];
-  if (room.scoringMode === "none") rules.push("No scoring");
-  if (room.scoringMode === "pressure") rules.push("Pressure");
-  if (room.hideMaskedPrompt) rules.push("Hidden prompt");
-  if (room.customPromptCount > 0) {
-    rules.push(room.customPromptsOnly ? "Custom prompts only" : `${room.customPromptCount} custom prompts`);
-  }
-  if (room.hintMode !== "none") {
-    rules.push(room.hintMode === "checkpoints" ? "Timed hints" : room.hintMode === "wheel" ? "Wheel of Fortune" : "Buy letters");
-  }
-  if (room.spectatorsSeePrompt) rules.push("Spectators see prompt");
-  const drawingRules = describeDrawingRules(room.allowedTools, room.colorMode);
-  if (drawingRules) rules.push(drawingRules);
-  return rules;
-}
-
+/**
+ * One open room, as a row you can scan in a second.
+ *
+ * The facts are the ones that decide whether to tap: what it is called, what
+ * language the prompts are in, how full it is, and how long a game will take
+ * (rounds x drawing time). Everything else the card used to carry — a chip per
+ * house rule, a capacity meter, the spectator count — priced the room rather
+ * than described it, and on a phone it pushed the next room off the screen.
+ * The room's own settings are one tap away on the other side of Join.
+ */
 export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCardProps) {
   const full = room.isFull || room.playerCount >= room.maxPlayers;
-  const primaryLabel = room.state === "playing" ? "Join in progress" : "Join";
-  const tags = exceptionalRules(room);
+  const playing = room.state === "playing";
   const languageLabel = promptLanguageLabel(room.promptLanguage);
-  const fillFraction = room.maxPlayers > 0 ? room.playerCount / room.maxPlayers : 0;
 
   return (
     <article className="public-room-card" data-testid="public-room-card">
       <div className="public-room-card-main">
-        <div className="public-room-title-row">
-          <h3>{room.name}</h3>
-          <Chip
-            kind={room.state === "playing" ? "warning" : "success"}
-            className={`room-state-badge room-state-${room.state}`}
-          >
-            {room.state === "playing" ? "In progress" : "Waiting"}
-          </Chip>
-        </div>
+        <h3 className="public-room-name">{room.name}</h3>
         <p className="public-room-facts">
-          <span title={`Prompt language: ${languageLabel}`}>
+          {/* The flag carries the language; the name of it is for anyone who
+              cannot see the flag, or is not sure which one it is. */}
+          <span className="public-room-language" title={`Prompt language: ${languageLabel}`}>
             <Flag language={room.promptLanguage} />
-            {languageLabel}
+            <span className="visually-hidden">{languageLabel}</span>
           </span>
           <span title="Players">
             <UsersIcon size={14} />
             {room.playerCount}/{room.maxPlayers}
-            <span className="public-room-capacity" aria-hidden="true">
-              <span
-                className={full ? "is-full" : undefined}
-                style={{ width: `${Math.round(Math.min(1, fillFraction) * 100)}%` }}
-              />
-            </span>
           </span>
           <span title="Rounds">
             <RoundsIcon size={14} />
@@ -72,31 +47,21 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
             <ClockIcon size={14} />
             {room.drawingSeconds}s
           </span>
-          {room.spectatorCount > 0 && (
-            <span title="Spectators">
-              <EyeIcon size={14} />
-              {room.spectatorCount}
-            </span>
-          )}
-          {full && <strong>Full</strong>}
+          {/* Not decoration: full removes the Join button, and a game already
+              running means joining puts you in a later turn. */}
+          {full && <strong className="public-room-flag">Full</strong>}
+          {!full && playing && <strong className="public-room-flag is-playing">In progress</strong>}
         </p>
-        {tags.length > 0 && (
-          <div className="public-room-badges">
-            {tags.map((tag) => (
-              <Chip key={tag}>{tag}</Chip>
-            ))}
-          </div>
-        )}
       </div>
       <div className="public-room-actions">
         {!full && (
           <button
             type="button"
-            className={`btn ${room.state === "playing" ? "btn-warm" : "btn-primary"} public-room-primary-action`}
+            className={`btn ${playing ? "btn-warm" : "btn-primary"} public-room-primary-action`}
             disabled={busy}
             onClick={() => onJoin(false)}
           >
-            {pendingMode === "join" ? "Joining…" : primaryLabel}
+            {pendingMode === "join" ? "Joining…" : "Join"}
           </button>
         )}
         <button
@@ -106,7 +71,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
           onClick={() => onJoin(true)}
         >
           <EyeIcon size={14} />
-          {pendingMode === "spectate" ? "Joining as spectator…" : "Spectate"}
+          {pendingMode === "spectate" ? "Joining…" : "Spectate"}
         </button>
       </div>
     </article>

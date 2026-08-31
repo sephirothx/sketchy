@@ -13,7 +13,9 @@ import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { ModalShell } from "../components/ui/ModalShell";
+import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AlertCircleIcon, ChevronDownIcon, EyeIcon, PlusIcon, SearchIcon } from "../components/icons";
 import { useClientConfig } from "../hooks/useClientConfig";
 import { promptLanguageLabel } from "../lib/promptLanguages";
@@ -66,10 +68,13 @@ function RoomCodeInput({
   value,
   onChange,
   onSubmit,
+  inputRef,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  /** So the code sheet can open with the caret already in the field. */
+  inputRef?: React.Ref<HTMLInputElement>;
 }) {
   const fieldId = useId();
   const activeIndex = Math.min(value.length, ROOM_CODE_LENGTH - 1);
@@ -80,6 +85,7 @@ function RoomCodeInput({
       <span className="room-code-cells">
         {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
         <input
+          ref={inputRef}
           id={fieldId}
           className="room-code-field"
           type="search"
@@ -139,6 +145,9 @@ export function LobbyBrowserPage() {
 
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [joinCode, setJoinCode] = useState("");
+  const [codeSheetOpen, setCodeSheetOpen] = useState(false);
+  const codeFieldRef = useRef<HTMLInputElement | null>(null);
+  const isNarrow = useMediaQuery("(max-width: 720px)");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
   const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
@@ -346,46 +355,48 @@ export function LobbyBrowserPage() {
 
       <FirstRunIdentity />
 
-      {error && <p className="lobby-action-error" role="alert">{error}</p>}
+      {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
 
-      <div className="lobby-columns">
-        <section className="panel lobby-entry-panel">
-          <h2>Start a game</h2>
-          <p className="create-room-lobby-copy">Pick the basics, invite your friends, draw. Settings can change any time before the first round.</p>
-          <div className="lobby-entry-actions">
-            <Button
-              variant="primary"
-              big
-              iconLeft={<PlusIcon size={16} />}
-              onClick={() => void handleOpenCreateRoom()}
-            >
-              Create room
-            </Button>
-          </div>
-        </section>
+      {isNarrow ? null : (
+        <div className="lobby-columns">
+          <section className="panel lobby-entry-panel">
+            <h2>Start a game</h2>
+            <p className="create-room-lobby-copy">Pick the basics, invite your friends, draw. Settings can change any time before the first round.</p>
+            <div className="lobby-entry-actions">
+              <Button
+                variant="primary"
+                big
+                iconLeft={<PlusIcon size={16} />}
+                onClick={() => void handleOpenCreateRoom()}
+              >
+                Create room
+              </Button>
+            </div>
+          </section>
 
-        <section className="panel lobby-entry-panel">
-          <h2>Join with a code</h2>
-          <RoomCodeInput
-            value={joinCode}
-            onChange={setJoinCode}
-            onSubmit={() => void handleJoinByCode(false)}
-          />
-          <div className="lobby-entry-actions">
-            <Button variant="primary" disabled={Boolean(pendingJoin)} onClick={() => void handleJoinByCode(false)}>
-              {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? "Joining…" : "Join by code"}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={Boolean(pendingJoin)}
-              iconLeft={<EyeIcon size={14} />}
-              onClick={() => void handleJoinByCode(true)}
-            >
-              {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate" ? "Joining as spectator…" : "Spectate"}
-            </Button>
-          </div>
-        </section>
-      </div>
+          <section className="panel lobby-entry-panel">
+            <h2>Join with a code</h2>
+            <RoomCodeInput
+              value={joinCode}
+              onChange={setJoinCode}
+              onSubmit={() => void handleJoinByCode(false)}
+            />
+            <div className="lobby-entry-actions">
+              <Button variant="primary" disabled={Boolean(pendingJoin)} onClick={() => void handleJoinByCode(false)}>
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? "Joining…" : "Join by code"}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={Boolean(pendingJoin)}
+                iconLeft={<EyeIcon size={14} />}
+                onClick={() => void handleJoinByCode(true)}
+              >
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate" ? "Joining as spectator…" : "Spectate"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <section className="panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
@@ -461,6 +472,74 @@ export function LobbyBrowserPage() {
           </div>
         )}
       </section>
+      {/* The two entry cards become one dock on a phone: the rooms are the
+          page, and the way to make or join a room is a fixed bar under the
+          thumb rather than 440px of card above the list. */}
+      {isNarrow && (
+        <div className="lobby-dock">
+          {/* The page-top alert is out of sight from down here, and behind the
+              code sheet entirely, so on a phone the message follows the
+              control. Only one of the three renders at a time. */}
+          {error && !codeSheetOpen && (
+            <p className="lobby-action-error" role="alert">{error}</p>
+          )}
+          <Button
+            variant="primary"
+            big
+            iconLeft={<PlusIcon size={16} />}
+            onClick={() => void handleOpenCreateRoom()}
+          >
+            Create a room
+          </Button>
+          <button
+            type="button"
+            className="btn btn-secondary lobby-dock-code"
+            onClick={() => setCodeSheetOpen(true)}
+          >
+            Join with a code
+          </button>
+        </div>
+      )}
+
+      {codeSheetOpen && (
+        <BottomSheet
+          title="Join with a code"
+          testId="lobby-code-sheet"
+          closeLabel="Close"
+          onDismiss={() => setCodeSheetOpen(false)}
+          initialFocusRef={codeFieldRef}
+          footer={
+            <>
+              {error && <p className="lobby-action-error" role="alert">{error}</p>}
+              <Button
+                variant="primary"
+                disabled={Boolean(pendingJoin)}
+                onClick={() => void handleJoinByCode(false)}
+              >
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? "Joining…" : "Join the room"}
+              </Button>
+              <button
+                type="button"
+                className="btn btn-ghost lobby-code-spectate"
+                disabled={Boolean(pendingJoin)}
+                onClick={() => void handleJoinByCode(true)}
+              >
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate"
+                  ? "Joining as spectator…"
+                  : "Watch without playing"}
+              </button>
+            </>
+          }
+        >
+          <RoomCodeInput
+            value={joinCode}
+            onChange={setJoinCode}
+            onSubmit={() => void handleJoinByCode(false)}
+            inputRef={codeFieldRef}
+          />
+        </BottomSheet>
+      )}
+
       <VersionBadge />
     </div>
   );

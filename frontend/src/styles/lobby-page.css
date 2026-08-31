@@ -233,20 +233,7 @@
   gap: 8px;
 }
 
-.public-room-title-row {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-}
 
-.public-room-title-row h3 {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 17px;
-  color: var(--ink);
-  margin: 0;
-}
 
 .public-room-facts {
   color: var(--muted);
@@ -265,34 +252,35 @@
   gap: 6px;
 }
 
-.public-room-facts strong {
+.public-room-name {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+
+/* The flag alone; the language's name is read out rather than printed, so the
+   fact row stays four short items wide on a phone. */
+.public-room-language > svg,
+.public-room-language img {
+  border-radius: 3px;
+  display: block;
+}
+
+/* Reserved for the two facts that change what the buttons do. */
+.public-room-flag {
   color: var(--warning);
 }
 
-.public-room-capacity {
-  display: inline-block;
-  width: 44px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--line);
-  overflow: hidden;
+.public-room-flag.is-playing {
+  color: var(--warm-ink);
 }
 
-.public-room-capacity > span {
-  display: block;
-  height: 100%;
-  background: var(--primary);
-}
 
-.public-room-capacity > span.is-full {
-  background: var(--warm);
-}
 
-.public-room-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+
 
 .public-room-actions {
   display: flex;
@@ -570,6 +558,44 @@
 }
 
 @media (max-width: 720px) {
+  /* ── The dock ──────────────────────────────────────────────────────────
+     The two entry cards took 440px above the room list; as a fixed bar they
+     take 120px below it, and both controls sit under the thumb. */
+  .lobby-dock {
+    background: var(--card);
+    border-top: 1.5px solid var(--line);
+    bottom: 0;
+    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    left: 0;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    position: fixed;
+    right: 0;
+    z-index: 30;
+  }
+
+  .lobby-dock .btn {
+    width: 100%;
+  }
+
+  .lobby-dock-code {
+    min-height: 46px;
+  }
+
+  /* Room for the dock, so the last card is never under it. */
+  .lobby-page {
+    padding-bottom: 132px;
+  }
+
+  .lobby-code-spectate {
+    min-height: 44px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    width: 100%;
+  }
+
   /* ── The lobby, on a phone ─────────────────────────────────────────────
      Open rooms are the page. They used to be the fourth of four stacked
      cards on a 1386px page — a screen and a half below the fold, under the

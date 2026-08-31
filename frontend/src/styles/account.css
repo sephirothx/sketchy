@@ -484,16 +484,25 @@
     max-width: 9ch;
   }
 
-  /* The title leaves too little beside it, so the controls get their own row
-     rather than each wrapping onto a line of its own. */
+  /* One row, always. The wordmark, the gear and the identity chip come to
+     about 280px of a 358px content width, so the second row this used to take
+     was spent on nothing — and it pushed the whole page down by 52px before
+     anything playable. The name truncates instead. */
   .lobby-header {
-    flex-wrap: wrap;
-    row-gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 10px;
   }
 
   .lobby-header-actions {
-    width: 100%;
-    justify-content: flex-start;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .lobby-wordmark {
+    flex: 0 1 auto;
+    min-width: 0;
   }
 }
 

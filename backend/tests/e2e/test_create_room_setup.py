@@ -15,6 +15,10 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
+            # At this width the code field lives in the dock's sheet rather
+            # than in a card above the room list.
+            await page.get_by_role("button", name="Join with a code").click()
+            await page.wait_for_selector('[data-testid="lobby-code-sheet"]')
             room_code_input = page.locator('input[placeholder="ABC123"]')
             await assert_input_contract(room_code_input, {
                 "type": "search",
@@ -29,6 +33,8 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await room_code_input.fill("ab-c12")
             assert await room_code_input.input_value() == "ABC12"
             await room_code_input.fill("")
+            await page.locator(".bottom-sheet-close").click()
+            await page.locator('[data-testid="lobby-code-sheet"]').wait_for(state="detached")
 
             # The first-run name field carries the app's input contract, except
             # that autoCapitalize is off: names are case-sensitive and cannot
@@ -48,7 +54,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await nickname_input.fill("SetupHost")
             await page.click(".first-run-guest-submit")
             await page.wait_for_selector('.identity-name:has-text("SetupHost")')
-            await page.click('button:has-text("Create room")')
+            await page.click('button:has-text("Create a room")')
             await page.wait_for_url(f"{BASE_URL}/create")
             # History updates before React finishes the route swap; wait for the
             # create page before asserting lobby controls are gone.
