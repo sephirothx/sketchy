@@ -70,8 +70,8 @@ async def test_finished_game_shows_up_on_the_profile_page():
 
             # The recap button is the signal that the game has ended, and the
             # history write happens just before it is emitted.
-            await host.get_by_role(
-                "button", name="View drawings", exact=True
+            await host.locator('[data-testid="game-end-overlay"]').get_by_role(
+                "button", name="Drawings", exact=True
             ).wait_for(timeout=12_000)
 
             # A separate tab in the same context: same session cookie, same

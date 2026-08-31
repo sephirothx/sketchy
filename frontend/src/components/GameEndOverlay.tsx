@@ -33,7 +33,7 @@ function ordinal(place: number): string {
 
 function ConfettiDots() {
   return (
-    <svg width="360" height="44" viewBox="0 0 360 44" fill="none" aria-hidden="true" style={{ display: "block", margin: "0 auto", maxWidth: "100%" }}>
+    <svg className="game-end-confetti" width="360" height="44" viewBox="0 0 360 44" fill="none" aria-hidden="true">
       <circle cx="24" cy="26" r="4" style={{ fill: "var(--warm)" }} />
       <rect x="70" y="10" width="8" height="8" rx="2" style={{ fill: "var(--primary)" }} transform="rotate(18 74 14)" />
       <circle cx="126" cy="14" r="3.5" style={{ fill: "var(--success)" }} />
@@ -185,9 +185,10 @@ export function GameEndOverlay({
       )}
       {isUnclaimedGuest && (
         <aside className="game-end-claim">
+          {/* One line. Three lines of explanation cost more of this screen
+              than the podium did, for a nudge nobody came here to read. */}
           <p className="game-end-claim-copy">
-            <strong>{user!.displayName}</strong> isn’t saved. Create an account
-            to keep it as your username.
+            Keep <strong>{user!.displayName}</strong> as your username
           </p>
           <button
             type="button"
@@ -203,13 +204,13 @@ export function GameEndOverlay({
         {highlightCount > 0 && (
           <button type="button" className="btn btn-secondary" onClick={onViewHighlights}>
             <TrophyIcon size={15} />
-            View highlights
+            Highlights
           </button>
         )}
         {drawingCount > 0 && (
           <button type="button" className="btn btn-secondary" onClick={onViewDrawings}>
             <BrushIcon size={15} />
-            View drawings
+            Drawings
           </button>
         )}
         <button

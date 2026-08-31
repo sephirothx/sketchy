@@ -84,7 +84,22 @@
   width: 100%;
 }
 
+/* Painted by CSS rather than an inline style, so a narrow screen can drop it.
+   An inline `display` cannot be overridden by a stylesheet at all. */
+.game-end-confetti {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+/* A column, so the standings take what is left and scroll inside themselves.
+   The panel itself does not scroll: the result, the podium and the way out
+   are the whole point of the screen and none of them should be below a fold.
+   Sixteen players cannot all fit anywhere, so that overflow goes to the one
+   list that can afford it. */
 .game-end-podium {
+  display: flex;
+  flex-direction: column;
   background: var(--card);
   border: 1.5px solid var(--line);
   border-radius: 18px;
@@ -92,10 +107,14 @@
   box-sizing: border-box;
   max-height: calc(100vh - 120px);
   max-width: 560px;
-  overflow-y: auto;
-  padding: 24px 30px 20px;
+  overflow: hidden;
+  padding: 20px 30px 16px;
   text-align: center;
   width: 100%;
+}
+
+.game-end-podium > * {
+  flex: none;
 }
 
 .game-end-podium h1 {
@@ -188,9 +207,13 @@
 
 .game-end-standings {
   list-style: none;
-  margin: 0 0 18px;
+  margin: 0 0 14px;
   padding: 0;
   border-top: 1.5px solid var(--line);
+  /* The one part of the screen that may run out of room. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto;
 }
 
 .game-end-standings li {
@@ -428,7 +451,79 @@
   }
 }
 
+/* Keyed on height as well as width, because the thing that runs out is
+   vertical: a 1024x700 desktop window had the same problem a phone did, and
+   clipped the buttons rather than scrolling to them. */
+@media (max-width: 900px), (max-height: 780px) {
+  /* Decoration is the first thing to go when the result does not fit: 44px of
+     confetti above a headline that is already the celebration. */
+  .game-end-confetti {
+    display: none;
+  }
+
+  .game-end-podium h1 {
+    font-size: 21px;
+    gap: 7px;
+    margin: 4px 0 2px;
+  }
+
+  .game-end-placement {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+
+  .game-end-podium-row {
+    margin-bottom: 12px;
+  }
+
+  /* Qualified by the panel deliberately: the base rules for these live in
+     account.css, which is imported after this file, so an unqualified
+     `.game-end-claim` here loses to them on source order alone — which is why
+     the row treatment never actually applied. */
+  .game-end-podium .game-end-claim {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 10px;
+    margin: 2px 0 10px;
+    padding: 8px 10px;
+    text-align: left;
+  }
+
+  .game-end-podium .game-end-claim-copy {
+    flex: 1 1 auto;
+    font-size: 12.5px;
+    line-height: 1.3;
+    margin: 0;
+  }
+
+  .game-end-podium .game-end-claim-action {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+}
+
 @media (max-width: 900px) {
+  /* The end of the game takes the screen. It used to be a section inside the
+     stacked room page — the players panel above it, the chat below — so at
+     390x844 the document was 1671px tall and the result was something you
+     scrolled to. */
+  .game-end-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1150;
+    align-items: center;
+    background: rgba(30, 27, 22, 0.42);
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .game-end-podium {
+    max-height: 100%;
+    padding: 14px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
   /* One loud control. The screen used to offer five actions of near-equal
      weight — create an account, highlights, drawings, continue and stay —
      on the narrowest surface the game has. Continue is the one almost
@@ -454,22 +549,8 @@
 
   /* The account nudge has earned attention here, but not a bordered card
      competing with the podium for it. */
-  .game-end-claim {
-    align-items: center;
-    display: flex;
-    gap: 10px;
-    text-align: left;
-  }
-
-  .game-end-claim-copy {
-    flex: 1 1 auto;
-    font-size: 12.5px;
-    margin: 0;
-  }
-
-  .game-end-claim-action {
-    flex: 0 0 auto;
-    min-height: 44px;
+  .game-end-stay {
+    margin: 8px 0 0;
   }
 }
 

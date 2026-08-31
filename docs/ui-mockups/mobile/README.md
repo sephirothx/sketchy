@@ -254,7 +254,21 @@ them:
   the preset row and the two-step *More options* split (artboard 03) are not.
 - **Game over keeps its separate highlights and drawings panels** rather than
   folding them into tabs on the result screen (artboard 10). It does drop to one
-  primary action.
+  primary action, and it takes the screen: on a phone it was a section inside
+  the stacked room page, players panel above and chat below, so at 390 x 844
+  the document was 1671px tall and the result was something you scrolled to.
+  It is a fixed layer now, a column whose standings scroll inside themselves
+  while the result, the podium and the way out stay put. Everything above the
+  podium was paying for that: 44px of confetti over a headline that is already
+  the celebration, a headline at 28px that wrapped to three lines, and an
+  account nudge that took 116px to say one sentence. With six players the panel
+  is 643px inside a 667px viewport with nothing clipped and nothing scrolling
+  but the standings.
+
+  The compact treatment is keyed on `(max-width: 900px), (max-height: 780px)`,
+  because what runs out is vertical: a 1024 x 700 desktop window had the same
+  problem, and being `overflow: hidden` it clipped the buttons rather than
+  scrolling to them.
 - **Turn results and the waiting room** keep their existing content; only their
   placement changed (sheet, and sticky start).
 

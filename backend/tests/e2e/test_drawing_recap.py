@@ -94,7 +94,9 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await second_guesser.fill(".chat-input input", second_prompt)
             await second_guesser.keyboard.press("Enter")
 
-            view_drawings = host.get_by_role("button", name="View drawings", exact=True)
+            view_drawings = host.locator('[data-testid="game-end-overlay"]').get_by_role(
+                "button", name="Drawings", exact=True
+            )
             await view_drawings.wait_for(timeout=12_000)
             continue_to_waiting = host.get_by_role(
                 "button",

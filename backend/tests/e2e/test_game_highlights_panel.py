@@ -72,7 +72,7 @@ async def test_highlights_open_from_game_over_and_close_when_a_rematch_starts():
 
             # The end screen offers the way in without carrying the list itself.
             assert await overlay.locator(".game-highlights-list").count() == 0
-            await host.get_by_role("button", name="View highlights").click()
+            await overlay.get_by_role("button", name="Highlights").click()
 
             panel = host.locator(".game-highlights")
             await panel.wait_for()
