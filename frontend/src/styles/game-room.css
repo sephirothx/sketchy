@@ -1076,10 +1076,18 @@
     min-height: 0;
   }
 
-  /* Newest message against the field. A short feed otherwise floats at the
-     top of the space the canvas did not use, with the gap underneath it. */
+  /* Newest message against the field, without breaking the scroll.
+     `justify-content: flex-end` on a scroll container puts the overflow above
+     the scroll origin, where scrollTop cannot reach it — the feed looked
+     scrollable and simply was not, and the oldest messages were gone. An auto
+     top margin does the same job and resolves to zero once the content
+     overflows, so everything stays reachable. */
   .game-room.game-room-playing .chat-messages {
-    justify-content: flex-end;
+    justify-content: flex-start;
+  }
+
+  .game-room.game-room-playing .chat-messages > :first-child {
+    margin-block-start: auto;
   }
 
   /* Players are a sheet during play, not a column. */
@@ -1877,10 +1885,10 @@ button.guess-pips {
 /* ── Landscape, on a phone ──────────────────────────────────────────────
    A 4:3 canvas is baked into the wire protocol (800x600), so in portrait it
    can never be more than about a third of a phone's height however good the
-   layout is. Turned sideways the same canvas gets roughly twice the area, so
-   landscape is treated as a real drawing mode rather than a broken portrait:
-   the palette becomes a rail on the holding side, the feed a narrow column,
-   and the canvas takes everything between them. */
+   layout is. Turned sideways the same canvas gets more of it, so landscape is
+   treated as a real drawing mode rather than a broken portrait: the controls
+   become a rail on the holding side, the feed a narrow column, and the canvas
+   takes everything between them. */
 @media (orientation: landscape) and (max-height: 520px) {
   .game-room.game-room-playing {
     padding: 0;
@@ -1922,32 +1930,54 @@ button.guess-pips {
     padding: 6px;
   }
 
-  .game-room.game-room-playing .toolbar-mobile-palette {
-    grid-auto-flow: row;
-    grid-auto-rows: 34px;
-    grid-template-columns: repeat(1, 34px);
-    grid-template-rows: none;
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
+  /* The chips stack down the rail rather than spreading across a strip. */
+  .game-room.game-room-playing .toolbar-mobile-strip {
+    flex-direction: column;
+    gap: 6px;
+    justify-content: flex-start;
     width: auto;
   }
 
-  .game-room.game-room-playing .toolbar-mobile-palette .toolbar-mobile-swatch-btn {
-    height: 34px;
-    min-height: 34px;
-    min-width: 34px;
-    width: 34px;
+  .game-room.game-room-playing .toolbar-mobile-strip .toolbar-mobile-chip {
+    flex: 0 0 auto;
+    width: 100%;
   }
 
-  .game-room.game-room-playing .toolbar-mobile-strip {
-    flex-direction: column;
+  .game-room.game-room-playing .toolbar-mobile-sep {
+    display: none;
+  }
+
+  /* A panel anchored above a full-height rail opens off the top of the
+     screen. Here it swings out beside the rail instead, over the drawing —
+     which is the one thing there is room for, and a deliberate trade: in
+     landscape the canvas is wide enough to spare the left third of itself
+     for as long as a colour takes to pick. */
+  .game-room.game-room-playing .toolbar-mobile-popover {
+    bottom: auto;
+    left: calc(100% + 6px);
+    max-height: calc(100dvh - 60px);
+    right: auto;
+    top: 0;
+    width: min(268px, 52vw);
   }
 
   .game-room.game-room-playing .room-shell-main {
     flex: 1 1 auto;
     min-width: 0;
     order: 1;
+  }
+
+  /* Sideways the height is what runs out, so the canvas is sized from it and
+     gives up width to keep 4:3. Sized from the width it came out 430px tall in
+     a 390px viewport and ran off the bottom of the screen. */
+  .game-room.game-room-playing .canvas-wrapper {
+    flex: 1 1 auto;
+    align-items: center;
+    container-type: size;
+  }
+
+  .game-room.game-room-playing .canvas-stack {
+    width: min(100%, calc(100cqh * 4 / 3));
   }
 
   /* The side columns are kept tight on purpose: every pixel they take comes
@@ -1976,5 +2006,20 @@ button.guess-pips {
      so the prompt and clock stay out of the drawing hand's way. */
   .game-room.game-room-playing .turn-bar {
     padding-inline: 8px;
+  }
+
+  /* Every band here is height taken straight off the canvas, and turning the
+     phone is only worth doing if the drawing gets bigger. The pip row goes:
+     the feed column beside it already reports who has guessed. */
+  .game-room.game-room-playing .guess-pips {
+    display: none;
+  }
+
+  .game-room.game-room-playing .game-header-mobile {
+    margin-bottom: 0;
+  }
+
+  .game-room.game-room-playing .room-shell {
+    padding-top: 0;
   }
 }

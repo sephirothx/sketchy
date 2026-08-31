@@ -334,7 +334,18 @@ export function RoomChatPanel({
       </div>
 
       <div className="chat-messages-container">
-        <div className="chat-messages" ref={listRef} onScroll={handleScroll}>
+        {/* Focusable because it scrolls: a scroll region a keyboard cannot
+            reach is content a keyboard cannot read. It only became genuinely
+            scrollable once the feed stopped overflowing out of its own top,
+            which is why axe had nothing to say about it before. */}
+        <div
+          className="chat-messages"
+          ref={listRef}
+          onScroll={handleScroll}
+          tabIndex={0}
+          role="log"
+          aria-label={mode === "playing" ? "Guesses and chat" : "Room chat"}
+        >
           {messages.length === 0 ? (
             <p className="waiting-chat-empty">
               {mode === "waiting" ? "Say hello before the game starts." : "No messages yet."}

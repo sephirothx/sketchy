@@ -61,11 +61,13 @@ Sorted by how much it cost a player.
    what they were colouring, and every colour change cost two taps and a look
    away. Tools sat in a 66 px strip in the *middle* of the screen, the hardest
    region to reach, between canvas and chat.
-   → The palette is out permanently, two scrollable rows of 40 px swatches, in a
-   dock at the bottom of the screen. The dock renders into a slot after the chat
-   region (`#room-shell-dock`), so it lands under the thumb rather than between
-   canvas and feed. Tool and size keep small popovers; neither is reached
-   anything like as often as a colour.
+   → The strip moved rather than grew. The toolbar renders into a slot after the
+   chat region (`#room-shell-dock`), so it lands under the thumb rather than
+   between canvas and feed, and it stays a row of collapsed chips — tool,
+   colour, size, undo, clear — each opening a popover above itself. Trying it
+   with the palette permanently unrolled cost the canvas two rows of swatches
+   for a control that is one tap away, and the original complaint was about
+   *where* the controls sat, which the dock already answers.
 4. **Turn results were crammed into a 250 px box.** `.turn-results-overlay` is
    `position:absolute; inset:0` *inside the canvas*, and the panel was
    `max-height:90%` of a 278 px canvas: the word, your score, the guess order,
@@ -181,10 +183,17 @@ never page-scrolled:
 
 ## Landscape
 
-Turned sideways, the palette becomes a rail on the holding side, the feed a
-narrow column, and the canvas takes everything between: **405 × 304 against
-375 × 281 in portrait**, about 1.2× the area. The side columns are kept
-deliberately tight, because every pixel they take comes straight off the canvas.
+Turned sideways, the toolbar chips stack into a rail on the holding side, the
+feed becomes a narrow column, and the canvas takes everything between:
+**403 × 302 against 375 × 281 in portrait**, about 1.15× the area. The side
+columns are kept deliberately tight, because every pixel they take comes
+straight off the canvas — the guess pips are dropped here for the same reason,
+since the feed already says who has guessed.
+
+Popovers open *sideways* out of the rail, over the canvas. Anchored above their
+chip, as they are in portrait, they had nowhere to go: the rail is full height,
+so `bottom: calc(100% + 8px)` put them off the top of the screen. Covering part
+of the drawing for as long as a colour takes to pick is the cheaper trade.
 
 ## Corrections
 
@@ -197,9 +206,9 @@ them:
   and 02) does not apply; nothing needed changing.
 - **Landscape does not double the drawing area.** Artboard 06-B claims
   520 × 390, which assumed the canvas could use the full 844 px of width. The
-  palette rail and the guess feed take about 220 px of it, so the real figure is
-  405 × 304 — a 1.2× gain, not 2×. Worth having, but not the transformation the
-  artboard promised.
+  toolbar rail and the guess feed take about 220 px of it, and height binds
+  before width does, so the real figure is 403 × 302 — a 1.15× gain, not 2×.
+  Worth having, but not the transformation the artboard promised.
 
 ## Where the build departs from the artboards
 
