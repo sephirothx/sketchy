@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { GuessBreakdown, TurnEndedPayload, TurnScoreEntry } from "../types";
-import { BrushIcon, PencilIcon } from "./icons";
+import { BrushIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import {
   entranceDelays,
@@ -11,7 +11,6 @@ import {
 interface TurnResultsOverlayProps {
   prompt: string;
   drawerId: string;
-  drawerBonus: number;
   myPlayerId: string | null;
   guesses?: TurnEndedPayload["guesses"];
   scores: TurnScoreEntry[];
@@ -21,12 +20,17 @@ interface TurnResultsOverlayProps {
   /** The results phase duration, driving the next-turn progress bar. */
   nextTurnSeconds?: number;
   nextTurnStartedAt?: number;
+  /** The phase's full length. `nextTurnSeconds` is rebased to what remains
+      when a sync arrives, so the bar's fraction divides by this instead. */
+  nextTurnDurationSeconds?: number;
 }
 
-// Must match the height of .turn-results-score-row in App.css - used to compute how
-// far (in px) a row needs to slide from its previous rank position to its
-// new one when animating overtakes.
-const ROW_HEIGHT = 44;
+// Must match the height of .turn-results-score-row in game-results.css - used to
+// compute how far (in px) a row needs to slide from its previous rank position
+// to its new one when animating overtakes. One value for every width: a
+// breakpoint that changed it here and not there would slide rows to the wrong
+// place on one of the two.
+const ROW_HEIGHT = 38;
 
 // How far left a row starts when it is introduced rather than rearranged.
 const ENTRANCE_TRAVEL = 28;
@@ -47,7 +51,6 @@ function formatGuessTime(seconds: number) {
 export function TurnResultsOverlay({
   prompt,
   drawerId,
-  drawerBonus,
   myPlayerId,
   guesses = [],
   scores,
@@ -55,6 +58,7 @@ export function TurnResultsOverlay({
   myBreakdown = null,
   nextTurnSeconds = 0,
   nextTurnStartedAt = 0,
+  nextTurnDurationSeconds = 0,
 }: TurnResultsOverlayProps) {
   // Rows render in their final (new-rank) order the whole time, but start
   // visually offset to where they *used* to rank. After a short pause (so
@@ -70,10 +74,6 @@ export function TurnResultsOverlay({
   const mine = sorted.find((entry) => entry.playerId === myPlayerId);
 
   const [settled, setSettled] = useState(false);
-  // Captured once on mount: how far into the results phase this client joined.
-  const [progressOffsetSeconds] = useState(() =>
-    Math.max(0, (Date.now() - nextTurnStartedAt) / 1000),
-  );
 
   useEffect(() => {
     // Rearranging waits, so the standings can be read before they move.
@@ -81,6 +81,35 @@ export function TurnResultsOverlay({
     const timeout = setTimeout(() => setSettled(true), reordering ? 2000 : 250);
     return () => clearTimeout(timeout);
   }, [reordering]);
+
+  // The bar is measured off the clock every tick rather than handed to a CSS
+  // animation once. The animation was told a duration and a negative delay
+  // computed at mount, so it drifted from the phase it was drawing: a delay
+  // captured before `nextTurnStartedAt` arrived measured from the epoch and
+  // drained the bar instantly, a sync mid-phase rebased the duration under an
+  // animation that had already started, and nothing afterwards could correct
+  // either. This is the same arithmetic the turn clock runs on.
+  const [remaining, setRemaining] = useState(nextTurnSeconds);
+
+  useEffect(() => {
+    if (nextTurnSeconds <= 0 || !nextTurnStartedAt) return;
+    const compute = () =>
+      setRemaining(
+        Math.max(0, nextTurnSeconds - (Date.now() - nextTurnStartedAt) / 1000),
+      );
+    compute();
+    const interval = setInterval(compute, 100);
+    return () => clearInterval(interval);
+  }, [nextTurnSeconds, nextTurnStartedAt]);
+
+  const progressDuration =
+    nextTurnDurationSeconds > 0 ? nextTurnDurationSeconds : nextTurnSeconds;
+  const progressFraction =
+    progressDuration > 0 ? Math.max(0, Math.min(1, remaining / progressDuration)) : 0;
+
+  // The order players got it in, to sit on their standings row. The list that
+  // used to carry it repeated every name a second time under its own heading.
+  const guessTimes = new Map(guesses.map((guess) => [guess.playerId, guess.seconds]));
 
 
   return (
@@ -111,24 +140,7 @@ export function TurnResultsOverlay({
             · now #{mine.newRank}
           </p>
         )}
-        {guesses.length > 0 ? (
-          <>
-            <h4 className="turn-results-guesses-heading">Correct guesses</h4>
-            <ol className="turn-results-guesses-list">
-              {guesses.map((guess) => (
-                <li key={guess.playerId}>
-                  <span
-                    className={playerNameClass(guess.isAnonymous)}
-                    style={playerNameStyle(guess.nameColor, guess.isAnonymous)}
-                  >
-                    {guess.nickname}
-                  </span>
-                  <time>{formatGuessTime(guess.seconds)}</time>
-                </li>
-              ))}
-            </ol>
-          </>
-        ) : (
+        {guesses.length === 0 && (
           <p className="turn-results-no-guesses">No one guessed correctly.</p>
         )}
         {showScores && (
@@ -170,17 +182,11 @@ export function TurnResultsOverlay({
                     {entry.playerId === myPlayerId && (
                       <span className="turn-results-score-you"> (you)</span>
                     )}
-                    {entry.playerId === drawerId && (
-                      <span className="turn-results-drew" title="Drew this turn">
-                        <PencilIcon size={12} />
-                        drew
-                      </span>
-                    )}
                   </span>
-                  {entry.playerId === drawerId && drawerBonus > 0 && (
-                    <span className="drawer-bonus">
-                      <BrushIcon size={12} /> +{drawerBonus}
-                    </span>
+                  {guessTimes.has(entry.playerId) && (
+                    <time className="turn-results-score-time">
+                      {formatGuessTime(guessTimes.get(entry.playerId)!)}
+                    </time>
                   )}
                   {change && (
                     <span className={`turn-results-score-change ${change.className}`}>
@@ -188,7 +194,16 @@ export function TurnResultsOverlay({
                       {change.places}
                     </span>
                   )}
+                  {/* The brush is the whole of "they drew this turn": the row
+                      used to say it twice, once as a pencil chip beside the
+                      name and again as a bonus that the delta already
+                      contained. */}
                   <span className={`turn-results-score-delta${entry.delta > 0 ? " positive" : ""}`}>
+                    {entry.playerId === drawerId && (
+                      <span className="turn-results-score-brush" title="Drew this turn">
+                        <BrushIcon size={12} />
+                      </span>
+                    )}
                     {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                   </span>
                   <span className="turn-results-score-total">{entry.score}</span>
@@ -203,12 +218,7 @@ export function TurnResultsOverlay({
               <span>Next turn</span>
             </div>
             <div className="turn-results-progress-track" aria-hidden="true">
-              <span
-                style={{
-                  animationDuration: `${nextTurnSeconds}s`,
-                  animationDelay: `-${progressOffsetSeconds}s`,
-                }}
-              />
+              <span style={{ width: `${progressFraction * 100}%` }} />
             </div>
           </div>
         )}

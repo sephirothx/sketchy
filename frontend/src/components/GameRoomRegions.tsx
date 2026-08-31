@@ -299,7 +299,6 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
         <TurnResultsOverlay
           prompt={lastTurnResult.prompt}
           drawerId={lastTurnResult.drawerId}
-          drawerBonus={lastTurnResult.drawerBonus}
           guesses={lastTurnResult.guesses}
           scores={lastTurnResult.scores}
           myPlayerId={playerId}
@@ -307,6 +306,7 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
           myBreakdown={lastGuessBreakdown}
           nextTurnSeconds={phaseSeconds}
           nextTurnStartedAt={phaseStartedAt}
+          nextTurnDurationSeconds={phaseDurationSeconds}
         />
       )}
       {isMobile && <GuessPips onOpenPlayers={onOpenPlayers} />}

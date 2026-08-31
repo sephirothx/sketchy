@@ -993,6 +993,14 @@ class GameFlowService:
             )
         )
 
+        # Before the payload is built: `seconds` on it is
+        # `game.remaining_seconds()`, which without this still answers for the
+        # drawing phase that just ended. A turn that ran out of clock therefore
+        # announced a results phase of 0 seconds, and one that ended early
+        # because everyone guessed announced whatever drawing time was left -
+        # 200 seconds for a 5 second screen. The countdown the client draws
+        # from it was wrong in both directions.
+        game.set_phase_deadline(timing.turn_results_seconds)
         await self._sio.emit(
             "turn_ended",
             self._turn_ended_payload(room, drawer_bonus=drawer_bonus),

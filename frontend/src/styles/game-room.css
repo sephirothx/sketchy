@@ -621,9 +621,14 @@
   min-width: 0;
 }
 
+/* Opacity only, deliberately. A transform on this wrapper — even a 2px one
+   that lasts 160ms — makes it the containing block for every `position:
+   fixed` descendant, and the turn-results sheet is one: it rendered trapped
+   inside the canvas column and jumped to the bottom of the screen when the
+   animation ended. Two pixels of travel is not worth that. */
 @keyframes room-main-enter {
-  from { opacity: 0; transform: translateY(2px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .room-shell-panel {

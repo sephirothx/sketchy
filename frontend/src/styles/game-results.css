@@ -1,43 +1,10 @@
-.drawer-bonus { align-items: center; color: var(--warm-ink); display: inline-flex; font-size: 12px; font-weight: 800; gap: 3px; white-space: nowrap; }
 /* Sits with the nickname, not at the end of the row: it says which name is
    yours, so it belongs to the name. Quiet enough not to compete with the
    score, matching how the game over standings mark the same thing. */
 .turn-results-score-you { color: var(--faint); font-size: 12px; font-weight: 600; }
 
-.turn-results-drew { align-items: center; color: var(--warm-ink); display: inline-flex; font-size: 11.5px; font-weight: 800; gap: 4px; margin-left: 6px; }
-
-.turn-results-guesses-heading {
-  margin: 0 0 6px;
-  color: var(--ink);
-}
-
-.turn-results-guesses-list {
-  margin: 0 0 14px;
-  padding-left: 24px;
-}
-
-.turn-results-guesses-list li {
-  padding: 3px 0 3px 4px;
-}
-
-.turn-results-guesses-list li::marker {
-  color: var(--faint);
-  font-weight: 600;
-}
-
-.turn-results-guesses-list span {
-  margin-right: 24px;
-}
-
-.turn-results-guesses-list time {
-  float: right;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
 .turn-results-no-guesses {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   color: var(--faint);
   font-style: italic;
 }
@@ -46,16 +13,31 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+  /* Rows slide between rank positions, so what leaves the box has to be
+     clipped. A room can hold sixteen, which no phone shows at once: past
+     what fits, this list scrolls and nothing else does, so the word, your
+     score and the countdown stay put. */
+  overflow: hidden auto;
+  min-height: 0;
 }
 
+/* Keep in step with ROW_HEIGHT in TurnResultsOverlay.tsx, which slides rows
+   by multiples of it. */
 .turn-results-score-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
+  height: 38px;
   padding: 0 4px;
   will-change: transform;
+}
+
+/* When they got it, on their own row. */
+.turn-results-score-time {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .turn-results-score-rank {
@@ -99,10 +81,22 @@
 }
 
 .turn-results-score-delta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   min-width: 36px;
   text-align: right;
   color: var(--faint);
   font-weight: 800;
+}
+
+/* The one mark that says who drew. Its own colour, so it reads as a role
+   rather than as part of the number it sits against — which is green when
+   that number is a gain. */
+.turn-results-score-brush {
+  display: inline-flex;
+  color: var(--primary);
 }
 
 .turn-results-score-delta.positive {
@@ -119,7 +113,8 @@
 
 /* Countdown to the next turn along the card's bottom edge. */
 .turn-results-progress {
-  margin-top: 14px;
+  margin-top: 12px;
+  flex: none;
 }
 
 .turn-results-progress-labels {
@@ -141,18 +136,15 @@
 .turn-results-progress-track span {
   display: block;
   height: 100%;
-  width: 100%;
   background: var(--primary);
-  animation: turn-results-drain linear forwards;
-}
-
-@keyframes turn-results-drain {
-  from { width: 100%; }
-  to { width: 0%; }
+  /* Width comes from the phase clock every 100ms; the transition only smooths
+     the step between two readings. A keyframe animation used to own this and
+     had no way to be corrected once it was wrong. */
+  transition: width 120ms linear;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .turn-results-progress-track span { animation: none; }
+  .turn-results-progress-track span { transition: none; }
 }
 
 .version-badge {

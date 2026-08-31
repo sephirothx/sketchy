@@ -83,8 +83,20 @@ Sorted by how much it cost a player.
    the standings and the progress bar all competing for it, with the bottom of
    the standings below the clipped edge, while the bottom 45% of the phone was
    an idle chat card and 164 px of nothing.
-   → A sheet at 74%, so the drawing you were staring at stays visible above the
-   answer.
+   → A sheet that takes what it needs, so the drawing you were staring at stays
+   visible above the answer. The panel itself never scrolls: it is a column
+   whose standings take what is left and scroll inside themselves, so the word,
+   your score and the countdown cannot be pushed below the fold — which is what
+   a single scrolling block did to the countdown, the one thing that tells you
+   how long you have to read the rest.
+
+   Two things were removed rather than fitted. A "Correct guesses" list under
+   its own heading repeated every name that the standings underneath were
+   already listing; the only thing it carried that they did not was when each
+   player got it, which now sits on their own row. And the drawer's row said
+   the same thing twice over: a pencil chip reading "drew" beside the name, and
+   a bonus beside the score that the score delta already contained. One brush
+   against the delta, in its own colour, says both.
 5. **Confetti at `z-index: 9999` painted over everything** — the results panel,
    the players drawer (`z-index: 1200`), the settings dialog, the game-over
    copy. On a 390 px screen the same particle count lands on a third of the

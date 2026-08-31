@@ -11,15 +11,28 @@
   z-index: 10;
 }
 
+/* A column, so the standings can take the space that is left and scroll
+   inside it. The panel itself never scrolls: what was one scrolling block
+   put the countdown — the one thing that tells you how long you have to read
+   any of it — below the fold. */
 .turn-results-panel {
+  display: flex;
+  flex-direction: column;
   background: var(--card);
   border-radius: 16px;
   padding: 20px 24px;
   min-width: 280px;
   width: min(430px, 92%);
-  max-height: 90%;
-  overflow-y: auto;
+  max-height: 100%;
+  overflow: hidden;
   box-shadow: var(--shadow-raised);
+}
+
+.turn-results-panel > h3,
+.turn-results-prompt,
+.turn-results-personal,
+.turn-results-no-guesses {
+  flex: none;
 }
 
 .turn-results-panel h3 {
@@ -33,7 +46,7 @@
 }
 
 .turn-results-prompt {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   text-align: center;
   font-size: 1.1rem;
   color: var(--muted);
@@ -53,7 +66,7 @@
   border-radius: 10px;
   color: var(--primary-ink);
   font-weight: 700;
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   padding: 9px 12px;
   text-align: center;
 }
@@ -665,7 +678,10 @@
 
   .turn-results-panel {
     border-radius: 24px 24px 0 0;
-    max-height: 74%;
+    /* Was 74%, which a full room overflowed. The sheet takes what it needs up
+       to nearly the screen; the canvas behind it stays visible because the
+       standings stop growing once they run out of players. */
+    max-height: calc(100% - 24px);
     max-width: none;
     padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
     width: 100%;
@@ -674,7 +690,8 @@
   /* The word, and what it did to your score, are the two things worth the
      top of the sheet; the standings scroll under them. */
   .turn-results-panel h3 { font-size: 11px; }
-  .turn-results-prompt { font-size: 1.35rem; margin-bottom: 10px; }
+  .turn-results-prompt { font-size: 1.35rem; margin-bottom: 8px; }
+  .turn-results-prompt strong { font-size: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
