@@ -436,6 +436,117 @@ async def test_add_friend_names_only_the_outcomes_that_changed_something():
         )
 
         assert answer == {"ok": True, "status": expected}
-        # Only a request that actually created something is worth a notice.
-        notices = emitted(sio, "friend_request_received")
-        assert bool(notices) is (outcome == FriendshipOutcome.CREATED)
+        # Told only where something moved. A notice on a request that was
+        # quietly dropped would be the tell that silence exists to avoid.
+        notices = emitted(sio, "friends_changed")
+        assert bool(notices) is (
+            outcome in (FriendshipOutcome.CREATED, FriendshipOutcome.ACCEPTED)
+        )
+
+
+# --- the paths that refuse -------------------------------------------------
+
+
+async def test_every_friend_command_needs_the_service_behind_it():
+    """Built without a database in most of the suite, and it must say so."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    assert ctx.friend_service is None
+    room = room_manager.create_room(name="Studio", is_public=True)
+    me = await seat_host(room_manager, room, ADA, "Ada")
+    me.sid = "sid-ada"
+    them = room_manager.add_player(room, "Bob", user_id=BOB, is_anonymous=False)
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": me.id})
+    await sessions.save("sid-bob", {"user_id": BOB})
+
+    for command, payload, sid in (
+        ("add_friend", {"playerId": them.id}, "sid-ada"),
+        ("invite_friend", {"friendUserId": BOB}, "sid-ada"),
+        ("join_friend_room", {"friendUserId": ADA}, "sid-bob"),
+    ):
+        answer = await sio.handlers["/"][command](sid, payload)
+        assert answer["ok"] is False
+        assert "unavailable" in answer["error"]
+
+
+async def test_a_friend_command_from_outside_a_room_is_refused():
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    await sessions.save("sid-ada", {"user_id": ADA})
+
+    for command, payload in (
+        ("add_friend", {"playerId": "whoever"}),
+        ("invite_friend", {"friendUserId": BOB}),
+    ):
+        answer = await sio.handlers["/"][command]("sid-ada", payload)
+        assert answer == {"ok": False, "error": "Not in this room"}
+
+
+async def test_a_guest_cannot_invite_even_a_friend():
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    room = room_manager.create_room(name="Studio", is_public=True)
+    me = room_manager.add_player(room, "Guesty", user_id=ADA, is_anonymous=True)
+    me.sid = "sid-guest"
+    await sessions.save("sid-guest", {"room_id": room.id, "player_id": me.id})
+
+    answer = await sio.handlers["/"]["invite_friend"](
+        "sid-guest", {"friendUserId": BOB}
+    )
+
+    assert answer["ok"] is False
+    assert "Create an account" in answer["error"]
+    assert emitted(sio, "friend_invite_received") == []
+
+
+async def test_a_seat_with_no_account_cannot_be_friended():
+    """R-HIST-10 keeps its cookieless seat; there is simply nobody to ask."""
+    room_manager = RoomManager()
+    friends = StubFriendService()
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    room = room_manager.create_room(name="Studio", is_public=True)
+    me = await seat_host(room_manager, room, ADA, "Ada")
+    me.sid = "sid-ada"
+    nobody = room_manager.add_player(room, "Nobody", user_id=None)
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": me.id})
+
+    answer = await sio.handlers["/"]["add_friend"](
+        "sid-ada", {"playerId": nobody.id}
+    )
+
+    assert answer == {"ok": True}
+    assert friends.requested == []
+
+
+async def test_a_full_friends_list_is_reported_from_inside_a_room():
+    room_manager = RoomManager()
+    friends = StubFriendService(refuse="Your friends list is full (200).")
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    room = room_manager.create_room(name="Studio", is_public=True)
+    me = await seat_host(room_manager, room, ADA, "Ada")
+    me.sid = "sid-ada"
+    them = room_manager.add_player(room, "Bob", user_id=BOB, is_anonymous=False)
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": me.id})
+
+    answer = await sio.handlers["/"]["add_friend"](
+        "sid-ada", {"playerId": them.id}
+    )
+
+    assert answer["ok"] is False
+    assert "full" in answer["error"]
+
+
+async def test_a_malformed_friend_payload_is_refused_before_anything_else():
+    room_manager = RoomManager()
+    friends = StubFriendService()
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+
+    for command, payload in (
+        ("add_friend", {"playerId": "seat", "extra": 1}),
+        ("invite_friend", {}),
+        ("join_friend_room", {"friendUserId": "u", "code": "ABC123"}),
+    ):
+        answer = await sio.handlers["/"][command]("sid-any", payload)
+        assert answer["ok"] is False

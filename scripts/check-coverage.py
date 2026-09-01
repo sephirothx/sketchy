@@ -91,6 +91,12 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     # reachable with nothing listening on it - and, from #529, a friend
     # request delivered into that silence.
     "app/services/presence.py": (99.0, 89.0),
+    # Friendships decide who may enter a room they cannot name, and most of
+    # what these modules do is refuse. An untested refusal is a way in.
+    "app/services/friends.py": (92.0, 83.0),
+    "app/services/friend_invites.py": (100.0, 100.0),
+    "app/handlers/friends.py": (88.0, 85.0),
+    "app/api/friends.py": (82.0, 72.0),
 }
 
 

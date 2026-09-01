@@ -257,6 +257,15 @@ def forget_merged_identities(source_user_id: str, target_user_id: str) -> None:
     forget_presence_identity(target_user_id)
 
 
+async def push_friends_changed(user_id: str) -> None:
+    """Tell an account its friend lists moved, wherever it is.
+
+    The same per-account room a suspension and a moderator warning use, so a
+    player idling in the lobby hears it as immediately as one in a game.
+    """
+    await sio.emit("friends_changed", {}, room=f"user:{user_id}")
+
+
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
     block_service.clear()
     forget_presence_identity(user_id)
@@ -495,7 +504,13 @@ api.include_router(
         async_session_factory, block_service, friend_service
     )
 )
-api.include_router(create_friends_router(async_session_factory, friend_service))
+api.include_router(
+    create_friends_router(
+        async_session_factory,
+        friend_service,
+        on_friends_changed=push_friends_changed,
+    )
+)
 api.include_router(create_role_notice_router(async_session_factory))
 api.include_router(
     create_moderation_router(

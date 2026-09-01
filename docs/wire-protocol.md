@@ -284,6 +284,9 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `cast_restart_vote` | `RestartVotePayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `watch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `unwatch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
+| `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
+| `invite_friend` | `FriendUserPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
+| `join_friend_room` | `JoinFriendRoomPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 
 ### Room settings fields
 
@@ -401,11 +404,21 @@ the server resolves the seat against the live room and selects the evidence itse
 | `server_paused` | `ServerPausedNotice` — an administrator stopped, or resumed, admitting new rooms | every socket on each toggle; one socket at handshake while paused |
 | `server_full` | `{reason}` — the socket is closed immediately afterwards | one socket, at handshake |
 | `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
+| `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it | every socket of the affected account |
+| `friend_invite_received` | `{fromUserId, displayName, inviteToken, expiresIn}` — **no room code, name, or id** | every socket of the invited account |
 | `client_config` | `ClientConfig` — cadences the client runs at | one socket at handshake; every socket when one changes |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
 
 ### Key payload shapes
+
+**Friend payloads** never carry a room. `friend_invite_received` holds a token
+the server resolves against the sender's live seat, so an invitation is a
+capability to *ask* rather than to enter: it cannot be forwarded to somebody it
+was not addressed to, it stops working when the sender leaves their seat, and
+it never puts a room code in the hands of somebody unseated (R-ROOM-02,
+R-FRIEND-06). `add_friend` names a **seat**, not an account, so no account id
+crosses the wire inside a room (R-ROOM-07).
 
 **`LobbyPlayer`** — one row of the lobby's online list. The baseline list is
 `{ok, revision, players: LobbyPlayer[], onlineCount}`, returned as the
@@ -963,12 +976,16 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | `POST` | `/api/prompt-lists/shared` | Resolve an Unlisted list by its bearer share code |
 | `GET` | `/api/prompt-lists/{slug}/prompt-stats` | Window (all-time / 30 d / 90 d) and scoring/hint segmentation |
 
-### Settings, blocks, presets
+### Settings, blocks, friends, presets
 
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET`/`PATCH` | `/api/users/me/settings` | Cross-device Player settings; bounded at API and database layers |
 | `GET`/`POST` | `/api/users/me/blocks` | Directional; self-blocks rejected |
+| `GET` | `/api/users/me/friends` | `{friends, incoming, outgoing}`. Refusals are in none of them |
+| `POST` | `/api/users/me/friends` | `{userId}`. **Answers the same whether it landed, hit a block, hit an earlier refusal, or named nobody** (R-FRIEND-04); 409 only for a ceiling the caller reached (`FRIEND_REQUEST_LIMIT`) |
+| `POST` | `/api/users/me/friends/{user_id}/accept` | Re-checks blocks: one placed since the request has to win |
+| `DELETE` | `/api/users/me/friends/{user_id}` | Decline, cancel, or unfriend — the server decides which the row is asking for |
 | `DELETE` | `/api/users/me/blocks/{user_id}` | Idempotent |
 | `GET`/`POST` | `/api/room-presets` | ≤ 20 per account |
 | `GET`/`PUT`/`DELETE` | `/api/room-presets/{preset_id}` | `PUT` uses an optimistic version check |

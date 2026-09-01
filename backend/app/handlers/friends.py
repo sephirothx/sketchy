@@ -115,8 +115,8 @@ async def add_friend(ctx: HandlerContext, sid, data):
         return BUSY_ACKNOWLEDGEMENT
     except FriendshipRefused as refused:
         return {"ok": False, "error": str(refused)}
-    if outcome == FriendshipOutcome.CREATED:
-        await _notify_request(ctx, target.user_id)
+    if outcome in (FriendshipOutcome.CREATED, FriendshipOutcome.ACCEPTED):
+        await _notify_friends_changed(ctx, target.user_id)
     # Only the two outcomes that changed something are named. Everything else -
     # already friends, already asked, or a block - answers the same, so the
     # command cannot be used to tell those apart.
@@ -274,14 +274,17 @@ def _room_of(ctx: HandlerContext, user_id: str):
     return None, None
 
 
-async def _notify_request(ctx: HandlerContext, to_user_id: str) -> None:
-    """Tell an account a request is waiting, if anything of theirs is open.
+async def _notify_friends_changed(ctx: HandlerContext, to_user_id: str) -> None:
+    """Tell an account its friend lists moved, without saying how.
 
-    Best effort and deliberately contentless beyond who: the list endpoint is
-    the source of truth, and somebody offline simply sees it next time they
-    look.
+    One event for every reason - a request arrived, one was answered - because
+    the list endpoint is the source of truth and the client refetches either
+    way. A second event carrying detail would be a second thing to keep
+    agreeing with that endpoint.
+
+    Best effort: somebody offline simply sees it next time they look.
     """
-    await ctx.sio.emit("friend_request_received", {}, room=f"user:{to_user_id}")
+    await ctx.sio.emit("friends_changed", {}, room=f"user:{to_user_id}")
 
 
 def register(ctx: HandlerContext) -> None:

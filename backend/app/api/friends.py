@@ -14,6 +14,7 @@ a convenience.
 from __future__ import annotations
 
 import os
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -75,6 +76,10 @@ def _person_payload(row: Friendship, person: User, viewer_id: UUID) -> dict:
 def create_friends_router(
     session_factory: async_sessionmaker[AsyncSession],
     friend_service: FriendService,
+    # Called with the *other* account whenever a call here changed what their
+    # own lists say. The router has no socket of its own, the way the ban and
+    # deletion paths do not either.
+    on_friends_changed: Callable[[str], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/users/me/friends")
 
@@ -132,6 +137,10 @@ def create_friends_router(
         if outcome in (FriendshipOutcome.IGNORED, FriendshipOutcome.UNCHANGED):
             # Nothing was written, so nothing was spent (R-RATE-05's rule).
             await request_limiter.refund(str(me.id))
+        elif on_friends_changed is not None:
+            # Only where something moved: a notification on a request that was
+            # quietly dropped would be the tell the silence exists to avoid.
+            await on_friends_changed(str(body.user_id))
         response.status_code = 201 if outcome == FriendshipOutcome.CREATED else 200
         return {"status": _reported_status(outcome)}
 
@@ -144,6 +153,9 @@ def create_friends_router(
             outcome = await friend_service.accept(me.id, user_id)
         except FriendshipRefused as refused:
             raise HTTPException(status_code=409, detail=str(refused)) from refused
+        if outcome == FriendshipOutcome.ACCEPTED and on_friends_changed is not None:
+            # The person who asked is the one who has been waiting.
+            await on_friends_changed(str(user_id))
         return {"status": _reported_status(outcome)}
 
     @router.delete("/{user_id}", status_code=204)

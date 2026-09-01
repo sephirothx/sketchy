@@ -87,6 +87,7 @@ erDiagram
     users ||--o{ auth_sessions : "has devices"
     users ||--o{ identity_aliases : "merges guests"
     users ||--o{ user_blocks : "blocks"
+    users ||--o{ friendships : "befriends"
     users ||--o| user_settings : "prefers"
     users ||--o{ user_stats_daily : "projects to"
     users ||--o{ prompt_lists : "owns"
@@ -122,7 +123,7 @@ erDiagram
 | Domain | Tables |
 | --- | --- |
 | **Server & rooms** | `app_config`, `room_code_reservations`, `room_presets`, `planned_shutdown_abandonments` |
-| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
+| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
 | **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_participant_outcomes`, `turn_guesses`, `score_events`, `game_prompt_sources` |
@@ -292,6 +293,47 @@ the forwarded header is attacker-controlled. Buckets
 are shared, so limits survive restarts and apply once across every replica. Expired
 buckets are cleaned in bounded batches. Rotating the secret starts fresh buckets without
 exposing or re-identifying old keys.
+
+### `friendships`
+`user_low_id` + `user_high_id` composite **PK** (both CASCADE) ·
+`requested_by_id` (CASCADE, NOT NULL) · `status` ∈
+`pending | accepted | declined` · `created_at` · `responded_at`, with
+`ck_friendships_ordered` (`user_low_id < user_high_id`) and
+`ck_friendships_requester_is_a_member`.
+
+**One row per pair, in a canonical order** rather than one row per direction.
+Two directional rows can disagree — one accepted, one not — and no constraint
+could forbid it; here the pair is the identity, the way it is for
+`user_blocks`. The ordering also settles the case #529 was really asking
+about: a crossing request, where A asks B while B has already asked A,
+collides on the primary key instead of creating a second row, so the handler
+sees a request from the other party and accepts it. `x < x` being false
+forbids a self-friendship for free.
+
+Canonicalisation lives in exactly one place,
+[`services/friends.py`](../backend/app/services/friends.py)`.friendship_key`;
+a site that inlines it and gets it backwards writes a row the CHECK rejects,
+which is the failure worth having. PostgreSQL compares `uuid` as sixteen bytes
+while SQLite compares the hex string, and this table rests on those orders
+agreeing — `tests/test_db_models.py` runs against both engines in CI for that
+reason.
+
+Registered accounts only. A guest is purged after 30 inactive days, so a
+friendship with one would outlive the account and disappear unexplained.
+
+A **declined** row is kept rather than deleted, so a refusal cannot simply be
+re-sent into; the person who declined may still ask in their own right later,
+which rewrites it. Cancelling or unfriending deletes instead — neither is a
+refusal. The tombstone durably records that one account asked and the other
+refused: it is in both parties' data export and goes with either account's
+deletion.
+
+Blocking deletes any row for the pair **in the same transaction as the block**
+([`api/user_blocks.py`](../backend/app/api/user_blocks.py)): a surviving
+friendship is a room-join capability the blocker has just tried to revoke.
+Deleted rather than tombstoned, so unblocking does not silently restore it.
+
+---
 
 ### `identity_aliases`
 `source_user_id` **PK** (FK RESTRICT) · `target_user_id` (FK RESTRICT) ·
@@ -1059,6 +1101,7 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 
 | Data | Retention | Mechanism |
 | --- | --- | --- |
+| Friendships, including refusals | Indefinite | Deleted with either account (CASCADE), and on a block |
 | Retained messages | 30 days | `expires_at`; startup purge + bounded hourly cleanup |
 | Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | Startup purge + hourly purge in the delivery sweep |
 | Pinned report evidence | Protected report policy (outlives the message) | Copied on report submission |
@@ -1105,6 +1148,7 @@ Deletion:
 - erases ordinary authored `room_messages` immediately and tombstones the presentation
   on copied evidence;
 - removes every block owned by or targeting the anonymized identities;
+- removes every friendship and pending or refused request involving them;
 - deletes owned prompt lists and their owned prompt concepts, rather than leaving
   ownerless content;
 - erases the drawings that account made while leaving the row saying so;

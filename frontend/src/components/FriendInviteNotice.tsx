@@ -34,14 +34,15 @@ export function FriendInviteNotice() {
       const parsed = parseFriendInvite(payload);
       if (parsed) setInvite(parsed);
     };
-    // A request needs no notice of its own — the lobby list is where it is
-    // answered — but the list has to know it arrived.
+    // Nothing to show for a list that moved — the lobby is where it is read
+    // — but it does have to be re-read. One event covers a request arriving
+    // and one being answered, because the endpoint is the truth either way.
     const onRequest = () => void refreshFriends();
     socket.on("friend_invite_received", onInvite);
-    socket.on("friend_request_received", onRequest);
+    socket.on("friends_changed", onRequest);
     return () => {
       socket.off("friend_invite_received", onInvite);
-      socket.off("friend_request_received", onRequest);
+      socket.off("friends_changed", onRequest);
     };
   }, [refreshFriends]);
 
