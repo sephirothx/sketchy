@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -41,8 +41,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             # Step 2: Player joins using room code from Browser 2 (Firefox)
             await page2.goto(BASE_URL)
             await use_guest_name(page2, "BobGuesser")
-            await page2.fill('input[placeholder="ABC123"]', code)
-            await page2.click('button:has-text("Join by code")')
+            await join_by_code(page2, code)
 
             # Wait for Browser 2 to enter waiting panel
             await page2.wait_for_selector('.room-copy-button')

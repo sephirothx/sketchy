@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code as get_room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -47,8 +47,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             code = await get_room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "SafePlayer")
-            await player_page.fill('input[placeholder="ABC123"]', code)
-            await player_page.click('button:has-text("Join by code")')
+            await join_by_code(player_page, code)
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
 
             await host_page.wait_for_selector('.waiting-start-button:not([disabled])')

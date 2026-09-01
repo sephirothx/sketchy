@@ -145,6 +145,7 @@ optional services. Handler domains:
 | [`chat.py`](../backend/app/handlers/chat.py) | `send_chat`, `guess`, `buy_hint`, `buy_wheel_letter` |
 | [`moderation.py`](../backend/app/handlers/moderation.py) | `toggle_afk`, `vote_player`, `report_player` |
 | [`restart.py`](../backend/app/handlers/restart.py) | `propose_restart_vote`, `cast_restart_vote` |
+| [`lobby.py`](../backend/app/handlers/lobby.py) | `watch_lobby`, `unwatch_lobby` - joining and leaving the online-players channel |
 | [`identity.py`](../backend/app/handlers/identity.py) | Resolving the account behind a socket into the name/color it plays under |
 | [`sessions.py`](../backend/app/handlers/sessions.py) | Socket session resolution shared by handler domains |
 | [`payloads.py`](../backend/app/handlers/payloads.py) | Strict typed validation for every inbound command |
@@ -268,6 +269,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Room-code reservations (including retirement) | Database | Yes |
 | Retained messages (30 days) and pinned report evidence | Database | Yes |
 | Runtime observations (30 days) and permanent daily roll-ups | Database | Yes |
+| Who is connected, and whether they are seated | `PresenceRegistry` (memory) | No |
 | Live counts of rooms/players/games | In-process counters | No, deliberately |
 
 The boundary is a rule, not an accident: **durable configuration and durable
@@ -448,6 +450,112 @@ grace. The retention write that used to follow seating now runs after the
 gate is released: it is not part of making the seat, and holding the gate for it kept
 every disconnect — a dropped connection, or that sweep — waiting behind a write with
 nothing to do with the seat.
+
+### Presence
+
+`connected` inside a room describes a **seat**: `Player.sid` and
+`Player.connected` say whether that seat has a socket. The lobby's online list
+asks the other question - which *accounts* can be reached at all - and
+[`app/services/presence.py`](../backend/app/services/presence.py) is where that
+lives.
+
+Keyed by account rather than by socket, so several tabs of one player are one
+entry by construction. A connection with no account is not in it at all: there
+is no key to file one under, which is what makes a crawler, a link preview and
+a visitor who has not yet chosen a name invisible by the shape of the registry
+rather than by a filter. Held as sets, not counts, for the reason the socket
+ledger gives at [`room_quotas.py`](../backend/app/services/room_quotas.py): a
+count is only as right as the last event that moved it.
+
+Written at exactly the two sites the socket ledger is written at, in
+[`handlers/connection.py`](../backend/app/handlers/connection.py) - registered
+after the handshake resolves the session, balanced by the same `finally` for a
+handshake that fails afterwards, and drained at the top of `disconnect`,
+**above** the `is_closing` early return so a socket this server closed itself
+drains too.
+
+Presence is released the moment a socket closes and is deliberately **not**
+held for the R-CONN-01 reconnect grace. That grace protects a seat; presence
+answers whether anybody is listening, and during the grace nobody is.
+
+Status - *in the lobby* or *in a game* - is derived from `RoomManager` on every
+snapshot rather than cached beside it, in one pass over the rooms rather than
+one walk per socket. Nothing feeds it from the seat transitions: `player.sid`
+is also assigned by the seat confirmation in `handlers/rooms.py`, which those
+transitions never see, so a cache fed from them would drift on the client's own
+liveness check.
+
+The name and colour each row shows are read through a bounded LRU warmed at the
+handshake, the same shape and the same failure rule as
+[`auth/blocks.py`](../backend/app/auth/blocks.py): a read that does not answer
+leaves the account out of the list rather than showing a blank name. Cached
+rather than stored because a display name changes through four paths - both
+profile routes, the in-room rename, and a guest merge - three of which never
+touch a socket.
+
+Two things follow from that cache being **read at the handshake and nowhere
+else**, and both had to be built rather than assumed. First, the tick repairs
+what the cache cannot answer for, a bounded number of accounts at a time: a
+rename, a colour change and a guest claim all keep the same account id, so
+nothing re-handshakes after one, and an eviction happens with nobody writing at
+all. Without the repair, `invalidate` would be permanent - the player's row
+would drop out of the list, be broadcast as a `left` for a socket that never
+closed, and stay gone until they reconnected. Putting the repair in the tick
+rather than beside each writer is deliberate: it also covers eviction, and it
+is not an invariant a future writer can forget. Second, the cache is sized from
+the **socket ceiling** rather than a constant, because one smaller than the
+number of accounts that can be online evicts rows it is about to be asked for
+and reads back rows it just evicted, for ever.
+
+For the same reason a guest merge invalidates only the two accounts it merged.
+Clearing the whole cache is right for blocks - a merge rewrites them for
+arbitrary pairs, and that cache reads through on a miss - but here it would
+take every connected player off the list because one of them logged in.
+
+A merge also **re-keys** the registry: the guest's other tabs resolved that
+identity at their own handshake and will not look again, so presence follows
+the alias rather than waiting for those tabs to close. Moved, never closed -
+closing sockets is what a ban or a deletion does, because those end the
+account, whereas a merge would be dropping a player out of a game on one tab
+because they signed in on another. The seat is deliberately untouched
+(R-ACCT-04 keeps historical seats) and revocation applies on the next
+connection (R-AUTH-04); only who presence says the socket belongs to moves,
+which is exactly what an alias means. Because the registry holds a *set* of
+sockets per account, an account that was already online is a union rather
+than a collision.
+
+That alias is also why the identity cache stores a row under **the id it was
+asked about** rather than the one the record came back with: `get_by_id`
+resolves through `identity_aliases`, so a cache keyed by the answer would
+never satisfy the question - and the per-tick repair above would ask again
+every second, for as long as that socket stayed open, and never stop.
+
+Delivery is a Socket.IO channel a client opts into with `watch_lobby`, never a
+second poll: the lobby already polls `/api/rooms`, and #462 is open about that
+being one poll too many. Membership is asked for rather than derived from seat
+state, which keeps it out from under the seating gate and correct for a player
+seated in one tab with the lobby open in another (R-ROOM-08). A fixed
+one-second tick rebuilds the snapshot, diffs it against the last broadcast, and
+emits `lobby_presence_changed` only when the two differ - so there is no
+`mark_dirty` for a mutation site to forget. Every message carries a monotonic
+`revision`, and a client that receives one out of sequence discards its store
+and re-subscribes rather than patching around the gap: that is what answers
+#493's objection to a delta protocol, and it is cheap here because a stale
+lobby row is cosmetic and no gameplay reads it.
+
+Three ceilings bound what this can cost, all configurable and all with a
+documented default: channel membership (only the sockets that asked),
+`PRESENCE_LIST_LIMIT` (100 rows per payload, with the true total beside it so
+a cap is never mistaken for a quiet server), and
+`PRESENCE_BROADCAST_INTERVAL_MS` (1000). A fixed tick rather than a trailing
+debounce, because a trailing debounce under continuous churn never fires at
+all, while a tick has a bounded worst case however much is moving.
+
+The list carries no search or filter. It is capped, so a filter over what the
+client happens to hold would answer "no such player" about somebody who is
+online - worse than offering nothing, and nobody scans a list this size by
+typing anyway. Finding one person is a different feature from seeing who is
+around, and it needs a server-side lookup over the registry.
 
 ### Room ceilings
 
@@ -938,6 +1046,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
+| [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
 | [`app/services/room_quotas.py`](../backend/app/services/room_quotas.py) | Ceilings on room creation, so one client cannot spend the whole server. |
@@ -955,10 +1064,10 @@ Files are named for their single concern; the directory says the role.
 | Directory | Files |
 | --- | --- |
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
-| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `gameStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
-| `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomSetupControls.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `gameStore.ts`, `presenceStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
+| `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyPresence.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `lobbyPresence.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `OnlinePlayersPanel.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomSetupControls.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).

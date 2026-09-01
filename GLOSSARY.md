@@ -181,7 +181,9 @@ Three different things, never used for one another:
 | Term | Meaning | Avoid |
 | --- | --- | --- |
 | **Room** | The place people play in — created by a host, joined by code or from the lobby, and outliving individual games. | game (for the place), channel, table |
-| **Lobby** | The browsable list of public rooms. **The lobby is one place, and it is not inside a room.** | browser, room list, home |
+| **Lobby** | The browsable list of public rooms, and the list of who is online beside it. **The lobby is one place, and it is not inside a room.** | browser, room list, home |
+| **Online player** | An account with at least one open socket. Not a seat: a player is online whether or not they are in a room, and several tabs of one account are one online player. A visitor who has not chosen a name has no account and is not one. | active user, logged-in user, connected user |
+| **Lobby presence** | The live list of online players the lobby shows, with each one marked *in the lobby* or *in a game*. It never says which room, so it is not a directory of who is playing where. | who's online, user list, friends list |
 | **Waiting room** | A room's state before a game starts or between games, where players gather and the host starts the game. | lobby, pre-game, staging |
 | **Public room** | A room listed in the lobby, joinable by anyone. | open room |
 | **Private room** | A room reachable only by its code or invite link. | closed room, locked room |

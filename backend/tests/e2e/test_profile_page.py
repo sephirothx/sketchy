@@ -4,6 +4,7 @@ import asyncio
 import pytest
 from playwright.async_api import Page, async_playwright
 from tests.e2e.lobby_helpers import (
+    join_by_code,
     open_room_settings,
     open_settings_section,
     room_code,
@@ -50,8 +51,7 @@ async def test_finished_game_shows_up_on_the_profile_page():
 
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "ProfileGuest")
-            await guest.fill('input[placeholder="ABC123"]', code)
-            await guest.click('button:has-text("Join by code")')
+            await join_by_code(guest, code)
             await guest.locator('[data-testid="waiting-room"]').wait_for()
 
             # One round of two players is two turns: each drives one, and each

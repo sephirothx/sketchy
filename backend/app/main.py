@@ -56,6 +56,7 @@ from app.auth.retention import (
 from app.auth.mail import purge_expired_outbox_entries
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
+from app.services.presence import start_presence_loop, stop_presence_loop
 from app.services.readiness import LoopHealth, ReadinessProbe
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -219,8 +220,42 @@ async def _close_every_socket_of(
         await sio.disconnect(sid)
 
 
+def forget_presence_identity(user_id: str) -> None:
+    """Drop a cached lobby row so the next handshake reads it again.
+
+    The four writers of a display name or colour all come through here: the
+    two profile routes, the in-room rename, and a guest merge. Three of them
+    never touch a socket, which is why the name is cached and invalidated
+    rather than written into the presence registry at the handshake.
+    """
+    handler_context.presence_identities.invalidate(user_id)
+
+
+def forget_merged_identities(source_user_id: str, target_user_id: str) -> None:
+    """Forget what a guest merge changed - and only that.
+
+    The block cache is cleared whole because a merge rewrites blocks for
+    arbitrary pairs, and because it reads through on a miss: clearing it costs
+    one query per sender who speaks again. Presence has neither property. Only
+    the two accounts in the merge change, and a cleared row is a player
+    missing from the lobby list until a tick reads it back - so wiping it
+    would take every connected player off the list because one of them
+    happened to log in.
+    """
+    block_service.clear()
+    # The guest's own sockets resolved it at their handshake and will not look
+    # again, so presence follows the alias rather than waiting for those tabs
+    # to close. Moved, never closed: a merge does not end the account the way
+    # a ban or a deletion does, and closing here would drop a player out of a
+    # game they are in on another tab because they signed in on this one.
+    handler_context.presence.rekey(source_user_id, target_user_id)
+    forget_presence_identity(source_user_id)
+    forget_presence_identity(target_user_id)
+
+
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
     block_service.clear()
+    forget_presence_identity(user_id)
     # Marked before the first await, not partway through. Every step below
     # yields, closing a socket waits at that socket's seating gate, and an
     # entry that reads the mark in one of those gaps is an entry that seats an
@@ -332,9 +367,11 @@ async def lifespan(_app: FastAPI):
     mail_delivery = None
     metrics_flush = None
     retention_sweep = None
+    presence_broadcast = None
     mail_health = LoopHealth("mail_delivery")
     metrics_health = LoopHealth("runtime_metrics")
     retention_health = LoopHealth("retention_sweep")
+    presence_health = LoopHealth("presence_broadcast")
     try:
         # Before anything that might have something to say.
         configure_logging()
@@ -364,9 +401,18 @@ async def lifespan(_app: FastAPI):
         retention_sweep = start_retention_loop(
             async_session_factory, health=retention_health
         )
+        # No database of its own: it rebuilds from the presence registry and
+        # the live rooms every tick, and broadcasts only when the two say
+        # something different from the last time it looked.
+        presence_broadcast = start_presence_loop(
+            handler_context.presence_broadcaster, health=presence_health
+        )
         readiness_probe.supervise("mail_delivery", mail_delivery, mail_health)
         readiness_probe.supervise("runtime_metrics", metrics_flush, metrics_health)
         readiness_probe.supervise("retention_sweep", retention_sweep, retention_health)
+        readiness_probe.supervise(
+            "presence_broadcast", presence_broadcast, presence_health
+        )
         shutdown_coordinator.mark_ready()
         yield
     finally:
@@ -374,6 +420,10 @@ async def lifespan(_app: FastAPI):
         # is not a crashed one, and readiness has already gone 503 for the
         # drain by the time this runs.
         readiness_probe.release()
+        # First, and with nothing to flush: it holds no state of its own, and
+        # a tick that broadcast into a drain would be describing a lobby that
+        # is about to stop existing.
+        await stop_presence_loop(presence_broadcast)
         # Flushed on the way out, so the observations describing a planned
         # restart are not the ones lost to it.
         await stop_retention_loop(retention_sweep)
@@ -408,7 +458,8 @@ api.include_router(
         user_repo,
         async_session_factory,
         on_account_deleted=remove_deleted_account_from_live_rooms,
-        on_identity_merged=block_service.clear,
+        on_identity_merged=forget_merged_identities,
+        on_profile_changed=forget_presence_identity,
     )
 )
 api.include_router(create_operations_router(async_session_factory))

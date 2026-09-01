@@ -282,6 +282,8 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `report_player` | `ReportPlayerPayload` | ✓ | [`moderation.py`](../backend/app/handlers/moderation.py) |
 | `propose_restart_vote` | `EmptyPayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `cast_restart_vote` | `RestartVotePayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
+| `watch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
+| `unwatch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 
 ### Room settings fields
 
@@ -398,11 +400,39 @@ the server resolves the seat against the live room and selects the evidence itse
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
 | `server_paused` | `ServerPausedNotice` — an administrator stopped, or resumed, admitting new rooms | every socket on each toggle; one socket at handshake while paused |
 | `server_full` | `{reason}` — the socket is closed immediately afterwards | one socket, at handshake |
+| `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `client_config` | `ClientConfig` — cadences the client runs at | one socket at handshake; every socket when one changes |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
 
 ### Key payload shapes
+
+**`LobbyPlayer`** — one row of the lobby's online list. The baseline list is
+`{ok, revision, players: LobbyPlayer[], onlineCount}`, returned as the
+`watch_lobby` **acknowledgement** rather than as an event, so there is no
+window in which a socket is in the channel receiving deltas against a list it
+does not have yet.
+
+```jsonc
+{ "userId": "…", "displayName": "Ada", "nameColor": "#4f9",
+  "isAnonymous": false, "status": "lobby" | "playing" }
+```
+
+This is the one payload that carries an account id, and deliberately so: a
+friend request (#529) needs a stable target, and unlike a room payload
+(R-ROOM-07) there is no seat to resolve for somebody idling in the lobby. What
+it must never carry is the *room*: no id, no code, no name, and no state richer
+than in-the-lobby or in-a-game. `Room.to_public_roster` refuses to make the
+lobby a directory of who is playing where, and naming the room would
+additionally disclose that a private one exists.
+`test_presence_payloads_never_carry_a_room_identifier` pins it.
+
+`revision` is a **sequence number, not a contract version**. It counts
+broadcasts so a client can tell that it missed one; a client that receives a
+delta which does not follow the revision it holds discards its list and
+re-runs `watch_lobby` rather than patching around the gap. Protocol
+compatibility is `PROTOCOL_VERSION` (§1) and nothing else.
+
 
 **`room_state`** ([`backend/app/rooms.py:511`](../backend/app/rooms.py) →
 `RoomStatePayload` in [`frontend/src/types.ts`](../frontend/src/types.ts)) carries the

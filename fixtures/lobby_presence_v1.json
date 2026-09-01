@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "note": "The one order both ends of the lobby presence channel must agree on. Read by backend/tests/test_presence.py and frontend/tests/lobbyPresence.test.mjs, so a comparator changed on one side alone fails on the other. Registered accounts before guests, then display name case-insensitively, then the account id as a total-order tiebreak. Display names are ASCII by NAME_PATTERN, which is what makes Python's lower and JavaScript's toLowerCase the same function here.",
+  "entries": [
+    { "userId": "0199a000-0000-7000-8000-00000000000a", "displayName": "zoe", "nameColor": "#4f9", "isAnonymous": false, "status": "lobby" },
+    { "userId": "0199a000-0000-7000-8000-00000000000b", "displayName": "Ada", "nameColor": "#f94", "isAnonymous": false, "status": "playing" },
+    { "userId": "0199a000-0000-7000-8000-00000000000c", "displayName": "ada", "nameColor": "#49f", "isAnonymous": false, "status": "lobby" },
+    { "userId": "0199a000-0000-7000-8000-00000000000d", "displayName": "Ada", "nameColor": null, "isAnonymous": true, "status": "lobby" },
+    { "userId": "0199a000-0000-7000-8000-00000000000e", "displayName": "Bob-2", "nameColor": "#9f4", "isAnonymous": false, "status": "playing" },
+    { "userId": "0199a000-0000-7000-8000-00000000000f", "displayName": "bob_1", "nameColor": "#94f", "isAnonymous": false, "status": "lobby" },
+    { "userId": "0199a000-0000-7000-8000-000000000010", "displayName": "aardvark", "nameColor": null, "isAnonymous": true, "status": "lobby" },
+    { "userId": "0199a000-0000-7000-8000-000000000001", "displayName": "Ada", "nameColor": "#ff0", "isAnonymous": false, "status": "lobby" }
+  ],
+  "sortedUserIds": [
+    "0199a000-0000-7000-8000-000000000001",
+    "0199a000-0000-7000-8000-00000000000b",
+    "0199a000-0000-7000-8000-00000000000c",
+    "0199a000-0000-7000-8000-00000000000e",
+    "0199a000-0000-7000-8000-00000000000f",
+    "0199a000-0000-7000-8000-00000000000a",
+    "0199a000-0000-7000-8000-000000000010",
+    "0199a000-0000-7000-8000-00000000000d"
+  ]
+}

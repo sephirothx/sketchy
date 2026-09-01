@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import close_room_settings, open_room_settings
+from tests.e2e.lobby_helpers import close_room_settings, join_by_code, open_room_settings
 from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
 
@@ -31,13 +31,11 @@ async def test_players_approve_restart_without_losing_room_context():
             room_code = await get_room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "RestartPlayer")
-            await player_page.fill('input[placeholder="ABC123"]', room_code)
-            await player_page.click('button:has-text("Join by code")')
+            await join_by_code(player_page, room_code)
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
             await third_page.goto(BASE_URL)
             await use_guest_name(third_page, "RestartThird")
-            await third_page.fill('input[placeholder="ABC123"]', room_code)
-            await third_page.click('button:has-text("Join by code")')
+            await join_by_code(third_page, room_code)
             await third_page.wait_for_selector('[data-testid="waiting-room"]')
 
             # Settings save themselves, so a value the room refuses has to snap
@@ -139,8 +137,7 @@ async def test_players_see_a_rejected_restart_and_cooldown():
 
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "RejectPlayer")
-            await player_page.fill('input[placeholder="ABC123"]', room_code)
-            await player_page.click('button:has-text("Join by code")')
+            await join_by_code(player_page, room_code)
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
             await host_page.click('button:has-text("Start game")')
             await host_page.wait_for_selector(".game-layout")

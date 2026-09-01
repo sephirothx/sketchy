@@ -98,6 +98,8 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             code = await room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "LobbyPlayer")
+            await player_page.click('button:has-text("Join by code")')
+            await player_page.wait_for_selector('[data-testid="lobby-code-sheet"]')
             room_code_input = player_page.locator('input[placeholder="ABC123"]')
             await room_code_input.fill(code.lower())
             assert await room_code_input.input_value() == code
@@ -111,7 +113,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
                     }).observe(document.body, { childList: true, subtree: true });
                 }"""
             )
-            await player_page.click('button:has-text("Join by code")')
+            await player_page.click('button:has-text("Join the room")')
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
             assert not await player_page.evaluate("window.__inviteLoaderSeen")
             assert await player_page.is_visible(

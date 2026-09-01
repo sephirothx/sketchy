@@ -27,8 +27,9 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
 
     Read-only: a visitor with no cookie yet connects as ``user_id=None`` and
     plays normally, just without reconnect or history. Guests are provisioned
-    solely by ``GET /api/auth/me`` so that merely opening a socket cannot
-    create user rows.
+    solely by ``POST /api/auth/display-name`` (R-ACCT-00), so that neither
+    opening a socket nor loading the page can create user rows - which makes
+    ``user_id=None`` the ordinary first visit rather than a rarity.
     """
     # The ledger is balanced in a `finally`, not on each way out. A handshake
     # refused with `ConnectionRefusedError` never reaches the disconnect
@@ -64,6 +65,9 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             auth_session = resolution.session
             user_id = auth_session.user_id if auth_session else None
         await ctx.sio.save_session(sid, {"user_id": user_id})
+        # Balanced by the same `finally` the socket ledger uses, and for the
+        # same reason: a handshake refused below never reaches `disconnect`.
+        ctx.presence.note_socket_opened(sid, user_id)
         client_protocol = client_protocol_version(auth)
         if client_protocol != PROTOCOL_VERSION:
             # Accepted, then told. Refusing would leave a stale build with nothing
@@ -83,6 +87,11 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             # level news (a suspension, a moderator warning) reaches a player in
             # the lobby as immediately as one seated in a game.
             await ctx.sio.enter_room(sid, f"user:{user_id}")
+            # Read the name this account shows in the lobby list here, where a
+            # visitor is already waiting, so that building a presence snapshot
+            # never has to. A read that does not answer leaves the account out
+            # of the list until something warms it again - never a blank row.
+            await ctx.presence_identities.warm(user_id)
         # Sent to every socket, including one that will be told to upgrade:
         # a client running the current bundle needs these before it draws
         # anything, and there is no acknowledgement on a handshake to put
@@ -105,12 +114,19 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     finally:
         if not accepted:
             ctx.room_capacity.note_socket_closed(sid)
+            ctx.presence.note_socket_closed(sid)
 
 
 async def disconnect(ctx: HandlerContext, sid):
     if not sid:
         return
     ctx.room_capacity.note_socket_closed(sid)
+    # Above the `is_closing` branch below, so a socket this server closed
+    # from inside a seat transition drains too. Presence is released the
+    # moment the socket goes and is deliberately not held for the R-CONN-01
+    # reconnect grace: that grace protects a *seat*, and a socket that cannot
+    # receive is not online.
+    ctx.presence.note_socket_closed(sid)
     ctx.clear_command_budget(sid)
     if ctx.is_closing(sid):
         # We are closing this socket ourselves, from inside a seat transition

@@ -871,6 +871,9 @@ async def rename_player(ctx: HandlerContext, sid, data):
     player.nickname = nickname
     if ctx.user_repo is not None and player.user_id:
         await ctx.user_repo.update_profile(player.user_id, display_name=nickname)
+        # The name is stored on the account, so the lobby's cached copy of it
+        # is now stale for every other tab this player has open.
+        ctx.presence_identities.invalidate(player.user_id)
 
     await ctx.game_flow.announce(room, f"{previous} is now known as {nickname}.")
     await ctx.game_flow._emit_room_state(room)

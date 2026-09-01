@@ -167,6 +167,13 @@
 .room-list {
   display: grid;
   gap: 12px;
+  /* Positioned on purpose, and load-bearing once this scrolls.
+     `.visually-hidden` is `position: absolute`, and with no positioned
+     ancestor inside the list its containing block is the document - so the
+     screen-reader label on a card scrolled out of view sat a thousand pixels
+     down the page, and the page grew to reach it. A scroll container clips
+     its descendants, but not ones whose containing block is outside it. */
+  position: relative;
 }
 
 .lobby-filter-bar {
@@ -974,4 +981,193 @@
 
 .room-code-paste:active {
   background: var(--track);
+}
+
+/* Chat and who-is-online, below the room list.
+
+   Two panels about the people rather than the rooms. Equal columns on a
+   desktop; stacked in source order on a phone, where the room browser is
+   what the page is for and these are what you scroll past it to reach. */
+.lobby-social {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.lobby-chat-placeholder {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.online-players-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.online-players-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Positioned so that it is the containing block for anything absolute
+     inside it - see `.room-list` below for what that is guarding against. */
+  position: relative;
+}
+
+.online-player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+
+/* The viewer's own row. Not moved to the top - the list is short and an
+   entry that jumps position depending on who is reading is harder to scan,
+   not easier - so it is marked in place instead. */
+.online-player-row.is-me {
+  background: var(--well);
+}
+
+.online-player-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Grey italics is the only cue separating an unclaimed name from a registered
+   one, so it is the same treatment the in-room player list uses. */
+.online-player-name.is-guest {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 500;
+}
+
+.online-player-status {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.online-player-status.is-playing {
+  color: var(--warm-ink);
+}
+
+/* The header's page actions: a desktop gets them beside the wordmark, a phone
+   gets the dock instead. */
+.lobby-header-actions .btn-compact {
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .lobby-social {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The lobby as a screen rather than a document.
+
+   Everything that matters is on it at once — the rooms, who is around, and
+   the conversation — so on a desktop the page is pinned to the viewport and
+   the panels scroll inside themselves. Nothing here is a reading surface that
+   wants a page scroll; each panel is a live list you glance at and come back
+   to, and scrolling one of them should not carry the other two off screen.
+
+   Deliberately not applied to a phone, where the room browser is the page and
+   the fixed thumb dock is the way in — three scroll areas stacked in 812px is
+   a worse answer than one that scrolls. The height floor is the same idea for
+   a short desktop window: below it the panels would each be a few rows tall,
+   which is less usable than the ordinary page, so the ordinary page is what
+   it falls back to. */
+@media (min-width: 900px) and (min-height: 640px) {
+  /* A visitor who has not chosen a name yet gets the ordinary scrolling page.
+     The first-run block is a 260px card, and pinning the viewport around it
+     leaves the rooms panel a heading and nothing else - the one screen where
+     the lists matter least is not worth breaking them for. It disappears the
+     moment they have a name, and the fixed shell takes over. */
+  .lobby-page:has(> .first-run) {
+    height: auto;
+    overflow: visible;
+  }
+
+  .lobby-page {
+    height: 100dvh;
+    padding-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow: hidden;
+  }
+
+  /* The gap owns the spacing now; the per-panel margin would double it. */
+  .lobby-page > .panel,
+  .lobby-page > .lobby-social,
+  .lobby-social > .panel {
+    margin-bottom: 0;
+  }
+
+  /* Chrome keeps its height; only the lists give ground. */
+  .lobby-page > .lobby-header,
+  .lobby-page > .first-run,
+  .lobby-page > .lobby-action-error {
+    flex: none;
+  }
+
+  /* The rooms take whatever is left after the social row, so they are still
+     the hero on a tall screen without squeezing the panels below on a short
+     one. `min-height: 0` is what lets a flex child shrink below its content
+     and hand the overflow to the scroll container inside it. */
+  .lobby-rooms-panel {
+    flex: 1 1 auto;
+    /* A floor, not zero. Sharing the squeeze is the point: without it the
+       rooms panel is the only child that can give ground, so anything else
+       growing collapses it to its heading and the page still overflows. */
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Shrinkable, with a floor of its own, so a tight viewport takes a little
+     from both rather than everything from the rooms. */
+  .lobby-social {
+    flex: 0 1 38%;
+    min-height: 260px;
+  }
+
+  .lobby-social > .panel {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .lobby-rooms-panel .room-list,
+  .lobby-online-panel .online-players-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    /* So a row's text does not run under the scrollbar's lane. */
+    padding-right: 4px;
+    /* Reaching the end of one list must not start scrolling anything else. */
+    overscroll-behavior: contain;
+  }
+
+  /* The states that stand in for the list sit where the list would, rather
+     than collapsing the panel to its heading and leaving a gap under it. */
+  .lobby-rooms-panel .room-list-loading,
+  .lobby-rooms-panel .room-list-error,
+  .lobby-rooms-panel .lobby-no-matches,
+  .lobby-rooms-panel > p {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 }

@@ -169,7 +169,12 @@ def create_auth_router(
     session_factory,
     *,
     on_account_deleted: Callable[[str], Awaitable[None]] | None = None,
-    on_identity_merged: Callable[[], None] | None = None,
+    on_identity_merged: Callable[[str, str], None] | None = None,
+    # Called with the account whose display name or colour just changed. The
+    # lobby's online list shows both, and it reads them from a cache warmed at
+    # the handshake - which is written once, while these can change at any
+    # moment and from a request that touches no socket at all.
+    on_profile_changed: Callable[[str], None] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
@@ -389,6 +394,8 @@ def create_auth_router(
         await refuse_a_registered_name(name)
 
         updated = await user_repo.update_profile(user.id, display_name=name)
+        if on_profile_changed is not None:
+            on_profile_changed(user.id)
         return user_payload(updated or user)
 
     @router.post("/name-color")
@@ -418,6 +425,8 @@ def create_auth_router(
             )
 
         updated = await user_repo.update_profile(user.id, name_color=color)
+        if on_profile_changed is not None:
+            on_profile_changed(user.id)
         return user_payload(updated or user)
 
     @router.post("/register")
@@ -467,6 +476,11 @@ def create_auth_router(
             ) from error
 
         refreshed = await user_repo.touch_last_login(claimed.id)
+        # Claiming keeps the account id but replaces the name it plays under
+        # (R-ACCT-05), so a row cached while it was a guest is now wrong in
+        # both the name and the grey it was pinned to.
+        if on_profile_changed is not None:
+            on_profile_changed(claimed.id)
         # The browser's current local preferences become the account's initial
         # cross-device copy exactly once. Later registration retries cannot
         # overwrite a row that already exists.
@@ -536,7 +550,7 @@ def create_auth_router(
                     detail="Guest progress could not be linked to this account.",
                 ) from error
             if on_identity_merged is not None:
-                on_identity_merged()
+                on_identity_merged(current.id, credentials.user.id)
             await revoke_all_sessions(session_factory, user_id=current.id)
 
         refreshed = await user_repo.touch_last_login(credentials.user.id)

@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -43,10 +43,12 @@ async def test_room_list_failure_retry_and_connection_banner():
 
             await context.set_offline(True)
             await page.wait_for_selector('.connection-status-banner.offline:has-text("You’re disconnected")')
-            await page.fill('input[placeholder="ABC123"]', "ABC123")
-            await page.click('button:has-text("Join by code")')
+            await join_by_code(page, "ABC123")
             await page.wait_for_selector('.lobby-action-error:has-text("Connection lost")')
-            assert await page.is_enabled('button:has-text("Join by code")')
+            # The control that was refused, not the one that opened the sheet:
+            # the header button is always enabled, so asserting on it would
+            # pass whether or not the failed attempt released anything.
+            assert await page.is_enabled('button:has-text("Join the room")')
             await context.set_offline(False)
             await page.wait_for_selector('.connection-status-banner', state="hidden", timeout=10000)
         finally:
@@ -135,8 +137,7 @@ async def test_mid_session_socket_reconnects_to_room():
 
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "GuestReconnect")
-            await guest.fill('input[placeholder="ABC123"]', code)
-            await guest.click('button:has-text("Join by code")')
+            await join_by_code(guest, code)
             await guest.wait_for_selector(".room-copy-button")
 
             # Drop the transport at the socket itself rather than via offline
