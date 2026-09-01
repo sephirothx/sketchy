@@ -1,0 +1,37 @@
+# Gitleaks configuration: the default rules, plus one narrow exemption.
+#
+# Discovered automatically as `(target path)/.gitleaks.toml`, so both scans in
+# `.github/workflows/ci.yml` pick it up without naming it.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+A Pydantic field alias followed by its length.
+
+`generic-api-key` reads `inviteToken", max_length=64` as a credential being
+assigned: a name ending in Token, a delimiter, and something with entropy
+after it. There is no value there. `handlers/payloads.py` declares the *shape*
+of every client command, and its only literals are wire names, lengths and
+patterns - the invitation token itself is minted per invitation in
+`services/friend_invites.py` and never written down.
+
+Scoped by the **shape of the finding**, not by the file. A `paths` entry was
+the obvious way to write this and is wrong: allowlist conditions are OR by
+default, so naming the path exempts everything in it. Checked rather than
+assumed - two random 44-character credentials pasted into that same file are
+still reported with this config, and were silently swallowed by the
+path-based version.
+
+Kept here rather than as a `gitleaks:allow` comment because the credential
+scan reads history as well as the tree, and a comment added in a later commit
+cannot reach the commit that introduced the line. It is also the more honest
+claim: the rule is wrong about this construct wherever it appears, not only
+where somebody happened to notice it.
+"""
+# Matched against the finding rather than the whole line: gitleaks reports
+# `inviteToken", max_length=64`. Requiring `max_length` immediately after is
+# what keeps this to field declarations - no credential is followed by one.
+regexes = ['''\w*[Tt]oken",\s*max_length=\d+''']
+regexTarget = "match"

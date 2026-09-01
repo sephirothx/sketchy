@@ -348,14 +348,8 @@ class JoinFriendRoomPayload(RequestModel):
     """
 
     friend_user_id: str = Field(alias="friendUserId", max_length=MAX_IDENTIFIER_LENGTH)
-    # The allow below is for gitleaks' generic-api-key rule, which reads the
-    # alias and the length as a credential being assigned. There is no value
-    # here - this is the field's declaration, and the token itself is minted
-    # per invitation and never written down (`services/friend_invites.py`).
     invite_token: str | None = Field(
-        default=None,
-        alias="inviteToken",  # gitleaks:allow
-        max_length=64,
+        default=None, alias="inviteToken", max_length=64
     )
     nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
     name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
