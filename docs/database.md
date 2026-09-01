@@ -755,7 +755,7 @@ One row per current or late-arriving non-drawer seat, per turn.
 
 `id` · `game_id` · `turn_id` · `participant_id` (same-game composite FKs, CASCADE) ·
 `eligible` ·
-`eligibility_reason` (`eligible \| afk \| disconnected \| joined_late`) ·
+`eligibility_reason` (`eligible \| afk \| disconnected \| joined_late`, the last written only by games finished before a mid-turn arrival became an ordinary guesser) ·
 `outcome` (`correct \| incorrect \| no_attempt \| ineligible`) ·
 `terminal_state` (`active \| afk \| disconnected \| left`) ·
 `correct_guess_time_seconds` · `wrong_guess_count` · `near_miss_count` ·
@@ -767,10 +767,13 @@ outcome, and a correct time exists **iff** the outcome is `correct`.
 
 **When drawing begins, the server freezes the eligible guesser seats**
 ([`backend/app/services/game_flow.py`](../backend/app/services/game_flow.py)). Players who
-were AFK or disconnected at that instant, and players who join afterwards, remain
-ineligible until the next turn; their text is treated as restricted chat rather than a
-guess that could reveal the prompt. Ordinary history retains these numeric facts but
-**not guess text** — text retention and evidence are governed separately (§5).
+were AFK or disconnected at that instant remain ineligible until the next turn; their text
+is treated as restricted chat rather than a guess that could reveal the prompt. A player who
+joins while the drawing is underway is *added* to the frozen population instead
+([`backend/app/game.py`](../backend/app/game.py)) and is recorded as the eligible guesser
+they were — which is why no new row carries `joined_late`. Ordinary history retains these
+numeric facts but **not guess text** — text retention and evidence are governed separately
+(§5).
 No-scoring games record the same factual outcomes with zero awarded points and never
 invent hypothetical score awards.
 

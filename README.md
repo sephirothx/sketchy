@@ -1283,7 +1283,10 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 3. **Choosing** (15s): the current drawer picks one of 3 prompt options.
 4. **Drawing** (90s by default, configurable): the drawer draws; everyone else sees a masked
    prompt (`_ _ _ _`) and guesses in the chat. The turn ends early once everyone's guessed
-   correctly.
+   correctly. Somebody who joins while the drawing is underway guesses in that turn too -
+   the canvas and the masked prompt are already on their screen - and the turn waits for
+   them like any other guesser. Players who were AFK or disconnected when the drawing began
+   sit that turn out and rejoin the guessers on the next one.
 5. **Turn results** (5s by default): the prompt is revealed and scores update, then the next
    player's turn begins.
 6. Repeat until every player has drawn once per configured round count, then **Game over**

@@ -34,7 +34,7 @@ and conversation.
 | **Choosing** | The phase where the drawer picks one of their prompt options. Everyone else waits. | word select, prompt select, picking phase |
 | **Drawing** | The phase where the drawer draws and everyone else guesses. Ends when the timer runs out or everyone has guessed. | play phase |
 | **Turn results** | The short phase after each turn: the prompt is revealed and scores update. | round end, round results, intermission |
-| **Turn eligibility** | The frozen set of non-drawer seats allowed to guess when **Drawing** begins. AFK or disconnected seats at that instant and seats joining later are recorded as ineligible until the next turn. | currently connected players, final guesser count |
+| **Turn eligibility** | The set of non-drawer seats allowed to guess, frozen when **Drawing** begins. AFK or disconnected seats at that instant are recorded as ineligible until the next turn; a seat that joins mid-drawing is added to the set and guesses like any other. | currently connected players, final guesser count |
 | **Turn outcome** | One durable per-seat result for a **Turn**: eligibility/reason, correct, incorrect, no attempt, or ineligible outcome, terminal participation state, timing when correct, and numeric attempt/hint facts. It never contains guess text. | correct guess, chat message, score event |
 | **Terminal participation state** | A seat's state when its **Turn** ends: Active, AFK, Disconnected, or Left. It is a final snapshot, not a connection-event transcript. | eligibility, account state |
 | **Game over** | The final screen: full standings, and the way through to the highlights and the drawing recap. | game end screen, results screen |
