@@ -170,6 +170,17 @@ one token sheet.
 
 ### Lobby (`Main`)
 
+- **The lobby is a screen, not a document.** Above 900 x 640 the page is
+  pinned to the viewport and the room list and online list scroll inside
+  themselves; nothing on it is a reading surface that wants a page scroll, and
+  scrolling one live list should not carry the others off screen. A phone, and
+  a desktop window too short to give each panel a usable share, fall back to
+  the ordinary scrolling page.
+- **The entry actions moved into the header.** *Create room* and *Join by
+  code* were 440px of card above the room list; the phone already kept them in
+  a thumb dock, and the header is the desktop equivalent. Public rooms is the
+  hero, with chat and who-is-online below it.
+
 - **Wordmark + a single account button.** The header carries only the
   player's name; Profile, Prompt stats, My prompt lists, Settings and Sign
   out all live in its dropdown (drawn open on the artboard). One entry point
