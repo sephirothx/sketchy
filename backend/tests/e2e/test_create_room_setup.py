@@ -33,8 +33,33 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await room_code_input.fill("ab-c12")
             assert await room_code_input.input_value() == "ABC12"
             await room_code_input.fill("")
-            # The code sheet spends its header slot on Paste, so the grab
-            # handle is what closes it.
+            # A downward pull on the handle dismisses it too, and the decision
+            # has to be made on the distance the last touchmove reported —
+            # not on the distance the last render happened to have committed.
+            # The lift is dispatched in the same task as the final move, which
+            # is the case that read a frame-old offset and lost the gesture.
+            await page.evaluate(
+                """() => {
+                    const grab = document.querySelector('.bottom-sheet-grab');
+                    const at = (y) => new Touch({
+                        identifier: 1, target: grab, clientX: 100, clientY: y,
+                    });
+                    const send = (type, y) => grab.dispatchEvent(new TouchEvent(type, {
+                        bubbles: true, cancelable: true,
+                        touches: type === 'touchend' ? [] : [at(y)],
+                        changedTouches: [at(y)],
+                    }));
+                    send('touchstart', 100);
+                    send('touchmove', 130);
+                    send('touchmove', 170);
+                    send('touchend', 170);
+                }"""
+            )
+            await page.locator('[data-testid="lobby-code-sheet"]').wait_for(state="detached")
+
+            # And the tap still closes it, which is what the handle is mostly for.
+            await page.get_by_role("button", name="Join with a code").click()
+            await page.wait_for_selector('[data-testid="lobby-code-sheet"]')
             await page.locator(".bottom-sheet-grab").click()
             await page.locator('[data-testid="lobby-code-sheet"]').wait_for(state="detached")
 

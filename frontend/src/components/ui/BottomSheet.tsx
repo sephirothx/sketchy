@@ -55,6 +55,12 @@ export function BottomSheet({
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const grabRef = useRef<HTMLButtonElement | null>(null);
   const dragOriginRef = useRef<number | null>(null);
+  // The distance travelled lives in a ref as well as in state. State drives the
+  // transform; the ref is what `touchend` reads, because a `touchmove` that
+  // lands in the same task as the lift has not re-rendered yet, and the
+  // handler would then decide the gesture on the previous frame's distance —
+  // losing exactly the swipes that end on the threshold.
+  const dragOffsetRef = useRef(0);
   const [dragOffset, setDragOffset] = useState(0);
 
   // Escape and the scrim both dismiss, but neither is discoverable by touch or
@@ -70,16 +76,20 @@ export function BottomSheet({
   // than a pull is let go of.
   const onGrabTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
     dragOriginRef.current = event.touches[0]?.clientY ?? null;
+    dragOffsetRef.current = 0;
   };
   const onGrabTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
     const origin = dragOriginRef.current;
     const touch = event.touches[0];
     if (origin == null || !touch) return;
-    setDragOffset(Math.max(0, touch.clientY - origin));
+    const travelled = Math.max(0, touch.clientY - origin);
+    dragOffsetRef.current = travelled;
+    setDragOffset(travelled);
   };
   const onGrabTouchEnd = () => {
-    const travelled = dragOffset;
+    const travelled = dragOffsetRef.current;
     dragOriginRef.current = null;
+    dragOffsetRef.current = 0;
     setDragOffset(0);
     if (travelled >= SWIPE_DISMISS_PX) onDismiss();
   };
