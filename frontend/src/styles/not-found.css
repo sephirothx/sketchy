@@ -1,0 +1,80 @@
+/* The not-found page: one centered card holding the canvas nobody drew on.
+   The frame copies `.canvas-stack` in game-room.css - a white sheet in both
+   themes, because that is what the game looks like - and the tool chips copy
+   `.tool-button`'s metrics in toolbar.css without its interactive states. */
+.not-found-page {
+  min-height: 100vh;
+  padding: 20px 16px 48px;
+}
+
+.not-found-page .lobby-header {
+  margin-bottom: 28px;
+}
+
+.not-found-card {
+  box-sizing: border-box;
+  margin: 0 auto;
+  max-width: 460px;
+  padding: 26px 24px;
+  text-align: center;
+  width: 100%;
+}
+
+.not-found-canvas {
+  /* 4:3 is the protocol's ratio, and it is also what keeps this card from
+     towering over a phone screen. */
+  aspect-ratio: 4 / 3;
+  background: white;
+  /* The drawing runs to the edges of its own page box, and the sparks sit
+     right on that edge - so without a margin the rounded corners clip them.
+     A percentage keeps the margin proportional at every width. */
+  padding: 3.5%;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.not-found-tools {
+  display: flex;
+  gap: 7px;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+.not-found-tools span {
+  align-items: center;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--faint);
+  display: flex;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.not-found-card h1 {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.not-found-card p {
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin: 0 0 20px;
+}
+
+@media (max-width: 600px) {
+  .not-found-card {
+    padding: 20px 16px;
+  }
+
+  .not-found-tools span {
+    height: 40px;
+    width: 40px;
+  }
+}

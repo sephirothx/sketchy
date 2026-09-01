@@ -13,6 +13,7 @@ import { AccountRecoveryPage } from "./pages/AccountRecoveryPage";
 import { AdminOperationsPage } from "./pages/AdminOperationsPage";
 import { BugReportsPage } from "./pages/BugReportsPage";
 import { ModerationPage } from "./pages/ModerationPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
@@ -183,6 +184,11 @@ function App() {
           <Route path="/admin/operations" element={<AdminOperationsPage />} />
           <Route path="/moderation" element={<ModerationPage />} />
           <Route path="/admin/bug-reports" element={<BugReportsPage />} />
+          {/* Last, and the only route not mirrored in
+              backend/app/client_routes.py: it is what draws the page a URL
+              with nothing behind it gets, and the server answers 404 for
+              exactly the URLs that land here. */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
         <SettingsModal />
         <ConfettiCanvas />

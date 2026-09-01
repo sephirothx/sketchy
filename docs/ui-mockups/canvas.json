@@ -33,6 +33,14 @@
       "title": "Settings (new)"
     },
     {
+      "file": "NotFound.dc.html",
+      "x": 4070,
+      "y": 0,
+      "w": 720,
+      "h": 700,
+      "title": "Page not found"
+    },
+    {
       "file": "WaitingRoom.dc.html",
       "x": 0,
       "y": 1780,

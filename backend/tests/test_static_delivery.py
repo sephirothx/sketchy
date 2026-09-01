@@ -165,3 +165,33 @@ async def test_head_and_conditional_asset_requests_preserve_cache_headers(static
     assert conditional_headers["cache-control"] == (
         "public, max-age=31536000, immutable"
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/nope", "/room/ABC123/extra", "/admin"])
+async def test_an_unknown_client_route_gets_the_shell_with_a_404(static_app, path):
+    """The page a browser can draw, and the status everything else reads.
+
+    Serving the shell is what lets the client render its not-found page;
+    answering 200 as well would tell a crawler or an uptime probe that a page
+    exists where none does.
+    """
+    app, index, _ = static_app
+
+    status, headers, body = await request(app, path)
+
+    assert status == 404
+    assert body == index
+    assert headers["cache-control"] == "no-cache"
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_api_path_is_a_plain_404(static_app):
+    """Never the SPA: an API client asking for a route that does not exist
+    must get a 404 it can act on, not an HTML page it has to parse."""
+    app, index, _ = static_app
+
+    status, _, body = await request(app, "/api/nope")
+
+    assert status == 404
+    assert body != index

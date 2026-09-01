@@ -98,7 +98,7 @@ async def test_a_guest_files_a_bug_and_an_admin_reads_it():
             # An ordinary player is not shown the queue, and the route answers
             # the same way to anyone who tries it anyway.
             await guest_page.goto(f"{BASE_URL}/admin/bug-reports")
-            await guest_page.wait_for_selector("text=This page is for administrators.")
+            await guest_page.wait_for_selector("text=Nobody drew this page")
 
             await admin_page.goto(BASE_URL)
             await use_guest_name(admin_page, "BugTriageAdmin")

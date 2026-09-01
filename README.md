@@ -1269,7 +1269,11 @@ When `frontend/dist` exists, `app/main.py` mounts it as static files on the same
 so the whole game (UI + API + WebSocket) is served from a single port. The built-in server
 gzip-compresses eligible responses, serves Vite's fingerprinted `/assets/` files with a
 one-year `immutable` cache policy, and serves `index.html` (including client-route fallbacks)
-with `no-cache` so browsers discover new deployments promptly.
+with `no-cache` so browsers discover new deployments promptly. A URL the client has no page
+for gets that same shell — it is what draws the not-found page — but with a **404** status,
+so a crawler or an uptime probe is not told a page exists where none does. The route list
+the server checks that against lives in `app/client_routes.py` and is held to the one in
+`App.tsx` by a test.
 
 If a reverse proxy handles compression instead, it may replace the gzip layer, but it should
 preserve the same cache distinction: fingerprinted assets are immutable while the SPA HTML
