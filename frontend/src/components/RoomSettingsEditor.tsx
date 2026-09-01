@@ -174,8 +174,10 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     }
   }
 
+  // No card of its own: the dialog it opens in is already a panel, and two
+  // nested ones cost 90px of a phone's width in padding and borders alone.
   return <section
-    className="waiting-card room-settings-editor"
+    className="room-settings-editor"
     aria-labelledby="room-settings-title"
   >
     <div className="room-settings-editor-heading">

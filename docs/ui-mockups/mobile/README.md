@@ -299,7 +299,11 @@ them:
 - **The host's editor is the creation form.** Both render one
   `RoomSetupForm` — the same four sections in the same order — where the
   editor used to be a flat column of the same controls, so the same room was
-  described two different ways depending on which screen you were on.
+  described two different ways depending on which screen you were on. It draws
+  no surface of its own: the dialog is already a panel, and the two nested
+  ones cost 45px of a phone's width in padding and borders. With the dialog's
+  own padding cut to what a phone can afford, the name field goes from about
+  180px to 268 at 390 wide.
 - **Settings are a draft, saved in one piece.** Every field used to go to the
   server as it was touched, which was right when settings were a panel
   permanently open beside the room. Behind a dialog it is wrong: a half-made
