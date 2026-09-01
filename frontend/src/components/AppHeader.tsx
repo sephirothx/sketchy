@@ -5,8 +5,14 @@ import { AccountMenu } from "./AccountMenu";
 import { BackIcon, GearIcon, Wordmark } from "./icons";
 
 /**
- * The shared page chrome outside a room: the wordmark (or a back button on
- * sub-pages) on the left, the settings gear and identity chip on the right.
+ * The shared page chrome outside a room: the wordmark on the left, preceded by
+ * a back control on sub-pages, and the settings gear and identity chip on the
+ * right.
+ *
+ * The wordmark is on every page, sub-pages included. It used to be replaced by
+ * the back button there, so the one screen a first-time visitor might arrive on
+ * from a link was the one that never said whose site it was. On a phone the
+ * back control is the arrow alone — the label is what would not fit beside it.
  *
  * The gear keeps its `.header-settings-button` class and "Player settings"
  * name — the settings modal restores focus to it on close, and the e2e suite
@@ -22,17 +28,24 @@ export function AppHeader({ backLabel }: { backLabel?: string } = {}) {
   const openSettings = useSettingsStore((s) => s.openSettings);
 
   return (
-    <header className="lobby-header">
-      {backLabel ? (
-        <button type="button" className="btn btn-ghost header-back-button" onClick={() => navigate("/")}>
-          <BackIcon size={15} />
-          {backLabel}
-        </button>
-      ) : (
+    <header className={`lobby-header${backLabel ? " has-back" : ""}`}>
+      <div className="lobby-header-lead">
+        {backLabel && (
+          <button
+            type="button"
+            className="btn btn-ghost header-back-button"
+            onClick={() => navigate("/")}
+            aria-label={backLabel}
+            title={backLabel}
+          >
+            <BackIcon size={15} />
+            <span className="header-back-label">{backLabel}</span>
+          </button>
+        )}
         <h1 className="lobby-wordmark">
           <Wordmark size={34} />
         </h1>
-      )}
+      </div>
       <div className="lobby-header-actions">
         {!isNarrow && (
           <button

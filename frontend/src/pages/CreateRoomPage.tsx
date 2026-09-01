@@ -447,10 +447,13 @@ export function CreateRoomPage() {
             </div>
           </div>
           <div className="setting-cards">
+            {/* No hints under these three. The ranges are enforced by the
+                controls themselves, "everyone draws once per round" is what a
+                round is, and the line below already says what the three of
+                them add up to in minutes. */}
             <InputNumber
               label="Max players"
               icon={<UsersIcon size={14} />}
-              hint={`${MAX_PLAYERS_MIN}–${MAX_PLAYERS_MAX} · spectators aren't counted`}
               value={maxPlayers}
               min={MAX_PLAYERS_MIN}
               max={MAX_PLAYERS_MAX}
@@ -459,7 +462,6 @@ export function CreateRoomPage() {
             <InputNumber
               label="Rounds"
               icon={<RoundsIcon size={14} />}
-              hint={`${ROUNDS_MIN}–${ROUNDS_MAX} · everyone draws once per round`}
               value={rounds}
               min={ROUNDS_MIN}
               max={ROUNDS_MAX}
@@ -469,7 +471,6 @@ export function CreateRoomPage() {
               label="Drawing time"
               icon={<ClockIcon size={14} />}
               unit="s"
-              hint={`Snaps to presets · ${DRAWING_TIME_OPTIONS[0]}s to ${DRAWING_TIME_OPTIONS[DRAWING_TIME_OPTIONS.length - 1]}s`}
               value={drawingSeconds}
               options={DRAWING_TIME_OPTIONS}
               onChange={setDrawingSeconds}

@@ -158,6 +158,11 @@ Sorted by how much it cost a player.
     both. An earlier draft of this screen opened with a tagline; it was cut, so
     the screen is one decision tall and the rooms below say what the game is.
 
+The wordmark is on every page now, sub-pages included. It used to be replaced
+by the back button there, so the one screen a first-time visitor might arrive
+on from a link was the one that never said whose site it was. On a phone the
+back control is the arrow alone, with the label kept as its accessible name.
+
 Alongside those: the eight-icon header strip — which put a red **Leave** one
 thumb-width from **Settings** — is now a code chip, the round and countdown
 ring, and a ⋯ sheet holding the rest as labelled rows, with leaving separated
@@ -250,8 +255,23 @@ them:
   open rooms move to the top, the entry copy is hidden, and Spectate becomes a
   link. The docked create/join bar and the join-code sheet (artboards 01–02)
   are not built.
-- **Create a room keeps its single scrolling form.** The overflow bug is fixed;
-  the preset row and the two-step *More options* split (artboard 03) are not.
+- **Create a room keeps its single scrolling form.** The two-step *More
+  options* split (artboard 03) is not built. What is: the docked Create bar,
+  with the summary of what is about to be created beside it, so the point of
+  the page is under the thumb from the first screen rather than at the end of
+  settings most people never change; and the three numbers as full-width rows,
+  label left and stepper right, in one card with dividers — 184px against the
+  273px they took as stacked cards, with 44px ± targets. Three across, which
+  the artboard warns off, cannot hold a 44px target on a phone: it overflowed
+  by 3px at 360 and 10px at 320.
+
+  Their hints are gone. The ranges are enforced by the controls, "everyone
+  draws once per round" is what a round is, and the line under them already
+  says what the three add up to in minutes.
+
+  The overflow bug is fixed, and a second one of the same kind with it:
+  `.setting-cards` was `repeat(3, 1fr)`, whose implicit per-column minimum is
+  the column's content, so it laid out a 560px row inside a 390px phone.
 - **Game over keeps its separate highlights and drawings panels** rather than
   folding them into tabs on the result screen (artboard 10). It does drop to one
   primary action, and it takes the screen: on a phone it was a section inside

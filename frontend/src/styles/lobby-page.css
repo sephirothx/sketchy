@@ -6,6 +6,27 @@
   line-height: 1;
 }
 
+/* The back control and the wordmark travel together on the left. */
+.lobby-header-lead {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  /* The arrow alone. "Back to lobby" beside a wordmark and an identity chip is
+     what would not fit; the label stays as the accessible name. */
+  .header-back-label {
+    display: none;
+  }
+
+  .lobby-header.has-back .header-back-button {
+    flex: none;
+    padding-inline: 10px;
+  }
+}
+
 .header-back-button {
   padding-left: 0;
 }
