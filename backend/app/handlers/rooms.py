@@ -499,7 +499,6 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
         payload = parse_payload(JoinRoomPayload, data)
     except PayloadError as error:
         return error.acknowledgement()
-    name_color = normalize_name_color(payload.name_color)
 
     room = ctx.room_manager.get_room(payload.room_id)
     if room is None and payload.code:
@@ -522,6 +521,31 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
                 "codeRetired": True,
             }
         return {"ok": False, "error": "Room not found"}
+
+    return await _seat_in_room(ctx, sid, room, payload, seated)
+
+
+async def _seat_in_room(
+    ctx: HandlerContext, sid, room, payload: JoinRoomPayload, seated: list
+):
+    """Take a seat in a room that has already been resolved.
+
+    Split out from `_join_room` so a second way in can reuse the whole seat
+    lifecycle rather than re-derive it. What is in here is everything that has
+    to happen once the room is known, in an order that matters: confirming a
+    seat this socket already holds, rebinding an account's existing seat,
+    the takeover and join rate limits with their refunds, spectator capacity,
+    enrolling a mid-game arrival into the rotation, releasing whatever seat the
+    socket held elsewhere (R-ROOM-08), and the `ending` checks on both sides of
+    seating. Deriving that list again at a second entry point is how one of
+    them goes missing.
+
+    The caller decides *which* room; this decides whether the socket may sit in
+    it. Deliberately no visibility check - `_join_room` never had one either,
+    because holding the code is the capability (R-ROOM-02), and #529's
+    `join_friend_room` resolves the room from a friendship instead.
+    """
+    name_color = normalize_name_color(payload.name_color)
 
     # Checked before the token-reconnect branch below: a client's first
     # join_room call (e.g. from the lobby) is very often followed by a
