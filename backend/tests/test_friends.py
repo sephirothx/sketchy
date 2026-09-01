@@ -381,3 +381,128 @@ async def test_the_listing_separates_friends_from_each_direction_of_request():
         assert await service.accepted_ids(ada) == {friend}
     finally:
         await engine.dispose()
+
+
+# --- the identity merge ---------------------------------------------------
+
+
+async def _add_row(factory, a, b, requested_by, status):
+    low, high = friendship_key(a, b)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                Friendship(
+                    user_low_id=low,
+                    user_high_id=high,
+                    requested_by_id=requested_by,
+                    status=status,
+                )
+            )
+
+
+async def _merge(factory, source, target):
+    from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+
+    await SqlAlchemyUserRepository(factory).merge_guest_into_account(
+        str(source), str(target)
+    )
+
+
+async def test_a_merge_moves_a_friendship_onto_the_account():
+    """Registered-only makes this unreachable today; the merge is written anyway.
+
+    The rule is a product decision that could be revisited, and this merge is
+    genuinely harder than the block merge beside it: the pair is *ordered*, so
+    a remap can move an id from one column to the other and the row has to be
+    rebuilt rather than reassigned.
+    """
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        guest = await make_account(factory, "Guesty", guest=True)
+        account = await make_account(factory, "Ada")
+        friend = await make_account(factory, "Friend")
+        await _add_row(
+            factory, guest, friend, guest, FriendshipState.ACCEPTED.value
+        )
+
+        await _merge(factory, guest, account)
+
+        assert await service.are_friends(account, friend)
+        assert await row_for(factory, guest, friend) is None
+        row = await row_for(factory, account, friend)
+        # The requester moved too, or the members CHECK would have fired.
+        assert row.requested_by_id == account
+    finally:
+        await engine.dispose()
+
+
+async def test_a_merge_does_not_make_somebody_their_own_friend():
+    factory, engine = await create_test_db()
+    try:
+        guest = await make_account(factory, "Guesty", guest=True)
+        account = await make_account(factory, "Ada")
+        await _add_row(
+            factory, guest, account, guest, FriendshipState.ACCEPTED.value
+        )
+
+        await _merge(factory, guest, account)
+
+        assert await row_for(factory, guest, account) is None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "guest_status,account_status,expected",
+    [
+        (FriendshipState.ACCEPTED.value, FriendshipState.PENDING.value, "accepted"),
+        (FriendshipState.PENDING.value, FriendshipState.ACCEPTED.value, "accepted"),
+        (FriendshipState.DECLINED.value, FriendshipState.ACCEPTED.value, "accepted"),
+        (FriendshipState.ACCEPTED.value, FriendshipState.DECLINED.value, "accepted"),
+    ],
+)
+async def test_a_merge_keeps_the_stronger_of_two_statuses(
+    guest_status, account_status, expected
+):
+    """An accepted friendship is a decision both people made.
+
+    A merge is not a reason to quietly undo it, whichever of the two identities
+    happened to hold it.
+    """
+    factory, engine = await create_test_db()
+    try:
+        guest = await make_account(factory, "Guesty", guest=True)
+        account = await make_account(factory, "Ada")
+        friend = await make_account(factory, "Friend")
+        await _add_row(factory, guest, friend, guest, guest_status)
+        await _add_row(factory, account, friend, account, account_status)
+
+        await _merge(factory, guest, account)
+
+        row = await row_for(factory, account, friend)
+        assert row is not None and row.status == expected
+        assert await row_for(factory, guest, friend) is None
+    finally:
+        await engine.dispose()
+
+
+async def test_a_merge_collapses_two_crossing_requests_into_a_friendship():
+    """Or the account is left holding two pendings that can never resolve."""
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        guest = await make_account(factory, "Guesty", guest=True)
+        account = await make_account(factory, "Ada")
+        friend = await make_account(factory, "Friend")
+        # The guest asked them; they asked the account.
+        await _add_row(factory, guest, friend, guest, FriendshipState.PENDING.value)
+        await _add_row(
+            factory, account, friend, friend, FriendshipState.PENDING.value
+        )
+
+        await _merge(factory, guest, account)
+
+        assert await service.are_friends(account, friend)
+    finally:
+        await engine.dispose()

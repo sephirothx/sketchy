@@ -15,20 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.db.models import (
+    AuditEvent,
+    Friendship,
     GameParticipant,
     GamePromptSource,
     GameRecord,
     IdentityAlias,
-    TurnDrawing,
-    TurnGuess,
-    TurnParticipantOutcome,
-    TurnPromptOffer,
-    TurnPromptOfferSource,
-    TurnRecord,
-    User,
-    UserStatsDaily,
-    UserBlock,
-    AuditEvent,
     Prompt,
     PromptAlias,
     PromptConcept,
@@ -37,25 +29,35 @@ from app.db.models import (
     PromptListRevisionItem,
     PromptTag,
     PromptUsageFact,
-    ScoreEvent,
     PromptVersion,
     PromptVersionAlias,
     PromptVersionTag,
+    ScoreEvent,
+    TurnDrawing,
+    TurnGuess,
+    TurnParticipantOutcome,
+    TurnPromptOffer,
+    TurnPromptOfferSource,
+    TurnRecord,
+    User,
+    UserBlock,
+    UserStatsDaily,
     generate_uuid,
 )
 from app.canvas_storage import prepare_stored_drawing
 from app.domain_values import (
     AccountState,
     AuditTargetType,
-    GAME_OUTCOMES,
-    GameOutcome,
     DRAWING_UNAVAILABLE_RECAP_BUDGET,
+    FriendshipState,
+    GAME_OUTCOMES,
     GAME_PROMPT_SOURCE_MODES,
+    GameOutcome,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
-    SCORE_EVENT_TYPES,
     PromptContentModerationState,
     PromptListVisibility,
+    SCORE_EVENT_TYPES,
     TURN_ELIGIBILITY_REASONS,
     TURN_PARTICIPANT_OUTCOMES,
     TURN_PARTICIPANT_STATES,
@@ -66,6 +68,7 @@ from app.services.user_stats_projection import (
     increment_user_stats_projection,
     rebuild_user_stats_in_session,
 )
+from app.services.friends import friendship_key, other_of
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     BundledPromptDefinition,
@@ -327,6 +330,82 @@ def _bundled_revision_hash(
         payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+async def _merge_friendships(session, source_id, target_id) -> None:
+    """Move a merged guest's friendships onto the account it became.
+
+    A no-op today: only registered accounts may hold a friendship, and a guest
+    being merged is by definition not one. Written anyway, because "registered
+    only" is a product decision that could be revisited, and because the shape
+    of this merge is genuinely harder than the block merge beside it - a pair
+    here is *ordered*, so a remap can move an id from one column to the other
+    and the row has to be rebuilt rather than reassigned in place.
+
+    The cases, in the order they are handled:
+
+    * **Self-friendship.** `(source, target)` becomes `(target, target)`, which
+      `ck_friendships_ordered` rejects. Deleted, the way the block merge drops
+      a pair that would become a self-block.
+    * **Duplicate.** A remap landing on a pair that already exists keeps one
+      row, and keeps the stronger status: `accepted` beats `pending` beats
+      `declined`. An accepted friendship is a decision both people made, and a
+      merge is not a reason to quietly undo it.
+    * **Crossing pendings collapse.** Two pendings in opposite directions
+      become one accepted friendship, for the same reason a crossing request
+      does - the alternative is two rows that can never resolve.
+    * **The requester moves too.** Miss it and
+      `ck_friendships_requester_is_a_member` fires, which is the constraint
+      earning its place rather than a bug reaching a user.
+    """
+    rows = (
+        await session.scalars(
+            select(Friendship).where(
+                or_(
+                    Friendship.user_low_id == source_id,
+                    Friendship.user_high_id == source_id,
+                )
+            )
+        )
+    ).all()
+    ranking = {
+        FriendshipState.ACCEPTED.value: 3,
+        FriendshipState.PENDING.value: 2,
+        FriendshipState.DECLINED.value: 1,
+    }
+    for row in rows:
+        other = other_of(row, source_id)
+        requested_by = target_id if row.requested_by_id == source_id else row.requested_by_id
+        await session.delete(row)
+        if other == target_id:
+            # The guest and the account it merged into. There is one person
+            # here now, and a person is not their own friend.
+            continue
+        await session.flush()
+        low, high = friendship_key(target_id, other)
+        existing = await session.get(Friendship, (low, high))
+        if existing is None:
+            session.add(
+                Friendship(
+                    user_low_id=low,
+                    user_high_id=high,
+                    requested_by_id=requested_by,
+                    status=row.status,
+                )
+            )
+            continue
+        crossing = (
+            existing.status == FriendshipState.PENDING.value
+            and row.status == FriendshipState.PENDING.value
+            and existing.requested_by_id != requested_by
+        )
+        if crossing:
+            existing.status = FriendshipState.ACCEPTED.value
+            existing.responded_at = row.responded_at or existing.responded_at
+        elif ranking[row.status] > ranking[existing.status]:
+            existing.status = row.status
+            existing.requested_by_id = requested_by
+            existing.responded_at = row.responded_at
 
 
 class SqlAlchemyUserRepository(UserRepository):
@@ -593,6 +672,7 @@ class SqlAlchemyUserRepository(UserRepository):
                     else:
                         block.blocker_user_id = blocker_id
                         block.blocked_user_id = blocked_id
+                await _merge_friendships(session, source.id, target.id)
                 await session.flush()
                 await rebuild_user_stats_in_session(
                     session, user_id=target.id
