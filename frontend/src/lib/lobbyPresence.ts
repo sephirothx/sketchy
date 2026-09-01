@@ -43,7 +43,8 @@ export const EMPTY_PRESENCE: PresenceState = {
 /** The order the server sorts by, applied again after every delta.
 
 Registered before guests, then display name case-insensitively, then the
-account id so the order is total rather than dependent on insertion.
+account id so the order is total rather than dependent on insertion. #529
+adds friends as a term in front of these, not as a change to them.
 
 The two ends can hold this comparator identically because display names are
 `[a-zA-Z0-9_-]` by the server's `NAME_PATTERN`: `toLowerCase` and Python's
@@ -161,20 +162,4 @@ export function presenceSummary(state: PresenceState): string {
   const shown = state.players.length;
   if (state.onlineCount > shown) return `Showing ${shown} of ${state.onlineCount}`;
   return `${state.onlineCount} online`;
-}
-
-/** Case-insensitive filter over what the client actually holds.
-
-Only ever a filter of the rows already on screen - never presented as a
-search of everyone online, because beyond the cap it would answer "no such
-player" about somebody who is. */
-export function filterPlayers(
-  players: OnlinePlayer[],
-  query: string,
-): OnlinePlayer[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return players;
-  return players.filter((player) =>
-    player.displayName.toLowerCase().includes(needle),
-  );
 }

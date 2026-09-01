@@ -6,7 +6,7 @@ sat with no caller, and the review queue could only ever be empty.
 """
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -36,8 +36,7 @@ async def test_a_player_reports_another_from_the_room_menu():
             code = await room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "ReportedPlayer")
-            await player_page.fill('input[placeholder="ABC123"]', code)
-            await player_page.click('button:has-text("Join by code")')
+            await join_by_code(player_page, code)
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
 
             # In a game, not a waiting room: the game layout is the stacking
@@ -126,8 +125,7 @@ async def test_a_guest_votes_but_is_offered_no_way_to_report():
             code = await room_code(host_page)
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "GuestOther")
-            await player_page.fill('input[placeholder="ABC123"]', code)
-            await player_page.click('button:has-text("Join by code")')
+            await join_by_code(player_page, code)
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
 
             # Started, so that kick and AFK are on offer and their absence

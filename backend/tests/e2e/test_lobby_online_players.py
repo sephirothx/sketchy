@@ -4,6 +4,8 @@ Deliberately asserts on *this test's own players* rather than on counts: the
 suite runs its workers against one server, so every other test's browser is
 online at the same time and any exact total would be a coin flip.
 """
+import re
+
 import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import use_guest_name
@@ -21,13 +23,6 @@ def row_for(page, name: str):
     )
 
 
-async def open_the_list(page):
-    strip = page.locator('[data-testid="online-players-strip"]')
-    await expect(strip).to_be_visible(timeout=SETTLE_MS)
-    await strip.click()
-    await page.wait_for_selector('[data-testid="online-players-sheet"]')
-
-
 @pytest.mark.asyncio
 async def test_the_lobby_shows_who_else_is_online_and_what_they_are_doing():
     async with async_playwright() as p:
@@ -43,8 +38,8 @@ async def test_the_lobby_shows_who_else_is_online_and_what_they_are_doing():
             await subject.goto(BASE_URL)
             await use_guest_name(subject, "PresenceSubject")
 
-            # The other player turns up in the list without a reload.
-            await open_the_list(watcher)
+            # The other player turns up in the list without a reload, and
+            # without anything having to be opened to see them.
             await expect(row_for(watcher, "PresenceSubject")).to_be_visible(
                 timeout=SETTLE_MS
             )
@@ -74,25 +69,22 @@ async def test_the_lobby_shows_who_else_is_online_and_what_they_are_doing():
 
 
 @pytest.mark.asyncio
-async def test_the_list_filters_what_it_is_showing():
+async def test_the_viewer_can_find_themselves_in_the_list():
+    """Marked in place rather than moved to the top, so the order is one order."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         context = await browser.new_context()
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
-            await use_guest_name(page, "FilterSubject")
-            await open_the_list(page)
-            await expect(row_for(page, "FilterSubject")).to_be_visible(
-                timeout=SETTLE_MS
+            await use_guest_name(page, "PresenceSelf")
+            mine = row_for(page, "PresenceSelf")
+            await expect(mine).to_be_visible(timeout=SETTLE_MS)
+            await expect(mine).to_have_class(re.compile(r"\bis-me\b"))
+            # A guest, so grey italics rather than an account colour (R-ACCT-05).
+            await expect(mine.locator(".online-player-name")).to_have_class(
+                re.compile(r"\bis-guest\b")
             )
-
-            await page.fill(
-                '[data-testid="online-players-sheet"] input[type="search"]',
-                "definitelynobody",
-            )
-            await expect(row_for(page, "FilterSubject")).to_have_count(0)
-            await expect(page.locator(".online-players-empty")).to_be_visible()
         finally:
             await context.close()
             await browser.close()

@@ -551,9 +551,11 @@ a cap is never mistaken for a quiet server), and
 debounce, because a trailing debounce under continuous churn never fires at
 all, while a tick has a bounded worst case however much is moving.
 
-The list carries no search. A client-side filter over a capped list would
-answer "no such player" about somebody who is online, which is worse than
-offering nothing; real search would be a server-side lookup over the registry.
+The list carries no search or filter. It is capped, so a filter over what the
+client happens to hold would answer "no such player" about somebody who is
+online - worse than offering nothing, and nobody scans a list this size by
+typing anyway. Finding one person is a different feature from seeing who is
+around, and it needs a server-side lookup over the registry.
 
 ### Room ceilings
 

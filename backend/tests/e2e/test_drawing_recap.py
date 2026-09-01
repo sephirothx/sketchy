@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from playwright.async_api import Page, async_playwright
 from tests.e2e.lobby_helpers import (
+    join_by_code,
     open_room_settings,
     open_settings_section,
     room_code,
@@ -50,8 +51,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
 
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "RecapGuest")
-            await guest.fill('input[placeholder="ABC123"]', code)
-            await guest.click('button:has-text("Join by code")')
+            await join_by_code(guest, code)
             await guest.locator('[data-testid="waiting-room"]').wait_for()
 
             await open_room_settings(host)

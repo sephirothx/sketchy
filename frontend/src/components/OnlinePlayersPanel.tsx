@@ -1,129 +1,63 @@
-import { useMemo, useState } from "react";
-
-import { filterPlayers, presenceSummary } from "../lib/lobbyPresence";
+import { presenceSummary } from "../lib/lobbyPresence";
+import { useAuthStore } from "../store/authStore";
 import { usePresenceStore } from "../store/presenceStore";
 import { Avatar } from "./ui/Avatar";
-import { BottomSheet } from "./ui/BottomSheet";
-import { SearchIcon } from "./icons";
 
-/** How many faces the strip shows before it becomes a count.
+/** Who else is here, beside the room list.
 
-Enough to read the room at a glance on a phone without the strip wrapping;
-everyone else is behind the tap. */
-const FACES_ON_THE_STRIP = 8;
+A plain list rather than something to open: at the lobby's scale it fits on
+screen, and the whole value of it is being readable without a click.
 
-function StatusLabel({ status }: { status: "lobby" | "playing" }) {
-  return (
-    <span className={`online-player-status is-${status}`}>
-      {status === "playing" ? "In a game" : "In the lobby"}
-    </span>
-  );
-}
-
-/** Who else is here, as a strip that opens into the full list.
-
-A strip rather than a list because the lobby's job is the room browser, and
-400 rows above it would bury the thing people came for. The count beside the
-faces is the whole list's, not the strip's, so it never implies the server is
-quieter than it is. */
+There is deliberately no filter. The list is capped, so a filter over it would
+answer "no such player" about somebody who is online — and nobody scans a list
+this size by typing anyway. Finding a specific person is a different feature
+from seeing who is around, and it needs a server-side lookup rather than a
+text box over the rows that happened to fit. */
 export function OnlinePlayersPanel() {
   const presence = usePresenceStore((state) => state.presence);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-
-  const visible = useMemo(
-    () => filterPlayers(presence.players, query),
-    [presence.players, query],
-  );
-
-  if (presence.onlineCount === 0) return null;
-
-  const faces = presence.players.slice(0, FACES_ON_THE_STRIP);
-  const overflow = presence.onlineCount - faces.length;
+  const myUserId = useAuthStore((state) => state.user?.id ?? null);
 
   return (
-    <>
-      <button
-        type="button"
-        className="online-strip"
-        data-testid="online-players-strip"
-        onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-      >
-        <span className="online-strip-faces" aria-hidden="true">
-          {faces.map((player) => (
-            <Avatar
-              key={player.userId}
-              name={player.displayName}
-              nameColor={player.nameColor ?? undefined}
-              isAnonymous={player.isAnonymous}
-              size={26}
-            />
-          ))}
-          {overflow > 0 && <span className="online-strip-more">+{overflow}</span>}
-        </span>
-        <span className="online-strip-count">{presenceSummary(presence)}</span>
-      </button>
+    <section className="panel lobby-online-panel" aria-labelledby="online-heading">
+      <div className="lobby-rooms-heading">
+        <h2 id="online-heading">Who is online</h2>
+        {/* The true total, not the number of rows: a cap must never read as a
+            quiet server (R-PRESENCE-04). */}
+        <span className="lobby-rooms-count">{presenceSummary(presence)}</span>
+      </div>
 
-      {open && (
-        <BottomSheet
-          title="Who is online"
-          testId="online-players-sheet"
-          onDismiss={() => {
-            setOpen(false);
-            setQuery("");
-          }}
-        >
-          <div className="online-players-sheet">
-            <div className="online-players-search">
-              <SearchIcon size={16} />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Filter this list"
-                aria-label="Filter the players shown"
+      {presence.players.length === 0 ? (
+        <p className="online-players-empty">Nobody else is here right now.</p>
+      ) : (
+        <ul className="online-players-list" data-testid="online-players-list">
+          {presence.players.map((player) => (
+            <li
+              key={player.userId}
+              className={`online-player-row${player.userId === myUserId ? " is-me" : ""}`}
+            >
+              <Avatar
+                name={player.displayName}
+                nameColor={player.nameColor ?? undefined}
+                isAnonymous={player.isAnonymous}
+                size={28}
               />
-            </div>
-            {presence.onlineCount > presence.players.length && (
-              // Said out loud rather than left to be inferred: the field above
-              // filters the rows on screen, and cannot find somebody the cap
-              // left out. Answering "no such player" about somebody who is
-              // online would be worse than not offering search at all.
-              <p className="online-players-note">
-                Showing the first {presence.players.length} of{" "}
-                {presence.onlineCount} players online.
-              </p>
-            )}
-            <ul className="online-players-list" data-testid="online-players-list">
-              {visible.map((player) => (
-                <li key={player.userId} className="online-player-row">
-                  <Avatar
-                    name={player.displayName}
-                    nameColor={player.nameColor ?? undefined}
-                    isAnonymous={player.isAnonymous}
-                    size={30}
-                  />
-                  <span
-                    className={`online-player-name${player.isAnonymous ? " is-guest" : ""}`}
-                    style={
-                      player.isAnonymous || !player.nameColor
-                        ? undefined
-                        : { color: player.nameColor }
-                    }
-                  >
-                    {player.displayName}
-                  </span>
-                  <StatusLabel status={player.status} />
-                </li>
-              ))}
-            </ul>
-            {visible.length === 0 && (
-              <p className="online-players-empty">Nobody here matches that.</p>
-            )}
-          </div>
-        </BottomSheet>
+              <span
+                className={`online-player-name${player.isAnonymous ? " is-guest" : ""}`}
+                style={
+                  player.isAnonymous || !player.nameColor
+                    ? undefined
+                    : { color: player.nameColor }
+                }
+              >
+                {player.displayName}
+              </span>
+              <span className={`online-player-status is-${player.status}`}>
+                {player.status === "playing" ? "In a game" : "In the lobby"}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
-    </>
+    </section>
   );
 }

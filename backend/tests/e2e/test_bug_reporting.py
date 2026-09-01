@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import BugReport, User
 from app.domain_values import UserRole
-from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -168,8 +168,7 @@ async def test_a_guest_in_a_live_game_can_still_reach_the_report_dialog():
 
             await guest_page.goto(BASE_URL)
             await use_guest_name(guest_page, "CompactGuest")
-            await guest_page.fill('input[placeholder="ABC123"]', code)
-            await guest_page.click('button:has-text("Join by code")')
+            await join_by_code(guest_page, code)
             await guest_page.wait_for_selector('[data-testid="waiting-room"]')
 
             # The compact chip only exists in the game layout.

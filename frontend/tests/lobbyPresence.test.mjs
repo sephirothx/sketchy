@@ -7,7 +7,6 @@ import {
   applyDelta,
   applySnapshot,
   comparePlayers,
-  filterPlayers,
   parsePlayer,
   presenceSummary,
 } from "../src/lib/lobbyPresence.ts";
@@ -132,11 +131,4 @@ test("the summary says how many were left out", () => {
     presenceSummary(snapshot(1, [player("u1", "Ada")], 412)),
     "Showing 1 of 412",
   );
-});
-
-test("the filter matches anywhere in a name, case-insensitively", () => {
-  const players = [player("u1", "Ada"), player("u2", "badger"), player("u3", "zoe")];
-  assert.deepEqual(filterPlayers(players, "AD").map((p) => p.userId), ["u1", "u2"]);
-  assert.deepEqual(filterPlayers(players, "  ").map((p) => p.userId), ["u1", "u2", "u3"]);
-  assert.deepEqual(filterPlayers(players, "nobody"), []);
 });

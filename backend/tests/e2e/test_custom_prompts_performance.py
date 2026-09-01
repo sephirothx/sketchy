@@ -5,7 +5,7 @@ from playwright.async_api import async_playwright
 
 from app.prompts import MAX_CUSTOM_PROMPTS, MAX_RAW_INPUT_LENGTH
 from tests.e2e.custom_prompts_fixture import maximum_custom_prompts, set_textarea_value
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -61,8 +61,7 @@ async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded(
 
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "MaximumGuest")
-            await guest.fill('input[placeholder="ABC123"]', code)
-            await guest.get_by_role("button", name="Join by code", exact=True).click()
+            await join_by_code(guest, code)
             await guest.wait_for_selector('[data-testid="waiting-room"]')
 
             started = perf_counter()

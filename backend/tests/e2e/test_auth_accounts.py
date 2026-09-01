@@ -4,7 +4,7 @@ import asyncio
 import pytest
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -211,8 +211,7 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
 
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "EndGuest")
-            await guest.fill('input[placeholder="ABC123"]', code)
-            await guest.click('button:has-text("Join by code")')
+            await join_by_code(guest, code)
             await guest.wait_for_selector('[data-testid="waiting-room"]')
 
             await host.click('button:has-text("Start game")')

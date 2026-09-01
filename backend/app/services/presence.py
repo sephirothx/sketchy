@@ -136,6 +136,10 @@ def sort_key(entry: PresenceEntry) -> tuple[bool, str, str]:
     Explicitly not recency: a list sorted by when people arrived reorders
     under the reader's cursor on every tick.
 
+    #529 puts friends above everyone else, which is a term in front of this
+    one rather than a change to it - the rest of the order still decides
+    among friends, and among everybody else.
+
     The client re-sorts by the same rule after applying a delta
     (`frontend/src/lib/lobbyPresence.ts`), and `fixtures/lobby_presence_v1.json`
     pins that the two agree. They provably can: `NAME_PATTERN` restricts a

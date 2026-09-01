@@ -18,7 +18,7 @@ import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
 import { useLobbyPresence } from "../hooks/useLobbyPresence";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { AlertCircleIcon, ChevronDownIcon, EyeIcon, PlusIcon, SearchIcon } from "../components/icons";
+import { AlertCircleIcon, ChevronDownIcon, PlusIcon, SearchIcon } from "../components/icons";
 import { useClientConfig } from "../hooks/useClientConfig";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import type { AckResponse, RoomSummary } from "../types";
@@ -378,7 +378,27 @@ export function LobbyBrowserPage() {
 
   return (
     <div className="lobby-page">
-      <AppHeader />
+      <AppHeader
+        actions={
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary btn-compact"
+              onClick={() => setCodeSheetOpen(true)}
+            >
+              Join by code
+            </button>
+            <Button
+              variant="primary"
+              compact
+              iconLeft={<PlusIcon size={15} />}
+              onClick={() => void handleOpenCreateRoom()}
+            >
+              Create room
+            </Button>
+          </>
+        }
+      />
 
       {criticalError && (
         <RemovedFromRoomDialog
@@ -391,50 +411,7 @@ export function LobbyBrowserPage() {
 
       <FirstRunIdentity />
 
-      <OnlinePlayersPanel />
-
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
-
-      {isNarrow ? null : (
-        <div className="lobby-columns">
-          <section className="panel lobby-entry-panel">
-            <h2>Start a game</h2>
-            <p className="create-room-lobby-copy">Pick the basics, invite your friends, draw. Settings can change any time before the first round.</p>
-            <div className="lobby-entry-actions">
-              <Button
-                variant="primary"
-                big
-                iconLeft={<PlusIcon size={16} />}
-                onClick={() => void handleOpenCreateRoom()}
-              >
-                Create room
-              </Button>
-            </div>
-          </section>
-
-          <section className="panel lobby-entry-panel">
-            <h2>Join with a code</h2>
-            <RoomCodeInput
-              value={joinCode}
-              onChange={setJoinCode}
-              onSubmit={() => void handleJoinByCode(false)}
-            />
-            <div className="lobby-entry-actions">
-              <Button variant="primary" disabled={Boolean(pendingJoin)} onClick={() => void handleJoinByCode(false)}>
-                {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? "Joining…" : "Join by code"}
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={Boolean(pendingJoin)}
-                iconLeft={<EyeIcon size={14} />}
-                onClick={() => void handleJoinByCode(true)}
-              >
-                {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate" ? "Joining as spectator…" : "Spectate"}
-              </Button>
-            </div>
-          </section>
-        </div>
-      )}
 
       <section className="panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
@@ -591,9 +568,29 @@ export function LobbyBrowserPage() {
           </div>
         )}
       </section>
-      {/* The two entry cards become one dock on a phone: the rooms are the
-          page, and the way to make or join a room is a fixed bar under the
-          thumb rather than 440px of card above the list. */}
+      {/* Two panels that are about the people here rather than the rooms, so
+          they sit below the list rather than above it. They stack on a phone
+          in the same order: the room browser is what the page is for. */}
+      <div className="lobby-social">
+        <section className="panel lobby-chat-panel" aria-labelledby="lobby-chat-heading">
+          <div className="lobby-rooms-heading">
+            <h2 id="lobby-chat-heading">Chat</h2>
+          </div>
+          {/* Deliberately not a disabled composer. A greyed-out text box reads
+              as broken rather than unbuilt, and invites bug reports about a
+              feature nobody has written yet. #533 replaces this whole panel. */}
+          <p className="lobby-chat-placeholder">
+            A lobby-wide chat is coming. For now, conversation happens inside a
+            room.
+          </p>
+        </section>
+
+        <OnlinePlayersPanel />
+      </div>
+
+      {/* The way in is a fixed bar under the thumb on a phone, rather than the
+          header controls a desktop gets: three actions beside the wordmark is
+          what used to push this header onto two rows. */}
       {isNarrow && (
         <div className="lobby-dock">
           {/* The page-top alert is out of sight from down here, and behind the

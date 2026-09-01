@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSettingsStore } from "../store/settingsStore";
@@ -21,8 +22,17 @@ import { BackIcon, GearIcon, Wordmark } from "./icons";
  * On a phone the gear moves into the identity menu instead: three controls
  * beside a wordmark is what used to push this header onto two rows, and
  * settings is the one of them nobody opens mid-session.
+ *
+ * `actions` is where a page puts its own primary controls - the lobby's
+ * *Create room* and *Join by code*. They are the page's, not the chrome's, so
+ * they are passed in rather than known about here; and a phone gets none of
+ * them, because that is the same two-row problem the gear was moved for. The
+ * lobby keeps its thumb dock for those.
  */
-export function AppHeader({ backLabel }: { backLabel?: string } = {}) {
+export function AppHeader({
+  backLabel,
+  actions,
+}: { backLabel?: string; actions?: ReactNode } = {}) {
   const navigate = useNavigate();
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const openSettings = useSettingsStore((s) => s.openSettings);
@@ -47,6 +57,7 @@ export function AppHeader({ backLabel }: { backLabel?: string } = {}) {
         </h1>
       </div>
       <div className="lobby-header-actions">
+        {!isNarrow && actions}
         {!isNarrow && (
           <button
             type="button"

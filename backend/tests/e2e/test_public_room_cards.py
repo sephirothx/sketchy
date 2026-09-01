@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -69,8 +69,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
 
             await player.goto(BASE_URL)
             await use_guest_name(player, "CardPlayer")
-            await player.fill('input[placeholder="ABC123"]', code)
-            await player.click('button:has-text("Join by code")')
+            await join_by_code(player, code)
             await player.wait_for_selector('[data-testid="waiting-room"]')
             await player.click('summary:has-text("Inspect 2 custom prompts")')
             prompt_list = player.locator('.waiting-custom-prompts-list')

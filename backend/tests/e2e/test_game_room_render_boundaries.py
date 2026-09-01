@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -48,8 +48,7 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             ):
                 await page.goto(BASE_URL)
                 await use_guest_name(page, nickname)
-                await page.fill('input[placeholder="ABC123"]', code)
-                await page.get_by_role("button", name="Join by code", exact=True).click()
+                await join_by_code(page, code)
                 await page.wait_for_selector('[data-testid="waiting-room"]')
 
             await host.get_by_role("button", name="Start game", exact=True).click()

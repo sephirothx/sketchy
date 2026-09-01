@@ -107,3 +107,22 @@ async def close_room_settings(page) -> None:
     Discards anything unsaved."""
     await page.keyboard.press("Escape")
     await page.locator(".room-settings-editor").wait_for(state="detached")
+
+
+async def join_by_code(page, code: str, *, spectate: bool = False) -> None:
+    """Enter a room from the lobby by its code.
+
+    The lobby's entry controls live in the header and open the code sheet, so
+    this is three steps rather than two. Worth a helper rather than 26 copies
+    of them: the last two lobby layout changes each had to rewrite every one
+    of those copies, and the step that is actually interesting to a test is
+    "this player joined that room".
+    """
+    await page.click('button:has-text("Join by code")')
+    await page.wait_for_selector('[data-testid="lobby-code-sheet"]')
+    await page.fill('input[placeholder="ABC123"]', code)
+    await page.click(
+        'button:has-text("Watch without playing")'
+        if spectate
+        else 'button:has-text("Join the room")'
+    )
