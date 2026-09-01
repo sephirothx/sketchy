@@ -717,3 +717,78 @@ async def test_one_player_logging_in_does_not_empty_the_lobby():
     cache.invalidate("user-0")
 
     assert cache.missing(list(users)) == ["user-0", "guest"]
+
+
+# --- a merged guest ------------------------------------------------------
+
+
+class AliasingRepo(StubUserRepo):
+    """A repository that resolves an alias, the way `get_by_id` really does.
+
+    `_canonical_user_id` means a merged guest's id reads back as the account
+    it was merged into - with the account's `id`, not the one that was asked
+    for.
+    """
+
+    def __init__(self, users, aliases=None):
+        super().__init__(users)
+        self._aliases = aliases or {}
+
+    async def get_by_id(self, user_id):
+        return await super().get_by_id(self._aliases.get(user_id, user_id))
+
+
+@pytest.mark.asyncio
+async def test_warming_an_aliased_id_does_not_spin_for_ever():
+    """`warm(x)` must make `missing([x])` false, whatever the repository says.
+
+    The cache remembered rows under the id the *repository* returned, so an
+    id that resolves to another account was never satisfied: the tick asked
+    for it, stored it under a different key, found it missing again, and read
+    the database for it once a second for as long as the socket stayed open.
+    """
+    repo = AliasingRepo(
+        {"account": StubUser("account", "Ada")}, aliases={"guest": "account"}
+    )
+    cache = PresenceIdentityCache(repo)
+
+    await cache.warm("guest")
+    assert cache.missing(["guest"]) == [], "the warm did not satisfy its own key"
+
+    await cache.warm("guest")
+    assert repo.reads == 1, "a satisfied key was read again"
+
+
+@pytest.mark.asyncio
+async def test_a_merged_guest_becomes_the_account_it_merged_into():
+    """One person, one row - without closing a socket that may be mid-game.
+
+    A guest logging in on one tab must not disconnect another tab of theirs
+    that is sitting in a game: the seat is deliberately left alone (R-ACCT-04
+    keeps historical seats), and revocation applies on the next connection
+    (R-AUTH-04). What has to move is who presence says that socket belongs
+    to, which is exactly what an identity alias means.
+    """
+    registry = PresenceRegistry()
+    registry.note_socket_opened("guest-tab", "guest")
+    registry.note_socket_opened("account-tab", "account")
+    assert registry.online_accounts == 2
+
+    registry.rekey("guest", "account")
+
+    assert registry.online_accounts == 1
+    assert registry.is_online("account")
+    assert not registry.is_online("guest")
+    # Both sockets now answer for the account, so either closing leaves the
+    # other one holding it.
+    assert registry.note_socket_closed("guest-tab") is False
+    assert registry.note_socket_closed("account-tab") is True
+
+
+def test_rekeying_an_account_with_no_sockets_is_a_no_op():
+    registry = PresenceRegistry()
+    registry.note_socket_opened("account-tab", "account")
+    registry.rekey("guest", "account")
+    registry.rekey("account", "account")
+    assert registry.online_accounts == 1
+    assert registry.is_online("account")

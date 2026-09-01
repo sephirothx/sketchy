@@ -280,6 +280,37 @@ class PresenceRegistry:
         del self._sids_by_user[user_id]
         return True
 
+    def rekey(self, source_user_id: str, target_user_id: str) -> None:
+        """Move every socket of a merged guest onto the account it became.
+
+        A guest logging in becomes an alias of an account (R-ACCT-04), and the
+        sockets they already had open still resolved the guest at their
+        handshake - the server reads the cookie once. Left alone they would
+        sit in the registry as a second person: an entry that inflates the
+        total, cannot be shown once the alias resolves, and only clears when
+        that tab is closed.
+
+        Moved rather than closed on purpose. Closing them is what a deletion
+        or a ban does, because those end the account - but a merge does not,
+        and closing here would drop a player out of a game they are in on
+        another tab because they signed in on this one. The seat is
+        deliberately left alone (historical seats keep their identity) and
+        revocation applies on the next connection (R-AUTH-04). What moves is
+        only who presence says the socket belongs to, which is precisely what
+        an alias means.
+
+        A set union, so the account being online already is the ordinary case
+        rather than a collision.
+        """
+        if source_user_id == target_user_id:
+            return
+        sids = self._sids_by_user.pop(source_user_id, set())
+        if not sids:
+            return
+        for sid in sids:
+            self._user_by_sid[sid] = target_user_id
+        self._sids_by_user.setdefault(target_user_id, set()).update(sids)
+
     def is_online(self, user_id: str | None) -> bool:
         return bool(user_id) and user_id in self._sids_by_user
 
@@ -441,18 +472,34 @@ class PresenceIdentityCache:
             return
         if user is None:
             return
+        # Stored under the key that was *asked for*, not the one the record
+        # came back with. `get_by_id` resolves an identity alias, so a merged
+        # guest's id reads back as the account it was merged into - and a
+        # cache keyed by the answer would never satisfy the question. The tick
+        # would ask again every second, for as long as that socket stayed
+        # open, and never stop.
         self.remember(
             PresenceIdentity(
                 user_id=user.id,
                 display_name=user.display_name,
                 name_color=user.name_color,
                 is_anonymous=user.is_anonymous,
-            )
+            ),
+            key=user_id,
         )
 
-    def remember(self, identity: PresenceIdentity) -> None:
-        self._identities[identity.user_id] = identity
-        self._identities.move_to_end(identity.user_id)
+    def remember(
+        self, identity: PresenceIdentity, *, key: str | None = None
+    ) -> None:
+        """Cache an identity under the key presence will look it up by.
+
+        `key` differs from `identity.user_id` only for an alias: a merged
+        guest is asked about under the id its socket handshook with, and
+        answers with the account it became.
+        """
+        cache_key = key or identity.user_id
+        self._identities[cache_key] = identity
+        self._identities.move_to_end(cache_key)
         while len(self._identities) > self._max_cached:
             self._identities.popitem(last=False)
 

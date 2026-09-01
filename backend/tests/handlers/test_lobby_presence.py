@@ -385,3 +385,37 @@ async def test_a_payload_where_none_belongs_is_refused(command):
     sio.enter_room.assert_not_awaited()
     sio.leave_room.assert_not_awaited()
     assert ctx is not None
+
+
+@pytest.mark.asyncio
+async def test_a_merged_guest_is_one_person_in_the_list(monkeypatch):
+    """Signing in must not leave the guest behind as a second online player."""
+    from app.services.presence import PresenceIdentity
+
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    account_cookies(monkeypatch, {"tok-guest": "guest", "tok-account": "account"})
+    ctx.presence_identities.remember(
+        PresenceIdentity(
+            user_id="guest",
+            display_name="Guest",
+            name_color=None,
+            is_anonymous=True,
+        )
+    )
+    ctx.presence_identities.remember(_identity("account", "Ada"))
+
+    # Two tabs as a guest, then a sign-in on a third as the account.
+    await connect_as(ctx, sio, "guest-tab-1", "tok-guest")
+    await connect_as(ctx, sio, "guest-tab-2", "tok-guest")
+    await connect_as(ctx, sio, "account-tab", "tok-account")
+    assert ctx.presence.online_accounts == 2
+
+    ctx.presence.rekey("guest", "account")
+
+    answer = await sio.handlers["/"]["watch_lobby"]("account-tab", None)
+    assert answer["onlineCount"] == 1
+    assert [row["displayName"] for row in answer["players"]] == ["Ada"]
+    # And the sockets are still open: a merge is not a ban.
+    assert ctx.room_capacity.open_sockets == 3
+    assert_balanced(ctx)

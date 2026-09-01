@@ -512,6 +512,24 @@ Clearing the whole cache is right for blocks - a merge rewrites them for
 arbitrary pairs, and that cache reads through on a miss - but here it would
 take every connected player off the list because one of them logged in.
 
+A merge also **re-keys** the registry: the guest's other tabs resolved that
+identity at their own handshake and will not look again, so presence follows
+the alias rather than waiting for those tabs to close. Moved, never closed -
+closing sockets is what a ban or a deletion does, because those end the
+account, whereas a merge would be dropping a player out of a game on one tab
+because they signed in on another. The seat is deliberately untouched
+(R-ACCT-04 keeps historical seats) and revocation applies on the next
+connection (R-AUTH-04); only who presence says the socket belongs to moves,
+which is exactly what an alias means. Because the registry holds a *set* of
+sockets per account, an account that was already online is a union rather
+than a collision.
+
+That alias is also why the identity cache stores a row under **the id it was
+asked about** rather than the one the record came back with: `get_by_id`
+resolves through `identity_aliases`, so a cache keyed by the answer would
+never satisfy the question - and the per-tick repair above would ask again
+every second, for as long as that socket stayed open, and never stop.
+
 Delivery is a Socket.IO channel a client opts into with `watch_lobby`, never a
 second poll: the lobby already polls `/api/rooms`, and #462 is open about that
 being one poll too many. Membership is asked for rather than derived from seat

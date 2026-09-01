@@ -243,6 +243,12 @@ def forget_merged_identities(source_user_id: str, target_user_id: str) -> None:
     happened to log in.
     """
     block_service.clear()
+    # The guest's own sockets resolved it at their handshake and will not look
+    # again, so presence follows the alias rather than waiting for those tabs
+    # to close. Moved, never closed: a merge does not end the account the way
+    # a ban or a deletion does, and closing here would drop a player out of a
+    # game they are in on another tab because they signed in on this one.
+    handler_context.presence.rekey(source_user_id, target_user_id)
     forget_presence_identity(source_user_id)
     forget_presence_identity(target_user_id)
 
