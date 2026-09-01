@@ -115,7 +115,11 @@ Sorted by how much it cost a player.
    ready state on the tile — the phone's version of the players column, which
    is not rendered at all below 900px because it would put every nickname on
    the page twice. The eight-chip settings summary is one line that opens the
-   editor. The page goes from 1 432px to 988.
+   editor, and Start is a fixed dock carrying its own blocking reason — sticky
+   pinned it to the bottom of its own column, and the chat card is the column
+   after that, so scrolling far enough put chat below the one control that is
+   supposed to be permanent. The invite card is 191px against 237. An empty
+   room comes to 847px on an 844px screen, against 1 432.
 8. **Hint tiles were 19 × 26 px tap targets** in buy-a-letter and Wheel modes
    (`.masked-tile.hint-blank` is a `<button>`); wheel letters about 28 × 22.
    Both far under 44 × 44 (iOS) and 48 × 48 (Android).

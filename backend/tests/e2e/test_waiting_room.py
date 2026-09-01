@@ -88,7 +88,12 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             await open_settings_section(host_page, "Prompts")
             await close_room_settings(host_page)
             assert await host_page.is_disabled('.waiting-start-button')
-            assert await host_page.is_visible('text=Spectators, AFK, and disconnected players do not count.')
+            # The button carries its own blocking reason; what counts as an
+            # active player is on its tooltip rather than a paragraph beside it.
+            assert await host_page.inner_text('.waiting-start-button') == "Need 1 more player"
+            assert "Spectators, AFK, and disconnected players do not count" in (
+                await host_page.get_attribute('.waiting-start-button', 'title') or ""
+            )
 
             code = await room_code(host_page)
             await player_page.goto(BASE_URL)
@@ -120,7 +125,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
 
             await host_page.wait_for_selector('text=LobbyPlayer')
             await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
-            assert await host_page.is_visible('text=2 active players are ready to play.')
+            assert await host_page.inner_text('.waiting-start-button') == "Start game"
 
             # The draft is the host's until they submit it. Rounds and a prompt
             # list go in together, and the room hears about them once.

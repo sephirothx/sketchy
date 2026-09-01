@@ -63,6 +63,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const me = players.find((player) => player.playerId === myPlayerId);
   const canStart = eligiblePlayers.length >= 2;
   const needsPlayers = Math.max(0, 2 - eligiblePlayers.length);
+  // The button says how many are missing; the tooltip says what counts, which
+  // is the part nobody needs until they wonder why a spectator is not enough.
+  const startBlockedReason =
+    "Spectators, AFK, and disconnected players do not count towards the two active players a game needs.";
   const rematch = Boolean(finalScores);
 
   async function copyToClipboard(value: string, what: string) {
@@ -234,40 +238,33 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         </div>
       )}
 
+      {/* The button and nothing else. What was around it — a heading saying
+          the host was ready, and a paragraph explaining why they were not —
+          is either obvious or belongs on the button itself. */}
       <section className="waiting-card waiting-start-card" aria-live="polite">
         {isHost ? (
           <>
-            <div>
-              <h2>{rematch ? "Ready for a rematch?" : "Ready when you are"}</h2>
-              <p className="waiting-start-hint">
-                {canStart
-                  ? `${eligiblePlayers.length} active players are ready to play.`
-                  : `Need ${needsPlayers} more active player${needsPlayers === 1 ? "" : "s"}. Spectators, AFK, and disconnected players do not count.`}
-              </p>
-              {props.startError && <p className="waiting-start-error">{props.startError}</p>}
-            </div>
-            <div className="waiting-host-actions">
-              <button
-                type="button"
-                className="btn btn-success btn-big waiting-start-button"
-                disabled={!canStart || props.startBusy}
-                onClick={props.onStart}
-              >
-                {props.startBusy ? "Starting…" : rematch ? "Rematch" : "Start game"}
-              </button>
-            </div>
+            {props.startError && <p className="waiting-start-error">{props.startError}</p>}
+            <button
+              type="button"
+              className="btn btn-success btn-big waiting-start-button"
+              disabled={!canStart || props.startBusy}
+              onClick={props.onStart}
+              title={canStart ? undefined : startBlockedReason}
+            >
+              {props.startBusy
+                ? "Starting…"
+                : canStart
+                  ? rematch ? "Rematch" : "Start game"
+                  : `Need ${needsPlayers} more player${needsPlayers === 1 ? "" : "s"}`}
+            </button>
           </>
         ) : (
-          <div>
-            <h2>
-              {host
-                ? <><span className={playerNameClass(host.isAnonymous)} style={playerNameStyle(host.nameColor, host.isAnonymous)}>{host.nickname}</span> will start {rematch ? "the rematch" : "the game"}</>
-                : "Waiting for a host"}
-            </h2>
-            <p className="waiting-start-hint">
-              You can invite friends or mark yourself AFK while you wait.
-            </p>
-          </div>
+          <p className="waiting-start-waiting">
+            {host
+              ? <><span className={playerNameClass(host.isAnonymous)} style={playerNameStyle(host.nameColor, host.isAnonymous)}>{host.nickname}</span> will start {rematch ? "the rematch" : "the game"}</>
+              : "Waiting for a host"}
+          </p>
         )}
       </section>
 

@@ -68,6 +68,9 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                 """
             )
             await page1.set_viewport_size({"width": 800, "height": 900})
+            # The roster is a React render off a media query, not a CSS rule,
+            # so it arrives a tick after the resize rather than with it.
+            await page1.locator(".waiting-roster").wait_for()
             waiting_mobile_order = await page1.evaluate(
                 """
                 () => ({
