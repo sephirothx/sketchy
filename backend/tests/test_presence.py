@@ -491,38 +491,55 @@ async def test_the_loop_records_a_healthy_tick_and_survives_a_broken_one():
     the lobby's updates for the life of the process - and is also what makes a
     loop failing every single time indistinguishable from a working one, from
     outside. The counters are that distinction.
-    """
-    from app.services.readiness import LoopHealth
-    from app.services.presence import start_presence_loop, stop_presence_loop
 
-    registry = PresenceRegistry()
-    cache = PresenceIdentityCache(None)
+    Watched through the health object rather than by polling it. The first
+    version of this counted `asyncio.sleep(0)` yields, which is a budget
+    rather than a deadline: it passed on an idle laptop and failed on a loaded
+    CI runner, where the loop's own sleep had not elapsed within the same
+    number of scheduler turns.
+    """
+    from app.services.presence import start_presence_loop, stop_presence_loop
+    from app.services.readiness import LoopHealth
+
+    class SignallingHealth(LoopHealth):
+        """A `LoopHealth` that says when it was written to."""
+
+        def __init__(self, name: str) -> None:
+            super().__init__(name)
+            self.succeeded = asyncio.Event()
+            self.failed = asyncio.Event()
+
+        def record_success(self) -> None:
+            super().record_success()
+            self.succeeded.set()
+
+        def record_failure(self) -> None:
+            super().record_failure()
+            self.failed.set()
+
     caster = PresenceBroadcaster(
         RecordingSio(),
-        registry,
-        cache,
+        PresenceRegistry(),
+        PresenceIdentityCache(None),
         RoomManager(),
         environ={"PRESENCE_BROADCAST_INTERVAL_MS": "1"},
     )
-    health = LoopHealth("presence_broadcast")
+    health = SignallingHealth("presence_broadcast")
     task = start_presence_loop(caster, health=health)
-    for _ in range(200):
-        await asyncio.sleep(0)
-        if health.last_success is not None:
-            break
-    assert health.last_success is not None, "a quiet tick never reported success"
+    try:
+        await asyncio.wait_for(health.succeeded.wait(), timeout=5)
+        assert health.last_success is not None
 
-    async def explode():
-        raise RuntimeError("the channel is gone")
+        async def explode():
+            raise RuntimeError("the channel is gone")
 
-    caster.flush = explode
-    for _ in range(400):
-        await asyncio.sleep(0)
-        if health.total_failures:
-            break
-    assert health.total_failures, "a broken tick was invisible from outside"
-
-    await stop_presence_loop(task)
+        caster.flush = explode
+        await asyncio.wait_for(health.failed.wait(), timeout=5)
+        assert health.total_failures > 0
+        # Counted, not fatal: the loop is still going.
+        assert not task.done()
+    finally:
+        await stop_presence_loop(task)
     assert task.cancelled() or task.done()
     # Stopping something that was never started is not an error: the lifespan
     # runs this in a `finally` that also covers a startup which never got here.
