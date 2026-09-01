@@ -68,20 +68,30 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                 """
             )
             await page1.set_viewport_size({"width": 800, "height": 900})
+            # The roster is a React render off a media query, not a CSS rule,
+            # so it arrives a tick after the resize rather than with it.
+            await page1.locator(".waiting-roster").wait_for()
             waiting_mobile_order = await page1.evaluate(
                 """
                 () => ({
                   main: document.querySelector(".room-shell-main").getBoundingClientRect().y,
                   chat: document.querySelector('[data-testid="room-chat-region"]').getBoundingClientRect().y,
-                  players: document.querySelector('[data-testid="room-players-region"]').getBoundingClientRect().y,
+                  roster: document.querySelector(".waiting-roster").getBoundingClientRect().y,
+                  panel: document.querySelector('[data-testid="room-players-region"]').offsetParent,
                 })
                 """
             )
+            # Who is in the room comes before chat while waiting: it is what
+            # the host is actually watching, and it used to be the last thing
+            # on the page, below the chat card. On a phone it is the roster
+            # grid inside the main column, and the players panel — which says
+            # the same thing a screen further down — is not rendered at all.
             assert (
                 waiting_mobile_order["main"]
+                <= waiting_mobile_order["roster"]
                 < waiting_mobile_order["chat"]
-                < waiting_mobile_order["players"]
             )
+            assert waiting_mobile_order["panel"] is None
             await page1.set_viewport_size({"width": 1280, "height": 720})
 
             # Step 4: Host starts the game
@@ -146,10 +156,15 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                 playing_mobile_layout["headerActionsWidth"]
                 <= playing_mobile_layout["headerActionsClient"] + 1
             )
-            await page1.click('[data-testid="open-players-drawer"]')
+            # Players and scores are a sheet reached from the room menu, so the
+            # canvas stays visible above them rather than being covered by a
+            # full-height drawer.
+            await page1.click('[data-testid="open-room-menu"]')
+            await page1.wait_for_selector('[data-testid="room-menu-sheet"]')
+            await page1.click('.sheet-menu-item:has-text("Players and scores")')
             await page1.wait_for_selector('[data-testid="players-drawer"]')
             assert await page1.is_visible('[data-testid="players-drawer"] .player-list')
-            await page1.click('.players-drawer-close')
+            await page1.click('.bottom-sheet-close')
             await page1.wait_for_selector('[data-testid="players-drawer"]', state="detached")
             await page1.set_viewport_size({"width": 1280, "height": 720})
 
@@ -205,17 +220,42 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                       return { width: box.width, height: box.height };
                     }),
                     saveInHeader: Boolean(document.querySelector('.game-header-save-button')),
+                    menuButton: Boolean(document.querySelector('[data-testid="open-room-menu"]')),
                   };
                 }
                 """
             )
             assert mobile_toolbar is not None
-            assert mobile_toolbar["saveInHeader"]
-            assert len(mobile_toolbar["chipSizes"]) >= 5
+            # Saving the drawing is in the room menu on a phone, not a seventh
+            # icon in a 44px band beside a red Leave.
+            assert not mobile_toolbar["saveInHeader"]
+            assert mobile_toolbar["menuButton"]
+            assert len(mobile_toolbar["chipSizes"]) >= 4
             assert all(
                 size["width"] >= 40 and size["height"] >= 40
                 for size in mobile_toolbar["chipSizes"]
             )
+
+            # The controls stay collapsed behind chips, and the dock they live
+            # in sits below the canvas — so the panel a chip opens rises into
+            # the feed rather than over the drawing being coloured, which is
+            # what made the popover unusable when the strip was mid-screen.
+            await drawer_page.click(".toolbar-mobile-color-chip")
+            await drawer_page.wait_for_selector(".toolbar-mobile-popover")
+            overlap = await drawer_page.evaluate(
+                """
+                () => {
+                  const pop = document.querySelector('.toolbar-mobile-popover');
+                  const canvas = document.querySelector('.canvas-stack');
+                  if (!pop || !canvas) return null;
+                  const p = pop.getBoundingClientRect();
+                  const c = canvas.getBoundingClientRect();
+                  return Math.max(0, Math.min(p.bottom, c.bottom) - Math.max(p.top, c.top));
+                }
+                """
+            )
+            assert overlap == 0, f"colour panel covers {overlap}px of the canvas"
+            await drawer_page.click(".toolbar-mobile-color-chip")
             await drawer_page.set_viewport_size({"width": 844, "height": 390})
             await drawer_page.wait_for_selector('[data-testid="toolbar-mobile"]')
             await drawer_page.set_viewport_size({"width": 1280, "height": 720})

@@ -47,12 +47,17 @@ async def test_players_approve_restart_without_losing_room_context():
             await host_page.fill(
                 '.room-settings-editor label:has-text("Max players") input', "2"
             )
+            await host_page.locator(".room-settings-save").click()
             await host_page.wait_for_selector(
                 '.app-toast:has-text("Max players cannot be below the 3 players")'
             )
-            assert await host_page.input_value(
-                '.room-settings-editor label:has-text("Max players") input'
-            ) != "2"
+            # The draft is not thrown away on a refusal - the host has a value
+            # to correct, and may have changed other things in the same draft -
+            # so the editor stays open with the reason on it.
+            assert await host_page.is_visible(".room-settings-editor")
+            assert await host_page.is_visible(
+                '.room-settings-editor .create-room-error'
+            )
 
             await player_page.fill(".waiting-chat-form input", "Keep this message")
             await player_page.click(".waiting-chat-form button")

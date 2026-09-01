@@ -54,6 +54,11 @@
 /* ------------------------------------------------------------ form sections */
 .create-room-sections {
   display: grid;
+  /* minmax(0, 1fr) rather than the implicit `auto`: an auto track sizes to its
+     widest item's max-content, so a 402px section (358px of content plus 22px
+     of padding a side) widened the track past the viewport and scrolled the
+     whole page sideways below ~420px. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -192,7 +197,10 @@ details.form-section > .form-section-body {
 
 .setting-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* `minmax(0, 1fr)`, not `1fr`: a grid column's implicit minimum is its
+     content, so three cards that refuse to shrink made a 560px row inside a
+     390px phone. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -671,10 +679,94 @@ details.form-section > .form-section-body {
     flex-direction: column;
     gap: 14px;
   }
-  .setting-cards { grid-template-columns: 1fr; }
+
+  /* ── The three numbers ────────────────────────────────────────────────
+     One row each — label on the left, stepper on the right — in a single
+     card with dividers. As three stacked cards they were 273px of a phone
+     screen for three two-digit values; as a three-across grid they could not
+     hold a 44px tap target, which is what a stepper is mostly made of. */
+  .setting-cards {
+    background: var(--well);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius);
+    gap: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .setting-cards .input-number-field {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    border-top: 1.5px solid var(--line);
+    flex-direction: row;
+    gap: 10px;
+    justify-content: space-between;
+    padding: 8px 12px;
+    text-align: left;
+  }
+
+  .setting-cards .input-number-field:first-child {
+    border-top: 0;
+  }
+
+  .setting-cards .input-number-label {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .setting-cards .input-number {
+    flex: none;
+    gap: 8px;
+  }
+
+  .setting-cards .input-number button {
+    height: 44px;
+    width: 44px;
+  }
+
+  .setting-cards .input-number-value {
+    min-width: 52px;
+  }
+
+  .setting-cards .input-number input {
+    font-size: 24px;
+  }
+
   .choice-cards { grid-template-columns: 1fr !important; }
-  .create-room-footer { align-items: stretch; flex-direction: column; }
-  .create-room-footer .create-room-submit { width: 100%; }
+
+  /* ── The dock ────────────────────────────────────────────────────────
+     Create is the point of the page and it sat under a long form, reachable
+     only by scrolling to the end of settings most people never change. As a
+     fixed bar it is under the thumb from the first screen, with the summary
+     of what is about to be created beside it. */
+  .create-room-footer {
+    align-items: center;
+    background: var(--card);
+    border: 0;
+    border-top: 1.5px solid var(--line);
+    border-radius: 0;
+    bottom: 0;
+    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    flex-direction: row;
+    gap: 12px;
+    left: 0;
+    margin-top: 0;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    position: fixed;
+    right: 0;
+    z-index: 30;
+  }
+
+  .create-room-footer .create-room-submit {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  /* Room for the dock, so the last field is never under it. */
+  .create-room-page {
+    padding-bottom: 96px;
+  }
 
   /* ChoiceChips (waiting-room editor): 2x2 on narrow screens, where the
      sliding thumb assumes a single row. */

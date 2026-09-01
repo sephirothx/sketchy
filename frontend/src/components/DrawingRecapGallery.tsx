@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { TouchEvent } from "react";
 import type { CanvasRef } from "./Canvas";
 import { CanvasSnapshot } from "./CanvasSnapshot";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
@@ -32,6 +33,7 @@ export function DrawingRecapGallery({
   const cacheRef = useRef(new Map<number, DecodedCanvasAction[]>());
   const loadGenerationRef = useRef(0);
   const canvasRef = useRef<CanvasRef | null>(null);
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
   const entry = entries[position];
 
   const changePosition = useCallback((nextPosition: number) => {
@@ -97,6 +99,25 @@ export function DrawingRecapGallery({
 
   if (!entry) return null;
 
+  // Horizontal swipe between drawings. Previous/Next stay for keyboards and
+  // pointers; on a touch screen full of pictures, a text button is not the
+  // gesture anybody reaches for first.
+  const onTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    swipeRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+  };
+  const onTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    const start = swipeRef.current;
+    swipeRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    // Ignore anything that reads as a vertical scroll rather than a swipe.
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    changePosition(position + (dx < 0 ? 1 : -1));
+  };
+
   return (
     <main className="drawing-recap" aria-labelledby="drawing-recap-title">
       <section className="drawing-recap-card">
@@ -133,6 +154,8 @@ export function DrawingRecapGallery({
         <div
           className="drawing-recap-canvas"
           aria-busy={actions === null && !error && !unavailable}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
         >
           {unavailable ? (
             <div className="drawing-recap-status">
@@ -170,7 +193,14 @@ export function DrawingRecapGallery({
           >
             Previous
           </button>
-          <strong>{position + 1} of {entries.length}</strong>
+          <span className="drawing-recap-pager">
+            <strong className="drawing-recap-position">{position + 1} of {entries.length}</strong>
+            <span className="drawing-recap-dots" aria-hidden="true">
+              {entries.map((dotEntry, dotIndex) => (
+                <i key={dotEntry.index} className={dotIndex === position ? "is-current" : ""} />
+              ))}
+            </span>
+          </span>
           <button
             type="button"
             disabled={position === entries.length - 1}

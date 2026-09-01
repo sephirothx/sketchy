@@ -11,15 +11,28 @@
   z-index: 10;
 }
 
+/* A column, so the standings can take the space that is left and scroll
+   inside it. The panel itself never scrolls: what was one scrolling block
+   put the countdown — the one thing that tells you how long you have to read
+   any of it — below the fold. */
 .turn-results-panel {
+  display: flex;
+  flex-direction: column;
   background: var(--card);
   border-radius: 16px;
   padding: 20px 24px;
   min-width: 280px;
   width: min(430px, 92%);
-  max-height: 90%;
-  overflow-y: auto;
+  max-height: 100%;
+  overflow: hidden;
   box-shadow: var(--shadow-raised);
+}
+
+.turn-results-panel > h3,
+.turn-results-prompt,
+.turn-results-personal,
+.turn-results-no-guesses {
+  flex: none;
 }
 
 .turn-results-panel h3 {
@@ -33,7 +46,7 @@
 }
 
 .turn-results-prompt {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   text-align: center;
   font-size: 1.1rem;
   color: var(--muted);
@@ -53,7 +66,7 @@
   border-radius: 10px;
   color: var(--primary-ink);
   font-weight: 700;
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   padding: 9px 12px;
   text-align: center;
 }
@@ -71,7 +84,22 @@
   width: 100%;
 }
 
+/* Painted by CSS rather than an inline style, so a narrow screen can drop it.
+   An inline `display` cannot be overridden by a stylesheet at all. */
+.game-end-confetti {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+/* A column, so the standings take what is left and scroll inside themselves.
+   The panel itself does not scroll: the result, the podium and the way out
+   are the whole point of the screen and none of them should be below a fold.
+   Sixteen players cannot all fit anywhere, so that overflow goes to the one
+   list that can afford it. */
 .game-end-podium {
+  display: flex;
+  flex-direction: column;
   background: var(--card);
   border: 1.5px solid var(--line);
   border-radius: 18px;
@@ -79,10 +107,14 @@
   box-sizing: border-box;
   max-height: calc(100vh - 120px);
   max-width: 560px;
-  overflow-y: auto;
-  padding: 24px 30px 20px;
+  overflow: hidden;
+  padding: 20px 30px 16px;
   text-align: center;
   width: 100%;
+}
+
+.game-end-podium > * {
+  flex: none;
 }
 
 .game-end-podium h1 {
@@ -175,9 +207,13 @@
 
 .game-end-standings {
   list-style: none;
-  margin: 0 0 18px;
+  margin: 0 0 14px;
   padding: 0;
   border-top: 1.5px solid var(--line);
+  /* The one part of the screen that may run out of room. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto;
 }
 
 .game-end-standings li {
@@ -413,4 +449,332 @@
   .game-end-podium-col {
     width: 88px;
   }
+}
+
+/* Keyed on height as well as width, because the thing that runs out is
+   vertical: a 1024x700 desktop window had the same problem a phone did, and
+   clipped the buttons rather than scrolling to them. */
+@media (max-width: 900px), (max-height: 780px) {
+  /* Decoration is the first thing to go when the result does not fit: 44px of
+     confetti above a headline that is already the celebration. */
+  .game-end-confetti {
+    display: none;
+  }
+
+  .game-end-podium h1 {
+    font-size: 21px;
+    gap: 7px;
+    margin: 4px 0 2px;
+  }
+
+  .game-end-placement {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+
+  .game-end-podium-row {
+    margin-bottom: 12px;
+  }
+
+  /* Qualified by the panel deliberately: the base rules for these live in
+     account.css, which is imported after this file, so an unqualified
+     `.game-end-claim` here loses to them on source order alone — which is why
+     the row treatment never actually applied. */
+  .game-end-podium .game-end-claim {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 10px;
+    margin: 2px 0 10px;
+    padding: 8px 10px;
+    text-align: left;
+  }
+
+  .game-end-podium .game-end-claim-copy {
+    flex: 1 1 auto;
+    font-size: 12.5px;
+    line-height: 1.3;
+    margin: 0;
+  }
+
+  .game-end-podium .game-end-claim-action {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 900px) {
+  /* The end of the game takes the screen. It used to be a section inside the
+     stacked room page — the players panel above it, the chat below — so at
+     390x844 the document was 1671px tall and the result was something you
+     scrolled to. */
+  .game-end-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1150;
+    align-items: center;
+    background: rgba(30, 27, 22, 0.42);
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .game-end-podium {
+    max-height: 100%;
+    padding: 14px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* One loud control. The screen used to offer five actions of near-equal
+     weight — create an account, highlights, drawings, continue and stay —
+     on the narrowest surface the game has. Continue is the one almost
+     everyone wants; the rest step back a level. */
+  .game-end-actions {
+    display: grid;
+    gap: 9px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .game-end-actions .btn-secondary {
+    min-height: 48px;
+    width: 100%;
+  }
+
+  .game-end-continue {
+    grid-column: 1 / -1;
+    justify-content: center;
+    min-height: 54px;
+    order: 3;
+    width: 100%;
+  }
+
+  /* The account nudge has earned attention here, but not a bordered card
+     competing with the podium for it. */
+  .game-end-stay {
+    margin: 8px 0 0;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Bottom sheets
+   Overlays that rise from the bottom edge, leaving what is above them
+   visible — on a phone the drawing stays on screen while the sheet reports
+   on it, and the sheet's controls land under the thumb rather than in the
+   top-right corner. Above the mobile breakpoint the same markup is centred
+   as an ordinary dialog, so one component serves both.
+   ══════════════════════════════════════════════════════════════════════ */
+.bottom-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.bottom-sheet {
+  background: var(--card);
+  transition: transform 180ms ease;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(88vh, 720px);
+  max-width: 460px;
+  padding: 18px 20px 20px;
+  width: 100%;
+}
+
+/* A real control, not an ornament: it takes a tap and follows a downward
+   drag, which is what a thumb tries first and what carries the dismiss when
+   the header slot is spent on something else. */
+.bottom-sheet-grab {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: none;
+  flex: 0 0 auto;
+  padding: 6px 0 4px;
+  touch-action: none;
+  width: 100%;
+}
+
+.bottom-sheet-grab-bar {
+  background: var(--line-strong);
+  border-radius: 3px;
+  display: block;
+  height: 5px;
+  margin: 0 auto;
+  width: 44px;
+}
+
+.bottom-sheet-grab:hover .bottom-sheet-grab-bar {
+  background: var(--faint);
+}
+
+.bottom-sheet-head {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.bottom-sheet-close {
+  align-items: center;
+  background: var(--well);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.bottom-sheet-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--ink);
+  margin: 0;
+}
+
+.bottom-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.bottom-sheet-foot {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .bottom-sheet-scrim {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .bottom-sheet {
+    border: 0;
+    border-top: 1.5px solid var(--line);
+    border-radius: 24px 24px 0 0;
+    max-height: 88%;
+    max-width: none;
+    padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .bottom-sheet-grab {
+    display: block;
+  }
+}
+
+/* ── The room's secondary actions ─────────────────────────────────────── */
+.sheet-menu {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sheet-menu-item {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  gap: 14px;
+  min-height: 52px;
+  padding: 0 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.sheet-menu-item > svg { color: var(--muted); flex: none; }
+.sheet-menu-item:hover:not(:disabled) { background: var(--well); }
+.sheet-menu-item:disabled { color: var(--faint); cursor: not-allowed; }
+.sheet-menu-item:disabled > svg { color: var(--faint); }
+.sheet-menu-item small { color: var(--faint); font-weight: 700; }
+
+.sheet-menu-item.is-active,
+.sheet-menu-item.is-active > svg {
+  color: var(--warning);
+}
+
+/* Leaving is separated from the routine rows, and reads as what it is. It
+   still routes through the confirmation dialog. */
+.sheet-menu-sep {
+  border-top: 1.5px solid var(--line);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.sheet-menu-item.is-danger,
+.sheet-menu-item.is-danger > svg {
+  color: var(--danger);
+}
+
+.sheet-menu-item.is-danger:hover { background: var(--danger-soft); }
+
+/* The players sheet reuses the sidebar panel's insides without its box. */
+.players-sheet .sidebar-box {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+@media (max-width: 900px) {
+  /* The turn recap as a sheet rather than a box floating on the canvas.
+     It used to be `position: absolute; inset: 0` inside the canvas area with
+     a panel capped at 90% of a 278px canvas — the word, your score, the guess
+     order, the standings, the progress bar and the button all competing for
+     250px, with the button below the clipped edge — while the bottom 45% of
+     the phone sat idle. Rising from the bottom keeps the drawing visible,
+     which is the reason you want to see the answer at all. */
+  .turn-results-overlay {
+    position: fixed;
+    inset: 0;
+    align-items: flex-end;
+    background: rgba(30, 27, 22, 0.28);
+    border-radius: 0;
+    padding: 0;
+    z-index: 1150;
+  }
+
+  .turn-results-panel {
+    border-radius: 24px 24px 0 0;
+    /* Was 74%, which a full room overflowed. The sheet takes what it needs up
+       to nearly the screen; the canvas behind it stays visible because the
+       standings stop growing once they run out of players. */
+    max-height: calc(100% - 24px);
+    max-width: none;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    width: 100%;
+  }
+
+  /* The word, and what it did to your score, are the two things worth the
+     top of the sheet; the standings scroll under them. */
+  .turn-results-panel h3 { font-size: 11px; }
+  .turn-results-prompt { font-size: 1.35rem; margin-bottom: 8px; }
+  .turn-results-prompt strong { font-size: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-sheet { transition: none; }
 }

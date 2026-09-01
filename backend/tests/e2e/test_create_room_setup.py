@@ -15,6 +15,10 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
+            # At this width the code field lives in the dock's sheet rather
+            # than in a card above the room list.
+            await page.get_by_role("button", name="Join with a code").click()
+            await page.wait_for_selector('[data-testid="lobby-code-sheet"]')
             room_code_input = page.locator('input[placeholder="ABC123"]')
             await assert_input_contract(room_code_input, {
                 "type": "search",
@@ -29,6 +33,35 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await room_code_input.fill("ab-c12")
             assert await room_code_input.input_value() == "ABC12"
             await room_code_input.fill("")
+            # A downward pull on the handle dismisses it too, and the decision
+            # has to be made on the distance the last touchmove reported —
+            # not on the distance the last render happened to have committed.
+            # The lift is dispatched in the same task as the final move, which
+            # is the case that read a frame-old offset and lost the gesture.
+            await page.evaluate(
+                """() => {
+                    const grab = document.querySelector('.bottom-sheet-grab');
+                    const at = (y) => new Touch({
+                        identifier: 1, target: grab, clientX: 100, clientY: y,
+                    });
+                    const send = (type, y) => grab.dispatchEvent(new TouchEvent(type, {
+                        bubbles: true, cancelable: true,
+                        touches: type === 'touchend' ? [] : [at(y)],
+                        changedTouches: [at(y)],
+                    }));
+                    send('touchstart', 100);
+                    send('touchmove', 130);
+                    send('touchmove', 170);
+                    send('touchend', 170);
+                }"""
+            )
+            await page.locator('[data-testid="lobby-code-sheet"]').wait_for(state="detached")
+
+            # And the tap still closes it, which is what the handle is mostly for.
+            await page.get_by_role("button", name="Join with a code").click()
+            await page.wait_for_selector('[data-testid="lobby-code-sheet"]')
+            await page.locator(".bottom-sheet-grab").click()
+            await page.locator('[data-testid="lobby-code-sheet"]').wait_for(state="detached")
 
             # The first-run name field carries the app's input contract, except
             # that autoCapitalize is off: names are case-sensitive and cannot
@@ -48,7 +81,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await nickname_input.fill("SetupHost")
             await page.click(".first-run-guest-submit")
             await page.wait_for_selector('.identity-name:has-text("SetupHost")')
-            await page.click('button:has-text("Create room")')
+            await page.click('button:has-text("Create a room")')
             await page.wait_for_url(f"{BASE_URL}/create")
             # History updates before React finishes the route swap; wait for the
             # create page before asserting lobby controls are gone.

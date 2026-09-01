@@ -34,6 +34,7 @@ import {
 } from "../store/settingsStore";
 import { socket } from "../lib/socket";
 import { patchUserSettings } from "../lib/userSettings";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 type SettingsTab = "general" | "game" | "shortcuts";
 
@@ -80,6 +81,11 @@ function SettingsModalContent() {
   const titleId = useId();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  // Nothing on a touch device can use a key binding, so the tab is not offered
+  // there. Keyed on the pointer rather than the width: a tablet with a
+  // keyboard is a narrow screen that can still use them.
+  const hasKeyboard = useMediaQuery("(pointer: fine)");
+  const tabs = hasKeyboard ? TABS : TABS.filter((tab) => tab.id !== "shortcuts");
   const [draftKeyBindings, setDraftKeyBindings] = useState<KeyBindings>(keyBindings);
   const [draftBrushCursor, setDraftBrushCursor] = useState<BrushCursorStyle>(brushCursor);
   const [draftTheme, setDraftTheme] = useState<AppTheme>(theme);
@@ -294,7 +300,7 @@ function SettingsModalContent() {
 
         <div className="settings-modal-body">
         <div className="settings-tabs" role="tablist" aria-orientation="vertical">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"

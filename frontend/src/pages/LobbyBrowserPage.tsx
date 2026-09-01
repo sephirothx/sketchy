@@ -13,7 +13,9 @@ import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { ModalShell } from "../components/ui/ModalShell";
+import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AlertCircleIcon, ChevronDownIcon, EyeIcon, PlusIcon, SearchIcon } from "../components/icons";
 import { useClientConfig } from "../hooks/useClientConfig";
 import { promptLanguageLabel } from "../lib/promptLanguages";
@@ -66,20 +68,30 @@ function RoomCodeInput({
   value,
   onChange,
   onSubmit,
+  inputRef,
+  hideLabel = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  /** So the code sheet can open with the caret already in the field. */
+  inputRef?: React.Ref<HTMLInputElement>;
+  /** The sheet's own title already says what the field is for. */
+  hideLabel?: boolean;
 }) {
   const fieldId = useId();
   const activeIndex = Math.min(value.length, ROOM_CODE_LENGTH - 1);
 
   return (
-    <label className="room-code-label" htmlFor={fieldId}>
-      Room code
+    <label
+      className={`room-code-label${hideLabel ? " is-unlabelled" : ""}`}
+      htmlFor={fieldId}
+    >
+      <span className={hideLabel ? "visually-hidden" : undefined}>Room code</span>
       <span className="room-code-cells">
         {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
         <input
+          ref={inputRef}
           id={fieldId}
           className="room-code-field"
           type="search"
@@ -139,6 +151,30 @@ export function LobbyBrowserPage() {
 
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [joinCode, setJoinCode] = useState("");
+  const [codeSheetOpen, setCodeSheetOpen] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+
+  /** A room code arrives from a message thread, so reading the clipboard is
+   *  the shortest path. Where that is refused — no permission, an insecure
+   *  origin, a browser that does not implement it — the field is focused so
+   *  the platform's own paste is one long-press away. */
+  async function pasteCode() {
+    try {
+      const text = await navigator.clipboard?.readText();
+      const cleaned = normalizeRoomCodeInput(text ?? "");
+      if (cleaned) {
+        setJoinCode(cleaned);
+        setError(null);
+      } else {
+        setError("There is no room code on the clipboard.");
+      }
+    } catch {
+      setError("Sketchy could not read the clipboard. Paste into the boxes instead.");
+    }
+    codeFieldRef.current?.focus();
+  }
+  const codeFieldRef = useRef<HTMLInputElement | null>(null);
+  const isNarrow = useMediaQuery("(max-width: 720px)");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
   const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
@@ -155,6 +191,10 @@ export function LobbyBrowserPage() {
   const [languageFilter, setLanguageFilter] = useState("all");
   const [hideFullRooms, setHideFullRooms] = useState(false);
   const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
+  // Drives the chip's badge, so a list narrowed by filters that are out of
+  // sight in a sheet never looks like a list with nothing in it.
+  const activeFilterCount =
+    (languageFilter !== "all" ? 1 : 0) + (hideFullRooms ? 1 : 0) + (hideInProgressRooms ? 1 : 0);
   // Nothing here works without a name: the server provisions on naming,
   // needs an account to open a room, and needs a valid nickname to seat
   // anybody. The first-run block above asks for it.
@@ -346,48 +386,50 @@ export function LobbyBrowserPage() {
 
       <FirstRunIdentity />
 
-      {error && <p className="lobby-action-error" role="alert">{error}</p>}
+      {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
 
-      <div className="lobby-columns">
-        <section className="panel lobby-entry-panel">
-          <h2>Start a game</h2>
-          <p className="create-room-lobby-copy">Pick the basics, invite your friends, draw. Settings can change any time before the first round.</p>
-          <div className="lobby-entry-actions">
-            <Button
-              variant="primary"
-              big
-              iconLeft={<PlusIcon size={16} />}
-              onClick={() => void handleOpenCreateRoom()}
-            >
-              Create room
-            </Button>
-          </div>
-        </section>
+      {isNarrow ? null : (
+        <div className="lobby-columns">
+          <section className="panel lobby-entry-panel">
+            <h2>Start a game</h2>
+            <p className="create-room-lobby-copy">Pick the basics, invite your friends, draw. Settings can change any time before the first round.</p>
+            <div className="lobby-entry-actions">
+              <Button
+                variant="primary"
+                big
+                iconLeft={<PlusIcon size={16} />}
+                onClick={() => void handleOpenCreateRoom()}
+              >
+                Create room
+              </Button>
+            </div>
+          </section>
 
-        <section className="panel lobby-entry-panel">
-          <h2>Join with a code</h2>
-          <RoomCodeInput
-            value={joinCode}
-            onChange={setJoinCode}
-            onSubmit={() => void handleJoinByCode(false)}
-          />
-          <div className="lobby-entry-actions">
-            <Button variant="primary" disabled={Boolean(pendingJoin)} onClick={() => void handleJoinByCode(false)}>
-              {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? "Joining…" : "Join by code"}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={Boolean(pendingJoin)}
-              iconLeft={<EyeIcon size={14} />}
-              onClick={() => void handleJoinByCode(true)}
-            >
-              {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate" ? "Joining as spectator…" : "Spectate"}
-            </Button>
-          </div>
-        </section>
-      </div>
+          <section className="panel lobby-entry-panel">
+            <h2>Join with a code</h2>
+            <RoomCodeInput
+              value={joinCode}
+              onChange={setJoinCode}
+              onSubmit={() => void handleJoinByCode(false)}
+            />
+            <div className="lobby-entry-actions">
+              <Button variant="primary" disabled={Boolean(pendingJoin)} onClick={() => void handleJoinByCode(false)}>
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? "Joining…" : "Join by code"}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={Boolean(pendingJoin)}
+                iconLeft={<EyeIcon size={14} />}
+                onClick={() => void handleJoinByCode(true)}
+              >
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate" ? "Joining as spectator…" : "Spectate"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
 
-      <section className="panel">
+      <section className="panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
           <h2>Public rooms</h2>
           <span className="lobby-rooms-count">
@@ -409,36 +451,117 @@ export function LobbyBrowserPage() {
                 enterKeyHint="search"
               />
             </span>
-            <span className="lobby-language-filter">
-              <select
-                aria-label="Filter by prompt language"
-                value={languageFilter}
-                onChange={(e) => setLanguageFilter(e.target.value)}
+            {/* Three controls in a row is three rows on a phone, and 110px of
+                filtering before the first room. Behind one chip they cost a
+                slot beside the search field, and the chip says how many are
+                on so a filtered-looking list is never a mystery. */}
+            {isNarrow ? (
+              <button
+                type="button"
+                className={`lobby-filter-toggle lobby-filter-sheet-button${activeFilterCount > 0 ? " has-filters" : ""}`}
+                aria-pressed={activeFilterCount > 0}
+                onClick={() => setFilterSheetOpen(true)}
               >
-                <option value="all">All languages</option>
-                {roomLanguages.map((language) => (
-                  <option key={language} value={language}>{promptLanguageLabel(language)}</option>
-                ))}
-              </select>
-              <ChevronDownIcon size={14} />
-            </span>
-            <button
-              type="button"
-              className="lobby-filter-toggle"
-              aria-pressed={hideFullRooms}
-              onClick={() => setHideFullRooms((v) => !v)}
-            >
-              Hide full
-            </button>
-            <button
-              type="button"
-              className="lobby-filter-toggle"
-              aria-pressed={hideInProgressRooms}
-              onClick={() => setHideInProgressRooms((v) => !v)}
-            >
-              Hide in progress
-            </button>
+                Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+              </button>
+            ) : (
+              <>
+                <span className="lobby-language-filter">
+                  <select
+                    aria-label="Filter by prompt language"
+                    value={languageFilter}
+                    onChange={(e) => setLanguageFilter(e.target.value)}
+                  >
+                    <option value="all">All languages</option>
+                    {roomLanguages.map((language) => (
+                      <option key={language} value={language}>{promptLanguageLabel(language)}</option>
+                    ))}
+                  </select>
+                  <ChevronDownIcon size={14} />
+                </span>
+                <button
+                  type="button"
+                  className="lobby-filter-toggle"
+                  aria-pressed={hideFullRooms}
+                  onClick={() => setHideFullRooms((v) => !v)}
+                >
+                  Hide full
+                </button>
+                <button
+                  type="button"
+                  className="lobby-filter-toggle"
+                  aria-pressed={hideInProgressRooms}
+                  onClick={() => setHideInProgressRooms((v) => !v)}
+                >
+                  Hide in progress
+                </button>
+              </>
+            )}
           </div>
+        )}
+
+        {filterSheetOpen && (
+          <BottomSheet
+            title="Filters"
+            testId="lobby-filter-sheet"
+            onDismiss={() => setFilterSheetOpen(false)}
+            footer={
+              <>
+                {activeFilterCount > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setLanguageFilter("all");
+                      setHideFullRooms(false);
+                      setHideInProgressRooms(false);
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                )}
+                <Button variant="primary" onClick={() => setFilterSheetOpen(false)}>
+                  Show {filteredRooms.length} {filteredRooms.length === 1 ? "room" : "rooms"}
+                </Button>
+              </>
+            }
+          >
+            <div className="lobby-filter-sheet">
+              <label className="lobby-filter-row">
+                <span>Prompt language</span>
+                <span className="lobby-language-filter">
+                  <select
+                    value={languageFilter}
+                    onChange={(e) => setLanguageFilter(e.target.value)}
+                  >
+                    <option value="all">All languages</option>
+                    {roomLanguages.map((language) => (
+                      <option key={language} value={language}>{promptLanguageLabel(language)}</option>
+                    ))}
+                  </select>
+                  <ChevronDownIcon size={14} />
+                </span>
+              </label>
+              <button
+                type="button"
+                className="lobby-filter-row is-toggle"
+                aria-pressed={hideFullRooms}
+                onClick={() => setHideFullRooms((v) => !v)}
+              >
+                <span>Hide full rooms</span>
+                <span className={`lobby-filter-switch${hideFullRooms ? " is-on" : ""}`} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="lobby-filter-row is-toggle"
+                aria-pressed={hideInProgressRooms}
+                onClick={() => setHideInProgressRooms((v) => !v)}
+              >
+                <span>Hide games in progress</span>
+                <span className={`lobby-filter-switch${hideInProgressRooms ? " is-on" : ""}`} aria-hidden="true" />
+              </button>
+            </div>
+          </BottomSheet>
         )}
 
         {roomRefreshError && <div className="room-list-warning" role="status"><span>{roomRefreshError}</span><button type="button" onClick={retryRoomList}>Retry</button></div>}
@@ -461,6 +584,84 @@ export function LobbyBrowserPage() {
           </div>
         )}
       </section>
+      {/* The two entry cards become one dock on a phone: the rooms are the
+          page, and the way to make or join a room is a fixed bar under the
+          thumb rather than 440px of card above the list. */}
+      {isNarrow && (
+        <div className="lobby-dock">
+          {/* The page-top alert is out of sight from down here, and behind the
+              code sheet entirely, so on a phone the message follows the
+              control. Only one of the three renders at a time. */}
+          {error && !codeSheetOpen && (
+            <p className="lobby-action-error" role="alert">{error}</p>
+          )}
+          <Button
+            variant="primary"
+            big
+            iconLeft={<PlusIcon size={16} />}
+            onClick={() => void handleOpenCreateRoom()}
+          >
+            Create a room
+          </Button>
+          <button
+            type="button"
+            className="btn btn-secondary lobby-dock-code"
+            onClick={() => setCodeSheetOpen(true)}
+          >
+            Join with a code
+          </button>
+        </div>
+      )}
+
+      {codeSheetOpen && (
+        <BottomSheet
+          title="Join with a code"
+          testId="lobby-code-sheet"
+          closeLabel="Close"
+          onDismiss={() => setCodeSheetOpen(false)}
+          initialFocusRef={codeFieldRef}
+          headerAction={
+            <button
+              type="button"
+              className="chip chip-neutral room-code-paste"
+              onClick={() => void pasteCode()}
+            >
+              Paste
+            </button>
+          }
+          footer={
+            <>
+              {error && <p className="lobby-action-error" role="alert">{error}</p>}
+              <Button
+                variant="primary"
+                disabled={Boolean(pendingJoin)}
+                onClick={() => void handleJoinByCode(false)}
+              >
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? "Joining…" : "Join the room"}
+              </Button>
+              <button
+                type="button"
+                className="btn btn-ghost lobby-code-spectate"
+                disabled={Boolean(pendingJoin)}
+                onClick={() => void handleJoinByCode(true)}
+              >
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate"
+                  ? "Joining as spectator…"
+                  : "Watch without playing"}
+              </button>
+            </>
+          }
+        >
+          <RoomCodeInput
+            value={joinCode}
+            onChange={setJoinCode}
+            onSubmit={() => void handleJoinByCode(false)}
+            inputRef={codeFieldRef}
+            hideLabel
+          />
+        </BottomSheet>
+      )}
+
       <VersionBadge />
     </div>
   );

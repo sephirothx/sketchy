@@ -309,6 +309,20 @@ mirrors it with every field optional (absent means *unchanged*).
 `create_room` adds `nickname`, `nameColor`
 (`#rrggbb`), and `colorblindSafeColors`.
 
+### `get_room_preview`
+
+Acknowledges with `{ ok, room, players }`. `room` is the same `RoomSummary`
+`GET /api/rooms` returns; `players` is the room's seated players, each
+`{ nickname, nameColor, isAnonymous, isHost }` — spectators excluded.
+
+**The roster is answered here and nowhere else.** `to_public_summary()` carries
+no player identities, so polling the lobby every four seconds cannot become a
+live directory of who is playing where; this is one room, answered when a
+visitor opens its card. The entries carry no seat id, no account id (room
+payloads carry none anywhere — see the note under `report_player`), no score
+and no connection or AFK state: none of that helps somebody decide whether to
+join, and each one would say more about a stranger than the question needs.
+
 `join_room` takes `roomId` **or** `code` (at least one required; `code` is upper-cased),
 plus `nickname`, `nameColor`, `colorblindSafeColors`, `asSpectator`, `soft`, and
 `reconnectOnly` — the last used by the invite screen to ask *"do I already hold a seat

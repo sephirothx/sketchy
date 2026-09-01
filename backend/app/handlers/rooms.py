@@ -454,7 +454,11 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
 
 
 async def get_room_preview(ctx: HandlerContext, sid, data):
-    """Return invite-screen metadata without joining or exposing player details."""
+    """Return invite-screen metadata, and who is seated, without joining.
+
+    The roster is answered here rather than in the polled room list: one room,
+    when somebody asks, instead of every public room every few seconds.
+    """
     try:
         payload = parse_payload(RoomPreviewPayload, data)
     except PayloadError as error:
@@ -474,7 +478,11 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
                 "codeRetired": True,
             }
         return {"ok": False, "error": "Room not found"}
-    return {"ok": True, "room": room.to_public_summary()}
+    return {
+        "ok": True,
+        "room": room.to_public_summary(),
+        "players": room.to_public_roster(),
+    }
 
 
 async def join_room(ctx: HandlerContext, sid, data):

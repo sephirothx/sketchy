@@ -20,6 +20,12 @@ interface RoomChatPanelProps {
   targetPromptLengths: string[];
   hideMaskedPrompt?: boolean;
   onFocusChange?: (focused: boolean) => void;
+  /** Set once this player has the word; drives the dock's success state. */
+  guessedPrompt?: string | null;
+  /** Points and hint spend for the guess that landed, for the same. */
+  guessBreakdown?: { points: number; hintSpend: number } | null;
+  /** 1-based finishing place among this turn's correct guesses. */
+  guessPlace?: number | null;
 }
 
 type GuessFlash = {
@@ -27,6 +33,17 @@ type GuessFlash = {
   text: string;
   kind: "close" | "miss" | "info" | "error";
 };
+
+function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
 
 function letterRunLengths(text: string): number[] {
   const runs: number[] = [];
@@ -53,6 +70,9 @@ export function RoomChatPanel({
   targetPromptLengths,
   hideMaskedPrompt = false,
   onFocusChange,
+  guessedPrompt = null,
+  guessBreakdown = null,
+  guessPlace = null,
 }: RoomChatPanelProps) {
   recordRender("chat");
   const inputPurpose = mode === "playing" ? "guess" : "chat";
@@ -138,15 +158,6 @@ export function RoomChatPanel({
     const timeout = window.setTimeout(() => setDeliveryError(null), 8000);
     return () => window.clearTimeout(timeout);
   }, [deliveryError]);
-
-  useEffect(() => {
-    if (!guessFlash) return;
-    const flashId = guessFlash.id;
-    const timeout = window.setTimeout(() => {
-      setGuessFlash((current) => (current?.id === flashId ? null : current));
-    }, 3200);
-    return () => window.clearTimeout(timeout);
-  }, [guessFlash]);
 
   if (previousInputPurpose !== inputPurpose) {
     setPreviousInputPurpose(inputPurpose);
@@ -323,7 +334,18 @@ export function RoomChatPanel({
       </div>
 
       <div className="chat-messages-container">
-        <div className="chat-messages" ref={listRef} onScroll={handleScroll}>
+        {/* Focusable because it scrolls: a scroll region a keyboard cannot
+            reach is content a keyboard cannot read. It only became genuinely
+            scrollable once the feed stopped overflowing out of its own top,
+            which is why axe had nothing to say about it before. */}
+        <div
+          className="chat-messages"
+          ref={listRef}
+          onScroll={handleScroll}
+          tabIndex={0}
+          role="log"
+          aria-label={mode === "playing" ? "Guesses and chat" : "Room chat"}
+        >
           {messages.length === 0 ? (
             <p className="waiting-chat-empty">
               {mode === "waiting" ? "Say hello before the game starts." : "No messages yet."}
@@ -373,9 +395,20 @@ export function RoomChatPanel({
       {(error ?? deliveryError) && (
         <p className="waiting-chat-error" role="alert">{error ?? deliveryError}</p>
       )}
+      {mode === "playing" && guessedPrompt && (
+        <p className="guess-verdict-hit" data-testid="guess-verdict-hit">
+          <span className="guess-verdict-hit-head">
+            Correct{guessPlace ? ` · ${ordinal(guessPlace)}` : ""}
+          </span>
+          <span className="guess-verdict-hit-word">{guessedPrompt}</span>
+          {guessBreakdown && guessBreakdown.points > 0 && (
+            <span className="guess-verdict-hit-points">+{guessBreakdown.points}</span>
+          )}
+        </p>
+      )}
       {inputVisible && (
         <form
-          className={`chat-input${mode === "waiting" ? " waiting-chat-form" : ""}`}
+          className={`chat-input${mode === "waiting" ? " waiting-chat-form" : ""}${guessedPrompt && mode === "playing" ? " has-guessed" : ""}`}
           onSubmit={(event) => void handleSubmit(event)}
         >
           {guessFlash && (
@@ -413,7 +446,10 @@ export function RoomChatPanel({
                 type="search"
                 inputMode="text"
                 value={text}
-                onChange={(event) => setText(event.target.value)}
+                onChange={(event) => {
+                  setText(event.target.value);
+                  if (guessFlash) setGuessFlash(null);
+                }}
                 onKeyDown={handleKeyDown}
                 onFocus={() => {
                   wasFocusedRef.current = true;

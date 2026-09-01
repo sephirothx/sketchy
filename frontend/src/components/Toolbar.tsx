@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
@@ -309,7 +310,13 @@ export function Toolbar({
   );
 
   if (isMobile) {
-    return (
+    const dock = typeof document !== "undefined"
+      ? document.getElementById("room-shell-dock")
+      : null;
+    // Collapsed controls, as before: one chip opens the tools, one the
+    // colours, one the size. The dock still renders after the chat region,
+    // so the strip sits at the bottom of the screen under the thumb.
+    const mobileToolbar = (
       <div className="toolbar-container toolbar-mobile" ref={mobileToolbarRef} data-testid="toolbar-mobile">
           <div className="toolbar toolbar-mobile-strip" role="toolbar" aria-label="Drawing tools">
             <button
@@ -458,6 +465,7 @@ export function Toolbar({
           )}
       </div>
     );
+    return dock ? createPortal(mobileToolbar, dock) : mobileToolbar;
   }
 
   return (

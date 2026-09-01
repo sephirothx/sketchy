@@ -6,6 +6,27 @@
   line-height: 1;
 }
 
+/* The back control and the wordmark travel together on the left. */
+.lobby-header-lead {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  /* The arrow alone. "Back to lobby" beside a wordmark and an identity chip is
+     what would not fit; the label stays as the accessible name. */
+  .header-back-label {
+    display: none;
+  }
+
+  .lobby-header.has-back .header-back-button {
+    flex: none;
+    padding-inline: 10px;
+  }
+}
+
 .header-back-button {
   padding-left: 0;
 }
@@ -59,6 +80,25 @@
   color: var(--ink);
   width: fit-content;
   margin-bottom: 0;
+}
+
+/* In the sheet the title already says what the field is for, and the cells
+   take the whole width rather than huddling at one end of it. */
+.room-code-label.is-unlabelled,
+.panel .room-code-label.is-unlabelled {
+  gap: 0;
+  width: 100%;
+}
+
+.room-code-label.is-unlabelled .room-code-cells {
+  width: 100%;
+}
+
+.room-code-label.is-unlabelled .room-code-cell {
+  flex: 1 1 0;
+  height: 56px;
+  min-width: 0;
+  width: auto;
 }
 
 .room-code-cells {
@@ -137,32 +177,46 @@
   margin-bottom: 14px;
 }
 
+/* The icon and the field are one control, so the wrapper carries the whole
+   field treatment and the input inside it is bare. */
 .lobby-room-search {
-  flex: 1 1 240px;
-  display: flex;
   align-items: center;
-  gap: 9px;
-  background: var(--well);
-  border: 1.5px solid var(--line);
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  padding: 10px 13px;
+  color: var(--faint);
+  display: flex;
+  flex: 1 1 240px;
+  gap: 9px;
   min-height: 44px;
+  padding: 0 13px;
+}
+
+/* Matches `.panel input[type="search"]` in layout-primitives.css rather than
+   losing to it, which is what drew a second bordered box inside this one. */
+.lobby-room-search input[type="search"] {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 15px;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+}
+
+.lobby-room-search input[type="search"]::placeholder {
   color: var(--faint);
 }
 
-.lobby-room-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  font-family: var(--font-body);
-  font-size: 14px;
-  color: var(--ink);
+.lobby-room-search:focus-within {
+  border-color: var(--focus-field-border, var(--primary));
 }
 
-.lobby-room-search:focus-within {
-  border-color: var(--primary);
+.lobby-room-search > svg {
+  flex: 0 0 auto;
 }
 
 .lobby-language-filter {
@@ -233,20 +287,7 @@
   gap: 8px;
 }
 
-.public-room-title-row {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-}
 
-.public-room-title-row h3 {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 17px;
-  color: var(--ink);
-  margin: 0;
-}
 
 .public-room-facts {
   color: var(--muted);
@@ -265,34 +306,48 @@
   gap: 6px;
 }
 
-.public-room-facts strong {
+.public-room-name {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+
+.public-room-name-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.public-room-language {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* The flag alone; the language's name is read out rather than printed, so the
+   fact row stays four short items wide on a phone. */
+.public-room-language > svg,
+.public-room-language img {
+  border-radius: 3px;
+  display: block;
+}
+
+/* Reserved for the two facts that change what the buttons do. */
+.public-room-flag {
   color: var(--warning);
 }
 
-.public-room-capacity {
-  display: inline-block;
-  width: 44px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--line);
-  overflow: hidden;
+.public-room-flag.is-playing {
+  color: var(--warm-ink);
 }
 
-.public-room-capacity > span {
-  display: block;
-  height: 100%;
-  background: var(--primary);
-}
 
-.public-room-capacity > span.is-full {
-  background: var(--warm);
-}
 
-.public-room-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+
 
 .public-room-actions {
   display: flex;
@@ -567,4 +622,356 @@
   .invite-actions {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 720px) {
+  /* ── The dock ──────────────────────────────────────────────────────────
+     The two entry cards took 440px above the room list; as a fixed bar they
+     take 120px below it, and both controls sit under the thumb. */
+  .lobby-dock {
+    background: var(--card);
+    border-top: 1.5px solid var(--line);
+    bottom: 0;
+    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    left: 0;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    position: fixed;
+    right: 0;
+    z-index: 30;
+  }
+
+  .lobby-dock .btn {
+    width: 100%;
+  }
+
+  .lobby-dock-code {
+    min-height: 46px;
+  }
+
+  /* Room for the dock, so the last card is never under it. */
+  .lobby-page {
+    padding-bottom: 132px;
+  }
+
+  .lobby-code-spectate {
+    min-height: 44px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    width: 100%;
+  }
+
+  /* ── The lobby, on a phone ─────────────────────────────────────────────
+     Open rooms are the page. They used to be the fourth of four stacked
+     cards on a 1386px page — a screen and a half below the fold, under the
+     account card, the create card and the code card — so the one thing that
+     answers "can I play right now" was the last thing anyone saw. */
+  .lobby-page {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The masthead and the first-run name prompt keep their place at the top;
+     only the rooms jump the entry cards. */
+  .lobby-page > .lobby-header,
+  .lobby-page > .first-run {
+    order: -2;
+  }
+
+  .lobby-rooms-panel {
+    order: -1;
+  }
+
+  /* Copy that reassures on a wide screen is just scroll on a narrow one. */
+  .lobby-entry-panel .create-room-lobby-copy {
+    display: none;
+  }
+
+  .lobby-entry-panel .btn-big,
+  .lobby-entry-actions > .btn-primary {
+    width: 100%;
+  }
+
+  /* Spectating is a real choice, just not the common one, and it should not
+     read as the twin of the button next to it. */
+  .lobby-entry-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lobby-entry-actions > .btn-secondary {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    min-height: 44px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+
+/* ── Arriving from an invite ────────────────────────────────────────────
+   The most common way anyone first meets this game is a link in a group
+   chat. Cold at 390 x 844 the Join button used to sit at y 839 — below the
+   fold, under 380px of room configuration and a 315px account decision. */
+.invite-room-headline {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.invite-room-headline strong {
+  color: var(--ink);
+}
+
+.invite-details > summary {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  min-height: 44px;
+  padding: 4px 2px;
+}
+
+.invite-details > summary::-webkit-details-marker { display: none; }
+
+.invite-details > summary::after {
+  color: var(--faint);
+  content: "▸";
+  margin-left: auto;
+  transition: transform 140ms ease;
+}
+
+.invite-details[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invite-details > summary::after { transition: none; }
+}
+
+.invite-details-summary {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  /* Spectating is a real choice for someone arriving mid-game, just not the
+     one the link was sent for. */
+  .invite-actions {
+    align-items: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .invite-actions > .invite-primary-button {
+    width: 100%;
+  }
+
+  .invite-actions > .invite-secondary-button {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    min-height: 44px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* ── Filters behind one chip ────────────────────────────────────────────
+   The bar's three controls wrapped to three rows on a phone — about 110px of
+   filtering above the first room. */
+.lobby-filter-sheet-button.has-filters {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.lobby-filter-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.lobby-filter-row {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-top: 1.5px solid var(--line);
+  color: var(--ink);
+  display: flex;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 800;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 2px;
+  text-align: left;
+  width: 100%;
+}
+
+.lobby-filter-row:first-child {
+  border-top: 0;
+}
+
+.lobby-filter-row.is-toggle {
+  cursor: pointer;
+}
+
+.lobby-filter-switch {
+  background: var(--line-strong);
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: 29px;
+  position: relative;
+  width: 48px;
+}
+
+.lobby-filter-switch::after {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  content: "";
+  height: 23px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: left 140ms ease;
+  width: 23px;
+}
+
+.lobby-filter-switch.is-on {
+  background: var(--primary);
+}
+
+.lobby-filter-switch.is-on::after {
+  left: 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-filter-switch::after { transition: none; }
+}
+
+@media (max-width: 720px) {
+  /* Search and the chip share one row. */
+  .lobby-filter-bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .lobby-room-search {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .lobby-filter-sheet-button {
+    flex: 0 0 auto;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+}
+
+/* ── Who is in a room ───────────────────────────────────────────────────
+   The player count doubles as the control. The names are fetched for this
+   room when asked for rather than carried by the polled list, so browsing
+   the lobby is not the same as reading every roster on the server. */
+.public-room-roster-toggle {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 6px;
+  margin: -6px -8px;
+  min-height: 32px;
+  padding: 6px 8px;
+}
+
+.public-room-roster-toggle:hover {
+  background: var(--well);
+  color: var(--ink);
+}
+
+.public-room-roster-toggle > svg:last-child {
+  transition: transform 140ms ease;
+}
+
+.public-room-roster-toggle.is-open > svg:last-child {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-room-roster-toggle > svg:last-child { transition: none; }
+}
+
+.public-room-roster {
+  border-top: 1.5px solid var(--line);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.public-room-roster ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.public-room-roster li {
+  align-items: center;
+  display: flex;
+  font-size: 13.5px;
+  font-weight: 700;
+  gap: 7px;
+  min-width: 0;
+}
+
+.public-room-roster-host {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.public-room-roster-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Paste sits where the ✕ was: a room code is almost always arriving from
+   somewhere else, and the grab handle above it is what closes the sheet.
+   `.chip` is only the shape — the paint comes from `.chip-neutral`, without
+   which this rendered as a transparent border in the UA's own font. */
+.room-code-paste {
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-family: var(--font-body);
+  min-height: 40px;
+  padding: 7px 14px;
+}
+
+.room-code-paste:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.room-code-paste:active {
+  background: var(--track);
 }

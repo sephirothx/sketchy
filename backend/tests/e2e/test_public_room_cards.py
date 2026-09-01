@@ -53,13 +53,19 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             assert not await card.is_visible()
             await room_search.fill("Room cards")
             await card.wait_for()
-            assert await card.get_by_text("Waiting", exact=True).is_visible()
+            # The card carries what decides whether to tap, and nothing else:
+            # name, prompt language, how full, and how long a game runs. The
+            # house rules it used to list as a chip apiece are one tap away on
+            # the other side of Join, and on a phone they pushed the next room
+            # off the screen.
             assert await card.get_by_text("1/3", exact=True).is_visible()
             assert await card.get_by_text("2 rounds", exact=True).is_visible()
             assert await card.get_by_text("90s", exact=True).is_visible()
-            assert await card.get_by_text("No scoring", exact=True).is_visible()
-            assert await card.get_by_text("Custom prompts only", exact=True).is_visible()
+            assert await card.get_by_text("English", exact=True).count() == 1
             assert await card.get_by_role("button", name="Join", exact=True).is_visible()
+            assert await card.get_by_role("button", name="Spectate", exact=True).is_visible()
+            for dropped in ("Waiting", "No scoring", "Custom prompts only"):
+                assert await card.get_by_text(dropped, exact=True).count() == 0, dropped
 
             await player.goto(BASE_URL)
             await use_guest_name(player, "CardPlayer")
@@ -91,9 +97,10 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await host.click('.waiting-start-button')
             await host.wait_for_selector('.game-layout')
 
+            # A running game still says so: it changes what joining means.
             await card.get_by_text("In progress", exact=True).wait_for()
-            assert await card.get_by_role("button", name="Join in progress", exact=True).is_visible()
-            await card.get_by_role("button", name="Join in progress", exact=True).click()
+            assert await card.get_by_role("button", name="Join", exact=True).is_visible()
+            await card.get_by_role("button", name="Join", exact=True).click()
             await visitor.wait_for_selector('.game-layout')
 
             await spectator.goto(BASE_URL)

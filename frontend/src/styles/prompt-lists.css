@@ -404,3 +404,90 @@
   min-height: 38px;
   padding: 6px 10px;
 }
+
+/* The wrapper existed but had no rule, so a table wider than the viewport was
+   simply cut off at the right edge with nothing to say so. */
+.prompt-stats-table-scroll {
+  overflow-x: auto;
+}
+
+.prompt-stats-more {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0 4px;
+}
+
+@media (max-width: 900px) {
+  /* Rows become cards. Five columns of numbers do not survive a 390px screen
+     as a table: the fourth was already off the edge, and difficulty read as
+     the same sentence repeated hundreds of times rather than as a ranking. */
+  .prompt-stats-table,
+  .prompt-stats-table tbody,
+  .prompt-stats-table tr,
+  .prompt-stats-table th,
+  .prompt-stats-table td {
+    display: block;
+    width: auto;
+  }
+
+  .prompt-stats-table thead {
+    display: none;
+  }
+
+  .prompt-stats-table tr {
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    padding: 12px 14px;
+  }
+
+  .prompt-stats-table th[scope="row"] {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    padding: 0 0 8px;
+    text-align: left;
+  }
+
+  .prompt-stats-table td {
+    border: 0;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 2px 0;
+  }
+
+  /* Label the loose numbers, since the header row is gone. */
+  .prompt-stats-table td[data-label]::before {
+    color: var(--faint);
+    content: attr(data-label) " ";
+    text-transform: none;
+  }
+
+  .prompt-stats-band { display: block; }
+  .prompt-stats-meter { margin-top: 6px; width: 100%; }
+
+  /* Filters are a stack of full-width rows rather than inline labels that
+     wrap "Prompt list" onto two lines. */
+  .prompt-stats-controls {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .prompt-stats-control {
+    align-items: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .prompt-stats-control select,
+  .prompt-stats-control input {
+    min-height: 44px;
+    width: 100%;
+  }
+}

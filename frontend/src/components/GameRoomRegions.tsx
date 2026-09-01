@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { Canvas, type CanvasRef } from "./Canvas";
+import { GuessPips } from "./GuessPips";
 import { ChoosingPromptOverlay } from "./ChoosingPromptOverlay";
 import { GameAnnouncer } from "./GameAnnouncer";
 import { RoomChatPanel } from "./RoomChatPanel";
@@ -11,6 +12,7 @@ import { WaitingRoomPanel } from "./WaitingRoomPanel";
 import { PromptDisplay } from "./PromptDisplay";
 import { useToolbarState } from "../hooks/useToolbarState";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { rankGuesses } from "../lib/guessOrder";
 import { splitMaskedPrompt } from "../lib/maskedPrompt";
 import { recordRender } from "../lib/renderDiagnostics";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
@@ -57,6 +59,8 @@ export function ConnectedRoomChatPanel({
   const guessedPrompt = useGameStore((state) => state.guessedPrompt);
   const maskedPrompt = useGameStore((state) => state.maskedPrompt);
   const hideMaskedPrompt = useGameStore((state) => state.hideMaskedPrompt);
+  const lastGuessBreakdown = useGameStore((state) => state.lastGuessBreakdown);
+  const turnCorrectGuesses = useGameStore((state) => state.turnCorrectGuesses);
   const me = players.find((player) => player.playerId === myPlayerId);
   const isDrawer = useGameStore(selectAmDrawer);
   const canGuess =
@@ -73,6 +77,9 @@ export function ConnectedRoomChatPanel({
       targetPromptLengths={splitMaskedPrompt(maskedPrompt).counts}
       hideMaskedPrompt={hideMaskedPrompt}
       onFocusChange={onFocusChange}
+      guessedPrompt={phase === "drawing" ? guessedPrompt : null}
+      guessBreakdown={lastGuessBreakdown}
+      guessPlace={myPlayerId ? rankGuesses(turnCorrectGuesses)[myPlayerId] ?? null : null}
     />
   );
 }
@@ -149,7 +156,13 @@ export function ConnectedWaitingRoomPanel({
   );
 }
 
-export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef | null> }) {
+interface GameplayRegionProps {
+  canvasRef: RefObject<CanvasRef | null>;
+  /** Phone only: the pip row doubles as the way into players and scores. */
+  onOpenPlayers?: () => void;
+}
+
+export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps) {
   recordRender("gameplay");
   const isMobile = useMediaQuery("(max-width: 900px)");
   const playerId = useGameStore((state) => state.playerId);
@@ -166,8 +179,6 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   const myPrompt = useGameStore((state) => state.myPrompt);
   const guessedPrompt = useGameStore((state) => state.guessedPrompt);
   const promptChoices = useGameStore((state) => state.promptChoices);
-  const roundNumber = useGameStore((state) => state.roundNumber);
-  const totalRounds = useGameStore((state) => state.totalRounds);
   const phaseSeconds = useGameStore((state) => state.phaseSeconds);
   const phaseStartedAt = useGameStore((state) => state.phaseStartedAt);
   const phaseDurationSeconds = useGameStore((state) => state.phaseDurationSeconds);
@@ -226,27 +237,36 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
   return (
     <main className="canvas-area">
       <GameAnnouncer message={phaseAnnouncement} />
-      {/* Desktop shows the round chip and countdown ring in the room header
-          (GameHeaderStatus); this compact line covers mobile, where the header
-          hides in guess-focused mode. */}
-      {isMobile && (
-        <div className="round-info">
-          <span>
-            Round {roundNumber} of {totalRounds}
-          </span>
-          {phase !== "turn_results" && (
+      {/* The prompt and the clock on one row, so that when the soft keyboard
+          takes the header away the remaining time is still a number and not
+          only a 6px rule. The depleting bar rides underneath for the
+          peripheral read; it is silent, so the numeric timer keeps ownership
+          of the tick sound and the screen-reader announcements. */}
+      <div className={isMobile ? "turn-bar" : undefined}>
+        <PromptDisplay
+          isDrawer={amDrawer}
+          myPrompt={myPrompt}
+          maskedPrompt={maskedPrompt}
+          promptChoices={promptChoices}
+          revealedPrompt={phase === "turn_results" ? lastTurnResult?.prompt ?? null : guessedPrompt}
+          hintMode={hintMode}
+          canBuyHint={phase === "drawing" && !amDrawer && !guessedPrompt}
+          nextHintCost={nextHintCost}
+          letterPrices={letterPrices}
+          hintSpend={hintSpend}
+          maxHintSpend={maxHintSpend}
+        />
+        {isMobile && phase === "drawing" && (
+          <span className="turn-bar-clock">
             <Timer
               totalSeconds={phaseSeconds}
               startedAt={phaseStartedAt}
               durationSeconds={phaseDurationSeconds}
               variant="text"
             />
-          )}
-        </div>
-      )}
-      {/* Guess-focused mode swaps the round/timer line for this depleting
-          bar; it stays mounted (hidden by CSS otherwise) and silent so the
-          visible timer keeps the tick sound and announcements. */}
+          </span>
+        )}
+      </div>
       {isMobile && phase === "drawing" && (
         <div className="guess-timer-bar">
           <Timer
@@ -258,19 +278,6 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           />
         </div>
       )}
-      <PromptDisplay
-        isDrawer={amDrawer}
-        myPrompt={myPrompt}
-        maskedPrompt={maskedPrompt}
-        promptChoices={promptChoices}
-        revealedPrompt={phase === "turn_results" ? lastTurnResult?.prompt ?? null : guessedPrompt}
-        hintMode={hintMode}
-        canBuyHint={phase === "drawing" && !amDrawer && !guessedPrompt}
-        nextHintCost={nextHintCost}
-        letterPrices={letterPrices}
-        hintSpend={hintSpend}
-        maxHintSpend={maxHintSpend}
-      />
       <Canvas
         ref={canvasRef}
         isDrawer={canDrawNow}
@@ -292,7 +299,6 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
         <TurnResultsOverlay
           prompt={lastTurnResult.prompt}
           drawerId={lastTurnResult.drawerId}
-          drawerBonus={lastTurnResult.drawerBonus}
           guesses={lastTurnResult.guesses}
           scores={lastTurnResult.scores}
           myPlayerId={playerId}
@@ -300,8 +306,10 @@ export function GameplayRegion({ canvasRef }: { canvasRef: RefObject<CanvasRef |
           myBreakdown={lastGuessBreakdown}
           nextTurnSeconds={phaseSeconds}
           nextTurnStartedAt={phaseStartedAt}
+          nextTurnDurationSeconds={phaseDurationSeconds}
         />
       )}
+      {isMobile && <GuessPips onOpenPlayers={onOpenPlayers} />}
       {canDrawNow && (
         <Toolbar
           color={color}

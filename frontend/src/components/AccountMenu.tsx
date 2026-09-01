@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useSettingsStore } from "../store/settingsStore";
 import { useAuthStore } from "../store/authStore";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError } from "../lib/api";
@@ -29,6 +31,7 @@ import {
   ChevronDownIcon,
   DevicesIcon,
   DownloadIcon,
+  GearIcon,
   KeyIcon,
   LeaveIcon,
   MailIcon,
@@ -77,6 +80,8 @@ function MenuItem({
  */
 export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const navigate = useNavigate();
+  const isNarrow = useMediaQuery("(max-width: 720px)");
+  const openSettings = useSettingsStore((s) => s.openSettings);
   const user = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
@@ -199,6 +204,21 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
+          {/* Settings reaches this menu on a phone, where the header has no
+              room for a gear beside the wordmark and the chip. Wide screens
+              keep the gear, so nothing moves for a mouse. */}
+          {isNarrow && (
+            <MenuItem
+              icon={<GearIcon size={16} />}
+              className="header-settings-button"
+              onClick={() => {
+                setMenuOpen(false);
+                openSettings();
+              }}
+            >
+              Settings
+            </MenuItem>
+          )}
           {/* The two entries that leave the page. Hidden for a guest in a
               live game, where following one would give up their seat. */}
           {!seatBound && (

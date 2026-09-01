@@ -2,7 +2,13 @@ import asyncio
 
 import pytest
 from playwright.async_api import Page, async_playwright
-from tests.e2e.lobby_helpers import close_room_settings, open_room_settings, room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    open_room_settings,
+    open_settings_section,
+    room_code,
+    save_room_settings,
+    use_guest_name,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -49,19 +55,15 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await guest.locator('[data-testid="waiting-room"]').wait_for()
 
             await open_room_settings(host)
-            await host.locator(".room-settings-editor details").click()
+            await open_settings_section(host, "Prompts")
             await host.locator("#custom-prompts").fill("apple\ntree")
             await host.get_by_label("Only use custom prompts").check()
-            # Settings save themselves, so the guest seeing them is the signal
-            # that the room has them - there is no Save button to wait on.
-            await guest.get_by_text("Custom prompts only (2)").wait_for()
-
-            # The rounds go in last, with nothing between them and Start: a
-            # setting still waiting out its delay has to reach the room before
-            # the game does, or the host plays the value they just replaced.
-            # This whole test is one round long, so it would never end.
+            # Rounds goes in with them: the draft is submitted in one piece,
+            # so there is no ordering to get wrong between a setting and the
+            # start. This whole test is one round long.
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
-            await close_room_settings(host)
+            await save_room_settings(host)
+            await guest.get_by_text("Custom prompts only (2)").wait_for()
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, guest]
@@ -94,7 +96,9 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await second_guesser.fill(".chat-input input", second_prompt)
             await second_guesser.keyboard.press("Enter")
 
-            view_drawings = host.get_by_role("button", name="View drawings", exact=True)
+            view_drawings = host.locator('[data-testid="game-end-overlay"]').get_by_role(
+                "button", name="Drawings", exact=True
+            )
             await view_drawings.wait_for(timeout=12_000)
             continue_to_waiting = host.get_by_role(
                 "button",

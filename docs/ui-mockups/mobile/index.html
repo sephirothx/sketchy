@@ -1,0 +1,2090 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketchy Mobile Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   VIEWER SHELL — its own identity: a cool drafting bench, so the warm
+   paper of the mockups reads as a separate object sitting on it.
+   ═══════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#e6e3dc; --bg-2:#dbd7ce; --panel:#fdfcfa; --panel-2:#f2efe9;
+  --ink:#191817; --ink-2:#5d584f; --ink-3:#8a8378;
+  --rule:#d3cec4; --rule-2:#bcb5a7;
+  --accent:#a8451a; --accent-soft:#f2e0d6; --accent-line:#d9a184;
+  --bad:#a5231c; --bad-soft:#f6e2e0;
+  --ok:#2b6e40; --ok-soft:#dfeee3;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --ui:"Nunito Sans","Segoe UI",system-ui,sans-serif;
+  --disp:"Fredoka","Trebuchet MS",system-ui,sans-serif;
+  --shadow-frame:0 30px 70px rgba(28,22,12,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1014; --bg-2:#141821; --panel:#181b22; --panel-2:#20242d;
+    --ink:#ecebe7; --ink-2:#9ba1ac; --ink-3:#6b7280;
+    --rule:#282d36; --rule-2:#39404c;
+    --accent:#e08a4e; --accent-soft:rgba(224,138,78,.13); --accent-line:rgba(224,138,78,.42);
+    --bad:#ef8078; --bad-soft:rgba(239,128,120,.13);
+    --ok:#63c185; --ok-soft:rgba(99,193,133,.13);
+    --shadow-frame:0 30px 70px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1014; --bg-2:#141821; --panel:#181b22; --panel-2:#20242d;
+  --ink:#ecebe7; --ink-2:#9ba1ac; --ink-3:#6b7280;
+  --rule:#282d36; --rule-2:#39404c;
+  --accent:#e08a4e; --accent-soft:rgba(224,138,78,.13); --accent-line:rgba(224,138,78,.42);
+  --bad:#ef8078; --bad-soft:rgba(239,128,120,.13);
+  --ok:#63c185; --ok-soft:rgba(99,193,133,.13);
+  --shadow-frame:0 30px 70px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink); font-family:var(--ui);
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  min-height:100dvh;
+}
+a{color:inherit}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+/* ── masthead ─────────────────────────────────────────────────── */
+.mast{
+  position:sticky; top:0; z-index:40; background:var(--bg);
+  border-bottom:1px solid var(--rule);
+  display:flex; align-items:center; gap:18px; padding:14px 22px;
+}
+.mast h1{
+  font-family:var(--disp); font-weight:600; font-size:19px; margin:0;
+  letter-spacing:-.01em; white-space:nowrap;
+}
+.mast h1 em{font-style:normal;color:var(--accent)}
+.mast .sub{
+  font-family:var(--mono); font-size:11px; color:var(--ink-3);
+  letter-spacing:.02em; white-space:nowrap;
+}
+.mast-sp{flex:1}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.tbtn{
+  background:var(--panel); border:1px solid var(--rule); border-radius:9px;
+  padding:7px 12px; font-size:12.5px; font-weight:800; cursor:pointer;
+  display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+}
+.tbtn:hover{border-color:var(--rule-2)}
+.tbtn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.seg{display:flex;background:var(--panel);border:1px solid var(--rule);border-radius:9px;overflow:hidden}
+.seg button{
+  background:none;border:0;padding:7px 11px;font-size:12.5px;font-weight:800;
+  cursor:pointer;color:var(--ink-2)
+}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+
+/* ── two-column bench ─────────────────────────────────────────── */
+.bench{display:grid;grid-template-columns:262px minmax(0,1fr);align-items:start}
+.rail{
+  position:sticky; top:57px; height:calc(100dvh - 57px); overflow:auto;
+  border-right:1px solid var(--rule); padding:16px 12px 40px; background:var(--bg);
+}
+.rail h2{
+  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3); margin:18px 8px 7px;
+}
+.rail h2:first-child{margin-top:2px}
+.rail a{
+  display:flex; align-items:baseline; gap:9px; padding:7px 9px; border-radius:8px;
+  text-decoration:none; font-size:13.5px; font-weight:700; color:var(--ink-2);
+  border:1px solid transparent; cursor:pointer;
+}
+.rail a:hover{background:var(--panel-2);color:var(--ink)}
+.rail a.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+.rail a .n{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);min-width:22px}
+.rail a.on .n{color:var(--accent)}
+.rail .alt{margin-left:22px;font-size:12.5px;font-weight:600;opacity:.9}
+
+.stage{padding:26px 30px 90px;min-width:0}
+
+/* ── screen header ────────────────────────────────────────────── */
+.shead{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.shead .eyebrow{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);font-weight:700
+}
+.shead h2{font-family:var(--disp);font-weight:600;font-size:30px;margin:2px 0 0;letter-spacing:-.015em;text-wrap:balance}
+.lede{color:var(--ink-2);max-width:62ch;margin:10px 0 0;font-size:15px}
+.vtabs{display:flex;gap:7px;margin:18px 0 0;flex-wrap:wrap}
+.vtab{
+  background:var(--panel);border:1px solid var(--rule);border-radius:999px;
+  padding:6px 14px;font-size:12.5px;font-weight:800;cursor:pointer;color:var(--ink-2)
+}
+.vtab[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.vtab .ships{
+  font-family:var(--mono);font-size:9.5px;font-style:normal;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ok);margin-left:5px
+}
+.vtab[aria-pressed="true"] .ships{color:var(--bg);opacity:.72}
+.verdict{
+  font-family:var(--mono);font-size:11.5px;color:var(--ink-3);
+  margin:20px 0 0;letter-spacing:.02em
+}
+
+/* ── phone deck ───────────────────────────────────────────────── */
+.deck{display:flex;gap:34px;flex-wrap:wrap;margin:26px 0 0;align-items:flex-start}
+.slot{display:flex;flex-direction:column;gap:11px;align-items:center}
+.slot .cap{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:700
+}
+.fitbox{position:relative}
+.frame{
+  width:390px;height:844px;border-radius:46px;position:relative;overflow:hidden;
+  transform-origin:top left;
+  box-shadow:0 0 0 10px #16181d,0 0 0 12px #3b414b,var(--shadow-frame);
+}
+.frame.land{width:844px;height:390px;border-radius:44px}
+
+/* ── critique ─────────────────────────────────────────────────── */
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin:34px 0 0;max-width:1120px}
+.note{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:16px 18px}
+.note h3{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  margin:0 0 11px;font-weight:700;display:flex;align-items:center;gap:8px
+}
+.note.bad h3{color:var(--bad)}
+.note.good h3{color:var(--ok)}
+.note h3::before{content:"";width:9px;height:9px;border-radius:3px;background:currentColor}
+.note ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.note li{font-size:13.5px;line-height:1.5;color:var(--ink-2);padding-left:15px;position:relative}
+.note li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:1.5px;background:var(--rule-2)}
+.note li b{color:var(--ink);font-weight:800}
+.note code, .m{
+  font-family:var(--mono);font-size:11.5px;background:var(--panel-2);
+  border:1px solid var(--rule);border-radius:5px;padding:1px 5px;color:var(--ink);
+  font-variant-numeric:tabular-nums;white-space:nowrap
+}
+
+.pager{display:flex;gap:10px;margin:38px 0 0;align-items:center}
+.pager .sp{flex:1}
+
+@media (max-width:1000px){
+  .bench{grid-template-columns:1fr}
+  .rail{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule);
+        display:flex;gap:6px;overflow-x:auto;padding:10px 14px}
+  .rail h2{display:none}
+  .rail a{white-space:nowrap}
+  .rail .alt{margin-left:0}
+  .stage{padding:20px 16px 70px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOCKUP TOKENS — copied verbatim from frontend/src/styles/theme.css
+   so the mockups are the shipped palette, not an approximation.
+   ═══════════════════════════════════════════════════════════════════ */
+.ph{
+  --paper:#faf6ef; --well:#faf6ef; --card:#ffffff; --field:#ffffff; --track:#f1ebe0;
+  --scrim:rgba(30,27,22,.5);
+  --ink:#292520; --muted:#6f6759; --faint:#a29883;
+  --line:#e7dfd2; --line-strong:#d3c8b4;
+  --avatar-ink:#fff; --guest-avatar:#5b6472; --guest-bg:#f0eadd;
+  --primary:#5157d8; --primary-soft:#eeeffb; --primary-ink:#3b41b5; --primary-edge:#3b41b5;
+  --warm:#e8703a; --warm-soft:#fbeadf; --warm-ink:#b5541f; --warm-edge:#c1521f;
+  --success:#2f9e44; --success-soft:#e7f5ea; --success-ink:#1f7a33;
+  --success-button:#2f9e44; --success-button-edge:#247c34;
+  --warning:#b45309; --warning-soft:#fdf1dc; --warning-edge:#ebc98a;
+  --danger:#c92a2a; --danger-soft:#fbecec;
+  --gold:#8a6d0b; --silver:#5a6472; --bronze:#8a5a2e;
+  --brand-wordmark:#3d2b1f; --brand-ferrule:#75726d;
+  --shadow:0 1px 2px rgba(20,16,10,.06); --shadow-raised:0 10px 30px rgba(20,16,10,.14);
+  --os:#f3efe8; --os-ink:#292520; --kb:#d3d0cb; --kbkey:#ffffff; --kbink:#111;
+}
+.ph[data-t="dark"]{
+  --paper:#0f172a; --well:rgba(2,6,23,.35); --card:#1e293b; --field:#0f172a; --track:rgba(2,6,23,.45);
+  --scrim:rgba(2,6,23,.6);
+  --ink:#f8fafc; --muted:#94a3b8; --faint:#64748b;
+  --line:#334155; --line-strong:#475569;
+  --avatar-ink:#132036; --guest-avatar:#c3cbd8; --guest-bg:rgba(148,163,184,.18);
+  --primary:#666ce4; --primary-soft:rgba(102,108,228,.17); --primary-ink:#c7cbfa; --primary-edge:#3b41b5;
+  --warm:#ee7e48; --warm-soft:rgba(238,126,72,.15); --warm-ink:#fdba74; --warm-edge:#9a3412;
+  --success:#4ade80; --success-soft:rgba(74,222,128,.13); --success-ink:#86efac;
+  --warning:#fbbf24; --warning-soft:rgba(251,191,36,.13); --warning-edge:rgba(251,191,36,.4);
+  --danger:#f87171; --danger-soft:rgba(248,113,113,.14);
+  --gold:#f5ce62; --silver:#b9c4d4; --bronze:#dfa878;
+  --brand-wordmark:#f8fafc; --brand-ferrule:#94a3b8;
+  --shadow:0 1px 2px rgba(0,0,0,.24); --shadow-raised:0 10px 30px rgba(0,0,0,.4);
+  --os:#0b1220; --os-ink:#f8fafc; --kb:#1c1f26; --kbkey:#3a3f49; --kbink:#fff;
+}
+
+/* ── mockup base ──────────────────────────────────────────────── */
+.ph{
+  width:100%;height:100%;background:var(--paper);color:var(--ink);
+  font-family:"Nunito Sans",system-ui,sans-serif;font-size:14px;line-height:1.4;
+  display:flex;flex-direction:column;position:relative;overflow:hidden;
+}
+.ph *{box-sizing:border-box}
+.ph .disp{font-family:"Fredoka",system-ui,sans-serif;font-weight:600}
+
+/* OS chrome */
+.osbar{
+  height:46px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:0 26px 0 30px;font-size:13.5px;font-weight:800;color:var(--ink);
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;
+}
+.osbar .r{display:flex;align-items:center;gap:5px;opacity:.85}
+.homebar{
+  flex:0 0 auto;height:22px;display:flex;align-items:center;justify-content:center;
+}
+.homebar i{display:block;width:134px;height:5px;border-radius:3px;background:var(--ink);opacity:.34}
+
+/* app shell: the fixed three-band contract */
+.app{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.band{flex:0 0 auto}
+.stagearea{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.dock{
+  flex:0 0 auto;background:var(--card);border-top:1.5px solid var(--line);
+  padding:10px 14px 12px;display:flex;flex-direction:column;gap:9px;
+  box-shadow:0 -6px 18px rgba(20,16,10,.05);
+}
+.ph[data-t="dark"] .dock{box-shadow:0 -6px 18px rgba(0,0,0,.32)}
+
+/* status band */
+.sband{
+  height:56px;display:flex;align-items:center;gap:10px;padding:0 12px;
+  border-bottom:1.5px solid var(--line);background:var(--card);
+}
+.codechip{
+  font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;letter-spacing:.1em;
+  background:var(--well);border:1.5px solid var(--line);border-radius:9px;padding:6px 9px;color:var(--muted);
+}
+.ph[data-t="dark"] .codechip{background:rgba(2,6,23,.4)}
+.sb-sp{flex:1}
+.iconbtn{
+  width:44px;height:44px;border-radius:13px;border:1.5px solid var(--line);background:var(--card);
+  display:flex;align-items:center;justify-content:center;color:var(--muted);flex:0 0 auto;
+}
+.iconbtn.ghost{border-color:transparent;background:transparent}
+.dots{display:flex;flex-direction:column;gap:3px;align-items:center}
+.dots i{width:4px;height:4px;border-radius:50%;background:currentColor;display:block}
+
+/* timer ring */
+.ring{position:relative;width:46px;height:46px;flex:0 0 auto}
+.ring svg{display:block;transform:rotate(-90deg)}
+.ring b{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--warm-ink);
+  letter-spacing:-.02em;
+}
+.ring.urgent b{color:var(--danger)}
+
+/* generic bits */
+.av{
+  width:34px;height:34px;border-radius:50%;background:var(--guest-bg);color:var(--guest-avatar);
+  display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;flex:0 0 auto;
+}
+.av.p{background:var(--primary);color:#fff}
+.av.w{background:var(--warm);color:#fff}
+.av.g{background:var(--success-button);color:#fff}
+.av.sm{width:26px;height:26px;font-size:11px}
+.av.lg{width:56px;height:56px;font-size:22px}
+.btn{
+  border:0;border-radius:14px;background:var(--primary);color:#fff;font-weight:900;font-size:16px;
+  min-height:52px;display:flex;align-items:center;justify-content:center;gap:9px;
+  box-shadow:0 3px 0 var(--primary-edge);width:100%;padding:0 16px;
+}
+.btn.go{background:var(--success-button);box-shadow:0 3px 0 var(--success-button-edge)}
+.btn.ghost{
+  background:var(--card);color:var(--ink);border:1.5px solid var(--line-strong);box-shadow:none;
+}
+.btn.sm{min-height:44px;font-size:14px;border-radius:12px}
+.linkbtn{
+  background:none;border:0;color:var(--muted);font-weight:800;font-size:13.5px;
+  min-height:44px;display:flex;align-items:center;justify-content:center;width:100%;
+}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px}
+.kick{
+  font-size:10.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+}
+.muted{color:var(--muted)}
+.faint{color:var(--faint)}
+
+/* the drawing surface */
+.canvas{
+  width:100%;aspect-ratio:4/3;background:#fff;border:1.5px solid var(--line-strong);
+  border-radius:14px;overflow:hidden;position:relative;flex:0 0 auto;color:#2b2b2b;
+}
+.canvas svg{width:100%;height:100%;display:block}
+/* Keyboard-open layouts: the canvas takes the height that is left and keeps
+   4:3 by giving up width, exactly like the shipped guess-focused rule. */
+.canvasfit{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.canvasfit>.canvas{height:100%;width:auto;max-width:100%;flex:0 0 auto;border-left:1.5px solid var(--line-strong);border-right:1.5px solid var(--line-strong);border-radius:10px}
+.canvas .zoom{
+  position:absolute;right:8px;bottom:8px;width:36px;height:36px;border-radius:11px;
+  background:rgba(255,255,255,.92);border:1.5px solid #d3c8b4;display:flex;
+  align-items:center;justify-content:center;color:#6f6759;
+}
+
+/* masked word tiles */
+.tiles{display:flex;align-items:flex-start;gap:5px;justify-content:center;flex-wrap:wrap}
+.tile{
+  width:29px;height:38px;border-radius:9px;background:var(--card);border:2px solid var(--line-strong);
+  display:flex;align-items:center;justify-content:center;font-family:"Fredoka",sans-serif;
+  font-weight:600;font-size:19px;color:var(--ink);flex:0 0 auto;
+}
+.tile.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-ink)}
+.tile.buy{border-style:dashed;border-color:var(--primary);color:var(--primary);height:44px}
+.tile.sm{width:24px;height:32px;font-size:16px;border-radius:8px}
+.wcount{
+  font-size:11px;font-weight:900;color:var(--faint);font-variant-numeric:tabular-nums;
+  align-self:center;margin-left:2px
+}
+
+/* the depleting rule (keyboard mode) */
+.timerule{height:5px;border-radius:3px;background:var(--track);overflow:hidden;flex:0 0 auto}
+.timerule i{display:block;height:100%;border-radius:3px;background:var(--warm)}
+.timerule.urgent i{background:var(--danger)}
+
+/* guessed pips — the live race state */
+.pips{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-height:30px}
+.pip{
+  width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:900;position:relative;flex:0 0 auto;
+}
+.pip.got{background:var(--success-soft);color:var(--success-ink);border:2px solid var(--success)}
+.pip.wait{background:var(--well);color:var(--faint);border:2px dashed var(--line-strong)}
+.ph[data-t="dark"] .pip.wait{background:rgba(2,6,23,.4)}
+.pip .rk{
+  position:absolute;right:-3px;bottom:-3px;width:14px;height:14px;border-radius:50%;
+  background:var(--success);color:#fff;font-size:8.5px;display:flex;align-items:center;
+  justify-content:center;font-weight:900;border:1.5px solid var(--card)
+}
+.pipmeta{font-size:12px;font-weight:800;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+
+/* one-line live ticker */
+.ticker{
+  display:flex;align-items:center;gap:7px;min-height:26px;font-size:13px;font-weight:700;
+  color:var(--muted);overflow:hidden;white-space:nowrap;flex:0 0 auto;
+}
+.ticker .ok{color:var(--success-ink);font-weight:900}
+.ticker .nm{color:var(--ink);font-weight:900;font-style:italic}
+
+/* guess input */
+.guessrow{display:flex;gap:9px;align-items:center}
+.gfield{
+  flex:1;min-height:52px;border-radius:14px;border:2px solid var(--line-strong);background:var(--field);
+  display:flex;align-items:center;padding:0 14px;font-size:16px;color:var(--faint);font-weight:600;
+}
+.gfield.focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.gfield .caret{width:2px;height:20px;background:var(--primary);margin-left:1px}
+.gsend{
+  width:52px;height:52px;border-radius:14px;background:var(--primary);color:#fff;display:flex;
+  align-items:center;justify-content:center;flex:0 0 auto;box-shadow:0 3px 0 var(--primary-edge);
+}
+.verdict{
+  border-radius:11px;padding:7px 12px;font-size:13px;font-weight:800;display:flex;
+  align-items:center;gap:8px;flex:0 0 auto;
+}
+.verdict.close{background:var(--warning-soft);border:1.5px solid var(--warning-edge);color:var(--warning)}
+.verdict.hit{background:var(--success-soft);border:1.5px solid var(--success);color:var(--success-ink)}
+
+/* drawing dock */
+.swatches{display:flex;gap:8px;align-items:center;overflow:hidden}
+.sw{width:38px;height:38px;border-radius:50%;flex:0 0 auto;border:2px solid rgba(0,0,0,.10)}
+.ph[data-t="dark"] .sw{border-color:rgba(255,255,255,.16)}
+.sw.on{box-shadow:0 0 0 3px var(--card),0 0 0 5.5px var(--primary);border-color:transparent}
+.toolrow{display:flex;gap:8px;align-items:center}
+.tool{
+  height:48px;min-width:48px;border-radius:14px;border:1.5px solid var(--line-strong);background:var(--card);
+  display:flex;align-items:center;justify-content:center;gap:6px;color:var(--muted);flex:0 0 auto;
+  font-weight:900;font-size:13px;padding:0 11px;
+}
+.tool.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-ink)}
+.tool.danger{color:var(--danger);border-color:var(--danger-soft)}
+.tool.wide{flex:1}
+
+/* bottom sheet */
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;background:var(--card);
+  border-top:1.5px solid var(--line);border-radius:26px 26px 0 0;
+  box-shadow:0 -14px 40px rgba(20,16,10,.20);padding:10px 16px 16px;
+  display:flex;flex-direction:column;gap:12px;z-index:8;
+}
+.ph[data-t="dark"] .sheet{box-shadow:0 -14px 40px rgba(0,0,0,.5)}
+.grab{width:44px;height:5px;border-radius:3px;background:var(--line-strong);margin:2px auto 4px;flex:0 0 auto}
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:7}
+
+/* list rows (settings, players) */
+.rows{display:flex;flex-direction:column;background:var(--card);border-radius:16px;border:1.5px solid var(--line);overflow:hidden}
+.row{display:flex;align-items:center;gap:11px;padding:0 14px;min-height:54px;border-top:1.5px solid var(--line)}
+.row:first-child{border-top:0}
+.row .lbl{font-weight:800;font-size:14.5px}
+.row .val{margin-left:auto;color:var(--muted);font-weight:700;font-size:14px;display:flex;align-items:center;gap:7px}
+.sw-toggle{width:48px;height:29px;border-radius:999px;background:var(--line-strong);position:relative;flex:0 0 auto}
+.sw-toggle i{position:absolute;top:3px;left:3px;width:23px;height:23px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.sw-toggle.on{background:var(--primary)}
+.sw-toggle.on i{left:22px}
+
+/* chips */
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{
+  border:1.5px solid var(--line);background:var(--well);border-radius:999px;padding:7px 12px;
+  font-size:12.5px;font-weight:800;color:var(--muted);min-height:36px;display:flex;align-items:center;gap:6px
+}
+.ph[data-t="dark"] .chip{background:rgba(2,6,23,.35)}
+.chip.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-ink)}
+.chip.warm{background:var(--warm-soft);border-color:var(--warm-edge);color:var(--warm-ink)}
+
+/* segmented */
+.segm{display:flex;background:var(--well);border:1.5px solid var(--line);border-radius:14px;padding:3px;gap:3px}
+.ph[data-t="dark"] .segm{background:rgba(2,6,23,.35)}
+.segm b{
+  flex:1;text-align:center;padding:10px 6px;border-radius:11px;font-size:13.5px;font-weight:800;
+  color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px
+}
+.segm b.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+
+/* stepper row */
+.step{display:flex;align-items:center;gap:12px;min-height:60px}
+.step .k{font-weight:800;font-size:14.5px;flex:1}
+.step .k small{display:block;font-weight:600;font-size:11.5px;color:var(--faint)}
+.step .pm{
+  width:48px;height:48px;border-radius:14px;border:1.5px solid var(--line-strong);background:var(--card);
+  display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:var(--muted);flex:0 0 auto
+}
+.step .v{
+  min-width:56px;text-align:center;font-family:"Fredoka",sans-serif;font-weight:600;font-size:24px;
+  font-variant-numeric:tabular-nums
+}
+
+/* the soft keyboard */
+.keyboard{flex:0 0 auto;background:var(--kb);padding:10px 3px 8px;user-select:none}
+.krow{display:flex;justify-content:center;gap:6px;margin-bottom:12px}
+.krow:last-child{margin-bottom:0}
+.key{
+  height:48px;flex:1;max-width:34px;border-radius:6px;background:var(--kbkey);color:var(--kbink);
+  display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:500;
+  box-shadow:0 1px 0 rgba(0,0,0,.28);font-family:system-ui,sans-serif;
+}
+.key.wide{max-width:46px;background:color-mix(in srgb,var(--kbkey) 72%, #7b7f88);font-size:13px;font-weight:700}
+.key.space{max-width:none;flex:5}
+.key.go{max-width:78px;background:var(--primary);color:#fff;font-size:14px;font-weight:800}
+.kacc{height:20px;display:flex;align-items:center;justify-content:center;gap:26px;font-size:12px;color:#6b7280;font-weight:700}
+
+/* wordmark */
+.mark{display:block;height:26px;width:auto;color:var(--brand-wordmark)}
+
+/* misc mock */
+.roomrow{
+  display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--card);
+  border:1.5px solid var(--line);border-radius:16px;min-height:76px
+}
+.avstack{display:flex}
+.avstack .av{margin-left:-9px;box-shadow:0 0 0 2px var(--card)}
+.avstack .av:first-child{margin-left:0}
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:10px}
+.pod{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;max-width:104px}
+.pod .bar{
+  width:100%;border-radius:12px 12px 0 0;display:flex;flex-direction:column;align-items:center;
+  justify-content:flex-start;padding-top:9px;gap:1px;color:#3d2b1f;font-weight:900
+}
+.pod .bar .p{font-family:"Fredoka",sans-serif;font-size:22px;line-height:1}
+.pod .bar .s{font-size:12px;font-variant-numeric:tabular-nums}
+.tabbar{display:flex;gap:4px;background:var(--well);border-radius:14px;padding:3px;border:1.5px solid var(--line)}
+.ph[data-t="dark"] .tabbar{background:rgba(2,6,23,.35)}
+.tabbar b{flex:1;text-align:center;padding:9px;border-radius:11px;font-size:13px;font-weight:800;color:var(--muted);min-height:42px;display:flex;align-items:center;justify-content:center}
+.tabbar b.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:12px}
+.stat .n{font-family:"Fredoka",sans-serif;font-weight:600;font-size:26px;line-height:1.1}
+.bar-t{height:7px;border-radius:4px;background:var(--track);overflow:hidden}
+.bar-t i{display:block;height:100%;border-radius:4px;background:var(--warm)}
+.overlaynote{
+  position:absolute;left:0;right:0;bottom:0;top:0;pointer-events:none;
+}
+</style>
+
+<div class="mast">
+  <h1>Sketchy <em>on phones</em></h1>
+  <span class="sub" style="opacity:.7">artboards drawn from the shipped build</span>
+  <span class="sub" id="crumb">01 / 17 · First landing</span>
+  <span class="mast-sp"></span>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="Theme pairing">
+      <button id="mBoth" aria-pressed="true">Both</button>
+      <button id="mLight" aria-pressed="false">Light</button>
+      <button id="mDark" aria-pressed="false">Dark</button>
+    </div>
+    <button class="tbtn" id="shellTheme" title="Toggle the page theme">◐ Page</button>
+    <button class="tbtn" id="prevBtn">◀</button>
+    <button class="tbtn" id="nextBtn">▶</button>
+  </div>
+</div>
+
+<div class="bench">
+  <nav class="rail" id="rail" aria-label="Screens"></nav>
+  <main class="stage" id="stage"></main>
+</div>
+
+<script>
+/* ═══════════════ shared mock fragments ═══════════════ */
+const T = (s) => s;
+
+const osbar = (t="9:41") => `<div class="osbar"><span>${t}</span>
+  <span class="r">
+    <svg width="17" height="11" viewBox="0 0 17 11" aria-hidden="true"><path fill="currentColor" d="M1 8h2v3H1zM5 6h2v5H5zM9 3.5h2V11H9zM13 1h2v10h-2z"/></svg>
+    <svg width="15" height="11" viewBox="0 0 15 11" aria-hidden="true"><path fill="currentColor" d="M7.5 2.2c1.9 0 3.6.7 4.9 1.9l1.2-1.3A9.2 9.2 0 0 0 7.5.4C5 .4 2.7 1.3.9 2.8l1.2 1.3a7.2 7.2 0 0 1 5.4-1.9Zm0 3.4c1 0 2 .4 2.7 1.1l1.2-1.3a6 6 0 0 0-7.8 0l1.2 1.3c.7-.7 1.7-1.1 2.7-1.1Zm0 3.3L9.3 11 7.5 8.9 5.7 11l1.8-2.1Z"/></svg>
+    <svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><rect x=".7" y=".7" width="21" height="10.6" rx="3.2" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="2.3" y="2.3" width="16" height="7.4" rx="1.9" fill="currentColor"/><path fill="currentColor" fill-opacity=".45" d="M23.4 4.1v3.8c.9-.3 1.5-1 1.5-1.9s-.6-1.6-1.5-1.9Z"/></svg>
+  </span></div>`;
+
+const home = `<div class="homebar"><i></i></div>`;
+
+const ring = (secs, pct, urgent=false) => `<div class="ring${urgent?' urgent':''}">
+  <svg width="46" height="46" viewBox="0 0 46 46" aria-hidden="true">
+    <circle cx="23" cy="23" r="19" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="23" cy="23" r="19" fill="none" stroke="${urgent?'var(--danger)':'var(--warm)'}" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="${(2*Math.PI*19).toFixed(1)}"
+      stroke-dashoffset="${(2*Math.PI*19*(1-pct)).toFixed(1)}"/>
+  </svg><b>${secs}</b></div>`;
+
+const menuBtn = `<button class="iconbtn"><span class="dots"><i></i><i></i><i></i></span></button>`;
+
+/* The in-game header, measured off the build: wordmark, the room code as a
+   copy button, the round chip, the countdown ring, and the ⋯ sheet. One clock
+   on the screen, and it lives here. */
+const gameBand = (secs, pct, urgent=false) => `
+  <div class="sband band" style="gap:6px">
+    ${wordmark(20)}
+    <span class="codechip" style="min-height:31px">BQ7F2K ${ic.copy}</span>
+    <span class="sb-sp"></span>
+    <span class="chip on" style="min-height:26px;padding:2px 10px;font-size:12px;font-weight:800">R1/3</span>
+    ${ring(secs,pct,urgent)}
+    ${menuBtn}
+  </div>`;
+
+/* the shipped wordmark, painted from tokens */
+const WM_VB="138.02 177.12 1170.69 371.69";
+const WM_SWOOSH="M 155.64431 409.38008 C 147.57886 417.97943 141.00071 429.86051 138.98047 439.59961 C 137.05047 448.91961 138.15031 465.10016 141.32031 473.91016 C 149.59031 496.87016 165.14 513.10906 191.5 526.28906 C 216 538.54906 249.35 545.86992 290 547.91992 C 313.12 549.07992 318.35 549.09047 344 547.98047 C 395.84 545.75047 439.59 541.00953 542 526.51953 C 666.08 508.95953 705.57 504.78914 761 503.36914 C 812.01 502.06914 860.04 506.53906 918.5 518.03906 C 990.22 532.14906 1003.2302 534.31016 1025.7402 535.91016 C 1039.2902 536.87016 1052.7102 536.14023 1061.1602 533.99023 C 1065.6602 532.85023 1066.0902 532.94016 1074.1602 536.91016 C 1084.7902 542.14016 1095.4491 544.80914 1108.8691 545.61914 C 1136.2291 547.26914 1156.9301 539.33953 1167.8301 523.01953 L 1171.9609 516.83008 L 1167.2305 513.03906 C 1159.7705 507.05906 1154.3209 500.51 1148.4609 490.5 C 1146.8909 487.82 1134.1697 487.23047 1126.4297 489.48047 C 1117.8797 491.96047 1113.5394 494.83961 1101.3594 506.09961 C 1089.2694 517.27961 1079.3503 523.93031 1070.8203 526.57031 C 1065.4703 528.22031 1064.9908 528.21914 1062.5508 526.61914 C 1061.1208 525.68914 1054.9005 523.80945 1048.7305 522.43945 C 1036.2205 519.67945 986.58 507.04953 966.5 501.51953 C 871.35 475.32953 796.99937 467.6393 705.60938 474.5293 C 650.43938 478.6893 632.41 480.68023 542.5 492.49023 C 523.25 495.02023 497.38 498.40906 485 500.03906 C 438.07 506.18906 390.80023 511.02008 357.24023 513.08008 C 335.52023 514.42008 285.36 513.79977 269.5 512.00977 C 219.26 506.32977 187.3793 491.7 176.2793 469.25 C 172.8793 462.38 172.52977 460.89055 172.50977 453.56055 C 172.49977 446.43055 172.89 444.66938 175.75 438.85938 C 177.6649 434.96727 180.12546 431.52727 183.08735 428.56069";
+const WM_LETTER="M 385.07227 177.16797 C 372.15914 176.86469 355.12336 177.91687 346.13086 179.85938 C 317.41086 186.07937 289.05 200.22031 267 219.32031 C 255.54 229.25031 245.58016 243.08047 242.41016 253.48047 C 232.02016 287.56047 255.72 317.2393 310.5 338.7793 C 314.9 340.5093 326.6 344.91055 336.5 348.56055 C 374.45 362.55055 392.8007 374.79961 401.7207 392.09961 C 404.1207 396.76961 404.50023 398.65 404.49023 406 C 404.47023 413.25 404.08031 415.24 401.82031 419.5 C 397.84031 427.02 392.80008 432.3007 386.33008 435.7207 C 374.50008 441.9707 362.79 442.3407 346.75 436.9707 C 335.72 433.2707 326.66984 428.13961 302.08984 411.59961 C 264.32984 386.20961 247.5793 380.10953 218.7793 381.26953 C 194.3393 382.25953 173.56961 391.26086 156.84961 408.13086 C 156.44446 408.53883 156.0428 408.95623 155.64453 409.38086 L 183.08789 428.56055 C 192.48462 419.14895 206.92676 414.50243 225 415.30078 C 246.6 416.25078 261.64 422.66 297 446 C 308.83 453.81 322.58031 462.17936 327.57031 464.60938 C 338.90031 470.11937 353.63 473.97992 366 474.66992 C 389.3 475.97992 412.67992 466.03 426.91992 448.75 C 431.64992 443.02 439.96953 428.33086 440.01953 425.63086 C 440.02953 425.01086 443.66961 422.57094 448.09961 420.21094 C 454.39961 416.85094 456.03938 416.31094 455.60938 417.71094 C 449.20938 438.54094 451.7 450.65938 463.5 456.10938 C 472.74 460.37937 483.91984 456.83008 488.83984 448.08008 C 490.02984 445.95008 492.66039 436.14016 494.90039 425.41016 C 499.54039 403.25016 502.15094 391.78922 502.46094 392.19922 C 502.58094 392.36922 506.86047 397.23 511.98047 403 C 528.77047 421.96 544.86914 435.33016 560.36914 443.16016 C 583.71914 454.97016 608.98984 453.31969 625.33984 438.92969 L 629.93945 434.88086 L 635.96094 438.9707 C 643.57094 444.1407 649.41 446.64031 659.5 449.07031 C 687.31 455.74031 721.5607 443.21984 749.7207 416.08984 C 753.1407 412.78984 756.12961 410.41078 756.34961 410.80078 C 756.57961 411.18078 757.09047 413.08 757.48047 415 C 757.87047 416.92 759.71055 421.69937 761.56055 425.60938 C 769.94055 443.25937 788.77992 453.03945 808.91992 450.18945 C 823.62992 448.10945 837.85 440.99023 851.25 428.99023 L 857.00977 423.83008 L 863.5293 429.80078 C 892.9393 456.76078 939.35078 450.37 978.30078 414 L 985.99023 406.81055 L 985.36914 420.15039 C 984.63914 435.47039 985.52992 439.02055 991.16992 443.31055 C 997.42992 448.09055 1006 448.64977 1013.5 444.75977 C 1020.35 441.20977 1022.6998 436.03078 1024.5098 420.55078 C 1027.9598 391.05078 1034.2305 372.49 1047.3105 353 C 1056.6905 339.03 1070.4098 327.89016 1074.8398 330.66016 C 1077.7998 332.52016 1077.3907 341.12953 1073.4707 359.51953 C 1065.7407 395.74953 1068.6392 418.69 1082.6992 432.75 C 1099.1592 449.21 1125.3101 447.21992 1146.3301 427.91992 L 1152.4102 422.33008 L 1157.6504 427.99023 C 1160.9704 431.57023 1165.3193 434.87953 1169.5293 437.01953 C 1175.2193 439.89953 1177.4495 440.45055 1184.9395 440.81055 C 1189.7595 441.04055 1196.08 440.71984 1199 440.08984 C 1201.91 439.46984 1204.4695 439.13936 1204.6895 439.35938 C 1205.2795 439.94937 1193.9797 453.91969 1186.4297 461.92969 C 1179.9297 468.80969 1179.8395 468.99031 1180.9395 472.32031 C 1183.3595 479.64031 1198.3091 493.98023 1203.5391 493.99023 C 1206.0891 494.00023 1223.3696 476.76 1232.5996 465 C 1259.8596 430.27 1289.4202 375.00937 1303.4102 332.60938 C 1308.4702 317.27938 1309.5998 310.43945 1308.0898 304.43945 C 1305.6198 294.61945 1299.5098 290 1289.0098 290 C 1282.1498 290 1277.9909 291.4407 1273.2109 295.4707 C 1268.9609 299.0607 1266.7595 303.47008 1263.4395 315.08008 C 1257.7495 335.01008 1245.0198 363.14 1234.5098 379 C 1228.1998 388.53 1215.8497 401.00031 1209.9297 403.82031 C 1203.6597 406.82031 1195.4804 406.78 1190.9004 403.75 C 1188.9904 402.48 1186.4 399.31 1185 396.5 C 1179.63 385.77 1181.6006 361.9907 1189.6406 340.2207 C 1197.3406 319.4107 1197.6005 314.87936 1191.4805 308.10938 C 1184.3205 300.17937 1171.9892 300.0393 1162.9492 307.7793 C 1156.4392 313.3493 1150.4491 327.30922 1145.2891 348.94922 C 1143.2491 357.49922 1142.7004 362.72 1142.4004 376.5 L 1142.0293 393.5 L 1135.6406 399.61914 C 1120.3806 414.24914 1108.9393 410.76 1109.0293 391.5 C 1109.0593 385.81 1112.33 366.51 1117 344.5 C 1122.36 319.27 1120.6891 305.68906 1111.0391 296.03906 C 1101.6291 286.62906 1086.2795 284.80937 1069.4395 291.10938 C 1062.3995 293.73937 1053.2502 299.89922 1045.1602 307.44922 L 1038.6895 313.5 L 1039.3691 308 C 1039.7391 304.98 1043.0302 284.73 1046.6602 263 C 1052.6802 227.06 1053.1702 223.02086 1052.1602 218.13086 C 1050.1502 208.37086 1043.9397 203 1034.6797 203 C 1022.8597 203 1015.2692 209.42 1012.1992 222 C 1010.5692 228.67 1002.4698 277.48 999.08984 301 C 997.46984 312.27 994.91016 329.6 993.41016 339.5 L 990.68945 357.5 L 984.89062 364.61914 C 962.11064 392.56914 933.11961 411.23055 912.34961 411.31055 C 899.22961 411.36055 890.35008 404.91023 886.08008 392.24023 C 882.24008 380.85023 884.03906 367.66977 891.53906 352.25977 C 899.64906 335.58977 914.97016 322 925.66016 322 C 931.23016 322 932.19922 323.80094 931.44922 332.71094 C 930.74922 340.90094 932.63992 344.76094 938.91992 347.96094 C 950.38992 353.81094 964.40039 345.37023 969.15039 329.74023 C 972.99039 317.08023 969.84945 305.77961 959.93945 296.59961 C 943.26945 281.16961 914.62922 282.94914 887.44922 301.11914 C 867.50922 314.45914 852.49977 335.06 846.00977 358 C 843.49977 366.87 842.39023 382.38945 843.74023 389.68945 C 844.70023 394.83945 844.67961 394.91078 841.09961 398.30078 C 824.31961 414.24078 809.05961 419.37922 800.59961 411.94922 C 790.33961 402.93922 791.05977 381.54914 803.50977 325.61914 C 810.05977 296.17914 808.26031 299.62055 817.57031 298.81055 C 855.81031 295.46055 860.50078 294.83031 865.80078 292.32031 C 873.14078 288.84031 876.4707 283.72039 876.4707 275.90039 C 876.4707 269.64039 874.82914 266.46031 869.61914 262.57031 C 865.76914 259.69031 855.54 259.47031 835 261.82031 C 825.92 262.86031 818.42031 263.64984 818.32031 263.58984 C 818.22031 263.51984 819.62922 257.82039 821.44922 250.90039 C 825.67922 234.88039 826.43078 229.30969 825.05078 224.17969 C 822.80078 215.83969 816.2393 210.97953 807.2793 211.01953 C 797.6293 211.06953 790.92 216.26047 787 226.73047 C 784.11 234.45047 777.42078 257.45945 776.55078 262.68945 C 776.16078 264.99945 775.31992 267.27953 774.66992 267.76953 C 774.02992 268.25953 768.1 269.21086 761.5 269.88086 C 746.47 271.41086 741.51 273.56023 738.25 279.99023 C 733.54 289.27023 736.19977 298.26008 745.00977 302.83008 C 749.01977 304.91008 750.43984 305.11062 758.33984 304.64062 C 767.05984 304.13063 767.18064 304.15055 766.64062 306.31055 C 765.64062 310.35055 758.98992 346.10936 757.41992 355.85938 C 756.28992 362.93937 755.28062 366.16 753.64062 368 C 752.40062 369.38 747.58922 374.73016 742.94922 379.91016 C 728.85922 395.60016 712.37 407.20008 696.5 412.58008 C 685.54 416.29008 671.95039 416.54016 664.40039 413.16016 C 658.79039 410.65016 650.37945 402.81984 651.43945 401.08984 C 651.80945 400.48984 653.60969 400 655.42969 400 C 660.31969 400 676.55031 395.66039 684.82031 392.15039 C 715.11031 379.25039 735.50078 350.05055 731.30078 325.56055 C 726.66078 298.46055 698.6 284.35023 667.5 293.49023 C 644.01 300.39023 623.65922 317.77 612.44922 340.5 C 606.69922 352.15 604.96031 359.02 604.32031 372.5 C 603.73031 385.02 605.32094 394.64922 609.46094 403.69922 C 610.86094 406.74922 612 409.58 612 410 C 612 410.41 609.64953 411.77 606.76953 413 C 590.06953 420.19 569.06008 409.84047 547.33008 383.73047 C 540.32008 375.30047 538.93064 373 540.89062 373 C 542.33064 373 559.91 361.22969 567.5 355.17969 C 586.39 340.12969 597.49008 328.46008 602.33008 318.58008 C 610.67008 301.54008 597.98914 285.85016 580.36914 291.41016 C 575.61914 292.91016 574.10039 294.17078 566.65039 302.80078 C 557.42039 313.49078 543.51 327.17945 535 333.93945 C 528.75 338.90945 515.13922 348 513.94922 348 C 512.58922 348 523.72078 308.34 536.55078 267.5 C 545.71078 238.31 546.02977 231.21914 538.50977 223.86914 C 528.19977 213.78914 511.00906 217.35 504.03906 231 C 500.48906 237.94 483.14 302.14 470 357 C 467.69 366.62 465.28039 375.13969 464.65039 375.92969 C 464.02039 376.71969 459.0093 380.90977 453.5293 385.25977 L 443.56055 393.15039 L 441.76953 385.83008 C 436.56953 364.59008 420.32016 346.54969 391.66016 330.17969 C 381.95016 324.63969 369.86 319.18008 345.5 309.33008 C 325.25 301.15008 309.71047 293.08992 303.23047 287.41992 C 297.03047 281.99992 292.99977 274.36078 293.00977 268.05078 C 293.05977 244.21078 339.25906 218.02 381.28906 218 C 392.04906 218 404.42922 220.15047 409.94922 222.98047 C 418.71922 227.48047 420.94 234.45977 415.75 241.25977 C 411.87 246.34977 407.53945 248.67031 397.43945 251.07031 C 384.75945 254.08031 381.38914 256.22922 377.61914 263.69922 C 372.96914 272.89922 378.99016 284.33977 390.41016 288.00977 C 395.81016 289.73977 409.95023 288.72055 417.49023 286.06055 C 435.24023 279.78055 451.11977 265 457.00977 249.25 C 460.04977 241.11 460.54008 233.53023 458.58008 224.74023 C 453.22008 200.63023 429.26016 182.65945 396.16016 177.93945 C 393.22266 177.51945 389.37664 177.26906 385.07227 177.16797 z M 682.86328 326.16797 C 684.67578 326.23687 686.33828 326.64289 687.80078 327.40039 C 691.67078 329.40039 693 331.75914 693 336.61914 C 693 348.94914 675.66047 363.84031 655.23047 369.07031 C 645.69047 371.51031 646 371.53937 646 368.10938 C 646 359.05937 655.55078 340.9093 663.80078 334.2793 C 670.63328 328.7893 677.42578 325.96125 682.86328 326.16797 z";
+/* Solid lettering rather than the app's ink->warm gradient: a shared <defs>
+   id would be resolved against whichever frame rendered first, so the dark
+   diptych would paint itself with the light theme's ink. */
+const wordmark = (h=26) => `<svg class="mark" style="height:${h}px" viewBox="${WM_VB}" role="img" aria-label="Sketchy">
+  <path d="${WM_SWOOSH}" fill="var(--warm)"/><path d="${WM_LETTER}" fill="var(--brand-wordmark)"/></svg>`;
+
+/* the drawing on the canvas — a lighthouse, mid-stroke */
+const doodle = (opts={}) => `<svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+  <rect width="400" height="300" fill="#fff"/>
+  ${opts.partial?'':'<path d="M182 68 h36 v26 h-36 z" fill="#f7d774"/>'}
+  <g fill="none" stroke="#2b2b2b" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M152 246 L172 112 L228 112 L248 246"/>
+    <path d="M166 152 H234"/><path d="M159 198 H241"/>
+    <path d="M169 112 L163 94 H237 L231 112"/>
+    ${opts.partial?'':'<path d="M182 94 V68 h36 v26"/><path d="M200 68 V52"/><path d="M196 46 a4 4 0 1 1 8 0 a4 4 0 1 1 -8 0" fill="#e8703a" stroke="#e8703a"/>'}
+    ${opts.partial?'':'<path d="M176 80 L112 64" stroke-width="3" opacity=".55"/><path d="M224 80 L288 64" stroke-width="3" opacity=".55"/>'}
+    <path d="M54 248 C112 232 296 232 350 248"/>
+    ${opts.partial?'':'<path d="M28 272 C74 262 112 280 168 270 C226 260 288 278 372 266" stroke-width="3.4" opacity=".7"/>'}
+  </g>
+  ${opts.partial?'':'<path d="M120 232 q14 -22 28 0" fill="none" stroke="#2b2b2b" stroke-width="3.4" stroke-linecap="round"/>'}
+</svg>`;
+
+const keyboard = (goLabel="guess") => `<div class="keyboard">
+  <div class="kacc"><span>lighthouse</span><span>light house</span><span>lightship</span></div>
+  <div class="krow">${"qwertyuiop".split("").map(k=>`<span class="key">${k}</span>`).join("")}</div>
+  <div class="krow"><span style="flex:.5"></span>${"asdfghjkl".split("").map(k=>`<span class="key">${k}</span>`).join("")}<span style="flex:.5"></span></div>
+  <div class="krow"><span class="key wide">⇧</span>${"zxcvbnm".split("").map(k=>`<span class="key">${k}</span>`).join("")}<span class="key wide">⌫</span></div>
+  <div class="krow"><span class="key wide">123</span><span class="key space"> </span><span class="key go">${goLabel}</span></div>
+</div>`;
+
+const ic = {
+  share:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>`,
+  users:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="9" cy="8" r="3.4"/><path d="M2.6 20a6.6 6.6 0 0 1 12.8 0"/><path d="M17 5.5a3.2 3.2 0 0 1 0 6"/><path d="M18.4 14.2A5.6 5.6 0 0 1 21.6 20"/></svg>`,
+  undo:`<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h11a5.5 5.5 0 0 1 0 11h-3"/><path d="m7 4-4 4 4 4"/></svg>`,
+  trash:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16"/><path d="M9 6V4h6v2"/><path d="M6 6l1 14h10l1-14"/></svg>`,
+  brush:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c3 0 4-2 4-4a3 3 0 0 0-4 0c-1 1-1 4 0 4Z"/><path d="M8.5 16.5 19 6a2.1 2.1 0 0 0-3-3L5.5 13.5"/></svg>`,
+  fill:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 3 9 9-7 7-9-9Z"/><path d="M20 15c0 1.7-1 3-2.2 3S16 16.7 16 15s2-3.5 2-3.5S20 13.3 20 15Z"/></svg>`,
+  shapes:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3" y="12" width="9" height="9" rx="1.6"/><circle cx="17" cy="7" r="4.2"/></svg>`,
+  send:`<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 16-8-6 8 6 8Z"/></svg>`,
+  expand:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H3v6"/><path d="M15 21h6v-6"/><path d="M3 3l7 7"/><path d="M21 21l-7-7"/></svg>`,
+  brushsm:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c3 0 4-2 4-4a3 3 0 0 0-4 0c-1 1-1 4 0 4Z"/><path d="M8.5 16.5 19 6a2.1 2.1 0 0 0-3-3L5.5 13.5"/></svg>`,
+  copy:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>`,
+  chevdown:`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 9 7 7 7-7"/></svg>`,
+  chev:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg>`,
+  back:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m14 5-7 7 7 7"/></svg>`,
+  plus:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
+  bulb:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z"/></svg>`,
+  crown:`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 8.5 6.6 12 12 4.6 17.4 12 21 8.5 19.3 19H4.7L3 8.5Z"/></svg>`,
+};
+</script>
+<script>
+/* ═══════════════════ SCREENS ═══════════════════ */
+const SCREENS = [];
+const S = (o) => SCREENS.push(o);
+
+const roomRow = (name, host, n, max, chips, live) => `
+  <div class="roomrow">
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:7px">
+        <div class="disp" style="font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+        ${live?`<span class="chip warm" style="min-height:22px;padding:2px 8px;font-size:10.5px">round 2</span>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <div class="avstack">${host.map(h=>`<span class="av sm ${h[1]}">${h[0]}</span>`).join('')}</div>
+        <span class="faint" style="font-size:12px;font-weight:800">${n}/${max}</span>
+        <span class="faint" style="font-size:12px">·</span>
+        <span class="muted" style="font-size:12px;font-weight:700">${chips}</span>
+      </div>
+    </div>
+    <span class="btn sm" style="width:auto;padding:0 18px;min-height:44px">Join</span>
+  </div>`;
+
+/* The shipped public room card: name + flag on one line, a facts row whose
+   player count is the control that opens the roster, then Join and Spectate. */
+const roomCard = (name, flag, n, max, rounds, secs, state) => `
+  <div class="card" style="padding:12px 13px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:7px;min-width:0">
+      <div class="disp" style="font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">${name}</div>
+      <span style="font-size:15px;line-height:1">${flag}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="chip" style="min-height:26px;padding:2px 9px;font-size:12px;font-weight:800;gap:5px">${ic.users}${n}/${max} ${ic.chevdown}</span>
+      <span class="muted" style="font-size:12px;font-weight:700">${rounds} rounds</span>
+      <span class="muted" style="font-size:12px;font-weight:700">${secs}s</span>
+      ${state?`<span class="chip warm" style="min-height:22px;padding:2px 8px;font-size:10.5px">${state}</span>`:''}
+    </div>
+    <div style="display:flex;gap:8px">
+      <span class="btn sm" style="flex:1;min-height:44px">Join</span>
+      <span class="btn ghost sm" style="flex:1;min-height:44px;border:1.5px solid var(--line-strong);background:var(--card)">Spectate</span>
+    </div>
+  </div>`;
+
+
+/* ───────────────── 01 · FIRST LANDING (no account, no name) ───────────────── */
+S({ id:'firstrun', n:'01', group:'Arriving', title:'First landing',
+  lede:'Someone who has never played, opening the site cold. They have not seen the game, they have no account, and they have not chosen a name. The first thing the screen used to ask them was which kind of account they would like.',
+  variants:[
+  { name:'A · Name and go', ships:true,
+    bad:[
+      'The page opens on <b>“Play as yourself · Keep your username and your stats on every device”</b> — an account decision, made before the visitor has seen a single thing the product does.',
+      'The fastest path — type a name, play — is the <b>lowest, quietest control</b>: below two account buttons, below an “or” divider, below a label reading “Just playing once?”, which frames it as the lesser choice before you have decided anything.',
+      'Measured cold at 390 × 844: the identity block is <span class="m">328 px</span> and the page is <span class="m">1 152 px</span>. Rooms and the create/join cards are below the fold.',
+      'Two account buttons of near-equal weight (<b>Create an account</b>, <b>Log in</b>) for two different people — the one who has never been here and the one who has.'
+    ],
+    good:[
+      '<b>One field, one loud button.</b> Name, then Play. That is the whole first decision, it is the one that leads somewhere, and it is the first thing on the screen.',
+      'No tagline: the rooms below say what the game is better than a line of copy would, and the screen stays one decision tall.',
+      '<b>Log in is a single quiet link</b> for the person coming back — they know what they are looking for, and they do not need a button the same size as the new player’s.',
+      'Creating an account moves <b>after</b> the first game, where the artboard for game over already offers it: by then the name is worth keeping.',
+      'Browsing stays ungated — the rooms list is right below, and the shipped component is deliberately inline rather than modal for exactly that reason.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band" style="border-bottom:0;background:none">
+        ${wordmark(26)}
+        <span class="sb-sp"></span>
+        <button class="iconbtn ghost"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 4.5l1.7 1.7M17.8 17.8l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.5 19.5l1.7-1.7M17.8 6.2l1.7-1.7"/></svg></button>
+      </div>
+      <div class="stagearea" style="padding:10px 14px 12px;gap:14px;overflow-y:auto">
+        <div class="card" style="flex:0 0 auto;padding:14px">
+          <label class="kick" style="display:block;margin-bottom:8px">What should we call you?</label>
+          <div class="gfield" style="margin-bottom:10px;color:var(--ink)">Kit<span class="caret"></span></div>
+          <button class="btn">Play</button>
+          <div class="muted" style="font-size:13px;font-weight:700;text-align:center;margin-top:12px">
+            Been here before? <b style="color:var(--primary-ink);text-decoration:underline">Log in</b>
+          </div>
+        </div>
+
+        <div style="flex:0 0 auto">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px;padding:0 2px">
+            <span class="kick">Open rooms</span>
+            <span class="kick" style="color:var(--success-ink)">● 4 live</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            ${roomRow('Coffee break doodles',[['J','p'],['P','w'],['K','']],3,8,'3 rounds · 90s',true)}
+            ${roomRow('sketch &amp; chill',[['A','w'],['R','']],2,6,'5 rounds · 60s',false)}
+          </div>
+        </div>
+      </div>
+    </div>` },
+
+  { name:'B · Browse first',
+    bad:[
+      'Same source problem: the visitor is asked to identify themselves before they have any reason to.'
+    ],
+    good:[
+      '<b>The game is on screen first.</b> Live rooms, with real people in them, are the most persuasive thing the product has, and they need no account to look at.',
+      'The name prompt becomes a <b>dock in the thumb zone</b> — permanently reachable, never in the way of scrolling, and the same shape as every other dock in this set.',
+      'Tapping a room focuses the dock rather than throwing up a dialog: the answer to “I want in” is a keyboard, not a modal.',
+      '<b>“14 people are drawing right now”</b> does the work the tagline does in A, with evidence instead of a claim. It falls back to the tagline when the server is quiet.',
+      'The riskier of the two: a visitor can scroll a long way without ever being told they need a name. The dock is what stops that, so it must never scroll away.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band" style="border-bottom:0;background:none">
+        ${wordmark(26)}
+        <span class="sb-sp"></span>
+        <button class="chip" style="min-height:40px">Log in</button>
+      </div>
+      <div class="stagearea" style="padding:0 14px 10px;gap:12px;overflow-y:auto">
+        <div style="flex:0 0 auto;padding:0 2px">
+          <div class="disp" style="font-size:22px;line-height:1.15">14 people are drawing right now</div>
+          <div class="muted" style="font-size:13px;font-weight:600;margin-top:5px">Jump into any of them — pick a name when you do.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px;flex:0 0 auto">
+          ${roomRow('Coffee break doodles',[['J','p'],['P','w'],['K','']],3,8,'3 rounds · 90s',true)}
+          ${roomRow('sketch &amp; chill',[['A','w'],['R','']],2,6,'5 rounds · 60s',false)}
+          ${roomRow('Pictionary but worse',[['D','p'],['M',''],['S','g'],['B','w']],6,8,'3 rounds · 45s',true)}
+          ${roomRow('quiet drawing room',[['N','']],1,4,'No scoring · 120s',false)}
+        </div>
+      </div>
+      <div class="dock">
+        <div class="kick">Pick a name to play</div>
+        <div class="guessrow">
+          <span class="gfield">Your name…</span>
+          <span class="gsend" style="width:auto;padding:0 18px;font-weight:900;font-size:15px">Play</span>
+        </div>
+      </div>
+    </div>` },
+
+  { name:'C · Naming, keyboard up',
+    bad:[
+      'The name field is the first text input a visitor ever meets, and the shipped page has no layout for the keyboard being open: the field sits mid-page and the rest of the screen keeps its full height behind it.'
+    ],
+    good:[
+      'The dock rides the keyboard exactly as the guess field does in play — same contract, so the first thing a player learns about this interface still holds an hour later.',
+      'The rooms stay visible above, so the reason for typing a name is still on screen while you type it.',
+      '<b>Go</b> submits; there is nothing else to reach for.',
+      'The identity block is the one place where a name is required rather than optional, so it is the one dock with no dismiss — but scrolling still works behind it.'
+    ],
+    kb:true, goLabel:'play',
+    html:`
+    <div class="app">
+      <div class="stagearea" style="padding:8px 14px 10px;gap:10px;overflow:hidden">
+        <div style="flex:0 0 auto;padding:0 2px">
+          <div class="disp" style="font-size:19px;line-height:1.15">14 people are drawing right now</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px;flex:0 0 auto">
+          ${roomRow('Coffee break doodles',[['J','p'],['P','w'],['K','']],3,8,'3 rounds · 90s',true)}
+          ${roomRow('sketch &amp; chill',[['A','w'],['R','']],2,6,'5 rounds · 60s',false)}
+        </div>
+      </div>
+      <div class="dock">
+        <div class="kick">Pick a name to play</div>
+        <div class="guessrow">
+          <span class="gfield focus" style="color:var(--ink)">Kit<span class="caret"></span></span>
+          <span class="gsend" style="width:auto;padding:0 18px;font-weight:900;font-size:15px">Play</span>
+        </div>
+      </div>
+    </div>` }
+]});
+
+/* ───────────────── 02 · ARRIVING FROM AN INVITE ───────────────── */
+S({ id:'invite', n:'02', group:'Arriving', title:'Arriving from an invite',
+  lede:'The most common first landing a party game has: a friend pastes a link into a group chat and you tap it. This is a different screen from the lobby, and it is the one where the cold-arrival problem costs the most.',
+  variants:[{ name:'Invite landing', ships:true,
+    bad:[
+      '<b>The Join button is below the fold.</b> Measured cold at 390 × 844: the actions sit at <span class="m">y 839–937</span> on an 844 px screen. You tap a friend’s link and the one thing you came to do is off screen.',
+      '<b>380 px of room configuration comes first</b> — a 2×2 table of Players / Rounds / Draw time / Scoring, then four chips for hint mode, tools, spectators and prompt list. None of it is why anyone taps an invite.',
+      'Then <b>315 px of account decision</b> before the button, on a screen reached by someone who has already decided to play.',
+      '<b>Join game</b> and <b>Spectate</b> are twins again, so the screen ends on a question rather than an answer.',
+      'The page is <span class="m">990 px</span> tall for what is fundamentally a yes.'
+    ],
+    good:[
+      '<b>Who invited you and who is already there</b> is the top of the screen: the room’s name, its state, and the faces in it. That is the whole reason the link got tapped.',
+      '<b>The name field and Join are one docked block.</b> Type, tap, you are in — and the field is pre-filled from the last name this device used, so a returning guest just taps.',
+      '<b>Room settings collapse behind one line.</b> They matter to the host who set them and nobody else at this moment; the summary stays for anyone who wants it.',
+      '<b>Spectate is a link.</b> It is a real choice for someone arriving mid-game, just not the one the link was sent for.',
+      'Everything above the dock scrolls; the dock does not.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <button class="iconbtn ghost">${ic.back}</button>
+        <span class="codechip">6CR2TQ</span>
+        <span class="sb-sp"></span>
+        <span class="chip warm">Waiting</span>
+      </div>
+      <div class="stagearea" style="padding:14px;gap:14px;overflow-y:auto">
+        <div style="flex:0 0 auto">
+          <div class="kick">You’ve been invited to</div>
+          <div class="disp" style="font-size:27px;line-height:1.12;margin-top:3px">Coffee break doodles</div>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;padding:14px">
+          <div class="kick" style="margin-bottom:10px">Already here · 3 of 8</div>
+          <div style="display:flex;gap:14px">
+            ${[['J','p','Jonas'],['P','w','Priya'],['K','','Kit']].map(([l,c,nm])=>`
+              <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+                <span class="av lg ${c}">${l}</span>
+                <span style="font-size:11.5px;font-weight:800">${nm}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <button class="row card" style="flex:0 0 auto;display:flex;align-items:center;gap:11px;min-height:56px;width:100%;text-align:left;border-radius:16px">
+          <span class="lbl">3 rounds · 90s · timed hints</span>
+          <span class="val faint">${ic.chev}</span>
+        </button>
+      </div>
+      <div class="dock" style="gap:10px">
+        <div>
+          <div class="kick" style="margin-bottom:7px">Play as</div>
+          <div class="gfield" style="color:var(--ink)">Kit<span class="caret"></span></div>
+        </div>
+        <button class="btn go">Join the game</button>
+        <button class="linkbtn">Watch without playing</button>
+      </div>
+    </div>` }]});
+
+/* ─────────────────────────── 03 · LOBBY ─────────────────────────── */
+S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
+  lede:'The lobby is where a phone user decides whether this game is worth pulling friends into. It used to open on an account-signup card and bury the rooms four cards down, 1.4 screens below the fold.',
+  variants:[
+  { name:'A · Rooms first', ships:true,
+    bad:[
+      'The page is <b>1 386 px tall on an 844 px screen</b> — four equal-weight cards stacked: identity, create, join-by-code, then public rooms last.',
+      'A returning player meets <b>“Create an account / Log in / Play as guest”</b> before anything playable. Identity is a prerequisite, not a decision.',
+      '<b>Join by code</b> and <b>Spectate</b> are twin buttons of equal weight — the flat-hierarchy problem the desktop review already flagged, repeated.',
+      'The six-box room code is six separate focus targets. Tab, backspace and paste all behave differently from a single field.',
+      'The build badge floats over the last card.'
+    ],
+    good:[
+      '<b>Open rooms are the page.</b> A card is the room\'s name with its prompt language as a flag on the same line, then one row of facts: how many are in it, rounds, seconds.',
+      '<b>The player count is the control.</b> Tapping it asks the server who is in that room and lists them under the card. The polled list itself carries no names — it is sent to everyone every four seconds — so the roster is fetched on demand instead.',
+      '<b>Identity moves into the status band</b> as <code>Marta ▾</code>, and settings moved inside that menu: three controls beside a wordmark is what put this header on two rows.',
+      'One dock, <b>one loud control</b>. <code>Join with a code</code> is quiet and opens a sheet.',
+      'A <b>Rejoin</b> strip appears only when you hold a live seat — the single most valuable row for someone who backgrounded the app mid-turn.',
+      'Filters are a sheet behind one chip rather than a block above the rooms, and the search field is one control rather than the two nested boxes a <code>.panel input</code> rule was drawing.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        ${wordmark(24)}
+        <span class="sb-sp"></span>
+        <button class="chip" style="min-height:40px"><span class="av sm">M</span> Marta ${ic.chev}</button>
+      </div>
+      <div class="stagearea" style="padding:12px 14px;gap:12px;overflow-y:auto">
+        <div class="card" style="border-color:var(--warm-edge);background:var(--warm-soft);padding:12px 14px;display:flex;align-items:center;gap:12px;flex:0 0 auto">
+          <div style="flex:1">
+            <div class="kick" style="color:var(--warm-ink)">Your seat is still warm</div>
+            <div class="disp" style="font-size:16px;margin-top:2px">Coffee break doodles</div>
+            <div style="font-size:12px;font-weight:700;color:var(--warm-ink);margin-top:2px">Round 2 · Marta is drawing</div>
+          </div>
+          <span class="btn sm" style="width:auto;padding:0 16px;background:var(--warm);box-shadow:0 3px 0 var(--warm-edge)">Rejoin</span>
+        </div>
+
+        <div style="display:flex;gap:8px;flex:0 0 auto">
+          <span class="gfield" style="flex:1;min-height:44px">Search rooms…</span>
+          <span class="chip" style="min-height:44px;padding:0 14px">Filters</span>
+        </div>
+
+        <div style="display:flex;align-items:baseline;gap:8px;flex:0 0 auto;padding:2px 2px 0">
+          <span class="kick">Open rooms</span>
+          <span class="kick" style="color:var(--success-ink)">● 4 live</span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;flex:0 0 auto">
+          ${roomCard('Coffee break doodles','🇬🇧',3,8,3,90,'in progress')}
+          ${roomCard('sketch &amp; chill','🇮🇹',2,6,5,60,'')}
+          ${roomCard('Pictionary but worse','🇬🇧',6,8,3,45,'in progress')}
+        </div>
+      </div>
+      <div class="dock">
+        <button class="btn">${ic.plus} Create a room</button>
+        <button class="btn ghost sm">Join with a code</button>
+      </div>
+    </div>` },
+
+  { name:'B · One big play',
+    bad:[
+      'Same source problem: nothing on the current lobby answers “I have 30 seconds and two friends, what do I press?”'
+    ],
+    good:[
+      'For a party game the honest primary is <b>“put me in a game”</b>. <code>Quick play</code> seats you in the fullest room that still has space.',
+      'Browsing is still one tap away, as a horizontally snapping shelf that costs no vertical space.',
+      'Same dock contract as A, so the two proposals can be A/B tested without moving anything the thumb has learned.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        ${wordmark(24)}
+        <span class="sb-sp"></span>
+        <button class="chip" style="min-height:40px"><span class="av sm">M</span> Marta ${ic.chev}</button>
+        <button class="iconbtn ghost"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 4.5l1.7 1.7M17.8 17.8l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.5 19.5l1.7-1.7M17.8 6.2l1.7-1.7"/></svg></button>
+      </div>
+      <div class="stagearea" style="padding:20px 14px 12px;gap:16px;overflow:hidden">
+        <div style="text-align:center;flex:0 0 auto;padding:8px 0 2px">
+          <div class="disp" style="font-size:27px;line-height:1.15">Draw badly.<br>Guess faster.</div>
+          <div class="muted" style="font-size:13.5px;margin-top:7px;font-weight:600">14 people are drawing right now.</div>
+        </div>
+        <button class="btn" style="min-height:74px;font-size:21px;border-radius:20px;flex:0 0 auto">Quick play</button>
+        <button class="btn ghost" style="flex:0 0 auto">${ic.plus} Create a room instead</button>
+
+        <div style="flex:0 0 auto;padding-top:4px">
+          <div class="kick" style="margin-bottom:9px">Or pick one · swipe</div>
+          <div style="display:flex;gap:10px;overflow:hidden">
+            <div class="card" style="min-width:186px;padding:12px">
+              <div class="disp" style="font-size:15px">Coffee break doodles</div>
+              <div class="avstack" style="margin-top:8px"><span class="av sm p">J</span><span class="av sm w">P</span><span class="av sm">K</span></div>
+              <div class="muted" style="font-size:12px;font-weight:800;margin-top:8px">3/8 · 90s · round 2</div>
+            </div>
+            <div class="card" style="min-width:186px;padding:12px">
+              <div class="disp" style="font-size:15px">sketch &amp; chill</div>
+              <div class="avstack" style="margin-top:8px"><span class="av sm w">A</span><span class="av sm">R</span></div>
+              <div class="muted" style="font-size:12px;font-weight:800;margin-top:8px">2/6 · 60s · waiting</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="dock">
+        <div style="display:flex;gap:9px">
+          <button class="btn ghost sm" style="flex:1">Join with a code</button>
+          <button class="btn ghost sm" style="width:52px;padding:0">${ic.users}</button>
+        </div>
+      </div>
+    </div>` }
+]});
+
+/* ─────────────────────────── 02 · JOIN SHEET ─────────────────────────── */
+S({ id:'join', n:'04', group:'Entry', title:'Join with a code',
+  lede:'A code is almost always arriving from a message thread, so the sheet leads with paste and keeps the field in the thumb zone above the keyboard.',
+  variants:[{ name:'Sheet', ships:true,
+    bad:[
+      'Today: six separate <code>&lt;input&gt;</code> boxes, each its own focus stop, sitting <b>at y≈940</b> — under a thumb only after scrolling.',
+      '<b>Join by code</b> and <b>Spectate</b> are the same weight, so the sheet asks a question no one came here to answer.'
+    ],
+    good:[
+      'One field with six rendered cells: <code>inputmode="text"</code>, <code>autocapitalize="characters"</code>, <code>autocomplete="one-time-code"</code>. Paste fills all six.',
+      '<b>Paste code</b> is offered up front because the code came from somewhere else.',
+      'Spectating demotes to a text link — it is a real choice, just not the common one.',
+      'The sheet sits on the keyboard, so nothing reflows when it opens.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        ${wordmark(24)}<span class="sb-sp"></span>
+        <button class="chip" style="min-height:40px"><span class="av sm">M</span> Marta ${ic.chev}</button>
+      </div>
+      <div class="stagearea" style="padding:12px 14px;gap:9px;opacity:.34">
+        ${roomRow('Coffee break doodles',[['J','p'],['P','w'],['K','']],3,8,'3 rounds · 90s',true)}
+        ${roomRow('sketch &amp; chill',[['A','w'],['R','']],2,6,'5 rounds · 60s',false)}
+      </div>
+      <div class="scrim"></div>
+      <div class="sheet" style="z-index:9;bottom:288px;border-radius:26px 26px 0 0">
+        <div class="grab"></div>
+        <div style="display:flex;align-items:baseline;gap:9px">
+          <div class="disp" style="font-size:20px">Join with a code</div>
+          <span class="sb-sp" style="flex:1"></span>
+          <span class="chip" style="min-height:34px">Paste</span>
+        </div>
+        <div style="display:flex;gap:7px;justify-content:space-between">
+          ${['B','Q','7','F','','',].map((c,i)=>`<span class="tile" style="flex:1 1 0;width:auto;min-width:0;height:56px;font-size:24px;${i===4?'border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)':''}">${c}</span>`).join('')}
+        </div>
+        <button class="btn">Join the room</button>
+        <button class="linkbtn">Watch without playing</button>
+      </div>
+    </div>`, kb:true, goLabel:'join' }]});
+
+/* ─────────────────────────── 03 · CREATE ─────────────────────────── */
+S({ id:'create', n:'05', group:'Entry', title:'Create a room',
+  lede:'The one page that had a confirmed layout bug: at 390 px the form was 419 px wide and every control was clipped on the right. Twice over, as it turned out — the stepper row had the same fault.',
+  variants:[{ name:'Basics + presets', ships:true,
+    bad:[
+      '<b>Horizontal overflow, on every common phone.</b> <code>.create-room-sections</code> is a bare <code>display:grid</code>, so its implicit <code>auto</code> column sizes to a 402 px card inside a 358 px track. Measured <code>scrollWidth 419</code> vs <code>innerWidth 390</code> — the room-name field, both toggles and all three steppers are cut off.',
+      'The form is <b>1 404 px of scroll</b> with 27 controls and no grouping a first-timer can skip.',
+      '<b>Create room</b> is the last thing on the page, reachable only after scrolling past everything.',
+      '“Wheel of Fortune”, colour modes and tool locks sit at the same level as “how many rounds”.'
+    ],
+    good:[
+      '<b>Four named sections</b>, with Basics open and the other three collapsed behind a summary of what is inside them. The same four, in the same order, are what the host edits from the waiting room — one component renders both.',
+      '<b>Create is docked</b>, with the summary of what is about to be created beside it, instead of being the last thing on a form most people never finish reading.',
+      '<b>Steppers are full-width rows</b> — label left, ± right — with 44 px targets. Three across cannot hold a 44 px target on a phone: it overflowed by 3 px at 360 and 10 px at 320.',
+      'No hints under the three numbers. The ranges are enforced by the controls, "everyone draws once per round" is what a round is, and the line under them says what the three add up to in minutes.',
+      'Grid tracks are <code>minmax(0,1fr)</code> everywhere, which is the actual fix for the overflow — and for a second one of the same kind: <code>repeat(3, 1fr)</code> laid the steppers out 560 px wide inside a 390 px phone.',
+      '<b>The wordmark stays in the header.</b> A sub-page replaced it with the back button, so the one screen a first-time visitor might arrive on from a link was the one that never said whose site it was.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <button class="iconbtn ghost">${ic.back}</button>
+        ${wordmark(22)}
+        <span class="sb-sp"></span>
+        <button class="chip" style="min-height:40px"><span class="av sm">M</span> Marta ${ic.chev}</button>
+      </div>
+      <div class="stagearea" style="padding:14px;gap:12px;overflow-y:auto">
+        <div style="flex:0 0 auto">
+          <div class="kick">Room setup</div>
+          <div class="disp" style="font-size:24px;margin-top:2px">Create a room</div>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;padding:14px 14px 15px">
+          <div class="disp" style="font-size:17px;margin-bottom:11px">Basics</div>
+          <div class="kick" style="margin-bottom:5px">Room name</div>
+          <div class="gfield" style="margin-bottom:11px">Leave blank for a random name!</div>
+          <div class="kick" style="margin-bottom:5px">Visibility</div>
+          <div class="chips" style="margin-bottom:12px">
+            <span class="chip on" style="flex:1;justify-content:center">Public</span>
+            <span class="chip" style="flex:1;justify-content:center">Private</span>
+          </div>
+          <div class="rows" style="border:1.5px solid var(--line);border-radius:14px;background:var(--well)">
+            <div class="step"><span class="k">Max players</span><span class="pm">−</span><span class="v">8</span><span class="pm">+</span></div>
+            <div class="step" style="border-top:1.5px solid var(--line)"><span class="k">Rounds</span><span class="pm">−</span><span class="v">3</span><span class="pm">+</span></div>
+            <div class="step" style="border-top:1.5px solid var(--line)"><span class="k">Drawing time</span><span class="pm">−</span><span class="v">90s</span><span class="pm">+</span></div>
+          </div>
+          <div class="muted" style="font-size:12.5px;font-weight:700;margin-top:10px">🕑 This setup runs <b>about 18 minutes</b> with a full room of 8.</div>
+        </div>
+
+        ${['Prompts|English · English — Standard · 260 prompts','Drawing|Brush, Fill, Shapes · All colors','Scoring and hints|Default scoring · Timed hints']
+          .map(x=>{const [t,sum]=x.split('|'); return `
+          <div class="card" style="flex:0 0 auto;padding:14px;display:flex;align-items:center;gap:10px">
+            <div class="disp" style="font-size:16px;flex:0 0 auto">${t}</div>
+            <div class="faint" style="font-size:12.5px;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sum}</div>
+            <span class="faint" style="flex:0 0 auto">${ic.chev}</span>
+          </div>`}).join('')}
+      </div>
+      <div class="dock">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="faint" style="flex:1;min-width:0;font-size:12px;font-weight:700;line-height:1.3">Public · 8 players · 3 rounds · 90s · Default scoring · Timed hints</div>
+          <button class="btn" style="width:auto;padding:0 20px;flex:0 0 auto">Create room</button>
+        </div>
+      </div>
+    </div>` }]});
+
+</script>
+<script>
+/* The app's own palette — COLOR_PAIRS in drawingRules.ts, the light shade then
+   the dark shade of each family. */
+const PAL = ['#ffffff','#000000','#c1c1c1','#4c4c4c','#ed1c24','#7f0000','#ff7f27','#a0522d',
+             '#fff200','#c9a227','#b5e61d','#2d5b1e','#22b14c','#1c6b5a','#7ac9e8','#2e5090',
+             '#3f48cc','#1b1b6e','#a349a4','#5c2d91','#ec6ea8','#7b3f61','#ffae85','#a9714b',
+             '#c69c6d','#5b3a1e'];
+const swatches = (on=1, from=0, to=6) => PAL.slice(from,to).map((c,i)=>
+  `<span class="sw${(i+from)===on?' on':''}" style="background:${c}"></span>`).join('');
+
+/* The popover the colour chip raises: 44px swatches, five to a row, clipped —
+   the palette is taller than the popover and scrolls inside it. Measured at
+   268 x 330 with 441px of content. */
+const paletteGrid = (rows=6) => `
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
+    ${PAL.slice(0, rows*5).map((c,i)=>
+      `<span class="sw${i===1?' on':''}" style="background:${c};width:auto;height:44px;border-radius:9px"></span>`).join('')}
+  </div>`;
+
+/* the masked word, grouped and counted */
+const tiles = (word, revealed, cls='') => {
+  const t = word.split('').map((ch,i)=>{
+    const on = revealed.includes(i);
+    return `<span class="tile ${cls}${on?' on':''}">${on?ch:''}</span>`;
+  }).join('');
+  return `<span style="display:flex;align-items:center;gap:5px">${t}<span class="wcount">${word.length}</span></span>`;
+};
+
+const feedLine = (who,txt,kind) =>
+  `<div class="ticker" style="min-height:24px">${
+    kind==='ok' ? `<span class="nm">${who}</span><span class="ok">got it · ${txt}</span>`
+    : kind==='sys' ? `<span class="faint" style="font-weight:700">${txt}</span>`
+    : `<span class="nm">${who}</span><span style="color:var(--ink);font-weight:600">${txt}</span>`}</div>`;
+
+/* ─────────────────────────── 04 · WAITING ROOM ─────────────────────────── */
+S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
+  lede:'The host has exactly two jobs here — get people in, then start. Both used to be below the fold.',
+  variants:[{ name:'Host view', ships:true,
+    bad:[
+      '<b>Start game sits at y = 822 on an 844 px screen</b> — clipped in half by the fold. The page is 1 376 px tall.',
+      'The <b>player list is dead last</b>, at y 1 153–1 360, below the chat card. The one thing you watch while waiting is 1.4 screens down.',
+      'A seven-chip settings summary spends ~250 px restating what the host chose ten seconds ago.',
+      'Header packs eight controls into a 44 px strip, with a red <b>Leave room</b> immediately beside <b>Settings</b>.'
+    ],
+    good:[
+      '<b>Invite is the hero</b>: the code at a size you can read across a room, and the two ways to send it. <b>Share the link</b> goes through the OS share sheet where there is one, which is how a code actually reaches a group chat. 138 px, against the 237 the six bordered cells and a subtitle took.',
+      '<b>Everyone in the room is on screen</b> as an avatar grid with the ready ring on the tile. It replaces the players column outright below 900 px — rendering both would put every nickname on the page twice.',
+      'Settings collapse to <b>one summary line that opens the editor</b>, carrying only the facts the host has moved off their defaults.',
+      '<b>Start game</b> is docked and permanent — <code>position: fixed</code>, not sticky, which pins to the bottom of its own column and let the chat card end up underneath it. It carries its own blocking reason (<code>Need 1 more player</code>) instead of a heading and a paragraph.',
+      'Every gap on the screen is the same 14 px, and an empty room comes to exactly <span class="m">844 px</span> on an 844 px viewport — against 1 432 before.',
+      'Chat stays a card in the column rather than becoming a dock tab; leaving moves into the ⋯ sheet behind a confirm.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <span class="codechip">BQ7F2K</span>
+        ${wordmark(20)}
+        <span class="sb-sp"></span>
+        ${menuBtn}
+      </div>
+      <div class="stagearea" style="padding:14px;gap:14px;overflow-y:auto">
+        <div style="flex:0 0 auto;text-align:center">
+          <div class="disp" style="font-size:20px">Coffee break doodles</div>
+          <div class="kick" style="margin-top:3px">Public room · waiting for players</div>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;text-align:center;padding:14px;background:var(--primary-soft);border-color:var(--primary-edge-soft)">
+          <div class="kick" style="color:var(--primary-ink)">Invite your friends</div>
+          <div class="disp" style="font-size:30px;letter-spacing:.14em;margin:4px 0 10px;color:var(--primary-ink)">BQ7F2K</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" style="flex:1;padding:0 10px">${ic.share} Share the link</button>
+            <button class="btn ghost" style="flex:1;padding:0 10px;border:1.5px solid var(--line-strong);background:var(--card)">${ic.copy} Copy code</button>
+          </div>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;padding:14px">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:11px">
+            <div class="disp" style="font-size:15px;flex:1">In the room</div>
+            <span class="kick" style="color:var(--success-ink)">3 of 8</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px 9px">
+            ${[['M','p','Marta','host'],['J','w','Jonas','you'],['P','','Priya',''],['','wait','Invite','']].map(([l,c,nm,tag])=>
+              c==='wait'
+              ? `<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+                   <span class="av lg" style="background:transparent;border:2px dashed var(--line-strong);color:var(--faint)">${ic.plus}</span>
+                   <span class="faint" style="font-size:11.5px;font-weight:800">${nm}</span></div>`
+              : `<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+                   <span class="av lg ${c}" style="box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--success)">${l}</span>
+                   <span style="font-size:11.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:74px">${nm}</span>
+                   ${tag?`<span class="kick" style="font-size:10px">${tag}</span>`:''}</div>`).join('')}
+          </div>
+        </div>
+
+        <button class="row card" style="flex:0 0 auto;display:flex;gap:11px;align-items:center;min-height:58px;border-radius:16px;width:100%;text-align:left">
+          <span class="lbl" style="flex:1;min-width:0;font-size:14px">2 rounds · 60s · Timed hints</span>
+          <span class="val faint">Edit ${ic.chev}</span>
+        </button>
+
+        <div class="card" style="flex:0 0 auto;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+          <div class="kick" style="margin-bottom:4px">Room chat</div>
+          ${feedLine('','Priya joined','sys')}
+          ${feedLine('Jonas','ok who’s drawing first','')}
+          ${feedLine('Priya','not me, I’m terrible','')}
+        </div>
+      </div>
+      <div class="dock">
+        <button class="btn go">Start game</button>
+      </div>
+    </div>` }]});
+
+/* ─────────────────────────── 05 · PROMPT CHOICE ─────────────────────────── */
+S({ id:'choice', n:'07', group:'In the room', title:'Pick a prompt',
+  lede:'A fifteen-second decision, currently made from three small tiles at the top of the screen above an empty white canvas.',
+  variants:[{ name:'Drawer', ships:true,
+    bad:[
+      'The three choices sat at <b>y 190–310</b>, out of thumb reach, above <b>278 px of blank canvas</b> that had nothing to show yet.',
+      'The countdown was a <b>12 px “11s”</b> in the corner of a screen whose whole point is that time is running out.',
+      'Choices wrapped 2 + 1, so the third option read as an afterthought.'
+    ],
+    good:[
+      'The countdown is the ring in the header, red under 10 s — visible at a glance without a second copy of the same number anywhere.',
+      '<b>The choice card takes the whole stage.</b> Where the canvas would be, there is a card with the three prompts as full-width buttons, 273 × 76 each, evenly weighted and stacked — no wrap, no third option reading as an afterthought.',
+      'It is headed by what is happening (<i>Your turn</i>), what to do (<i>Pick something to draw</i>) and what happens if you do not (<i>Auto-picks when time runs out</i>), in that order.',
+      'The toolbar is not rendered yet: there is nothing to draw on, so the dock is absent rather than disabled.',
+      'Room chat stays below, so the room is still talking while you choose.'
+    ],
+    html:`
+    <div class="app">
+      ${gameBand(9,.6,true)}
+      <div class="stagearea" style="gap:0">
+        <div style="flex:0 0 auto;padding:12px;display:flex">
+          <div class="card" style="flex:1;padding:20px 24px;text-align:center;display:flex;flex-direction:column;gap:0">
+            <div class="kick" style="color:var(--warm-ink)">Your turn</div>
+            <div class="disp" style="font-size:22px;margin-top:5px">Pick something to draw</div>
+            <div class="muted" style="font-size:13px;font-weight:600;margin-top:5px">Auto-picks when time runs out.</div>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
+              ${['telescope','bear','flower'].map(w=>`
+                <button class="card" style="width:100%;min-height:76px;display:flex;align-items:center;justify-content:center;padding:0 18px;border-width:2px;box-shadow:0 3px 0 var(--line-strong)">
+                  <span class="disp" style="font-size:22px">${w}</span>
+                </button>`).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="card" style="flex:1 1 auto;min-height:0;margin:0 12px 12px;padding:12px;display:flex;flex-direction:column;gap:3px;justify-content:flex-end">
+          ${feedLine('','Priya joined the room','sys')}
+          ${feedLine('','Game started!','sys')}
+          ${feedLine('','Marta is choosing a prompt…','sys')}
+        </div>
+      </div>
+    </div>` }]});
+
+/* ─────────────────────────── 06 · DRAWING ─────────────────────────── */
+S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
+  lede:'A 4:3 canvas is baked into the wire protocol (800×600), so on a portrait phone it can never be more than about a third of the screen. The redesign stops fighting that and spends the remaining two thirds on the two things a drawer actually wants: full tools under the thumb, and the guesses arriving.',
+  variants:[{ name:'A · Collapsed controls', ships:true,
+    bad:[
+      'Canvas measures <b>370 × 278 — 33% of the viewport</b>, while <b>164 px at the bottom is left completely empty</b>.',
+      'The <b>colour palette is behind a chevron</b>, and its popover <b>covers the entire canvas</b>: you cannot see the drawing you are colouring. Every colour change costs two taps and a look-away.',
+      'Tools live in a 66 px strip <b>in the middle of the screen</b>, the hardest region to reach, sandwiched between canvas and chat.',
+      'The drawer cannot see who has guessed — the players panel is <code>display:none</code> while playing.',
+      'The prompt is 15 px text; the thing the drawer must hold in their head is the smallest type on screen.'
+    ],
+    good:[
+      '<b>The strip moved rather than grew.</b> Tool, colour, size, undo and clear are one row of collapsed chips filling the dock at the bottom of the screen, each opening a popover above itself. An earlier draft unrolled the palette permanently; it cost the canvas two rows of swatches for a control that is one tap away, and the original complaint was about <i>where</i> the controls sat.',
+      'The dock renders into a slot after the chat region, so it lands under the thumb rather than between canvas and feed.',
+      '<b>One clock.</b> The ring in the header, and nothing else — the same number had been on the screen three times.',
+      '<b>The top row is the wordmark, the room code, the round and the ring</b>, in that order, with the ⋯ sheet last. The drawer\'s prompt is not up there: it sits in a 28 px bar directly above the canvas, which is where the drawing is.',
+      'The drawer sees <b>the word itself</b>, not the masked tiles the guessers get.',
+      '<b>Guesses arrive on the drawer’s screen</b> and the feed scrolls — <code>justify-content: flex-end</code> had been putting the overflow above the scroll origin, where no gesture could reach it.',
+      'Pinch to zoom the canvas for detail; <b>⤢ flips to landscape focus</b> (variant B).'
+    ],
+    html:`
+    <div class="app">
+      ${gameBand(79,.62)}
+      <div class="stagearea" style="gap:0">
+        <div style="flex:0 0 auto;padding:5px 12px;display:flex;align-items:center;justify-content:center;min-height:28px">
+          <span class="disp" style="font-size:18px">waterfall</span>
+        </div>
+        <div class="canvas" style="flex:0 0 auto;border-radius:0;border-left:0;border-right:0">
+          ${doodle({partial:true})}
+          <span class="zoom">${ic.expand}</span>
+        </div>
+        <div style="flex:0 0 auto;padding:6px 12px">
+          <div class="pips">
+            <span class="pip wait">J</span><span class="pip wait">P</span><span class="pip wait">K</span>
+            <span class="pipmeta">0 of 3 guessed</span>
+          </div>
+        </div>
+        <div class="card" style="flex:1 1 auto;min-height:0;margin:0 12px 10px;padding:12px;display:flex;flex-direction:column;gap:3px;justify-content:flex-end">
+          ${feedLine('','Marta is drawing','sys')}
+          ${feedLine('Priya','a candle?','')}
+          ${feedLine('Kit','tower','')}
+          <div class="faint" style="font-size:12px;font-weight:700;margin-top:6px">You’re drawing—watch the guesses come in.</div>
+        </div>
+      </div>
+      <div class="dock" style="gap:8px;position:relative;padding-top:9px;padding-bottom:9px">
+        <!-- one chip open, to show where a popover goes -->
+        <div class="card" style="position:absolute;left:12px;right:12px;bottom:70px;padding:10px;max-height:200px;overflow:hidden;box-shadow:var(--shadow-raised)">
+          ${paletteGrid(4)}
+        </div>
+        <div class="toolrow" style="gap:8px">
+          <span class="tool" style="flex:1.3">${ic.brush}</span>
+          <span class="tool on" style="flex:1.3"><i style="width:16px;height:16px;border-radius:50%;background:#111;border:1.5px solid var(--line-strong);display:block"></i></span>
+          <span class="tool" style="flex:1;gap:5px"><i style="width:9px;height:9px;border-radius:50%;background:currentColor;display:block"></i>6</span>
+          <span class="tool" style="flex:1">${ic.undo}</span>
+          <span class="tool danger" style="flex:1">${ic.trash}</span>
+        </div>
+      </div>
+    </div>` },
+
+  { name:'B · Landscape focus', ships:true,
+    bad:[
+      'Portrait is a hard ceiling: with a protocol-fixed 4:3 canvas, a 390 px-wide phone gives the drawer <b>292 px of drawing height</b>, no matter how good the layout is.',
+      'Turned sideways, the layout kept the portrait stack: the canvas overflowed at <b>430 px tall inside a 390 px viewport</b>, and the control popovers opened off the top of the screen.'
+    ],
+    good:[
+      'Rotating gives the same canvas <b>403 × 302 against 375 × 281</b> — about 1.15×, not the 2× an earlier draft of this artboard claimed. The rail and the feed take about 220 px of the width, and height binds before width does.',
+      '<b>Three columns under the same header.</b> The controls stack into a 76 px rail on the holding side — the same five chips as portrait, 62 × 44 each — the canvas takes the middle with the prompt bar above it, and the guess feed is a 180 px column on the far side.',
+      'Popovers open <b>sideways out of the rail, across the canvas</b> — measured at 268 × 330, in bounds, with the palette scrolling inside it. Anchored above their chip as they are in portrait they had nowhere to go: the rail is full height, so they opened off the top of the screen.',
+      'The guess pips are dropped here — the feed already says who has guessed, and every pixel the side columns take comes straight off the canvas.',
+      '<b><code>orientation: landscape</code> is not a phone on its side.</b> It is a viewport wider than it is tall, which a portrait handset with a big soft keyboard also is; every landscape rule carries <code>min-width: 600px</code> for that reason.'
+    ],
+    land:true,
+    html:`
+    <div class="app">
+      <div class="sband band" style="gap:6px;flex:0 0 auto">
+        ${wordmark(20)}
+        <span class="codechip" style="min-height:31px">B0J3CE ${ic.copy}</span>
+        <span class="sb-sp"></span>
+        <span class="chip on" style="min-height:26px;padding:2px 10px;font-size:12px;font-weight:800">R1/3</span>
+        ${ring(89,.7)}
+        ${menuBtn}
+      </div>
+      <div style="flex:1 1 auto;min-height:0;display:flex">
+        <!-- the rail: the portrait chips, stacked, on the holding side -->
+        <div style="width:76px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0">
+          <span class="tool" style="width:62px;min-width:62px;height:44px">${ic.brush}</span>
+          <span class="tool on" style="width:62px;min-width:62px;height:44px"><i style="width:16px;height:16px;border-radius:50%;background:#000;border:1.5px solid var(--line-strong);display:block"></i></span>
+          <span class="tool" style="width:62px;min-width:62px;height:44px;gap:5px"><i style="width:9px;height:9px;border-radius:50%;background:currentColor;display:block"></i>6</span>
+          <span class="tool" style="width:62px;min-width:62px;height:44px">${ic.undo}</span>
+          <span class="tool danger" style="width:62px;min-width:62px;height:44px">${ic.trash}</span>
+        </div>
+        <!-- the canvas, with the prompt bar above it -->
+        <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;position:relative">
+          <div style="flex:0 0 auto;min-height:30px;display:flex;align-items:center;justify-content:center">
+            <span class="disp" style="font-size:17px">banana</span>
+          </div>
+          <div style="flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 4px 4px">
+            <div class="canvas" style="height:100%;width:auto;max-width:100%;flex:0 0 auto;border-radius:10px">${doodle({partial:true})}</div>
+          </div>
+          <!-- the colour popover, opening out of the rail across the drawing -->
+          <div class="card" style="position:absolute;left:5px;top:0;bottom:7px;width:268px;padding:10px;overflow:hidden;box-shadow:var(--shadow-raised)">
+            ${paletteGrid(7)}
+          </div>
+        </div>
+        <!-- the feed, and what it is for -->
+        <div style="width:180px;flex:0 0 auto;display:flex;flex-direction:column;padding:6px 12px 8px 0">
+          <div class="card" style="flex:1 1 auto;min-height:0;padding:10px;display:flex;flex-direction:column;gap:3px;justify-content:flex-end">
+            ${feedLine('','Marta is drawing','sys')}
+            ${feedLine('Priya','a candle?','')}
+            ${feedLine('Kit','tower','')}
+            <div class="faint" style="font-size:11.5px;font-weight:700;margin-top:6px;line-height:1.3">You’re drawing—watch the guesses come in.</div>
+          </div>
+        </div>
+      </div>
+    </div>` }
+]});
+</script>
+<script>
+/* ─────────────────────────── 07 · GUESSING (idle) ─────────────────────────── */
+S({ id:'guessing', n:'09', group:'In the room', title:'Guessing',
+  lede:'The guesser’s screen before the keyboard opens. Everything here has to survive the keyboard opening — see the next screen.',
+  variants:[{ name:'Guesser', ships:true,
+    bad:[
+      'The masked word is <b>ten 19 × 26 px tiles</b> with a 12 px superscript. In buy-a-letter and Wheel modes each tile is a <b>button</b> — a 19 × 26 tap target, less than a fifth of the 44 × 44 iOS minimum.',
+      '<b>The guess field sits above the message list</b> (<code>.chat-input { order: -1 }</code>), so you type at the top and read below, and new messages travel away from the caret.',
+      'No sign of who has already guessed. Frozen eligibility and the drawer bonus both turn on that, and it is invisible.',
+      'Timer is <b>12 px of grey text</b> in the corner of a game scored on seconds.',
+      '164 px of empty screen below the chat card.'
+    ],
+    good:[
+      'Tiles at <b>29 × 38</b>, word-grouped with a count, and 44 px tall when they are buyable. The hint price rides on the row that spends it.',
+      '<b>Pips make the race visible</b>: who has it, in what order, who is still hunting.',
+      'The feed reads bottom-up like every other messaging surface, with the field pinned beneath it.',
+      'The ring is the loudest object in the status band and turns red under 10 s.',
+      'The layout fills the viewport — no scroll, no dead band.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <span class="codechip">BQ7F2K</span>
+        <span class="chip">R2 · <b style="color:var(--ink)">Marta</b> draws</span>
+        <span class="sb-sp"></span>
+        ${ring(47,.52)}
+        ${menuBtn}
+      </div>
+      <div class="stagearea" style="gap:9px">
+        <div style="padding:10px 12px 2px;display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto">
+          <div class="tiles">${tiles('lighthouse',[0,5,9])}</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="chip on" style="min-height:30px;padding:4px 10px;font-size:12px">${ic.bulb} Buy a letter · 12</span>
+            <span class="faint" style="font-size:11.5px;font-weight:800">spent 0</span>
+          </div>
+        </div>
+        <div class="canvas" style="border-radius:0;border-left:0;border-right:0">${doodle({})}</div>
+        <div style="padding:0 14px;display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:0">
+          <div class="pips">
+            <span class="pip got">J<span class="rk">1</span></span>
+            <span class="pip got">P<span class="rk">2</span></span>
+            <span class="pip wait">K</span><span class="pip wait">M</span>
+            <span class="pipmeta">2 of 4 got it</span>
+          </div>
+          <div style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;gap:2px">
+            ${feedLine('','Marta is drawing','sys')}
+            ${feedLine('Jonas','0:14 · +240','ok')}
+            ${feedLine('Priya','0:22 · +198','ok')}
+            ${feedLine('Kit','a candle?','')}
+          </div>
+        </div>
+      </div>
+      <div class="dock">
+        <div class="guessrow">
+          <span class="gfield">Type your guess…</span>
+          <span class="gsend">${ic.send}</span>
+        </div>
+      </div>
+    </div>` }]});
+
+/* ─────────────────────────── 08 · GUESSING + KEYBOARD ─────────────────────────── */
+S({ id:'keyboard', n:'10', group:'In the room', title:'Guessing with the keyboard up',
+  lede:'The scenario the whole redesign turns on. With a soft keyboard open the guesser has about 500 px of app. That budget used to buy a 6 px hairline, ten tiny tiles, the drawing, and nothing else — every other player, every guess and the clock gone from the moment you started typing.',
+  variants:[{ name:'A · Nothing overlaps the drawing', ships:true,
+    bad:[
+      'Focusing the field adds <code>.guess-focused</code>, which sets <code>display:none</code> on the header, the round line, the chat heading and <b>the entire message list</b>. You cannot see other players’ guesses, who just got it, or the score while you type — which is most of the turn.',
+      '<b>The clock becomes a 6 px rule</b> at y 49–55, with <b>49 px of empty space above it</b>. No number anywhere. In a game where points decay per second.',
+      'Your own result is a transient one-line flash that replaces itself and then vanishes.',
+      'Measured: canvas 378 × 284 in a 508 px viewport, with <b>49 px of empty space above the hairline</b> and another 49 px gap between canvas and field — nearly 100 px spent on nothing.'
+    ],
+    good:[
+      '<b>Everything that is not the drawing or the field you type into goes.</b> The clock numeral, the pip row and the feed are all read <i>between</i> guesses rather than during one; the depleting rule alone says "running out", which is what a guesser takes from a timer, and it says it without spending a line.',
+      'What is left is the letter tiles, that rule, the canvas, and the composer — the live letter counts, the field, the send button, with no panel drawn around them.',
+      '<b>The verdict on your own guess</b> is the one piece of feedback that is about the guess being typed. It hangs over the canvas when the canvas reaches that far, translucent over a blur so the strokes stay readable through it.',
+      'Measured against keeping the pips and a line of feed: canvas <span class="m">390 × 293</span> vs 349 × 262 at a 480 px viewport, and <span class="m">387 × 290</span> vs 296 × 222 at 440. At 520 and up both reach 390 × 293, the protocol ceiling at this width.',
+      'Implementation notes: <code>interactive-widget=resizes-content</code> in the viewport meta, and a shell height of <code>min(var(--vv-height), 100dvh)</code> — the two signals disagree in both directions.'
+    ],
+    kb:true,
+    html:`
+    <div class="app">
+      <div style="padding:6px 12px 0;display:flex;align-items:center;gap:10px;flex:0 0 auto">
+        <div class="tiles" style="flex:1;justify-content:flex-start">${tiles('lighthouse',[0,5,9],'sm')}</div>
+      </div>
+      <div style="padding:5px 12px 0;flex:0 0 auto"><div class="timerule" style="height:5px"><i style="width:23%"></i></div></div>
+      <div class="stagearea" style="gap:6px;padding-top:6px;position:relative">
+        <div class="canvasfit" style="padding:0 8px">
+          <div class="canvas">${doodle({})}</div>
+        </div>
+        <!-- the verdict hangs over the drawing rather than taking a band of its own -->
+        <div class="verdict close" style="position:absolute;left:14px;right:14px;bottom:6px;backdrop-filter:blur(8px);opacity:.94">“lighthous” — so close, keep going</div>
+      </div>
+      <div style="padding:0 14px 9px;display:flex;flex-direction:column;gap:5px;flex:0 0 auto">
+        <div class="faint" style="font-size:11px;font-weight:800;letter-spacing:.06em">9</div>
+        <div class="guessrow">
+          <span class="gfield focus" style="color:var(--ink)">lighthous<span class="caret"></span></span>
+          <span class="gsend">${ic.send}</span>
+        </div>
+      </div>
+    </div>` },
+
+  { name:'B · HUD over the drawing',
+    bad:[
+      'A protocol-fixed 4:3 canvas cannot grow past 292 px at 390 px wide, so the only way to buy context is to take it from somewhere.'
+    ],
+    good:[
+      'Tiles and clock move <b>onto</b> the canvas as a translucent strip on its bottom edge, freeing <b>57 px above</b>.',
+      'That 57 px buys a <b>three-line feed</b> — you can follow the conversation while typing rather than seeing only the last event.',
+      'The trade is explicit: the bottom sixth of the drawing sits under a scrim. Acceptable when drawings are centre-weighted; A is the safer default.',
+      'Same dock, same verdict chip, same gestures — only the tile row moves, so switching between A and B is a one-line layout change, not a different screen.'
+    ],
+    kb:true,
+    html:`
+    <div class="app">
+      <div class="stagearea" style="gap:6px;padding-top:8px">
+        <div class="canvasfit" style="padding:0 8px">
+        <div class="canvas">
+          ${doodle({})}
+          <div style="position:absolute;left:0;right:0;bottom:0;padding:8px 10px 9px;background:linear-gradient(to top,rgba(255,255,255,.97),rgba(255,255,255,.86));display:flex;align-items:center;gap:9px;border-top:1px solid rgba(0,0,0,.07)">
+            <div class="tiles" style="flex:1;justify-content:flex-start">
+              ${'lighthouse'.split('').map((ch,i)=>`<span class="tile sm${[0,5,9].includes(i)?' on':''}" style="background:${[0,5,9].includes(i)?'#eeeffb':'#fff'};border-color:${[0,5,9].includes(i)?'#5157d8':'#d3c8b4'};color:${[0,5,9].includes(i)?'#3b41b5':'#292520'}">${[0,5,9].includes(i)?ch:''}</span>`).join('')}
+              <span class="wcount" style="color:#a29883">10</span>
+            </div>
+            <b style="font-size:18px;font-weight:900;color:#b5541f;font-variant-numeric:tabular-nums">21s</b>
+          </div>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:#f1ebe0"><i style="display:block;height:100%;width:23%;background:#e8703a"></i></div>
+        </div>
+        </div>
+        <div style="padding:0 14px;display:flex;flex-direction:column;gap:2px;flex:0 0 auto">
+          <div class="pips">
+            <span class="pip got">J<span class="rk">1</span></span>
+            <span class="pip got">P<span class="rk">2</span></span>
+            <span class="pip wait">K</span><span class="pip wait">M</span>
+            <span class="pipmeta">2 of 4 got it</span>
+          </div>
+          ${feedLine('','Marta bought a letter','sys')}
+          ${feedLine('Jonas','0:14 · +240','ok')}
+          ${feedLine('Priya','0:22 · +198','ok')}
+        </div>
+      </div>
+      <div class="dock" style="padding-bottom:9px;padding-top:8px;gap:7px">
+        <div class="verdict close">“lighthous” — so close, keep going</div>
+        <div class="guessrow">
+          <span class="gfield focus" style="color:var(--ink)">lighthous<span class="caret"></span></span>
+          <span class="gsend">${ic.send}</span>
+        </div>
+      </div>
+    </div>` },
+
+  { name:'C · Correct guess', ships:true,
+    bad:[
+      'Today a correct guess while focused produces the same one-line flash as a wrong one, then the keyboard is blurred and the layout re-flows underneath you.'
+    ],
+    good:[
+      'The dock <b>becomes the confirmation</b> — green, with the points and the placing — so the reward lands where the eye already is.',
+      'The field turns into a post-guess chat field rather than disappearing, which is what the rules already allow after you have guessed.',
+      'Nothing else moves. No re-layout, no keyboard dismissal, no scroll jump.'
+    ],
+    kb:true,
+    html:`
+    <div class="app">
+      <div style="padding:6px 12px 0;display:flex;align-items:center;gap:10px;flex:0 0 auto">
+        <div class="tiles" style="flex:1;justify-content:flex-start">${tiles('lighthouse','lighthouse'.split('').map((_,i)=>i),'sm')}</div>
+        <b style="font-size:19px;font-weight:900;color:var(--warm-ink);font-variant-numeric:tabular-nums">19s</b>
+      </div>
+      <div style="padding:5px 12px 0;flex:0 0 auto"><div class="timerule" style="height:4px"><i style="width:21%"></i></div></div>
+      <div class="stagearea" style="gap:6px;padding-top:6px">
+        <div class="canvasfit" style="padding:0 8px">
+          <div class="canvas">${doodle({})}</div>
+        </div>
+        <div style="padding:0 14px;display:flex;flex-direction:column;gap:2px;flex:0 0 auto">
+          <div class="pips">
+            <span class="pip got">J<span class="rk">1</span></span>
+            <span class="pip got">P<span class="rk">2</span></span>
+            <span class="pip got" style="box-shadow:0 0 0 3px var(--success-soft)">M<span class="rk">3</span></span>
+            <span class="pip wait">K</span>
+            <span class="pipmeta">3 of 4 got it</span>
+          </div>
+          ${feedLine('Priya','0:22 · +198','ok')}
+        </div>
+      </div>
+      <div class="dock" style="padding-bottom:9px;padding-top:8px;gap:7px;background:var(--success-soft);border-top-color:var(--success)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <div class="kick" style="color:var(--success-ink)">Correct · 3rd in 0:29</div>
+            <div class="disp" style="font-size:22px;color:var(--success-ink)">lighthouse</div>
+          </div>
+          <div class="disp" style="font-size:28px;color:var(--success-ink)">+176</div>
+        </div>
+        <div class="guessrow">
+          <span class="gfield" style="border-color:var(--success)">Say something to the room…</span>
+          <span class="gsend" style="background:var(--success-button);box-shadow:0 3px 0 var(--success-button-edge)">${ic.send}</span>
+        </div>
+      </div>
+    </div>` }
+]});
+</script>
+<script>
+/* The shipped row: rank, name, when they got it, then the delta — with a brush
+   against it for whoever drew, in the primary colour so it reads as a role and
+   not as part of a number that is green when it is a gain. */
+const scoreRow = (rk,l,c,nm,you,delta,total,drew,time) => `
+  <div class="row" style="min-height:38px;padding:0 10px;gap:8px">
+    <span class="disp" style="width:24px;font-size:15px;color:var(--faint)">#${rk}</span>
+    <span class="lbl" style="flex:1;min-width:0;font-style:italic">${nm}${you?' <span class="faint" style="font-style:normal;font-weight:700;font-size:12px">(you)</span>':''}</span>
+    ${time?`<span class="muted" style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">${time}</span>`:''}
+    <span style="display:inline-flex;align-items:center;justify-content:flex-end;gap:4px;min-width:52px">
+      ${drew?`<span style="display:inline-flex;color:var(--primary)">${ic.brushsm}</span>`:''}
+      <b style="color:${delta>0?'var(--success-ink)':'var(--faint)'};font-variant-numeric:tabular-nums">${delta>0?'+':''}${delta}</b>
+    </span>
+    <b style="color:var(--ink);font-variant-numeric:tabular-nums;min-width:40px;text-align:right">${total}</b>
+  </div>`;
+
+const finalRow = (rk,l,c,nm,you,total,note) => `
+  <div class="row" style="min-height:56px;padding:0 12px">
+    <span class="disp" style="width:26px;font-size:17px;color:${rk===1?'var(--gold)':'var(--faint)'}">${rk}</span>
+    <span class="av sm ${c}">${l}</span>
+    <span><span class="lbl" style="font-style:italic">${nm}${you?' <span class="faint" style="font-style:normal;font-weight:700;font-size:12px">you</span>':''}</span><br><span class="faint" style="font-size:11.5px;font-weight:800">${note}</span></span>
+    <span class="val"><b style="color:var(--ink);font-variant-numeric:tabular-nums">${total}</b></span>
+  </div>`;
+
+/* ─────────────────────────── 09 · TURN RESULTS ─────────────────────────── */
+S({ id:'results', n:'11', group:'Between turns', title:'Turn results',
+  lede:'Six seconds of payoff, once delivered inside a 250 px box floating on the canvas while confetti painted over the text.',
+  variants:[{ name:'Sheet', ships:true,
+    bad:[
+      '<code>.turn-results-overlay</code> is <code>position:absolute; inset:0</code> <b>inside the canvas</b>, and the panel is <code>max-height:90%</code> of a 278 px canvas. The whole recap — word, your score, guess order, full standings, next-turn progress and the button — is crammed into a <b>250 px scrolling box</b>.',
+      '<b>The Next turn button is below the clipped edge.</b> So is the bottom of the standings list.',
+      'Confetti draws at <code>z-index:9999</code>, <b>above the panel</b>, so the guess list and standings are unreadable.',
+      'Meanwhile the bottom 45% of the phone shows an idle chat card and 150 px of nothing.'
+    ],
+    good:[
+      'A <b>bottom sheet</b>: the drawing you were staring at stays visible above it, which is the whole reason you want to see the answer.',
+      '<b>The sheet never scrolls.</b> It is a column — the word, your score and the countdown are fixed, and the standings take what is left and scroll inside themselves. A single scrolling block put the countdown, the one thing that says how long you have to read any of it, below the fold.',
+      '<b>Each thing is said once.</b> A "Correct guesses" list under its own heading repeated every name the standings below already carried; the only thing it had that they did not was when each player got it, which now sits on their row. The drawer\'s row said it twice over too — a pencil chip beside the name and a bonus beside the score that the delta already contained.',
+      '<b>The countdown means something.</b> `turn_ended` carries the phase length, and nothing was setting a deadline when the phase began — so a turn that ran out of clock announced 0 seconds and drew no bar at all, and one that ended early announced whatever drawing time was left. Measured end to end now: predicted 28.1 s remaining, overlay lived 28.2.',
+      'Confetti drops below the sheet layer and stops after 2.5 s.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <span class="codechip">BQ7F2K</span>
+        <span class="chip">Round 2 of 3</span>
+        <span class="sb-sp"></span>${menuBtn}
+      </div>
+      <div class="stagearea">
+        <div class="canvas" style="border-radius:0;border-left:0;border-right:0">${doodle({})}</div>
+      </div>
+      <div class="scrim" style="background:rgba(30,27,22,.28)"></div>
+      <div class="sheet" style="height:62%">
+        <div class="grab"></div>
+        <div style="text-align:center;flex:0 0 auto">
+          <div class="kick">The word was</div>
+          <div class="disp" style="font-size:32px;line-height:1.1;margin-top:1px">lighthouse</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;background:var(--success-soft);border:1.5px solid var(--success);border-radius:14px;padding:11px 14px;flex:0 0 auto">
+          <div style="flex:1">
+            <div class="kick" style="color:var(--success-ink)">3rd in 0:29</div>
+            <div style="font-size:13px;font-weight:800;color:var(--success-ink)">You move up to 2nd</div>
+          </div>
+          <div class="disp" style="font-size:30px;color:var(--success-ink)">+176</div>
+        </div>
+        <div class="rows" style="flex:1 1 auto;min-height:0;overflow:hidden">
+          ${scoreRow(1,'J','p','Jonas',false,240,986,false,'14.2s')}
+          ${scoreRow(2,'M','','Marta',true,176,842,false,'29.0s')}
+          ${scoreRow(3,'P','w','Priya',false,198,790,false,'22.4s')}
+          ${scoreRow(4,'K','g','Kit',false,240,604,true,'')}
+        </div>
+        <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:5px">
+          <div class="kick">Next turn</div>
+          <div class="timerule" style="height:6px"><i style="width:64%;background:var(--primary)"></i></div>
+        </div>
+      </div>
+    </div>` }]});
+
+/* ─────────────────────────── 10 · GAME OVER ─────────────────────────── */
+S({ id:'gameover', n:'12', group:'Between turns', title:'Game over',
+  lede:'The moment that decides whether the group plays another round — once five competing buttons under confetti that made half the text unreadable.',
+  variants:[{ name:'Podium + tabs', ships:true,
+    bad:[
+      '<b>Five actions, no hierarchy</b>: Create account, View highlights, View drawings, Continue (with a countdown inside the label) and Stay here — which is clipped off the bottom of the panel.',
+      '<b>Confetti at z-index 9999 covers every label.</b> On a 390 px screen the same particle count lands on a third of the area, so “Marta isn’t saved…” is genuinely illegible.',
+      'The panel scrolls internally, so the final standings — the thing people screenshot — are hidden.',
+      'Highlights and Drawings are two separate destinations reached by two separate buttons.'
+    ],
+    good:[
+      '<b>One primary: Continue</b>, with the auto-return countdown as a ring inside it. Highlights and Drawings step back a level, and they keep their own panels — the tabs in this artboard are the one part of it that is not built.',
+      '<b>It takes the screen.</b> On a phone this was a section inside the stacked room page, players panel above and chat below, so the document was 1 671 px tall and the result was something you scrolled to.',
+      '<b>The panel never scrolls.</b> A column: the headline, the podium and the way out stay put while the standings scroll inside themselves — sixteen players do not fit anywhere.',
+      'Everything above the podium was paying for that. 44 px of confetti over a headline that is already the celebration, gone on short screens; a 28 px headline that wrapped to three lines, 21 px there; and an account nudge that took 116 px to say one sentence, now one line at 58.',
+      '<b>“Highlights” and “Drawings”</b>, not “View highlights” and “View drawings”, which wrapped to two lines in a half-width button.',
+      'Measured with six players, nothing clipped and only the standings scrolling, at 390 × 844, 375 × 667, 360 × 640, 360 × 560, 1280 × 860, 1024 × 700 and 1440 × 900. The compact treatment is keyed on <code>(max-width: 900px), (max-height: 780px)</code>: what runs out is vertical, and a short desktop window had the same problem.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <span class="codechip">BQ7F2K</span><span class="chip">Game over</span>
+        <span class="sb-sp"></span>${menuBtn}
+      </div>
+      <div class="stagearea" style="overflow:hidden">
+        <div style="position:relative;flex:0 0 auto;padding:16px 14px 14px;overflow:hidden;background:var(--card);border-bottom:1.5px solid var(--line)">
+          <div style="position:absolute;inset:0;opacity:.10;color:var(--ink)">${doodle({})}</div>
+          <div style="position:relative;text-align:center">
+            <div class="kick" style="color:var(--warm-ink)">${ic.crown} Winner</div>
+            <div class="disp" style="font-size:27px;line-height:1.1;margin:2px 0 12px">Jonas takes it</div>
+            <div class="podium">
+              <div class="pod"><span class="av w">P</span><div class="bar" style="height:52px;background:var(--silver);opacity:.85"><span class="p">2</span><span class="s">790</span></div></div>
+              <div class="pod" style="max-width:112px"><span class="av p">J</span><div class="bar" style="height:74px;background:var(--gold)"><span class="p">1</span><span class="s">986</span></div></div>
+              <div class="pod"><span class="av">M</span><div class="bar" style="height:40px;background:var(--bronze);opacity:.85"><span class="p">3</span><span class="s">842</span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:10px 14px 0;flex:1 1 auto;min-height:0;overflow:hidden">
+          <div class="rows">
+            ${finalRow(1,'J','p','Jonas',false,986,'won 2 turns')}
+            ${finalRow(2,'M','','Marta',true,842,'fastest guess 0:14')}
+            ${finalRow(3,'P','w','Priya',false,790,'guessed every turn')}
+            ${finalRow(4,'K','g','Kit',false,604,'best drawing')}
+          </div>
+        </div>
+      </div>
+      <div class="dock" style="gap:8px">
+        <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;color:var(--muted);background:var(--warm-soft);border:1px solid var(--warm-edge);border-radius:12px;padding:8px 10px">
+          <span style="flex:1">Keep <b style="color:var(--ink)">Marta</b> as your username</span>
+          <span class="chip on" style="min-height:40px">Create account</span>
+        </div>
+        <div style="display:flex;gap:9px">
+          <button class="btn ghost sm" style="flex:1;border:1.5px solid var(--line-strong);background:var(--card)">${ic.crown} Highlights</button>
+          <button class="btn ghost sm" style="flex:1;border:1.5px solid var(--line-strong);background:var(--card)">${ic.brush} Drawings</button>
+        </div>
+        <button class="btn" style="gap:11px">
+          <svg width="26" height="26" viewBox="0 0 46 46" aria-hidden="true" style="flex:none">
+            <circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="6"/>
+            <circle cx="23" cy="23" r="19" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"
+              stroke-dasharray="119.4" stroke-dashoffset="53.7" transform="rotate(-90 23 23)"/>
+          </svg>
+          Continue
+        </button>
+        <button class="linkbtn">Stay here</button>
+      </div>
+    </div>` }]});
+
+/* ─────────────────────────── 11 · DRAWINGS ─────────────────────────── */
+S({ id:'recap', n:'13', group:'Between turns', title:'The drawings',
+  lede:'Six drawings from the game, currently paged one at a time by two text buttons.',
+  variants:[{ name:'Swipe gallery', ships:true,
+    bad:[
+      '<b>Previous / Next text buttons</b> on a touch screen full of images. No swipe, no grid, no way to see what else is in there.',
+      '<b>Save image</b> and <b>Close</b> sit above the artwork as equal-weight buttons, so the first thing you meet is chrome.',
+      'The image is another 4:3 box in a portrait frame with a caption under it, so the drawing is about a quarter of the screen.'
+    ],
+    good:[
+      'Full-bleed, horizontally swipeable, with a dot pager and a <b>grid toggle</b> for jumping.',
+      'Caption bar carries word, artist and who guessed it — the story of the turn, not just the picture.',
+      'Save is a single icon in the corner. Sharing a drawing to the group chat is the action people actually want, so it gets the button.',
+      'Double-tap zooms; the pager tells you where you are without doing arithmetic.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <button class="iconbtn ghost">${ic.back}</button>
+        <div class="disp" style="font-size:17px">Drawings</div>
+        <span class="chip">2 / 6</span>
+        <span class="sb-sp"></span>
+        <button class="iconbtn ghost"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/></svg></button>
+        <button class="iconbtn ghost">${ic.share}</button>
+      </div>
+      <div class="stagearea" style="justify-content:center;gap:14px;padding:0 0 6px">
+        <div style="display:flex;align-items:center;gap:10px;padding:0 8px">
+          <div class="canvas" style="width:26px;flex:0 0 auto;aspect-ratio:auto;height:180px;border-radius:12px 0 0 12px;opacity:.35;overflow:hidden"></div>
+          <div class="canvas" style="flex:1;border-radius:16px">${doodle({})}</div>
+          <div class="canvas" style="width:26px;flex:0 0 auto;aspect-ratio:auto;height:180px;border-radius:0 12px 12px 0;opacity:.35;overflow:hidden"></div>
+        </div>
+        <div style="display:flex;justify-content:center;gap:6px">
+          ${[0,1,2,3,4,5].map(i=>`<i style="display:block;width:${i===1?18:7}px;height:7px;border-radius:4px;background:${i===1?'var(--primary)':'var(--line-strong)'}"></i>`).join('')}
+        </div>
+        <div style="padding:0 16px;text-align:center">
+          <div class="disp" style="font-size:26px">lighthouse</div>
+          <div class="muted" style="font-size:13px;font-weight:700;margin-top:3px">Marta · round 2 · <b style="color:var(--success-ink)">3 of 4 guessed it</b></div>
+        </div>
+      </div>
+      <div class="dock">
+        <div style="display:flex;gap:9px">
+          <button class="btn" style="flex:1">${ic.share} Share this one</button>
+          <button class="btn ghost sm" style="width:56px;padding:0;min-height:52px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></button>
+        </div>
+      </div>
+    </div>` }]});
+
+/* ─────────────────────────── 12 · PLAYERS ─────────────────────────── */
+S({ id:'players', n:'14', group:'Overlays', title:'Players & score',
+  lede:'The live scoreboard during a turn.',
+  variants:[{ name:'Bottom sheet', ships:true,
+    bad:[
+      'The drawer slides in from the <b>left and covers 74% of the width, full height</b>, for two rows of content — checking the score means covering the game.',
+      '<b>Confetti renders on top of the drawer</b> (z-index 9999 vs the drawer’s 1200), so during the celebration the names are unreadable — exactly when people look.',
+      'Reached only from an icon in an eight-control header strip.'
+    ],
+    good:[
+      'A <b>bottom sheet at 55%</b>: the canvas stays visible above, so you never lose the drawing to check the score.',
+      'Opened by tapping the pip row you are already looking at, or the <code>2/4</code> pill — and dismissed by swiping down.',
+      'Each row carries live turn state: <b>guessed and when</b>, drawing, still hunting, away. Rank change is a small delta, not a re-sort surprise.',
+      'Moderation (report, kick vote) moves behind a row press, out of the accidental-tap path.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <span class="codechip">BQ7F2K</span><span class="chip">R2 · <b style="color:var(--ink)">Marta</b> draws</span>
+        <span class="sb-sp"></span>${ring(47,.52)}${menuBtn}
+      </div>
+      <div class="stagearea" style="gap:9px">
+        <div style="padding:10px 12px 2px;display:flex;justify-content:center;flex:0 0 auto">
+          <div class="tiles">${tiles('lighthouse',[0,5,9])}</div>
+        </div>
+        <div class="canvas" style="border-radius:0;border-left:0;border-right:0">${doodle({})}</div>
+      </div>
+      <div class="scrim" style="background:rgba(30,27,22,.28)"></div>
+      <div class="sheet" style="height:55%">
+        <div class="grab"></div>
+        <div style="display:flex;align-items:baseline;gap:9px;flex:0 0 auto">
+          <div class="disp" style="font-size:20px">Players</div>
+          <span class="chip">4 of 8</span>
+          <span class="sb-sp" style="flex:1"></span>
+          <span class="kick">Round 2 of 3</span>
+        </div>
+        <div class="rows" style="flex:1 1 auto;min-height:0;overflow:hidden">
+          <div class="row" style="min-height:60px">
+            <span class="disp" style="width:24px;font-size:16px;color:var(--faint)">1</span><span class="av sm p">J</span>
+            <span><span class="lbl" style="font-style:italic">Jonas</span><br><span style="font-size:11.5px;font-weight:800;color:var(--success-ink)">guessed · 0:14</span></span>
+            <span class="val"><b style="color:var(--success-ink)">+240</b><b>986</b></span>
+          </div>
+          <div class="row" style="min-height:60px">
+            <span class="disp" style="width:24px;font-size:16px;color:var(--faint)">2</span><span class="av sm">M</span>
+            <span><span class="lbl" style="font-style:italic">Marta <span class="faint" style="font-style:normal;font-size:12px">you</span></span><br><span style="font-size:11.5px;font-weight:800;color:var(--warm-ink)">drawing</span></span>
+            <span class="val"><b>842</b></span>
+          </div>
+          <div class="row" style="min-height:60px">
+            <span class="disp" style="width:24px;font-size:16px;color:var(--faint)">3</span><span class="av sm w">P</span>
+            <span><span class="lbl" style="font-style:italic">Priya</span><br><span style="font-size:11.5px;font-weight:800;color:var(--success-ink)">guessed · 0:22</span></span>
+            <span class="val"><b style="color:var(--success-ink)">+198</b><b>790</b></span>
+          </div>
+          <div class="row" style="min-height:60px">
+            <span class="disp" style="width:24px;font-size:16px;color:var(--faint)">4</span><span class="av sm g">K</span>
+            <span><span class="lbl" style="font-style:italic">Kit</span><br><span style="font-size:11.5px;font-weight:800;color:var(--faint)">still guessing</span></span>
+            <span class="val"><b>604</b></span>
+          </div>
+        </div>
+      </div>
+    </div>` }]});
+</script>
+<script>
+/* ─────────────────────────── 13 · SETTINGS ─────────────────────────── */
+S({ id:'settings', n:'15', group:'Overlays', title:'Settings',
+  lede:'A desktop dialog rendered on a phone.',
+  variants:[{ name:'Full-screen sheet', ships:true,
+    bad:[
+      'A <b>340 × 699 floating dialog</b> with 901 px of content scrolling inside it, on a 390 px screen. It is a desktop modal wearing a phone.',
+      'A <b>Shortcuts tab</b> — keyboard shortcuts, on a touch device — takes a third of the tab bar.',
+      'Close is a small ✕ in the top-right, the least reachable corner of a 6.1″ phone.',
+      'Field labels, help “?” buttons and controls all sit at the same level, so nothing scans.'
+    ],
+    good:[
+      'A <b>full-screen sheet with grouped rows</b> — the idiom both platforms already teach. <code>Done</code> sits bottom-right where the thumb is, and swipe-down dismisses.',
+      '<b>Shortcuts is hidden when the pointer is coarse.</b> Nothing on a phone should offer keyboard bindings.',
+      'Values live on the right of each row and open their own sheet, so the list stays one screen tall instead of nine hundred pixels.',
+      'Help text is a row subtitle, not a “?” that needs a second tap.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <div class="disp" style="font-size:19px">Settings</div>
+        <span class="sb-sp"></span>
+        <span class="chip">Playing as guest</span>
+      </div>
+      <div class="stagearea" style="padding:14px;gap:16px;overflow-y:auto">
+        <div style="flex:0 0 auto">
+          <div class="kick" style="margin:0 4px 8px">You</div>
+          <div class="rows">
+            <div class="row"><span class="lbl">Display name</span><span class="val">Marta ${ic.chev}</span></div>
+            <div class="row" style="min-height:66px"><span><span class="lbl">Account</span><br><span class="faint" style="font-size:12px;font-weight:700">Guests lose their name when the tab closes</span></span><span class="val"><span class="chip on" style="min-height:36px">Create</span></span></div>
+            <div class="row"><span class="lbl">Name colour</span><span class="val"><span class="av sm">M</span> Guest grey ${ic.chev}</span></div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto">
+          <div class="kick" style="margin:0 4px 8px">Look and feel</div>
+          <div class="rows">
+            <div class="row"><span class="lbl">Theme</span><span class="val">System · dark ${ic.chev}</span></div>
+            <div class="row" style="min-height:64px"><span><span class="lbl">Colourblind-safe palette</span><br><span class="faint" style="font-size:12px;font-weight:700">Limits drawing colours to a safe set</span></span><span class="val"><span class="sw-toggle"><i></i></span></span></div>
+            <div class="row" style="min-height:64px"><span><span class="lbl">Confetti</span><br><span class="faint" style="font-size:12px;font-weight:700">Bursts on a correct guess and at the finish</span></span><span class="val"><span class="sw-toggle on"><i></i></span></span></div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto">
+          <div class="kick" style="margin:0 4px 8px">Sound</div>
+          <div class="rows">
+            <div class="row"><span class="lbl">Sound effects</span><span class="val"><span class="sw-toggle on"><i></i></span></span></div>
+            <div class="row" style="min-height:62px"><span class="lbl" style="flex:0 0 auto">Volume</span><span class="val" style="flex:1"><span class="bar-t" style="flex:1;margin-left:14px"><i style="width:70%;background:var(--primary)"></i></span></span></div>
+          </div>
+        </div>
+        <div style="flex:0 0 auto">
+          <div class="kick" style="margin:0 4px 8px">While playing</div>
+          <div class="rows">
+            <div class="row" style="min-height:64px"><span><span class="lbl">Clear the box after a guess</span><br><span class="faint" style="font-size:12px;font-weight:700">Keeps the keyboard up between tries</span></span><span class="val"><span class="sw-toggle on"><i></i></span></span></div>
+            <div class="row"><span class="lbl">Report a problem</span><span class="val">${ic.chev}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="dock">
+        <div style="display:flex;gap:9px">
+          <button class="btn ghost sm" style="flex:1">Cancel</button>
+          <button class="btn" style="flex:1.6">Done</button>
+        </div>
+      </div>
+    </div>` }]});
+
+/* ─────────────────────────── 14 · PROFILE ─────────────────────────── */
+S({ id:'profile', n:'16', group:'Elsewhere', title:'Profile',
+  lede:'A player’s record, sized for a phone rather than reflowed from a desktop table.',
+  variants:[{ name:'Profile', ships:true,
+    bad:[
+      'The desktop layout stacks into a long single column of labelled rows with no visual weight on the numbers people came for.',
+      'No way back into a game from here, so it is a dead end mid-session.'
+    ],
+    good:[
+      'Four stat tiles carry the headline numbers in the display face, at a size worth screenshotting.',
+      'A guess-speed sparkline gives the record a shape rather than a list of figures.',
+      'Recent games are rows you can tap, ending in a rematch rather than a dead end.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <button class="iconbtn ghost">${ic.back}</button>
+        <div class="disp" style="font-size:17px">Profile</div>
+        <span class="sb-sp"></span>${menuBtn}
+      </div>
+      <div class="stagearea" style="padding:16px 14px;gap:15px;overflow-y:auto">
+        <div style="display:flex;align-items:center;gap:14px;flex:0 0 auto">
+          <span class="av lg p" style="width:66px;height:66px;font-size:26px">J</span>
+          <div style="min-width:0">
+            <div class="disp" style="font-size:24px;font-style:italic">Jonas</div>
+            <div class="muted" style="font-size:12.5px;font-weight:700">Playing since March · 214 games</div>
+          </div>
+        </div>
+        <div class="statgrid" style="flex:0 0 auto">
+          <div class="stat"><div class="kick">Wins</div><div class="n">37</div><div class="faint" style="font-size:11.5px;font-weight:800">17% of games</div></div>
+          <div class="stat"><div class="kick">Guessed</div><div class="n">81%</div><div class="faint" style="font-size:11.5px;font-weight:800">of turns</div></div>
+          <div class="stat"><div class="kick">Median guess</div><div class="n">18.4<small style="font-size:14px">s</small></div><div class="faint" style="font-size:11.5px;font-weight:800">top 12% here</div></div>
+          <div class="stat"><div class="kick">Best drawing</div><div class="n">4/4</div><div class="faint" style="font-size:11.5px;font-weight:800">“lighthouse”</div></div>
+        </div>
+        <div class="card" style="flex:0 0 auto">
+          <div class="kick" style="margin-bottom:10px">Guess speed · last 20 turns</div>
+          <svg viewBox="0 0 300 66" style="width:100%;height:60px;display:block" aria-hidden="true">
+            <polyline fill="none" stroke="var(--line)" stroke-width="1" points="0,33 300,33"/>
+            <polyline fill="none" stroke="var(--warm)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
+              points="4,44 20,38 36,47 52,30 68,35 84,22 100,29 116,18 132,26 148,20 164,31 180,16 196,24 212,12 228,20 244,14 260,22 276,10 292,16"/>
+            <circle cx="292" cy="16" r="4.5" fill="var(--warm)"/>
+          </svg>
+        </div>
+        <div style="flex:0 0 auto">
+          <div class="kick" style="margin:0 4px 8px">Recent games</div>
+          <div class="rows">
+            <div class="row"><span class="lbl">Coffee break doodles</span><span class="val"><b style="color:var(--gold)">1st</b> 986 ${ic.chev}</span></div>
+            <div class="row"><span class="lbl">sketch &amp; chill</span><span class="val">3rd 512 ${ic.chev}</span></div>
+            <div class="row"><span class="lbl">quiet drawing room</span><span class="val">2nd 744 ${ic.chev}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="dock"><button class="btn ghost">Invite Jonas to a room</button></div>
+    </div>` }]});
+
+/* ─────────────────────────── 15 · PROMPT STATS ─────────────────────────── */
+S({ id:'stats', n:'17', group:'Elsewhere', title:'Prompt stats',
+  lede:'A 592-row data table, delivered to a phone in full.',
+  variants:[{ name:'Cards + filter sheet', ships:true,
+    bad:[
+      'The page is <b>25 496 px tall</b> on an 844 px screen — thirty screens of scroll, unpaginated.',
+      'Five native <code>&lt;select&gt;</code> menus stacked with inline labels that wrap (“Prompt / list”), taking 200 px before any data.',
+      'The table is <b>wider than the viewport and clipped</b> — the fourth column is cut off at the right edge with no scroll affordance.',
+      'Difficulty is a text string (“Not played enough”) repeated 592 times, which is unreadable as a ranking.'
+    ],
+    good:[
+      'Rows become cards: word, a <b>difficulty bar</b>, guessed rate, times played. Difficulty is a shape you can scan, not a sentence you have to read.',
+      'All five filters collapse into <b>one Filters chip</b> that opens a sheet, with the active ones shown as removable chips.',
+      'Search is pinned; the list pages 40 at a time with an explicit <code>Load more</code> — no silent truncation, no thirty-screen scroll.',
+      'Sort is a segmented control, because there are only three answers anyone wants.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <button class="iconbtn ghost">${ic.back}</button>
+        <div class="disp" style="font-size:17px">Prompt stats</div>
+        <span class="sb-sp"></span>
+        <span class="chip on">Filters · 2</span>
+      </div>
+      <div style="padding:11px 14px 0;flex:0 0 auto;display:flex;flex-direction:column;gap:9px;background:var(--card);border-bottom:1.5px solid var(--line);padding-bottom:11px">
+        <div class="gfield" style="min-height:46px;font-size:15px">Find a prompt…</div>
+        <div class="segm"><b class="on">Hardest</b><b>Easiest</b><b>Most picked</b></div>
+        <div class="chips">
+          <span class="chip on">English — Extended ✕</span>
+          <span class="chip on">Last 30 days ✕</span>
+        </div>
+      </div>
+      <div class="stagearea" style="padding:12px 14px;gap:9px;overflow-y:auto">
+        ${[['accordion',88,'12%','41'],['microscope',74,'31%','58'],['lighthouse',61,'44%','96'],['battery',38,'71%','133'],['puppy',14,'92%','204']].map(([w,d,g,n])=>`
+          <div class="card" style="flex:0 0 auto;padding:12px 14px">
+            <div style="display:flex;align-items:baseline;gap:9px">
+              <div class="disp" style="font-size:18px;flex:1">${w}</div>
+              <span class="muted" style="font-size:12px;font-weight:800;font-variant-numeric:tabular-nums">${g} guessed</span>
+              <span class="faint" style="font-size:12px;font-weight:800;font-variant-numeric:tabular-nums">${n}×</span>
+            </div>
+            <div class="bar-t" style="margin-top:9px"><i style="width:${d}%;background:${d>70?'var(--danger)':d>40?'var(--warm)':'var(--success)'}"></i></div>
+          </div>`).join('')}
+        <button class="btn ghost sm" style="flex:0 0 auto;margin-top:3px">Load 40 more · 592 total</button>
+      </div>
+    </div>` }]});
+</script>
+<script>
+/* ═══════════════════ VIEWER ═══════════════════ */
+let cur = 0, curVar = 0, mode = 'both';
+
+const railEl = document.getElementById('rail');
+const stageEl = document.getElementById('stage');
+const crumbEl = document.getElementById('crumb');
+
+/* rail */
+(function buildRail(){
+  let html = '', lastGroup = '';
+  SCREENS.forEach((s,i)=>{
+    if (s.group !== lastGroup){ html += `<h2>${s.group}</h2>`; lastGroup = s.group; }
+    html += `<a data-i="${i}" data-v="0" role="button" tabindex="0"><span class="n">${s.n}</span><span>${s.title}</span></a>`;
+    if (s.variants.length > 1){
+      s.variants.forEach((v,j)=>{ html += `<a class="alt" data-i="${i}" data-v="${j}" role="button" tabindex="0"><span class="n"></span><span>${v.name}</span></a>`; });
+    }
+  });
+  railEl.innerHTML = html;
+  railEl.addEventListener('click', e=>{
+    const a = e.target.closest('a[data-i]'); if(!a) return;
+    go(+a.dataset.i, +a.dataset.v);
+  });
+  railEl.addEventListener('keydown', e=>{
+    if(e.key!=='Enter' && e.key!==' ') return;
+    const a = e.target.closest('a[data-i]'); if(!a) return;
+    e.preventDefault(); go(+a.dataset.i, +a.dataset.v);
+  });
+})();
+
+/* build one phone */
+function phone(v, theme){
+  return `<div class="frame${v.land?' land':''}">
+    <div class="ph" data-t="${theme}">
+      ${v.land ? '' : osbar()}
+      ${v.html}
+      ${v.kb ? keyboard(v.goLabel || 'guess') : ''}
+      ${v.land ? '' : home}
+    </div>
+  </div>`;
+}
+
+function render(){
+  const s = SCREENS[cur];
+  const v = s.variants[Math.min(curVar, s.variants.length-1)];
+  crumbEl.textContent = `${s.n} / ${String(SCREENS.length).padStart(2,'0')} · ${s.title}${s.variants.length>1?' · '+v.name:''}`;
+
+  const themes = mode === 'both' ? ['light','dark'] : [mode];
+  const deck = themes.map(t=>`
+    <div class="slot">
+      <span class="cap">${t} · 390 × 844</span>
+      <div class="fitbox">${phone(v,t)}</div>
+    </div>`).join('');
+
+  stageEl.innerHTML = `
+    <div class="shead">
+      <div>
+        <div class="eyebrow">${s.group} · screen ${s.n}</div>
+        <h2>${s.title}</h2>
+      </div>
+    </div>
+    <p class="lede">${s.lede}</p>
+    ${s.variants.length>1 ? `<div class="vtabs" role="group" aria-label="Proposals">${
+      s.variants.map((x,j)=>`<button class="vtab" data-v="${j}" aria-pressed="${j===curVar}">${x.name}${x.ships?' <i class="ships">built</i>':''}</button>`).join('')
+    }</div>` : (v.ships ? `<div class="vtabs"><span class="vtab" aria-pressed="true">Built <i class="ships">built</i></span></div>` : '')}
+    <div class="deck">${deck}</div>
+    ${s.variants.length>1 ? `<p class="verdict">${v.ships
+      ? 'This is the one that shipped — the artboard is drawn from the build.'
+      : 'Drawn as an alternative; the build went the other way.'}</p>` : ''}
+    <div class="notes">
+      <div class="note bad"><h3>What it was</h3><ul>${v.bad.map(b=>`<li>${b}</li>`).join('')}</ul></div>
+      <div class="note good"><h3>What it is now</h3><ul>${v.good.map(b=>`<li>${b}</li>`).join('')}</ul></div>
+    </div>
+    <div class="pager">
+      <button class="tbtn" data-nav="-1">◀ ${SCREENS[(cur-1+SCREENS.length)%SCREENS.length].title}</button>
+      <span class="sp"></span>
+      <button class="tbtn" data-nav="1">${SCREENS[(cur+1)%SCREENS.length].title} ▶</button>
+    </div>`;
+
+  stageEl.querySelectorAll('.vtab').forEach(b=>b.onclick=()=>{ curVar=+b.dataset.v; render(); syncRail(); });
+  stageEl.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>go((cur+ +b.dataset.nav + SCREENS.length)%SCREENS.length, 0));
+  fit();
+  syncRail();
+  stageEl.scrollIntoView({block:'start'});
+  window.scrollTo({top:0});
+}
+
+function syncRail(){
+  railEl.querySelectorAll('a').forEach(a=>{
+    const i=+a.dataset.i, v=+a.dataset.v;
+    const isAlt = a.classList.contains('alt');
+    a.classList.toggle('on', i===cur && (isAlt ? v===curVar : SCREENS[i].variants.length===1 || true) && (isAlt ? v===curVar : !isAlt));
+  });
+  railEl.querySelectorAll('a.alt').forEach(a=>{
+    a.classList.toggle('on', +a.dataset.i===cur && +a.dataset.v===curVar);
+  });
+  railEl.querySelectorAll('a:not(.alt)').forEach(a=>{
+    a.classList.toggle('on', +a.dataset.i===cur && SCREENS[cur].variants.length===1);
+  });
+  const active = railEl.querySelector('a.on');
+  if (active && window.innerWidth<=1000) active.scrollIntoView({inline:'center',block:'nearest'});
+}
+
+function go(i,v){ cur=i; curVar=v||0; render(); }
+
+/* scale phones to fit the column */
+function fit(){
+  const boxes = stageEl.querySelectorAll('.fitbox');
+  if(!boxes.length) return;
+  /* A collapsed or not-yet-laid-out column reports 0; scaling off that would
+     shrink every frame to nothing. Wait for a real measurement instead. */
+  if (stageEl.clientWidth < 200){ requestAnimationFrame(fit); return; }
+  const avail = stageEl.clientWidth - 60;
+  const n = boxes.length;
+  boxes.forEach(box=>{
+    const f = box.querySelector('.frame');
+    const w = f.classList.contains('land') ? 844 : 390;
+    const h = f.classList.contains('land') ? 390 : 844;
+    const per = n>1 ? (avail - 34)/n : avail;
+    let s = Math.min(1, per / (w + 24));
+    if (h*s > window.innerHeight*1.25) s = Math.min(s, (window.innerHeight*1.25)/h);
+    f.style.transform = `scale(${s})`;
+    box.style.width = (w*s + 24) + 'px';
+    box.style.height = (h*s + 24) + 'px';
+    f.style.margin = '12px';
+  });
+}
+window.addEventListener('resize', fit);
+if (window.ResizeObserver) new ResizeObserver(()=>fit()).observe(stageEl);
+
+/* controls */
+const modeBtns = {both:document.getElementById('mBoth'), light:document.getElementById('mLight'), dark:document.getElementById('mDark')};
+Object.entries(modeBtns).forEach(([k,b])=>b.onclick=()=>{
+  mode=k; Object.entries(modeBtns).forEach(([k2,b2])=>b2.setAttribute('aria-pressed', String(k2===k))); render();
+});
+document.getElementById('prevBtn').onclick=()=>go((cur-1+SCREENS.length)%SCREENS.length,0);
+document.getElementById('nextBtn').onclick=()=>go((cur+1)%SCREENS.length,0);
+document.getElementById('shellTheme').onclick=()=>{
+  const r=document.documentElement;
+  const isDark = r.getAttribute('data-theme')==='dark' ||
+    (!r.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+  r.setAttribute('data-theme', isDark?'light':'dark');
+};
+document.addEventListener('keydown', e=>{
+  if(e.target.matches('input,textarea')) return;
+  if(e.key==='ArrowRight'){ go((cur+1)%SCREENS.length,0); }
+  if(e.key==='ArrowLeft'){ go((cur-1+SCREENS.length)%SCREENS.length,0); }
+});
+
+render();
+</script>

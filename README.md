@@ -13,6 +13,9 @@ This README is the narrative introduction. The precise references live in
 [requirements](docs/requirements.md). Read the relevant one before changing the thing it
 describes, and update it in the same change. [`docs/ui-mockups/`](docs/ui-mockups/) holds
 the same rule for the interface: an artboard per screen, matched to the shipped styles.
+[`docs/ui-mockups/mobile/`](docs/ui-mockups/mobile/README.md) does the same for those screens on a
+portrait phone, where the layout is a different problem: a protocol-fixed 4:3 canvas, a soft
+keyboard that takes half the screen, and one thumb.
 
 ## Features
 
