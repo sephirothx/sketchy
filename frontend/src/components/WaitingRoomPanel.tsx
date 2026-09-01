@@ -140,9 +140,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           <Button variant="primary" iconLeft={<LinkIcon size={15} />} onClick={() => void shareInvite()}>
             Share the link
           </Button>
+          {/* A button of its own, not a link pretending to be one: it is the
+              other half of the same job as Share, on a card whose whole
+              purpose is these two. */}
           <Button
-            variant="ghost"
-            iconLeft={<CopyIcon size={14} />}
+            variant="secondary"
+            iconLeft={<CopyIcon size={15} />}
             onClick={() => code && void copyToClipboard(code, "Room code")}
           >
             Copy code

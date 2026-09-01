@@ -2227,16 +2227,12 @@ button.guess-pips {
   }
 }
 
-/* Two labels in one row stop fitting before the row does. Under 400px the
-   icons go — "Share the link" wrapped to two lines at 360 with them — and
-   under 340 the row itself gives up and stacks. */
+/* Two labels in one row stop fitting before the row does. The padding goes
+   first, which is enough to keep both icons and both labels on one line down
+   to 360; under 340 the row itself gives up and stacks. */
 @media (max-width: 400px) {
   .waiting-invite-actions .btn {
     padding-inline: 10px;
-  }
-
-  .waiting-invite-actions .btn svg {
-    display: none;
   }
 }
 
