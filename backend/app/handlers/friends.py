@@ -1,0 +1,281 @@
+"""Friends, from inside the game: adding one, inviting one, joining one.
+
+Three commands, and the interesting thing is that two of them let somebody into
+a room they cannot name - so the rule for *who* may do that is the whole
+design.
+
+**An invitation is not weaker than what already exists.** Anybody seated can
+already paste the room code into a chat window; R-ROOM-02 makes the code a
+bearer capability precisely so that it can be shared. `invite_friend` is a
+tighter version of that same gesture: it carries no code, it is addressed to
+one account, it is single use, and it dies in two minutes. So any seated player
+may send one.
+
+**Pulling yourself in is new, so it is held to the host.** Presence says a
+friend is *in a game*, and `join_friend_room` without an invitation turns that
+into a seat. Nobody chose to let that person in - which is fine when the room
+is the host's own and the host is your friend, and is not fine when it means a
+private room gains a fifth person because one of the four occupants knows them.
+So an uninvited join resolves only rooms whose **host** is an accepted friend
+of the caller.
+
+Neither path ever sends a room code to somebody who has not been seated. Both
+re-check blocks at the moment of use: a friendship read a moment ago is not a
+licence, and a block placed in between has to win.
+"""
+from __future__ import annotations
+
+from functools import partial
+import logging
+from uuid import UUID
+
+from app.handlers.context import HandlerContext
+from app.handlers.payloads import (
+    AddFriendPayload,
+    FriendUserPayload,
+    JoinFriendRoomPayload,
+    PayloadError,
+    parse_payload,
+)
+from app.handlers.rooms import (
+    BUSY_ACKNOWLEDGEMENT,
+    EntryTimedOut,
+    _after_seating,
+    _bounded,
+    _seat_in_room,
+)
+from app.services.friends import FriendshipRefused
+
+logger = logging.getLogger("sketchy.handlers.friends")
+
+REGISTER_FIRST = {
+    "ok": False,
+    "error": "Create an account to add friends - a guest account is removed "
+    "after a month of not playing.",
+}
+NOT_IN_A_GAME = {"ok": False, "error": "Your friend is not in a game right now."}
+# Deliberately the same answer for "we are not friends" and "there is no such
+# account": neither is a fact this caller is owed, and telling them apart makes
+# the command a way to test whether somebody has unfriended you.
+NOT_FRIENDS = {"ok": False, "error": "You can only join a friend's game."}
+
+
+def _account_of(session) -> str | None:
+    return session.get("user_id") if session else None
+
+
+async def _uuid_or_none(value: str | None) -> UUID | None:
+    if not value:
+        return None
+    try:
+        return UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+async def add_friend(ctx: HandlerContext, sid, data):
+    """Send a friend request to somebody sitting in the same room.
+
+    Named by seat, so no account id crosses the wire in either direction
+    (R-ROOM-07). This is the moment people actually want the button: you have
+    just played with somebody, and the lobby is where you would otherwise have
+    to go and find them again.
+    """
+    try:
+        payload = parse_payload(AddFriendPayload, data)
+    except PayloadError as error:
+        return error.acknowledgement()
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return {"ok": False, "error": "Not in this room"}
+    room, me = current
+    if ctx.friend_service is None:
+        return {"ok": False, "error": "Friends are unavailable right now."}
+
+    target = room.players.get(payload.player_id)
+    if target is None or target.id == me.id:
+        # One answer for "no such seat" and "that is you", the way
+        # `report_player` does it: a report is not a way to find out who is in
+        # a room you cannot see, and neither is a friend request.
+        return {"ok": True}
+    if me.is_anonymous or not me.user_id:
+        return REGISTER_FIRST
+    if not target.user_id:
+        return {"ok": True}
+
+    mine = await _uuid_or_none(me.user_id)
+    theirs = await _uuid_or_none(target.user_id)
+    if mine is None or theirs is None:
+        return {"ok": True}
+    try:
+        await _bounded(
+            ctx.friend_service.request(mine, theirs), "sending a friend request"
+        )
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
+    except FriendshipRefused as refused:
+        return {"ok": False, "error": str(refused)}
+    await _notify_request(ctx, target.user_id)
+    return {"ok": True}
+
+
+async def invite_friend(ctx: HandlerContext, sid, data):
+    """Invite a friend into the game this socket is seated in."""
+    try:
+        payload = parse_payload(FriendUserPayload, data)
+    except PayloadError as error:
+        return error.acknowledgement()
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return {"ok": False, "error": "Not in this room"}
+    _, me = current
+    if ctx.friend_service is None or ctx.friend_invites is None:
+        return {"ok": False, "error": "Friends are unavailable right now."}
+    if me.is_anonymous or not me.user_id:
+        return REGISTER_FIRST
+
+    mine = await _uuid_or_none(me.user_id)
+    theirs = await _uuid_or_none(payload.friend_user_id)
+    if mine is None or theirs is None or mine == theirs:
+        return NOT_FRIENDS
+    try:
+        allowed = await _bounded(
+            ctx.friend_service.are_friends(mine, theirs), "reading a friendship"
+        )
+        blocked = allowed and await _bounded(
+            ctx.friend_service.is_blocked_pair(mine, theirs), "reading blocks"
+        )
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
+    if not allowed or blocked:
+        return NOT_FRIENDS
+
+    invite = ctx.friend_invites.issue(me.user_id, payload.friend_user_id)
+    await ctx.sio.emit(
+        "friend_invite_received",
+        {
+            "fromUserId": me.user_id,
+            "displayName": me.nickname,
+            "inviteToken": invite.token,
+            "expiresIn": int(ctx.friend_invites.ttl_seconds),
+        },
+        room=f"user:{payload.friend_user_id}",
+    )
+    return {"ok": True}
+
+
+async def join_friend_room(ctx: HandlerContext, sid, data):
+    """Take a seat wherever a friend is, without ever naming the room."""
+    seated: list = []
+    async with ctx.seating(sid):
+        answer = await _join_friend_room(ctx, sid, data, seated)
+    await _after_seating(ctx, seated)
+    return answer
+
+
+async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
+    try:
+        payload = parse_payload(JoinFriendRoomPayload, data)
+    except PayloadError as error:
+        return error.acknowledgement()
+    if ctx.friend_service is None:
+        return {"ok": False, "error": "Friends are unavailable right now."}
+
+    session = await ctx.sio.get_session(sid) if sid else None
+    account = _account_of(session)
+    if not account:
+        return {"ok": False, "error": "Sign in to join a friend's game."}
+    mine = await _uuid_or_none(account)
+    theirs = await _uuid_or_none(payload.friend_user_id)
+    if mine is None or theirs is None or mine == theirs:
+        return NOT_FRIENDS
+
+    # An invitation is spent before anything else is checked, so a stale token
+    # cannot also fall through to the uninvited path and quietly work.
+    invited_by = None
+    if payload.invite_token and ctx.friend_invites is not None:
+        invite = ctx.friend_invites.redeem(payload.invite_token, account)
+        if invite is None:
+            return {"ok": False, "error": "That invitation has expired."}
+        if invite.from_user_id != payload.friend_user_id:
+            return NOT_FRIENDS
+        invited_by = invite.from_user_id
+
+    try:
+        allowed = await _bounded(
+            ctx.friend_service.are_friends(mine, theirs), "reading a friendship"
+        )
+        # Belt and braces: blocking already deletes the friendship in the same
+        # transaction as the block, so this should never fire. It is logged if
+        # it does, because that means the delete did not run.
+        blocked = allowed and await _bounded(
+            ctx.friend_service.is_blocked_pair(mine, theirs), "reading blocks"
+        )
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
+    if blocked:
+        logger.warning(
+            "a friendship survived a block between %s and %s", mine, theirs
+        )
+        return NOT_FRIENDS
+    if not allowed:
+        return NOT_FRIENDS
+
+    room, host_user_id = _room_of(ctx, payload.friend_user_id)
+    if room is None:
+        return NOT_IN_A_GAME
+
+    if invited_by is None:
+        # Uninvited. Nobody in that room chose to let this caller in, so the
+        # only room they may resolve is one whose host is their own friend.
+        if host_user_id is None:
+            return NOT_IN_A_GAME
+        if host_user_id != payload.friend_user_id:
+            host = await _uuid_or_none(host_user_id)
+            try:
+                host_is_a_friend = host is not None and await _bounded(
+                    ctx.friend_service.are_friends(mine, host),
+                    "reading a friendship",
+                )
+            except EntryTimedOut:
+                return BUSY_ACKNOWLEDGEMENT
+            if not host_is_a_friend:
+                return {
+                    "ok": False,
+                    "error": "Only the host's friends can join this game "
+                    "uninvited. Ask them for an invite.",
+                }
+
+    return await _seat_in_room(ctx, sid, room, payload, seated)
+
+
+def _room_of(ctx: HandlerContext, user_id: str):
+    """The live room this account is seated in, and who hosts it.
+
+    One pass over the rooms rather than an index, the way presence derives
+    status: a few hundred comparisons at the product ceiling, and nothing that
+    can stop being true.
+    """
+    for room in list(ctx.room_manager.rooms.values()):
+        seats = list(room.players.values())
+        if not any(player.user_id == user_id for player in seats):
+            continue
+        host = next((player for player in seats if player.is_host), None)
+        return room, (host.user_id if host else None)
+    return None, None
+
+
+async def _notify_request(ctx: HandlerContext, to_user_id: str) -> None:
+    """Tell an account a request is waiting, if anything of theirs is open.
+
+    Best effort and deliberately contentless beyond who: the list endpoint is
+    the source of truth, and somebody offline simply sees it next time they
+    look.
+    """
+    await ctx.sio.emit("friend_request_received", {}, room=f"user:{to_user_id}")
+
+
+def register(ctx: HandlerContext) -> None:
+    ctx.on("add_friend", handler=partial(add_friend, ctx))
+    ctx.on("invite_friend", handler=partial(invite_friend, ctx))
+    ctx.on("join_friend_room", handler=partial(join_friend_room, ctx))

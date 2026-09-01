@@ -522,11 +522,26 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
             }
         return {"ok": False, "error": "Room not found"}
 
-    return await _seat_in_room(ctx, sid, room, payload, seated)
+    return await _seat_in_room(
+        ctx,
+        sid,
+        room,
+        payload,
+        seated,
+        soft=payload.soft,
+        reconnect_only=payload.reconnect_only,
+    )
 
 
 async def _seat_in_room(
-    ctx: HandlerContext, sid, room, payload: JoinRoomPayload, seated: list
+    ctx: HandlerContext,
+    sid,
+    room,
+    payload,
+    seated: list,
+    *,
+    soft: bool = False,
+    reconnect_only: bool = False,
 ):
     """Take a seat in a room that has already been resolved.
 
@@ -539,6 +554,13 @@ async def _seat_in_room(
     socket held elsewhere (R-ROOM-08), and the `ending` checks on both sides of
     seating. Deriving that list again at a second entry point is how one of
     them goes missing.
+
+    `payload` is anything carrying the identity fields a seat is built from -
+    nickname, colour, spectator - so a second entry point does not have to
+    inherit the room-naming half it has no use for. The two flags that belong
+    only to the code path are named here instead of read off it: `soft` is a
+    heartbeat that must not resend canvas history, and `reconnect_only` is the
+    invite screen asking whether a seat is already held.
 
     The caller decides *which* room; this decides whether the socket may sit in
     it. Deliberately no visibility check - `_join_room` never had one either,
@@ -576,7 +598,7 @@ async def _seat_in_room(
             sid,
             room,
             already_joined,
-            sync_canvas=not payload.soft,
+            sync_canvas=not soft,
         )
         if ctx.is_ending(sid):
             return await _unseat_an_ended_account(ctx, room, already_joined)
@@ -622,7 +644,7 @@ async def _seat_in_room(
         seated.append(player)
         return session_payload(room, player)
 
-    if payload.reconnect_only:
+    if reconnect_only:
         return {"ok": False, "error": "No existing session in this room"}
 
     try:

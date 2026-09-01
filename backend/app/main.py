@@ -152,6 +152,7 @@ handler_context = register_all_handlers(
     prompt_list_repo=prompt_list_repo,
     session_factory=async_session_factory,
     block_service=block_service,
+    friend_service=friend_service,
     shutdown=shutdown_coordinator,
 )
 # Built here rather than at import so it can reach the live policy objects the

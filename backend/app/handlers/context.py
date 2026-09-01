@@ -24,6 +24,8 @@ from app.services.timers import TimerManager
 if TYPE_CHECKING:
     from app.auth.blocks import BlockService
     from app.services.game_flow import GameFlowService
+    from app.services.friend_invites import FriendInviteBook
+    from app.services.friends import FriendService
     from app.services.message_retention import MessageRetentionService
     from app.services.presence import (
         PresenceBroadcaster,
@@ -82,6 +84,10 @@ class HandlerContext:
     presence: PresenceRegistry = field(init=False)
     presence_identities: PresenceIdentityCache = field(init=False)
     presence_broadcaster: PresenceBroadcaster = field(init=False)
+    # Friendships are durable, so the service exists only where there is a
+    # database; the invitations are live state and always exist.
+    friend_service: FriendService | None = None
+    friend_invites: FriendInviteBook = field(init=False)
     shutdown: ShutdownCoordinator | None = None
     game_flow: GameFlowService = field(init=False)
     _seating_gates: dict[str, SeatingGate] = field(
