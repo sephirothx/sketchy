@@ -17,6 +17,7 @@ import { ModalShell } from "../components/ui/ModalShell";
 import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
 import { useLobbyPresence } from "../hooks/useLobbyPresence";
+import { useFriendsStore } from "../store/friendsStore";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AlertCircleIcon, ChevronDownIcon, PlusIcon, SearchIcon } from "../components/icons";
 import { useClientConfig } from "../hooks/useClientConfig";
@@ -179,6 +180,13 @@ export function LobbyBrowserPage() {
   // Only the lobby watches the presence channel: a player inside a room is
   // not reading this list and should not be paying for it mid-game.
   useLobbyPresence();
+  const refreshFriends = useFriendsStore((state) => state.refresh);
+  const myUserId = useAuthStore((state) => state.user?.id ?? null);
+  // Re-read on the account, not just on mount: registering or signing in
+  // replaces whose friends these are, and a guest simply has none.
+  useEffect(() => {
+    void refreshFriends();
+  }, [refreshFriends, myUserId]);
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);

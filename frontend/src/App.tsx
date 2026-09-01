@@ -18,6 +18,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
+import { FriendInviteNotice } from "./components/FriendInviteNotice";
 import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { SuspensionNotice } from "./components/SuspensionNotice";
 import { RoleChangeNotice } from "./components/RoleChangeNotice";
@@ -169,6 +170,8 @@ function App() {
       <RoleChangeNotice />
       <BrowserRouter>
         <ScrollToTop />
+        {/* Inside the router: answering an invitation navigates. */}
+        <FriendInviteNotice />
         <Routes>
           <Route path="/" element={<LobbyBrowserPage />} />
           <Route path="/create" element={<CreateRoomPage />} />
