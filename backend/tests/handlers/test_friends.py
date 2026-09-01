@@ -550,3 +550,87 @@ async def test_a_malformed_friend_payload_is_refused_before_anything_else():
     ):
         answer = await sio.handlers["/"][command]("sid-any", payload)
         assert answer["ok"] is False
+
+
+async def test_an_invitation_dies_with_the_room_it_was_sent_from():
+    """It must not follow its sender into a room nobody invited you to.
+
+    Nothing revokes invitations when a seat is lost, deliberately: that would
+    be one more thing every teardown path has to remember, and forgetting it
+    is silent. The room is part of the invitation instead.
+    """
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    first = room_manager.create_room(name="First", is_public=False)
+    host = await seat_host(room_manager, first, ADA, "Ada")
+    host.sid = "sid-ada"
+    await sessions.save("sid-ada", {"room_id": first.id, "player_id": host.id})
+    await sessions.save("sid-bob", {"user_id": BOB})
+
+    await sio.handlers["/"]["invite_friend"]("sid-ada", {"friendUserId": BOB})
+    token = emitted(sio, "friend_invite_received")[0].args[1]["inviteToken"]
+
+    # Ada leaves and opens a different room. The invitation was to the first.
+    room_manager.remove_player(first, host.id)
+    second = room_manager.create_room(name="Second", is_public=False)
+    moved = await seat_host(room_manager, second, ADA, "Ada")
+    moved.sid = "sid-ada"
+
+    answer = await sio.handlers["/"]["join_friend_room"](
+        "sid-bob", {"friendUserId": ADA, "inviteToken": token, "nickname": "Bob"}
+    )
+
+    assert answer["ok"] is False
+    assert not any(p.user_id == BOB for p in second.players.values())
+
+
+async def test_an_invitation_to_a_game_that_ended_is_not_spent_answering_so():
+    """One use, and it must not be burned on a refusal."""
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    room = room_manager.create_room(name="Studio", is_public=False)
+    host = await seat_host(room_manager, room, ADA, "Ada")
+    host.sid = "sid-ada"
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": host.id})
+    await sessions.save("sid-bob", {"user_id": BOB})
+
+    await sio.handlers["/"]["invite_friend"]("sid-ada", {"friendUserId": BOB})
+    token = emitted(sio, "friend_invite_received")[0].args[1]["inviteToken"]
+
+    # Ada steps out, so the room resolves to nothing for a moment.
+    room_manager.remove_player(room, host.id)
+    refused = await sio.handlers["/"]["join_friend_room"](
+        "sid-bob", {"friendUserId": ADA, "inviteToken": token, "nickname": "Bob"}
+    )
+    assert refused["ok"] is False
+
+    # She comes back to the same room, and the invitation still stands.
+    back = await seat_host(room_manager, room, ADA, "Ada")
+    back.sid = "sid-ada"
+    accepted = await sio.handlers["/"]["join_friend_room"](
+        "sid-bob", {"friendUserId": ADA, "inviteToken": token, "nickname": "Bob"}
+    )
+    assert accepted["ok"] is True
+    await ctx.timers.close()
+
+
+async def test_an_invitation_never_puts_the_room_on_the_wire():
+    """The room is remembered on the server; the client is told a token."""
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    room = room_manager.create_room(name="Secret Studio", is_public=False)
+    host = await seat_host(room_manager, room, ADA, "Ada")
+    host.sid = "sid-ada"
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": host.id})
+
+    answer = await sio.handlers["/"]["invite_friend"](
+        "sid-ada", {"friendUserId": BOB}
+    )
+
+    flat = timeline(sio, answer)
+    assert room.id not in flat
+    assert room.code not in flat
+    assert room.name not in flat

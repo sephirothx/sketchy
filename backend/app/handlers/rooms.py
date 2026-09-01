@@ -821,6 +821,9 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
             await ctx.user_repo.update_profile(
                 player.user_id, name_color=player.name_color
             )
+            # The lobby shows this colour too, from a cache warmed at the
+            # handshake - and nothing re-handshakes after a colour change.
+            ctx.presence_identities.invalidate(player.user_id)
         except Exception:
             logger.exception(
                 "Failed to store name color for user %s", player.user_id

@@ -490,9 +490,9 @@ The name and colour each row shows are read through a bounded LRU warmed at the
 handshake, the same shape and the same failure rule as
 [`auth/blocks.py`](../backend/app/auth/blocks.py): a read that does not answer
 leaves the account out of the list rather than showing a blank name. Cached
-rather than stored because a display name changes through four paths - both
-profile routes, the in-room rename, and a guest merge - three of which never
-touch a socket.
+rather than stored because a display name or colour changes through five
+paths - both profile routes, the in-room rename, the in-room colour change,
+and a guest merge - three of which never touch a socket.
 
 Two things follow from that cache being **read at the handshake and nowhere
 else**, and both had to be built rather than assumed. First, the tick repairs

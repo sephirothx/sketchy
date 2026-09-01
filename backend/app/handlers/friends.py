@@ -159,7 +159,10 @@ async def invite_friend(ctx: HandlerContext, sid, data):
     if not allowed or blocked:
         return NOT_FRIENDS
 
-    invite = ctx.friend_invites.issue(me.user_id, payload.friend_user_id)
+    room, _ = _room_of(ctx, me.user_id)
+    if room is None:
+        return {"ok": False, "error": "Not in this room"}
+    invite = ctx.friend_invites.issue(me.user_id, payload.friend_user_id, room.id)
     await ctx.sio.emit(
         "friend_invite_received",
         {
@@ -199,16 +202,16 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
     if mine is None or theirs is None or mine == theirs:
         return NOT_FRIENDS
 
-    # An invitation is spent before anything else is checked, so a stale token
-    # cannot also fall through to the uninvited path and quietly work.
-    invited_by = None
+    # Read, not yet spent. An invitation is one use, and burning it to answer
+    # "that game has ended" would leave the recipient with nothing - so the
+    # room is checked first and the token spent only once it can be honoured.
+    invite = None
     if payload.invite_token and ctx.friend_invites is not None:
-        invite = ctx.friend_invites.redeem(payload.invite_token, account)
+        invite = ctx.friend_invites.peek(payload.invite_token, account)
         if invite is None:
             return {"ok": False, "error": "That invitation has expired."}
         if invite.from_user_id != payload.friend_user_id:
             return NOT_FRIENDS
-        invited_by = invite.from_user_id
 
     try:
         allowed = await _bounded(
@@ -233,8 +236,13 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
     room, host_user_id = _room_of(ctx, payload.friend_user_id)
     if room is None:
         return NOT_IN_A_GAME
+    # An invitation is to the room it was sent from, and only while its sender
+    # is still in it. Otherwise somebody who left and joined another room would
+    # have handed out a way into that one, which nobody offered.
+    if invite is not None and invite.room_id != room.id:
+        return NOT_IN_A_GAME
 
-    if invited_by is None:
+    if invite is None:
         # Uninvited. Nobody in that room chose to let this caller in, so the
         # only room they may resolve is one whose host is their own friend.
         if host_user_id is None:
@@ -255,6 +263,9 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
                     "uninvited. Ask them for an invite.",
                 }
 
+    # Everything that could refuse has refused, so the one use is spent here.
+    if invite is not None:
+        ctx.friend_invites.redeem(payload.invite_token, account)
     return await _seat_in_room(ctx, sid, room, payload, seated)
 
 
