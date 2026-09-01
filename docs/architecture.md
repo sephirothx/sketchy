@@ -493,6 +493,25 @@ rather than stored because a display name changes through four paths - both
 profile routes, the in-room rename, and a guest merge - three of which never
 touch a socket.
 
+Two things follow from that cache being **read at the handshake and nowhere
+else**, and both had to be built rather than assumed. First, the tick repairs
+what the cache cannot answer for, a bounded number of accounts at a time: a
+rename, a colour change and a guest claim all keep the same account id, so
+nothing re-handshakes after one, and an eviction happens with nobody writing at
+all. Without the repair, `invalidate` would be permanent - the player's row
+would drop out of the list, be broadcast as a `left` for a socket that never
+closed, and stay gone until they reconnected. Putting the repair in the tick
+rather than beside each writer is deliberate: it also covers eviction, and it
+is not an invariant a future writer can forget. Second, the cache is sized from
+the **socket ceiling** rather than a constant, because one smaller than the
+number of accounts that can be online evicts rows it is about to be asked for
+and reads back rows it just evicted, for ever.
+
+For the same reason a guest merge invalidates only the two accounts it merged.
+Clearing the whole cache is right for blocks - a merge rewrites them for
+arbitrary pairs, and that cache reads through on a miss - but here it would
+take every connected player off the list because one of them logged in.
+
 Delivery is a Socket.IO channel a client opts into with `watch_lobby`, never a
 second poll: the lobby already polls `/api/rooms`, and #462 is open about that
 being one poll too many. Membership is asked for rather than derived from seat

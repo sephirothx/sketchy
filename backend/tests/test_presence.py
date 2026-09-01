@@ -25,6 +25,7 @@ from app.services.presence import (
     PresenceIdentity,
     PresenceIdentityCache,
     PresenceRegistry,
+    WARM_PER_TICK,
     build_snapshot,
     diff_snapshots,
     seated_accounts,
@@ -593,3 +594,126 @@ async def test_warming_without_a_repository_is_a_no_op():
     await cache.warm("user-1")
     await cache.warm(None)
     assert cache.cached_accounts() == 0
+
+
+# --- the cache repopulates itself ----------------------------------------
+
+
+class CountingRepo(StubUserRepo):
+    """A repository that can change a name under the cache, as a rename does."""
+
+    def rename(self, user_id, name):
+        self._users[user_id] = StubUser(user_id, name)
+
+
+@pytest.mark.asyncio
+async def test_an_invalidated_identity_comes_back_on_the_next_tick():
+    """A rename must not delete somebody from the lobby.
+
+    `warm` is only ever called at the handshake, and the four writers of a
+    display name all keep the account id - so nothing re-handshakes after a
+    rename, a colour change, or a guest claim. Without the tick repopulating
+    what it is missing, `invalidate` is permanent: the row is dropped from
+    the list, broadcast as `left`, and never comes back while that player
+    stays connected.
+    """
+    repo = CountingRepo({"user-1": StubUser("user-1", "Ada")})
+    cache = PresenceIdentityCache(repo)
+    registry = PresenceRegistry()
+    registry.note_socket_opened("sid-a", "user-1")
+    await cache.warm("user-1")
+    caster = broadcaster_for(registry, RoomManager(), cache)
+    await caster.flush()
+    assert [e.display_name for e in caster._last.entries] == ["Ada"]
+
+    repo.rename("user-1", "Adalovelace")
+    cache.invalidate("user-1")
+
+    delta = await caster.flush()
+    assert delta is not None
+    assert delta.left == (), "a rename dropped the player out of the lobby"
+    assert [e.display_name for e in caster._last.entries] == ["Adalovelace"]
+
+
+@pytest.mark.asyncio
+async def test_an_account_evicted_from_the_cache_comes_back():
+    """The same hole, reached without anybody writing anything.
+
+    A bounded cache evicts an online account simply because others were
+    warmed after it, and nothing re-handshakes for that either. This is why
+    the repair belongs to the tick rather than to the writers of a name.
+    """
+    users = {f"user-{i}": StubUser(f"user-{i}", f"player{i}") for i in range(6)}
+    cache = PresenceIdentityCache(CountingRepo(users), max_cached=4)
+    registry = PresenceRegistry()
+    registry.note_socket_opened("sid-a", "user-0")
+    registry.note_socket_opened("sid-b", "user-1")
+    # Four other accounts warmed after them push both out of the cache.
+    for user_id in ["user-2", "user-3", "user-4", "user-5"]:
+        await cache.warm(user_id)
+    assert cache.missing(["user-0", "user-1"]) == ["user-0", "user-1"]
+
+    caster = broadcaster_for(registry, RoomManager(), cache)
+    await caster.flush()
+
+    assert [e.user_id for e in caster._last.entries] == ["user-0", "user-1"]
+
+
+def test_the_identity_cache_holds_every_account_that_can_be_online(monkeypatch):
+    """Below the socket ceiling the cache thrashes instead of caching.
+
+    Every tick would evict rows it is about to be asked for and read back
+    rows it just evicted: the list flickers for ever and the database pays
+    for it. So the size is wired to `SOCKET_LIMIT` rather than left as a
+    constant somebody has to remember to raise beside it.
+    """
+    import socketio
+
+    from app.handlers import register_all_handlers
+
+    monkeypatch.setenv("SOCKET_LIMIT", "5000")
+    ctx = register_all_handlers(socketio.AsyncServer(async_mode="asgi"), RoomManager())
+
+    assert ctx.room_capacity.sockets == 5000
+    assert ctx.presence_identities.capacity >= ctx.room_capacity.sockets
+
+
+@pytest.mark.asyncio
+async def test_repopulating_is_bounded_per_tick():
+    """A cold cache must not turn one tick into hundreds of database reads."""
+    users = {f"user-{i}": StubUser(f"user-{i}", f"player{i}") for i in range(200)}
+    repo = CountingRepo(users)
+    cache = PresenceIdentityCache(repo)
+    registry = PresenceRegistry()
+    for index, user_id in enumerate(users):
+        registry.note_socket_opened(f"sid-{index}", user_id)
+
+    caster = broadcaster_for(registry, RoomManager(), cache)
+    await caster.flush()
+
+    assert repo.reads <= WARM_PER_TICK
+    assert repo.reads > 0, "nothing was repopulated at all"
+
+
+@pytest.mark.asyncio
+async def test_one_player_logging_in_does_not_empty_the_lobby():
+    """A merge invalidates the two accounts it merged, not the process.
+
+    `block_service.clear()` is the right shape for blocks - a merge rewrites
+    them for arbitrary pairs, and that cache reads through on a miss. Copying
+    it here took every connected player off the list because somebody else
+    logged in.
+    """
+    users = {f"user-{i}": StubUser(f"user-{i}", f"player{i}") for i in range(4)}
+    users["guest"] = StubUser("guest", "guest")
+    cache = PresenceIdentityCache(CountingRepo(users))
+    registry = PresenceRegistry()
+    for index, user_id in enumerate(users):
+        registry.note_socket_opened(f"sid-{index}", user_id)
+        await cache.warm(user_id)
+
+    # What a login that merges a guest into `user-0` now invalidates.
+    cache.invalidate("guest")
+    cache.invalidate("user-0")
+
+    assert cache.missing(list(users)) == ["user-0", "guest"]

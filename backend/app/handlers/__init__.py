@@ -25,6 +25,7 @@ from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
 from app.services.message_retention import MessageRetentionService
 from app.services.presence import (
+    DEFAULT_MAX_CACHED_IDENTITIES,
     PresenceBroadcaster,
     PresenceIdentityCache,
     PresenceRegistry,
@@ -84,7 +85,13 @@ def register_all_handlers(
     # memory, and only the name beside each row needs one - which is why the
     # cache tolerates having no repository at all rather than refusing.
     ctx.presence = PresenceRegistry()
-    ctx.presence_identities = PresenceIdentityCache(user_repo)
+    # Sized from the socket ceiling, not a constant: every account that can be
+    # online at once has to fit, or the identity cache evicts rows the next
+    # tick immediately reads back.
+    ctx.presence_identities = PresenceIdentityCache(
+        user_repo,
+        max_cached=max(DEFAULT_MAX_CACHED_IDENTITIES, ctx.room_capacity.sockets),
+    )
     ctx.presence_broadcaster = PresenceBroadcaster(
         sio, ctx.presence, ctx.presence_identities, room_manager
     )

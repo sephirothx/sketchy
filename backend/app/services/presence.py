@@ -56,6 +56,16 @@ DEFAULT_BROADCAST_INTERVAL_MS = 1000
 # Long enough that an ordinary cold read succeeds, short enough that a stalled
 # one is not felt. A miss omits the row rather than showing a blank name.
 IDENTITY_TIMEOUT_SECONDS = 2
+# How many identities one tick may read. The handshake warms the ordinary
+# case, so this is only ever repairing what was invalidated or evicted - but
+# a cold cache with a full server behind it would otherwise be one tick
+# issuing hundreds of reads at once. Spread over ticks instead: a row missing
+# for an extra second is not worth a thundering herd.
+WARM_PER_TICK = 25
+# Every account that can hold a socket must fit, or the cache thrashes (see
+# `PresenceIdentityCache`). The default sits above `DEFAULT_SOCKETS`; where the
+# socket ceiling is raised, the cache is built from it instead.
+DEFAULT_MAX_CACHED_IDENTITIES = 1024
 
 
 def _ceiling(values: Mapping[str, str], name: str, default: int) -> int:
@@ -370,9 +380,16 @@ class PresenceIdentityCache:
         self,
         user_repo: UserRepository | None,
         *,
-        max_cached: int = 1024,
+        max_cached: int = DEFAULT_MAX_CACHED_IDENTITIES,
     ) -> None:
         self._user_repo = user_repo
+        # Never smaller than the number of accounts that can be online at
+        # once. A cache below that ceiling cannot hold the list it exists to
+        # answer: every tick would evict rows it is about to be asked for and
+        # read back rows it just evicted, and the lobby would flicker for ever
+        # while the database took the cost. `BlockService` has no equivalent
+        # floor because a miss there is answered by a read on the spot; here a
+        # miss means the row is simply absent until a later tick.
         self._max_cached = max(1, max_cached)
         self._identities: OrderedDict[str, PresenceIdentity] = OrderedDict()
 
@@ -380,9 +397,9 @@ class PresenceIdentityCache:
         """Whatever is known now, without waiting for anything.
 
         The snapshot builder asks this rather than reading through, so
-        building a payload never awaits a database: an account nobody has
-        warmed is simply not in the list yet, and the next tick after its
-        warm completes includes it.
+        building a payload never awaits a database. What makes that safe is
+        `missing` below: the tick repairs what this could not answer, so an
+        account absent here is absent for a tick rather than for good.
         """
         found = {}
         for user_id in user_ids:
@@ -391,6 +408,10 @@ class PresenceIdentityCache:
                 self._identities.move_to_end(user_id)
                 found[user_id] = identity
         return found
+
+    def missing(self, user_ids: list[str]) -> list[str]:
+        """Which of these accounts this cache cannot currently answer for."""
+        return [user_id for user_id in user_ids if user_id not in self._identities]
 
     async def warm(self, user_id: str | None) -> None:
         """Read an account's identity ahead of the first snapshot needing it.
@@ -447,6 +468,10 @@ class PresenceIdentityCache:
 
     def clear(self) -> None:
         self._identities.clear()
+
+    @property
+    def capacity(self) -> int:
+        return self._max_cached
 
     def cached_accounts(self) -> int:
         return len(self._identities)
@@ -520,8 +545,37 @@ class PresenceBroadcaster:
         """
         return self._build(self._revision)
 
+    async def _repair_identities(self) -> None:
+        """Read back the identities the cache can no longer answer for.
+
+        The handshake warms an account once, and every writer of a display
+        name or colour invalidates it - but **nothing re-handshakes after a
+        write**: a rename, a colour change and a guest claim all keep the same
+        account id, and `authStore` only shakes hands again when the id
+        changes. Without this, `invalidate` would be permanent for as long as
+        the player stayed connected - their row would drop out of the list,
+        be broadcast as a `left` for a socket that never closed, and never
+        come back.
+
+        Doing it here rather than at each call site is the point. There are
+        four writers today, and the same state is reached with nobody writing
+        at all: a busy server evicts an online account from a bounded cache
+        just by warming others after it. A repair living at the writers would
+        be one more invariant every future writer has to know about, and would
+        still not cover eviction. The tick already rebuilds everything else
+        from truth; this is that idea applied to the one part of a row that is
+        not held in memory.
+        """
+        absent = self._identities.missing(self._registry.online_user_ids())
+        if not absent:
+            return
+        await asyncio.gather(
+            *(self._identities.warm(user_id) for user_id in absent[:WARM_PER_TICK])
+        )
+
     async def flush(self) -> PresenceDelta | None:
         """Broadcast what changed since the last one, if anything did."""
+        await self._repair_identities()
         candidate = self._build(self._revision + 1)
         delta = diff_snapshots(self._last, candidate)
         # The count moves on its own: an account beyond the cap connecting

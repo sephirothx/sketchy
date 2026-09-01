@@ -169,7 +169,7 @@ def create_auth_router(
     session_factory,
     *,
     on_account_deleted: Callable[[str], Awaitable[None]] | None = None,
-    on_identity_merged: Callable[[], None] | None = None,
+    on_identity_merged: Callable[[str, str], None] | None = None,
     # Called with the account whose display name or colour just changed. The
     # lobby's online list shows both, and it reads them from a cache warmed at
     # the handshake - which is written once, while these can change at any
@@ -550,7 +550,7 @@ def create_auth_router(
                     detail="Guest progress could not be linked to this account.",
                 ) from error
             if on_identity_merged is not None:
-                on_identity_merged()
+                on_identity_merged(current.id, credentials.user.id)
             await revoke_all_sessions(session_factory, user_id=current.id)
 
         refreshed = await user_repo.touch_last_login(credentials.user.id)

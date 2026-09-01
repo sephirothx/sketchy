@@ -231,9 +231,20 @@ def forget_presence_identity(user_id: str) -> None:
     handler_context.presence_identities.invalidate(user_id)
 
 
-def forget_merged_identities() -> None:
+def forget_merged_identities(source_user_id: str, target_user_id: str) -> None:
+    """Forget what a guest merge changed - and only that.
+
+    The block cache is cleared whole because a merge rewrites blocks for
+    arbitrary pairs, and because it reads through on a miss: clearing it costs
+    one query per sender who speaks again. Presence has neither property. Only
+    the two accounts in the merge change, and a cleared row is a player
+    missing from the lobby list until a tick reads it back - so wiping it
+    would take every connected player off the list because one of them
+    happened to log in.
+    """
     block_service.clear()
-    handler_context.presence_identities.clear()
+    forget_presence_identity(source_user_id)
+    forget_presence_identity(target_user_id)
 
 
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
