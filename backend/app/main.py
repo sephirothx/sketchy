@@ -30,6 +30,7 @@ from app.api.role_notices import (
     pending_role_notice_payload,
 )
 from app.api.user_settings import create_user_settings_router
+from app.api.friends import create_friends_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.bans import suspension_payload
 from app.auth.warnings import pending_warning_payload
@@ -56,6 +57,7 @@ from app.auth.retention import (
 from app.auth.mail import purge_expired_outbox_entries
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
+from app.services.friends import FriendService
 from app.services.presence import start_presence_loop, stop_presence_loop
 from app.services.readiness import LoopHealth, ReadinessProbe
 from app.repositories.sqlalchemy import (
@@ -136,6 +138,7 @@ user_repo = SqlAlchemyUserRepository(async_session_factory)
 game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
 prompt_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
 block_service = BlockService(async_session_factory)
+friend_service = FriendService(async_session_factory)
 room_preset_service = RoomPresetService(async_session_factory, prompt_list_repo)
 shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
 readiness_probe = ReadinessProbe(async_session_factory)
@@ -487,8 +490,11 @@ api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))
 api.include_router(create_room_preset_router(room_preset_service))
 api.include_router(
-    create_user_blocks_router(async_session_factory, block_service)
+    create_user_blocks_router(
+        async_session_factory, block_service, friend_service
+    )
 )
+api.include_router(create_friends_router(async_session_factory, friend_service))
 api.include_router(create_role_notice_router(async_session_factory))
 api.include_router(
     create_moderation_router(

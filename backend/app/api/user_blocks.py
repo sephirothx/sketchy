@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.audit import audit_coordinates
 from app.auth.blocks import BlockService
+from app.services.friends import FriendService
 from app.domain_values import AuditTargetType
 from app.db.models import (
     AuditEvent,
@@ -58,6 +59,7 @@ async def _target_user(session: AsyncSession, user_id: UUID) -> User | None:
 def create_user_blocks_router(
     session_factory: async_sessionmaker[AsyncSession],
     block_service: BlockService,
+    friend_service: FriendService | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/users/me/blocks")
 
@@ -120,6 +122,18 @@ def create_user_blocks_router(
                         blocked_user_id=target.id,
                     )
                     session.add(block)
+                    if friend_service is not None:
+                        # In the same transaction as the block itself. A
+                        # surviving friendship is a private-room join
+                        # capability (#529) that the blocker has just tried to
+                        # revoke, so it cannot outlive the block by even one
+                        # failed commit. Deleted rather than tombstoned: the
+                        # block is now the durable record, and unblocking must
+                        # not silently restore a friendship neither party
+                        # re-agreed to.
+                        await friend_service.forget_pair(
+                            session, current_id, target.id
+                        )
                     session.add(
                         AuditEvent(
                             id=generate_uuid(),
