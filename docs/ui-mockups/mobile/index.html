@@ -509,6 +509,7 @@ button{font:inherit;color:inherit}
 
 <div class="mast">
   <h1>Sketchy <em>on phones</em></h1>
+  <span class="sub" style="opacity:.7">artboards drawn from the shipped build</span>
   <span class="sub" id="crumb">01 / 17 · First landing</span>
   <span class="mast-sp"></span>
   <div class="tools">
@@ -595,6 +596,9 @@ const ic = {
   shapes:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3" y="12" width="9" height="9" rx="1.6"/><circle cx="17" cy="7" r="4.2"/></svg>`,
   send:`<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 16-8-6 8 6 8Z"/></svg>`,
   expand:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H3v6"/><path d="M15 21h6v-6"/><path d="M3 3l7 7"/><path d="M21 21l-7-7"/></svg>`,
+  brushsm:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c3 0 4-2 4-4a3 3 0 0 0-4 0c-1 1-1 4 0 4Z"/><path d="M8.5 16.5 19 6a2.1 2.1 0 0 0-3-3L5.5 13.5"/></svg>`,
+  copy:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>`,
+  chevdown:`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 9 7 7 7-7"/></svg>`,
   chev:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg>`,
   back:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m14 5-7 7 7 7"/></svg>`,
   plus:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
@@ -624,10 +628,30 @@ const roomRow = (name, host, n, max, chips, live) => `
     <span class="btn sm" style="width:auto;padding:0 18px;min-height:44px">Join</span>
   </div>`;
 
+/* The shipped public room card: name + flag on one line, a facts row whose
+   player count is the control that opens the roster, then Join and Spectate. */
+const roomCard = (name, flag, n, max, rounds, secs, state) => `
+  <div class="card" style="padding:12px 13px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:7px;min-width:0">
+      <div class="disp" style="font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">${name}</div>
+      <span style="font-size:15px;line-height:1">${flag}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="chip" style="min-height:26px;padding:2px 9px;font-size:12px;font-weight:800;gap:5px">${ic.users}${n}/${max} ${ic.chevdown}</span>
+      <span class="muted" style="font-size:12px;font-weight:700">${rounds} rounds</span>
+      <span class="muted" style="font-size:12px;font-weight:700">${secs}s</span>
+      ${state?`<span class="chip warm" style="min-height:22px;padding:2px 8px;font-size:10.5px">${state}</span>`:''}
+    </div>
+    <div style="display:flex;gap:8px">
+      <span class="btn sm" style="flex:1;min-height:44px">Join</span>
+      <span class="btn ghost sm" style="flex:1;min-height:44px;border:1.5px solid var(--line-strong);background:var(--card)">Spectate</span>
+    </div>
+  </div>`;
+
 
 /* ───────────────── 01 · FIRST LANDING (no account, no name) ───────────────── */
 S({ id:'firstrun', n:'01', group:'Arriving', title:'First landing',
-  lede:'Someone who has never played, opening the site cold. They have not seen the game, they have no account, and they have not chosen a name. Today the first thing the screen asks them is which kind of account they would like.',
+  lede:'Someone who has never played, opening the site cold. They have not seen the game, they have no account, and they have not chosen a name. The first thing the screen used to ask them was which kind of account they would like.',
   variants:[
   { name:'A · Name and go', ships:true,
     bad:[
@@ -747,7 +771,7 @@ S({ id:'firstrun', n:'01', group:'Arriving', title:'First landing',
 /* ───────────────── 02 · ARRIVING FROM AN INVITE ───────────────── */
 S({ id:'invite', n:'02', group:'Arriving', title:'Arriving from an invite',
   lede:'The most common first landing a party game has: a friend pastes a link into a group chat and you tap it. This is a different screen from the lobby, and it is the one where the cold-arrival problem costs the most.',
-  variants:[{ name:'Invite landing',
+  variants:[{ name:'Invite landing', ships:true,
     bad:[
       '<b>The Join button is below the fold.</b> Measured cold at 390 × 844: the actions sit at <span class="m">y 839–937</span> on an 844 px screen. You tap a friend’s link and the one thing you came to do is off screen.',
       '<b>380 px of room configuration comes first</b> — a 2×2 table of Players / Rounds / Draw time / Scoring, then four chips for hint mode, tools, spectators and prompt list. None of it is why anyone taps an invite.',
@@ -804,7 +828,7 @@ S({ id:'invite', n:'02', group:'Arriving', title:'Arriving from an invite',
 
 /* ─────────────────────────── 03 · LOBBY ─────────────────────────── */
 S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
-  lede:'The lobby is where a phone user decides whether this game is worth pulling friends into. Today it opens on an account-signup card and buries the rooms four cards down, 1.4 screens below the fold.',
+  lede:'The lobby is where a phone user decides whether this game is worth pulling friends into. It used to open on an account-signup card and bury the rooms four cards down, 1.4 screens below the fold.',
   variants:[
   { name:'A · Rooms first', ships:true,
     bad:[
@@ -815,11 +839,12 @@ S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
       'The build badge floats over the last card.'
     ],
     good:[
-      '<b>Open rooms are the page.</b> Each row is one 76 px tap target — name, who is in it, size, settings, live state.',
-      '<b>Identity moves into the status band</b> as <code>Marta ▾</code>. The account nudge appears once, after a finished game, where it has earned attention.',
-      'One sticky dock, <b>one loud control</b>. <code>Join with a code</code> is quiet and opens a sheet; spectating lives inside that sheet as a secondary choice.',
+      '<b>Open rooms are the page.</b> A card is the room\'s name with its prompt language as a flag on the same line, then one row of facts: how many are in it, rounds, seconds.',
+      '<b>The player count is the control.</b> Tapping it asks the server who is in that room and lists them under the card. The polled list itself carries no names — it is sent to everyone every four seconds — so the roster is fetched on demand instead.',
+      '<b>Identity moves into the status band</b> as <code>Marta ▾</code>, and settings moved inside that menu: three controls beside a wordmark is what put this header on two rows.',
+      'One dock, <b>one loud control</b>. <code>Join with a code</code> is quiet and opens a sheet.',
       'A <b>Rejoin</b> strip appears only when you hold a live seat — the single most valuable row for someone who backgrounded the app mid-turn.',
-      'Everything actionable sits in the bottom 40% of the screen.'
+      'Filters are a sheet behind one chip rather than a block above the rooms, and the search field is one control rather than the two nested boxes a <code>.panel input</code> rule was drawing.'
     ],
     html:`
     <div class="app">
@@ -827,7 +852,6 @@ S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
         ${wordmark(24)}
         <span class="sb-sp"></span>
         <button class="chip" style="min-height:40px"><span class="av sm">M</span> Marta ${ic.chev}</button>
-        <button class="iconbtn ghost"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 4.5l1.7 1.7M17.8 17.8l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.5 19.5l1.7-1.7M17.8 6.2l1.7-1.7"/></svg></button>
       </div>
       <div class="stagearea" style="padding:12px 14px;gap:12px;overflow-y:auto">
         <div class="card" style="border-color:var(--warm-edge);background:var(--warm-soft);padding:12px 14px;display:flex;align-items:center;gap:12px;flex:0 0 auto">
@@ -839,26 +863,25 @@ S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
           <span class="btn sm" style="width:auto;padding:0 16px;background:var(--warm);box-shadow:0 3px 0 var(--warm-edge)">Rejoin</span>
         </div>
 
+        <div style="display:flex;gap:8px;flex:0 0 auto">
+          <span class="gfield" style="flex:1;min-height:44px">Search rooms…</span>
+          <span class="chip" style="min-height:44px;padding:0 14px">Filters</span>
+        </div>
+
         <div style="display:flex;align-items:baseline;gap:8px;flex:0 0 auto;padding:2px 2px 0">
           <span class="kick">Open rooms</span>
           <span class="kick" style="color:var(--success-ink)">● 4 live</span>
-          <span class="sb-sp" style="flex:1"></span>
-          <span class="kick" style="color:var(--primary-ink)">Refresh</span>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:9px;flex:0 0 auto">
-          ${roomRow('Coffee break doodles',[['J','p'],['P','w'],['K','']],3,8,'3 rounds · 90s',true)}
-          ${roomRow('sketch &amp; chill',[['A','w'],['R','']],2,6,'5 rounds · 60s',false)}
-          ${roomRow('Pictionary but worse',[['D','p'],['M',''],['S','g'],['B','w']],6,8,'3 rounds · 45s',true)}
-          ${roomRow('quiet drawing room',[['N','']],1,4,'No scoring · 120s',false)}
+        <div style="display:flex;flex-direction:column;gap:10px;flex:0 0 auto">
+          ${roomCard('Coffee break doodles','🇬🇧',3,8,3,90,'in progress')}
+          ${roomCard('sketch &amp; chill','🇮🇹',2,6,5,60,'')}
+          ${roomCard('Pictionary but worse','🇬🇧',6,8,3,45,'in progress')}
         </div>
       </div>
       <div class="dock">
         <button class="btn">${ic.plus} Create a room</button>
-        <div style="display:flex;gap:9px">
-          <button class="btn ghost sm" style="flex:1">Join with a code</button>
-          <button class="btn ghost sm" style="width:52px;padding:0">${ic.users}</button>
-        </div>
+        <button class="btn ghost sm">Join with a code</button>
       </div>
     </div>` },
 
@@ -915,7 +938,7 @@ S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
 /* ─────────────────────────── 02 · JOIN SHEET ─────────────────────────── */
 S({ id:'join', n:'04', group:'Entry', title:'Join with a code',
   lede:'A code is almost always arriving from a message thread, so the sheet leads with paste and keeps the field in the thumb zone above the keyboard.',
-  variants:[{ name:'Sheet',
+  variants:[{ name:'Sheet', ships:true,
     bad:[
       'Today: six separate <code>&lt;input&gt;</code> boxes, each its own focus stop, sitting <b>at y≈940</b> — under a thumb only after scrolling.',
       '<b>Join by code</b> and <b>Spectate</b> are the same weight, so the sheet asks a question no one came here to answer.'
@@ -954,8 +977,8 @@ S({ id:'join', n:'04', group:'Entry', title:'Join with a code',
 
 /* ─────────────────────────── 03 · CREATE ─────────────────────────── */
 S({ id:'create', n:'05', group:'Entry', title:'Create a room',
-  lede:'The one page with a confirmed layout bug: at 390 px the form is 419 px wide and every control is clipped on the right.',
-  variants:[{ name:'Basics + presets',
+  lede:'The one page that had a confirmed layout bug: at 390 px the form was 419 px wide and every control was clipped on the right. Twice over, as it turned out — the stepper row had the same fault.',
+  variants:[{ name:'Basics + presets', ships:true,
     bad:[
       '<b>Horizontal overflow, on every common phone.</b> <code>.create-room-sections</code> is a bare <code>display:grid</code>, so its implicit <code>auto</code> column sizes to a 402 px card inside a 358 px track. Measured <code>scrollWidth 419</code> vs <code>innerWidth 390</code> — the room-name field, both toggles and all three steppers are cut off.',
       'The form is <b>1 404 px of scroll</b> with 27 controls and no grouping a first-timer can skip.',
@@ -963,59 +986,60 @@ S({ id:'create', n:'05', group:'Entry', title:'Create a room',
       '“Wheel of Fortune”, colour modes and tool locks sit at the same level as “how many rounds”.'
     ],
     good:[
-      '<b>Presets carry the 90% case.</b> One tap sets rounds, time and scoring; the steppers below stay live for anyone who wants to nudge them.',
-      'The form collapses to <b>five decisions</b>. Everything else moves behind <code>More options</code> — same settings, second screen.',
-      '<b>Create</b> is docked and always visible, with the session-length estimate next to it so the number that matters is attached to the button.',
-      'Steppers become full-width rows with 48 px ± targets and a tabular value, instead of a three-across grid that cannot fit.',
-      'Grid tracks are <code>minmax(0,1fr)</code> everywhere, which is the actual fix for the overflow.'
+      '<b>Four named sections</b>, with Basics open and the other three collapsed behind a summary of what is inside them. The same four, in the same order, are what the host edits from the waiting room — one component renders both.',
+      '<b>Create is docked</b>, with the summary of what is about to be created beside it, instead of being the last thing on a form most people never finish reading.',
+      '<b>Steppers are full-width rows</b> — label left, ± right — with 44 px targets. Three across cannot hold a 44 px target on a phone: it overflowed by 3 px at 360 and 10 px at 320.',
+      'No hints under the three numbers. The ranges are enforced by the controls, "everyone draws once per round" is what a round is, and the line under them says what the three add up to in minutes.',
+      'Grid tracks are <code>minmax(0,1fr)</code> everywhere, which is the actual fix for the overflow — and for a second one of the same kind: <code>repeat(3, 1fr)</code> laid the steppers out 560 px wide inside a 390 px phone.',
+      '<b>The wordmark stays in the header.</b> A sub-page replaced it with the back button, so the one screen a first-time visitor might arrive on from a link was the one that never said whose site it was.'
     ],
     html:`
     <div class="app">
       <div class="sband band">
         <button class="iconbtn ghost">${ic.back}</button>
-        <div class="disp" style="font-size:17px">New room</div>
+        ${wordmark(22)}
         <span class="sb-sp"></span>
-        <span class="chip">Public ${ic.chev}</span>
+        <button class="chip" style="min-height:40px"><span class="av sm">M</span> Marta ${ic.chev}</button>
       </div>
-      <div class="stagearea" style="padding:14px;gap:14px;overflow-y:auto">
+      <div class="stagearea" style="padding:14px;gap:12px;overflow-y:auto">
         <div style="flex:0 0 auto">
-          <div class="kick" style="margin-bottom:8px">Start from</div>
-          <div class="chips">
-            <span class="chip on">Quick · 2×60s</span>
-            <span class="chip">Classic · 3×90s</span>
-            <span class="chip">Marathon · 6×90s</span>
+          <div class="kick">Room setup</div>
+          <div class="disp" style="font-size:24px;margin-top:2px">Create a room</div>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;padding:14px 14px 15px">
+          <div class="disp" style="font-size:17px;margin-bottom:11px">Basics</div>
+          <div class="kick" style="margin-bottom:5px">Room name</div>
+          <div class="gfield" style="margin-bottom:11px">Leave blank for a random name!</div>
+          <div class="kick" style="margin-bottom:5px">Visibility</div>
+          <div class="chips" style="margin-bottom:12px">
+            <span class="chip on" style="flex:1;justify-content:center">Public</span>
+            <span class="chip" style="flex:1;justify-content:center">Private</span>
           </div>
+          <div class="rows" style="border:1.5px solid var(--line);border-radius:14px;background:var(--well)">
+            <div class="step"><span class="k">Max players</span><span class="pm">−</span><span class="v">8</span><span class="pm">+</span></div>
+            <div class="step" style="border-top:1.5px solid var(--line)"><span class="k">Rounds</span><span class="pm">−</span><span class="v">3</span><span class="pm">+</span></div>
+            <div class="step" style="border-top:1.5px solid var(--line)"><span class="k">Drawing time</span><span class="pm">−</span><span class="v">90s</span><span class="pm">+</span></div>
+          </div>
+          <div class="muted" style="font-size:12.5px;font-weight:700;margin-top:10px">🕑 This setup runs <b>about 18 minutes</b> with a full room of 8.</div>
         </div>
 
-        <div class="rows" style="flex:0 0 auto">
-          <div class="row"><span class="lbl">Name</span><span class="val faint">Coffee break doodles</span></div>
-          <div class="row"><span class="lbl">Who can join</span><span class="val">Anyone ${ic.chev}</span></div>
-        </div>
-
-        <div class="card" style="flex:0 0 auto;padding:4px 14px">
-          <div class="step"><span class="k">Players<small>Spectators are free</small></span>
-            <span class="pm">−</span><span class="v">8</span><span class="pm">+</span></div>
-          <div class="step" style="border-top:1.5px solid var(--line)"><span class="k">Rounds<small>Everyone draws once each</small></span>
-            <span class="pm">−</span><span class="v">2</span><span class="pm">+</span></div>
-          <div class="step" style="border-top:1.5px solid var(--line)"><span class="k">Time to draw<small>15s – 5min</small></span>
-            <span class="pm">−</span><span class="v">60s</span><span class="pm">+</span></div>
-        </div>
-
-        <button class="row card" style="flex:0 0 auto;display:flex;align-items:center;gap:11px;min-height:60px;width:100%;text-align:left;border-radius:16px">
-          <span class="lbl">More options</span>
-          <span class="val faint" style="font-size:12.5px">prompts · hints · tools · scoring ${ic.chev}</span>
-        </button>
+        ${['Prompts|English · English — Standard · 260 prompts','Drawing|Brush, Fill, Shapes · All colors','Scoring and hints|Default scoring · Timed hints']
+          .map(x=>{const [t,sum]=x.split('|'); return `
+          <div class="card" style="flex:0 0 auto;padding:14px;display:flex;align-items:center;gap:10px">
+            <div class="disp" style="font-size:16px;flex:0 0 auto">${t}</div>
+            <div class="faint" style="font-size:12.5px;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sum}</div>
+            <span class="faint" style="flex:0 0 auto">${ic.chev}</span>
+          </div>`}).join('')}
       </div>
       <div class="dock">
         <div style="display:flex;align-items:center;gap:12px">
-          <div style="flex:1">
-            <div class="kick">Runs about</div>
-            <div class="disp" style="font-size:19px">18 minutes</div>
-          </div>
-          <button class="btn" style="width:auto;padding:0 26px">Create</button>
+          <div class="faint" style="flex:1;min-width:0;font-size:12px;font-weight:700;line-height:1.3">Public · 8 players · 3 rounds · 90s · Default scoring · Timed hints</div>
+          <button class="btn" style="width:auto;padding:0 20px;flex:0 0 auto">Create room</button>
         </div>
       </div>
     </div>` }]});
+
 </script>
 <script>
 /* palette shown permanently in the drawer dock */
@@ -1040,8 +1064,8 @@ const feedLine = (who,txt,kind) =>
 
 /* ─────────────────────────── 04 · WAITING ROOM ─────────────────────────── */
 S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
-  lede:'The host has exactly two jobs here — get people in, then start. Today both are below the fold.',
-  variants:[{ name:'Host view',
+  lede:'The host has exactly two jobs here — get people in, then start. Both used to be below the fold.',
+  variants:[{ name:'Host view', ships:true,
     bad:[
       '<b>Start game sits at y = 822 on an 844 px screen</b> — clipped in half by the fold. The page is 1 376 px tall.',
       'The <b>player list is dead last</b>, at y 1 153–1 360, below the chat card. The one thing you watch while waiting is 1.4 screens down.',
@@ -1049,49 +1073,61 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
       'Header packs eight controls into a 44 px strip, with a red <b>Leave room</b> immediately beside <b>Settings</b>.'
     ],
     good:[
-      '<b>Invite is the hero</b>, and it is one button: the OS share sheet, which is how a code actually reaches a group chat. The code stays visible for people reading it aloud.',
-      '<b>Everyone in the room is on screen</b> as an avatar grid, with ready state on the tile.',
-      'Settings collapse to <b>one summary line that opens the editor</b>; chat collapses to a dock tab with an unread count.',
-      '<b>Start game</b> is docked and permanent. It carries its own blocking reason (<code>Need 1 more</code>) instead of a separate paragraph.',
-      'Leaving moves into the ⋯ sheet behind a confirm, away from routine controls.'
+      '<b>Invite is the hero</b>: the code at a size you can read across a room, and the two ways to send it. <b>Share the link</b> goes through the OS share sheet where there is one, which is how a code actually reaches a group chat. 138 px, against the 237 the six bordered cells and a subtitle took.',
+      '<b>Everyone in the room is on screen</b> as an avatar grid with the ready ring on the tile. It replaces the players column outright below 900 px — rendering both would put every nickname on the page twice.',
+      'Settings collapse to <b>one summary line that opens the editor</b>, carrying only the facts the host has moved off their defaults.',
+      '<b>Start game</b> is docked and permanent — <code>position: fixed</code>, not sticky, which pins to the bottom of its own column and let the chat card end up underneath it. It carries its own blocking reason (<code>Need 1 more player</code>) instead of a heading and a paragraph.',
+      'Every gap on the screen is the same 14 px, and an empty room comes to exactly <span class="m">844 px</span> on an 844 px viewport — against 1 432 before.',
+      'Chat stays a card in the column rather than becoming a dock tab; leaving moves into the ⋯ sheet behind a confirm.'
     ],
     html:`
     <div class="app">
       <div class="sband band">
         <span class="codechip">BQ7F2K</span>
-        <div class="disp" style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Coffee break doodles</div>
+        ${wordmark(20)}
         <span class="sb-sp"></span>
         ${menuBtn}
       </div>
-      <div class="stagearea" style="padding:14px;gap:13px;overflow-y:auto">
-        <div class="card" style="flex:0 0 auto;text-align:center;padding:16px 14px;background:var(--primary-soft);border-color:var(--primary-edge-soft)">
-          <div class="kick" style="color:var(--primary-ink)">Invite your friends</div>
-          <div class="disp" style="font-size:34px;letter-spacing:.14em;margin:6px 0 12px;color:var(--primary-ink)">BQ7F2K</div>
-          <button class="btn">${ic.share} Share the link</button>
+      <div class="stagearea" style="padding:14px;gap:14px;overflow-y:auto">
+        <div style="flex:0 0 auto;text-align:center">
+          <div class="disp" style="font-size:20px">Coffee break doodles</div>
+          <div class="kick" style="margin-top:3px">Public room · waiting for players</div>
         </div>
 
-        <div style="flex:0 0 auto">
-          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px">
-            <span class="kick">In the room</span><span class="kick" style="color:var(--success-ink)">3 of 8</span>
+        <div class="card" style="flex:0 0 auto;text-align:center;padding:14px;background:var(--primary-soft);border-color:var(--primary-edge-soft)">
+          <div class="kick" style="color:var(--primary-ink)">Invite your friends</div>
+          <div class="disp" style="font-size:30px;letter-spacing:.14em;margin:4px 0 10px;color:var(--primary-ink)">BQ7F2K</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" style="flex:1;padding:0 10px">${ic.share} Share the link</button>
+            <button class="btn ghost" style="flex:1;padding:0 10px;border:1.5px solid var(--line-strong);background:var(--card)">${ic.copy} Copy code</button>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px">
-            ${[['M','p','you','ready'],['J','w','Jonas','ready'],['P','','Priya','ready'],['','wait','Invite','']].map(([l,c,nm,st])=>
+        </div>
+
+        <div class="card" style="flex:0 0 auto;padding:14px">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:11px">
+            <div class="disp" style="font-size:15px;flex:1">In the room</div>
+            <span class="kick" style="color:var(--success-ink)">3 of 8</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px 9px">
+            ${[['M','p','Marta','host'],['J','w','Jonas','you'],['P','','Priya',''],['','wait','Invite','']].map(([l,c,nm,tag])=>
               c==='wait'
               ? `<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
                    <span class="av lg" style="background:transparent;border:2px dashed var(--line-strong);color:var(--faint)">${ic.plus}</span>
-                   <span class="faint" style="font-size:11px;font-weight:800">${nm}</span></div>`
+                   <span class="faint" style="font-size:11.5px;font-weight:800">${nm}</span></div>`
               : `<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
                    <span class="av lg ${c}" style="box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--success)">${l}</span>
-                   <span style="font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:74px">${nm}</span></div>`).join('')}
+                   <span style="font-size:11.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:74px">${nm}</span>
+                   ${tag?`<span class="kick" style="font-size:10px">${tag}</span>`:''}</div>`).join('')}
           </div>
         </div>
 
         <button class="row card" style="flex:0 0 auto;display:flex;gap:11px;align-items:center;min-height:58px;border-radius:16px;width:100%;text-align:left">
-          <span class="lbl">2 rounds · 60s · timed hints</span>
+          <span class="lbl" style="flex:1;min-width:0;font-size:14px">2 rounds · 60s · Timed hints</span>
           <span class="val faint">Edit ${ic.chev}</span>
         </button>
 
-        <div style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;padding:0 2px">
+        <div class="card" style="flex:0 0 auto;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+          <div class="kick" style="margin-bottom:4px">Room chat</div>
           ${feedLine('','Priya joined','sys')}
           ${feedLine('Jonas','ok who’s drawing first','')}
           ${feedLine('Priya','not me, I’m terrible','')}
@@ -1099,17 +1135,13 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
       </div>
       <div class="dock">
         <button class="btn go">Start game</button>
-        <div style="display:flex;gap:9px">
-          <button class="btn ghost sm" style="flex:1">Chat <span class="chip on" style="min-height:22px;padding:1px 8px;font-size:11px">2</span></button>
-          <button class="btn ghost sm" style="flex:1">Room settings</button>
-        </div>
       </div>
     </div>` }]});
 
 /* ─────────────────────────── 05 · PROMPT CHOICE ─────────────────────────── */
 S({ id:'choice', n:'07', group:'In the room', title:'Pick a prompt',
   lede:'A fifteen-second decision, currently made from three small tiles at the top of the screen above an empty white canvas.',
-  variants:[{ name:'Drawer',
+  variants:[{ name:'Drawer', ships:true,
     bad:[
       'The three choices sit at <b>y 190–310</b>, out of thumb reach, above <b>278 px of blank canvas</b> that has nothing to show yet.',
       'The countdown is a <b>12 px “11s”</b> in the corner of a screen whose whole point is that time is running out.',
@@ -1156,7 +1188,7 @@ S({ id:'choice', n:'07', group:'In the room', title:'Pick a prompt',
 /* ─────────────────────────── 06 · DRAWING ─────────────────────────── */
 S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
   lede:'A 4:3 canvas is baked into the wire protocol (800×600), so on a portrait phone it can never be more than about a third of the screen. The redesign stops fighting that and spends the remaining two thirds on the two things a drawer actually wants: full tools under the thumb, and the guesses arriving.',
-  variants:[{ name:'A · Palette always out', ships:true,
+  variants:[{ name:'A · Collapsed controls', ships:true,
     bad:[
       'Canvas measures <b>370 × 278 — 33% of the viewport</b>, while <b>164 px at the bottom is left completely empty</b>.',
       'The <b>colour palette is behind a chevron</b>, and its popover <b>covers the entire canvas</b>: you cannot see the drawing you are colouring. Every colour change costs two taps and a look-away.',
@@ -1165,11 +1197,12 @@ S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
       'The prompt is 15 px text; the thing the drawer must hold in their head is the smallest type on screen.'
     ],
     good:[
-      '<b>Twelve colours permanently visible</b> in two rows in the thumb zone. No popover, nothing ever covers the drawing.',
-      'Tools, brush size, undo and clear are a single 48 px row. <b>Clear asks once</b> — it is the only destructive control on the screen.',
-      'The prompt is set in the display face at 22 px with its letter count, so the drawer can check it at a glance.',
-      '<b>Guesses arrive on the drawer’s screen</b>, with the pip row showing who is still hunting. That is the feedback loop the game runs on.',
-      'Pinch to zoom the canvas for detail; <b>⤢ flips to landscape focus</b> (variant B), where the same 4:3 canvas is 2.2× the area.'
+      '<b>The strip moved rather than grew.</b> Tool, colour, size, undo and clear are one row of collapsed chips filling the dock at the bottom of the screen, each opening a popover above itself. An earlier draft unrolled the palette permanently; it cost the canvas two rows of swatches for a control that is one tap away, and the original complaint was about <i>where</i> the controls sat.',
+      'The dock renders into a slot after the chat region, so it lands under the thumb rather than between canvas and feed.',
+      '<b>One clock.</b> The countdown ring, the prompt and the depleting rule under it were the same number three times; the ring stays in the band and the rest goes.',
+      'The wordmark is in the top row, and the prompt is set in the display face with its letter count.',
+      '<b>Guesses arrive on the drawer’s screen</b> and the feed scrolls — <code>justify-content: flex-end</code> had been putting the overflow above the scroll origin, where no gesture could reach it.',
+      'Pinch to zoom the canvas for detail; <b>⤢ flips to landscape focus</b> (variant B).'
     ],
     html:`
     <div class="app">
@@ -1199,30 +1232,31 @@ S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
           ${feedLine('Kit','tower','')}
         </div>
       </div>
-      <div class="dock" style="gap:10px">
-        <div class="swatches" style="justify-content:space-between">${swatches(0,0,6)}</div>
-        <div class="swatches" style="justify-content:space-between">${swatches(0,6,12)}</div>
-        <div class="toolrow">
-          <span class="tool on">${ic.brush}</span>
-          <span class="tool">${ic.fill}</span>
-          <span class="tool">${ic.shapes}</span>
-          <span class="tool" style="gap:5px"><i style="width:9px;height:9px;border-radius:50%;background:currentColor;display:block"></i>6</span>
-          <span class="sb-sp" style="flex:1"></span>
-          <span class="tool">${ic.undo}</span>
-          <span class="tool danger">${ic.trash}</span>
+      <div class="dock" style="gap:8px;position:relative">
+        <!-- one chip open, showing the popover it raises over the feed -->
+        <div class="card" style="position:absolute;left:14px;right:14px;bottom:74px;padding:10px;display:flex;flex-direction:column;gap:7px;box-shadow:var(--shadow-raised)">
+          <div class="swatches" style="justify-content:space-between">${swatches(0,0,6)}</div>
+          <div class="swatches" style="justify-content:space-between">${swatches(0,6,12)}</div>
         </div>
-      </div>
-    </div>` },
+        <div class="toolrow" style="gap:7px">
+          <span class="tool" style="flex:1">${ic.brush}</span>
+          <span class="tool on" style="flex:1"><i style="width:15px;height:15px;border-radius:50%;background:#111;border:1.5px solid var(--line-strong);display:block"></i></span>
+          <span class="tool" style="flex:1;gap:5px"><i style="width:9px;height:9px;border-radius:50%;background:currentColor;display:block"></i>6</span>
+          <span class="tool" style="flex:1">${ic.undo}</span>
+          <span class="tool danger" style="flex:1">${ic.trash}</span>
+        </div>
+      </div>    </div>` },
 
   { name:'B · Landscape focus', ships:true,
     bad:[
       'Portrait is a hard ceiling: with a protocol-fixed 4:3 canvas, a 390 px-wide phone gives the drawer <b>292 px of drawing height</b>, no matter how good the layout is.'
     ],
     good:[
-      'Rotating gives the same canvas <b>520 × 390 rather than 374 × 280 — twice the drawing area</b>, and finger precision scales with it.',
-      'The palette becomes a vertical rail on the holding side; the prompt and clock move to the opposite corner, out of the drawing hand’s way.',
-      'Guesses keep flowing in a narrow right column, so nothing is lost by rotating.',
-      'This is an offer, not a mode switch: <code>⤢</code> in the canvas corner, and it follows the device orientation lock.'
+      'Rotating gives the same canvas <b>403 × 302 against 375 × 281</b> — about 1.15×, not the 2× an earlier draft of this artboard claimed. The rail and the feed take about 220 px of the width, and height binds before width does.',
+      'The controls stack into a rail on the holding side; the prompt and clock move to the opposite corner, out of the drawing hand’s way.',
+      'Popovers open <b>sideways out of the rail, over the canvas</b>. Anchored above their chip as they are in portrait they had nowhere to go: the rail is full height, so they opened off the top of the screen.',
+      'The guess pips are dropped here — the feed already says who has guessed, and every pixel the side columns take comes straight off the canvas.',
+      '<b><code>orientation: landscape</code> is not a phone on its side.</b> It is a viewport wider than it is tall, which a portrait handset with a big soft keyboard also is; every landscape rule carries <code>min-width: 600px</code> for that reason.'
     ],
     land:true,
     html:`
@@ -1266,7 +1300,7 @@ S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
 /* ─────────────────────────── 07 · GUESSING (idle) ─────────────────────────── */
 S({ id:'guessing', n:'09', group:'In the room', title:'Guessing',
   lede:'The guesser’s screen before the keyboard opens. Everything here has to survive the keyboard opening — see the next screen.',
-  variants:[{ name:'Guesser',
+  variants:[{ name:'Guesser', ships:true,
     bad:[
       'The masked word is <b>ten 19 × 26 px tiles</b> with a 12 px superscript. In buy-a-letter and Wheel modes each tile is a <b>button</b> — a 19 × 26 tap target, less than a fifth of the 44 × 44 iOS minimum.',
       '<b>The guess field sits above the message list</b> (<code>.chat-input { order: -1 }</code>), so you type at the top and read below, and new messages travel away from the caret.',
@@ -1324,7 +1358,7 @@ S({ id:'guessing', n:'09', group:'In the room', title:'Guessing',
 
 /* ─────────────────────────── 08 · GUESSING + KEYBOARD ─────────────────────────── */
 S({ id:'keyboard', n:'10', group:'In the room', title:'Guessing with the keyboard up',
-  lede:'The scenario the whole redesign turns on. With a soft keyboard open the guesser has about 510 px of app. Today that budget buys a 6 px hairline, ten tiny tiles, the drawing, and nothing else — every other player, every guess and the clock are gone from the moment you start typing.',
+  lede:'The scenario the whole redesign turns on. With a soft keyboard open the guesser has about 500 px of app. That budget used to buy a 6 px hairline, ten tiny tiles, the drawing, and nothing else — every other player, every guess and the clock gone from the moment you started typing.',
   variants:[{ name:'A · Nothing overlaps the drawing', ships:true,
     bad:[
       'Focusing the field adds <code>.guess-focused</code>, which sets <code>display:none</code> on the header, the round line, the chat heading and <b>the entire message list</b>. You cannot see other players’ guesses, who just got it, or the score while you type — which is most of the turn.',
@@ -1333,36 +1367,28 @@ S({ id:'keyboard', n:'10', group:'In the room', title:'Guessing with the keyboar
       'Measured: canvas 378 × 284 in a 508 px viewport, with <b>49 px of empty space above the hairline</b> and another 49 px gap between canvas and field — nearly 100 px spent on nothing.'
     ],
     good:[
-      '<b>The clock stays a number.</b> Ring collapses into <code>21s</code> beside the tiles, with the depleting rule underneath for peripheral read. Both go red at 10 s.',
-      '<b>The feed survives as one line</b> and the pips survive whole — you keep seeing the race you are in.',
-      '<b>Your guess gets a persistent verdict chip</b> above the field: <span class="m">so close</span> in warm, <span class="m">already guessed</span>, or the dock turning green with the points on a hit.',
-      'Measured in the mockup: app area <span class="m">510</span>, canvas <span class="m">374 × 284</span>. <b>The drawing does not shrink</b> — today’s is 378 × 284 — so the clock, the pips, the feed and the verdict all arrive for free.',
-      'Implementation notes: <code>interactive-widget=resizes-content</code> in the viewport meta, <code>100dvh</code> plus the existing <code>visualViewport</code> vars, and <code>position:sticky</code> rather than <code>fixed</code> for the dock.'
+      '<b>Everything that is not the drawing or the field you type into goes.</b> The clock numeral, the pip row and the feed are all read <i>between</i> guesses rather than during one; the depleting rule alone says "running out", which is what a guesser takes from a timer, and it says it without spending a line.',
+      'What is left is the letter tiles, that rule, the canvas, and the composer — the live letter counts, the field, the send button, with no panel drawn around them.',
+      '<b>The verdict on your own guess</b> is the one piece of feedback that is about the guess being typed. It hangs over the canvas when the canvas reaches that far, translucent over a blur so the strokes stay readable through it.',
+      'Measured against keeping the pips and a line of feed: canvas <span class="m">390 × 293</span> vs 349 × 262 at a 480 px viewport, and <span class="m">387 × 290</span> vs 296 × 222 at 440. At 520 and up both reach 390 × 293, the protocol ceiling at this width.',
+      'Implementation notes: <code>interactive-widget=resizes-content</code> in the viewport meta, and a shell height of <code>min(var(--vv-height), 100dvh)</code> — the two signals disagree in both directions.'
     ],
     kb:true,
     html:`
     <div class="app">
       <div style="padding:6px 12px 0;display:flex;align-items:center;gap:10px;flex:0 0 auto">
         <div class="tiles" style="flex:1;justify-content:flex-start">${tiles('lighthouse',[0,5,9],'sm')}</div>
-        <b style="font-size:19px;font-weight:900;color:var(--warm-ink);font-variant-numeric:tabular-nums">21s</b>
       </div>
-      <div style="padding:5px 12px 0;flex:0 0 auto"><div class="timerule" style="height:4px"><i style="width:23%"></i></div></div>
-      <div class="stagearea" style="gap:6px;padding-top:6px">
+      <div style="padding:5px 12px 0;flex:0 0 auto"><div class="timerule" style="height:5px"><i style="width:23%"></i></div></div>
+      <div class="stagearea" style="gap:6px;padding-top:6px;position:relative">
         <div class="canvasfit" style="padding:0 8px">
           <div class="canvas">${doodle({})}</div>
         </div>
-        <div style="padding:0 14px;display:flex;flex-direction:column;gap:2px;flex:0 0 auto">
-          <div class="pips">
-            <span class="pip got">J<span class="rk">1</span></span>
-            <span class="pip got">P<span class="rk">2</span></span>
-            <span class="pip wait">K</span><span class="pip wait">M</span>
-            <span class="pipmeta">2 of 4 · you would be 3rd</span>
-          </div>
-          ${feedLine('Priya','0:22 · +198','ok')}
-        </div>
+        <!-- the verdict hangs over the drawing rather than taking a band of its own -->
+        <div class="verdict close" style="position:absolute;left:14px;right:14px;bottom:6px;backdrop-filter:blur(8px);opacity:.94">“lighthous” — so close, keep going</div>
       </div>
-      <div class="dock" style="padding-bottom:9px;padding-top:8px;gap:7px">
-        <div class="verdict close">“lighthous” — so close, keep going</div>
+      <div style="padding:0 14px 9px;display:flex;flex-direction:column;gap:5px;flex:0 0 auto">
+        <div class="faint" style="font-size:11px;font-weight:800;letter-spacing:.06em">9</div>
         <div class="guessrow">
           <span class="gfield focus" style="color:var(--ink)">lighthous<span class="caret"></span></span>
           <span class="gsend">${ic.send}</span>
@@ -1467,16 +1493,19 @@ S({ id:'keyboard', n:'10', group:'In the room', title:'Guessing with the keyboar
 ]});
 </script>
 <script>
-const scoreRow = (rk,l,c,nm,you,delta,total,drew) => `
-  <div class="row" style="min-height:52px;padding:0 12px">
-    <span class="disp" style="width:26px;font-size:16px;color:var(--faint)">${rk}</span>
-    <span class="av sm ${c}">${l}</span>
-    <span class="lbl" style="font-style:italic">${nm}${you?' <span class="faint" style="font-style:normal;font-weight:700;font-size:12px">you</span>':''}</span>
-    ${drew?`<span class="chip warm" style="min-height:22px;padding:1px 8px;font-size:10.5px">drew</span>`:''}
-    <span class="val">
-      <b style="color:var(--success-ink);font-variant-numeric:tabular-nums">+${delta}</b>
-      <b style="color:var(--ink);font-variant-numeric:tabular-nums;min-width:44px;text-align:right">${total}</b>
+/* The shipped row: rank, name, when they got it, then the delta — with a brush
+   against it for whoever drew, in the primary colour so it reads as a role and
+   not as part of a number that is green when it is a gain. */
+const scoreRow = (rk,l,c,nm,you,delta,total,drew,time) => `
+  <div class="row" style="min-height:38px;padding:0 10px;gap:8px">
+    <span class="disp" style="width:24px;font-size:15px;color:var(--faint)">#${rk}</span>
+    <span class="lbl" style="flex:1;min-width:0;font-style:italic">${nm}${you?' <span class="faint" style="font-style:normal;font-weight:700;font-size:12px">(you)</span>':''}</span>
+    ${time?`<span class="muted" style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">${time}</span>`:''}
+    <span style="display:inline-flex;align-items:center;justify-content:flex-end;gap:4px;min-width:52px">
+      ${drew?`<span style="display:inline-flex;color:var(--primary)">${ic.brushsm}</span>`:''}
+      <b style="color:${delta>0?'var(--success-ink)':'var(--faint)'};font-variant-numeric:tabular-nums">${delta>0?'+':''}${delta}</b>
     </span>
+    <b style="color:var(--ink);font-variant-numeric:tabular-nums;min-width:40px;text-align:right">${total}</b>
   </div>`;
 
 const finalRow = (rk,l,c,nm,you,total,note) => `
@@ -1489,8 +1518,8 @@ const finalRow = (rk,l,c,nm,you,total,note) => `
 
 /* ─────────────────────────── 09 · TURN RESULTS ─────────────────────────── */
 S({ id:'results', n:'11', group:'Between turns', title:'Turn results',
-  lede:'Six seconds of payoff, currently delivered inside a 250 px box floating on the canvas while confetti paints over the text.',
-  variants:[{ name:'Sheet',
+  lede:'Six seconds of payoff, once delivered inside a 250 px box floating on the canvas while confetti painted over the text.',
+  variants:[{ name:'Sheet', ships:true,
     bad:[
       '<code>.turn-results-overlay</code> is <code>position:absolute; inset:0</code> <b>inside the canvas</b>, and the panel is <code>max-height:90%</code> of a 278 px canvas. The whole recap — word, your score, guess order, full standings, next-turn progress and the button — is crammed into a <b>250 px scrolling box</b>.',
       '<b>The Next turn button is below the clipped edge.</b> So is the bottom of the standings list.',
@@ -1498,11 +1527,11 @@ S({ id:'results', n:'11', group:'Between turns', title:'Turn results',
       'Meanwhile the bottom 45% of the phone shows an idle chat card and 150 px of nothing.'
     ],
     good:[
-      'A <b>bottom sheet at 62%</b>: the drawing you were staring at stays visible above it, which is the whole reason you want to see the answer.',
-      'Your own result is the largest thing on the sheet. The standings scroll under it, ranked.',
-      'One primary. <b>The countdown is a rule under the button</b>, not text inside its label, and tapping anywhere on the sheet cancels the auto-advance.',
-      'Confetti drops below the sheet layer and stops after 2.5 s.',
-      'Swipe down dismisses to watch the canvas; swipe up expands to the full scoreboard.'
+      'A <b>bottom sheet</b>: the drawing you were staring at stays visible above it, which is the whole reason you want to see the answer.',
+      '<b>The sheet never scrolls.</b> It is a column — the word, your score and the countdown are fixed, and the standings take what is left and scroll inside themselves. A single scrolling block put the countdown, the one thing that says how long you have to read any of it, below the fold.',
+      '<b>Each thing is said once.</b> A "Correct guesses" list under its own heading repeated every name the standings below already carried; the only thing it had that they did not was when each player got it, which now sits on their row. The drawer\'s row said it twice over too — a pencil chip beside the name and a bonus beside the score that the delta already contained.',
+      '<b>The countdown means something.</b> `turn_ended` carries the phase length, and nothing was setting a deadline when the phase began — so a turn that ran out of clock announced 0 seconds and drew no bar at all, and one that ended early announced whatever drawing time was left. Measured end to end now: predicted 28.1 s remaining, overlay lived 28.2.',
+      'Confetti drops below the sheet layer and stops after 2.5 s.'
     ],
     html:`
     <div class="app">
@@ -1529,22 +1558,22 @@ S({ id:'results', n:'11', group:'Between turns', title:'Turn results',
           <div class="disp" style="font-size:30px;color:var(--success-ink)">+176</div>
         </div>
         <div class="rows" style="flex:1 1 auto;min-height:0;overflow:hidden">
-          ${scoreRow(1,'J','p','Jonas',false,240,986,false)}
-          ${scoreRow(2,'M','','Marta',true,176,842,false)}
-          ${scoreRow(3,'P','w','Priya',false,198,790,false)}
-          ${scoreRow(4,'K','g','Kit',false,240,604,true)}
+          ${scoreRow(1,'J','p','Jonas',false,240,986,false,'14.2s')}
+          ${scoreRow(2,'M','','Marta',true,176,842,false,'29.0s')}
+          ${scoreRow(3,'P','w','Priya',false,198,790,false,'22.4s')}
+          ${scoreRow(4,'K','g','Kit',false,240,604,true,'')}
         </div>
-        <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:7px">
-          <button class="btn">Next turn — Kit draws</button>
-          <div class="timerule" style="height:4px"><i style="width:64%;background:var(--primary)"></i></div>
+        <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:5px">
+          <div class="kick">Next turn</div>
+          <div class="timerule" style="height:6px"><i style="width:64%;background:var(--primary)"></i></div>
         </div>
       </div>
     </div>` }]});
 
 /* ─────────────────────────── 10 · GAME OVER ─────────────────────────── */
 S({ id:'gameover', n:'12', group:'Between turns', title:'Game over',
-  lede:'The moment that decides whether the group plays another round — currently five competing buttons under confetti that makes half the text unreadable.',
-  variants:[{ name:'Podium + tabs',
+  lede:'The moment that decides whether the group plays another round — once five competing buttons under confetti that made half the text unreadable.',
+  variants:[{ name:'Podium + tabs', ships:true,
     bad:[
       '<b>Five actions, no hierarchy</b>: Create account, View highlights, View drawings, Continue (with a countdown inside the label) and Stay here — which is clipped off the bottom of the panel.',
       '<b>Confetti at z-index 9999 covers every label.</b> On a 390 px screen the same particle count lands on a third of the area, so “Marta isn’t saved…” is genuinely illegible.',
@@ -1552,11 +1581,12 @@ S({ id:'gameover', n:'12', group:'Between turns', title:'Game over',
       'Highlights and Drawings are two separate destinations reached by two separate buttons.'
     ],
     good:[
-      '<b>One primary: Play again.</b> Everything else is a text link or a tab.',
-      '<b>Highlights and Drawings become tabs on this screen</b>, not two exits from it. Result, highlights and gallery are one place.',
-      'The winner’s own drawing is the backdrop — the game’s material, doing the celebrating, instead of generic particles.',
-      'The auto-return countdown is a rule under a quiet <code>Back to lobby</code>, cancellable by touching the screen.',
-      'The guest→account nudge waits at the bottom as one quiet line. It has earned attention here; it does not get to shout.'
+      '<b>One primary: Continue</b>, with the auto-return countdown as a ring inside it. Highlights and Drawings step back a level, and they keep their own panels — the tabs in this artboard are the one part of it that is not built.',
+      '<b>It takes the screen.</b> On a phone this was a section inside the stacked room page, players panel above and chat below, so the document was 1 671 px tall and the result was something you scrolled to.',
+      '<b>The panel never scrolls.</b> A column: the headline, the podium and the way out stay put while the standings scroll inside themselves — sixteen players do not fit anywhere.',
+      'Everything above the podium was paying for that. 44 px of confetti over a headline that is already the celebration, gone on short screens; a 28 px headline that wrapped to three lines, 21 px there; and an account nudge that took 116 px to say one sentence, now one line at 58.',
+      '<b>“Highlights” and “Drawings”</b>, not “View highlights” and “View drawings”, which wrapped to two lines in a half-width button.',
+      'Measured with six players, nothing clipped and only the standings scrolling, at 390 × 844, 375 × 667, 360 × 640, 360 × 560, 1280 × 860, 1024 × 700 and 1440 × 900. The compact treatment is keyed on <code>(max-width: 900px), (max-height: 780px)</code>: what runs out is vertical, and a short desktop window had the same problem.'
     ],
     html:`
     <div class="app">
@@ -1578,9 +1608,6 @@ S({ id:'gameover', n:'12', group:'Between turns', title:'Game over',
           </div>
         </div>
 
-        <div style="padding:12px 14px 0;flex:0 0 auto">
-          <div class="tabbar"><b class="on">Standings</b><b>Highlights</b><b>Drawings · 6</b></div>
-        </div>
         <div style="padding:10px 14px 0;flex:1 1 auto;min-height:0;overflow:hidden">
           <div class="rows">
             ${finalRow(1,'J','p','Jonas',false,986,'won 2 turns')}
@@ -1591,20 +1618,30 @@ S({ id:'gameover', n:'12', group:'Between turns', title:'Game over',
         </div>
       </div>
       <div class="dock" style="gap:8px">
-        <button class="btn go">Play again</button>
-        <button class="linkbtn">Back to lobby</button>
-        <div class="timerule" style="height:3px;margin-top:-4px"><i style="width:38%;background:var(--faint)"></i></div>
-        <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;color:var(--muted);padding-top:2px">
-          <span style="flex:1">Keep “Marta” and your 842 points?</span>
-          <span class="chip on" style="min-height:34px">Create account</span>
+        <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;color:var(--muted);background:var(--warm-soft);border:1px solid var(--warm-edge);border-radius:12px;padding:8px 10px">
+          <span style="flex:1">Keep <b style="color:var(--ink)">Marta</b> as your username</span>
+          <span class="chip on" style="min-height:40px">Create account</span>
         </div>
+        <div style="display:flex;gap:9px">
+          <button class="btn ghost sm" style="flex:1;border:1.5px solid var(--line-strong);background:var(--card)">${ic.crown} Highlights</button>
+          <button class="btn ghost sm" style="flex:1;border:1.5px solid var(--line-strong);background:var(--card)">${ic.brush} Drawings</button>
+        </div>
+        <button class="btn" style="gap:11px">
+          <svg width="26" height="26" viewBox="0 0 46 46" aria-hidden="true" style="flex:none">
+            <circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="6"/>
+            <circle cx="23" cy="23" r="19" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"
+              stroke-dasharray="119.4" stroke-dashoffset="53.7" transform="rotate(-90 23 23)"/>
+          </svg>
+          Continue
+        </button>
+        <button class="linkbtn">Stay here</button>
       </div>
     </div>` }]});
 
 /* ─────────────────────────── 11 · DRAWINGS ─────────────────────────── */
 S({ id:'recap', n:'13', group:'Between turns', title:'The drawings',
   lede:'Six drawings from the game, currently paged one at a time by two text buttons.',
-  variants:[{ name:'Swipe gallery',
+  variants:[{ name:'Swipe gallery', ships:true,
     bad:[
       '<b>Previous / Next text buttons</b> on a touch screen full of images. No swipe, no grid, no way to see what else is in there.',
       '<b>Save image</b> and <b>Close</b> sit above the artwork as equal-weight buttons, so the first thing you meet is chrome.',
@@ -1651,7 +1688,7 @@ S({ id:'recap', n:'13', group:'Between turns', title:'The drawings',
 /* ─────────────────────────── 12 · PLAYERS ─────────────────────────── */
 S({ id:'players', n:'14', group:'Overlays', title:'Players & score',
   lede:'The live scoreboard during a turn.',
-  variants:[{ name:'Bottom sheet',
+  variants:[{ name:'Bottom sheet', ships:true,
     bad:[
       'The drawer slides in from the <b>left and covers 74% of the width, full height</b>, for two rows of content — checking the score means covering the game.',
       '<b>Confetti renders on top of the drawer</b> (z-index 9999 vs the drawer’s 1200), so during the celebration the names are unreadable — exactly when people look.',
@@ -1713,7 +1750,7 @@ S({ id:'players', n:'14', group:'Overlays', title:'Players & score',
 /* ─────────────────────────── 13 · SETTINGS ─────────────────────────── */
 S({ id:'settings', n:'15', group:'Overlays', title:'Settings',
   lede:'A desktop dialog rendered on a phone.',
-  variants:[{ name:'Full-screen sheet',
+  variants:[{ name:'Full-screen sheet', ships:true,
     bad:[
       'A <b>340 × 699 floating dialog</b> with 901 px of content scrolling inside it, on a 390 px screen. It is a desktop modal wearing a phone.',
       'A <b>Shortcuts tab</b> — keyboard shortcuts, on a touch device — takes a third of the tab bar.',
@@ -1776,7 +1813,7 @@ S({ id:'settings', n:'15', group:'Overlays', title:'Settings',
 /* ─────────────────────────── 14 · PROFILE ─────────────────────────── */
 S({ id:'profile', n:'16', group:'Elsewhere', title:'Profile',
   lede:'A player’s record, sized for a phone rather than reflowed from a desktop table.',
-  variants:[{ name:'Profile',
+  variants:[{ name:'Profile', ships:true,
     bad:[
       'The desktop layout stacks into a long single column of labelled rows with no visual weight on the numbers people came for.',
       'No way back into a game from here, so it is a dead end mid-session.'
@@ -1831,7 +1868,7 @@ S({ id:'profile', n:'16', group:'Elsewhere', title:'Profile',
 /* ─────────────────────────── 15 · PROMPT STATS ─────────────────────────── */
 S({ id:'stats', n:'17', group:'Elsewhere', title:'Prompt stats',
   lede:'A 592-row data table, delivered to a phone in full.',
-  variants:[{ name:'Cards + filter sheet',
+  variants:[{ name:'Cards + filter sheet', ships:true,
     bad:[
       'The page is <b>25 496 px tall</b> on an 844 px screen — thirty screens of scroll, unpaginated.',
       'Five native <code>&lt;select&gt;</code> menus stacked with inline labels that wrap (“Prompt / list”), taking 200 px before any data.',
@@ -1938,14 +1975,14 @@ function render(){
     <p class="lede">${s.lede}</p>
     ${s.variants.length>1 ? `<div class="vtabs" role="group" aria-label="Proposals">${
       s.variants.map((x,j)=>`<button class="vtab" data-v="${j}" aria-pressed="${j===curVar}">${x.name}${x.ships?' <i class="ships">built</i>':''}</button>`).join('')
-    }</div>` : ''}
+    }</div>` : (v.ships ? `<div class="vtabs"><span class="vtab" aria-pressed="true">Built <i class="ships">built</i></span></div>` : '')}
     <div class="deck">${deck}</div>
     ${s.variants.length>1 ? `<p class="verdict">${v.ships
-      ? 'This is the one that ships.'
+      ? 'This is the one that shipped — the artboard is drawn from the build.'
       : 'Drawn as an alternative; the build went the other way.'}</p>` : ''}
     <div class="notes">
-      <div class="note bad"><h3>What breaks today</h3><ul>${v.bad.map(b=>`<li>${b}</li>`).join('')}</ul></div>
-      <div class="note good"><h3>What this does instead</h3><ul>${v.good.map(b=>`<li>${b}</li>`).join('')}</ul></div>
+      <div class="note bad"><h3>What it was</h3><ul>${v.bad.map(b=>`<li>${b}</li>`).join('')}</ul></div>
+      <div class="note good"><h3>What it is now</h3><ul>${v.good.map(b=>`<li>${b}</li>`).join('')}</ul></div>
     </div>
     <div class="pager">
       <button class="tbtn" data-nav="-1">◀ ${SCREENS[(cur-1+SCREENS.length)%SCREENS.length].title}</button>

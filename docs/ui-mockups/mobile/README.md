@@ -7,7 +7,11 @@ explicitly "desktop widths only"; this is the other half.
 
 - **The artboards** — 17 screens, 23 of them, each rendered as a light/dark pair
   at a true 390 × 844, with a real soft keyboard drawn where the keyboard is part
-  of the problem:
+  of the problem. **They are drawn from the shipped build**, not from the
+  proposal: where a screen changed during implementation the artboard changed
+  with it, every variant that shipped is badged *built*, and the two panels read
+  "what it was" and "what it is now". The alternatives that were not built are
+  still there, labelled as such:
   <https://claude.ai/code/artifact/afdba7d2-a8b0-4374-80e1-af68510f72ff>
   ([`index.html`](index.html) is the source and the same page — one self-contained
   file, no build step. Open it from disk, or publish it as an Artifact.)
