@@ -4,7 +4,7 @@ import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { ChevronRightIcon, CopyIcon, LinkIcon, PlusIcon } from "./icons";
+import { ChevronRightIcon, LinkIcon, PlusIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { describeDrawingRules } from "../lib/drawingRules";
 import { hintLabelFor } from "../lib/roomSetup";
@@ -82,6 +82,24 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // The first three are what everyone wants to know; the rest appear only
   // when the host has moved them off their defaults, which is when they are
   // worth a line. Eight chips said all of it always, and spent 250px doing it.
+  // The OS share sheet is how a code actually reaches a group chat. Where
+  // there is none — every desktop browser but Safari — copying the link is
+  // the same job done by hand.
+  async function shareInvite() {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: props.name, text: `Join my Sketchy room: ${code ?? ""}`, url });
+        return;
+      } catch (error) {
+        // A cancelled share is not a failure, and must not fall through to a
+        // copy the player did not ask for.
+        if ((error as DOMException)?.name === "AbortError") return;
+      }
+    }
+    await copyToClipboard(url, "Invite link");
+  }
+
   const promptsValue = props.customPromptsOnly
     ? `Custom prompts only (${props.customPromptCount})`
     : props.customPromptCount > 0
@@ -102,37 +120,32 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
 
   return (
     <main className="waiting-room" data-testid="waiting-room">
-      <section className="waiting-card waiting-invite-card">
+      {/* Which room this is, out of the invite card. It is the one thing on
+          the screen that is not about getting people into it. */}
+      <header className="waiting-room-head">
+        <h1>{props.name}</h1>
         <p className="section-label">
           {props.isPublic ? "Public room" : "Private room"} · {rematch ? "between games" : "waiting for players"}
         </p>
-        <h1>{props.name}</h1>
-        <p className="waiting-room-subtitle">
-          {rematch
-            ? "Game over. Send the code around for the next one."
-            : "Send friends the code or the link — they can join mid-lobby."}
-        </p>
+      </header>
+
+      {/* The code, read at a glance or tapped to copy, and one way to send it.
+          Six bordered cells and two buttons spent 237px on that. */}
+      <section className="waiting-card waiting-invite-card">
+        <p className="waiting-invite-kicker">Invite your friends</p>
         {code && (
-          <div className="waiting-code-cells" role="img" aria-label={`Room code ${code}`}>
-            {code.split("").map((character, index) => (
-              <span key={index} aria-hidden="true">{character}</span>
-            ))}
-          </div>
+          <button
+            type="button"
+            className="waiting-code"
+            aria-label={`Room code ${code}. Copy it.`}
+            onClick={() => void copyToClipboard(code, "Room code")}
+          >
+            {code}
+          </button>
         )}
         <div className="waiting-invite-actions">
-          <Button
-            variant="primary"
-            iconLeft={<LinkIcon size={15} />}
-            onClick={() => void copyToClipboard(window.location.href, "Invite link")}
-          >
-            Copy invite link
-          </Button>
-          <Button
-            variant="ghost"
-            iconLeft={<CopyIcon size={14} />}
-            onClick={() => code && void copyToClipboard(code, "Room code")}
-          >
-            Copy code
+          <Button variant="primary" iconLeft={<LinkIcon size={15} />} onClick={() => void shareInvite()}>
+            Share the link
           </Button>
         </div>
       </section>

@@ -476,31 +476,55 @@
 .waiting-card h2 { font-size: 18px; }
 .waiting-card-kicker { color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: .09em; margin: 0 0 5px; text-transform: uppercase; }
 
-/* Invite-first center card. */
-.waiting-invite-card { padding: 24px; text-align: center; }
-.waiting-invite-card h1 { font-size: 28px; margin-top: 5px; }
-.waiting-room-subtitle { color: var(--muted); font-size: 14px; margin: 6px 0 0; }
-.waiting-code-cells {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  margin: 18px 0 14px;
-}
-.waiting-code-cells > span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 56px;
-  border: 1.5px solid var(--line-strong);
-  border-radius: 12px;
-  background: var(--well);
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 26px;
+/* Which room this is. Out of the invite card, which is about getting people
+   into it rather than naming it. */
+.waiting-room-head { text-align: center; }
+.waiting-room-head h1 {
   color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
 }
+.waiting-room-head .section-label { margin-top: 3px; }
+
+/* Invite-first center card: a kicker, the code, one way to send it. */
+.waiting-invite-card {
+  background: var(--primary-soft);
+  border-color: var(--primary-edge-soft, var(--primary-edge));
+  padding: 16px 18px;
+  text-align: center;
+}
+
+.waiting-invite-kicker {
+  color: var(--primary-ink);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+/* The code is the thing people read aloud, and tapping it copies — which is
+   what the second button used to be for. */
+.waiting-code {
+  background: none;
+  border: 0;
+  color: var(--primary-ink);
+  cursor: pointer;
+  display: block;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.1;
+  margin: 6px auto 12px;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.waiting-code:hover { background: color-mix(in srgb, var(--primary-ink) 8%, transparent); }
+
 .waiting-invite-actions {
   display: flex;
   align-items: center;
@@ -818,7 +842,7 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
   .room-shell {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 14px;
   }
 
   .canvas-area {
@@ -846,9 +870,6 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
      is not costing the page anything. */
   .room-shell-waiting .room-shell-players { display: none; }
   .room-shell-waiting .room-shell-chat { order: 3; }
-
-  /* The code cells and the two buttons under them are the instruction. */
-  .waiting-room-subtitle { display: none; }
 
   /* Start is the host's whole reason for being on this screen, and it sat at
      y=822 on an 844px viewport — clipped by the fold. Fixed rather than
@@ -878,33 +899,17 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
     width: 100%;
   }
 
-  /* ── The invite card ──────────────────────────────────────────────────
-     237px for a code and two buttons. The room name is on the status line
-     above it; here it only has to be recognisable. */
-  .waiting-invite-card { padding: 12px 14px 14px; }
-  .waiting-invite-card h1 { font-size: 19px; margin-top: 2px; }
+  .waiting-room-head h1 { font-size: 20px; }
 
-  .waiting-code-cells {
-    gap: 4px;
-    margin: 10px 0;
-  }
+  .waiting-invite-card { padding: 14px 14px 15px; }
+  .waiting-code { font-size: 30px; margin: 4px auto 10px; }
 
-  .waiting-code-cells > span {
-    border-radius: 9px;
-    font-size: 20px;
-    height: 40px;
-    width: 36px;
-  }
+  .waiting-invite-actions .btn { width: 100%; }
 
-  .waiting-invite-actions {
-    flex-wrap: nowrap;
-    gap: 8px;
-  }
-
-  .waiting-invite-actions .btn {
-    flex: 1 1 0;
-    min-width: 0;
-  }
+  /* The gap below the last card in this column is the gap between it and the
+     chat card in the next one, and it was 32px of clearance for a start card
+     that is fixed now. Everything is spaced the same. */
+  .waiting-room { padding-bottom: 0; }
 
   .room-settings-actions {
     flex-direction: column-reverse;
