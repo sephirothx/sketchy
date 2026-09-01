@@ -4,7 +4,7 @@ import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { ChevronRightIcon, LinkIcon, PlusIcon } from "./icons";
+import { ChevronRightIcon, CopyIcon, LinkIcon, PlusIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { describeDrawingRules } from "../lib/drawingRules";
 import { hintLabelFor } from "../lib/roomSetup";
@@ -134,18 +134,18 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       <section className="waiting-card waiting-invite-card">
         <p className="waiting-invite-kicker">Invite your friends</p>
         {code && (
-          <button
-            type="button"
-            className="waiting-code"
-            aria-label={`Room code ${code}. Copy it.`}
-            onClick={() => void copyToClipboard(code, "Room code")}
-          >
-            {code}
-          </button>
+          <p className="waiting-code" aria-label={`Room code ${code}`}>{code}</p>
         )}
         <div className="waiting-invite-actions">
           <Button variant="primary" iconLeft={<LinkIcon size={15} />} onClick={() => void shareInvite()}>
             Share the link
+          </Button>
+          <Button
+            variant="ghost"
+            iconLeft={<CopyIcon size={14} />}
+            onClick={() => code && void copyToClipboard(code, "Room code")}
+          >
+            Copy code
           </Button>
         </div>
       </section>

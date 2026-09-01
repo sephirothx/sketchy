@@ -119,10 +119,10 @@ Sorted by how much it cost a player.
    pinned it to the bottom of its own column, and the chat card is the column
    after that, so scrolling far enough put chat below the one control that is
    supposed to be permanent. The invite card is the artboard's: a kicker, the
-   code as letter-spaced display type that copies when tapped, and one Share
-   the link that goes through the OS share sheet where there is one. 142px
-   against 237. An empty room comes to exactly 844px on an 844px screen,
-   against 1 432, with every gap on it the same 14.
+   code as letter-spaced display type, and the two ways to send it on one row
+   — Share the link, which goes through the OS share sheet where there is one,
+   and Copy code. 138px against 237. An empty room comes to exactly 844px on
+   an 844px screen, against 1 432, with every gap on it the same 14.
 8. **Hint tiles were 19 × 26 px tap targets** in buy-a-letter and Wheel modes
    (`.masked-tile.hint-blank` is a `<button>`); wheel letters about 28 × 22.
    Both far under 44 × 44 (iOS) and 48 × 48 (Android).

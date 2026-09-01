@@ -505,25 +505,17 @@
   text-transform: uppercase;
 }
 
-/* The code is the thing people read aloud, and tapping it copies — which is
-   what the second button used to be for. */
+/* The code at a size people can read aloud across a room. Not a control:
+   copying it is what the button below is for. */
 .waiting-code {
-  background: none;
-  border: 0;
   color: var(--primary-ink);
-  cursor: pointer;
-  display: block;
   font-family: var(--font-display);
   font-size: 34px;
   font-weight: 600;
   letter-spacing: 0.14em;
   line-height: 1.1;
-  margin: 6px auto 12px;
-  padding: 2px 6px;
-  border-radius: 8px;
+  margin: 6px 0 12px;
 }
-
-.waiting-code:hover { background: color-mix(in srgb, var(--primary-ink) 8%, transparent); }
 
 .waiting-invite-actions {
   display: flex;
@@ -904,7 +896,18 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
   .waiting-invite-card { padding: 14px 14px 15px; }
   .waiting-code { font-size: 30px; margin: 4px auto 10px; }
 
-  .waiting-invite-actions .btn { width: 100%; }
+  /* Side by side: two full-width buttons would put back most of what the
+     card just gave up. */
+  .waiting-invite-actions {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .waiting-invite-actions .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+  }
 
   /* The gap below the last card in this column is the gap between it and the
      chat card in the next one, and it was 32px of clearance for a start card
@@ -2221,5 +2224,28 @@ button.guess-pips {
 
   .game-room.game-room-playing .room-shell {
     padding-top: 0;
+  }
+}
+
+/* Two labels in one row stop fitting before the row does. Under 400px the
+   icons go — "Share the link" wrapped to two lines at 360 with them — and
+   under 340 the row itself gives up and stacks. */
+@media (max-width: 400px) {
+  .waiting-invite-actions .btn {
+    padding-inline: 10px;
+  }
+
+  .waiting-invite-actions .btn svg {
+    display: none;
+  }
+}
+
+@media (max-width: 340px) {
+  .waiting-invite-actions {
+    flex-wrap: wrap;
+  }
+
+  .waiting-invite-actions .btn {
+    flex: 1 0 100%;
   }
 }
