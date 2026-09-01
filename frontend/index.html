@@ -10,7 +10,13 @@
          the same #ee7e48 as the card's swoosh and tagline. Real browsers run
          the pre-paint script below, which overwrites it with --paper before
          first paint, so mobile chrome still matches the theme the player chose
-         rather than going orange. -->
+         rather than going orange.
+
+         This is the only place the browser chrome's colour is stated. Do not
+         put `theme_color` back in manifest.webmanifest: an installed PWA in
+         standalone mode takes the status bar from the manifest, a manifest
+         cannot answer to a theme, and a static value there paints a dark app's
+         status bar in light paper regardless of what this tag says. -->
     <meta name="theme-color" content="#ee7e48" />
     <meta name="description" content="Draw, guess and laugh with friends!" />
     <meta property="og:type" content="website" />
