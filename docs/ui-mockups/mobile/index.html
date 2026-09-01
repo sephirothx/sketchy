@@ -552,6 +552,19 @@ const ring = (secs, pct, urgent=false) => `<div class="ring${urgent?' urgent':''
 
 const menuBtn = `<button class="iconbtn"><span class="dots"><i></i><i></i><i></i></span></button>`;
 
+/* The in-game header, measured off the build: wordmark, the room code as a
+   copy button, the round chip, the countdown ring, and the ⋯ sheet. One clock
+   on the screen, and it lives here. */
+const gameBand = (secs, pct, urgent=false) => `
+  <div class="sband band" style="gap:6px">
+    ${wordmark(20)}
+    <span class="codechip" style="min-height:31px">BQ7F2K ${ic.copy}</span>
+    <span class="sb-sp"></span>
+    <span class="chip on" style="min-height:26px;padding:2px 10px;font-size:12px;font-weight:800">R1/3</span>
+    ${ring(secs,pct,urgent)}
+    ${menuBtn}
+  </div>`;
+
 /* the shipped wordmark, painted from tokens */
 const WM_VB="138.02 177.12 1170.69 371.69";
 const WM_SWOOSH="M 155.64431 409.38008 C 147.57886 417.97943 141.00071 429.86051 138.98047 439.59961 C 137.05047 448.91961 138.15031 465.10016 141.32031 473.91016 C 149.59031 496.87016 165.14 513.10906 191.5 526.28906 C 216 538.54906 249.35 545.86992 290 547.91992 C 313.12 549.07992 318.35 549.09047 344 547.98047 C 395.84 545.75047 439.59 541.00953 542 526.51953 C 666.08 508.95953 705.57 504.78914 761 503.36914 C 812.01 502.06914 860.04 506.53906 918.5 518.03906 C 990.22 532.14906 1003.2302 534.31016 1025.7402 535.91016 C 1039.2902 536.87016 1052.7102 536.14023 1061.1602 533.99023 C 1065.6602 532.85023 1066.0902 532.94016 1074.1602 536.91016 C 1084.7902 542.14016 1095.4491 544.80914 1108.8691 545.61914 C 1136.2291 547.26914 1156.9301 539.33953 1167.8301 523.01953 L 1171.9609 516.83008 L 1167.2305 513.03906 C 1159.7705 507.05906 1154.3209 500.51 1148.4609 490.5 C 1146.8909 487.82 1134.1697 487.23047 1126.4297 489.48047 C 1117.8797 491.96047 1113.5394 494.83961 1101.3594 506.09961 C 1089.2694 517.27961 1079.3503 523.93031 1070.8203 526.57031 C 1065.4703 528.22031 1064.9908 528.21914 1062.5508 526.61914 C 1061.1208 525.68914 1054.9005 523.80945 1048.7305 522.43945 C 1036.2205 519.67945 986.58 507.04953 966.5 501.51953 C 871.35 475.32953 796.99937 467.6393 705.60938 474.5293 C 650.43938 478.6893 632.41 480.68023 542.5 492.49023 C 523.25 495.02023 497.38 498.40906 485 500.03906 C 438.07 506.18906 390.80023 511.02008 357.24023 513.08008 C 335.52023 514.42008 285.36 513.79977 269.5 512.00977 C 219.26 506.32977 187.3793 491.7 176.2793 469.25 C 172.8793 462.38 172.52977 460.89055 172.50977 453.56055 C 172.49977 446.43055 172.89 444.66938 175.75 438.85938 C 177.6649 434.96727 180.12546 431.52727 183.08735 428.56069";
@@ -1143,44 +1156,38 @@ S({ id:'choice', n:'07', group:'In the room', title:'Pick a prompt',
   lede:'A fifteen-second decision, currently made from three small tiles at the top of the screen above an empty white canvas.',
   variants:[{ name:'Drawer', ships:true,
     bad:[
-      'The three choices sit at <b>y 190–310</b>, out of thumb reach, above <b>278 px of blank canvas</b> that has nothing to show yet.',
-      'The countdown is a <b>12 px “11s”</b> in the corner of a screen whose whole point is that time is running out.',
-      'Choices wrap 2 + 1, so the third option reads as an afterthought.'
+      'The three choices sat at <b>y 190–310</b>, out of thumb reach, above <b>278 px of blank canvas</b> that had nothing to show yet.',
+      'The countdown was a <b>12 px “11s”</b> in the corner of a screen whose whole point is that time is running out.',
+      'Choices wrapped 2 + 1, so the third option read as an afterthought.'
     ],
     good:[
-      'The countdown becomes the ring and a depleting rule under the header — visible at a glance, urgent below 5s.',
-      'Three <b>full-width 84 px cards in the bottom half</b>, evenly weighted, each showing its letter count so the drawer can judge difficulty.',
-      'The dead canvas is replaced by what is genuinely useful: who is waiting on you.',
-      'The auto-pick is stated once, in words, not folded into a label.'
+      'The countdown is the ring in the header, red under 10 s — visible at a glance without a second copy of the same number anywhere.',
+      '<b>The choice card takes the whole stage.</b> Where the canvas would be, there is a card with the three prompts as full-width buttons, 273 × 76 each, evenly weighted and stacked — no wrap, no third option reading as an afterthought.',
+      'It is headed by what is happening (<i>Your turn</i>), what to do (<i>Pick something to draw</i>) and what happens if you do not (<i>Auto-picks when time runs out</i>), in that order.',
+      'The toolbar is not rendered yet: there is nothing to draw on, so the dock is absent rather than disabled.',
+      'Room chat stays below, so the room is still talking while you choose.'
     ],
     html:`
     <div class="app">
-      <div class="sband band">
-        <span class="codechip">BQ7F2K</span>
-        <span class="chip">Round 2 of 3</span>
-        <span class="sb-sp"></span>
-        ${ring(9,.6)}
-      </div>
-      <div class="timerule" style="border-radius:0;height:4px"><i style="width:60%"></i></div>
-      <div class="stagearea" style="padding:18px 16px 12px;gap:14px">
-        <div style="flex:0 0 auto;text-align:center">
-          <div class="kick" style="color:var(--warm-ink)">Your turn</div>
-          <div class="disp" style="font-size:26px;margin-top:3px">Pick something to draw</div>
-          <div class="muted" style="font-size:13px;font-weight:600;margin-top:5px">We pick for you when the ring runs out.</div>
+      ${gameBand(9,.6,true)}
+      <div class="stagearea" style="gap:0">
+        <div style="flex:0 0 auto;padding:12px;display:flex">
+          <div class="card" style="flex:1;padding:20px 24px;text-align:center;display:flex;flex-direction:column;gap:0">
+            <div class="kick" style="color:var(--warm-ink)">Your turn</div>
+            <div class="disp" style="font-size:22px;margin-top:5px">Pick something to draw</div>
+            <div class="muted" style="font-size:13px;font-weight:600;margin-top:5px">Auto-picks when time runs out.</div>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
+              ${['telescope','bear','flower'].map(w=>`
+                <button class="card" style="width:100%;min-height:76px;display:flex;align-items:center;justify-content:center;padding:0 18px;border-width:2px;box-shadow:0 3px 0 var(--line-strong)">
+                  <span class="disp" style="font-size:22px">${w}</span>
+                </button>`).join('')}
+            </div>
+          </div>
         </div>
-
-        <div style="flex:1 1 auto;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
-          <span class="pip wait">J</span><span class="pip wait">P</span><span class="pip wait">K</span>
-          <span class="muted" style="font-size:12.5px;font-weight:800;width:100%;text-align:center;margin-top:8px">3 people are waiting on you</span>
-        </div>
-
-        <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:10px">
-          ${[['lighthouse',10,'tricky'],['puppy',5,'easy'],['battery',7,'']].map(([w,n,tag])=>`
-            <button class="card" style="width:100%;min-height:84px;display:flex;align-items:center;gap:12px;padding:0 18px;border-width:2px;box-shadow:0 3px 0 var(--line-strong)">
-              <span class="disp" style="font-size:24px;flex:1;text-align:left">${w}</span>
-              ${tag?`<span class="chip warm" style="min-height:26px;padding:3px 9px;font-size:11px">${tag}</span>`:''}
-              <span class="wcount" style="font-size:14px">${n}</span>
-            </button>`).join('')}
+        <div class="card" style="flex:1 1 auto;min-height:0;margin:0 12px 12px;padding:12px;display:flex;flex-direction:column;gap:3px;justify-content:flex-end">
+          ${feedLine('','Priya joined the room','sys')}
+          ${feedLine('','Game started!','sys')}
+          ${feedLine('','Marta is choosing a prompt…','sys')}
         </div>
       </div>
     </div>` }]});
@@ -1199,53 +1206,51 @@ S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
     good:[
       '<b>The strip moved rather than grew.</b> Tool, colour, size, undo and clear are one row of collapsed chips filling the dock at the bottom of the screen, each opening a popover above itself. An earlier draft unrolled the palette permanently; it cost the canvas two rows of swatches for a control that is one tap away, and the original complaint was about <i>where</i> the controls sat.',
       'The dock renders into a slot after the chat region, so it lands under the thumb rather than between canvas and feed.',
-      '<b>One clock.</b> The countdown ring, the prompt and the depleting rule under it were the same number three times; the ring stays in the band and the rest goes.',
-      'The wordmark is in the top row, and the prompt is set in the display face with its letter count.',
+      '<b>One clock.</b> The ring in the header, and nothing else — the same number had been on the screen three times.',
+      '<b>The top row is the wordmark, the room code, the round and the ring</b>, in that order, with the ⋯ sheet last. The drawer\'s prompt is not up there: it sits in a 28 px bar directly above the canvas, which is where the drawing is.',
+      'The drawer sees <b>the word itself</b>, not the masked tiles the guessers get.',
       '<b>Guesses arrive on the drawer’s screen</b> and the feed scrolls — <code>justify-content: flex-end</code> had been putting the overflow above the scroll origin, where no gesture could reach it.',
       'Pinch to zoom the canvas for detail; <b>⤢ flips to landscape focus</b> (variant B).'
     ],
     html:`
     <div class="app">
-      <div class="sband band">
-        <span class="codechip">BQ7F2K</span>
-        <div style="min-width:0">
-          <div class="kick" style="color:var(--warm-ink)">You are drawing</div>
-          <div class="disp" style="font-size:22px;line-height:1.05">lighthouse <span class="wcount" style="font-size:12px">10</span></div>
+      ${gameBand(79,.62)}
+      <div class="stagearea" style="gap:0">
+        <div style="flex:0 0 auto;padding:5px 12px;display:flex;align-items:center;justify-content:center;min-height:28px">
+          <span class="disp" style="font-size:18px">waterfall</span>
         </div>
-        <span class="sb-sp"></span>
-        ${ring(47,.52)}
-        ${menuBtn}
-      </div>
-      <div class="stagearea" style="gap:10px">
-        <div class="canvas" style="border-radius:0;border-left:0;border-right:0">
+        <div class="canvas" style="flex:0 0 auto;border-radius:0;border-left:0;border-right:0">
           ${doodle({partial:true})}
           <span class="zoom">${ic.expand}</span>
         </div>
-        <div style="padding:0 14px;display:flex;flex-direction:column;gap:7px;flex:1 1 auto;min-height:0">
+        <div style="flex:0 0 auto;padding:6px 12px">
           <div class="pips">
-            <span class="pip got">J<span class="rk">1</span></span>
-            <span class="pip wait">P</span><span class="pip wait">K</span>
-            <span class="pipmeta">1 of 3 got it</span>
+            <span class="pip wait">J</span><span class="pip wait">P</span><span class="pip wait">K</span>
+            <span class="pipmeta">0 of 3 guessed</span>
           </div>
-          ${feedLine('Jonas','0:14 · +240','ok')}
+        </div>
+        <div class="card" style="flex:1 1 auto;min-height:0;margin:0 12px 10px;padding:12px;display:flex;flex-direction:column;gap:3px;justify-content:flex-end">
+          ${feedLine('','Marta is drawing','sys')}
           ${feedLine('Priya','a candle?','')}
           ${feedLine('Kit','tower','')}
+          <div class="faint" style="font-size:12px;font-weight:700;margin-top:6px">You’re drawing—watch the guesses come in.</div>
         </div>
       </div>
-      <div class="dock" style="gap:8px;position:relative">
-        <!-- one chip open, showing the popover it raises over the feed -->
-        <div class="card" style="position:absolute;left:14px;right:14px;bottom:74px;padding:10px;display:flex;flex-direction:column;gap:7px;box-shadow:var(--shadow-raised)">
+      <div class="dock" style="gap:8px;position:relative;padding-top:9px;padding-bottom:9px">
+        <!-- one chip open, to show where a popover goes -->
+        <div class="card" style="position:absolute;left:12px;right:12px;bottom:70px;padding:10px;display:flex;flex-direction:column;gap:7px;box-shadow:var(--shadow-raised)">
           <div class="swatches" style="justify-content:space-between">${swatches(0,0,6)}</div>
           <div class="swatches" style="justify-content:space-between">${swatches(0,6,12)}</div>
         </div>
-        <div class="toolrow" style="gap:7px">
-          <span class="tool" style="flex:1">${ic.brush}</span>
-          <span class="tool on" style="flex:1"><i style="width:15px;height:15px;border-radius:50%;background:#111;border:1.5px solid var(--line-strong);display:block"></i></span>
+        <div class="toolrow" style="gap:8px">
+          <span class="tool" style="flex:1.3">${ic.brush}</span>
+          <span class="tool on" style="flex:1.3"><i style="width:16px;height:16px;border-radius:50%;background:#111;border:1.5px solid var(--line-strong);display:block"></i></span>
           <span class="tool" style="flex:1;gap:5px"><i style="width:9px;height:9px;border-radius:50%;background:currentColor;display:block"></i>6</span>
           <span class="tool" style="flex:1">${ic.undo}</span>
           <span class="tool danger" style="flex:1">${ic.trash}</span>
         </div>
-      </div>    </div>` },
+      </div>
+    </div>` },
 
   { name:'B · Landscape focus', ships:true,
     bad:[
