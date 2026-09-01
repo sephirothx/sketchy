@@ -80,11 +80,30 @@ async def room_code(page) -> str:
 
 async def open_room_settings(page) -> None:
     """Open the host's room-settings editor, which lives in a modal."""
-    await page.get_by_role("button", name="Edit settings").click()
+    await page.locator(".waiting-settings-row").click()
     await page.wait_for_selector(".room-settings-editor")
 
 
+async def open_settings_section(page, name: str) -> None:
+    """Expand one of the editor's collapsible sections by its heading.
+
+    The editor is the creation form now, so its fields live under Basics,
+    Prompts, Drawing, and Scoring and hints rather than one "Advanced
+    settings" block."""
+    await page.locator(
+        f'.room-settings-editor details:has(h2:text-is("{name}")) > summary'
+    ).click()
+
+
+async def save_room_settings(page) -> None:
+    """Submit the draft. The editor holds changes until this is pressed, and
+    closes itself once the room has taken them."""
+    await page.locator(".room-settings-save").click()
+    await page.locator(".room-settings-editor").wait_for(state="detached")
+
+
 async def close_room_settings(page) -> None:
-    """Close the room-settings modal (Escape) and wait for it to unmount."""
+    """Close the room-settings modal (Escape) and wait for it to unmount.
+    Discards anything unsaved."""
     await page.keyboard.press("Escape")
     await page.locator(".room-settings-editor").wait_for(state="detached")

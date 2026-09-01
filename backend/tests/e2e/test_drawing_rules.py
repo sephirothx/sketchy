@@ -1,7 +1,13 @@
 """The host's tool and color rules, from the lobby through to the canvas."""
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import close_room_settings, open_room_settings, room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    open_room_settings,
+    open_settings_section,
+    room_code,
+    save_room_settings,
+    use_guest_name,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -44,23 +50,26 @@ async def test_the_rules_the_host_sets_reach_the_lobby_and_then_the_toolbar():
 
             # ...and they follow the host's edits, like every other setting.
             await open_room_settings(host_page)
+            await open_settings_section(host_page, "Drawing")
             await host_page.click(
                 '.room-settings-editor fieldset:has(legend:text-is("Allowed tools")) button:has-text("Shapes")'
             )
-            await player_page.wait_for_selector('text=Brush only, black and white')
 
             # The last of brush and shapes cannot be turned off: fill alone
-            # would leave the room with nothing to draw with.
+            # would leave the room with nothing to draw with. The chip knows
+            # that before anything is saved.
             brush_chip = host_page.locator(
                 '.room-settings-editor fieldset:has(legend:text-is("Allowed tools")) button:has-text("Brush")'
             )
             assert await brush_chip.is_disabled()
 
+            await save_room_settings(host_page)
+            await player_page.wait_for_selector('text=Brush only, black and white')
+
             # In the game, the toolbar offers only what the room allows.
             # The drawer has to be identified while the choosing phase is still
             # up: waiting for the canvas first lets that phase time out, and
             # then neither page is holding the prompt choices any more.
-            await close_room_settings(host_page)
             await host_page.click('.waiting-start-button')
             await host_page.wait_for_selector('.prompt-choices, [data-testid="choosing-prompt-status"]')
             drawer_page = (

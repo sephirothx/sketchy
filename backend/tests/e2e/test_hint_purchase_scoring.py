@@ -3,7 +3,13 @@ import asyncio
 
 import pytest
 from playwright.async_api import Page, async_playwright
-from tests.e2e.lobby_helpers import close_room_settings, open_room_settings, room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    open_room_settings,
+    open_settings_section,
+    room_code,
+    save_room_settings,
+    use_guest_name,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -51,13 +57,14 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
 
             await open_room_settings(host)
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
-            await host.locator(".room-settings-editor details").click()
+            await open_settings_section(host, "Scoring and hints")
             await host.locator('[aria-label="Hints"] button:has-text("Buy letters")').click()
+            await open_settings_section(host, "Prompts")
             await host.locator("#custom-prompts").fill("elephant")
             await host.get_by_label("Only use custom prompts").check()
+            await save_room_settings(host)
             await guest.get_by_text("Custom prompts only (1)").wait_for()
             await guest.get_by_text("Buy letters", exact=True).wait_for()
-            await close_room_settings(host)
             await host.get_by_role("button", name="Start game").click()
 
             drawer, guesser, prompt = await choose_prompt([host, guest])

@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
+import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { CopyIcon, GearIcon, LinkIcon } from "./icons";
+import { ChevronRightIcon, CopyIcon, LinkIcon, PlusIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { describeDrawingRules } from "../lib/drawingRules";
+import { hintLabelFor } from "../lib/roomSetup";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useToast } from "../lib/toast";
 import type {
   ColorMode,
@@ -45,27 +48,14 @@ interface WaitingRoomPanelProps {
   onViewHighlights: () => void;
 }
 
-function hintLabel(mode: HintMode, hidden: boolean) {
-  if (hidden) return "Hidden prompt";
-  return ({
-    checkpoints: "Timed hints",
-    purchase: "Buy letters",
-    wheel: "Wheel of Fortune",
-    none: "No hints",
-  })[mode];
-}
-
-function SettingChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="waiting-setting-chip">
-      {label} <strong>{value}</strong>
-    </span>
-  );
-}
 
 export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const { players, myPlayerId, isHost, finalScores, code } = props;
   const { notify } = useToast();
+  // Narrow only. Above this the players panel has a column of its own and
+  // says more than a grid of faces can, so rendering both would put every
+  // nickname on the page twice.
+  const isNarrow = useMediaQuery("(max-width: 900px)");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const activePlayers = players.filter((player) => !player.isSpectator);
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
@@ -85,13 +75,26 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     }
   }
 
+  // The first three are what everyone wants to know; the rest appear only
+  // when the host has moved them off their defaults, which is when they are
+  // worth a line. Eight chips said all of it always, and spent 250px doing it.
   const promptsValue = props.customPromptsOnly
     ? `Custom prompts only (${props.customPromptCount})`
     : props.customPromptCount > 0
       ? `${props.customPromptCount} custom prompts + curated lists`
       : props.promptListSlugs && props.promptListSlugs.length > 1
         ? `${props.promptListSlugs.length} curated prompt lists`
-        : "Curated prompt list";
+        : null;
+  const settingsFacts = [
+    `${props.rounds} ${props.rounds === 1 ? "round" : "rounds"}`,
+    `${props.drawingSeconds}s`,
+    hintLabelFor(props.hintMode, props.hideMaskedPrompt),
+    props.scoringMode === "none" ? "No scoring" : null,
+    promptsValue,
+    describeDrawingRules(props.allowedTools, props.colorMode),
+    props.spectatorsSeePrompt ? "Spectators see the prompt" : null,
+  ].filter((fact): fact is string => Boolean(fact));
+
 
   return (
     <main className="waiting-room" data-testid="waiting-room">
@@ -130,50 +133,91 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         </div>
       </section>
 
-      <section className="waiting-card waiting-settings-card" aria-labelledby="waiting-settings-title">
-        <div className="waiting-settings-head">
-          <h2 id="waiting-settings-title">Room settings</h2>
-          {isHost && (
-            <Button
-              variant="secondary"
-              compact
-              iconLeft={<GearIcon size={15} />}
-              onClick={() => setSettingsOpen(true)}
+      {/* Who is here, as faces rather than a list in another column. The one
+          thing you watch while waiting used to be the last thing on the page,
+          below the chat card. */}
+      {isNarrow && <section className="waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
+        <div className="waiting-roster-head">
+          <h2 id="waiting-roster-title">In the room</h2>
+          <span className="waiting-roster-count">
+            {activePlayers.length} of {props.maxPlayers}
+          </span>
+        </div>
+        <ul className="waiting-roster-grid">
+          {activePlayers.map((player) => (
+            <li
+              key={player.playerId}
+              className={`waiting-roster-tile${player.connected && !player.isAfk ? " is-ready" : ""}`}
             >
-              Edit settings
-            </Button>
+              <Avatar
+                name={player.nickname}
+                nameColor={player.nameColor}
+                isAnonymous={player.isAnonymous}
+                size={46}
+              />
+              <span className="waiting-roster-name">
+                <span
+                  className={playerNameClass(player.isAnonymous)}
+                  style={playerNameStyle(player.nameColor, player.isAnonymous)}
+                >
+                  {player.nickname}
+                </span>
+              </span>
+              {player.isHost && <span className="waiting-roster-tag">host</span>}
+              {player.playerId === myPlayerId && !player.isHost && (
+                <span className="waiting-roster-tag">you</span>
+              )}
+            </li>
+          ))}
+          {activePlayers.length < props.maxPlayers && (
+            <li className="waiting-roster-tile is-empty">
+              <span className="waiting-roster-empty-avatar" aria-hidden="true">
+                <PlusIcon size={18} />
+              </span>
+              <span className="waiting-roster-name">Invite</span>
+            </li>
           )}
-        </div>
-        <div className="waiting-settings-chips">
-          <SettingChip label="Players" value={`${props.maxPlayers} max`} />
-          <SettingChip label="Rounds" value={String(props.rounds)} />
-          <SettingChip label="Drawing time" value={`${props.drawingSeconds}s`} />
-          <SettingChip
-            label="Scoring"
-            value={props.scoringMode === "none" ? "No scoring" : props.scoringMode === "pressure" ? "Pressure" : "Default"}
-          />
-          <SettingChip label="Hints" value={hintLabel(props.hintMode, props.hideMaskedPrompt)} />
-          <SettingChip label="Prompts" value={promptsValue} />
-          <SettingChip
-            label="Drawing"
-            value={describeDrawingRules(props.allowedTools, props.colorMode) ?? "Every tool and color"}
-          />
-          <SettingChip
-            label="Spectators"
-            value={props.spectatorsSeePrompt ? "See the prompt" : "Guess along"}
-          />
-        </div>
-        {isHost && (
-          <p className="waiting-settings-note">
-            Only you can edit settings while the room waits. Everyone sees changes instantly.
-          </p>
-        )}
-        {/* Players get a read-only look at the prompts; the host has the
-            editor itself, and spectators are kept away from spoilers. */}
-        {props.customPromptCount > 0 && !me?.isSpectator && !isHost && (
-          <CustomPromptsPreview count={props.customPromptCount} />
-        )}
-      </section>
+        </ul>
+      </section>}
+
+      {/* One line, and a way in. Eight chips restating what the host chose a
+          minute ago spent 250px saying it twice. */}
+      {isHost ? (
+        <button
+          type="button"
+          className="waiting-card waiting-settings-row"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <span className="waiting-settings-summary">
+            {settingsFacts.map((fact, index) => (
+              <Fragment key={fact}>
+                {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
+                <span>{fact}</span>
+              </Fragment>
+            ))}
+          </span>
+          <span className="waiting-settings-edit">
+            Edit <ChevronRightIcon size={16} />
+          </span>
+        </button>
+      ) : (
+        <p className="waiting-card waiting-settings-row is-static">
+          <span className="waiting-settings-summary">
+            {settingsFacts.map((fact, index) => (
+              <Fragment key={fact}>
+                {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
+                <span>{fact}</span>
+              </Fragment>
+            ))}
+          </span>
+        </p>
+      )}
+
+      {/* Players get a read-only look at the prompts; the host has the editor
+          itself, and spectators are kept away from spoilers. */}
+      {props.customPromptCount > 0 && !me?.isSpectator && !isHost && (
+        <CustomPromptsPreview count={props.customPromptCount} />
+      )}
 
       {finalScores && (props.highlightCount > 0 || props.drawingCount > 0) && (
         <div className="waiting-room-actions">
@@ -233,7 +277,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           cardClassName="room-settings-modal-card"
           onDismiss={() => setSettingsOpen(false)}
         >
-          <RoomSettingsEditor />
+          <RoomSettingsEditor
+            onSaved={() => setSettingsOpen(false)}
+            onCancel={() => setSettingsOpen(false)}
+          />
         </ModalShell>
       )}
     </main>

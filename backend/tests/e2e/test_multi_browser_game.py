@@ -73,18 +73,22 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                 () => ({
                   main: document.querySelector(".room-shell-main").getBoundingClientRect().y,
                   chat: document.querySelector('[data-testid="room-chat-region"]').getBoundingClientRect().y,
-                  players: document.querySelector('[data-testid="room-players-region"]').getBoundingClientRect().y,
+                  roster: document.querySelector(".waiting-roster").getBoundingClientRect().y,
+                  panel: document.querySelector('[data-testid="room-players-region"]').offsetParent,
                 })
                 """
             )
             # Who is in the room comes before chat while waiting: it is what
             # the host is actually watching, and it used to be the last thing
-            # on the page, below the chat card.
+            # on the page, below the chat card. On a phone it is the roster
+            # grid inside the main column, and the players panel — which says
+            # the same thing a screen further down — is not rendered at all.
             assert (
                 waiting_mobile_order["main"]
-                < waiting_mobile_order["players"]
+                <= waiting_mobile_order["roster"]
                 < waiting_mobile_order["chat"]
             )
+            assert waiting_mobile_order["panel"] is None
             await page1.set_viewport_size({"width": 1280, "height": 720})
 
             # Step 4: Host starts the game

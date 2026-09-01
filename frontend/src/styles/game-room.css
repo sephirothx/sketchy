@@ -166,7 +166,6 @@
   .waiting-start-button,
   .custom-prompts-apply { width: 100%; }
   .waiting-card { padding: 16px; }
-  .room-settings-fields { grid-template-columns: 1fr; }
   .waiting-room-actions { justify-content: flex-start; width: 100%; }
 }
 
@@ -510,29 +509,123 @@
   gap: 10px;
 }
 
-/* Settings summary chips. */
-.waiting-settings-head {
+/* ── Who is here ─────────────────────────────────────────────────────────
+   Faces, not a list in another column: this is the thing you watch while
+   waiting, and it used to be the last block on the page.
+
+   Phones only — the component itself decides, because hiding it here would
+   still leave every nickname on the page twice for anything reading the DOM.
+   Above 900px the players panel has a column of its own and says more than a
+   grid of faces can: roles, AFK, the moderation controls. */
+
+.waiting-roster-head {
+  align-items: baseline;
   display: flex;
-  align-items: center;
+  gap: 10px;
   justify-content: space-between;
-  gap: 12px;
   margin-bottom: 12px;
 }
-.waiting-settings-chips { display: flex; flex-wrap: wrap; gap: 7px; }
-.waiting-setting-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--well);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--muted);
+
+.waiting-roster-head h2 {
+  font-size: 15px;
+  margin: 0;
 }
-.waiting-setting-chip strong { color: var(--ink); font-weight: 800; }
-.waiting-settings-note { color: var(--faint); font-size: 12.5px; margin: 10px 0 0; }
+
+.waiting-roster-count {
+  color: var(--success-ink);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.waiting-roster-grid {
+  display: grid;
+  gap: 12px 9px;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.waiting-roster-tile {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+}
+
+/* The ready ring is drawn outside the avatar rather than as a border, so it
+   does not eat into the initial. */
+.waiting-roster-tile.is-ready .avatar {
+  box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--success);
+}
+
+.waiting-roster-name {
+  font-size: 11.5px;
+  font-weight: 800;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waiting-roster-tag {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.waiting-roster-tile.is-empty .waiting-roster-name { color: var(--faint); }
+
+.waiting-roster-empty-avatar {
+  align-items: center;
+  border: 2px dashed var(--line-strong);
+  border-radius: 50%;
+  color: var(--faint);
+  display: inline-flex;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+/* ── The settings line ───────────────────────────────────────────────────
+   One row that opens the editor, where eight chips used to restate what the
+   host chose a minute ago. */
+.waiting-settings-row {
+  align-items: center;
+  display: flex;
+  font: inherit;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 58px;
+  text-align: left;
+  width: 100%;
+}
+
+button.waiting-settings-row { cursor: pointer; }
+
+button.waiting-settings-row:hover { border-color: var(--line-strong); }
+
+.waiting-settings-summary {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.waiting-settings-edit {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  flex: none;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 4px;
+}
 
 .waiting-ready-count { background: var(--well); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 800; padding: 4px 11px; white-space: nowrap; }
 .waiting-ready-count.is-ready { background: var(--success-soft); border-color: transparent; color: var(--success-ink); }
@@ -589,21 +682,20 @@
 }
 .modal-card.room-settings-modal-card .room-settings-editor { margin: 0; }
 .room-settings-editor-heading { margin-bottom: 14px; }
-.room-settings-fields { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.room-settings-fields label:not(.input-number-field):not(.m3-switch-label), .room-settings-advanced label:not(.m3-switch-label) { color: var(--ink); display: flex; flex-direction: column; font-size: 14.5px; font-weight: 800; gap: 5px; }
-.room-settings-fields input[type="text"],
-.room-settings-fields input[type="search"],
-.room-settings-fields select,
-.room-settings-fields textarea { background: var(--field); border: 1.5px solid var(--line-strong); border-radius: var(--radius-sm); box-sizing: border-box; color: var(--ink); font: inherit; font-weight: 400; padding: 9px 10px; width: 100%; }
-.room-settings-fields .create-room-name-row,
-.room-settings-fields .input-number-field,
-.room-settings-fields .m3-switch-label,
-.room-settings-fields > .room-choice-group { grid-column: 1 / -1; }
-.room-settings-fields details { border-top: 1.5px solid var(--line); grid-column: 1 / -1; padding-top: 18px; }
-.room-settings-fields summary { color: var(--ink); cursor: pointer; font-weight: 800; }
+/* The editor renders the same `RoomSetupForm` as /create, so its fields are
+   styled by create-room-page.css. What used to be here was a second, flatter
+   arrangement of the same controls. */
 .room-settings-advanced { display: grid; gap: 14px; margin-top: 14px; }
-.room-settings-status { color: var(--muted); display: flex; font-size: 13px; font-weight: 700; justify-content: flex-end; margin-top: 20px; min-height: 18px; }
-.room-settings-status.is-failed { color: var(--danger); }
+/* The draft is submitted, not dripped out, so this is a button rather than a
+   status line reporting saves the host never asked for. */
+.room-settings-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.room-settings-actions .room-settings-save { min-width: 148px; }
 
 .room-shell {
   display: grid;
@@ -729,10 +821,15 @@
   }
 
   /* ── Waiting room ─────────────────────────────────────────────────────
-     Who is here comes before chat: it is what you actually watch while you
-     wait, and it used to be the last thing on a 1376px page. */
-  .room-shell-waiting .room-shell-players { order: 2; }
+     The panel says the same thing the roster grid does, a screen further
+     down. The grid is the one with the faces on it, so the column goes; it
+     comes back above 900px, where it has a column of its own to live in and
+     is not costing the page anything. */
+  .room-shell-waiting .room-shell-players { display: none; }
   .room-shell-waiting .room-shell-chat { order: 3; }
+
+  /* The code cells and the two buttons under them are the instruction. */
+  .waiting-room-subtitle { display: none; }
 
   /* Start is the host's whole reason for being on this screen, and it sat at
      y=822 on an 844px viewport — clipped by the fold. Pinned to the bottom,
@@ -751,19 +848,11 @@
     width: 100%;
   }
 
-  /* One scrollable row rather than a 250px wrap restating what the host
-     chose ten seconds ago. */
-  .waiting-settings-chips {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    padding-bottom: 4px;
-    scrollbar-width: none;
+  .room-settings-actions {
+    flex-direction: column-reverse;
   }
 
-  .waiting-settings-chips::-webkit-scrollbar { display: none; }
-  .waiting-settings-chips > * { flex: 0 0 auto; }
+  .room-settings-actions .btn { width: 100%; }
 
   .guess-chat {
     display: flex;

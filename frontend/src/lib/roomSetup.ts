@@ -61,3 +61,17 @@ export function isSendableRoomNumber(
     : [MAX_PLAYERS_MIN, MAX_PLAYERS_MAX];
   return value >= min && value <= max;
 }
+
+
+/** The labels the collapsed sections, the create dock and the waiting room all
+    use for these two, so the same room is described the same way wherever it
+    is summarised. */
+export function scoringLabelFor(mode: ScoringMode) {
+  return SCORING_OPTIONS.find((option) => option.value === mode)?.label ?? "Default";
+}
+
+export function hintLabelFor(hintMode: HintMode, hideMaskedPrompt: boolean) {
+  return hideMaskedPrompt
+    ? "Hidden prompt"
+    : HINT_OPTIONS.find((option) => option.value === hintMode)?.label ?? "Timed hints";
+}

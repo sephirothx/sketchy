@@ -1,44 +1,12 @@
 import { useEffect, useReducer, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CustomPromptsEditor } from "../components/CustomPromptsEditor";
-import { PromptListPicker } from "../components/PromptListPicker";
-import {
-  ChoiceCards,
-  InputNumber,
-  SegmentedControl,
-  Switch,
-  ToggleChips,
-} from "../components/RoomSetupControls";
 import { AppHeader } from "../components/AppHeader";
+import { RoomSetupForm } from "../components/RoomSetupForm";
 import { SectionLabel } from "../components/ui/Card";
-import {
-  ChevronRightIcon,
-  ClockIcon,
-  GlobeIcon,
-  LockIcon,
-  RoundsIcon,
-  UsersIcon,
-} from "../components/icons";
-import { promptLanguageLabel } from "../lib/promptLanguages";
+import { ClockIcon } from "../components/icons";
 import type { PromptListSummary } from "../types";
-import {
-  COLOR_MODE_OPTIONS,
-  DEFAULT_ALLOWED_TOOLS,
-  DEFAULT_COLOR_MODE,
-  TOOL_GROUP_OPTIONS,
-  canDisallowTool,
-} from "../lib/drawingRules";
-import {
-  DEFAULT_DRAWING_SECONDS,
-  DEFAULT_HINT_MODE,
-  DRAWING_TIME_OPTIONS,
-  HINT_OPTIONS,
-  MAX_PLAYERS_MAX,
-  MAX_PLAYERS_MIN,
-  ROUNDS_MAX,
-  ROUNDS_MIN,
-  SCORING_OPTIONS,
-} from "../lib/roomSetup";
+import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
+import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringLabelFor } from "../lib/roomSetup";
 import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
@@ -315,39 +283,10 @@ export function CreateRoomPage() {
     }
   }
 
-  const hintsDisabled = hideMaskedPrompt || scoringMode === "none";
-
-  function handleCustomPromptsChange(value: string) {
-    dispatchCustomPrompts({ type: "change", value });
-  }
-
-  // ---- collapsed-section and footer summaries -----------------------------
-  const scoringLabel = SCORING_OPTIONS.find((option) => option.value === scoringMode)?.label ?? "Default";
-  const hintLabel = hideMaskedPrompt
-    ? "Hidden prompt"
-    : HINT_OPTIONS.find((option) => option.value === hintMode)?.label ?? "Timed hints";
+  // The form's own collapsed summaries live with the form. What is left here
+  // is the one the dock carries, which is about the room as a whole.
   const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
-  const promptsSummary = (() => {
-    const parts: string[] = [];
-    if (selectedLists.length > 0) {
-      parts.push(promptLanguageLabel(selectedLists[0].language));
-      const names = selectedLists.map((list) => list.name);
-      parts.push(names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2}` : names.join(", "));
-      const total = selectedLists.reduce((sum, list) => sum + list.promptCount, 0);
-      if (total > 0) parts.push(`${total.toLocaleString()} prompts`);
-    }
-    if (customPrompts.analysis.usableCount > 0) {
-      parts.push(`${customPrompts.analysis.usableCount} custom`);
-    }
-    return parts.join(" · ");
-  })();
-  const drawingSummary = [
-    TOOL_GROUP_OPTIONS.filter((option) => allowedTools.includes(option.value))
-      .map((option) => option.label)
-      .join(", "),
-    COLOR_MODE_OPTIONS.find((option) => option.value === colorMode)?.label ?? "All colors",
-  ].filter(Boolean).join(" · ");
-  const scoringSummary = `${scoringMode === "none" ? "No scoring" : `${scoringLabel} scoring`} · ${hintLabel}`;
+  const scoringSummary = `${scoringMode === "none" ? "No scoring" : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
   const footerSummary = [
     isPublic ? "Public" : "Private",
     `${maxPlayers} players`,
@@ -416,189 +355,65 @@ export function CreateRoomPage() {
     </div>
     {error && <p className="create-room-error" role="alert">{error}</p>}
 
-    <div className="create-room-sections">
-      <section className="form-section">
-        <div className="form-section-head">
-          <h2>Basics</h2>
-        </div>
-        <div className="form-section-body">
-          <div className="create-room-name-row">
-            <label className="create-room-name-field">
-              Room name
-              {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
-              <input type="search" inputMode="text" value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={40} placeholder="Leave blank for a random name!" autoComplete="off" autoCapitalize="sentences" spellCheck={true} enterKeyHint="done" />
-            </label>
-            <div className="visibility-field">
-              <span className="visibility-field-label" aria-hidden="true">Visibility</span>
-              <SegmentedControl
-                label="Visibility"
-                value={isPublic ? "public" : "private"}
-                onChange={(value) => setIsPublic(value === "public")}
-                options={[
-                  { value: "public", label: <><GlobeIcon size={14} />Public</> },
-                  { value: "private", label: <><LockIcon size={14} />Private</> },
-                ]}
-              />
-              <span className="visibility-caption">
-                {isPublic
-                  ? "Listed in the lobby — anyone can wander in."
-                  : "Joinable only with the code or invite link."}
-              </span>
-            </div>
-          </div>
-          <div className="setting-cards">
-            {/* No hints under these three. The ranges are enforced by the
-                controls themselves, "everyone draws once per round" is what a
-                round is, and the line below already says what the three of
-                them add up to in minutes. */}
-            <InputNumber
-              label="Max players"
-              icon={<UsersIcon size={14} />}
-              value={maxPlayers}
-              min={MAX_PLAYERS_MIN}
-              max={MAX_PLAYERS_MAX}
-              onChange={setMaxPlayers}
-            />
-            <InputNumber
-              label="Rounds"
-              icon={<RoundsIcon size={14} />}
-              value={rounds}
-              min={ROUNDS_MIN}
-              max={ROUNDS_MAX}
-              onChange={setRounds}
-            />
-            <InputNumber
-              label="Drawing time"
-              icon={<ClockIcon size={14} />}
-              unit="s"
-              value={drawingSeconds}
-              options={DRAWING_TIME_OPTIONS}
-              onChange={setDrawingSeconds}
-            />
-          </div>
-          <p className="create-room-duration">
-            <ClockIcon size={17} />
-            <span>
-              This setup runs <strong>about {fullMinutes} minutes</strong> with a full room of{" "}
-              <strong>{maxPlayers}</strong>
-              {halfPlayers >= 2 && halfPlayers < maxPlayers && (
-                <> — closer to <strong>{halfMinutes}</strong> if {halfPlayers} join</>
-              )}
-              .
-            </span>
-          </p>
-        </div>
-      </section>
-
-      <details className="form-section is-collapsible">
-        <summary>
-          <h2>Prompts</h2>
-          {promptsSummary && <span className="form-section-summary">{promptsSummary}</span>}
-          <span className="form-section-chevron" aria-hidden="true"><ChevronRightIcon size={16} /></span>
-        </summary>
-        <div className="form-section-body">
-          <PromptListPicker
-            selectedSlugs={promptListSlugs}
-            onChange={setPromptListSlugs}
-            shareCodes={promptListShareCodes}
-            onShareCodesChange={setPromptListShareCodes}
-            onListsLoaded={setLoadedLists}
-          />
-          <CustomPromptsEditor
-              value={customPrompts.value}
-              analysis={customPrompts.analysis}
-              onChange={handleCustomPromptsChange}
-              footer={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
-                <button
-                  type="button"
-                  className="custom-prompts-apply"
-                  onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
-                >
-                  Save as reusable list
-                </button>
-              ) : undefined}
-          />
-          <Switch
-            label="Only use custom prompts"
-            hint="Add a usable custom prompt to enable this option."
-            checked={customPrompts.only}
-            disabled={customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
-            onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
-          />
-        </div>
-      </details>
-
-      <details className="form-section is-collapsible">
-        <summary>
-          <h2>Drawing</h2>
-          <span className="form-section-summary">{drawingSummary}</span>
-          <span className="form-section-chevron" aria-hidden="true"><ChevronRightIcon size={16} /></span>
-        </summary>
-        <div className="form-section-body">
-          <ToggleChips
-            label="Allowed tools"
-            values={allowedTools}
-            onChange={setAllowedTools}
-            options={TOOL_GROUP_OPTIONS.map((option) => ({
-              ...option,
-              disabled: !canDisallowTool(option.value, allowedTools),
-            }))}
-          />
-          <ChoiceCards
-            label="Colors"
-            value={colorMode}
-            onChange={setColorMode}
-            columns={4}
-            options={COLOR_MODE_OPTIONS}
-          />
-        </div>
-      </details>
-
-      <details className="form-section is-collapsible">
-        <summary>
-          <h2>Scoring and hints</h2>
-          <span className="form-section-summary">{scoringSummary}</span>
-          <span className="form-section-chevron" aria-hidden="true"><ChevronRightIcon size={16} /></span>
-        </summary>
-        <div className="form-section-body">
-          <ChoiceCards
-            label="Scoring"
-            value={scoringMode}
-            columns={3}
-            onChange={(mode) => {
-              setScoringMode(mode);
-              if (mode === "none" && (hintMode === "purchase" || hintMode === "wheel")) setHintMode("none");
-            }}
-            options={SCORING_OPTIONS}
-          />
-          <ChoiceCards
-            label="Hints"
-            value={hintMode}
-            columns={2}
-            disabled={hideMaskedPrompt}
-            onChange={setHintMode}
-            options={HINT_OPTIONS.map((option) => ({
-              ...option,
-              disabled: scoringMode === "none" && (option.value === "purchase" || option.value === "wheel"),
-            }))}
-          />
-          {hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
-          {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">Point-purchase hint modes require scoring.</p>}
-          <div className="form-section-switch-row">
-            <Switch label="Spectators can see the prompt" checked={spectatorsSeePrompt} onChange={setSpectatorsSeePrompt} />
-            <Switch
-              label="Hide blanks"
-              hint="Also turns hints off: with no blanks there is nothing to reveal."
-              checked={hideMaskedPrompt}
-              onChange={(checked) => {
-                setHideMaskedPrompt(checked);
-                if (checked) setHintMode("none");
-              }}
-            />
-          </div>
-        </div>
-      </details>
-    </div>
+    <RoomSetupForm
+      values={{
+        name: roomName,
+        isPublic,
+        maxPlayers,
+        rounds,
+        drawingSeconds,
+        promptListSlugs,
+        promptListShareCodes,
+        allowedTools,
+        colorMode,
+        scoringMode,
+        hintMode,
+        spectatorsSeePrompt,
+        hideMaskedPrompt,
+      }}
+      onChange={(patch) => {
+        if (patch.name !== undefined) setRoomName(patch.name);
+        if (patch.isPublic !== undefined) setIsPublic(patch.isPublic);
+        if (patch.maxPlayers !== undefined) setMaxPlayers(patch.maxPlayers);
+        if (patch.rounds !== undefined) setRounds(patch.rounds);
+        if (patch.drawingSeconds !== undefined) setDrawingSeconds(patch.drawingSeconds);
+        if (patch.promptListSlugs !== undefined) setPromptListSlugs(patch.promptListSlugs);
+        if (patch.promptListShareCodes !== undefined) setPromptListShareCodes(patch.promptListShareCodes);
+        if (patch.allowedTools !== undefined) setAllowedTools(patch.allowedTools);
+        if (patch.colorMode !== undefined) setColorMode(patch.colorMode);
+        if (patch.scoringMode !== undefined) setScoringMode(patch.scoringMode);
+        if (patch.hintMode !== undefined) setHintMode(patch.hintMode);
+        if (patch.spectatorsSeePrompt !== undefined) setSpectatorsSeePrompt(patch.spectatorsSeePrompt);
+        if (patch.hideMaskedPrompt !== undefined) setHideMaskedPrompt(patch.hideMaskedPrompt);
+      }}
+      customPrompts={customPrompts}
+      dispatchCustomPrompts={dispatchCustomPrompts}
+      namePlaceholder="Leave blank for a random name!"
+      onListsLoaded={setLoadedLists}
+      selectedLists={selectedLists}
+      promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
+        <button
+          type="button"
+          className="custom-prompts-apply"
+          onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
+        >
+          Save as reusable list
+        </button>
+      ) : undefined}
+      durationNote={
+        <p className="create-room-duration">
+          <ClockIcon size={17} />
+          <span>
+            This setup runs <strong>about {fullMinutes} minutes</strong> with a full room of{" "}
+            <strong>{maxPlayers}</strong>
+            {halfPlayers >= 2 && halfPlayers < maxPlayers && (
+              <> — closer to <strong>{halfMinutes}</strong> if {halfPlayers} join</>
+            )}
+            .
+          </span>
+        </p>
+      }
+    />
 
     <div className="create-room-footer">
       <div className="create-room-footer-info">

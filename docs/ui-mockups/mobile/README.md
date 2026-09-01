@@ -111,8 +111,11 @@ Sorted by how much it cost a player.
 7. **Start game sat at y = 822 on an 844 px screen**, clipped by the fold, on a
    1 376 px page whose player list was dead last at y 1 153–1 360, below chat.
    → Start is `position: sticky` at the bottom of the waiting room, always one
-   thumb away, and the player list moves above chat: who is here is what you
-   actually watch while you wait.
+   thumb away, and who is here comes before chat as a grid of faces with the
+   ready state on the tile — the phone's version of the players column, which
+   is not rendered at all below 900px because it would put every nickname on
+   the page twice. The eight-chip settings summary is one line that opens the
+   editor. The page goes from 1 432px to 988.
 8. **Hint tiles were 19 × 26 px tap targets** in buy-a-letter and Wheel modes
    (`.masked-tile.hint-blank` is a `<button>`); wheel letters about 28 × 22.
    Both far under 44 × 44 (iOS) and 48 × 48 (Android).
@@ -289,8 +292,21 @@ them:
   because what runs out is vertical: a 1024 x 700 desktop window had the same
   problem, and being `overflow: hidden` it clipped the buttons rather than
   scrolling to them.
-- **Turn results and the waiting room** keep their existing content; only their
-  placement changed (sheet, and sticky start).
+- **Turn results** keeps its existing content; only its placement changed.
+- **The waiting room is the artboard**, minus the ⋯ status band and the chat
+  dock tab: invite hero, the roster grid, one settings line, docked start.
+  Chat stays a card below rather than a tab.
+- **The host's editor is the creation form.** Both render one
+  `RoomSetupForm` — the same four sections in the same order — where the
+  editor used to be a flat column of the same controls, so the same room was
+  described two different ways depending on which screen you were on.
+- **Settings are a draft, saved in one piece.** Every field used to go to the
+  server as it was touched, which was right when settings were a panel
+  permanently open beside the room. Behind a dialog it is wrong: a half-made
+  decision is not a decision, and every intermediate value on the way to "5
+  rounds" was broadcast to everyone waiting. Measured: two stepper presses and
+  a prompt list now cost the room one `room_state`, where before each settled
+  edit cost its own.
 
 ## The screens
 
