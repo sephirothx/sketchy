@@ -136,6 +136,21 @@ class AccountState(StrEnum):
     DELETED = "deleted"
 
 
+class FriendshipState(StrEnum):
+    """Where a friendship between two accounts has got to.
+
+    `declined` is kept rather than deleted: a row that disappears lets the
+    sender ask again immediately and for ever, and "you are doing that too
+    quickly" is the wrong sentence for "this person said no". The person who
+    declined may still send their own request later, which rewrites the row -
+    saying no is not a commitment.
+    """
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+
+
 class UserRole(StrEnum):
     """Service-wide authorization role for an account."""
 
@@ -363,6 +378,7 @@ PROMPT_CONTENT_REPORT_REASONS = tuple(
 )
 ACCOUNT_STATES = tuple(state.value for state in AccountState)
 USER_ROLES = tuple(role.value for role in UserRole)
+FRIENDSHIP_STATES = tuple(state.value for state in FriendshipState)
 # The roles an administrator may set over the network, and so the only ones a
 # role-change notice can ever be about. `admin` is deliberately absent: the
 # first one is made by a guarded server-side command, and `api/admin_controls`
