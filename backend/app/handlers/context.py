@@ -25,6 +25,11 @@ if TYPE_CHECKING:
     from app.auth.blocks import BlockService
     from app.services.game_flow import GameFlowService
     from app.services.message_retention import MessageRetentionService
+    from app.services.presence import (
+        PresenceBroadcaster,
+        PresenceIdentityCache,
+        PresenceRegistry,
+    )
     from app.services.room_codes import RoomCodeService
     from app.services.room_quotas import RoomCapacityService, RoomQuotaService
     from app.services.shutdown import ShutdownCoordinator
@@ -71,6 +76,12 @@ class HandlerContext:
     room_codes: RoomCodeService | None = None
     room_quotas: RoomQuotaService = field(init=False)
     room_capacity: RoomCapacityService = field(init=False)
+    # Who is connected at all, as opposed to who is holding a seat. Built
+    # here rather than in a handler module because the handshake writes it
+    # and the lobby channel reads it, and neither owns it.
+    presence: PresenceRegistry = field(init=False)
+    presence_identities: PresenceIdentityCache = field(init=False)
+    presence_broadcaster: PresenceBroadcaster = field(init=False)
     shutdown: ShutdownCoordinator | None = None
     game_flow: GameFlowService = field(init=False)
     _seating_gates: dict[str, SeatingGate] = field(

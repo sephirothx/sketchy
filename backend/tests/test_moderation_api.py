@@ -31,6 +31,7 @@ from app.db.models import (
 )
 from app.domain_values import ReportReason, ReportStatus, UserRole
 from app.handlers.connection import connect as socket_connect
+from app.services.presence import PresenceRegistry
 from app.services.room_quotas import RoomCapacityService
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.message_retention import purge_expired_room_messages
@@ -354,6 +355,7 @@ async def test_ban_revokes_sessions_and_rejects_http_login_and_socket(env):
         sio=SimpleNamespace(save_session=AsyncMock()),
         session_factory=factory,
         room_capacity=RoomCapacityService(),
+        presence=PresenceRegistry(),
     )
     with pytest.raises(ConnectionRefusedError, match="suspended"):
         await socket_connect(
@@ -367,6 +369,9 @@ async def test_ban_revokes_sessions_and_rejects_http_login_and_socket(env):
     # socket counted on the way in and refused on the way out would sit in the
     # ledger for ever. Enough of those and the process refuses everybody.
     assert context.room_capacity.open_sockets == 0
+    # The same property, for the ledger that says who is reachable: a
+    # suspension refused here must not leave the account listed as online.
+    assert context.presence.online_accounts == 0
 
     async with factory() as session:
         event = await session.scalar(

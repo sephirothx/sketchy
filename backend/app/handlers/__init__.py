@@ -4,7 +4,16 @@ from __future__ import annotations
 import socketio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.handlers import chat, connection, drawing, game, moderation, restart, rooms
+from app.handlers import (
+    chat,
+    connection,
+    drawing,
+    game,
+    lobby,
+    moderation,
+    restart,
+    rooms,
+)
 from app.auth.blocks import BlockService
 from app.handlers.context import HandlerContext
 from app.repositories.interfaces import (
@@ -15,6 +24,11 @@ from app.repositories.interfaces import (
 from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
 from app.services.message_retention import MessageRetentionService
+from app.services.presence import (
+    PresenceBroadcaster,
+    PresenceIdentityCache,
+    PresenceRegistry,
+)
 from app.services.room_codes import RoomCodeService
 from app.services.room_quotas import RoomCapacityService, RoomQuotaService
 from app.services.timers import TimerManager
@@ -66,6 +80,14 @@ def register_all_handlers(
     # memory, and only the creation *rate* needs a persistent bucket.
     ctx.room_quotas = RoomQuotaService(room_manager, session_factory)
     ctx.room_capacity = RoomCapacityService()
+    # Also built without a database: presence is answered entirely from
+    # memory, and only the name beside each row needs one - which is why the
+    # cache tolerates having no repository at all rather than refusing.
+    ctx.presence = PresenceRegistry()
+    ctx.presence_identities = PresenceIdentityCache(user_repo)
+    ctx.presence_broadcaster = PresenceBroadcaster(
+        sio, ctx.presence, ctx.presence_identities, room_manager
+    )
 
     moderation.register(ctx)
     restart.register(ctx)
@@ -73,5 +95,6 @@ def register_all_handlers(
     chat.register(ctx)
     drawing.register(ctx)
     game.register(ctx)
+    lobby.register(ctx)
     connection.register(ctx)
     return ctx

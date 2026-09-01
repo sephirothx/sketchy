@@ -5,6 +5,7 @@ import { sessionFrom } from "../lib/roomEntryState";
 import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
+import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
 import { ApiError } from "../lib/api";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
 import { currentPlayerName } from "../store/authStore";
@@ -15,6 +16,7 @@ import { useSettingsStore } from "../store/settingsStore";
 import { ModalShell } from "../components/ui/ModalShell";
 import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
+import { useLobbyPresence } from "../hooks/useLobbyPresence";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AlertCircleIcon, ChevronDownIcon, EyeIcon, PlusIcon, SearchIcon } from "../components/icons";
 import { useClientConfig } from "../hooks/useClientConfig";
@@ -174,6 +176,9 @@ export function LobbyBrowserPage() {
     codeFieldRef.current?.focus();
   }
   const codeFieldRef = useRef<HTMLInputElement | null>(null);
+  // Only the lobby watches the presence channel: a player inside a room is
+  // not reading this list and should not be paying for it mid-game.
+  useLobbyPresence();
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
@@ -385,6 +390,8 @@ export function LobbyBrowserPage() {
 
 
       <FirstRunIdentity />
+
+      <OnlinePlayersPanel />
 
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
 

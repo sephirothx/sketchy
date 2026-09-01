@@ -65,20 +65,30 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-ROOM-01** | The lobby MUST show a live, polled list of public rooms, and MUST allow joining a private room by code. |
+| **R-ROOM-01** | The lobby MUST show a live, polled list of public rooms, and MUST allow joining a private room by code. It MUST also show who is online (R-PRESENCE-01). |
 | **R-ROOM-02** | Room codes MUST be six-character random invite **capabilities**, reserved in the database before being shown to a player. They MUST NOT be derived from an entity ID. |
 | **R-ROOM-03** | When an ephemeral room empties, its code MUST be retired for 30 days, so a stale invite says the room ended instead of silently joining an unrelated group. Startup MUST retire reservations orphaned by a crash. |
 | **R-ROOM-03a** | Codes permanently claimed by the removed persistent-room feature MUST stay claimed and MUST report a stale invite as ended. Releasing them would hand exactly those codes back to the allocator. |
 | **R-ROOM-04** | Room settings MUST be settable at creation and editable by the host while waiting: name, visibility, max players (2–16), rounds (1–10), drawing time (a fixed preset list), scoring mode, hint mode, spectator prompt visibility, masked-prompt hiding, allowed tools, color mode, prompt lists, and custom prompts. |
 | **R-ROOM-05** | A game MUST require at least 2 players before the host can start it. |
 | **R-ROOM-06** | The host role is a **gameplay** role only. It MUST NOT confer any service-wide privilege. Conversely an administrator MUST NOT become host merely by holding the role. |
-| **R-ROOM-07** | Room payloads MUST NOT carry account IDs. Anything that needs an account (reports, blocks, profile links) resolves the seat server-side. |
+| **R-ROOM-07** | **Room** payloads MUST NOT carry account IDs. Anything that needs an account (reports, blocks, profile links) resolves the seat server-side. The lobby presence list is not a room payload: it MUST carry the account id, because there is no seat to resolve for a player idling in the lobby and a friend request needs a stable target — and it MUST NOT carry a room id, code, name, or any state beyond *in the lobby* / *in a game*, so that presence never becomes a directory of who is playing where or discloses that a private room exists. |
 | **R-ROOM-13** | Room state MUST carry a player's kick and AFK vote lists only where votes exist. Every seat receives every other seat's entry on every broadcast, so an empty list per player is the payload paying a quadratic price for the state almost every player is in almost always. |
 | **R-ROOM-08** | A socket MUST hold at most one live seat. Creating or joining a room MUST first release any seat that connection already holds, by the same path an explicit leave takes: room state re-emitted, timers cancelled, empty-room teardown and code retirement run. Seats MUST be matched by socket, never by account — two tabs of one account may sit in two different rooms. |
 | **R-ROOM-09** | Opening a room MUST require a provisioned session. Joining, playing, and receiving a factual history seat MUST NOT — a visitor whose browser keeps no cookie can still play (R-HIST-10); they cannot host. |
 | **R-ROOM-10** | Room creation MUST be bounded on four axes: live rooms per account, room creations per account per hour, live rooms per process, and quick-prompt characters retained across every live room. Each MUST be configurable, and each refusal MUST say which ceiling was reached in terms a player can act on. |
 | **R-ROOM-14** | Database work on the way into a room MUST be bounded by a timeout and refuse the entry cleanly when it expires. Seat transitions hold the socket's seating gate and its disconnect queues at the same gate, so an entry that never returns is a seat that never reconciles — the leak R-ROOM-08 closed, reopened by a stall. |
 | **R-ROOM-11** | A ceiling MUST be re-checked at the instant the room is created, not only when the command arrives: everything in between awaits, and a refusal at that point MUST release the room code it had already claimed. |
+
+### Lobby presence
+
+| # | Requirement |
+| --- | --- |
+| **R-PRESENCE-01** | The lobby MUST show every connected account, keyed by **account** rather than by socket, so several tabs of one player are one entry. A connection with no account (R-ACCT-02) MUST NOT appear, and that MUST follow from the registry's shape rather than from a filter that a later change could drop. There is **no opt-out**: this is a deliberate product decision, not an omission. |
+| **R-PRESENCE-02** | Presence MUST be released the moment a socket closes, on **every** way out — including a handshake that fails after the account was registered, which never reaches the disconnect handler. It MUST NOT be held for the R-CONN-01 reconnect grace: that grace protects a *seat*, and a socket that cannot receive is not online. |
+| **R-PRESENCE-03** | Presence MUST say only whether a player is in the lobby or in a game. It MUST NOT name the room, in any form, for a public or a private one alike. |
+| **R-PRESENCE-04** | The list MUST be bounded and MUST report the true total alongside the bounded list, so a cap is never mistaken for a quiet server. The cap and the broadcast interval MUST both be configurable (R-ROOM-10's rule). |
+| **R-PRESENCE-05** | Presence MUST be delivered over a channel a client opts into, never a second poll (#462). Every message MUST carry a sequence number, and a client MUST be able to detect a missed one and ask for a fresh snapshot, so its store is self-correcting rather than authoritative (#493). |
 
 ### Turn structure
 
@@ -515,6 +525,7 @@ design, not a bug fix.
 | --- | --- | --- |
 | Game rules, scoring, hints, guess matching | [`app/game.py`](../backend/app/game.py) | `tests/test_game.py`, `test_standings.py`, `test_prompts.py` |
 | Room model, votes, recap budget | [`app/rooms.py`](../backend/app/rooms.py) | `tests/test_rooms.py`, `tests/handlers/test_rooms.py` |
+| Lobby presence | [`app/services/presence.py`](../backend/app/services/presence.py), [`handlers/lobby.py`](../backend/app/handlers/lobby.py), [`lib/lobbyPresence.ts`](../frontend/src/lib/lobbyPresence.ts) | `tests/test_presence.py`, `tests/handlers/test_lobby_presence.py`, `frontend/tests/lobbyPresence.test.mjs`, `tests/e2e/test_lobby_online_players.py`, `fixtures/lobby_presence_v1.json` |
 | Socket.IO commands and payloads | [`app/handlers/`](../backend/app/handlers/) | `tests/handlers/`, `tests/test_payloads.py` |
 | Wire naming agreement | both trees | `tests/test_wire_contract.py` |
 | Drawing wire format | [`app/live_drawing.py`](../backend/app/live_drawing.py) | `tests/test_live_drawing.py`, `frontend/tests/canvasProtocol*.test.mjs`, `fixtures/canvas_protocol_v1.json` |

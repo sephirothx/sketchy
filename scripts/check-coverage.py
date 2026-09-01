@@ -87,6 +87,10 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     "app/db/__init__.py": (92.0, 78.0),
     # Room-code allocation: a collision is two rooms sharing an identity.
     "app/services/room_codes.py": (98.0, 98.0),
+    # Who is online: a ledger, so an unbalanced path is an account listed as
+    # reachable with nothing listening on it - and, from #529, a friend
+    # request delivered into that silence.
+    "app/services/presence.py": (99.0, 89.0),
 }
 
 
