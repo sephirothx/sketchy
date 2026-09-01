@@ -1142,7 +1142,25 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (1) | The export document, pinned by [`fixtures/account_data_export_v1_fields.json`](../fixtures/account_data_export_v1_fields.json) | The export's field surface changes |
+| Data export `schema_version` (2) | The export document, pinned by [`fixtures/account_data_export_v2_fields.json`](../fixtures/account_data_export_v2_fields.json) | The export's field surface changes |
+
+### Before the first deployment
+
+**Nothing is deployed yet, so nothing needs a compatibility story.** Until this
+service runs somewhere with users on it, every version constant above is free
+to change without a migration path, a decoder for the old shape, or a bump at
+all: there is no client in the wild speaking the old protocol, and no database
+holding rows written by it. A schema may be rewritten rather than migrated; an
+export format may be replaced rather than dual-read; a payload may change shape
+under a version number that stays put.
+
+Bumping is still worth doing where it costs a line, because a stale tab open
+across a rebuild is told to reload rather than left silently broken - but it is
+a development convenience for now, not a contract with anybody.
+
+What changes at launch: every rule below starts applying, and
+`docs/database.md`'s "Pre-v1 note" stops being an option. Delete this section
+then, rather than leaving it to be read as still true.
 
 **Checklist for any wire change:**
 

@@ -378,7 +378,7 @@ guesses, prompt-list revision history, unexpired authored retained messages, sub
 evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v1_fields.json`](../fixtures/account_data_export_v1_fields.json).
+pinned by [`fixtures/account_data_export_v2_fields.json`](../fixtures/account_data_export_v2_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -1179,6 +1179,19 @@ HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
    ownership changed and [`requirements.md`](requirements.md) if a stated guarantee moved.
 
 ### Pre-v1 note
+
+**Nothing is deployed, so no schema change owes anybody a migration path.**
+Until this service runs somewhere with real data in it, a table may be
+rewritten rather than converted, a column may change type in place, and a
+format may be replaced rather than dual-read. Migrations still have to be
+reversible and still have to replay cleanly in both directions on both engines
+- that is what `tests/test_migrations.py` checks, and it is about the chain
+being sound rather than about anybody's data surviving. The same freedom is
+written down for the wire in `docs/wire-protocol.md` §11.
+
+Delete this paragraph at launch rather than leaving it to be read as still
+true.
+
 
 The UUID change **rewrote** the pre-v1 initial migration rather than converting old text
 keys. Databases created before that baseline must be rebuilt; preserve no production
