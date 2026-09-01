@@ -397,3 +397,45 @@ async def test_joining_a_friend_releases_the_seat_this_socket_already_held():
     assert answer["roomId"] == second.id
     assert room_manager.get_room(first.id) is None, "the first room leaked"
     await ctx.timers.close()
+
+
+async def test_add_friend_names_only_the_outcomes_that_changed_something():
+    """Three answers, and a fourth that covers everything else on purpose.
+
+    Already friends, already asked, and a block all read as "nothing to do",
+    so the command cannot be used to tell those apart from inside a room.
+    """
+    from app.services.friends import FriendshipOutcome
+
+    class Outcomes(StubFriendService):
+        def __init__(self, outcome):
+            super().__init__()
+            self._outcome = outcome
+
+        async def request(self, a, b):
+            return self._outcome
+
+    for outcome, expected in (
+        (FriendshipOutcome.CREATED, "created"),
+        (FriendshipOutcome.ACCEPTED, "accepted"),
+        (FriendshipOutcome.UNCHANGED, "unchanged"),
+        (FriendshipOutcome.IGNORED, "unchanged"),
+    ):
+        room_manager = RoomManager()
+        ctx, sio, sessions = build_stack(
+            room_manager, friend_service=Outcomes(outcome)
+        )
+        room = room_manager.create_room(name="Studio", is_public=True)
+        me = await seat_host(room_manager, room, ADA, "Ada")
+        me.sid = "sid-ada"
+        them = room_manager.add_player(room, "Bob", user_id=BOB, is_anonymous=False)
+        await sessions.save("sid-ada", {"room_id": room.id, "player_id": me.id})
+
+        answer = await sio.handlers["/"]["add_friend"](
+            "sid-ada", {"playerId": them.id}
+        )
+
+        assert answer == {"ok": True, "status": expected}
+        # Only a request that actually created something is worth a notice.
+        notices = emitted(sio, "friend_request_received")
+        assert bool(notices) is (outcome == FriendshipOutcome.CREATED)

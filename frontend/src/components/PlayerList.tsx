@@ -82,15 +82,25 @@ export function PlayerList({
   party to protect by being vague. */
   async function sendFriendRequest(playerId: string, nickname: string) {
     try {
-      const answer = await emitWithAck<{ ok: boolean; error?: string }>(
-        "add_friend",
-        { playerId },
-      );
-      notify(
-        answer?.ok
-          ? `Friend request sent to ${nickname}.`
-          : answer?.error ?? "That request could not be sent.",
-      );
+      const answer = await emitWithAck<{
+        ok: boolean;
+        error?: string;
+        status?: string;
+      }>("add_friend", { playerId });
+      if (!answer?.ok) {
+        notify(answer?.error ?? "That request could not be sent.");
+        return;
+      }
+      // Three outcomes worth telling apart, and one that deliberately is not:
+      // anything else - already friends, already asked, or a block - reads as
+      // "nothing to do", so the answer never becomes a way to test for one.
+      if (answer.status === "accepted") {
+        notify(`You and ${nickname} are now friends.`);
+      } else if (answer.status === "created") {
+        notify(`Friend request sent to ${nickname}.`);
+      } else {
+        notify(`Nothing to do - you have already asked ${nickname}.`);
+      }
     } catch {
       notify("That request could not be sent.");
     }
@@ -131,6 +141,11 @@ export function PlayerList({
         // durable identity to hold a friendship, and the server refuses one
         // anyway. Guests are the common case in a room, so a control that
         // always failed would be the usual experience of it.
+        // Not hidden for somebody who is already a friend, because the room
+        // payload has no account ids to match against (R-ROOM-07) and adding
+        // per-viewer flags to room state would make it differ per player,
+        // which is exactly what R-BLOCK-03 forbids. The server says what the
+        // request actually did instead, and the answer says so.
         const canAddFriend = Boolean(
           !isMe && !iAmAGuest && !p.isAnonymous && p.connected,
         );

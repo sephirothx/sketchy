@@ -2245,3 +2245,53 @@ button.guess-pips {
     flex: 1 0 100%;
   }
 }
+
+/* Friends who are around, on the invite card. The other half of Share: the
+   people you actually play with, without a clipboard round trip. */
+.waiting-invite-friends {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1.5px solid var(--line);
+  text-align: left;
+}
+
+.waiting-invite-friends-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.waiting-invite-friends-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 176px;
+  overflow-y: auto;
+}
+
+.waiting-invite-friends-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.waiting-invite-friend-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.waiting-invite-friend-sent {
+  color: var(--muted);
+  font-size: 13px;
+}

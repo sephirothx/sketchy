@@ -1,16 +1,20 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 
+import { sessionFrom } from "../lib/roomEntryState";
 import { emitWithAck } from "../lib/socket";
 import { friendActionFor, isFriend, withFriendsFirst } from "../lib/friends";
 import { presenceSummary } from "../lib/lobbyPresence";
 import type { OnlinePlayer } from "../lib/lobbyPresence";
 import { useAuthStore } from "../store/authStore";
 import { useFriendsStore } from "../store/friendsStore";
+import { useGameStore } from "../store/gameStore";
 import { usePresenceStore } from "../store/presenceStore";
 import { useToast } from "../lib/toast";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { PlusIcon } from "./icons";
+import type { AckResponse } from "../types";
 
 /** Who else is here, beside the room list.
 
@@ -32,6 +36,8 @@ export function OnlinePlayersPanel() {
   const acceptRequest = useFriendsStore((state) => state.accept);
   const declineRequest = useFriendsStore((state) => state.remove);
   const { notify } = useToast();
+  const navigate = useNavigate();
+  const setSession = useGameStore((state) => state.setSession);
 
   // Friends first, then the order the server sent — see `withFriendsFirst`.
   const players = useMemo(
@@ -51,11 +57,18 @@ export function OnlinePlayersPanel() {
 
   async function joinFriend(player: OnlinePlayer) {
     try {
-      const answer = await emitWithAck<{ ok: boolean; error?: string }>(
-        "join_friend_room",
-        { friendUserId: player.userId },
-      );
-      if (!answer?.ok) notify(answer?.error ?? "Could not join that game.");
+      const answer = await emitWithAck<AckResponse>("join_friend_room", {
+        friendUserId: player.userId,
+      });
+      const session = sessionFrom(answer);
+      if (!session) {
+        notify(answer?.error ?? "Could not join that game.");
+        return;
+      }
+      // The seat is already taken by the time this answers, so the page has
+      // to follow it - otherwise the player is in a room the screen is not.
+      setSession(session);
+      navigate(`/room/${session.code}`);
     } catch {
       notify("Could not join that game.");
     }

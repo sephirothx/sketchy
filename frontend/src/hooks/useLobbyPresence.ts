@@ -3,12 +3,15 @@ import { useEffect } from "react";
 import { emitWithAck, socket } from "../lib/socket";
 import { usePresenceStore } from "../store/presenceStore";
 
-/** Subscribe to the lobby's presence channel for as long as it is on screen.
+/** Subscribe to the presence channel for as long as it is on screen.
 
 Membership is asked for rather than derived from anything the server knows,
-which is what bounds the broadcast to the lobbies actually open. Mounted by
-the lobby page alone: a player inside a room is not watching this list, and
-should not be paying for it mid-game. */
+which is what bounds the broadcast to the clients actually showing it.
+
+Mounted in two places, and not in a third. The lobby shows the list; the
+*waiting* room needs it to offer an invitation to a friend who is around.
+Nowhere else — a player mid-game is not reading any of this, and should not be
+paying for a broadcast a second for it. */
 export function useLobbyPresence(): void {
   useEffect(() => {
     let cancelled = false;

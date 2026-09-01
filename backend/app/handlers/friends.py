@@ -44,7 +44,7 @@ from app.handlers.rooms import (
     _bounded,
     _seat_in_room,
 )
-from app.services.friends import FriendshipRefused
+from app.services.friends import FriendshipOutcome, FriendshipRefused
 
 logger = logging.getLogger("sketchy.handlers.friends")
 
@@ -108,15 +108,24 @@ async def add_friend(ctx: HandlerContext, sid, data):
     if mine is None or theirs is None:
         return {"ok": True}
     try:
-        await _bounded(
+        outcome = await _bounded(
             ctx.friend_service.request(mine, theirs), "sending a friend request"
         )
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
     except FriendshipRefused as refused:
         return {"ok": False, "error": str(refused)}
-    await _notify_request(ctx, target.user_id)
-    return {"ok": True}
+    if outcome == FriendshipOutcome.CREATED:
+        await _notify_request(ctx, target.user_id)
+    # Only the two outcomes that changed something are named. Everything else -
+    # already friends, already asked, or a block - answers the same, so the
+    # command cannot be used to tell those apart.
+    reported = (
+        outcome.value
+        if outcome in (FriendshipOutcome.CREATED, FriendshipOutcome.ACCEPTED)
+        else "unchanged"
+    )
+    return {"ok": True, "status": reported}
 
 
 async def invite_friend(ctx: HandlerContext, sid, data):
