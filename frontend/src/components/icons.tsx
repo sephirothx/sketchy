@@ -4,6 +4,7 @@
  * accessible names. */
 import { useId } from "react";
 import type { ReactNode } from "react";
+import { NOT_FOUND_PATHS, NOT_FOUND_VIEWBOX } from "./notFoundArt";
 import {
   FERRULE_PATHS,
   LETTERING_GRADIENT,
@@ -173,6 +174,33 @@ export function Squiggle({ width = 96, color = "var(--warm)" }: { width?: number
         strokeWidth="2.5"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+/* The drawing nobody finished, for the not-found page. The geometry is
+ * Stefano's Inkscape original, derived into `notFoundArt.ts` by
+ * `scripts/brand/derive-assets.mjs` - the same pipeline as the wordmark, so
+ * the app and the mockup artboards cannot drift apart.
+ *
+ * It carries its own colours rather than theme tokens, because it hangs on the
+ * canvas sheet and that sheet is white in both themes; the paint is the game's
+ * drawing palette, so this is a drawing a player could have made.
+ *
+ * Decoration, deliberately: the heading says what happened, and an unnamed
+ * <svg> that is not aria-hidden is a serious axe violation. */
+export function NotFoundDoodle() {
+  return (
+    <svg
+      viewBox={NOT_FOUND_VIEWBOX}
+      width="100%"
+      height="100%"
+      aria-hidden="true"
+      style={{ display: "block" }}
+    >
+      {NOT_FOUND_PATHS.map(({ fill, d }) => (
+        <path key={d} d={d} fill={fill} />
+      ))}
     </svg>
   );
 }

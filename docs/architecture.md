@@ -206,7 +206,7 @@ frontend/src/
 └── styles/                CSS, one file per surface
 ```
 
-Routes ([`frontend/src/App.tsx:103`](../frontend/src/App.tsx)):
+Routes ([`frontend/src/App.tsx:172`](../frontend/src/App.tsx)):
 
 | Path | Page |
 | --- | --- |
@@ -220,6 +220,16 @@ Routes ([`frontend/src/App.tsx:103`](../frontend/src/App.tsx)):
 | `/admin/operations` | [`AdminOperationsPage`](../frontend/src/pages/AdminOperationsPage.tsx) |
 | `/moderation` | [`ModerationPage`](../frontend/src/pages/ModerationPage.tsx) |
 | `/admin/bug-reports` | [`BugReportsPage`](../frontend/src/pages/BugReportsPage.tsx) |
+| `*` | [`NotFoundPage`](../frontend/src/pages/NotFoundPage.tsx) |
+
+A URL that matches none of the others is served the same shell, so the client can
+draw `NotFoundPage`, but **with a 404 status** — otherwise every typo tells a crawler
+or an uptime probe that a page exists. Deciding that needs the route list on the
+server too ([`app/client_routes.py`](../backend/app/client_routes.py)), which is a
+second copy of the table above; `tests/test_client_routes.py` reads `App.tsx` and
+refuses any difference, because the drift is invisible in a browser. The three staff
+routes render the same page for the wrong role rather than naming the surface and
+refusing it (§7, *Authorization*), and keep their 200: the URL exists, the account is what does not.
 
 Two frontend conventions worth knowing:
 
@@ -944,7 +954,7 @@ Files are named for their single concern; the directory says the role.
 
 | Directory | Files |
 | --- | --- |
-| `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
+| `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `gameStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
 | `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
@@ -982,5 +992,7 @@ at the bottom of the screen. [`ui-mockups/mobile/`](ui-mockups/mobile/README.md)
 is the reference for all of it.
 
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
+
+The not-found page's drawing comes down the same pipe: `scripts/brand/sketchy-404-source.svg` is the artwork of record, and the generator writes `frontend/src/components/notFoundArt.ts` and `docs/ui-mockups/tools/notFoundArt.mjs` from it. Unlike the wordmark it keeps literal colours rather than tokens — it hangs on the canvas sheet, which is `white` in both themes (`.canvas-stack`), so ink that answered to the theme would only get weaker on the one ground it ever sits on. The generator maps each authored fill onto a chosen colour — mostly the same-family swatch from the game's own drawing palette (`COLOR_PAIRS` in `lib/drawingRules.ts`), so the doodle is close to a drawing a player could have made — and it refuses to run if a re-export introduces a fill it has no mapping for.
 
 The square app mark is a separate drawing, `scripts/brand/sketchy-icon-source.svg`. The same generator rewrites it into `frontend/public/favicon.svg`, lifting its paint into a `<style>` block with a `prefers-color-scheme` branch — a file-based icon renders in an isolated document where `var()` and `currentColor` do not resolve, so it carries literal colours rather than tokens. The dark values preserve each element's authored contrast ratio rather than being picked by eye; without them the mark sits at 1.03:1 against the dark theme's ground. `scripts/brand/render-rasters.sh` then produces the PNGs that cannot be SVG at all — `apple-touch-icon.png` (iOS ignores alpha and composites onto black), the manifest icons, and `og-image.png`. Those are committed rather than built, since they change about as often as the product name.

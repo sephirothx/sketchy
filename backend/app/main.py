@@ -63,6 +63,7 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
 )
 from app.client_config import client_config
+from app.client_routes import is_client_route
 from app.flow_timing import timing as flow_timing
 from app.state import room_manager
 from app.services.message_retention import purge_expired_room_messages
@@ -77,20 +78,35 @@ from app.services.shutdown import (
 
 
 class SPAStaticFiles(StaticFiles):
-    """Serve the SPA for extensionless client routes while preserving real 404s."""
+    """Serve the SPA for extensionless client routes while preserving real 404s.
+
+    A client route gets the shell and a 200. A URL the client has no page for
+    gets the shell too - it is what draws the not-found page - but with a 404,
+    so the status tells the truth to everything that is not a browser. A
+    missing file, and anything under /api/, stays a plain 404 with no body.
+    """
 
     async def get_response(self, path: str, scope):
         try:
             response = await super().get_response(path, scope)
         except HTTPException as exc:
-            is_client_route = (
+            serves_the_shell = (
                 exc.status_code == 404
                 and not path.startswith("api/")
                 and not Path(path).suffix
             )
-            if not is_client_route:
+            if not serves_the_shell:
                 raise
             response = await super().get_response("index.html", scope)
+            # The shell either way, because only the client can draw the
+            # not-found page - but a URL it has no page for says so in its
+            # status. Otherwise every typo answers 200, and a crawler or an
+            # uptime probe is told a page exists where none does.
+            #
+            # Asked of the URL the browser sent, not of `path`: StaticFiles
+            # normalizes that one, and the root arrives as "." rather than "/".
+            if not is_client_route(scope["path"]):
+                response.status_code = 404
 
         if path.startswith("assets/"):
             response.headers["Cache-Control"] = (

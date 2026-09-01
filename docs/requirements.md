@@ -462,6 +462,7 @@ claim that an arbitrary host will sustain it.
 | **R-UX-02** | UI copy MUST be American English and sentence case, and MUST use the canonical term from [`../GLOSSARY.md`](../GLOSSARY.md). |
 | **R-UX-03** | A new player-visible concept MUST get a glossary entry **in the same change** that ships it. |
 | **R-UX-04** | Renaming a term MUST rename it everywhere in one change. Browser-stored settings are the exception that cannot be renamed at all — migrate them on load. |
+| **R-UX-05** | A URL the client has no page for MUST answer **404** and show the not-found page. Serving the application shell is what draws that page; answering 200 with it tells every non-browser client that a page exists where none does. [`app/client_routes.py`](../backend/app/client_routes.py), `tests/test_client_routes.py`, `tests/e2e/test_not_found.py` |
 
 ---
 
@@ -535,6 +536,6 @@ design, not a bug fix.
 | Runtime analytics | [`services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | `tests/test_runtime_analytics.py` |
 | Runtime tuning | [`services/runtime_settings.py`](../backend/app/services/runtime_settings.py), [`services/tunables.py`](../backend/app/services/tunables.py), [`services/config_store.py`](../backend/app/services/config_store.py), [`api/admin_settings.py`](../backend/app/api/admin_settings.py) | `tests/test_runtime_settings.py`, `test_admin_tunables_api.py` |
 | CI supply-chain and quality gates | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`scripts/check-coverage.py`](../scripts/check-coverage.py) | `tests/test_repo_gates.py`, `tests/test_repo_artifacts.py` |
-| Deployment, environment mode, static delivery, worker topology | [`deployment.py`](../backend/app/deployment.py) | `tests/test_deployment.py`, `test_static_delivery.py` |
+| Deployment, environment mode, static delivery, worker topology | [`deployment.py`](../backend/app/deployment.py), [`client_routes.py`](../backend/app/client_routes.py) | `tests/test_deployment.py`, `test_static_delivery.py`, `test_client_routes.py` |
 | Health, readiness, loop supervision | [`services/readiness.py`](../backend/app/services/readiness.py) | `tests/test_readiness.py` |
 | Connection resilience | [`handlers/connection.py`](../backend/app/handlers/connection.py) | `tests/handlers/test_connection.py`, `tests/e2e/test_network_resilience.py`, `test_player_afk_reconnect.py` |

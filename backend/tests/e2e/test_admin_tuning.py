@@ -245,7 +245,7 @@ async def test_an_ordinary_player_is_not_shown_the_operations_page():
             await page.goto(BASE_URL)
             await use_guest_name(page, "CuriousPlayer")
             await page.goto(f"{BASE_URL}/admin/operations")
-            await page.wait_for_selector("text=This page is for administrators.")
+            await page.wait_for_selector("text=Nobody drew this page")
         finally:
             await context.close()
             await browser.close()

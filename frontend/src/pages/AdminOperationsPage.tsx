@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
+import { NotFoundPage } from "./NotFoundPage";
 import { Chip } from "../components/ui/Chip";
 import { SectionLabel } from "../components/ui/Card";
 import { RoundsIcon } from "../components/icons";
@@ -252,16 +253,11 @@ export function AdminOperationsPage() {
   const admission = admissionLabel(state);
   const admitting = isAdmitting(state);
   if (hasResolved && !allowed) {
-    // The same refusal the bug-report and moderation pages give. Without it a
-    // non-administrator gets the page chrome and a load error, which reads as
-    // a broken page rather than one that is not theirs - and this page now
-    // carries controls, so the door should look shut.
-    return (
-      <main className="ops-page">
-        <AppHeader backLabel="Back to lobby" />
-        <p className="ops-empty">This page is for administrators.</p>
-      </main>
-    );
+    // The same answer the API gives this account. A page that names the
+    // surface and refuses it confirms the surface exists; R-ROLE-01 has every
+    // endpoint behind these entries answer 404 rather than 403, and the door
+    // in front of them should say the same thing.
+    return <NotFoundPage />;
   }
 
   return (

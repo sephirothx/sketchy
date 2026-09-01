@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
+import { NotFoundPage } from "./NotFoundPage";
 import { Chip } from "../components/ui/Chip";
 import { SectionLabel } from "../components/ui/Card";
 import { CopyIcon } from "../components/icons";
@@ -102,13 +103,11 @@ export function BugReportsPage() {
   }, [reports, selectedId]);
 
   if (hasResolved && !allowed) {
-    return (
-      <main className="ops-page">
-        <AppHeader backLabel="Back to lobby" />
-        <h1>Bug reports</h1>
-        <p className="ops-empty">This page is for administrators.</p>
-      </main>
-    );
+    // The same answer the API gives this account. A page that names the
+    // surface and refuses it confirms the surface exists; R-ROLE-01 has every
+    // endpoint behind these entries answer 404 rather than 403, and the door
+    // in front of them should say the same thing.
+    return <NotFoundPage />;
   }
 
   async function decide(report: BugReport, decision: Exclude<BugReportStatus, "pending">) {

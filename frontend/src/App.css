@@ -7,6 +7,7 @@
 @import "./styles/layout-primitives.css" layer(components);
 @import "./styles/create-room-page.css" layer(components);
 @import "./styles/lobby-page.css" layer(components);
+@import "./styles/not-found.css" layer(components);
 @import "./styles/game-room.css" layer(components);
 @import "./styles/toolbar.css" layer(components);
 @import "./styles/chat.css" layer(components);

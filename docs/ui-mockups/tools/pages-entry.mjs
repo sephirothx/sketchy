@@ -1,5 +1,6 @@
 // Entry screens: lobby, room creation, account recovery.
 import { T, P, icon, flag, avatar, pname, btn, chip, card, sectionLabel, segmented, selectBox, switchCtl, input, wordmark, squiggle } from './ui.mjs';
+import { NOT_FOUND_PATHS, NOT_FOUND_VIEWBOX } from './notFoundArt.mjs';
 
 const menuItem = (svg, label, danger = false) => `
 <button type="button" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 10px 12px; font-family: ${T.body}; font-size: 14px; font-weight: 700; color: ${danger ? T.danger : T.ink}; min-height: 40px">
@@ -338,6 +339,46 @@ export const AccountRecoveryPage = `
       ${btn.ghost('Back to the lobby', { iconL: icon.back(14), style: 'justify-self: center' })}
     </section>
   </div>
+</div>`;
+
+// --------------------------------------------------------------- Not found
+// The page a URL with nothing behind it gets (#527), and the page the staff
+// routes show an account that is not staff. The canvas sheet is white in both
+// themes, exactly like `.canvas-stack` in the room, so the doodle is drawn on
+// the same paper the game draws on. The tool strip is decoration - spans in
+// the build, hidden from assistive technology - and it is here because an
+// empty canvas with no tools under it looks like a broken screenshot.
+// The header keeps the wordmark alone, with no back control: the card's
+// button is the one way out, and two of them side by side is the same
+// offer made twice.
+const notFoundTool = (svg) => `
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; color: ${T.faint}">${svg}</span>`;
+
+export const NotFoundPage = `
+<div style="width: 720px; min-height: 700px; padding: 22px 26px 34px">
+  <header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px">
+    ${wordmark(34)}
+    <div style="display: flex; align-items: center; gap: 10px">
+      ${btn.iconOnly(icon.gear(18), 'Player settings')}
+      <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid ${T.line}; background: ${T.card}; border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: ${T.body}; box-shadow: ${T.shadow}">
+        ${avatar(P.marta, 30)}
+        <span style="font-weight: 800; font-size: 14px; color: ${T.ink}">Marta</span>
+      </button>
+    </div>
+  </header>
+  <main style="max-width: 460px; margin: 12px auto 0; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; box-shadow: ${T.shadow}; padding: 26px 24px; text-align: center">
+    <div style="aspect-ratio: 4 / 3; background: #fff; border: 1.5px solid ${T.lineStrong}; border-radius: 12px; box-shadow: ${T.shadow}; overflow: hidden; margin-bottom: 16px; padding: 3.5%">
+      <svg viewBox="${NOT_FOUND_VIEWBOX}" width="100%" height="100%" aria-hidden="true" style="display: block">
+        ${NOT_FOUND_PATHS.map(({ fill, d }) => `<path d="${d}" fill="${fill}"/>`).join('')}
+      </svg>
+    </div>
+    <div style="display: flex; justify-content: center; gap: 7px; margin-bottom: 18px">
+      ${notFoundTool(icon.brush(18))}${notFoundTool(icon.fill(18))}${notFoundTool(icon.rect(18))}${notFoundTool(icon.undo(18))}
+    </div>
+    <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 25px; color: ${T.ink}; margin-bottom: 8px">Nobody drew this page</h1>
+    <p style="font-size: 14.5px; color: ${T.muted}; font-weight: 600; margin-bottom: 20px">That link doesn&rsquo;t lead anywhere on Sketchy.</p>
+    ${btn.primary('Back to lobby')}
+  </main>
 </div>`;
 
 // ------------------------------------------------------------------ Settings

@@ -5,7 +5,7 @@ the layouts that answer it. The desktop set one directory up
 ([`../sketchy-redesign-rationale.md`](../sketchy-redesign-rationale.md)) is
 explicitly "desktop widths only"; this is the other half.
 
-- **The artboards** — 17 screens, 23 of them, each rendered as a light/dark pair
+- **The artboards** — 18 screens, 24 of them, each rendered as a light/dark pair
   at a true 390 × 844, with a real soft keyboard drawn where the keyboard is part
   of the problem. **They are drawn from the shipped build**, not from the
   proposal: where a screen changed during implementation the artboard changed
