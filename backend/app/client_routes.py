@@ -46,7 +46,15 @@ def _matches(route: str, segments: list[str]) -> bool:
         # A parameter matches any one segment that is actually there. An empty
         # one is not a value: "/room/" is the room list, which does not exist,
         # rather than a room whose code is the empty string.
-        (part[1:] and actual != "") if part.startswith(":") else part == actual
+        (part[1:] and actual != "")
+        if part.startswith(":")
+        # Case-folded, because react-router is: a `<Route>` matches
+        # case-insensitively unless it sets `caseSensitive`, and none of ours
+        # do - so /Create renders the create page, and answering 404 for it
+        # would be the mismatch this module exists to prevent. `lower()`
+        # rather than `casefold()`, which folds harder than a JS regexp's `i`
+        # does and would claim URLs the client does not actually match.
+        else part.lower() == actual.lower()
         # strict: the length check above already guarantees equal lengths.
         for part, actual in zip(expected, segments, strict=True)
     )

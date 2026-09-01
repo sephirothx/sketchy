@@ -75,10 +75,30 @@ def test_app_tsx_is_where_this_thinks_it_is():
         "/admin/operations",
         "/moderation",
         "/admin/bug-reports",
+        # React Router matches case-insensitively unless a route opts into
+        # `caseSensitive`, and none of these do - so every one of these renders
+        # a real page in the browser, and the status has to agree.
+        "/Create",
+        "/CREATE",
+        "/ROOM/ABC123",
+        "/Admin/Operations",
+        "/My-Prompt-Lists",
+        "/Forgot-Password",
     ],
 )
 def test_a_page_the_client_has_is_a_client_route(path):
     assert is_client_route(path)
+
+
+def test_no_route_has_opted_into_case_sensitivity():
+    """The matcher folds case because react-router does.
+
+    `caseSensitive` on a `<Route>` would reverse that for one path, and the
+    matcher here has no way to know - it would answer 200 for a URL the client
+    renders as not found. Adding the prop has to be a deliberate change here
+    too, so it fails the build until it is.
+    """
+    assert "caseSensitive" not in APP_TSX.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
