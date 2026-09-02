@@ -137,7 +137,7 @@ async def invite_friend(ctx: HandlerContext, sid, data):
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
         return {"ok": False, "error": "Not in this room"}
-    _, me = current
+    room, me = current
     if ctx.friend_service is None or ctx.friend_invites is None:
         return {"ok": False, "error": "Friends are unavailable right now."}
     if me.is_anonymous or not me.user_id:
@@ -159,9 +159,10 @@ async def invite_friend(ctx: HandlerContext, sid, data):
     if not allowed or blocked:
         return NOT_FRIENDS
 
-    room, _ = _room_of(ctx, me.user_id)
-    if room is None:
-        return {"ok": False, "error": "Not in this room"}
+    # The room this *socket* is seated in, from `require_current_player` above.
+    # Not "a room this account is in": one account may hold seats in two rooms
+    # on two tabs (R-ROOM-08), and an invitation sent from one of them must not
+    # name the other.
     invite = ctx.friend_invites.issue(me.user_id, payload.friend_user_id, room.id)
     await ctx.sio.emit(
         "friend_invite_received",
@@ -233,35 +234,42 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
     if not allowed:
         return NOT_FRIENDS
 
-    room, host_user_id = _room_of(ctx, payload.friend_user_id)
-    if room is None:
-        return NOT_IN_A_GAME
-    # An invitation is to the room it was sent from, and only while its sender
-    # is still in it. Otherwise somebody who left and joined another room would
-    # have handed out a way into that one, which nobody offered.
-    if invite is not None and invite.room_id != room.id:
-        return NOT_IN_A_GAME
-
-    if invite is None:
-        # Uninvited. Nobody in that room chose to let this caller in, so the
-        # only room they may resolve is one whose host is their own friend.
-        if host_user_id is None:
+    if invite is not None:
+        # An invitation names its room, so there is nothing to search for. It
+        # is good only while its sender is still sitting in that room: one who
+        # left and joined another would otherwise have handed out a way into
+        # the second, which nobody offered.
+        room = ctx.room_manager.get_room(invite.room_id)
+        if room is None or not _is_seated(room, payload.friend_user_id):
             return NOT_IN_A_GAME
-        if host_user_id != payload.friend_user_id:
-            host = await _uuid_or_none(host_user_id)
-            try:
-                host_is_a_friend = host is not None and await _bounded(
-                    ctx.friend_service.are_friends(mine, host),
-                    "reading a friendship",
-                )
-            except EntryTimedOut:
-                return BUSY_ACKNOWLEDGEMENT
-            if not host_is_a_friend:
+    else:
+        # Uninvited, so nobody in the room chose to let this caller in and the
+        # host's friendship is the only consent there is. The friend may be in
+        # two rooms at once (R-ROOM-08), and picking whichever comes first
+        # would resolve a different game from one call to the next - so the
+        # candidates are filtered and an ambiguous answer is refused rather
+        # than guessed.
+        try:
+            candidates = await _joinable_rooms(ctx, mine, payload.friend_user_id)
+        except EntryTimedOut:
+            return BUSY_ACKNOWLEDGEMENT
+        if not candidates:
+            if _rooms_of(ctx, payload.friend_user_id):
                 return {
                     "ok": False,
                     "error": "Only the host's friends can join this game "
                     "uninvited. Ask them for an invite.",
                 }
+            return NOT_IN_A_GAME
+        if len(candidates) > 1:
+            # Two games, one button, and no way to know which was meant. An
+            # invitation names one, which is the way out of this.
+            return {
+                "ok": False,
+                "error": "That friend is in more than one game. "
+                "Ask them for an invite.",
+            }
+        room = candidates[0]
 
     answer = await _seat_in_room(ctx, sid, room, payload, seated)
     # Spent only once there is a seat. `_seat_in_room` refuses for half a dozen
@@ -273,20 +281,54 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
     return answer
 
 
-def _room_of(ctx: HandlerContext, user_id: str):
-    """The live room this account is seated in, and who hosts it.
+def _is_seated(room, user_id: str) -> bool:
+    return any(player.user_id == user_id for player in room.players.values())
 
-    One pass over the rooms rather than an index, the way presence derives
+
+def _rooms_of(ctx: HandlerContext, user_id: str) -> list:
+    """Every live room this account is seated in, with who hosts each.
+
+    A list, not the first match: seats are matched by socket rather than by
+    account (R-ROOM-08), so two tabs of one account in two rooms is ordinary
+    rather than a fault. A caller that took the first would resolve a
+    different game depending on dictionary order.
+
+    One pass over the rooms rather than an index, the way presence derives its
     status: a few hundred comparisons at the product ceiling, and nothing that
     can stop being true.
     """
+    found = []
     for room in list(ctx.room_manager.rooms.values()):
         seats = list(room.players.values())
         if not any(player.user_id == user_id for player in seats):
             continue
         host = next((player for player in seats if player.is_host), None)
-        return room, (host.user_id if host else None)
-    return None, None
+        found.append((room, host.user_id if host else None))
+    return found
+
+
+async def _joinable_rooms(ctx: HandlerContext, mine, friend_user_id: str) -> list:
+    """The rooms holding this friend that the caller may enter uninvited.
+
+    Which is to say: the ones whose host is a friend of the caller. A room the
+    named friend hosts qualifies without another lookup - they have already
+    been checked.
+    """
+    joinable = []
+    for room, host_user_id in _rooms_of(ctx, friend_user_id):
+        if host_user_id is None:
+            continue
+        if host_user_id == friend_user_id:
+            joinable.append(room)
+            continue
+        host = await _uuid_or_none(host_user_id)
+        if host is None:
+            continue
+        if await _bounded(
+            ctx.friend_service.are_friends(mine, host), "reading a friendship"
+        ):
+            joinable.append(room)
+    return joinable
 
 
 async def _notify_friends_changed(ctx: HandlerContext, to_user_id: str) -> None:

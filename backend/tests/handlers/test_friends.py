@@ -672,3 +672,115 @@ async def test_an_invitation_survives_a_seating_that_was_refused():
     )
     assert retried["ok"] is True
     await ctx.timers.close()
+
+
+# --- a friend with two seats ----------------------------------------------
+#
+# Seats are matched by socket, never by account (R-ROOM-08), so two tabs of
+# one account sitting in two rooms is ordinary. Everything that resolves "the
+# room my friend is in" has to say which one it means.
+
+
+async def test_an_invitation_names_the_room_its_sender_is_sitting_in():
+    """Not 'a room this account is in' - the two are different with two tabs."""
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    other = room_manager.create_room(name="Other", is_public=False)
+    elsewhere = await seat_host(room_manager, other, ADA, "Ada")
+    elsewhere.sid = "sid-ada-tab1"
+    here = room_manager.create_room(name="Here", is_public=False)
+    seat = await seat_host(room_manager, here, ADA, "Ada")
+    seat.sid = "sid-ada-tab2"
+    await sessions.save("sid-ada-tab2", {"room_id": here.id, "player_id": seat.id})
+    await sessions.save("sid-bob", {"user_id": BOB})
+
+    await sio.handlers["/"]["invite_friend"]("sid-ada-tab2", {"friendUserId": BOB})
+    token = emitted(sio, "friend_invite_received")[0].args[1]["inviteToken"]
+
+    answer = await sio.handlers["/"]["join_friend_room"](
+        "sid-bob", {"friendUserId": ADA, "inviteToken": token, "nickname": "Bob"}
+    )
+
+    assert answer["ok"] is True
+    assert answer["roomId"] == here.id, "the invitation named the wrong tab's room"
+    assert not any(p.user_id == BOB for p in other.players.values())
+    await ctx.timers.close()
+
+
+async def test_a_token_join_goes_to_the_room_on_the_token():
+    """Even when another of the sender's rooms would be found first."""
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    invited_room = room_manager.create_room(name="Invited", is_public=False)
+    seat = await seat_host(room_manager, invited_room, ADA, "Ada")
+    seat.sid = "sid-ada"
+    await sessions.save("sid-ada", {"room_id": invited_room.id, "player_id": seat.id})
+    await sessions.save("sid-bob", {"user_id": BOB})
+
+    await sio.handlers["/"]["invite_friend"]("sid-ada", {"friendUserId": BOB})
+    token = emitted(sio, "friend_invite_received")[0].args[1]["inviteToken"]
+
+    # Ada opens a second room afterwards. The invitation still means the first.
+    second = room_manager.create_room(name="Second", is_public=False)
+    later = await seat_host(room_manager, second, ADA, "Ada")
+    later.sid = "sid-ada-tab2"
+
+    answer = await sio.handlers["/"]["join_friend_room"](
+        "sid-bob", {"friendUserId": ADA, "inviteToken": token, "nickname": "Bob"}
+    )
+
+    assert answer["ok"] is True
+    assert answer["roomId"] == invited_room.id
+    await ctx.timers.close()
+
+
+async def test_an_uninvited_join_refuses_rather_than_guessing_which_game():
+    """Two games, one button, and no way to know which was meant."""
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    for name in ("First", "Second"):
+        room = room_manager.create_room(name=name, is_public=False)
+        seat = await seat_host(room_manager, room, ADA, "Ada")
+        seat.sid = f"sid-ada-{name}"
+    await sessions.save("sid-bob", {"user_id": BOB})
+
+    answer = await sio.handlers["/"]["join_friend_room"](
+        "sid-bob", {"friendUserId": ADA, "nickname": "Bob"}
+    )
+
+    assert answer["ok"] is False
+    assert "more than one game" in answer["error"]
+    for room in room_manager.rooms.values():
+        assert not any(p.user_id == BOB for p in room.players.values())
+
+
+async def test_an_uninvited_join_ignores_a_room_whose_host_is_a_stranger():
+    """The host gate is evaluated per room, not against whichever came first."""
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    # Ada hosts one room, and is a guest in a stranger's.
+    strangers = room_manager.create_room(name="Strangers", is_public=False)
+    stranger_host = await seat_host(room_manager, strangers, CAT, "Cat")
+    stranger_host.sid = "sid-cat"
+    visiting = room_manager.add_player(
+        strangers, "Ada", user_id=ADA, is_anonymous=False
+    )
+    visiting.sid = "sid-ada-visiting"
+    hers = room_manager.create_room(name="Hers", is_public=False)
+    own = await seat_host(room_manager, hers, ADA, "Ada")
+    own.sid = "sid-ada-own"
+    await sessions.save("sid-bob", {"user_id": BOB})
+
+    answer = await sio.handlers["/"]["join_friend_room"](
+        "sid-bob", {"friendUserId": ADA, "nickname": "Bob"}
+    )
+
+    # Exactly one qualifies, so it is not ambiguous - and it is the right one.
+    assert answer["ok"] is True
+    assert answer["roomId"] == hers.id
+    assert not any(p.user_id == BOB for p in strangers.players.values())
+    await ctx.timers.close()
