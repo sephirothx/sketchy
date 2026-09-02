@@ -55,12 +55,13 @@ async def env(monkeypatch):
     # (or this test module's own imports) recorded leaks into an assertion.
     INJECTED["readiness"] = ReadinessProbe(factory)
     INJECTED["telemetry"] = Telemetry()
+    INJECTED["queues"] = QueueDepths(factory, cache_seconds=0.0)
     app.include_router(
         create_operations_router(
             factory,
             readiness=INJECTED["readiness"],
             telemetry=INJECTED["telemetry"],
-            queue_depths=QueueDepths(factory, cache_seconds=0.0),
+            queue_depths=INJECTED["queues"],
             mail_sweep_seconds=30.0,
         )
     )
@@ -608,3 +609,32 @@ async def test_the_ledger_row_and_the_response_share_one_request_id(env):
             select(AuditEvent).where(AuditEvent.event_type == "admin.player_activity_viewed")
         )
         assert event.request_id == minted
+
+
+async def test_a_database_outage_costs_the_scrape_only_the_queue_family(env, monkeypatch):
+    """The scrape is read *during* an outage; it must not go down with the database."""
+    import asyncio
+
+    from app.api import operations
+
+    new_client, _ = env
+    monkeypatch.setenv("METRICS_TOKEN", "scrape-me")
+    depths: QueueDepths = INJECTED["queues"]  # type: ignore[assignment]
+
+    async def refused():
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(depths, "_query", refused)
+    response = await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})
+    assert response.status_code == 200
+    assert "sketchy_event_loop_lag_seconds" in response.text
+    assert "sketchy_mail_outbox_pending" not in response.text
+
+    async def hung():
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(depths, "_query", hung)
+    monkeypatch.setattr(operations, "QUEUE_SCRAPE_TIMEOUT_SECONDS", 0.05)
+    response = await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})
+    assert response.status_code == 200
+    assert "sketchy_mail_outbox_pending" not in response.text
