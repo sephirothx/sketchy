@@ -607,12 +607,14 @@ async def test_forgetting_a_pair_reports_whether_it_revoked_anything():
         await service.request(ada, bob)
         await service.accept(bob, ada)
 
+        # Who to tell, which is nobody when nothing was revoked.
         async with factory() as session:
             async with session.begin():
-                assert await service.forget_pair(session, ada, bob) is True
+                told = await service.forget_pair(session, ada, bob)
+        assert sorted(told) == sorted([str(ada), str(bob)])
         async with factory() as session:
             async with session.begin():
-                assert await service.forget_pair(session, ada, stranger) is False
+                assert await service.forget_pair(session, ada, stranger) == ()
     finally:
         await engine.dispose()
 
@@ -747,5 +749,56 @@ async def test_a_refused_ceiling_gives_the_allowance_back_too():
         with pytest.raises(FriendshipRefused):
             await service.request(ada, newcomer)
         assert limiter.spent[str(ada)] == 0
+    finally:
+        await engine.dispose()
+
+
+# --- one place decides who is told ----------------------------------------
+
+
+async def test_every_write_announces_itself_and_no_no_op_does():
+    """The contract the routers and handlers now rely on rather than repeat.
+
+    Six rounds of review found the same shape of bug: one entry point telling
+    the other account their lists had moved, and another not. It is decided
+    here now, beside the write, so a third way in cannot be given a weaker
+    rule than the first two.
+    """
+    factory, engine = await create_test_db()
+    told: list[str] = []
+
+    async def announce(user_id: str) -> None:
+        told.append(user_id)
+
+    try:
+        service = FriendService(factory, announce=announce)
+        ada = await make_account(factory, "Ada")
+        bob = await make_account(factory, "Bob")
+        guest = await make_account(factory, "Guesty", guest=True)
+
+        await service.request(ada, bob)
+        assert told == [str(bob)]
+
+        told.clear()
+        await service.accept(bob, ada)
+        assert told == [str(ada)], "the person who asked was not told"
+
+        told.clear()
+        await service.remove(ada, bob)
+        assert told == [str(bob)], "unfriending said nothing"
+
+        # A refusal is a change to the asker's list too.
+        told.clear()
+        await service.request(bob, ada)
+        told.clear()
+        await service.remove(ada, bob)
+        assert told == [str(bob)]
+
+        # And nothing that wrote nothing says anything.
+        told.clear()
+        await service.request(ada, guest)
+        await service.remove(ada, guest)
+        await service.accept(ada, guest)
+        assert told == []
     finally:
         await engine.dispose()

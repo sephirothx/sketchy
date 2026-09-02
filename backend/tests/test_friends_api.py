@@ -307,18 +307,16 @@ async def wired(monkeypatch):
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    friends = FriendService(factory)
     told = Notifications()
+    # The announcement is the service's now, so both routers get it from one
+    # place rather than each being handed its own.
+    friends = FriendService(factory, announce=told)
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
+    app.include_router(create_friends_router(factory, friends))
     app.include_router(
-        create_friends_router(factory, friends, on_friends_changed=told)
-    )
-    app.include_router(
-        create_user_blocks_router(
-            factory, BlockService(factory), friends, on_friends_changed=told
-        )
+        create_user_blocks_router(factory, BlockService(factory), friends)
     )
     clients: list[AsyncClient] = []
 

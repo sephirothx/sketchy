@@ -139,6 +139,15 @@ user_repo = SqlAlchemyUserRepository(async_session_factory)
 game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
 prompt_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
 block_service = BlockService(async_session_factory)
+async def push_friends_changed(user_id: str) -> None:
+    """Tell an account its friend lists moved, wherever it is.
+
+    The same per-account room a suspension and a moderator warning use, so a
+    player idling in the lobby hears it as immediately as one in a game.
+    """
+    await sio.emit("friends_changed", {}, room=f"user:{user_id}")
+
+
 def _friend_request_limit() -> int:
     """How many friend requests one account may send in an hour."""
     raw = os.environ.get("FRIEND_REQUEST_LIMIT", "").strip()
@@ -162,6 +171,9 @@ friend_service = FriendService(
         limit=_friend_request_limit(),
         window_seconds=3600,
     ),
+    # One place decides who is told a friendship moved, and it is the place
+    # the friendship is written.
+    announce=push_friends_changed,
 )
 room_preset_service = RoomPresetService(async_session_factory, prompt_list_repo)
 shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
@@ -279,15 +291,6 @@ def forget_merged_identities(source_user_id: str, target_user_id: str) -> None:
     handler_context.presence.rekey(source_user_id, target_user_id)
     forget_presence_identity(source_user_id)
     forget_presence_identity(target_user_id)
-
-
-async def push_friends_changed(user_id: str) -> None:
-    """Tell an account its friend lists moved, wherever it is.
-
-    The same per-account room a suspension and a moderator warning use, so a
-    player idling in the lobby hears it as immediately as one in a game.
-    """
-    await sio.emit("friends_changed", {}, room=f"user:{user_id}")
 
 
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
@@ -497,7 +500,7 @@ api.include_router(
         on_account_deleted=remove_deleted_account_from_live_rooms,
         on_identity_merged=forget_merged_identities,
         on_profile_changed=forget_presence_identity,
-        on_friends_changed=push_friends_changed,
+        on_friends_changed=friend_service.announce_to,
     )
 )
 api.include_router(create_operations_router(async_session_factory))
@@ -525,19 +528,10 @@ api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))
 api.include_router(create_room_preset_router(room_preset_service))
 api.include_router(
-    create_user_blocks_router(
-        async_session_factory,
-        block_service,
-        friend_service,
-        on_friends_changed=push_friends_changed,
-    )
+    create_user_blocks_router(async_session_factory, block_service, friend_service)
 )
 api.include_router(
-    create_friends_router(
-        async_session_factory,
-        friend_service,
-        on_friends_changed=push_friends_changed,
-    )
+    create_friends_router(async_session_factory, friend_service)
 )
 api.include_router(create_role_notice_router(async_session_factory))
 api.include_router(

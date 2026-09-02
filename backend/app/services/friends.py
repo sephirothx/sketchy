@@ -5,6 +5,15 @@ and write has to agree on which of two accounts is `low`. That decision lives
 here, in `friendship_key`, and nowhere else - a site that inlines it and gets
 it wrong writes a row the CHECK rejects, which is the failure worth having.
 
+**Every rule about a friendship is enforced here, not beside a caller.** The
+ceilings, the hourly limit, the silences, and telling the other person their
+lists moved. That is a deliberate reaction to how this feature was reviewed:
+each round found the same shape of bug - one entry point enforcing something
+the other did not, because the rule lived next to the first caller written
+rather than next to the write. There are two ways in today (a REST router and
+a socket handler) and there will be a third; a rule that lives out here is a
+rule the third one gets for free.
+
 The interesting rules are not the storage, though. They are what a request
 does when there is already a row, and what it refuses to tell the caller:
 
@@ -25,6 +34,7 @@ does when there is already a row, and what it refuses to tell the caller:
 """
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from enum import StrEnum
 import logging
@@ -47,6 +57,15 @@ MAX_FRIENDS_PER_ACCOUNT = 200
 MAX_PENDING_SENT = 50
 # Deliberately high, and its refusal deliberately vague - see `request`.
 MAX_PENDING_RECEIVED = 200
+
+
+#: Said to a guest who tries to hold a friendship, at either entry point. The
+#: rule is R-FRIEND-03's and the wording is the same wherever it surfaces - two
+#: copies of it drifted apart once already.
+REGISTER_FIRST = (
+    "Create an account to add friends - a guest account is removed after a "
+    "month of not playing."
+)
 
 
 class FriendshipOutcome(StrEnum):
@@ -145,8 +164,14 @@ class FriendService:
         self,
         session_factory: async_sessionmaker[AsyncSession],
         request_limiter=None,
+        announce: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._session_factory = session_factory
+        # Told after a write commits, with the account whose own lists moved.
+        # Held here for the same reason as the limiter: it used to be decided
+        # by each caller, and three of the five paths that changed somebody's
+        # list said nothing at all.
+        self._announce = announce
         # Held here rather than by a router, so every way of sending a request
         # answers to it. It used to live in the REST router alone, which meant
         # the in-room command had only the generic per-socket command budget -
@@ -259,9 +284,28 @@ class FriendService:
             await self._refund_request(requester_id)
             raise
         if outcome in (FriendshipOutcome.IGNORED, FriendshipOutcome.UNCHANGED):
-            # Nothing was written, so nothing was spent (R-RATE-05's rule).
+            # Nothing was written, so nothing was spent (R-RATE-05's rule) and
+            # there is nobody to tell. Announcing a request that was quietly
+            # dropped would be the tell the silence exists to avoid.
             await self._refund_request(requester_id)
+            return outcome
+        await self.announce_to([target_id])
         return outcome
+
+    async def announce_to(self, user_ids) -> None:
+        """Tell these accounts their friend lists moved.
+
+        Public because two writes cannot announce themselves: `forget_pair`
+        joins a transaction it does not own, and an account deletion happens
+        in a sweep elsewhere. Both hand back who was affected and call this
+        once the commit is theirs to talk about. Everything else in here
+        announces on its own.
+        """
+        if self._announce is None:
+            return
+        for user_id in user_ids:
+            if user_id:
+                await self._announce(str(user_id))
 
     async def _refund_request(self, requester_id: UUID) -> None:
         if self._request_limiter is not None:
@@ -350,23 +394,34 @@ class FriendService:
         low, high = friendship_key(user_id, other_id)
         async with self._session_factory() as session:
             async with session.begin():
-                row = await session.get(Friendship, (low, high))
-                if row is None or row.status != FriendshipState.PENDING.value:
-                    return FriendshipOutcome.UNCHANGED
-                if row.requested_by_id == user_id:
-                    # Their own outgoing request. Accepting it yourself would
-                    # be a friendship one party never agreed to.
-                    return FriendshipOutcome.UNCHANGED
-                # Re-checked here, not just at the request: a block placed in
-                # between has to win, or it is a block that did not hold.
-                if await pair_is_blocked(session, user_id, other_id):
-                    row.status = FriendshipState.DECLINED.value
-                    row.responded_at = _now()
-                    return FriendshipOutcome.IGNORED
-                await self._raise_if_either_list_is_full(session, user_id, other_id)
-                row.status = FriendshipState.ACCEPTED.value
-                row.responded_at = _now()
-                return FriendshipOutcome.ACCEPTED
+                outcome = await self._accept_in(session, user_id, other_id, low, high)
+        # Announced after the commit, never inside it: a notification for a row
+        # that rolled back is worse than one that never arrived.
+        if outcome == FriendshipOutcome.ACCEPTED:
+            # The person who asked is the one who has been waiting.
+            await self.announce_to([other_id])
+        return outcome
+
+    async def _accept_in(
+        self, session: AsyncSession, user_id: UUID, other_id: UUID, low, high
+    ) -> FriendshipOutcome:
+        row = await session.get(Friendship, (low, high))
+        if row is None or row.status != FriendshipState.PENDING.value:
+            return FriendshipOutcome.UNCHANGED
+        if row.requested_by_id == user_id:
+            # Their own outgoing request. Accepting it yourself would be a
+            # friendship one party never agreed to.
+            return FriendshipOutcome.UNCHANGED
+        # Re-checked here, not just at the request: a block placed in between
+        # has to win, or it is a block that did not hold.
+        if await pair_is_blocked(session, user_id, other_id):
+            row.status = FriendshipState.DECLINED.value
+            row.responded_at = _now()
+            return FriendshipOutcome.IGNORED
+        await self._raise_if_either_list_is_full(session, user_id, other_id)
+        row.status = FriendshipState.ACCEPTED.value
+        row.responded_at = _now()
+        return FriendshipOutcome.ACCEPTED
 
     async def remove(self, user_id: UUID, other_id: UUID) -> FriendshipOutcome:
         """Decline, cancel, or unfriend - whichever this row is asking for.
@@ -380,23 +435,36 @@ class FriendService:
         low, high = friendship_key(user_id, other_id)
         async with self._session_factory() as session:
             async with session.begin():
-                row = await session.get(Friendship, (low, high))
-                if row is None:
-                    return FriendshipOutcome.UNCHANGED
-                if (
-                    row.status == FriendshipState.PENDING.value
-                    and row.requested_by_id != user_id
-                ):
-                    row.status = FriendshipState.DECLINED.value
-                    row.responded_at = _now()
-                    return FriendshipOutcome.IGNORED
-                if row.status == FriendshipState.DECLINED.value:
-                    # Somebody else's refusal is not this caller's to clear.
-                    return FriendshipOutcome.UNCHANGED
-                await session.delete(row)
-                return FriendshipOutcome.REMOVED
+                outcome = await self._remove_in(session, user_id, low, high)
+        # A decline, a cancelled request and an unfriend all take something off
+        # the other person's list. A no-op does not, and saying so would be a
+        # way to ask whether a row existed.
+        if outcome in (FriendshipOutcome.REMOVED, FriendshipOutcome.IGNORED):
+            await self.announce_to([other_id])
+        return outcome
 
-    async def forget_pair(self, session: AsyncSession, a: UUID, b: UUID) -> bool:
+    async def _remove_in(
+        self, session: AsyncSession, user_id: UUID, low, high
+    ) -> FriendshipOutcome:
+        row = await session.get(Friendship, (low, high))
+        if row is None:
+            return FriendshipOutcome.UNCHANGED
+        if (
+            row.status == FriendshipState.PENDING.value
+            and row.requested_by_id != user_id
+        ):
+            row.status = FriendshipState.DECLINED.value
+            row.responded_at = _now()
+            return FriendshipOutcome.IGNORED
+        if row.status == FriendshipState.DECLINED.value:
+            # Somebody else's refusal is not this caller's to clear.
+            return FriendshipOutcome.UNCHANGED
+        await session.delete(row)
+        return FriendshipOutcome.REMOVED
+
+    async def forget_pair(
+        self, session: AsyncSession, a: UUID, b: UUID
+    ) -> tuple[str, ...]:
         """Remove any friendship between two accounts, in the caller's session.
 
         Called from the block router - a surviving friendship is a capability the
@@ -411,11 +479,12 @@ class FriendService:
                 Friendship.user_low_id == low, Friendship.user_high_id == high
             )
         )
-        # Whether anything was actually revoked. The caller uses it to decide
-        # whether to tell the other account their lists moved - saying so when
-        # there was no friendship would turn a block into a way to ask whether
-        # one existed.
-        return bool(result.rowcount)
+        # Who to tell, which is nobody when nothing was revoked - announcing a
+        # block of a stranger would turn it into a way to ask whether they were
+        # a friend. Handed back rather than announced here because this joins a
+        # transaction it does not own, and the caller is the only one who knows
+        # when it committed. `announce_to` is the other half.
+        return (str(a), str(b)) if result.rowcount else ()
 
     # --- ceilings ---------------------------------------------------------
 
