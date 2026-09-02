@@ -58,6 +58,10 @@ STEPS = ("guest", "connect", "create", "join", "start", "prompt", "draw", "leave
 DEFAULT_STATE_PATH = Path.home() / ".cache" / "sketchy" / "probe-sessions.json"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 STEP_TIMEOUT_SECONDS = 8.0
+# A quiet long-poll is held by the server until a packet or its ping
+# (25 s by default, 20 s more before it gives up on us), so a poll must be
+# allowed to wait longer than any step. Only the poll gets this.
+POLL_TIMEOUT_SECONDS = 60.0
 RECORD_SEPARATOR = "\x1e"
 
 # One `draw_start` frame, exactly as the wire-protocol document lays it out:
@@ -82,16 +86,20 @@ class HttpResponse:
     body: bytes
 
 
-# (method, url, body, headers) -> response. Injected so a test can drive the
-# probe through an ASGI app, and production can use the standard library.
-Transport = Callable[[str, str, bytes | None, dict[str, str]], Awaitable[HttpResponse]]
+# (method, url, body, headers, *, wait_seconds=None) -> response. Injected so a
+# test can drive the probe through a fake, and production can use the
+# standard library. A transport raises `TimeoutError` when the wait it was
+# given runs out, and any other exception for a failure to reach the server.
+Transport = Callable[..., Awaitable[HttpResponse]]
 
 
 def urllib_transport(timeout: float = STEP_TIMEOUT_SECONDS) -> Transport:
-    def fetch(method: str, url: str, body: bytes | None, headers: dict[str, str]) -> HttpResponse:
+    def fetch(
+        method: str, url: str, body: bytes | None, headers: dict[str, str], wait: float
+    ) -> HttpResponse:
         request = urllib.request.Request(url, data=body, method=method, headers=headers)
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - the operator names the URL
+            with urllib.request.urlopen(request, timeout=wait) as response:  # noqa: S310 - the operator names the URL
                 return HttpResponse(
                     response.status, {k.lower(): v for k, v in response.headers.items()}, response.read()
                 )
@@ -99,10 +107,17 @@ def urllib_transport(timeout: float = STEP_TIMEOUT_SECONDS) -> Transport:
             return HttpResponse(
                 error.code, {k.lower(): v for k, v in error.headers.items()}, error.read()
             )
+        except urllib.error.URLError as error:
+            if isinstance(error.reason, TimeoutError):
+                raise TimeoutError(str(error.reason)) from error
+            raise
 
-    async def transport(method, url, body, headers):
-        return await asyncio.to_thread(fetch, method, url, body, headers)
+    async def transport(method, url, body, headers, *, wait_seconds: float | None = None):
+        return await asyncio.to_thread(
+            fetch, method, url, body, headers, wait_seconds or timeout_default
+        )
 
+    timeout_default = timeout
     return transport
 
 
@@ -198,13 +213,18 @@ class PollingSocket:
         # it arrives *before* the prompt choices, and a reader waiting for
         # those would otherwise let it go by.
         self.canvas_reset: list | None = None
+        # Why the receiver stopped, if it did: surfaced by the next `expect`
+        # rather than left as a silent gap where the events should be.
+        self.failure: str | None = None
 
     def _url(self) -> str:
         url = f"{self._base}&t={int(time.time() * 1000)}"
         return f"{url}&sid={self.sid}" if self.sid else url
 
-    async def _get(self) -> list[str | bytes]:
-        response = await self._transport("GET", self._url(), None, self._headers)
+    async def _get(self, *, wait: float | None = None) -> list[str | bytes]:
+        response = await self._transport(
+            "GET", self._url(), None, self._headers, wait_seconds=wait
+        )
         if response.status != 200:
             raise ProbeError(self.label, f"poll answered {response.status}")
         return decode_payload(response.body)
@@ -233,7 +253,19 @@ class PollingSocket:
 
     async def _poll_forever(self) -> None:
         while True:
-            for packet in await self._get():
+            try:
+                packets = await self._get(wait=POLL_TIMEOUT_SECONDS)
+            except asyncio.CancelledError:
+                raise
+            except TimeoutError:
+                # A quiet socket: the server had nothing to say within the
+                # wait, which is longer than its own ping. Ask again.
+                continue
+            except Exception as error:  # noqa: BLE001 - reported, not raised, from a background task
+                self.failure = f"{type(error).__name__}: {error}"
+                self._events.put_nowait(Event("__failed__", []))
+                return
+            for packet in packets:
                 self._handle(packet)
 
     def _handle(self, packet: str | bytes) -> None:
@@ -317,6 +349,8 @@ class PollingSocket:
             if remaining <= 0:
                 raise ProbeError(self.label, f"never received {name}")
             event = await asyncio.wait_for(self._events.get(), remaining)
+            if event.name == "__failed__":
+                raise ProbeError(self.label, f"the connection failed: {self.failure}")
             if event.name == name:
                 return event
 
@@ -400,8 +434,15 @@ async def _guest(base_url: str, transport: Transport, name: str) -> str:
     return cookie.split(";", 1)[0]
 
 
-async def _session_is_known(base_url: str, transport: Transport, cookie: str) -> bool:
-    """Whether the server still answers `/api/auth/me` with an account for this cookie."""
+async def _session_check(base_url: str, transport: Transport, cookie: str) -> str | None:
+    """The cookie to keep using, if the server still knows this one.
+
+    `/api/auth/me` answers `null` for a session it does not know, and for
+    one older than half its lifetime it answers with the account *and* a
+    successor in `Set-Cookie`, revoking the one it was asked with. A
+    browser adopts that silently; so does this, or the game that follows
+    would be played with a token the server just retired.
+    """
     try:
         response = await transport(
             "GET",
@@ -410,13 +451,16 @@ async def _session_is_known(base_url: str, transport: Transport, cookie: str) ->
             {"Cookie": cookie, "Accept": "application/json"},
         )
     except Exception:
-        return False
+        return None
     if response.status != 200:
-        return False
+        return None
     try:
-        return json.loads(response.body or b"null") is not None
+        if json.loads(response.body or b"null") is None:
+            return None
     except ValueError:
-        return False
+        return None
+    rotated = response.headers.get("set-cookie", "")
+    return rotated.split(";", 1)[0] if rotated else cookie
 
 
 def load_sessions(path: Path | None, base_url: str) -> dict[str, str]:
@@ -464,8 +508,9 @@ async def _sessions(
     stamp = str(int(time.time()))[-6:]
     for seat in ("host", "guest"):
         cookie = saved.get(seat)
-        if cookie and await _session_is_known(base_url, transport, cookie):
-            cookies[seat] = cookie
+        usable = await _session_check(base_url, transport, cookie) if cookie else None
+        if usable:
+            cookies[seat] = usable
             continue
         cookies[seat] = await _guest(base_url, transport, f"{name_prefix[:8]}{seat[0]}{stamp}")
         provisioned = True

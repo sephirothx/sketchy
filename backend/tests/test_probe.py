@@ -7,6 +7,7 @@ and the textfile a scrape reads.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 
 import pytest
@@ -97,9 +98,18 @@ class FakeServer:
         self.provisioned = 0
         self.limit_after = limit_after
 
-    async def __call__(self, method, url, body, headers):
+    rotates: set[str] = set()
+
+    async def __call__(self, method, url, body, headers, *, wait_seconds=None):
         if url.endswith("/api/auth/me"):
             cookie = headers.get("Cookie", "")
+            if cookie in self.rotates:
+                successor = cookie + "-rotated"
+                self.known.discard(cookie)
+                self.known.add(successor)
+                return HttpResponse(
+                    200, {"set-cookie": successor + "; Path=/; HttpOnly"}, b'{"id":"u"}'
+                )
             return HttpResponse(200, {}, b'{"id":"u"}' if cookie in self.known else b"null")
         if url.endswith("/api/auth/display-name"):
             if self.limit_after is not None and self.provisioned >= self.limit_after:
@@ -156,3 +166,78 @@ async def test_the_rate_limit_is_named_rather_than_reported_as_a_status():
         await _sessions("http://x", server, None, "probe")
     assert caught.value.step == "guest"
     assert "GUEST_PROVISION_LIMIT" in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_a_rotated_session_is_adopted_not_kept(tmp_path):
+    """Half a lifetime in, `/me` retires the cookie it was asked with and
+    hands over a successor; the game must be played with the successor."""
+    state = tmp_path / "sessions.json"
+    save_sessions(state, "http://x", {"host": "sketchy_session=old-host", "guest": "sketchy_session=old-guest"})
+    server = FakeServer(known={"sketchy_session=old-host", "sketchy_session=old-guest"})
+    server.rotates = {"sketchy_session=old-host"}
+
+    host, guest, provisioned = await _sessions("http://x", server, state, "probe")
+    assert not provisioned
+    assert host == "sketchy_session=old-host-rotated"
+    assert guest == "sketchy_session=old-guest"
+    assert load_sessions(state, "http://x") == {"host": host, "guest": guest}
+
+
+# --- the receiver ------------------------------------------------------------------
+
+
+class QuietThenChatty:
+    """A transport whose first poll times out, whose second answers, and whose
+    later polls hang the way a long-poll on a quiet socket does."""
+
+    def __init__(self, *, then_fail: Exception | None = None) -> None:
+        self.polls = 0
+        self.waits: list[float | None] = []
+        self.then_fail = then_fail
+
+    async def __call__(self, method, url, body, headers, *, wait_seconds=None):
+        assert method == "GET"
+        self.polls += 1
+        self.waits.append(wait_seconds)
+        if self.polls == 1:
+            raise TimeoutError("timed out")
+        if self.polls == 2:
+            return HttpResponse(200, {}, b'42["room_state",{"a":1}]')
+        if self.then_fail is not None:
+            raise self.then_fail
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+
+@pytest.mark.asyncio
+async def test_a_quiet_poll_is_retried_rather_than_ending_the_receiver():
+    from app.probe import POLL_TIMEOUT_SECONDS
+
+    transport = QuietThenChatty()
+    socket = PollingSocket("http://x", transport, "c=1", label="t")
+    socket.sid = "eio"
+    socket._poller = asyncio.create_task(socket._poll_forever())
+    try:
+        event = await socket.expect("room_state", wait_seconds=2)
+        assert event.args == [{"a": 1}]
+        assert transport.waits[0] == POLL_TIMEOUT_SECONDS
+        assert POLL_TIMEOUT_SECONDS > 25 + 20
+    finally:
+        await socket.close()
+
+
+@pytest.mark.asyncio
+async def test_a_failed_poll_is_reported_by_the_next_expect():
+    transport = QuietThenChatty(then_fail=ConnectionRefusedError("gone"))
+    socket = PollingSocket("http://x", transport, "c=1", label="draw")
+    socket.sid = "eio"
+    socket._poller = asyncio.create_task(socket._poll_forever())
+    try:
+        await socket.expect("room_state", wait_seconds=2)
+        with pytest.raises(ProbeError) as caught:
+            await socket.expect("draw", wait_seconds=2)
+        assert "ConnectionRefusedError: gone" in str(caught.value)
+        assert caught.value.step == "draw"
+    finally:
+        await socket.close()
