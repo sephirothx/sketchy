@@ -63,6 +63,9 @@ class RetainedMessageKind(StrEnum):
 class RetainedMessageAudience(StrEnum):
     ROOM = "room"
     PROMPT_AWARE = "prompt_aware"
+    # Said in the lobby, to every lobby that was open: public by construction,
+    # with no room to scope it to and no recipient list worth recording.
+    LOBBY = "lobby"
 
 
 class NearMissKind(StrEnum):

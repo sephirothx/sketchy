@@ -95,6 +95,10 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     # calls a changed room unchanged is a lobby that stays wrong until
     # something else moves, which a poll could never be.
     "app/services/lobby_rooms.py": (100.0, 100.0),
+    # The lobby's chat backlog: a line kept past its author's deletion, or
+    # shown to the one person who blocked its author, is a moderation promise
+    # broken in the most public place on the site.
+    "app/services/lobby_chat.py": (100.0, 100.0),
     # Friendships decide who may enter a room they cannot name, and most of
     # what these modules do is refuse. An untested refusal is a way in.
     "app/services/friends.py": (98.0, 95.0),

@@ -171,7 +171,7 @@ async def test_account_state_and_role_constants_cover_database_values():
     )
     assert REPORT_STATUSES == ("pending", "resolved", "dismissed")
     assert RETAINED_MESSAGE_KINDS == ("chat", "wrong_guess", "correct_guess")
-    assert RETAINED_MESSAGE_AUDIENCES == ("room", "prompt_aware")
+    assert RETAINED_MESSAGE_AUDIENCES == ("room", "prompt_aware", "lobby")
     assert NEAR_MISS_KINDS == ("close", "partial")
 
 
@@ -1787,3 +1787,92 @@ async def test_a_friendship_status_is_database_constrained():
     finally:
         await engine.dispose()
 
+
+
+async def test_a_lobby_line_has_no_room_and_no_seat_and_nothing_else_does():
+    """A null scope is a statement - this was said in the lobby - never a room
+    line that lost its room; and the lobby holds chat, not guesses."""
+    factory, engine = await create_test_db()
+    sender_id = generate_uuid()
+    now = datetime.now(timezone.utc)
+    common = {
+        "sender_user_id": sender_id,
+        "sender_display_name_snapshot": "Sender",
+        "sender_is_anonymous_snapshot": False,
+        "is_spectator": False,
+        "audience_user_ids": [],
+        "created_at": now,
+        "expires_at": now + timedelta(days=30),
+    }
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=sender_id, display_name="Sender"))
+                session.add(
+                    RoomMessage(
+                        id=generate_uuid(),
+                        message_kind="chat",
+                        audience="lobby",
+                        room_instance_id=None,
+                        sender_player_id=None,
+                        text="valid lobby chat",
+                        **common,
+                    )
+                )
+
+        invalid_rows = (
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="chat",
+                audience="lobby",
+                room_instance_id=generate_uuid(),
+                sender_player_id=None,
+                text="a lobby line with a room",
+                **common,
+            ),
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="chat",
+                audience="lobby",
+                room_instance_id=None,
+                sender_player_id=generate_uuid(),
+                text="a lobby line with a seat",
+                **common,
+            ),
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="chat",
+                audience="room",
+                room_instance_id=None,
+                sender_player_id=generate_uuid(),
+                text="a room line with no room",
+                **common,
+            ),
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="chat",
+                audience="prompt_aware",
+                room_instance_id=generate_uuid(),
+                sender_player_id=None,
+                text="a room line with no seat",
+                **common,
+            ),
+            RoomMessage(
+                id=generate_uuid(),
+                message_kind="wrong_guess",
+                audience="lobby",
+                room_instance_id=None,
+                sender_player_id=None,
+                game_id=generate_uuid(),
+                turn_id=generate_uuid(),
+                text="a guess in the lobby",
+                **common,
+            ),
+        )
+        for invalid_row in invalid_rows:
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(invalid_row)
+    finally:
+        await engine.dispose()

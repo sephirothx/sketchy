@@ -243,3 +243,15 @@ async def test_undo_is_refused_out_loud_even_though_it_shares_the_drawing_budget
     refused = await sio.handlers["/"]["undo_stroke"]("host-sid", [1, 1, 1])
     assert refused is not None, "a refused undo said nothing at all"
     assert refused["ok"] is False and "too quickly" in refused["error"]
+
+
+def test_lobby_chat_is_a_kind_of_its_own():
+    """A room line reaches at most twenty-four seats; a lobby line reaches every
+    lobby that is open. Sharing `conversation` would let a lobby flood spend
+    the guessing allowance, and tightening the lobby would tighten guessing."""
+    policy = CommandBudgetPolicy()
+    assert policy.class_of("send_lobby_chat") == "lobby_chat"
+    assert policy.for_command("send_lobby_chat") != policy.for_command("send_chat")
+    assert policy.for_command("send_lobby_chat").limit < policy.for_command(
+        "send_chat"
+    ).limit

@@ -499,3 +499,15 @@ async def test_submitting_an_unchanged_value_records_nothing(env):
         "budget.action",
         "budget.drawing",
     ]
+
+
+async def test_the_lobby_chat_budget_is_a_setting_of_its_own(env):
+    """It appears because the policy describes it, not because anything here
+    restates it - so a bound it carries is the bound the guard reads."""
+    admin = await an_admin(env)
+    body = (await admin.get("/api/admin/tunables")).json()
+    lobby = next(item for item in body["tunables"] if item["name"] == "budget.lobby_chat")
+    assert lobby["value"] == lobby["default"] == 6
+    assert (lobby["minimum"], lobby["maximum"]) == (1, 60)
+    assert lobby["unit"] == "commands per 10s"
+    assert "Lobby chat" in lobby["description"]

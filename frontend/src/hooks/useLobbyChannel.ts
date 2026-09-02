@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import { resubscribeDelayMs } from "../lib/lobbyChannel";
 import { emitWithAck, socket } from "../lib/socket";
+import { useLobbyChatStore } from "../store/lobbyChatStore";
 import { usePresenceStore } from "../store/presenceStore";
 import { useRoomsStore } from "../store/roomsStore";
 
@@ -11,6 +12,14 @@ Two feeds ride it — who is online, and the public room list — each with its 
 revision, because they move independently. One subscription carries both, and
 one acknowledgement hands over both baselines, so there is never a window in
 which this client is applying changes to a list it has not been given.
+
+The lobby's chat rides the same channel and the same acknowledgement, but it
+is not a third feed: a line is an event, delivered the moment it is said, and
+a gap in its numbering is expected rather than a reason to resync — a line is
+deliberately not delivered to somebody who blocked its author. The
+acknowledgement hands over the recent lines for the same reason it hands over
+the other two baselines, so a line that beats it has something to be placed
+against.
 
 Membership is asked for rather than derived from anything the server knows,
 which is what bounds the broadcast to the clients actually showing it.
@@ -33,6 +42,11 @@ export function useLobbyChannel(): void {
     // joins the channel before it builds the answer, so a delta can arrive
     // first, and there is nothing sensible to apply it to yet.
     let baseline = false;
+    // Whether the next backlog replaces the chat or merges into it. Replaced
+    // on a new socket, whose numbering is new; merged on a resync the other
+    // feeds asked for, so a lobby left open all evening keeps what it watched
+    // go by rather than being cut back to the fifty lines the server holds.
+    let replaceChat = true;
     let attempt = 0;
     let retry: number | null = null;
 
@@ -57,6 +71,8 @@ export function useLobbyChannel(): void {
         if (!answer?.ok) throw new Error("watch_lobby was refused");
         usePresenceStore.getState().receiveSnapshot(answer);
         useRoomsStore.getState().receiveSnapshot(answer.rooms, answer.roomsRevision);
+        useLobbyChatStore.getState().receiveBacklog(answer, replaceChat);
+        replaceChat = false;
         baseline = true;
         attempt = 0;
       } catch {
@@ -90,12 +106,20 @@ export function useLobbyChannel(): void {
       if (useRoomsStore.getState().rooms.needsResync) void subscribe();
     };
 
+    // A line before the baseline is also in the backlog the answer carries,
+    // so dropping it here loses nothing.
+    const onChat = (payload: unknown) => {
+      if (cancelled || !baseline) return;
+      useLobbyChatStore.getState().receiveLine(payload);
+    };
+
     // A reconnect is a new socket in a new server, so whatever revisions these
     // stores held belong to sequences that no longer exist.
     const onConnect = () => {
       generation += 1;
       asking = false;
       baseline = false;
+      replaceChat = true;
       attempt = 0;
       stopRetrying();
       usePresenceStore.getState().reset();
@@ -103,7 +127,8 @@ export function useLobbyChannel(): void {
       void subscribe();
     };
     // Presence empties and the room list only goes stale - see `markRoomsStale`
-    // for why the two lists answer a dropped socket differently.
+    // for why the two lists answer a dropped socket differently. The chat is
+    // left exactly as it is: those lines were said, and stay said.
     const onDisconnect = () => {
       generation += 1;
       asking = false;
@@ -115,6 +140,7 @@ export function useLobbyChannel(): void {
 
     socket.on("lobby_presence_changed", onPresence);
     socket.on("lobby_rooms_changed", onRooms);
+    socket.on("lobby_chat_message", onChat);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     if (socket.connected) void subscribe();
@@ -124,10 +150,12 @@ export function useLobbyChannel(): void {
       stopRetrying();
       socket.off("lobby_presence_changed", onPresence);
       socket.off("lobby_rooms_changed", onRooms);
+      socket.off("lobby_chat_message", onChat);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       usePresenceStore.getState().reset();
       useRoomsStore.getState().reset();
+      useLobbyChatStore.getState().reset();
       // Best effort: the server drops a closed socket from the channel by
       // itself, so this only matters for a client that stayed connected and
       // navigated into a room.

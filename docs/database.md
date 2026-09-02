@@ -7,7 +7,7 @@ Companion documents: [`architecture.md`](architecture.md) ·
 [`../GLOSSARY.md`](../GLOSSARY.md)
 
 Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py).
-Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) (46 revisions,
+Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) (61 revisions,
 starting at `e7c9d4bc813e_initial_schema_…`).
 
 To regenerate an authoritative dump of this schema:
@@ -501,23 +501,41 @@ pending report receives one resolution and cannot later be silently rewritten.
 
 ### `room_messages`
 Accepted player-authored chat, wrong guesses, and correct-guess text, kept **30 days**
-in an audience-aware store.
+in an audience-aware store — and, since #533, the lobby's chat too.
 
 | Column | Notes |
 | --- | --- |
 | `id` | UUIDv7 |
-| `room_instance_id` | Durable correlation scope; the live room ID is never stored as a code |
+| `room_instance_id` | Durable correlation scope; the live room ID is never stored as a code. **Null for a lobby line**, which is the only kind without a room |
 | `game_id`, `turn_id` | The same UUIDv7s eventual history will use — assigned before play, so a message from an unfinished game already correlates |
-| `sender_user_id` (`SET NULL`), `sender_player_id`, `sender_seat_id` | |
+| `sender_user_id` (`SET NULL`), `sender_player_id`, `sender_seat_id` | `sender_player_id` is null for a lobby line, which has no seat |
 | `sender_*_snapshot` | Frozen presentation |
 | `is_spectator`, `message_kind`, `audience`, `near_miss_kind` | |
-| `audience_user_ids` (JSON) | The recipients who **actually received** the line after Blocks and prompt-visibility rules |
+| `audience_user_ids` (JSON) | The recipients who **actually received** the line after Blocks and prompt-visibility rules. Empty for a lobby line: see below |
 | `text`, `created_at`, `expires_at` | |
 
 `message_kind` ∈ `chat \| wrong_guess \| correct_guess`; `audience` ∈
-`room \| prompt_aware`. `CHECK`s enforce that guesses carry a game and turn, that a
-turn implies a game, that a near-miss kind only appears on a wrong guess, and that
-`expires_at > created_at`.
+`room \| prompt_aware \| lobby`. `CHECK`s enforce that guesses carry a game and turn, that a
+turn implies a game, that a near-miss kind only appears on a wrong guess, that
+`expires_at > created_at`, and — `ck_room_messages_lobby_has_no_scope`,
+`ck_room_messages_lobby_is_chat` — that a null room and seat *is* a lobby line and a
+lobby line is chat: a null scope is a statement, never a room line that lost its room.
+
+**Lobby lines.** Said to every lobby that was open, so the row has no room to scope
+it to, no seat that said it, and **no recipient list**: recording every watcher per
+line would make this table a directory of who was around, at lobby scale. The
+audience value is what the moderation API reads instead of the list — a lobby line
+is public by construction, so `POST /api/reports` accepts it as evidence without the
+"did you receive it" check, still requires the reported account to have written it,
+and refuses a report that mixes lobby and room lines, since the lobby is one
+conversation and not any room's. An in-room `report_player` never selects lobby lines
+automatically; `evidence_from_live_room` is scoped to that room by construction. The
+`created_at` is the instant the line went out on the wire (`sentAt`), so the age a
+watcher saw beside it is the time a moderator sees on it. Account deletion erases
+them with the rest of the author's messages; the live backlog forgets them at the
+same moment ([`services/lobby_chat.py`](../backend/app/services/lobby_chat.py)). A
+guest's lines keep the guest's id after a merge, and resolve through
+`identity_aliases` exactly as room chat does.
 
 **Flow.** Ordinary chat and guesses use the Room audience; near misses, correct
 guesses, spectator chat during play, and other restricted text use the Prompt-aware
@@ -539,7 +557,9 @@ accepted privacy and storage-volume tradeoff.
 A report may pin up to **20** unexpired `messageIds`, but only when the reported player
 authored them and the reporter was in each stored audience — which makes *"is this
 message theirs"* and *"did you see it"* true by construction rather than by checking a
-client's claims. The server copies those lines here before the ordinary rows expire.
+client's claims. A lobby line answers the second question differently: it was said to
+everybody, so its `audience` value (`lobby`, carried across into the copy) stands in
+for a list. The server copies those lines here before the ordinary rows expire.
 
 Account deletion erases ordinary authored messages immediately and **tombstones the
 presentation** on copied evidence; the evidence text continues under the protected
@@ -1102,7 +1122,7 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Data | Retention | Mechanism |
 | --- | --- | --- |
 | Friendships, including refusals | Indefinite | Deleted with either account (CASCADE), and on a block |
-| Retained messages | 30 days | `expires_at`; startup purge + bounded hourly cleanup |
+| Retained messages, room and lobby alike | 30 days | `expires_at`; startup purge + bounded hourly cleanup. The lobby's live backlog (50 lines) is memory, re-seeded from these rows at startup |
 | Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | Startup purge + hourly purge in the delivery sweep |
 | Pinned report evidence | Protected report policy (outlives the message) | Copied on report submission |
 | Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | Rolled up first, then purged |
@@ -1145,7 +1165,7 @@ Deletion:
 - revokes every linked session;
 - removes export, provider, and avatar records, and clears login and profile identity;
 - replaces frozen participant/drawer/guess names with the **Deleted player** tombstone;
-- erases ordinary authored `room_messages` immediately and tombstones the presentation
+- erases ordinary authored `room_messages` immediately, lobby lines included, and tombstones the presentation
   on copied evidence;
 - removes every block owned by or targeting the anonymized identities;
 - removes every friendship and pending or refused request involving them;

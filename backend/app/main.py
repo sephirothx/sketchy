@@ -59,6 +59,7 @@ from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
 from app.auth.rate_limit import PersistentRateLimiter
 from app.services.friends import FriendService
+from app.services.lobby_chat import restore_lobby_backlog
 from app.services.presence import start_presence_loop, stop_presence_loop
 from app.services.readiness import LoopHealth, ReadinessProbe
 from app.repositories.sqlalchemy import (
@@ -296,6 +297,7 @@ def forget_merged_identities(source_user_id: str, target_user_id: str) -> None:
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
     block_service.clear()
     forget_presence_identity(user_id)
+    handler_context.lobby_chat.drop_author(user_id)
     # Marked before the first await, not partway through. Every step below
     # yields, closing a socket waits at that socket's seating gate, and an
     # entry that reads the mark in one of those gaps is an entry that seats an
@@ -314,6 +316,9 @@ async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
 
 
 async def remove_banned_account_from_live_rooms(user_id: str) -> None:
+    # What they said in the lobby goes with the account, the way their seat
+    # does; the retained copy stays for the report that may have caused this.
+    handler_context.lobby_chat.drop_author(user_id)
     # Marked before even reading what to tell them: that read is an await like
     # any other, and the account is banned already by the time this is called.
     with handler_context.ending(_sockets_of(user_id)) as sids:
@@ -424,6 +429,8 @@ async def lifespan(_app: FastAPI):
         if handler_context.room_codes is not None:
             await handler_context.room_codes.retire_orphaned_ephemeral()
         await purge_expired_room_messages(async_session_factory)
+        # After the purge, so nothing expired is handed to the first arrival.
+        await restore_lobby_backlog(handler_context.lobby_chat, async_session_factory)
         await purge_expired_outbox_entries(async_session_factory)
         await purge_expired_auth_sessions(async_session_factory)
         await purge_expired_data_exports(async_session_factory)

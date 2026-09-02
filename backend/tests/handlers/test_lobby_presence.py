@@ -520,3 +520,20 @@ async def test_an_in_room_colour_change_reaches_the_lobby(monkeypatch):
 
     ctx.user_repo.update_profile.assert_awaited()
     assert ctx.presence_identities.cached(["user-ada"]) == {}
+
+
+@pytest.mark.asyncio
+async def test_a_handshake_warms_who_has_muted_the_account(monkeypatch):
+    """A lobby line has no seat to warm the block filter at, so the handshake
+    is where a sender's entry is read - and only for a socket with an
+    account, since a visitor without one has nobody's list to be on."""
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    ctx.block_service = SimpleNamespace(warm=AsyncMock(), blockers_of=AsyncMock())
+    account_cookies(monkeypatch, {"tok-ada": "user-ada"})
+
+    await connect_as(ctx, sio, "sid-a", "tok-ada")
+    ctx.block_service.warm.assert_awaited_once_with("user-ada")
+
+    await connect_as(ctx, sio, "sid-anon", "tok-none")
+    ctx.block_service.warm.assert_awaited_once()

@@ -406,6 +406,26 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                     expires_at=STARTED + timedelta(days=30),
                 )
             )
+            # A line said in the lobby has no room and no seat; it is theirs
+            # all the same, and their export says where it was said.
+            session.add(
+                RoomMessage(
+                    id=generate_uuid(),
+                    room_instance_id=None,
+                    sender_user_id=UUID(owner["id"]),
+                    sender_player_id=None,
+                    sender_display_name_snapshot="Exporter",
+                    sender_name_color_snapshot="#224466",
+                    sender_is_anonymous_snapshot=False,
+                    is_spectator=False,
+                    message_kind="chat",
+                    audience="lobby",
+                    audience_user_ids=[],
+                    text="Requester-authored lobby line",
+                    created_at=STARTED + timedelta(minutes=2),
+                    expires_at=STARTED + timedelta(days=30),
+                )
+            )
             session.add(
                 PlayerReportMessageEvidence(
                     report_id=submitted_report_id,
@@ -503,6 +523,10 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         "Requester-authored retained guess"
     )
     assert artifact["retainedMessages"][0]["messageKind"] == "wrong_guess"
+    assert artifact["retainedMessages"][1]["text"] == "Requester-authored lobby line"
+    assert artifact["retainedMessages"][1]["audience"] == "lobby"
+    assert artifact["retainedMessages"][1]["gameId"] is None
+    assert artifact["retainedMessages"][1]["participantSeatId"] is None
     assert artifact["sessions"] and "tokenHash" not in artifact["sessions"][0]
     assert artifact["reportsSubmitted"][0]["details"] == (
         "Requester-authored report details"

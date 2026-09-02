@@ -26,6 +26,7 @@ from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
 from app.services.friend_invites import FriendInviteBook
 from app.services.friends import FriendService
+from app.services.lobby_chat import LobbyChatLog
 from app.services.message_retention import MessageRetentionService
 from app.services.presence import (
     DEFAULT_MAX_CACHED_IDENTITIES,
@@ -107,6 +108,7 @@ def register_all_handlers(
         sio, ctx.presence, ctx.presence_identities, room_manager
     )
     ctx.friend_invites = FriendInviteBook()
+    ctx.lobby_chat = LobbyChatLog()
 
     moderation.register(ctx)
     restart.register(ctx)

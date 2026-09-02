@@ -389,3 +389,94 @@ async def test_what_is_still_queued_at_shutdown_is_written():
         assert message.text == "goodbye"
     finally:
         await engine.dispose()
+
+
+async def test_a_lobby_line_is_kept_with_no_room_and_a_public_audience():
+    """Said to every lobby that was open: no room to scope it to, no seat that
+    said it, and no recipient list worth writing down - the audience value is
+    what the moderation API reads instead."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        speaker = UUID(int=7)
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=speaker, display_name="Ada"))
+        service = MessageRetentionService(factory)
+        said_at = datetime(2026, 9, 2, 12, 0, tzinfo=timezone.utc)
+
+        message_id = await service.record_lobby(
+            user_id=str(speaker),
+            display_name="Ada",
+            name_color="#4f9",
+            is_anonymous=False,
+            text="anyone up for a round?",
+            sent_at=said_at,
+        )
+        assert message_id is not None
+        await service.drain()
+
+        async with factory() as session:
+            message = await session.scalar(select(RoomMessage))
+        assert message is not None
+        assert str(message.id) == message_id
+        assert UUID(message_id).version == 7
+        assert message.room_instance_id is None
+        assert message.sender_player_id is None
+        assert message.sender_seat_id is None
+        assert message.game_id is None and message.turn_id is None
+        assert message.sender_user_id == speaker
+        assert message.sender_display_name_snapshot == "Ada"
+        assert message.sender_name_color_snapshot == "#4f9"
+        assert message.message_kind == "chat"
+        assert message.audience == "lobby"
+        assert message.audience_user_ids == []
+        assert message.text == "anyone up for a round?"
+        assert message.created_at == said_at
+        assert message.expires_at - message.created_at == MESSAGE_RETENTION
+        await service.aclose()
+    finally:
+        await engine.dispose()
+
+
+async def test_a_lobby_line_is_not_promised_when_the_queue_is_already_full():
+    """The same bargain as room chat: the line goes out, the identifier does
+    not, and nothing waits on the database to find that out."""
+    service = MessageRetentionService(HangingFactory(), queue_depth=1)
+    said_at = datetime.now(timezone.utc)
+
+    def line(text):
+        return service.record_lobby(
+            user_id=str(generate_uuid()),
+            display_name="Ada",
+            name_color=None,
+            is_anonymous=True,
+            text=text,
+            sent_at=said_at,
+        )
+
+    first = await line("one")
+    await asyncio.sleep(0)
+    second = await line("two")
+    third = await line("three")
+    assert first is not None and second is not None
+    assert third is None
+    await service.aclose()
+
+
+async def test_a_lobby_line_with_no_account_behind_it_is_not_kept():
+    service = MessageRetentionService(HangingFactory())
+    assert (
+        await service.record_lobby(
+            user_id="not-an-id",
+            display_name="Ada",
+            name_color=None,
+            is_anonymous=True,
+            text="hello",
+            sent_at=datetime.now(timezone.utc),
+        )
+        is None
+    )
+    await service.aclose()

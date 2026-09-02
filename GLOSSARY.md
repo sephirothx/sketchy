@@ -135,7 +135,7 @@ Three different things, never used for one another:
 | **Correct guess** | A guess that matches the prompt. Announced to the room without revealing it. | win, hit |
 | **Wrong guess** | A guess that does not match the prompt. Its text is a **Retained message** for 30 days; per-seat and per-turn wrong/close totals remain as durable **Turn outcome** facts after the text expires. | failed answer, incorrect chat |
 | **Close guess** | A wrong guess one small edit away from the prompt, or one that gets some words of a multi-word prompt right. The classification hint is shown only to the guesser; the original text has the **Prompt-aware audience**. | near miss, almost |
-| **Chat** | The room's message stream. **Spectator chat** is the restricted stream that only the drawer, spectators, and correct guessers can see. | messages, log, feed |
+| **Chat** | A message stream: a room's, or the lobby's (**Lobby chat**). **Spectator chat** is the restricted stream in a room that only the drawer, spectators, and correct guessers can see. | messages, log, feed |
 
 ## Drawing
 
@@ -181,13 +181,14 @@ Three different things, never used for one another:
 | Term | Meaning | Avoid |
 | --- | --- | --- |
 | **Room** | The place people play in — created by a host, joined by code or from the lobby, and outliving individual games. | game (for the place), channel, table |
-| **Lobby** | The browsable list of public rooms, and the list of who is online beside it. **The lobby is one place, and it is not inside a room.** | browser, room list, home |
+| **Lobby** | The browsable list of public rooms, with the lobby chat and the list of who is online beside it. **The lobby is one place, and it is not inside a room.** | browser, room list, home |
 | **Online player** | An account with at least one open socket. Not a seat: a player is online whether or not they are in a room, and several tabs of one account are one online player. A visitor who has not chosen a name has no account and is not one. | active user, logged-in user, connected user |
 | **Friend** | An account another account has a mutual, accepted friendship with. Registered accounts only: a guest identity is a browser rather than a person, and is removed after a month of not playing. | contact, buddy, follower |
 | **Friend request** | An ask waiting for an answer. Answering it with a request of your own is the same as accepting. A **decline** is kept, so it cannot be re-sent into; the person who declined may still ask later. | invite, add |
 | **Invitation** | What a seated player sends a friend to bring them into the game they are in. It carries a token rather than a **Room code** — the server resolves the room from the sender's seat — and it is single use and short-lived. Distinct from a **Friend request**. | invite link, summon |
 | **Lobby presence** | The live list of online players the lobby shows, with each one marked *in the lobby* or *in a game*. It never says which room, so it is not a directory of who is playing where. | who's online, user list, friends list |
-| **Lobby channel** | The one subscription a lobby opens to be *told* things instead of asking: who is online, and the public room list. Each feed is numbered on its own, so a client can tell it missed a message and ask for a fresh list. | presence channel, room feed, socket room |
+| **Lobby channel** | The one subscription a lobby opens to be *told* things instead of asking: who is online, the public room list, and the lobby chat. Each of the two lists is numbered on its own, so a client can tell it missed a message and ask for a fresh list; a chat line is an event rather than a list, and is never asked for again. | presence channel, room feed, socket room |
+| **Lobby chat** | The one conversation every open lobby shares. Anyone with a name may speak, a guest included; a **Block** hides a player's lines from the one who blocked them and nobody else. An arrival is shown the last fifty lines, restarts included, each marked with how long ago it was said. | global chat, world chat, general |
 | **Waiting room** | A room's state before a game starts or between games, where players gather and the host starts the game. | lobby, pre-game, staging |
 | **Public room** | A room listed in the lobby, joinable by anyone. | open room |
 | **Private room** | A room reachable only by its code or invite link. | closed room, locked room |

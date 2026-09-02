@@ -995,11 +995,63 @@
   align-items: start;
 }
 
-.lobby-chat-placeholder {
+.lobby-chat-empty {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.5;
+}
+
+/* On a phone the panel is as tall as its contents, so the list has to bound
+   itself; the desktop's pinned viewport lifts this and lets the panel do it. */
+.lobby-chat-panel .chat-messages {
+  min-height: 160px;
+  max-height: 40vh;
+}
+
+.lobby-chat-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.lobby-chat-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A margin note, not part of the message: small, quiet, and out at the edge
+   so a long line wraps under the name rather than under the time. */
+.lobby-chat-time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: default;
+}
+
+/* `.panel input[type="search"]` (layout-primitives.css) gives every field in a
+   panel a border of its own; inside the chat box that is a box within a box.
+   The room's chat panel is not a `.panel`, so only the lobby needs this. */
+.lobby-chat-panel .chat-input-box input[type="search"] {
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 14.5px;
+}
+
+.lobby-chat-panel .chat-input-box input[type="search"]:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.lobby-chat-name-prompt {
+  align-self: flex-start;
+  margin-top: 10px;
 }
 
 .online-players-empty {
@@ -1151,7 +1203,8 @@
   }
 
   .lobby-rooms-panel .room-list,
-  .lobby-online-panel .online-players-list {
+  .lobby-online-panel .online-players-list,
+  .lobby-chat-panel .chat-messages {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
@@ -1159,6 +1212,10 @@
     padding-right: 4px;
     /* Reaching the end of one list must not start scrolling anything else. */
     overscroll-behavior: contain;
+  }
+
+  .lobby-chat-panel .chat-messages {
+    max-height: none;
   }
 
   /* The states that stand in for the list sit where the list would, rather

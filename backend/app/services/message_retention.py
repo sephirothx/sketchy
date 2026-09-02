@@ -136,6 +136,55 @@ class MessageRetentionService:
             created_at=now,
             expires_at=now + MESSAGE_RETENTION,
         )
+        return self._enqueue(row, f"for game {game_id} turn {turn_id}")
+
+    async def record_lobby(
+        self,
+        *,
+        user_id: str,
+        display_name: str,
+        name_color: str | None,
+        is_anonymous: bool,
+        text: str,
+        sent_at: datetime,
+    ) -> str | None:
+        """Take one lobby line for retention and return its UUIDv7.
+
+        The same bargain as `record`, for a line with no room and no seat: the
+        row is composed now from what the lobby knows about its author and
+        written later. The audience is the lobby itself - everybody with one
+        open - so no recipient list is kept; the moderation API reads the
+        audience value instead of the list when deciding who may cite it.
+        """
+        try:
+            sender = UUID(user_id)
+        except ValueError:
+            logger.warning("Lobby line by %r has no account id; not kept", user_id)
+            return None
+        row = RoomMessage(
+            id=generate_uuid7(),
+            room_instance_id=None,
+            game_id=None,
+            turn_id=None,
+            sender_user_id=sender,
+            sender_player_id=None,
+            sender_seat_id=None,
+            sender_display_name_snapshot=display_name,
+            sender_name_color_snapshot=name_color,
+            sender_is_anonymous_snapshot=is_anonymous,
+            is_spectator=False,
+            message_kind="chat",
+            audience="lobby",
+            audience_user_ids=[],
+            near_miss_kind=None,
+            text=text,
+            created_at=sent_at,
+            expires_at=sent_at + MESSAGE_RETENTION,
+        )
+        return self._enqueue(row, "from the lobby")
+
+    def _enqueue(self, row: RoomMessage, described: str) -> str | None:
+        """Hand one composed row to the writer, or say why it will not be kept."""
         self._ensure_worker()
         try:
             self._queue.put_nowait(row)
@@ -144,13 +193,12 @@ class MessageRetentionService:
             # find that out, so the line goes out unretained and the log is
             # where it is said.
             logger.warning(
-                "Retention queue is full; message %s for game %s turn %s is not kept",
-                message_id,
-                game_id,
-                turn_id,
+                "Retention queue is full; message %s %s is not kept",
+                row.id,
+                described,
             )
             return None
-        return str(message_id)
+        return str(row.id)
 
     def _ensure_worker(self) -> None:
         """Start the writer, or replace one that somehow stopped."""
