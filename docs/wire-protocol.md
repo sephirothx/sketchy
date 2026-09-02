@@ -404,6 +404,7 @@ the server resolves the seat against the live room and selects the evidence itse
 | `server_paused` | `ServerPausedNotice` — an administrator stopped, or resumed, admitting new rooms | every socket on each toggle; one socket at handshake while paused |
 | `server_full` | `{reason}` — the socket is closed immediately afterwards | one socket, at handshake |
 | `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
+| `lobby_rooms_changed` | `{revision, opened: RoomSummary[], closed: roomId[], changed: RoomSummary[]}` — the public room list moved, on the same fixed tick. Its own revision, because the two feeds move independently | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it | every socket of **both** affected accounts, the one that acted included: its REST answer refreshes only the tab that called, and a second lobby has no other way to hear |
 | `friend_invite_received` | `{fromUserId, displayName, inviteToken, expiresIn}` — **no room code, name, or id** | every socket of the invited account |
 | `client_config` | `ClientConfig` — cadences the client runs at | one socket at handshake; every socket when one changes |
@@ -420,11 +421,20 @@ it never puts a room code in the hands of somebody unseated (R-ROOM-02,
 R-FRIEND-06). `add_friend` names a **seat**, not an account, so no account id
 crosses the wire inside a room (R-ROOM-07).
 
-**`LobbyPlayer`** — one row of the lobby's online list. The baseline list is
-`{ok, revision, players: LobbyPlayer[], onlineCount}`, returned as the
-`watch_lobby` **acknowledgement** rather than as an event, so there is no
-window in which a socket is in the channel receiving deltas against a list it
-does not have yet.
+**`LobbyPlayer`** — one row of the lobby's online list. The `watch_lobby`
+**acknowledgement** carries both of the channel's baselines at once:
+
+```jsonc
+{ "ok": true,
+  "revision": 41, "players": [LobbyPlayer], "onlineCount": 412,
+  "roomsRevision": 17, "rooms": [RoomSummary] }
+```
+
+Baselines, not events, so there is no window in which a socket is in the
+channel receiving deltas against a list it does not have yet — and one
+acknowledgement rather than two, so that guarantee holds for both feeds. The
+revisions are separate on purpose: a room filling up must not look like
+presence news, and somebody signing in must not re-send the rooms.
 
 ```jsonc
 { "userId": "…", "displayName": "Ada", "nameColor": "#4f9",
@@ -440,11 +450,19 @@ lobby a directory of who is playing where, and naming the room would
 additionally disclose that a private one exists.
 `test_presence_payloads_never_carry_a_room_identifier` pins it.
 
-`revision` is a **sequence number, not a contract version**. It counts
-broadcasts so a client can tell that it missed one; a client that receives a
-delta which does not follow the revision it holds discards its list and
-re-runs `watch_lobby` rather than patching around the gap. Protocol
-compatibility is `PROTOCOL_VERSION` (§1) and nothing else.
+`revision` and `roomsRevision` are **sequence numbers, not contract
+versions**. Each counts broadcasts on its own feed so a client can tell that it
+missed one; a client that receives a delta which does not follow the revision
+it holds discards that list and re-runs `watch_lobby` rather than patching
+around the gap. Protocol compatibility is `PROTOCOL_VERSION` (§1) and nothing
+else.
+
+A **reconnect** ends both sequences, since the revisions were the old socket's.
+The client empties its presence list and marks its room list *stale* — still
+drawn, because those rooms are public and were true a moment ago, but patched
+by nothing until a fresh acknowledgement replaces it. The rooms in
+`lobby_rooms_changed` are the same `RoomSummary` shape `GET /api/rooms`
+returns, from the same serializer.
 
 
 **`room_state`** ([`backend/app/rooms.py:511`](../backend/app/rooms.py) →
@@ -532,7 +550,7 @@ fixed when the drain starts, so a change to the configured default cannot move i
 [`frontend/src/lib/clientConfig.ts`](../frontend/src/lib/clientConfig.ts)):
 
 ```ts
-{ contractVersion: 1, flushIntervalMs: number, lobbyPollIntervalMs: number }
+{ contractVersion: 2, flushIntervalMs: number }
 ```
 
 Cadences the *client* runs at, decided by the server so a deployment can tune them
@@ -541,6 +559,9 @@ it is the largest single lever on drawing bandwidth, the drawer never feels it �
 their own canvas is rasterized on every `pointermove` — and a viewer draws each
 batch as one polyline, so a value the byte curve likes can arrive visibly faceted.
 It can only be settled by looking at a running game, which is why it ships.
+
+Version 2 dropped `lobbyPollIntervalMs`. The lobby is told about rooms over its
+channel now (#462) and has no cadence of its own to be given.
 
 The client keeps its compiled defaults for any field that is missing or outside
 what it can run, because a server that cannot say is not a reason to stop drawing.
@@ -932,7 +953,7 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | --- | --- | --- |
 | `GET` | `/api/health` | Liveness, process-only — never fails on a dependency, because a restart cannot fix an outage the replacement comes back into. `{"status":"ok","readiness":…,"paused":…,"loops":{…}}`, where each supervised background loop reports `running`, `consecutive_failures`, `total_failures`, `seconds_since_success`, `seconds_since_failure` |
 | `GET` | `/api/ready` | 200 only when startup finished, no drain has begun, no supervised loop has stopped, and the database answers `SELECT 1` inside 1 s (result cached ~5 s). 503 otherwise, with `detail.reason` naming which of the three it was. A loop that is merely *erroring* stays ready — see `docs/architecture.md` §Health and readiness |
-| `GET` | `/api/rooms` | Public room summaries (`RoomSummary[]`), polled by the lobby every 4 s. Sends an `ETag` and answers a matching `If-None-Match` with an empty **304**; `Cache-Control: no-cache` so it is revalidated, never served stale. The validator is a hash of the serialized list, not a change counter — a counter must be bumped at every site touching any of the 22 fields in `to_public_summary()`, and a missed bump is a lobby that stays stale |
+| `GET` | `/api/rooms` | Public room summaries (`RoomSummary[]`). No longer polled by anything — the lobby is pushed this list on its channel (#462) — but kept as a plain public read for operators and tests. Sends an `ETag` and answers a matching `If-None-Match` with an empty **304**; `Cache-Control: no-cache` so it is revalidated, never served stale. The validator is a hash of the serialized list, not a change counter — a counter must be bumped at every site touching any of the 22 fields in `to_public_summary()`, and a missed bump is a lobby that stays stale |
 | `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set** |
 
 ### Accounts and sessions — [`backend/app/auth/routes.py`](../backend/app/auth/routes.py)
@@ -1158,7 +1179,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `score_ledger_version` | The score-event ledger contract | The ledger's semantics change |
 | `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
-| `contractVersion` on `client_config` | The client-cadence notice | A cadence is added, removed or renamed |
+| `contractVersion` on `client_config` (2) | The client-cadence notice | A cadence is added, removed or renamed |
 | Data export `schema_version` (2) | The export document, pinned by [`fixtures/account_data_export_v2_fields.json`](../fixtures/account_data_export_v2_fields.json) | The export's field surface changes |
 
 ### Before the first deployment

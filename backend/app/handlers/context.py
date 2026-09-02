@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from app.services.friends import FriendService
     from app.services.message_retention import MessageRetentionService
     from app.services.presence import (
-        PresenceBroadcaster,
+        LobbyBroadcaster,
         PresenceIdentityCache,
         PresenceRegistry,
     )
@@ -83,7 +83,7 @@ class HandlerContext:
     # and the lobby channel reads it, and neither owns it.
     presence: PresenceRegistry = field(init=False)
     presence_identities: PresenceIdentityCache = field(init=False)
-    presence_broadcaster: PresenceBroadcaster = field(init=False)
+    presence_broadcaster: LobbyBroadcaster = field(init=False)
     # Friendships are durable, so the service exists only where there is a
     # database; the invitations are live state and always exist.
     friend_service: FriendService | None = None

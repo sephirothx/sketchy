@@ -1,6 +1,6 @@
 """Client-side cadences the server decides, and the notice that carries them.
 
-Most tunables change something the server does. These two change something the
+Most tunables change something the server does. This one changes something the
 *client* does, which is the harder half of #446 and the half the issue was
 actually about: the drawer's flush interval is the largest single lever on
 drawing bandwidth, and the value that turned out to be right was not the one
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-CLIENT_CONFIG_CONTRACT_VERSION = 1
+CLIENT_CONFIG_CONTRACT_VERSION = 2
 
 
 @dataclass
@@ -34,16 +34,12 @@ class ClientConfig:
     # says to raise this; measured against a viewer's screen, 56ms and 80ms
     # both read as steppy and 40ms did not.
     flush_interval_ms: int = 40
-    # How often the lobby asks for the room list. Freshness against request
-    # volume; the poll already stops while the tab is hidden.
-    lobby_poll_interval_ms: int = 4_000
 
     def payload(self) -> dict:
         """The `client_config` notice, in the names the client reads."""
         return {
             "contractVersion": CLIENT_CONFIG_CONTRACT_VERSION,
             "flushIntervalMs": self.flush_interval_ms,
-            "lobbyPollIntervalMs": self.lobby_poll_interval_ms,
         }
 
 

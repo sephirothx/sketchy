@@ -271,6 +271,66 @@ async def test_watching_the_lobby_answers_with_a_baseline_to_apply_to(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_one_acknowledgement_carries_both_baselines(monkeypatch):
+    """One subscription, two feeds, and no window between them.
+
+    Two acknowledgements would leave a moment in which this socket is on the
+    channel receiving room deltas against a list it has not been given - the
+    exact gap `watch_lobby` answering with the snapshot exists to close, now
+    that there are two things to be given.
+    """
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    account_cookies(monkeypatch, {"tok-ada": "user-ada"})
+    ctx.presence_identities.remember(_identity("user-ada", "Ada"))
+    await connect_as(ctx, sio, "sid-a", "tok-ada")
+    public = room_manager.create_room(name="Open", is_public=True)
+    room_manager.create_room(name="Hidden", is_public=False)
+
+    answer = await sio.handlers["/"]["watch_lobby"]("sid-a", None)
+
+    assert answer["ok"] is True
+    # Named separately from the presence revision, because they move
+    # separately - a room filling up must not look like presence news.
+    assert answer["roomsRevision"] == 0
+    assert [room["id"] for room in answer["rooms"]] == [public.id]
+    assert "revision" in answer and "players" in answer
+
+
+@pytest.mark.asyncio
+async def test_the_acknowledged_room_list_never_carries_a_private_room(monkeypatch):
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    account_cookies(monkeypatch, {"tok-ada": "user-ada"})
+    await connect_as(ctx, sio, "sid-a", "tok-ada")
+    hidden = room_manager.create_room(name="Hidden", is_public=False)
+
+    answer = await sio.handlers["/"]["watch_lobby"]("sid-a", None)
+    assert answer["rooms"] == []
+    assert hidden.code not in repr(answer)
+
+
+@pytest.mark.asyncio
+async def test_a_room_change_reaches_the_channel_and_nowhere_else(monkeypatch):
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    account_cookies(monkeypatch, {"tok-ada": "user-ada"})
+    await connect_as(ctx, sio, "sid-a", "tok-ada")
+    await sio.handlers["/"]["watch_lobby"]("sid-a", None)
+
+    room = room_manager.create_room(name="Open", is_public=True)
+    await ctx.presence_broadcaster.flush()
+
+    frames = [
+        call for call in sio.emit.await_args_list
+        if call.args and call.args[0] == "lobby_rooms_changed"
+    ]
+    assert len(frames) == 1
+    assert frames[0].kwargs["room"] == LOBBY_CHANNEL
+    assert [entry["id"] for entry in frames[0].args[1]["opened"]] == [room.id]
+
+
+@pytest.mark.asyncio
 async def test_leaving_the_lobby_leaves_the_channel(monkeypatch):
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)

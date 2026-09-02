@@ -26,18 +26,31 @@ from app.services.presence import LOBBY_CHANNEL
 
 
 async def watch_lobby(ctx: HandlerContext, sid, data=None):
-    """Join the presence channel, answering with the baseline to apply to.
+    """Join the lobby channel, answering with both baselines to apply to.
 
-    The snapshot rides in the acknowledgement rather than in a follow-up
-    event, so there is no window in which the socket is in the channel and
-    receiving deltas against a list it does not have yet.
+    Presence and the public room list, each with its own revision. The channel
+    is what a lobby opens instead of polling `GET /api/rooms` every four
+    seconds (#462); the endpoint stays for operators and for the tests that
+    pin its shape, and nothing in the app asks it any more.
     """
     try:
         parse_empty_payload(data)
     except PayloadError as error:
         return error.acknowledgement()
     await ctx.sio.enter_room(sid, LOBBY_CHANNEL)
-    return {"ok": True, **ctx.presence_broadcaster.snapshot_for_watcher().payload()}
+    feed = ctx.presence_broadcaster
+    rooms = feed.rooms_for_watcher()
+    return {
+        "ok": True,
+        **feed.snapshot_for_watcher().payload(),
+        # The room list rides the same acknowledgement rather than a first
+        # delta, for the reason presence does: there must be no window in
+        # which the socket is in the channel and receiving changes against a
+        # list it has not been given. Its own revision, because the two feeds
+        # move independently.
+        "rooms": rooms.payload()["rooms"],
+        "roomsRevision": rooms.revision,
+    }
 
 
 async def unwatch_lobby(ctx: HandlerContext, sid, data=None):

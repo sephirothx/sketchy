@@ -91,6 +91,10 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     # reachable with nothing listening on it - and, from #529, a friend
     # request delivered into that silence.
     "app/services/presence.py": (99.0, 89.0),
+    # The room list, now that it is a feed rather than an answer: a diff that
+    # calls a changed room unchanged is a lobby that stays wrong until
+    # something else moves, which a poll could never be.
+    "app/services/lobby_rooms.py": (100.0, 100.0),
     # Friendships decide who may enter a room they cannot name, and most of
     # what these modules do is refuse. An untested refusal is a way in.
     "app/services/friends.py": (98.0, 95.0),

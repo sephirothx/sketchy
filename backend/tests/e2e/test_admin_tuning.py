@@ -6,19 +6,21 @@ is set on one machine, travels over the socket, and has to reach a timer that
 is already armed in a browser that never reloaded. Each of those is somewhere
 the value could be quietly dropped, and none of them is visible from one side.
 
-The cadence under test is the lobby poll rather than the drawer's flush
-interval, for two reasons. It is observable without adding anything to the
-application: counting the lobby's own requests watches the behaviour the
-setting names, where reading the flush interval back would mean exposing it on
-`window` for the benefit of this file - production code existing only for a
-test, which is what R-ENG-10 discourages. And it is the safe one to move.
+The cadence under test is the drawer's flush interval, and it is observed on
+the wire: the `client_config` frame the running socket receives. This used to
+count the lobby's polling instead, which #462 retired - the room list is pushed
+now and has no cadence of its own. Reading the frame is the better test
+anyway. It asserts the *value* that arrived rather than inferring a change from
+timing, so it needs no discriminating window and cannot flake on a slow worker,
+and it still adds nothing to the application: the frame is protocol, not a
+hook exposed on `window` for the benefit of this file (R-ENG-10).
 
 **A tunable is process-wide, and this suite shares one server.** `--dist=load`
 spreads individual tests across workers, so anything changed here is changed
-for whatever else is running at that moment. That rules out most of them: a
-flush interval of 20ms would reach every drawing test in flight. Polling the
-lobby *faster* cannot break a test that waits for a room card to appear, which
-is why it is the one this file moves - briefly, and put back in a `finally`
+for whatever else is running at that moment. 56ms is chosen for that reason: it
+is a value production actually weighed, it is well inside the bounds the
+drawing budget admits, and a viewer receiving batches 16ms further apart cannot
+fail a test that waits for a stroke to appear. It is put back in a `finally`
 through the API rather than the page, so a failed assertion still restores it.
 
 These tests must never reach for a tunable to make themselves faster (R-CONF-08).
@@ -31,8 +33,8 @@ coverage is worth. The pause is covered against the API in
 `tests/test_admin_controls.py`, and the banner that reports it by
 `frontend/tests/adminControls.test.mjs`.
 """
+import asyncio
 import os
-import time
 
 import pytest
 from playwright.async_api import async_playwright
@@ -122,14 +124,18 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
         player_page = await player_context.new_page()
         player_page.set_default_timeout(10000)
 
-        polls: list[float] = []
+        notices: list[str] = []
+        arrived = asyncio.Event()
+
+        def record(payload) -> None:
+            if isinstance(payload, str) and '"client_config"' in payload:
+                notices.append(payload)
+                arrived.set()
+
+        # Attached before the socket opens, so the handshake's own notice is
+        # seen too - and so nothing is missed between navigating and listening.
         player_page.on(
-            "request",
-            lambda request: (
-                polls.append(time.monotonic())
-                if request.url.endswith("/api/rooms")
-                else None
-            ),
+            "websocket", lambda websocket: websocket.on("framereceived", record)
         )
 
         try:
@@ -139,8 +145,12 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
             # client that was already running.
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "TunedPlayer")
-            await player_page.bring_to_front()
-            await player_page.wait_for_timeout(500)
+            async with asyncio.timeout(10):
+                while not notices:
+                    arrived.clear()
+                    await arrived.wait()
+            assert '"flushIntervalMs":40' in notices[-1].replace(" ", ""), notices[-1]
+            already_seen = len(notices)
 
             await admin_page.goto(f"{BASE_URL}/admin/operations?tab=tuning")
             # The tab is addressable, so a link to one survives being sent.
@@ -149,35 +159,32 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
             )
             # Every control is drawn from what the server said about the
             # setting, so the page knows nothing about any particular one.
-            await admin_page.wait_for_selector(
-                "text=Freshness against request volume"
-            )
+            await admin_page.wait_for_selector("text=Bandwidth against stroke smoothness")
 
-            await admin_page.fill(field_for("client.lobby_poll_interval_ms"), "1000")
+            await admin_page.fill(field_for("client.flush_interval_ms"), "56")
             await admin_page.click('button:has-text("Apply changes")')
             await admin_page.wait_for_selector("text=In force now")
 
             assert (
                 await stored_settings()
-            ).get("tunable.client.lobby_poll_interval_ms") == "1000"
+            ).get("tunable.client.flush_interval_ms") == "56"
             # `override` says the change is now a durable row, which is the
             # half of the record a reset later takes back.
             assert (
-                "client.lobby_poll_interval_ms",
-                {"from": 4000, "to": 1000, "override": "stored"},
+                "client.flush_interval_ms",
+                {"from": 40, "to": 56, "override": "stored"},
             ) in await config_changes()
 
-            # Four polls inside eight seconds is impossible at the four-second
-            # default and comfortable at one second, so this discriminates
-            # without depending on the browser hitting an exact cadence.
-            await player_page.bring_to_front()
-            polls.clear()
-            deadline = time.monotonic() + 8
-            while len(polls) < 4 and time.monotonic() < deadline:
-                await player_page.wait_for_timeout(250)
-            assert len(polls) >= 4, (
-                f"the lobby polled {len(polls)} times in eight seconds; a change "
-                "from 4000ms to 1000ms did not reach a browser already running"
+            # The point of the test: a notice the running socket had not
+            # received when the page loaded, carrying the new value.
+            async with asyncio.timeout(10):
+                while len(notices) == already_seen:
+                    arrived.clear()
+                    await arrived.wait()
+            fresh = notices[-1].replace(" ", "")
+            assert '"flushIntervalMs":56' in fresh, (
+                f"the client_config notice said {fresh}; a change from 40ms to "
+                "56ms did not reach a browser already running"
             )
 
             # Reset through the page, since that control is part of what is
@@ -185,18 +192,18 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
             # to the boot value would pin the setting against a later change to
             # whatever supplies it.
             await admin_page.click(
-                f'{field_for("client.lobby_poll_interval_ms")} ~ button:has-text("Reset")'
+                f'{field_for("client.flush_interval_ms")} ~ button:has-text("Reset")'
             )
             await admin_page.wait_for_selector("text=In force now")
             assert (
-                "tunable.client.lobby_poll_interval_ms" not in await stored_settings()
+                "tunable.client.flush_interval_ms" not in await stored_settings()
             )
         finally:
             # Through the API, not the page: a failed assertion above must not
-            # leave every other test in this run polling four times as often.
+            # leave every other test in this run on a cadence it did not choose.
             await admin_page.request.patch(
                 f"{BASE_URL}/api/admin/tunables",
-                data={"reset": ["client.lobby_poll_interval_ms"]},
+                data={"reset": ["client.flush_interval_ms"]},
             )
             await player_context.close()
             await admin_context.close()

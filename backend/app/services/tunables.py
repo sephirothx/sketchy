@@ -335,16 +335,6 @@ def client_tunables(config: ClientConfig) -> list[Tunable]:
                 "polyline, so a fast curve arrives faceted."
             ),
         ),
-        _number(
-            config, "lobby_poll_interval_ms",
-            name="client.lobby_poll_interval_ms", default=4_000,
-            minimum=1_000, maximum=60_000, unit="ms", audience_=CLIENT,
-            description=(
-                "How often the lobby asks for the room list. Freshness "
-                "against request volume; polling already stops while the tab "
-                "is hidden."
-            ),
-        ),
     ]
 
 

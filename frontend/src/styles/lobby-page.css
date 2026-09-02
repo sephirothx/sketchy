@@ -1164,7 +1164,6 @@
   /* The states that stand in for the list sit where the list would, rather
      than collapsing the panel to its heading and leaving a gap under it. */
   .lobby-rooms-panel .room-list-loading,
-  .lobby-rooms-panel .room-list-error,
   .lobby-rooms-panel .lobby-no-matches,
   .lobby-rooms-panel > p {
     flex: 1 1 auto;

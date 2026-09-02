@@ -10,39 +10,29 @@ BASE_URL = "http://localhost:8000"
 
 
 @pytest.mark.asyncio
-async def test_room_list_failure_retry_and_connection_banner():
+async def test_going_offline_banners_and_refuses_a_join():
+    """The lobby's failure mode, now that the room list is not fetched.
+
+    There is nothing left to retry: the list arrives on the socket, and a
+    socket that is down is what the banner is for. What still has to hold is
+    that a command issued into that outage is refused and gives its control
+    back, rather than spinning on a promise nothing will ever settle.
+    """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         context = await browser.new_context()
         page = await context.new_page()
-        attempts = 0
-
-        async def handle_rooms(route):
-            nonlocal attempts
-            attempts += 1
-            if attempts == 1:
-                await asyncio.sleep(0.25)
-                await route.fulfill(status=503, json={"error": "unavailable"})
-            else:
-                await route.fulfill(status=200, json=[])
-
-        await page.route("**/api/rooms", handle_rooms)
         try:
             await page.goto(BASE_URL)
-            assert await page.is_visible("text=Loading public rooms…")
-            await page.wait_for_selector('.room-list-error:has-text("Could not load public rooms")')
-
-            await page.click('.room-list-error button:has-text("Retry")')
-            await page.wait_for_selector('text=No public rooms yet. Create one!')
-            assert attempts >= 2
-
             # Name the player before the connection drops: seeding it reloads
             # the page, which offline emulation would block.
             await use_guest_name(page, "OfflinePlayer")
-            await page.wait_for_selector('text=No public rooms yet. Create one!')
+            await page.wait_for_selector(".lobby-rooms-panel")
 
             await context.set_offline(True)
-            await page.wait_for_selector('.connection-status-banner.offline:has-text("You’re disconnected")')
+            await page.wait_for_selector(
+                '.connection-status-banner.offline:has-text("You\u2019re disconnected")'
+            )
             await join_by_code(page, "ABC123")
             await page.wait_for_selector('.lobby-action-error:has-text("Connection lost")')
             # The control that was refused, not the one that opened the sheet:
@@ -50,7 +40,7 @@ async def test_room_list_failure_retry_and_connection_banner():
             # pass whether or not the failed attempt released anything.
             assert await page.is_enabled('button:has-text("Join the room")')
             await context.set_offline(False)
-            await page.wait_for_selector('.connection-status-banner', state="hidden", timeout=10000)
+            await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
         finally:
             await context.close()
             await browser.close()
@@ -183,52 +173,51 @@ async def test_mid_session_socket_reconnects_to_room():
 
 
 @pytest.mark.asyncio
-async def test_room_refresh_failure_keeps_last_successful_list():
+async def test_a_dropped_socket_keeps_the_rooms_it_last_knew():
+    """Losing the server must not blank the lobby.
+
+    The room list is pushed now, so a reconnect abandons the revision sequence
+    it was numbered in - but not the rooms themselves, which are public and
+    were true a moment ago. The poll this replaced kept its last answer on
+    screen for up to four seconds; a transport bounce that emptied the lobby
+    would be a regression in what the reader sees for the sake of a counter.
+    """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
-        page = await browser.new_page()
-        attempts = 0
-        room = {
-            "id": "resilient-room",
-            "code": "STABLE",
-            "name": "Last known room",
-            "isPublic": True,
-            "playerCount": 1,
-            "spectatorCount": 0,
-            "maxPlayers": 8,
-            "isFull": False,
-            "rounds": 3,
-            "customPromptCount": 0,
-            "customPromptsOnly": False,
-            "drawingSeconds": 80,
-            "hintMode": "none",
-            "scoringMode": "default",
-            "spectatorsSeePrompt": False,
-            "hideMaskedPrompt": False,
-            "allowedTools": ["brush", "fill", "shapes"],
-            "colorMode": "all",
-            "state": "waiting",
-        }
-
-        async def handle_rooms(route):
-            nonlocal attempts
-            attempts += 1
-            if attempts == 1:
-                await route.fulfill(status=200, json=[room])
-            else:
-                await route.fulfill(status=503, json={"error": "unavailable"})
-
-        await page.route("**/api/rooms", handle_rooms)
+        host_context = await browser.new_context()
+        watcher_context = await browser.new_context()
+        host = await host_context.new_page()
+        watcher = await watcher_context.new_page()
         try:
-            # The lobby re-polls on a four-second interval, and this test needs
-            # the second poll - the one that fails. Fast-forwarding the page's
-            # own clock gets there without spending the four seconds, and keeps
-            # the interval a production constant rather than a test setting.
-            await page.clock.install()
-            await page.goto(BASE_URL)
-            await page.wait_for_selector('[data-testid="public-room-card"]:has-text("Last known room")')
-            await page.clock.fast_forward(5000)
-            await page.wait_for_selector('.room-list-warning:has-text("Could not load public rooms")', timeout=7000)
-            assert await page.is_visible('[data-testid="public-room-card"]:has-text("Last known room")')
+            await watcher.goto(BASE_URL)
+            await use_guest_name(watcher, "ListWatcher")
+            await watcher.wait_for_selector(".lobby-rooms-panel")
+
+            await host.goto(BASE_URL)
+            await use_guest_name(host, "ListHost")
+            await host.click('button:has-text("Create room")')
+            await host.fill(
+                'input[placeholder="Leave blank for a random name!"]', "Last known room"
+            )
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+
+            # Arrived with no reload and no request of its own: the watcher had
+            # already been given its snapshot before this room existed.
+            card = '[data-testid="public-room-card"]:has-text("Last known room")'
+            await watcher.wait_for_selector(card)
+
+            await watcher_context.set_offline(True)
+            await watcher.wait_for_selector(".connection-status-banner.offline")
+            assert await watcher.is_visible(card)
+            assert not await watcher.is_visible(".room-list-loading")
+
+            await watcher_context.set_offline(False)
+            await watcher.wait_for_selector(
+                ".connection-status-banner", state="hidden", timeout=10000
+            )
+            await watcher.wait_for_selector(card)
         finally:
+            await host_context.close()
+            await watcher_context.close()
             await browser.close()

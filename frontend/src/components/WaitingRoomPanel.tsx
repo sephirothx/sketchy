@@ -9,7 +9,7 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { describeDrawingRules } from "../lib/drawingRules";
 import { hintLabelFor } from "../lib/roomSetup";
 import { InviteFriendsList } from "./InviteFriendsList";
-import { useLobbyPresence } from "../hooks/useLobbyPresence";
+import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useToast } from "../lib/toast";
 import type {
@@ -55,7 +55,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // The waiting room is the one place inside a room that needs to know
   // who is around: it is where you are trying to get people in, and it is
   // not mid-game. Dropped again the moment the game starts.
-  useLobbyPresence();
+  useLobbyChannel();
   const { players, myPlayerId, isHost, finalScores, code } = props;
   const { notify } = useToast();
   // Narrow only. Above this the players panel has a column of its own and

@@ -65,7 +65,7 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-ROOM-01** | The lobby MUST show a live, polled list of public rooms, and MUST allow joining a private room by code. It MUST also show who is online (R-PRESENCE-01). |
+| **R-ROOM-01** | The lobby MUST show a live list of public rooms, pushed rather than polled (R-PRESENCE-05), and MUST allow joining a private room by code. It MUST also show who is online (R-PRESENCE-01). |
 | **R-ROOM-02** | Room codes MUST be six-character random invite **capabilities**, reserved in the database before being shown to a player. They MUST NOT be derived from an entity ID. |
 | **R-ROOM-03** | When an ephemeral room empties, its code MUST be retired for 30 days, so a stale invite says the room ended instead of silently joining an unrelated group. Startup MUST retire reservations orphaned by a crash. |
 | **R-ROOM-03a** | Codes permanently claimed by the removed persistent-room feature MUST stay claimed and MUST report a stale invite as ended. Releasing them would hand exactly those codes back to the allocator. |
@@ -88,7 +88,7 @@ claim that an arbitrary host will sustain it.
 | **R-PRESENCE-02** | Presence MUST be released the moment a socket closes, on **every** way out — including a handshake that fails after the account was registered, which never reaches the disconnect handler. It MUST NOT be held for the R-CONN-01 reconnect grace: that grace protects a *seat*, and a socket that cannot receive is not online. |
 | **R-PRESENCE-03** | Presence MUST say only whether a player is in the lobby or in a game. It MUST NOT name the room, in any form, for a public or a private one alike. |
 | **R-PRESENCE-04** | The list MUST be bounded and MUST report the true total alongside the bounded list, so a cap is never mistaken for a quiet server. The cap and the broadcast interval MUST both be configurable (R-ROOM-10's rule). |
-| **R-PRESENCE-05** | Presence MUST be delivered over a channel a client opts into, never a second poll (#462). Every message MUST carry a sequence number, and a client MUST be able to detect a missed one and ask for a fresh snapshot, so its store is self-correcting rather than authoritative (#493). |
+| **R-PRESENCE-05** | Presence and the public room list MUST be delivered over one channel a client opts into, never a poll (#462). Each feed MUST carry its own sequence number, one acknowledgement MUST hand over both baselines, and a client MUST be able to detect a missed message and ask for a fresh snapshot, so its store is self-correcting rather than authoritative (#493). |
 
 ### Friends
 
