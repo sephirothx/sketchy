@@ -87,7 +87,7 @@ export function TrafficCard({ live, reasons }: { live: LiveSnapshot; reasons: At
       reasons={reasons}
       wide
     >
-      <div className="ops-signal-grid">
+      <div className="ops-signal-grid ops-signal-row" role="group" aria-label="Requests">
         <Cell label="Requests / min" value={formatRate(http.perMinute)} note={`${http.inFlight} in flight`}>
           <Sparkline values={series.httpPerMinute} label="Requests per minute" format={formatRate} />
         </Cell>
@@ -104,6 +104,8 @@ export function TrafficCard({ live, reasons }: { live: LiveSnapshot; reasons: At
           note={`${http.total.toLocaleString()} since start`}
           warning={flagged(reasons, "http-errors")}
         />
+      </div>
+      <div className="ops-signal-grid ops-signal-row" role="group" aria-label="Commands">
         <Cell label="Commands / min" value={formatRate(socket.perMinute)} note={`${socket.connected ?? "—"} sockets open`}>
           <Sparkline values={series.socketPerMinute} label="Client commands per minute" format={formatRate} />
         </Cell>
@@ -116,6 +118,8 @@ export function TrafficCard({ live, reasons }: { live: LiveSnapshot; reasons: At
           note={`refused ${formatPercent(socket.refusedRate)} · throttled ${formatRate(socket.throttledPerMinute)}/min`}
           warning={flagged(reasons, "socket-errors")}
         />
+      </div>
+      <div className="ops-signal-grid ops-signal-row" role="group" aria-label="Sockets">
         <Cell
           label="Socket in / min"
           value={formatBytes(socket.bytesInPerMinute)}

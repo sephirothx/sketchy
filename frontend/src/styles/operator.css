@@ -182,8 +182,15 @@
   grid-column: 1 / -1;
 }
 
-.ops-card-wide .ops-signal-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+/* One row per kind of traffic - requests, commands, sockets - three across,
+   so the "per minute / p95 / errors" columns line up between rows. */
+.ops-card-wide .ops-signal-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ops-card-wide .ops-signal-row + .ops-signal-row {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
 }
 
 @media (max-width: 1000px) {
@@ -197,7 +204,7 @@
     grid-column: 1 / -1;
   }
 
-  .ops-card-wide .ops-signal-grid {
+  .ops-card-wide .ops-signal-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
