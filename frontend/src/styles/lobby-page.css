@@ -1171,3 +1171,87 @@
     min-height: 0;
   }
 }
+
+/* Friends, on the rows they belong to. */
+.online-player-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.online-player-actions .online-player-status {
+  margin-left: 0;
+}
+
+/* The add control is quiet until the row is under the cursor: it is an
+   offer, not the reason the list exists. It stays visible on a touch screen,
+   where there is no hover to reveal it with. */
+.online-add-friend {
+  min-height: 30px;
+  padding: 0 8px;
+  color: var(--muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .online-add-friend {
+    opacity: 0;
+  }
+
+  .online-player-row:hover .online-add-friend,
+  .online-add-friend:focus-visible {
+    opacity: 1;
+  }
+}
+
+.online-add-friend:hover {
+  color: var(--primary);
+}
+
+/* A friend's row carries a little more weight than the rest of the list. */
+.online-player-row.is-friend .online-player-name {
+  font-weight: 700;
+}
+
+.online-requests {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid var(--line);
+}
+
+.online-player-row.is-request {
+  background: var(--well);
+}
+
+/* An invitation asks a question, so it sits where a banner does rather than
+   passing by like a toast. */
+.friend-invite-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(92vw, 460px);
+  padding: 10px 12px 10px 16px;
+  background: var(--card);
+  border: 1.5px solid var(--primary);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.friend-invite-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.friend-invite-dismiss {
+  min-width: 32px;
+  min-height: 32px;
+  color: var(--muted);
+}

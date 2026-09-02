@@ -146,6 +146,7 @@ optional services. Handler domains:
 | [`moderation.py`](../backend/app/handlers/moderation.py) | `toggle_afk`, `vote_player`, `report_player` |
 | [`restart.py`](../backend/app/handlers/restart.py) | `propose_restart_vote`, `cast_restart_vote` |
 | [`lobby.py`](../backend/app/handlers/lobby.py) | `watch_lobby`, `unwatch_lobby` - joining and leaving the online-players channel |
+| [`friends.py`](../backend/app/handlers/friends.py) | `add_friend`, `invite_friend`, `join_friend_room` — the two ways into a room nobody named |
 | [`identity.py`](../backend/app/handlers/identity.py) | Resolving the account behind a socket into the name/color it plays under |
 | [`sessions.py`](../backend/app/handlers/sessions.py) | Socket session resolution shared by handler domains |
 | [`payloads.py`](../backend/app/handlers/payloads.py) | Strict typed validation for every inbound command |
@@ -489,9 +490,9 @@ The name and colour each row shows are read through a bounded LRU warmed at the
 handshake, the same shape and the same failure rule as
 [`auth/blocks.py`](../backend/app/auth/blocks.py): a read that does not answer
 leaves the account out of the list rather than showing a blank name. Cached
-rather than stored because a display name changes through four paths - both
-profile routes, the in-room rename, and a guest merge - three of which never
-touch a socket.
+rather than stored because a display name or colour changes through five
+paths - both profile routes, the in-room rename, the in-room colour change,
+and a guest merge - three of which never touch a socket.
 
 Two things follow from that cache being **read at the handshake and nowhere
 else**, and both had to be built rather than assumed. First, the tick repairs
@@ -1046,6 +1047,8 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
+| [`app/services/friends.py`](../backend/app/services/friends.py) | Friendship rules: the canonical pair, and what a request is not told. |
+| [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |
 | [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
@@ -1064,10 +1067,10 @@ Files are named for their single concern; the directory says the role.
 | Directory | Files |
 | --- | --- |
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
-| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `gameStore.ts`, `presenceStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
+| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `friendsStore.ts`, `gameStore.ts`, `presenceStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyPresence.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `lobbyPresence.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `OnlinePlayersPanel.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomSetupControls.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `lobbyPresence.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `OnlinePlayersPanel.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomSetupControls.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).

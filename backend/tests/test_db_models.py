@@ -17,6 +17,7 @@ from app.db.models import (
     AppConfig,
     Base,
     DataExport,
+    Friendship,
     GameParticipant,
     GameRecord,
     PlayerReport,
@@ -39,7 +40,11 @@ from app.db.models import (
 )
 from app.domain_values import (
     ACCOUNT_STATES,
+    AccountState,
+    BRUSH_CURSOR_STYLES,
     DATA_EXPORT_STATUSES,
+    FRIENDSHIP_STATES,
+    FriendshipState,
     HINT_MODES,
     NEAR_MISS_KINDS,
     PROMPT_LANGUAGES,
@@ -47,13 +52,11 @@ from app.domain_values import (
     REPORT_STATUSES,
     RETAINED_MESSAGE_AUDIENCES,
     RETAINED_MESSAGE_KINDS,
-    SCORING_MODES,
     SCORE_EVENT_TYPES,
+    SCORING_MODES,
     TURN_END_REASONS,
     USER_ROLES,
     USER_THEMES,
-    BRUSH_CURSOR_STYLES,
-    AccountState,
     UserRole,
 )
 
@@ -155,6 +158,7 @@ async def test_user_state_and_role_are_database_constrained(column, invalid):
 async def test_account_state_and_role_constants_cover_database_values():
     assert ACCOUNT_STATES == ("anonymous", "registered", "merged", "deleted")
     assert USER_ROLES == ("user", "moderator", "admin")
+    assert FRIENDSHIP_STATES == ("pending", "accepted", "declined")
     assert DATA_EXPORT_STATUSES == ("pending", "processing", "ready", "failed")
     assert USER_THEMES == ("light", "dark", "system")
     assert BRUSH_CURSOR_STYLES == ("crosshair", "circle")
@@ -1669,3 +1673,117 @@ async def test_no_index_duplicates_the_leading_column_of_a_composite():
         "these indexes cover a strict subset of a composite that already "
         "leads with the same column: " + "; ".join(offenders)
     )
+
+
+async def _two_accounts(factory):
+    """A pair of accounts, returned in the canonical order the table wants."""
+    low, high = sorted([generate_uuid(), generate_uuid()])
+    async with factory() as session:
+        async with session.begin():
+            for index, user_id in enumerate((low, high)):
+                session.add(
+                    User(id=user_id, display_name=f"Player{index}", username=f"p{index}")
+                )
+    return low, high
+
+
+async def test_a_friendship_is_stored_once_in_a_canonical_order():
+    """The ordering is the identity, so the database has to enforce it.
+
+    And it has to enforce it the *same way* on both engines: PostgreSQL
+    compares `uuid` as sixteen bytes while SQLite compares the hex string
+    SQLAlchemy stores, and this table's whole shape rests on those two orders
+    agreeing. They do - both are big-endian over the same bytes - but "they
+    do" is a claim about two databases, so this module was added to the
+    PostgreSQL job in CI rather than left to prove it on SQLite alone.
+    """
+    factory, engine = await create_test_db()
+    try:
+        low, high = await _two_accounts(factory)
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    Friendship(
+                        user_low_id=low,
+                        user_high_id=high,
+                        requested_by_id=low,
+                        status=FriendshipState.PENDING.value,
+                    )
+                )
+        # The pair written the wrong way round is a different row to the
+        # primary key and the same relationship to a person, which is exactly
+        # what the CHECK exists to make impossible.
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    session.add(
+                        Friendship(
+                            user_low_id=high,
+                            user_high_id=low,
+                            requested_by_id=low,
+                            status=FriendshipState.PENDING.value,
+                        )
+                    )
+    finally:
+        await engine.dispose()
+
+
+async def test_a_friendship_cannot_be_with_yourself_or_a_stranger():
+    factory, engine = await create_test_db()
+    try:
+        low, high = await _two_accounts(factory)
+        outsider = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=outsider, display_name="Outsider", username="out"))
+
+        # `x < x` is false, so the ordering constraint forbids a self-friendship
+        # without a second constraint saying so.
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    session.add(
+                        Friendship(
+                            user_low_id=low,
+                            user_high_id=low,
+                            requested_by_id=low,
+                            status=FriendshipState.PENDING.value,
+                        )
+                    )
+
+        # Somebody outside the pair cannot be the one who asked - the column
+        # that makes an incoming request tellable from an outgoing one would
+        # otherwise be able to name a third party.
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    session.add(
+                        Friendship(
+                            user_low_id=low,
+                            user_high_id=high,
+                            requested_by_id=outsider,
+                            status=FriendshipState.PENDING.value,
+                        )
+                    )
+    finally:
+        await engine.dispose()
+
+
+async def test_a_friendship_status_is_database_constrained():
+    factory, engine = await create_test_db()
+    try:
+        low, high = await _two_accounts(factory)
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    session.add(
+                        Friendship(
+                            user_low_id=low,
+                            user_high_id=high,
+                            requested_by_id=low,
+                            status="besties",
+                        )
+                    )
+    finally:
+        await engine.dispose()
+

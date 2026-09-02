@@ -27,15 +27,20 @@ from app.db.models import (
     AuditEvent,
     AuthSession,
     Base,
+    BugReport,
     DataExport,
+    Friendship,
     GameParticipant,
     GameRecord,
-    BugReport,
+    IdentityAlias,
     PlayerReport,
     PlayerReportMessageEvidence,
+    PromptConcept,
     PromptContentReport,
+    PromptList,
+    RoomMessage,
+    RoomPreset,
     ScoreEvent,
-    IdentityAlias,
     TurnDrawing,
     TurnGuess,
     TurnRecord,
@@ -43,13 +48,10 @@ from app.db.models import (
     UserBan,
     UserBlock,
     UserSettings,
-    PromptConcept,
-    PromptList,
-    RoomMessage,
-    RoomPreset,
     generate_uuid,
 )
-from app.domain_values import AccountState, DataExportStatus
+from app.domain_values import AccountState, DataExportStatus, FriendshipState
+from app.services.friends import friendship_key
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
@@ -352,6 +354,18 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                     blocked_user_id=other_row.id,
                 )
             )
+            # A friendship the requester is half of, so the export's friend
+            # fields are pinned by a row rather than by an empty list.
+            low, high = friendship_key(owner_row.id, other_row.id)
+            session.add(
+                Friendship(
+                    user_low_id=low,
+                    user_high_id=high,
+                    requested_by_id=owner_row.id,
+                    status=FriendshipState.ACCEPTED.value,
+                    responded_at=datetime.now(timezone.utc),
+                )
+            )
     game_id = await record_private_game(
         history, owner_id=owner["id"], other_id=other.id
     )
@@ -458,8 +472,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 1
-    assert artifact["schemaVersion"] == 1
+    assert status["schemaVersion"] == 2
+    assert artifact["schemaVersion"] == 2
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -516,7 +530,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert "$argon2" not in encoded
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v1_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v2_fields.json").read_text(
             encoding="utf-8"
         )
     )
@@ -994,3 +1008,32 @@ async def test_a_corrupt_export_document_is_refused_not_served(env):
         job.artifact = gzip.compress(b"")
         with pytest.raises(AccountDataError, match="decoded to nothing"):
             decode_export_artifact(job)
+
+
+async def test_deleting_an_account_names_the_friends_it_takes_something_from(env):
+    """Their lists lose a row, and they are still connected to hear it.
+
+    Collected before the delete: afterwards there is nothing left to say who
+    they were.
+    """
+    http, _, _, factory = env
+    owner = await register(http)
+    other_http = AsyncClient(transport=http._transport, base_url="http://test")
+    async with other_http:
+        friend = await register(other_http, "FriendOfOwner")
+        async with factory() as session:
+            async with session.begin():
+                low, high = friendship_key(UUID(owner["id"]), UUID(friend["id"]))
+                session.add(
+                    Friendship(
+                        user_low_id=low,
+                        user_high_id=high,
+                        requested_by_id=UUID(owner["id"]),
+                        status=FriendshipState.ACCEPTED.value,
+                    )
+                )
+
+        result = await anonymize_account(factory, user_id=UUID(owner["id"]))
+
+    # The friend, and nobody else - certainly not the account being deleted.
+    assert result.friends_notified == (friend["id"],)

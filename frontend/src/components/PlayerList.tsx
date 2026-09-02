@@ -1,7 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ModerationState, PlayerInfo } from "../types";
-import { emitTransient } from "../lib/socket";
+import { emitWithAck, emitTransient } from "../lib/socket";
+import { useToast } from "../lib/toast";
 import { ReportPlayerDialog } from "./ReportPlayerDialog";
 import { useAuthStore } from "../store/authStore";
 import { competitionRanks } from "../lib/standings";
@@ -71,6 +72,39 @@ export function PlayerList({
   const canRequestReport = useAuthStore(
     (state) => Boolean(state.user && !state.user.isAnonymous),
   );
+  const iAmAGuest = useAuthStore((state) => state.user?.isAnonymous ?? true);
+  const { notify } = useToast();
+
+  /** Friend somebody by their seat, so no account id crosses the wire.
+
+  Answered plainly here rather than silently: unlike the lobby's list, both
+  people are in the same room and can see each other, so there is no third
+  party to protect by being vague. */
+  async function sendFriendRequest(playerId: string, nickname: string) {
+    try {
+      const answer = await emitWithAck<{
+        ok: boolean;
+        error?: string;
+        status?: string;
+      }>("add_friend", { playerId });
+      if (!answer?.ok) {
+        notify(answer?.error ?? "That request could not be sent.");
+        return;
+      }
+      // Three outcomes worth telling apart, and one that deliberately is not:
+      // anything else - already friends, already asked, or a block - reads as
+      // "nothing to do", so the answer never becomes a way to test for one.
+      if (answer.status === "accepted") {
+        notify(`You and ${nickname} are now friends.`);
+      } else if (answer.status === "created") {
+        notify(`Friend request sent to ${nickname}.`);
+      } else {
+        notify(`Nothing to do - you have already asked ${nickname}.`);
+      }
+    } catch {
+      notify("That request could not be sent.");
+    }
+  }
   const listRef = useRef<HTMLUListElement>(null);
   const nameFitKey = sorted.map((player) => `${player.playerId}:${player.nickname}`).join("\0");
 
@@ -103,6 +137,18 @@ export function PlayerList({
         // stays available for a disconnected player, because leaving is the
         // usual next thing to happen after the behaviour worth reporting.
         const canReport = Boolean(canRequestReport && !isMe);
+        // Offered only where it can work: a guest on either side has no
+        // durable identity to hold a friendship, and the server refuses one
+        // anyway. Guests are the common case in a room, so a control that
+        // always failed would be the usual experience of it.
+        // Not hidden for somebody who is already a friend, because the room
+        // payload has no account ids to match against (R-ROOM-07) and adding
+        // per-viewer flags to room state would make it differ per player,
+        // which is exactly what R-BLOCK-03 forbids. The server says what the
+        // request actually did instead, and the answer says so.
+        const canAddFriend = Boolean(
+          !isMe && !iAmAGuest && !p.isAnonymous && p.connected,
+        );
         const requiredVotes = moderation.requiredVotes;
         const kickVotes = eligibleModerationVotes(moderation, p.kickVotes);
         const afkVotes = eligibleModerationVotes(moderation, p.afkVotes);
@@ -155,6 +201,11 @@ export function PlayerList({
                 onOpenChange={(open) => setOpenMenuToken(open ? p.playerId : null)}
                 onReport={() =>
                   setReporting({ playerId: p.playerId, nickname: p.nickname })
+                }
+                onAddFriend={
+                  canAddFriend
+                    ? () => void sendFriendRequest(p.playerId, p.nickname)
+                    : null
                 }
               />
             )}
@@ -336,6 +387,7 @@ function PlayerModerationMenu({
   isOpen,
   onOpenChange,
   onReport,
+  onAddFriend,
 }: {
   player: PlayerInfo;
   /** Kick and AFK need a live seat and an eligible voter; reporting does not,
@@ -350,6 +402,7 @@ function PlayerModerationMenu({
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onReport: () => void;
+  onAddFriend: (() => void) | null;
 }) {
   const menuId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -380,6 +433,11 @@ function PlayerModerationMenu({
   function handleReport() {
     onOpenChange(false);
     onReport();
+  }
+
+  function handleAddFriend() {
+    onOpenChange(false);
+    onAddFriend?.();
   }
 
   function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -454,6 +512,19 @@ function PlayerModerationMenu({
               <span className="player-vote-action-count">
                 {kickVotes.length}/{requiredVotes}
               </span>
+            </button>
+          )}
+          {onAddFriend && (
+            <button
+              type="button"
+              role="menuitem"
+              className="player-vote-action player-vote-friend"
+              onClick={handleAddFriend}
+            >
+              <span className="player-vote-action-kind">Add friend</span>
+              {/* The seat is what is named on the wire; the server resolves
+                  who is in it, so no account id passes through here. */}
+              <span className="player-vote-action-label">Send a request</span>
             </button>
           )}
           {canReport && (

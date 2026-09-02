@@ -30,6 +30,7 @@ from app.api.role_notices import (
     pending_role_notice_payload,
 )
 from app.api.user_settings import create_user_settings_router
+from app.api.friends import create_friends_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.bans import suspension_payload
 from app.auth.warnings import pending_warning_payload
@@ -56,6 +57,8 @@ from app.auth.retention import (
 from app.auth.mail import purge_expired_outbox_entries
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
+from app.auth.rate_limit import PersistentRateLimiter
+from app.services.friends import FriendService
 from app.services.presence import start_presence_loop, stop_presence_loop
 from app.services.readiness import LoopHealth, ReadinessProbe
 from app.repositories.sqlalchemy import (
@@ -136,6 +139,30 @@ user_repo = SqlAlchemyUserRepository(async_session_factory)
 game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
 prompt_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
 block_service = BlockService(async_session_factory)
+def _friend_request_limit() -> int:
+    """How many friend requests one account may send in an hour."""
+    raw = os.environ.get("FRIEND_REQUEST_LIMIT", "").strip()
+    if not raw:
+        return 20
+    try:
+        value = int(raw)
+    except ValueError:
+        return 20
+    return value if value > 0 else 20
+
+
+friend_service = FriendService(
+    async_session_factory,
+    # Per account rather than per address: behind a reverse proxy every caller
+    # presents the proxy, and this is an action only a signed-in account can
+    # take. Persistent, so a restart is not a fresh allowance.
+    request_limiter=PersistentRateLimiter(
+        async_session_factory,
+        scope="friend_request",
+        limit=_friend_request_limit(),
+        window_seconds=3600,
+    ),
+)
 room_preset_service = RoomPresetService(async_session_factory, prompt_list_repo)
 shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
 readiness_probe = ReadinessProbe(async_session_factory)
@@ -149,6 +176,7 @@ handler_context = register_all_handlers(
     prompt_list_repo=prompt_list_repo,
     session_factory=async_session_factory,
     block_service=block_service,
+    friend_service=friend_service,
     shutdown=shutdown_coordinator,
 )
 # Built here rather than at import so it can reach the live policy objects the
@@ -251,6 +279,15 @@ def forget_merged_identities(source_user_id: str, target_user_id: str) -> None:
     handler_context.presence.rekey(source_user_id, target_user_id)
     forget_presence_identity(source_user_id)
     forget_presence_identity(target_user_id)
+
+
+async def push_friends_changed(user_id: str) -> None:
+    """Tell an account its friend lists moved, wherever it is.
+
+    The same per-account room a suspension and a moderator warning use, so a
+    player idling in the lobby hears it as immediately as one in a game.
+    """
+    await sio.emit("friends_changed", {}, room=f"user:{user_id}")
 
 
 async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
@@ -460,6 +497,7 @@ api.include_router(
         on_account_deleted=remove_deleted_account_from_live_rooms,
         on_identity_merged=forget_merged_identities,
         on_profile_changed=forget_presence_identity,
+        on_friends_changed=push_friends_changed,
     )
 )
 api.include_router(create_operations_router(async_session_factory))
@@ -487,7 +525,19 @@ api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))
 api.include_router(create_room_preset_router(room_preset_service))
 api.include_router(
-    create_user_blocks_router(async_session_factory, block_service)
+    create_user_blocks_router(
+        async_session_factory,
+        block_service,
+        friend_service,
+        on_friends_changed=push_friends_changed,
+    )
+)
+api.include_router(
+    create_friends_router(
+        async_session_factory,
+        friend_service,
+        on_friends_changed=push_friends_changed,
+    )
 )
 api.include_router(create_role_notice_router(async_session_factory))
 api.include_router(

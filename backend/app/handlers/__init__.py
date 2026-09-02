@@ -8,6 +8,7 @@ from app.handlers import (
     chat,
     connection,
     drawing,
+    friends,
     game,
     lobby,
     moderation,
@@ -23,6 +24,8 @@ from app.repositories.interfaces import (
 )
 from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
+from app.services.friend_invites import FriendInviteBook
+from app.services.friends import FriendService
 from app.services.message_retention import MessageRetentionService
 from app.services.presence import (
     DEFAULT_MAX_CACHED_IDENTITIES,
@@ -46,6 +49,7 @@ def register_all_handlers(
     prompt_list_repo: PromptListRepository | None = None,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
     block_service: BlockService | None = None,
+    friend_service: FriendService | None = None,
     shutdown: ShutdownCoordinator | None = None,
 ) -> HandlerContext:
     """Create the shared context and register every domain exactly once."""
@@ -74,6 +78,13 @@ def register_all_handlers(
             if session_factory is not None
             else None
         ),
+        friend_service=(
+            friend_service
+            if friend_service is not None
+            else FriendService(session_factory)
+            if session_factory is not None
+            else None
+        ),
         shutdown=shutdown,
     )
     ctx.game_flow = GameFlowService(ctx)
@@ -95,6 +106,7 @@ def register_all_handlers(
     ctx.presence_broadcaster = PresenceBroadcaster(
         sio, ctx.presence, ctx.presence_identities, room_manager
     )
+    ctx.friend_invites = FriendInviteBook()
 
     moderation.register(ctx)
     restart.register(ctx)
@@ -102,6 +114,7 @@ def register_all_handlers(
     chat.register(ctx)
     drawing.register(ctx)
     game.register(ctx)
+    friends.register(ctx)
     lobby.register(ctx)
     connection.register(ctx)
     return ctx

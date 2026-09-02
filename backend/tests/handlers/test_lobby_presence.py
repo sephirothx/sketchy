@@ -12,6 +12,7 @@ presence never tracks more sockets than are open.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -419,3 +420,43 @@ async def test_a_merged_guest_is_one_person_in_the_list(monkeypatch):
     # And the sockets are still open: a merge is not a ban.
     assert ctx.room_capacity.open_sockets == 3
     assert_balanced(ctx)
+
+
+@pytest.mark.asyncio
+async def test_an_in_room_colour_change_reaches_the_lobby(monkeypatch):
+    """The fifth writer of an account's identity, and the easiest to miss.
+
+    A registered player changing colour mid-room writes it to their account,
+    which is what the lobby's list shows. The cache is warmed at the handshake
+    and nothing re-handshakes for a colour change, so without invalidating it
+    the lobby keeps the old one - and the tick's repair does not help, because
+    a stale entry is a hit rather than a miss.
+    """
+    from app.services.presence import PresenceIdentity
+
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    account_cookies(monkeypatch, {"tok-ada": "user-ada"})
+    ctx.presence_identities.remember(
+        PresenceIdentity(
+            user_id="user-ada",
+            display_name="Ada",
+            name_color="#111111",
+            is_anonymous=False,
+        )
+    )
+    ctx.user_repo = SimpleNamespace(update_profile=AsyncMock())
+    room = room_manager.create_room(name="Studio", is_public=True)
+    seat = room_manager.add_player(
+        room, "Ada", user_id="user-ada", is_anonymous=False
+    )
+    seat.sid = "sid-a"
+    await connect_as(ctx, sio, "sid-a", "tok-ada")
+    await sessions.save("sid-a", {"room_id": room.id, "player_id": seat.id})
+
+    await sio.handlers["/"]["update_player_settings"](
+        "sid-a", {"nameColor": "#4f9a2b"}
+    )
+
+    ctx.user_repo.update_profile.assert_awaited()
+    assert ctx.presence_identities.cached(["user-ada"]) == {}

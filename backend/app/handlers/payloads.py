@@ -316,6 +316,54 @@ class JoinRoomPayload(RequestModel):
         return self
 
 
+class AddFriendPayload(RequestModel):
+    """Friend somebody by their *seat*, never by their account.
+
+    R-ROOM-07 keeps account ids out of room payloads, so the client names the
+    seat it can see and the server resolves who is sitting in it - the same way
+    reports and blocks already work from inside a room.
+    """
+
+    player_id: str = Field(alias="playerId", max_length=MAX_IDENTIFIER_LENGTH)
+
+
+class FriendUserPayload(RequestModel):
+    """Addressed to an account, because the lobby has no seat to resolve."""
+
+    friend_user_id: str = Field(alias="friendUserId", max_length=MAX_IDENTIFIER_LENGTH)
+
+
+class JoinFriendRoomPayload(RequestModel):
+    """Ask to be seated wherever a friend is, without naming the room.
+
+    Carries the same trailing identity fields `JoinRoomPayload` does, so the
+    seat is built by exactly the same `resolve_identity` path. What it does not
+    carry is any way to name a room: no code, no id. The server resolves that
+    from the friend's live seat, which is what keeps a room code a capability
+    somebody was given rather than one they can ask for.
+
+    `inviteToken` is present when this answers an invitation. Without one the
+    caller is pulling themselves in, which is held to a stricter rule - see
+    `handlers/friends.py`.
+    """
+
+    friend_user_id: str = Field(alias="friendUserId", max_length=MAX_IDENTIFIER_LENGTH)
+    invite_token: str | None = Field(
+        default=None, alias="inviteToken", max_length=64
+    )
+    nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
+    name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
+    colorblind_safe_colors: bool = Field(
+        default=False, alias="colorblindSafeColors"
+    )
+    as_spectator: bool = Field(default=False, alias="asSpectator")
+
+    @field_validator("nickname")
+    @classmethod
+    def normalize_nickname(cls, value: str) -> str:
+        return value.strip()
+
+
 class RoomPreviewPayload(RequestModel):
     code: str = Field(min_length=1, max_length=16)
 

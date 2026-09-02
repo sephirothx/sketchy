@@ -20,6 +20,7 @@ from app.db.models import (
     AuditEvent,
     AuthSession,
     AuthToken,
+    Friendship,
     DataExport,
     EmailOutboxEntry,
     ExternalIdentity,
@@ -62,7 +63,10 @@ from app.domain_values import (
 )
 
 
-EXPORT_SCHEMA_VERSION = 1
+# Bumped to 2 when friendships joined the export. Additive counts: the
+# document's field surface changed, and a reader that keys off the version
+# should be able to tell which shape it has.
+EXPORT_SCHEMA_VERSION = 2
 EXPORT_TTL = timedelta(days=7)
 STALE_PROCESSING_AFTER = timedelta(minutes=15)
 DELETED_DISPLAY_NAME = "Deleted player"
@@ -83,6 +87,10 @@ class AccountDeletionResult:
     user_id: str
     identities_anonymized: int
     sessions_revoked: int
+    #: Accounts that lost a friendship or a pending request to this deletion,
+    #: so the caller can tell them their lists moved. Never the deleted
+    #: identities themselves - their sockets are already being closed.
+    friends_notified: tuple[str, ...] = ()
 
 
 def _entity_id(value: str | UUID) -> UUID:
@@ -360,6 +368,20 @@ async def _build_export_artifact(
                 select(UserBlock)
                 .where(UserBlock.blocker_user_id.in_(identity_ids))
                 .order_by(UserBlock.created_at, UserBlock.blocked_user_id)
+            )
+        ).all()
+    )
+    friendships = list(
+        (
+            await session.scalars(
+                select(Friendship)
+                .where(
+                    or_(
+                        Friendship.user_low_id.in_(identity_ids),
+                        Friendship.user_high_id.in_(identity_ids),
+                    )
+                )
+                .order_by(Friendship.created_at, Friendship.user_low_id)
             )
         ).all()
     )
@@ -799,6 +821,27 @@ async def _build_export_artifact(
             }
             for block in blocks
         ],
+        "friends": [
+            {
+                "userId": str(
+                    friendship.user_high_id
+                    if friendship.user_low_id in identity_ids
+                    else friendship.user_low_id
+                ),
+                "status": friendship.status,
+                # A boolean rather than the requester's id. Which of the two
+                # asked is a fact about this pair and the reader is one of
+                # them, but a raw third-party account id in a downloadable
+                # document travels further than it needs to - the blocks
+                # export above avoids the same thing.
+                "requestedByMe": friendship.requested_by_id in identity_ids,
+                "createdAt": _timestamp(friendship.created_at),
+                "respondedAt": _timestamp(friendship.responded_at)
+                if friendship.responded_at
+                else None,
+            }
+            for friendship in friendships
+        ],
         # Audit details and other actor identifiers are deliberately omitted:
         # they can contain moderator or third-party data. This still exposes
         # every security event in which the requester participated.
@@ -1014,6 +1057,7 @@ async def anonymize_account(
                 ).all()
             )
             identity_ids = [account.id, *source_ids]
+            friends_of: set[str] = set()
 
             owned_concept_ids = list(
                 (
@@ -1165,6 +1209,34 @@ async def anonymize_account(
                     )
                 )
             )
+            # Read before they go: the accounts on the other side of these
+            # rows are about to lose something from their own lists, and after
+            # the delete there is nothing left to say who they were.
+            for low, high in (
+                await session.execute(
+                    select(Friendship.user_low_id, Friendship.user_high_id).where(
+                        or_(
+                            Friendship.user_low_id.in_(identity_ids),
+                            Friendship.user_high_id.in_(identity_ids),
+                        )
+                    )
+                )
+            ).all():
+                friends_of.update(
+                    str(side)
+                    for side in (low, high)
+                    if side not in identity_ids
+                )
+            # Both halves, and every status: a refusal this account sent or
+            # received is as much a fact about them as an accepted friendship.
+            await session.execute(
+                delete(Friendship).where(
+                    or_(
+                        Friendship.user_low_id.in_(identity_ids),
+                        Friendship.user_high_id.in_(identity_ids),
+                    )
+                )
+            )
             # A live reset link is a way into an account that no longer
             # exists, and both tables hold an address the erasure is supposed
             # to remove. Queued messages go with them: a verification mail
@@ -1220,6 +1292,7 @@ async def anonymize_account(
                 user_id=str(account.id),
                 identities_anonymized=len(identity_ids),
                 sessions_revoked=int(sessions.rowcount or 0),
+                friends_notified=tuple(sorted(friends_of)),
             )
 
 

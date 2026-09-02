@@ -90,6 +90,20 @@ claim that an arbitrary host will sustain it.
 | **R-PRESENCE-04** | The list MUST be bounded and MUST report the true total alongside the bounded list, so a cap is never mistaken for a quiet server. The cap and the broadcast interval MUST both be configurable (R-ROOM-10's rule). |
 | **R-PRESENCE-05** | Presence MUST be delivered over a channel a client opts into, never a second poll (#462). Every message MUST carry a sequence number, and a client MUST be able to detect a missed one and ask for a fresh snapshot, so its store is self-correcting rather than authoritative (#493). |
 
+### Friends
+
+| # | Requirement |
+| --- | --- |
+| **R-FRIEND-01** | A friendship MUST be mutual, and MUST be reached by a request and an answer. A request sent to somebody whose own request is already waiting MUST resolve to one accepted friendship rather than two pending ones — asking back is how you say yes. |
+| **R-FRIEND-02** | A friendship MUST be stored as **one row per pair, in a canonical order**, enforced by the database. Two directional rows can disagree and nothing could forbid it. The ordering MUST also make a self-friendship impossible, and the account that asked MUST be one of the pair. |
+| **R-FRIEND-03** | Both sides MUST be registered accounts. A guest identity is a browser rather than a person and is purged after a month of not playing, so a friendship with one would outlive the account and vanish unexplained. The caller MUST be told why; the target MUST NOT be. Note the deliberate asymmetry with R-BLOCK-01: a block is a protection and every account has one, a friendship is a convenience. |
+| **R-FRIEND-04** | A request MUST be answered identically whether it landed, hit a block, hit an earlier refusal, or named an id that was never an account. Anything else makes the endpoint a way to learn who has blocked you, or which ids are real. The only refusal that may name its reason is a ceiling the caller themselves reached. |
+| **R-FRIEND-05** | A decline MUST be durable, so it cannot simply be re-sent into, and MUST be indistinguishable from success to the sender. The person who declined MUST still be able to ask in their own right later: saying no is not a commitment. Cancelling a request or ending a friendship MUST delete the row instead — neither is a refusal, and neither may suppress a future request. |
+| **R-FRIEND-06** | A player seated in a room MAY invite a friend into it. The invitation MUST carry no room code, name, or id: it is a token the server resolves against the sender's live seat, so it cannot be forwarded, stops working when the sender leaves, and never tells anybody the code of a room they were not seated in. It MUST be single use and MUST expire. |
+| **R-FRIEND-07** | A friend MAY take a seat in a room they cannot name. Uninvited, this MUST resolve only rooms whose **host** is an accepted friend of the caller — otherwise a private room gains a player because one of its occupants knows them, and the host never agreed. With an invitation, the sender's own seat is the consent, and the invitation names the room its **sending socket** was in. Resolution MUST NOT depend on iteration order: an account may hold seats in two rooms at once (R-ROOM-08), so a request that could mean either MUST be refused rather than answered with whichever was found first. |
+| **R-FRIEND-08** | Entry by either path MUST run the ordinary seating lifecycle — the seating gate, R-ROOM-08's release of any seat the socket held, R-RATE-06's limits with their refunds, capacity, and the suspension checks on both sides of seating. It MUST NOT re-derive them. |
+| **R-FRIEND-09** | Friendships MUST be bounded per account and MUST be rate limited, each refusal naming what was reached in terms the caller can act on — except one that would disclose a third party's state, which MUST stay generic. Every ceiling MUST be enforced where the friendship is written rather than beside one of its callers, so that a second way in cannot be given a weaker rule than the first. Merging a guest into an account MUST carry its friendships across under R-BLOCK-04's rules, keeping the stronger status where a pair already exists. |
+
 ### Turn structure
 
 | # | Requirement |
@@ -352,7 +366,7 @@ claim that an arbitrary host will sustain it.
 | **R-BLOCK-03** | Room state, players, scores, turns, correct-guess events, votes, and room-authored announcements MUST NEVER be hidden by a block. A block MUST NOT change gameplay facts or create a different game state per player. |
 | **R-BLOCK-04** | Login MUST merge both incoming and outgoing blocks without creating duplicates or a self-block; a historical guest alias resolves to its registered account. |
 | **R-BLOCK-06** | The block filter MUST be answerable from memory on the chat path: it is warmed when a player takes a seat and invalidated on every change. A lookup that cannot be answered in time MUST deliver the line **unfiltered** rather than delay or withhold it — a block is a presentation filter, and a message silently withheld is a failure its sender cannot see. |
-| **R-BLOCK-05** | Any future direct-invite feature MUST consult `user_blocks` before delivery. A room link obtained independently remains usable, because a Block is not a service-wide Suspension. |
+| **R-BLOCK-05** | Direct delivery between players — a friend request, an invitation, and a friend's request to join a game — MUST consult `user_blocks` in **both** directions before delivery. A block MUST also remove any existing friendship for the pair, in the same transaction as the block: a surviving friendship is a room-join capability the blocker has just tried to revoke. Removal MUST be a delete rather than a refusal, so unblocking does not silently restore a friendship neither party re-agreed to. A room link obtained independently remains usable, because a Block is not a service-wide Suspension. |
 
 ### Roles and audit
 
@@ -510,7 +524,7 @@ design, not a bug fix.
 | **N-03** | **Ratings, seasons, achievements, competitive-mode eligibility, or server-wide standings.** The durable *foundation* exists; the policy does not, and MUST NOT be introduced as mutable counters or by rewriting finished games. |
 | **N-04** | **Community prompt-list discovery**, a favourite/star table, or a user-facing fork endpoint. `public` visibility is reserved. |
 | **N-05** | **A chat transcript or profile message-history endpoint.** |
-| **N-06** | **Direct player-to-player invites.** Only shareable room links exist, so there is no direct-invite delivery path to filter yet. |
+| **N-06** | **Invitations to players who are not friends, and any notification that carries a room code.** An invitation between friends exists (R-FRIEND-06) and carries a token rather than a code; nothing else does. There is still no way to reach a stranger directly. |
 | **N-07** | **Avatar uploads and external identity providers.** Schema is reserved; no API is enabled until storage validation, moderation, and identity-linking flows ship. |
 | **N-08** | **A built-in room-preset catalogue or preset sharing.** |
 | **N-09** | **Prompt languages beyond the Latin registry** (`en`, `de`, `es`, `fr`, `it`, `nl`, `pt`) until their matching semantics are implemented. |
@@ -525,6 +539,7 @@ design, not a bug fix.
 | --- | --- | --- |
 | Game rules, scoring, hints, guess matching | [`app/game.py`](../backend/app/game.py) | `tests/test_game.py`, `test_standings.py`, `test_prompts.py` |
 | Room model, votes, recap budget | [`app/rooms.py`](../backend/app/rooms.py) | `tests/test_rooms.py`, `tests/handlers/test_rooms.py` |
+| Friends | [`services/friends.py`](../backend/app/services/friends.py), [`api/friends.py`](../backend/app/api/friends.py), [`handlers/friends.py`](../backend/app/handlers/friends.py), [`services/friend_invites.py`](../backend/app/services/friend_invites.py) | `tests/test_friends.py`, `tests/test_friends_api.py`, `tests/handlers/test_friends.py`, `frontend/tests/friends.test.mjs`, `tests/e2e/test_friends.py` |
 | Lobby presence | [`app/services/presence.py`](../backend/app/services/presence.py), [`handlers/lobby.py`](../backend/app/handlers/lobby.py), [`lib/lobbyPresence.ts`](../frontend/src/lib/lobbyPresence.ts) | `tests/test_presence.py`, `tests/handlers/test_lobby_presence.py`, `frontend/tests/lobbyPresence.test.mjs`, `tests/e2e/test_lobby_online_players.py`, `fixtures/lobby_presence_v1.json` |
 | Socket.IO commands and payloads | [`app/handlers/`](../backend/app/handlers/) | `tests/handlers/`, `tests/test_payloads.py` |
 | Wire naming agreement | both trees | `tests/test_wire_contract.py` |
@@ -536,7 +551,7 @@ design, not a bug fix.
 | Finished-game history and ledger | [`services/game_history.py`](../backend/app/services/game_history.py) | `tests/test_game_history_builder.py`, `test_competitive_projection_foundation.py` |
 | Daily projection | [`services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) | `tests/test_user_stats_projection.py`, `benchmarks/user_stats.py` |
 | Accounts, sessions, recovery | [`app/auth/`](../backend/app/auth/) | `tests/test_auth.py`, `test_sessions.py`, `test_account_recovery.py`, `test_email_identity.py`, `test_identity_merge.py` |
-| Data export and deletion | [`auth/account_data.py`](../backend/app/auth/account_data.py) | `tests/test_account_data.py`, `fixtures/account_data_export_v1_fields.json` |
+| Data export and deletion | [`auth/account_data.py`](../backend/app/auth/account_data.py) | `tests/test_account_data.py`, `fixtures/account_data_export_v2_fields.json` |
 | Retention | [`auth/retention.py`](../backend/app/auth/retention.py), [`services/message_retention.py`](../backend/app/services/message_retention.py) | `tests/test_anonymous_retention.py`, `test_message_retention.py` |
 | Bug reports and triage | [`api/bug_reports.py`](../backend/app/api/bug_reports.py), [`request_limits.py`](../backend/app/request_limits.py), [`lib/bugReports.ts`](../frontend/src/lib/bugReports.ts), [`lib/clientErrorLog.ts`](../frontend/src/lib/clientErrorLog.ts), [`lib/screenCapture.ts`](../frontend/src/lib/screenCapture.ts) | `tests/test_bug_reports.py`, `tests/test_request_limits.py`, `tests/e2e/test_bug_reporting.py`, `frontend/tests/bugReports.test.mjs`, `clientErrorLog.test.mjs`, `screenCapture.test.mjs` |
 | Moderation, reports, bans, blocks | [`api/moderation.py`](../backend/app/api/moderation.py), [`auth/bans.py`](../backend/app/auth/bans.py), [`auth/blocks.py`](../backend/app/auth/blocks.py) | `tests/test_moderation_api.py`, `test_user_blocks.py`, `test_prompt_content_moderation.py`, `tests/e2e/test_player_reporting.py` |

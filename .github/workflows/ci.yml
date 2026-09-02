@@ -199,6 +199,14 @@ jobs:
       - name: Replay migrations in both directions and check schema drift
         run: pytest -q tests/test_migrations.py
 
+      # Constraints are the dialect-sensitive half of the schema: a CHECK that
+      # holds on SQLite's stored hex can behave differently against
+      # PostgreSQL's native types. Run the model suite here too, or the only
+      # engine those constraints are ever proven on is the one production does
+      # not use.
+      - name: Run schema constraints against PostgreSQL
+        run: pytest -q tests/test_db_models.py
+
       - name: Run repositories against PostgreSQL
         run: pytest -q tests/test_repositories.py
 

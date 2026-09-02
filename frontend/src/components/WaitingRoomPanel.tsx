@@ -8,6 +8,8 @@ import { ChevronRightIcon, CopyIcon, LinkIcon, PlusIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { describeDrawingRules } from "../lib/drawingRules";
 import { hintLabelFor } from "../lib/roomSetup";
+import { InviteFriendsList } from "./InviteFriendsList";
+import { useLobbyPresence } from "../hooks/useLobbyPresence";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useToast } from "../lib/toast";
 import type {
@@ -50,6 +52,10 @@ interface WaitingRoomPanelProps {
 
 
 export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
+  // The waiting room is the one place inside a room that needs to know
+  // who is around: it is where you are trying to get people in, and it is
+  // not mid-game. Dropped again the moment the game starts.
+  useLobbyPresence();
   const { players, myPlayerId, isHost, finalScores, code } = props;
   const { notify } = useToast();
   // Narrow only. Above this the players panel has a column of its own and
@@ -151,6 +157,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             Copy code
           </Button>
         </div>
+        {/* The same job as Share, for the people you already play with: no
+            clipboard, no other app, and no code leaving this room. */}
+        <InviteFriendsList />
       </section>
 
       {/* Who is here, as faces rather than a list in another column. The one

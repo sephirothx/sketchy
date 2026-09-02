@@ -11,7 +11,7 @@ Three pieces, deliberately separated by what can go wrong with each:
 
 * `PresenceRegistry` - pure, synchronous, no I/O. Who is online.
 * `PresenceIdentityCache` - the name and colour to show, read through a
-  bounded LRU rather than stored, because identity changes through four paths
+  bounded LRU rather than stored, because identity changes through five paths
   and only one of them touches a socket.
 * `PresenceBroadcaster` - the fixed tick that turns changes into at most one
   delta per second on the `lobby` channel.
@@ -405,10 +405,13 @@ class PresenceIdentityCache:
 
     Identity is read through here rather than stored in the registry because
     the registry is written once, at the handshake, while a display name or
-    colour changes through four paths - `set_display_name`, `set_name_color`,
+    colour changes through five paths - `set_display_name`, `set_name_color`,
+    the in-room colour change in `update_player_settings`,
     the `rename_player` command, and a guest merge - three of which never
-    touch a socket. Four invalidation sites for a cache is routine; four
-    writers into a live registry is the drift this module is shaped to avoid.
+    touch a socket. Five invalidation sites for a cache is routine; five
+    writers into a live registry is the drift this module is shaped to avoid -
+    and the tick's repair is what makes a missed one recoverable rather than
+    permanent.
     """
 
     def __init__(

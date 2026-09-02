@@ -46,6 +46,8 @@ from app.domain_values import (
     DATA_EXPORT_ARTIFACT_ENCODINGS,
     DATA_EXPORT_STATUSES,
     DEFAULT_USER_KEY_BINDINGS,
+    FRIENDSHIP_STATES,
+    FriendshipState,
     GAME_PROMPT_SOURCE_MODES,
     HINT_MODES,
     NEAR_MISS_KINDS,
@@ -1373,6 +1375,62 @@ class UserBlock(Base):
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
+
+
+class Friendship(Base):
+    """A mutual friendship, or a request on its way to becoming one.
+
+    **One row per pair, in a canonical order**, rather than one row per
+    direction. Two directional rows can disagree - one accepted, one not - and
+    no constraint can forbid it; here the pair *is* the identity, the way it is
+    for `user_blocks`. It also settles the case #529 was really asking about:
+    a crossing request, where A asks B while B has already asked A, collides on
+    the primary key instead of creating a second row, so the handler sees a
+    pending request from the other party and accepts it.
+
+    The columns are named for the invariant they hold. `ck_friendships_ordered`
+    makes it unfalsifiable and forbids a self-friendship for free, since
+    `x < x` is false. Canonicalisation lives in exactly one place -
+    `app.services.friends.friendship_key` - and a site that forgets it writes a
+    row this CHECK rejects, which is the failure worth having.
+    """
+
+    __tablename__ = "friendships"
+    __table_args__ = (
+        CheckConstraint("user_low_id < user_high_id", name="ck_friendships_ordered"),
+        CheckConstraint(
+            "requested_by_id = user_low_id OR requested_by_id = user_high_id",
+            name="ck_friendships_requester_is_a_member",
+        ),
+        _values_check("status", FRIENDSHIP_STATES, "ck_friendships_status"),
+        Index("ix_friendships_user_high_id", "user_high_id"),
+        Index("ix_friendships_requested_by_id", "requested_by_id"),
+    )
+
+    user_low_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_high_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # Which of the pair asked. Needed to answer an incoming request from an
+    # outgoing one, and to let the decliner ask in their own right later.
+    requested_by_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=FriendshipState.PENDING.value
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    responded_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class IdentityAlias(Base):
