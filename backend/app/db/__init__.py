@@ -1,8 +1,11 @@
 """Database engine, session management, and lifecycle initialization."""
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 import os
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 import warnings
 
@@ -19,6 +22,8 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+from app.services.telemetry import PoolGauges, Telemetry, telemetry
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./sketchy.db"
 SQLITE_BUSY_TIMEOUT_MS = 5_000
@@ -109,23 +114,107 @@ def get_engine_pool_options(url: str) -> dict[str, Any]:
     }
 
 
+def pool_gauges(engine: AsyncEngine, *, max_overflow: int | None = None) -> PoolGauges | None:
+    """What the pool will say about itself, or `None` for a pool that keeps no count.
+
+    SQLite's pools do not implement the accessors, and asking them raises
+    rather than answering zero; `None` is the honest answer there and the
+    exposition simply omits the family.
+    """
+    pool = engine.sync_engine.pool
+    try:
+        size = int(pool.size())
+        checked_in = int(pool.checkedin())
+        checked_out = int(pool.checkedout())
+        overflow = int(pool.overflow())
+    except (AttributeError, NotImplementedError):
+        return None
+    if max_overflow is None:
+        max_overflow = int(getattr(pool, "_max_overflow", 0) or 0)
+    return PoolGauges(
+        size=size,
+        checked_out=checked_out,
+        checked_in=checked_in,
+        overflow=max(0, overflow),
+        capacity=size + max(0, max_overflow),
+    )
+
+
+@dataclass(frozen=True)
+class EngineListeners:
+    """The three listeners `instrument_engine` attached, so a test can call them."""
+
+    before: Callable[..., None]
+    after: Callable[..., None]
+    failed: Callable[..., None]
+
+
+def instrument_engine(engine: AsyncEngine, store: Telemetry | None = None) -> EngineListeners:
+    """Time every statement the engine runs, on the store given or the default.
+
+    The listeners run inside SQLAlchemy's greenlet on the event-loop thread,
+    so they do the least possible: two clock reads and one counter bump.
+    For aiosqlite the span includes the hand-off to its worker thread, which
+    is exactly the latency the caller feels.
+    """
+    target = store if store is not None else telemetry
+
+    def before(conn, cursor, statement, parameters, context, executemany):
+        context._sketchy_started = perf_counter()
+
+    def after(conn, cursor, statement, parameters, context, executemany):
+        started = getattr(context, "_sketchy_started", None)
+        if started is not None:
+            target.db_query(perf_counter() - started)
+
+    def failed(exception_context):
+        context = exception_context.execution_context
+        started = getattr(context, "_sketchy_started", None)
+        if started is not None:
+            # Cleared so a retried statement on the same context is not
+            # counted twice, and the error is not also counted as a success.
+            context._sketchy_started = None
+            target.db_query(perf_counter() - started, failed=True)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", before)
+    event.listen(engine.sync_engine, "after_cursor_execute", after)
+    event.listen(engine.sync_engine, "handle_error", failed)
+    return EngineListeners(before=before, after=after, failed=failed)
+
+
 def create_db_engine(url: str | None = None) -> AsyncEngine:
     """Create an async SQLAlchemy engine instance."""
     resolved_url = url or get_database_url()
+    pool_options = get_engine_pool_options(resolved_url)
     engine = create_async_engine(
         resolved_url,
         echo=False,
         connect_args=get_engine_connect_args(resolved_url),
         future=True,
-        **get_engine_pool_options(resolved_url),
+        **pool_options,
     )
     if resolved_url.startswith("sqlite"):
         event.listen(engine.sync_engine, "connect", _configure_sqlite_connection)
+    instrument_engine(engine)
     return engine
+
+
+def data_directory(url: str | None = None) -> str:
+    """Where the data lives, for the disk gauge: the SQLite file's folder, else here."""
+    resolved_url = url or get_database_url()
+    if resolved_url.startswith("sqlite") and ":memory:" not in resolved_url:
+        path = resolved_url.split("///", 1)[-1].split("?", 1)[0]
+        if path:
+            return str(Path(path).expanduser().resolve().parent)
+    return os.getcwd()
 
 
 # Default process-wide engine and session factory
 async_engine: AsyncEngine = create_db_engine()
+telemetry.sources.pool = lambda: pool_gauges(
+    async_engine, max_overflow=get_engine_pool_options(get_database_url()).get("max_overflow")
+)
+telemetry.process.data_path = data_directory()
 async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
     async_engine,
     expire_on_commit=False,

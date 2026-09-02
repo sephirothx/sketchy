@@ -1412,7 +1412,28 @@ Operators read this two ways. `GET /metrics` returns Prometheus text behind a
 bearer token and is disabled entirely until `METRICS_TOKEN` is set. The
 in-app page at `/admin/operations` needs the administrator role and carries
 live counts, trends over the retained window, the raw activity table, and the
-audit ledger as its own tab. Its per-player view answers "which account keeps
+audit ledger as its own tab. Its overview also shows the process signals: request
+and command rates, error shares and p95 latency with an hour of sparklines, event-loop
+lag, CPU and resident memory, pool occupancy and statement latency, the mail and
+export queues, and every supervised loop. It re-reads them every ten seconds while it
+is the tab on screen. The status banner and the "Attention" list are driven by one
+ordered set of triggers — a dropped observation, a stopped or failing loop, a
+finished game whose history was not saved, a failed readiness probe, event-loop lag
+p95 over 250 ms, more than 1 % of requests or commands failing, a saturated pool,
+mail older than two sweeps, an export older than ten minutes, abandonment at or above
+25 % — so the banner, the list, and the chip on each card always agree.
+
+A scrape configuration for the token-protected endpoint:
+
+```yaml
+scrape_configs:
+  - job_name: sketchy
+    metrics_path: /metrics
+    authorization:
+      credentials: "<METRICS_TOKEN>"
+    static_configs:
+      - targets: ["sketchy.example:8000"]
+``` Its per-player view answers "which account keeps
 disconnecting", and because that is a surveillance surface on the game's own
 players, every use writes an audit event naming both who looked and who was
 looked at.

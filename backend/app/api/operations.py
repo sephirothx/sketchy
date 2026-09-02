@@ -32,16 +32,101 @@ from app.db.models import (
     generate_uuid,
 )
 from app.domain_values import AuditTargetType, GameOutcome
+from app.services.mail_delivery import sweep_interval_seconds
+from app.services.queue_depths import QueueDepths, QueueSnapshot
+from app.services.readiness import ReadinessProbe
 from app.services.runtime_metrics import (
     daily_totals,
     metrics,
     recent_events,
     stored_event_count,
 )
+from app.services.telemetry import (
+    Telemetry,
+    gauge_lines,
+    labelled_gauge_lines,
+    telemetry as default_telemetry,
+)
 
 
 def _scrape_token() -> str:
     return os.environ.get("METRICS_TOKEN", "").strip()
+
+
+def _loop_lines(loops: dict[str, dict[str, object]]) -> list[str]:
+    """The `/api/health` loop counters, in a form an alert rule can watch."""
+    names = sorted(loops)
+
+    def rows(key: str, *, as_int=lambda v: v):
+        for name in names:
+            value = loops[name].get(key)
+            if value is not None:
+                yield (name,), as_int(value)
+
+    return [
+        *labelled_gauge_lines(
+            "sketchy_loop_running",
+            "Whether the background loop's task is still alive.",
+            ("loop",),
+            rows("running", as_int=int),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_loop_consecutive_failures",
+            "Iterations that have failed in a row.",
+            ("loop",),
+            rows("consecutive_failures"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_loop_failures_total",
+            "Iterations that have failed since start.",
+            ("loop",),
+            rows("total_failures"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_loop_seconds_since_success",
+            "Seconds since the loop last completed an iteration.",
+            ("loop",),
+            rows("seconds_since_success"),
+        ),
+    ]
+
+
+def _queue_lines(queues: QueueSnapshot) -> list[str]:
+    return [
+        *gauge_lines(
+            "sketchy_mail_outbox_pending",
+            "Messages queued and not yet delivered.",
+            queues.mail_outbox.pending,
+        ),
+        *gauge_lines(
+            "sketchy_mail_outbox_oldest_seconds",
+            "Age of the oldest undelivered message.",
+            queues.mail_outbox.oldest_seconds,
+        ),
+        *gauge_lines(
+            "sketchy_data_exports_pending",
+            "Account exports requested and not yet ready.",
+            queues.data_exports.pending,
+        ),
+        *gauge_lines(
+            "sketchy_data_exports_oldest_seconds",
+            "Age of the oldest unfinished export.",
+            queues.data_exports.oldest_seconds,
+        ),
+    ]
+
+
+def _camel_loops(loops: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
+    return {
+        name: {
+            "running": entry.get("running"),
+            "consecutiveFailures": entry.get("consecutive_failures"),
+            "totalFailures": entry.get("total_failures"),
+            "secondsSinceSuccess": entry.get("seconds_since_success"),
+            "secondsSinceFailure": entry.get("seconds_since_failure"),
+        }
+        for name, entry in loops.items()
+    }
 
 
 def _prometheus_lines() -> list[str]:
@@ -151,9 +236,31 @@ async def _resolve_subjects(
 
 def create_operations_router(
     session_factory: async_sessionmaker[AsyncSession],
+    *,
+    readiness: ReadinessProbe | None = None,
+    telemetry: Telemetry | None = None,
+    queue_depths: QueueDepths | None = None,
+    mail_sweep_seconds: float | None = None,
 ) -> APIRouter:
+    """The two operator surfaces over one set of numbers.
+
+    Everything that is not the recorder is injected, so a test can hand in a
+    fresh store and probe rather than inherit the process's; `main.py` passes
+    the real ones.
+    """
     router = APIRouter()
     require_admin = admin_gate(session_factory)
+    store = telemetry if telemetry is not None else default_telemetry
+    queues = queue_depths if queue_depths is not None else QueueDepths(session_factory)
+    sweep_seconds = (
+        mail_sweep_seconds if mail_sweep_seconds is not None else sweep_interval_seconds()
+    )
+
+    def loop_snapshot() -> dict[str, dict[str, object]]:
+        return {} if readiness is None else readiness.loop_snapshot()  # type: ignore[return-value]
+
+    def database_readiness() -> dict[str, object] | None:
+        return None if readiness is None else readiness.last_database_result()
 
     @router.get("/metrics")
     async def scrape(request: Request):
@@ -172,7 +279,20 @@ def create_operations_router(
         supplied = request.headers.get("authorization", "")
         if supplied != f"Bearer {expected}":
             raise HTTPException(status_code=401, detail="Not authorized.")
-        body = "\n".join(_prometheus_lines()) + "\n"
+        lines = [
+            *_prometheus_lines(),
+            *store.prometheus_lines(),
+            *_loop_lines(loop_snapshot()),
+            *_queue_lines(await queues.read()),
+        ]
+        database = database_readiness()
+        if database is not None:
+            lines += gauge_lines(
+                "sketchy_db_ready",
+                "Whether the last readiness probe reached the database.",
+                1 if database["ok"] else 0,
+            )
+        body = "\n".join(lines) + "\n"
         return Response(content=body, media_type="text/plain; version=0.0.4")
 
     @router.get("/api/admin/metrics")
@@ -181,6 +301,10 @@ def create_operations_router(
         await require_admin(request)
         gauges = metrics.gauges
         stored = await stored_event_count(session_factory)
+        signals = store.snapshot()
+        queue_snapshot = await queues.read()
+        database = dict(signals["database"])  # type: ignore[arg-type]
+        database["readiness"] = database_readiness()
         async with session_factory() as session:
             outcomes = {
                 outcome: count
@@ -215,6 +339,21 @@ def create_operations_router(
                 "abandoned": outcomes.get(GameOutcome.ABANDONED.value, 0),
                 "shutdown": outcomes.get(GameOutcome.SHUTDOWN.value, 0),
             },
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "windowMinutes": signals["windowMinutes"],
+            "http": signals["http"],
+            "socket": signals["socket"],
+            "process": signals["process"],
+            "database": database,
+            "queues": {
+                "mailOutbox": {
+                    **queue_snapshot.mail_outbox.as_json(),
+                    "sweepSeconds": sweep_seconds,
+                },
+                "dataExports": queue_snapshot.data_exports.as_json(),
+            },
+            "loops": _camel_loops(loop_snapshot()),
+            "series": signals["series"],
         }
 
     @router.get("/api/admin/metrics/daily")

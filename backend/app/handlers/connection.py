@@ -18,6 +18,7 @@ from app.handlers.context import HandlerContext
 from app.protocol import PROTOCOL_VERSION, client_protocol_version
 from app.rooms import Player, Room, _metrics_user_id as metrics_user_id
 from app.services.runtime_metrics import metrics
+from app.services.telemetry import telemetry
 
 logger = logging.getLogger("sketchy.handlers.connection")
 
@@ -39,6 +40,9 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     # everybody. The same is true of any other failure in here.
     ctx.room_capacity.note_socket_opened(sid)
     accepted = False
+    # Anything that leaves early without saying otherwise was refused: a
+    # suspension raises out, and so would any failure in the lookups below.
+    outcome = "refused"
     try:
         # Counted before the ceiling is read, so this socket is measured
         # against a ceiling that includes it.
@@ -49,6 +53,7 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             logger.warning(
                 "refusing socket %s: %d already open", sid, ctx.room_capacity.open_sockets
             )
+            outcome = "full"
             await ctx.sio.emit(
                 "server_full",
                 {"reason": "Sketchy is full right now. Try again in a few minutes."},
@@ -117,7 +122,9 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             await ctx.sio.emit("server_paused", shutdown.pause_payload(), to=sid)
         logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
         accepted = True
+        outcome = "accepted"
     finally:
+        telemetry.socket_connection(outcome)
         if not accepted:
             ctx.room_capacity.note_socket_closed(sid)
             ctx.presence.note_socket_closed(sid)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
 import { Chip } from "../components/ui/Chip";
@@ -19,19 +19,25 @@ import { useAuthStore } from "../store/authStore";
 import { ControlsPanel } from "./ops/ControlsPanel";
 import { OpsTabPanel, OpsTabs, type OpsTab } from "./ops/OpsTabs";
 import { TuningPanel } from "./ops/TuningPanel";
+import { DatabaseCard, ProcessCard, QueuesCard, TrafficCard } from "./ops/OverviewSignals";
 import {
   abandonmentRate,
+  attentionReasons,
   readAuditLedger,
   readDailyTotals,
-  readLiveMetrics,
+  readLiveSnapshot,
   readPlayerActivity,
   readRuntimeEvents,
   seriesFor,
   type AuditEntry,
   type DailyTotal,
-  type LiveMetrics,
+  type LiveSnapshot,
   type RuntimeEventRow,
 } from "../lib/operations";
+
+// The live numbers are re-read this often while the overview is on screen.
+// Same period as the clock that says "checked Ns ago", so the two agree.
+const POLL_MS = 10_000;
 
 const TRENDS = [
   { metric: "room.created", label: "Rooms opened" },
@@ -135,7 +141,7 @@ and the audit ledger. Live counts come from the worker's own memory, which is
 exact because one worker owns everything; the chart comes from permanent daily
 aggregates, which outlive the raw rows behind them. */
 export function AdminOperationsPage() {
-  const [live, setLive] = useState<LiveMetrics | null>(null);
+  const [live, setLive] = useState<LiveSnapshot | null>(null);
   // Admission state, because the banner speaks for it. It used to say
   // "accepting rooms" unconditionally, which is the opposite of the truth
   // while a maintenance pause is on.
@@ -149,6 +155,9 @@ export function AdminOperationsPage() {
   const [roomFilter, setRoomFilter] = useState("");
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // When the live numbers were last asked for, by either path. Null until
+  // `refresh` has run, so the first poll cannot double the fetch it makes.
+  const lastPolledRef = useRef<number | null>(null);
   const [showIds, setShowIds] = useState(false);
   const [player, setPlayer] = useState<{
     displayName: string;
@@ -173,8 +182,9 @@ export function AdminOperationsPage() {
     // firing four requests that answer 404 is noise in the log and a
     // confusing error on a page the visitor was never meant to see.
     if (!allowed) return;
+    lastPolledRef.current = Date.now();
     void Promise.all([
-      readLiveMetrics(),
+      readLiveSnapshot(),
       readDailyTotals(),
       readAuditLedger({ limit: 200 }),
       readMaintenance(),
@@ -189,6 +199,36 @@ export function AdminOperationsPage() {
       })
       .catch(fail);
   }, [allowed, fail]);
+
+  // Only the live snapshot is polled, only while the overview is the tab on
+  // screen and the document is visible: a background tab asking every ten
+  // seconds is exactly the load a dashboard should not be, and the daily
+  // aggregates and the ledger do not change at that pace.
+  useEffect(() => {
+    if (tab !== "overview" || !allowed) return;
+    if (document.visibilityState !== "visible") return;
+    if (lastPolledRef.current === null) return;
+    // Skipped only when a refresh landed within the last half-period, so a
+    // tick that falls just short of ten seconds after one still polls.
+    if (now - lastPolledRef.current < POLL_MS / 2) return;
+    lastPolledRef.current = now;
+    void readLiveSnapshot()
+      .then((metrics) => {
+        setLive(metrics);
+        setCheckedAt(Date.now());
+        setError(null);
+      })
+      .catch(fail);
+  }, [now, tab, allowed, fail]);
+
+  // Coming back to the tab re-reads at once rather than at the next tick.
+  useEffect(() => {
+    const wake = () => {
+      if (document.visibilityState === "visible") setNow(Date.now());
+    };
+    document.addEventListener("visibilitychange", wake);
+    return () => document.removeEventListener("visibilitychange", wake);
+  }, []);
 
   const loadEvents = useCallback(() => {
     void readRuntimeEvents({
@@ -245,7 +285,10 @@ export function AdminOperationsPage() {
   );
   const checkedAgo =
     checkedAt === null ? null : Math.max(0, Math.round((now - checkedAt) / 1000));
-  const recorderHealthy = !live || live.recorder.dropped === 0;
+  // One ordered list of what needs an operator, shared by the banner, the
+  // attention paragraph, and the chip on every card - so they cannot disagree.
+  const reasons = useMemo(() => (live ? attentionReasons(live) : []), [live]);
+  const recorderHealthy = !reasons.some((reason) => reason.card === "recorder");
   // Corrected by what the server has announced since the last fetch, so a
   // pause or a drain started elsewhere does not leave this banner claiming
   // the server is taking rooms.
@@ -287,14 +330,14 @@ export function AdminOperationsPage() {
         <>
           <div
             className={`ops-status-banner${
-              recorderHealthy && admitting ? "" : " is-warning"
+              reasons.length === 0 && admitting ? "" : " is-warning"
             }`}
             role="status"
           >
             <span className="ops-status-dot" aria-hidden="true" />
             <strong>
-              {!recorderHealthy
-                ? "Recorder dropped observations"
+              {reasons.length > 0
+                ? reasons[0].headline
                 : admitting
                   ? "All systems operational"
                   : "Not accepting new rooms"}
@@ -336,6 +379,13 @@ export function AdminOperationsPage() {
               </span>
             </div>
           </section>
+
+          <div className="ops-signals">
+            <TrafficCard live={live} reasons={reasons} />
+            <ProcessCard live={live} reasons={reasons} />
+            <DatabaseCard live={live} reasons={reasons} />
+            <QueuesCard live={live} reasons={reasons} />
+          </div>
 
           <div className="ops-columns">
             <section className="ops-card" aria-label="Daily trend">
@@ -388,13 +438,15 @@ export function AdminOperationsPage() {
               </div>
               <div className="ops-attention">
                 <h3>Attention</h3>
-                <p>
-                  {!recorderHealthy
-                    ? `${live.recorder.dropped} observations were dropped by a full buffer.`
-                    : rate !== null && rate >= 25
-                      ? `Abandoned games sit at ${rate}% this window. Nothing else needs an operator.`
-                      : "Nothing needs an operator."}
-                </p>
+                {reasons.length === 0 ? (
+                  <p>Nothing needs an operator.</p>
+                ) : (
+                  <ul>
+                    {reasons.map((reason) => (
+                      <li key={reason.key}>{reason.text}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </section>
           </div>

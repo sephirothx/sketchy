@@ -30,6 +30,7 @@ from app.services.game_highlights import build_game_highlights
 from app.services.game_history import build_game_history
 from app.services.runtime_metrics import metrics
 from app.services.prompt_usage import tally_prompt_usage
+from app.services.telemetry import telemetry
 from app.presenters import (
     turn_ended_payload,
     room_state_payload,
@@ -1059,6 +1060,7 @@ class GameFlowService:
         """
         if not self._ctx.game_history_repo or history is None:
             return
+        started = time.monotonic()
         try:
             await asyncio.wait_for(
                 self._ctx.game_history_repo.save_game(
@@ -1080,8 +1082,30 @@ class GameFlowService:
                 room.id,
                 HISTORY_WRITE_TIMEOUT_SECONDS,
             )
+            self._note_abandoned_write(room, "game", "timeout", started)
         except Exception:
             logger.exception("Failed to persist game history for room %s", room.id)
+            self._note_abandoned_write(room, "game", "error", started)
+
+    @staticmethod
+    def _note_abandoned_write(room: Room, kind: str, reason: str, started: float) -> None:
+        """Make a swallowed write countable (#482).
+
+        Swallowing is right - nothing a player can do, and a slow database
+        must not hold a room open - but a loss that leaves only a log line is
+        a loss nobody can alert on or reconcile. One observation, carrying
+        which write and why, on both the persisted recorder and the process
+        counters, so the rate is visible to a scraper and on the operations
+        page alike.
+        """
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        metrics.record(
+            RuntimeEventType.HISTORY_WRITE_ABANDONED,
+            room_id=room.id,
+            value=elapsed_ms,
+            details={"kind": kind, "reason": reason},
+        )
+        telemetry.history_write_abandoned(kind, reason)
 
     async def _record_prompt_usage(
         self,
@@ -1113,6 +1137,7 @@ class GameFlowService:
         )
         if not usage:
             return
+        started = time.monotonic()
         try:
             await asyncio.wait_for(
                 self._ctx.prompt_list_repo.record_prompt_usage(revision_ids, usage),
@@ -1124,8 +1149,10 @@ class GameFlowService:
                 room.id,
                 PROMPT_USAGE_WRITE_TIMEOUT_SECONDS,
             )
+            self._note_abandoned_write(room, "prompt_usage", "timeout", started)
         except Exception:
             logger.exception("Failed to record prompt usage for room %s", room.id)
+            self._note_abandoned_write(room, "prompt_usage", "error", started)
 
     async def _finish_or_next(self, room: Room) -> None:
         game = room.game

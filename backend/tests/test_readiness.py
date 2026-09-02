@@ -391,3 +391,25 @@ async def test_a_purge_failure_does_not_also_report_the_flush_as_a_success(monke
 
     assert health.last_success is None
     assert health.consecutive_failures == 1
+
+
+async def test_the_last_probe_result_is_readable_without_probing_again():
+    """The operations page reads what the load balancer last found, however
+    old, and must never become a second prober."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    now = [1000.0]
+    probe = ReadinessProbe(factory, cache_seconds=5.0, clock=lambda: now[0])
+    try:
+        assert probe.last_database_result() is None
+        assert await probe.check_database() == (True, None)
+        now[0] += 42.0
+        assert probe.last_database_result() == {
+            "ok": True,
+            "reason": None,
+            "checkedAgoSeconds": 42.0,
+        }
+    finally:
+        await engine.dispose()

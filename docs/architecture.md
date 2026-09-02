@@ -338,7 +338,7 @@ revocation applies uniformly without a shared signing secret.
 `/api/health` is liveness and stays process-only: a restart cannot fix a database
 outage the replacement comes back into, so a dependency failure must not be reported
 as "restart me". It does carry each background loop's run state, failure streak, and
-time since its last success — the three loops swallow every exception but cancellation
+time since its last success — every supervised loop (mail delivery, metrics flush, retention, presence broadcast, the loop-lag sampler) swallows every exception but cancellation
 and carry on for ever, which keeps one bad row from stopping every later sweep and also
 makes a loop failing on every iteration indistinguishable from a working one. These
 counters are that distinction.
@@ -990,7 +990,8 @@ Two things are recorded, answering two different questions
   meant to vanish on restart.
 - **Observations** (joins, disconnects, evictions after grace, games started/finished/
   abandoned, timer overruns past 250 ms, stored drawing sizes, recap-budget drops,
-  callers held to a command budget) are
+  callers held to a command budget, finished-game or prompt-usage writes the server gave
+  up on) are
   buffered and written in batches, because a database round trip per join would be felt
   as lag inside a drawing. The buffer is bounded, drops oldest when full, and counts
   what it dropped so a gap is visible rather than silent.
@@ -1000,6 +1001,41 @@ Operators read this through `GET /metrics` (Prometheus text, bearer token, disab
 until `METRICS_TOKEN` is set) or `/admin/operations` in the app. The per-player view
 there is a surveillance surface on the game's own players, so **every use writes an
 audit event naming both who looked and who was looked at.**
+
+A third thing is measured but never written: **signals**, in
+[`backend/app/services/telemetry.py`](../backend/app/services/telemetry.py). Neither
+of the two above says whether the worker is *keeping up*, and before #472 a traffic
+spike, a database stall, a starved event loop and a leak all looked the same from
+outside. So every HTTP request is counted and timed at the outermost middleware
+([`backend/app/request_timing.py`](../backend/app/request_timing.py) — pure ASGI, added
+after gzip so the number is what a client actually waited), every client command is
+timed at `HandlerContext.on`, the one door they all use (outcome `ok`, `refused` for a
+handler's own `ok: False`, `error` for an exception, counted before it propagates, or
+`throttled`), a supervised sampler measures how late a one-second timer fires (event-loop
+lag) and reads CPU and resident memory, two cursor listeners time every statement and the
+pool is asked for its occupancy, and the two durable queues (mail outbox, account
+exports) report their depth and oldest age. Labels are bounded by construction — route
+*templates* not paths, status *classes* not codes, command names from the registration
+table, a hard cap per family beyond which values fold into `other` — because a series per
+room id is how an exposition falls over.
+
+It is hand-rolled rather than `prometheus_client`, because the operations page is the
+first consumer and it needs "the last five minutes", which a cumulative histogram cannot
+answer: each family keeps the cumulative buckets a scraper expects *and* a sixty-slot ring
+of per-minute buckets, from which a windowed p50/p95/p99, a rate, and a sparkline are read.
+One store, two views, so the page and the scrape cannot disagree. Percentiles are
+estimated from fixed buckets, the way `histogram_quantile` does it, and are only as fine
+as the buckets. Everything here is process memory and vanishes on restart, like the live
+counts, and for the same reason. The queue depths are the one thing that costs a query,
+so they are cached for ten seconds and shared by both surfaces.
+
+`/api/admin/metrics` carries all of it beside the live counts; the overview polls it
+every ten seconds while it is the tab on screen and the document is visible, and never
+otherwise. One ordered list of *attention reasons* — data already lost first (a dropped
+observation, a stopped loop, an abandoned history write), then a dependency that is
+down, then latency, then a queue that is merely slow — feeds the status banner, the
+attention list, and the chip on every card, so no two of them can disagree about what is
+wrong.
 
 ---
 
@@ -1242,10 +1278,13 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/lobby_rooms.py`](../backend/app/services/lobby_rooms.py) | The public room list as a snapshot and deltas, for that channel. |
 | [`app/services/lobby_chat.py`](../backend/app/services/lobby_chat.py) | The last few lines said in the lobby, and the number each one was given. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
+| [`app/request_timing.py`](../backend/app/request_timing.py) | Count and time every HTTP request by the route template it matched. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
 | [`app/services/room_quotas.py`](../backend/app/services/room_quotas.py) | Ceilings on room creation, so one client cannot spend the whole server. |
 | [`app/services/room_presets.py`](../backend/app/services/room_presets.py) | Private, account-owned templates for ordinary room configuration. |
 | [`app/services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | What the server records about its own behaviour. |
+| [`app/services/telemetry.py`](../backend/app/services/telemetry.py) | Process signals — request, command, query and loop-lag RED/USE — kept in memory for `/metrics` and the operations page. |
+| [`app/services/queue_depths.py`](../backend/app/services/queue_depths.py) | Depth and oldest age of the mail outbox and pending exports, cached. |
 | [`app/services/shutdown.py`](../backend/app/services/shutdown.py) | Bounded planned-shutdown drain for process-owned live rooms. |
 | [`app/services/timers.py`](../backend/app/services/timers.py) | Own asyncio task lifecycle for game phases, hints, and disconnects. |
 | [`app/services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) | Incremental and full rebuild paths for bounded-cost profile statistics. |

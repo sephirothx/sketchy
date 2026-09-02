@@ -290,6 +290,10 @@ async def test_the_operations_workspace_is_accessible_on_every_tab():
             await page.wait_for_selector(
                 '[role="tab"][aria-selected="true"]'
             )
+            if tab == "overview":
+                # The signal cards mount once the snapshot arrives; scanning
+                # before that would pass on a page that is not yet there.
+                await page.wait_for_selector('section[aria-label="Traffic"]')
             # The panel the selected tab names has to be the one on screen.
             controls = await page.get_attribute(
                 '[role="tab"][aria-selected="true"]', "aria-controls"

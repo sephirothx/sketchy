@@ -84,7 +84,13 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     "app/deployment.py": (98.0, 98.0),
     "app/services/readiness.py": (96.0, 98.0),
     "app/services/shutdown.py": (88.0, 74.0),
-    "app/db/__init__.py": (92.0, 78.0),
+    "app/db/__init__.py": (94.0, 80.0),
+    # The signals an on-call operator acts on (#472): an untested branch here
+    # is a number on the page or in the scrape that is quietly wrong, which
+    # is worse than no number at all.
+    "app/services/telemetry.py": (91.0, 78.0),
+    "app/request_timing.py": (93.0, 98.0),
+    "app/services/queue_depths.py": (98.0, 98.0),
     # Room-code allocation: a collision is two rooms sharing an identity.
     "app/services/room_codes.py": (98.0, 98.0),
     # Who is online: a ledger, so an unbalanced path is an account listed as

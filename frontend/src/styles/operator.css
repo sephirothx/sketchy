@@ -162,6 +162,99 @@
   }
 }
 
+/* ------------------------------------------------------------ signal cards */
+.ops-signals {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 800px) {
+  .ops-signals {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ops-signal-grid {
+  display: grid;
+  gap: 10px 14px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-bottom: 8px;
+}
+
+.ops-signal {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ops-signal-label {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ops-signal-value {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.ops-signal.is-warning .ops-signal-value {
+  color: var(--warm-ink);
+}
+
+.ops-signal-note {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ops-sparkline {
+  display: block;
+  height: 28px;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.ops-sparkline path {
+  fill: none;
+  stroke: var(--primary);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.ops-sparkline.is-warning path {
+  stroke: var(--warm);
+}
+
+.ops-loop-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+}
+
+.ops-attention ul {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ops-attention li + li {
+  margin-top: 4px;
+}
+
 /* -------------------------------------------------------------- trend chart */
 .ops-chart-bars {
   align-items: flex-end;

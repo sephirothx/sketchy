@@ -1090,7 +1090,10 @@ itself) · `event_type` · `occurred_at` · `room_id` · `user_id` (`SET NULL`) 
 Types: `room.created`, `room.closed`, `player.joined`, `player.left`,
 `player.disconnected`, `player.reconnected`, `player.evicted`, `command.throttled`, `game.started`,
 `game.finished`, `game.abandoned`, `turn.ended`, `timer.overran`,
-`canvas.payload_observed`, `drawing.stored`, `recap.budget_dropped`.
+`canvas.payload_observed`, `drawing.stored`, `recap.budget_dropped`,
+`history.write_abandoned` (a finished game's history or prompt-usage write the server gave
+up on; `details.kind` is `game` or `prompt_usage`, `details.reason` is `timeout` or `error`,
+`value` is the milliseconds spent before giving up — #482).
 
 Observations are **buffered and written in batches**, because a database round trip per
 join would be felt as lag inside a drawing. The buffer is bounded and drops oldest when

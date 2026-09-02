@@ -453,6 +453,10 @@ claim that an arbitrary host will sustain it.
 | **R-OBS-04** | Raw observations MUST be rolled into permanent daily totals **before** being purged. Unbounded event rows on embedded SQLite is a disk that fills up quietly. |
 | **R-OBS-05** | `GET /metrics` MUST be disabled entirely until `METRICS_TOKEN` is set, and MUST require that bearer token. |
 | **R-OBS-06** | The in-app operations page MUST require the administrator role. |
+| **R-OBS-07** | Every HTTP request and every client command MUST be counted and timed in-process, labelled by route template, status class and command name so that label cardinality is bounded by construction. A handler exception MUST be counted before it propagates, never instead. |
+| **R-OBS-08** | Event-loop lag, process CPU and memory, pool occupancy, statement latency, queue depth and age, and loop health MUST be exposed on both `GET /metrics` and the operations overview from one store, and MUST NOT be written to the database. |
+| **R-OBS-09** | The operations overview MUST poll only while it is the selected tab in a visible document. |
+| **R-OBS-10** | A finished-game or prompt-usage write that is abandoned (timeout or error) MUST be counted with its kind and reason, on the persisted recorder and on `/metrics`; the swallow itself stays (#482). |
 
 ### Runtime tuning
 
@@ -573,6 +577,7 @@ design, not a bug fix.
 | Presets, room codes | [`services/room_presets.py`](../backend/app/services/room_presets.py), [`services/room_codes.py`](../backend/app/services/room_codes.py) | `tests/test_room_presets.py`, `test_room_codes.py` |
 | Shutdown drain | [`services/shutdown.py`](../backend/app/services/shutdown.py) | `tests/test_shutdown.py`, `tests/handlers/test_shutdown.py` |
 | Runtime analytics | [`services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | `tests/test_runtime_analytics.py` |
+| Process signals | [`services/telemetry.py`](../backend/app/services/telemetry.py), [`request_timing.py`](../backend/app/request_timing.py), [`services/queue_depths.py`](../backend/app/services/queue_depths.py) | `tests/test_telemetry.py`, `test_request_timing.py`, `test_db_telemetry.py`, `tests/handlers/test_socket_telemetry.py`, `tests/handlers/test_game_history.py` (#482) |
 | Runtime tuning | [`services/runtime_settings.py`](../backend/app/services/runtime_settings.py), [`services/tunables.py`](../backend/app/services/tunables.py), [`services/config_store.py`](../backend/app/services/config_store.py), [`api/admin_settings.py`](../backend/app/api/admin_settings.py) | `tests/test_runtime_settings.py`, `test_admin_tunables_api.py` |
 | CI supply-chain and quality gates | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`scripts/check-coverage.py`](../scripts/check-coverage.py) | `tests/test_repo_gates.py`, `tests/test_repo_artifacts.py` |
 | Deployment, environment mode, static delivery, worker topology | [`deployment.py`](../backend/app/deployment.py), [`client_routes.py`](../backend/app/client_routes.py) | `tests/test_deployment.py`, `test_static_delivery.py`, `test_client_routes.py` |
