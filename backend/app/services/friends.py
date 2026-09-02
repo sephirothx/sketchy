@@ -284,6 +284,14 @@ class FriendService:
                     # one who refused, they may ask in their own right.
                     if row.requested_by_id == requester_id:
                         return FriendshipOutcome.IGNORED
+                    # Held to the same ceilings as a request that writes a new
+                    # row. Rewriting a refusal is still sending a request, and
+                    # somebody who has declined a lot of people would otherwise
+                    # have a row per refusal to send an uncounted one along.
+                    await self._raise_if_full(session, requester_id)
+                    await self._raise_if_too_many_pending(
+                        session, requester_id, target.id
+                    )
                     row.status = FriendshipState.PENDING.value
                     row.requested_by_id = requester_id
                     row.responded_at = None
@@ -291,6 +299,8 @@ class FriendService:
 
                 await self._raise_if_full(session, requester_id)
                 await self._raise_if_too_many_pending(session, requester_id, target.id)
+                # Same two checks as the declined-row rewrite above: every path
+                # that leaves a pending request behind answers to them.
                 session.add(
                     Friendship(
                         user_low_id=low,

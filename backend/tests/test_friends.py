@@ -614,3 +614,55 @@ async def test_forgetting_a_pair_reports_whether_it_revoked_anything():
                 assert await service.forget_pair(session, ada, stranger) is False
     finally:
         await engine.dispose()
+
+
+async def test_re_asking_along_a_refusal_is_still_a_request():
+    """Somebody who has declined a lot of people has a row per refusal.
+
+    Each one can be rewritten into a request they sent, so if the rewrite
+    skipped the ceilings it would be an uncounted way to send as many as they
+    have refused.
+    """
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        decliner = await make_account(factory, "Decliner")
+
+        # Fill the outgoing allowance with ordinary pending requests.
+        await _fill(factory, decliner, MAX_PENDING_SENT, FriendshipState.PENDING.value)
+
+        # And hold one refusal: somebody asked, and was told no.
+        asker = await make_account(factory, "Asker")
+        await service.request(asker, decliner)
+        await service.remove(decliner, asker)
+        assert (await row_for(factory, asker, decliner)).status == (
+            FriendshipState.DECLINED.value
+        )
+
+        with pytest.raises(FriendshipRefused, match="waiting for an"):
+            await service.request(decliner, asker)
+
+        # And the refusal is left as it was, rather than half-rewritten.
+        assert (await row_for(factory, asker, decliner)).status == (
+            FriendshipState.DECLINED.value
+        )
+    finally:
+        await engine.dispose()
+
+
+async def test_re_asking_along_a_refusal_respects_a_full_friends_list():
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        decliner = await make_account(factory, "Decliner")
+        asker = await make_account(factory, "Asker")
+        await service.request(asker, decliner)
+        await service.remove(decliner, asker)
+        await _fill(
+            factory, decliner, MAX_FRIENDS_PER_ACCOUNT, FriendshipState.ACCEPTED.value
+        )
+
+        with pytest.raises(FriendshipRefused, match="full"):
+            await service.request(decliner, asker)
+    finally:
+        await engine.dispose()
