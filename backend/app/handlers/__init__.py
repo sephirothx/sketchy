@@ -29,7 +29,7 @@ from app.services.friends import FriendService
 from app.services.message_retention import MessageRetentionService
 from app.services.presence import (
     DEFAULT_MAX_CACHED_IDENTITIES,
-    PresenceBroadcaster,
+    LobbyBroadcaster,
     PresenceIdentityCache,
     PresenceRegistry,
 )
@@ -103,7 +103,7 @@ def register_all_handlers(
         user_repo,
         max_cached=max(DEFAULT_MAX_CACHED_IDENTITIES, ctx.room_capacity.sockets),
     )
-    ctx.presence_broadcaster = PresenceBroadcaster(
+    ctx.presence_broadcaster = LobbyBroadcaster(
         sio, ctx.presence, ctx.presence_identities, room_manager
     )
     ctx.friend_invites = FriendInviteBook()

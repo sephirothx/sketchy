@@ -187,6 +187,7 @@ Three different things, never used for one another:
 | **Friend request** | An ask waiting for an answer. Answering it with a request of your own is the same as accepting. A **decline** is kept, so it cannot be re-sent into; the person who declined may still ask later. | invite, add |
 | **Invitation** | What a seated player sends a friend to bring them into the game they are in. It carries a token rather than a **Room code** — the server resolves the room from the sender's seat — and it is single use and short-lived. Distinct from a **Friend request**. | invite link, summon |
 | **Lobby presence** | The live list of online players the lobby shows, with each one marked *in the lobby* or *in a game*. It never says which room, so it is not a directory of who is playing where. | who's online, user list, friends list |
+| **Lobby channel** | The one subscription a lobby opens to be *told* things instead of asking: who is online, and the public room list. Each feed is numbered on its own, so a client can tell it missed a message and ask for a fresh list. | presence channel, room feed, socket room |
 | **Waiting room** | A room's state before a game starts or between games, where players gather and the host starts the game. | lobby, pre-game, staging |
 | **Public room** | A room listed in the lobby, joinable by anyone. | open room |
 | **Private room** | A room reachable only by its code or invite link. | closed room, locked room |

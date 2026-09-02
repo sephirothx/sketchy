@@ -25,7 +25,7 @@ const player = (userId, displayName, extra = {}) => ({
 });
 
 const snapshot = (revision, players, onlineCount = players.length) =>
-  applySnapshot({ revision, players, onlineCount });
+  applySnapshot(EMPTY_PRESENCE, { revision, players, onlineCount });
 
 test("the sort matches the one the server pins", () => {
   // The same fixture backend/tests/test_presence.py reads, so a comparator
@@ -36,7 +36,7 @@ test("the sort matches the one the server pins", () => {
 
 test("a snapshot replaces the store wholesale", () => {
   const first = snapshot(4, [player("u1", "Ada")], 9);
-  const second = applySnapshot({
+  const second = applySnapshot(first, {
     revision: 5,
     players: [player("u2", "Bob")],
     onlineCount: 1,
@@ -106,7 +106,7 @@ test("a row this build cannot read is dropped rather than rendered", () => {
   assert.equal(parsePlayer({ userId: "u1", displayName: "Ada" }), null);
   assert.equal(parsePlayer({ userId: "", displayName: "Ada", status: "lobby" }), null);
   assert.equal(parsePlayer({ displayName: "Ada", status: "lobby" }), null);
-  const state = applySnapshot({
+  const state = applySnapshot(EMPTY_PRESENCE, {
     revision: 1,
     players: [player("u1", "Ada"), { userId: "u2" }],
     onlineCount: 2,
@@ -121,7 +121,7 @@ test("a malformed message leaves the store alone", () => {
   for (const bad of [null, undefined, 7, "nope", {}, { revision: -1 }]) {
     assert.deepEqual(applyDelta(state, bad).players, state.players);
   }
-  assert.deepEqual(applySnapshot(null), EMPTY_PRESENCE);
+  assert.deepEqual(applySnapshot(state, null), EMPTY_PRESENCE);
 });
 
 test("the summary says how many were left out", () => {
@@ -131,4 +131,41 @@ test("the summary says how many were left out", () => {
     presenceSummary(snapshot(1, [player("u1", "Ada")], 412)),
     "Showing 1 of 412",
   );
+});
+
+
+test("a presence snapshot never moves the list backwards", () => {
+  // One acknowledgement stamps both feeds, so a resync the *rooms* asked for
+  // still replaces presence - and a presence delta applied while that answer
+  // was in flight would be undone by it. Nothing afterwards would look like a
+  // gap, so a rolled-back list would stay until somebody connected or left.
+  const state = snapshot(9, [player("u1", "Ada")]);
+  const older = applySnapshot(state, {
+    revision: 4,
+    players: [player("u2", "Bob")],
+    onlineCount: 1,
+  });
+  assert.equal(older, state);
+
+  // Its own revision again is not backwards, and replacing is harmless.
+  const same = applySnapshot(state, {
+    revision: 9,
+    players: [player("u2", "Bob")],
+    onlineCount: 1,
+  });
+  assert.deepEqual(same.players.map((p) => p.userId), ["u2"]);
+});
+
+test("a reconnect is not caught by that guard", () => {
+  // `reset` zeroes the revision rather than remembering one, so whatever the
+  // new server offers is at least as high as the nothing this client holds.
+  const held = snapshot(40, [player("u1", "Ada")]);
+  assert.notEqual(held.revision, EMPTY_PRESENCE.revision);
+  const afterReconnect = applySnapshot(EMPTY_PRESENCE, {
+    revision: 2,
+    players: [player("u2", "Bob")],
+    onlineCount: 1,
+  });
+  assert.deepEqual(afterReconnect.players.map((p) => p.userId), ["u2"]);
+  assert.equal(afterReconnect.revision, 2);
 });

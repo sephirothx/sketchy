@@ -271,6 +271,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Retained messages (30 days) and pinned report evidence | Database | Yes |
 | Runtime observations (30 days) and permanent daily roll-ups | Database | Yes |
 | Who is connected, and whether they are seated | `PresenceRegistry` (memory) | No |
+| The public room list a watching lobby holds | `LobbyBroadcaster` (memory, derived from `RoomManager`) | No |
 | Live counts of rooms/players/games | In-process counters | No, deliberately |
 
 The boundary is a rule, not an accident: **durable configuration and durable
@@ -532,17 +533,90 @@ never satisfy the question - and the per-tick repair above would ask again
 every second, for as long as that socket stayed open, and never stop.
 
 Delivery is a Socket.IO channel a client opts into with `watch_lobby`, never a
-second poll: the lobby already polls `/api/rooms`, and #462 is open about that
-being one poll too many. Membership is asked for rather than derived from seat
-state, which keeps it out from under the seating gate and correct for a player
-seated in one tab with the lobby open in another (R-ROOM-08). A fixed
-one-second tick rebuilds the snapshot, diffs it against the last broadcast, and
-emits `lobby_presence_changed` only when the two differ - so there is no
-`mark_dirty` for a mutation site to forget. Every message carries a monotonic
-`revision`, and a client that receives one out of sequence discards its store
-and re-subscribes rather than patching around the gap: that is what answers
-#493's objection to a delta protocol, and it is cheap here because a stale
-lobby row is cosmetic and no gameplay reads it.
+second poll. Membership is asked for rather than derived from seat state, which
+keeps it out from under the seating gate and correct for a player seated in one
+tab with the lobby open in another (R-ROOM-08). A fixed one-second tick
+rebuilds the snapshot, diffs it against the last broadcast, and emits
+`lobby_presence_changed` only when the two differ - so there is no `mark_dirty`
+for a mutation site to forget. Every message carries a monotonic `revision`,
+and a client that receives one out of sequence discards its store and
+re-subscribes rather than patching around the gap: that is what answers #493's
+objection to a delta protocol, and it is cheap here because a stale lobby row
+is cosmetic and no gameplay reads it.
+
+### The room list rides the same channel
+
+The lobby used to ask `/api/rooms` every four seconds, which is what #462 was
+filed about: a hundred visible lobbies is twenty-five requests a second before
+anybody plays, and each one crosses the session middleware and a database read
+to resolve a cookie. An `ETag` makes the *body* free; it does not make the
+request free. So the list is pushed the same way presence is, from the same
+tick — [`services/lobby_rooms.py`](../backend/app/services/lobby_rooms.py)
+builds a snapshot from `list_public_rooms()`, diffs it against the last one
+broadcast, and `LobbyBroadcaster` emits `lobby_rooms_changed` when they differ.
+
+**Two feeds on one subscription, with two revisions.** One `watch_lobby`
+acknowledgement hands over both baselines, so a socket is never receiving
+changes to a list it has not been given. The revisions are separate because the
+feeds move independently: a room filling up must not re-send who is online, and
+somebody signing in must not re-send the rooms.
+
+The snapshot is built from `Room.to_public_summary()` — the same serializer the
+endpoint uses, so the two surfaces cannot drift into describing rooms
+differently — and it is diffed rather than marked dirty, for the reason
+presence gives at length: a room summary changes from a dozen places (a join, a
+leave, a game starting, a settings edit, a code retiring), and a `mark_dirty`
+at each is one more thing every future writer has to know about.
+
+`GET /api/rooms` stays. Nothing in the client calls it now; it remains a plain
+public read for operators and for tests, and its conditional-request handling
+goes with it.
+
+**A revision is spent only once it has been broadcast.** Both feeds emit
+before writing back `_last`/`_revision`. The supervised loop swallows a failed
+tick so that one bad broadcast does not stop every later one, which means a
+raise inside the emit has to leave the feed exactly where it was — state
+written first would mark the revision delivered and diff the next tick against
+a list nobody was sent, so an unchanged list would give an empty delta and the
+change would never go out at all. Re-sending costs nothing: a client ignores a
+revision it already holds, and every entry is an upsert or a delete.
+
+**Neither snapshot is ever applied backwards.** One acknowledgement stamps
+both feeds, so a resync the *rooms* asked for still replaces presence — and a
+presence delta applied while that answer was in flight would be undone by it,
+with nothing afterwards looking like a gap to correct it. Both
+`applyRoomsSnapshot` and `applySnapshot` therefore take the state they replace
+and decline a revision behind it. A reconnect is not caught by either: both
+stores zero their revision first, so whatever the new server offers is at
+least as high as the nothing the client holds.
+
+**The client applies no delta before its baseline.** `watch_lobby` joins the
+channel before it builds the acknowledgement, so the first delta can beat the
+list it applies to. Patching an empty list would leave a lobby showing only the
+rooms that happened to move while claiming that was all of them, and a snapshot
+is never applied backwards for the same reason — an acknowledgement built
+before a delta the client already applied would strand it behind, with nothing
+afterwards looking like a gap. `useLobbyChannel` also keeps one subscription in
+flight at a time: every delta that finds the store out of step asks for a
+resync, so without that a single missed message becomes one subscription per
+tick.
+
+**A refused subscription is retried.** The poll retried by construction — a
+failed fetch was followed four seconds later by another — and nothing had to be
+written down. A subscription has no such second chance: one timed-out
+acknowledgement on a socket that stays up would leave that lobby loading for
+ever, because there is no other source for the list and a quiet server sends no
+delta to notice a gap with. `resubscribeDelayMs` doubles from a second and caps
+at thirty.
+
+**A reconnect makes the room list stale, not empty.** The revisions belong to a
+sequence that no longer exists, so no delta may be applied to what the client
+holds — but the *rooms* are public and were true a moment ago, and the poll
+this replaced kept its last answer on screen for up to four seconds. So
+`markRoomsStale` keeps them drawable and refuses every delta until a snapshot
+replaces them. Presence deliberately does the opposite and empties: a room that
+closed while we were away is a card that fails when clicked, but a person shown
+as online who is not is a friend request sent into silence.
 
 Three ceilings bound what this can cost, all configurable and all with a
 documented default: channel membership (only the sockets that asked),
@@ -1080,7 +1154,8 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |
 | [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |
-| [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it. |
+| [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it and the room list. |
+| [`app/services/lobby_rooms.py`](../backend/app/services/lobby_rooms.py) | The public room list as a snapshot and deltas, for that channel. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
 | [`app/services/room_quotas.py`](../backend/app/services/room_quotas.py) | Ceilings on room creation, so one client cannot spend the whole server. |
@@ -1098,9 +1173,9 @@ Files are named for their single concern; the directory says the role.
 | Directory | Files |
 | --- | --- |
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
-| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `friendsStore.ts`, `gameStore.ts`, `presenceStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
-| `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyPresence.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `lobbyPresence.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomListPolling.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
+| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `friendsStore.ts`, `gameStore.ts`, `presenceStore.ts`, `roomsStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
+| `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
 | `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `OnlinePlayersPanel.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomSetupControls.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and

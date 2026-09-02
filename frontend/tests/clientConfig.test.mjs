@@ -19,22 +19,15 @@ test("a client with no notice yet runs at the compiled defaults", () => {
 });
 
 test("a notice replaces the cadences", () => {
-  applyClientConfig({
-    contractVersion: 1,
-    flushIntervalMs: 56,
-    lobbyPollIntervalMs: 8000,
-  });
-  assert.deepEqual(currentClientConfig(), {
-    flushIntervalMs: 56,
-    lobbyPollIntervalMs: 8000,
-  });
+  applyClientConfig({ contractVersion: 2, flushIntervalMs: 56 });
+  assert.deepEqual(currentClientConfig(), { flushIntervalMs: 56 });
 });
 
 test("a subscriber is told what is already known", () => {
   // The notice arrives at the handshake, usually long before anything that
   // depends on it has mounted. A subscriber that only heard about *changes*
   // would miss the value entirely on a page that loads after connecting.
-  applyClientConfig({ contractVersion: 1, flushIntervalMs: 72 });
+  applyClientConfig({ contractVersion: 2, flushIntervalMs: 72 });
   let seen = null;
   onClientConfig((config) => {
     seen = config;
@@ -45,7 +38,7 @@ test("a subscriber is told what is already known", () => {
 test("a subscriber hears about a change", () => {
   const seen = [];
   onClientConfig((config) => seen.push(config.flushIntervalMs));
-  applyClientConfig({ contractVersion: 1, flushIntervalMs: 80 });
+  applyClientConfig({ contractVersion: 2, flushIntervalMs: 80 });
   assert.deepEqual(seen, [40, 80]);
 });
 
@@ -54,8 +47,8 @@ test("re-sending the same values tells nobody", () => {
   // and re-arm the drawer's flush timer on every transport bounce.
   const seen = [];
   onClientConfig((config) => seen.push(config.flushIntervalMs));
-  applyClientConfig({ contractVersion: 1, flushIntervalMs: 40, lobbyPollIntervalMs: 4000 });
-  applyClientConfig({ contractVersion: 1, flushIntervalMs: 40, lobbyPollIntervalMs: 4000 });
+  applyClientConfig({ contractVersion: 2, flushIntervalMs: 40 });
+  applyClientConfig({ contractVersion: 2, flushIntervalMs: 40 });
   assert.deepEqual(seen, [40]);
 });
 
@@ -63,14 +56,13 @@ test("unsubscribing stops the notices", () => {
   const seen = [];
   const stop = onClientConfig((config) => seen.push(config.flushIntervalMs));
   stop();
-  applyClientConfig({ contractVersion: 1, flushIntervalMs: 80 });
+  applyClientConfig({ contractVersion: 2, flushIntervalMs: 80 });
   assert.deepEqual(seen, [40]);
 });
 
 test("a missing field keeps the default rather than becoming undefined", () => {
-  const config = parseClientConfig({ contractVersion: 1, flushIntervalMs: 56 });
-  assert.equal(config.flushIntervalMs, 56);
-  assert.equal(config.lobbyPollIntervalMs, DEFAULT_CLIENT_CONFIG.lobbyPollIntervalMs);
+  const config = parseClientConfig({ contractVersion: 2 });
+  assert.equal(config.flushIntervalMs, DEFAULT_CLIENT_CONFIG.flushIntervalMs);
 });
 
 test("a nonsense payload leaves the client on its defaults", () => {
@@ -81,7 +73,7 @@ test("a nonsense payload leaves the client on its defaults", () => {
     "40",
     40,
     [],
-    { contractVersion: 1, flushIntervalMs: "fast" },
+    { contractVersion: 2, flushIntervalMs: "fast" },
   ]) {
     resetClientConfig();
     applyClientConfig(payload);
@@ -95,7 +87,7 @@ test("a value outside what the client can run is refused", () => {
   // a busy loop, and an enormous one is a canvas that never updates.
   for (const interval of [0, -40, 5, 5000, Number.NaN, Number.POSITIVE_INFINITY]) {
     resetClientConfig();
-    applyClientConfig({ contractVersion: 1, flushIntervalMs: interval });
+    applyClientConfig({ contractVersion: 2, flushIntervalMs: interval });
     assert.equal(
       currentClientConfig().flushIntervalMs,
       DEFAULT_CLIENT_CONFIG.flushIntervalMs,
@@ -107,7 +99,7 @@ test("a value outside what the client can run is refused", () => {
 test("the bounds admit the values the server's own bounds allow", () => {
   for (const interval of [10, 40, 56, 80, 200]) {
     resetClientConfig();
-    applyClientConfig({ contractVersion: 1, flushIntervalMs: interval });
+    applyClientConfig({ contractVersion: 2, flushIntervalMs: interval });
     assert.equal(currentClientConfig().flushIntervalMs, interval);
   }
 });
@@ -116,8 +108,8 @@ test("a notice from a contract this build does not know is ignored whole", () =>
   // Not field by field. A later server could give a field a different meaning
   // rather than a different name, and a client that kept the ones it
   // recognised would be running half a contract it does not understand.
-  applyClientConfig({ contractVersion: 1, flushIntervalMs: 80 });
-  for (const version of [2, 0, "1", undefined, null]) {
+  applyClientConfig({ contractVersion: 2, flushIntervalMs: 80 });
+  for (const version of [1, 3, 0, "2", undefined, null]) {
     applyClientConfig({ contractVersion: version, flushIntervalMs: 20 });
     assert.equal(currentClientConfig().flushIntervalMs, 80, String(version));
   }
@@ -131,6 +123,6 @@ test("an unknown contract leaves subscribers undisturbed", () => {
 });
 
 test("parsing reports an unknown contract rather than guessing", () => {
-  assert.equal(parseClientConfig({ contractVersion: 2, flushIntervalMs: 56 }), null);
+  assert.equal(parseClientConfig({ contractVersion: 3, flushIntervalMs: 56 }), null);
   assert.equal(parseClientConfig(undefined), null);
 });

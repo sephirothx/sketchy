@@ -20,7 +20,7 @@ from app.services.presence import (
     EMPTY_SNAPSHOT,
     STATUS_LOBBY,
     STATUS_PLAYING,
-    PresenceBroadcaster,
+    LobbyBroadcaster,
     PresenceEntry,
     PresenceIdentity,
     PresenceIdentityCache,
@@ -398,7 +398,7 @@ class RecordingSio:
 
 
 def broadcaster_for(registry, room_manager, cache):
-    return PresenceBroadcaster(
+    return LobbyBroadcaster(
         RecordingSio(), registry, cache, room_manager, environ={}
     )
 
@@ -440,7 +440,7 @@ async def test_the_count_moving_alone_is_still_worth_broadcasting():
     for index in range(3):
         cache.remember(identity(f"user-{index}", f"player{index}"))
         registry.note_socket_opened(f"sid-{index}", f"user-{index}")
-    caster = PresenceBroadcaster(
+    caster = LobbyBroadcaster(
         RecordingSio(),
         registry,
         cache,
@@ -517,7 +517,7 @@ async def test_the_loop_records_a_healthy_tick_and_survives_a_broken_one():
             super().record_failure()
             self.failed.set()
 
-    caster = PresenceBroadcaster(
+    caster = LobbyBroadcaster(
         RecordingSio(),
         PresenceRegistry(),
         PresenceIdentityCache(None),
@@ -553,7 +553,7 @@ def test_a_ceiling_that_is_not_a_positive_number_falls_back(caplog):
         DEFAULT_LIST_LIMIT,
     )
 
-    caster = PresenceBroadcaster(
+    caster = LobbyBroadcaster(
         RecordingSio(),
         PresenceRegistry(),
         PresenceIdentityCache(None),
@@ -566,7 +566,7 @@ def test_a_ceiling_that_is_not_a_positive_number_falls_back(caplog):
     assert caster.list_limit == DEFAULT_LIST_LIMIT
     assert caster.interval_ms == DEFAULT_BROADCAST_INTERVAL_MS
 
-    blank = PresenceBroadcaster(
+    blank = LobbyBroadcaster(
         RecordingSio(),
         PresenceRegistry(),
         PresenceIdentityCache(None),

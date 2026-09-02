@@ -51,8 +51,3 @@ textarea:disabled {
 .create-room-lobby-copy { color: var(--muted); line-height: 1.5; margin: 8px 0 16px; font-size: 14px; }
 .lobby-action-error { background: var(--danger-soft); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: var(--danger); font-weight: 600; margin: 0 0 16px; padding: 10px 12px; }
 .room-list-loading { color: var(--muted); padding: 20px 0; text-align: center; }
-.room-list-error { background: var(--danger-soft); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: var(--danger); padding: 16px; }
-.room-list-error p { margin: 0 0 10px; }
-.room-list-error button,
-.room-list-warning button { background: var(--card); border: 1px solid currentColor; border-radius: 8px; color: inherit; font-weight: 700; padding: 7px 11px; }
-.room-list-warning { align-items: center; background: var(--warning-soft); border: 1px solid var(--warning-edge); border-radius: var(--radius-sm); color: var(--warning); display: flex; gap: 12px; justify-content: space-between; margin-bottom: 14px; padding: 10px 12px; }

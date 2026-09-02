@@ -19,7 +19,13 @@ interface PresenceStore {
 
 export const usePresenceStore = create<PresenceStore>((set) => ({
   presence: EMPTY_PRESENCE,
-  receiveSnapshot: (payload) => set({ presence: applySnapshot(payload) }),
+  // Through the current state, so an acknowledgement that was built before a
+  // delta this client already applied is declined rather than rolling it back.
+  receiveSnapshot: (payload) =>
+    set((state) => {
+      const next = applySnapshot(state.presence, payload);
+      return next === state.presence ? state : { presence: next };
+    }),
   // `applyDelta` returns the state it was given when there is nothing to do -
   // a duplicate, a message from before a resync, an unreadable one - so an
   // identical reference here is what keeps the panel from re-rendering on

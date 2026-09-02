@@ -13,7 +13,7 @@ Three pieces, deliberately separated by what can go wrong with each:
 * `PresenceIdentityCache` - the name and colour to show, read through a
   bounded LRU rather than stored, because identity changes through five paths
   and only one of them touches a socket.
-* `PresenceBroadcaster` - the fixed tick that turns changes into at most one
+* `LobbyBroadcaster` - the fixed tick that turns changes into at most one
   delta per second on the `lobby` channel.
 
 Process-owned and never durable, like every other live-state owner (see the
@@ -31,6 +31,13 @@ import logging
 import os
 
 from app.repositories.interfaces import UserRepository
+from app.services.lobby_rooms import (
+    EMPTY_ROOMS,
+    RoomsDelta,
+    RoomsSnapshot,
+    build_rooms_snapshot,
+    diff_rooms,
+)
 from app.rooms import RoomManager
 
 logger = logging.getLogger("sketchy.presence")
@@ -531,8 +538,13 @@ class PresenceIdentityCache:
         return len(self._identities)
 
 
-class PresenceBroadcaster:
-    """One delta a tick to the lobby channel, and only when something moved.
+class LobbyBroadcaster:
+    """One tick, two feeds, and a delta only where something moved.
+
+    Presence and the public room list both ride the channel the lobby opens,
+    as separate events with separate revisions. Separate because they move
+    independently: a room filling up should not re-send who is online, and
+    somebody signing in should not re-send the rooms.
 
     Deliberately has no `mark_dirty`. Every tick rebuilds the snapshot and
     diffs it against the last one broadcast, so a change is picked up wherever
@@ -567,10 +579,16 @@ class PresenceBroadcaster:
         )
         self._revision = 0
         self._last = EMPTY_SNAPSHOT
+        self._rooms_revision = 0
+        self._last_rooms = EMPTY_ROOMS
 
     @property
     def revision(self) -> int:
         return self._revision
+
+    @property
+    def rooms_revision(self) -> int:
+        return self._rooms_revision
 
     def _build(self, revision: int) -> PresenceSnapshot:
         online = self._registry.online_user_ids()
@@ -598,6 +616,40 @@ class PresenceBroadcaster:
         a fresher view than the channel without falling out of step with it.
         """
         return self._build(self._revision)
+
+    def rooms_for_watcher(self) -> RoomsSnapshot:
+        """The room list a socket joining the channel is handed.
+
+        Fresh, and stamped with the revision already broadcast - the same
+        bargain the presence snapshot strikes, and safe for the same reason:
+        `opened` and `changed` are upserts and `closed` is a delete, so a room
+        this snapshot already carried being announced again changes nothing.
+        """
+        return build_rooms_snapshot(self._room_manager, revision=self._rooms_revision)
+
+    async def _flush_rooms(self) -> RoomsDelta | None:
+        """Broadcast what moved in the room list, if anything did."""
+        candidate = build_rooms_snapshot(
+            self._room_manager, revision=self._rooms_revision + 1
+        )
+        delta = diff_rooms(self._last_rooms, candidate)
+        if delta.is_empty:
+            return None
+        # Emitted before the revision is consumed. `run` swallows a failed
+        # tick so that one bad broadcast does not stop every later one, which
+        # means a raise here must leave the feed exactly where it was: state
+        # written first would mark this revision delivered and diff the next
+        # tick against a list nobody was sent, so the change would never go
+        # out again and watchers would sit on the old list until some
+        # unrelated room moved. Re-sending instead is free - a client ignores
+        # a revision it already holds, and every entry is an upsert or a
+        # delete.
+        await self._sio.emit(
+            "lobby_rooms_changed", delta.payload(), room=LOBBY_CHANNEL
+        )
+        self._last_rooms = candidate
+        self._rooms_revision = candidate.revision
+        return delta
 
     async def _repair_identities(self) -> None:
         """Read back the identities the cache can no longer answer for.
@@ -628,7 +680,8 @@ class PresenceBroadcaster:
         )
 
     async def flush(self) -> PresenceDelta | None:
-        """Broadcast what changed since the last one, if anything did."""
+        """Broadcast what changed since the last tick, on either feed."""
+        await self._flush_rooms()
         await self._repair_identities()
         candidate = self._build(self._revision + 1)
         delta = diff_snapshots(self._last, candidate)
@@ -638,11 +691,14 @@ class PresenceBroadcaster:
         # rendering the old number for as long as the list stayed still.
         if delta.is_empty and candidate.online_count == self._last.online_count:
             return None
-        self._last = candidate
-        self._revision = candidate.revision
+        # Emitted before the revision is consumed, for the reason
+        # `_flush_rooms` gives at length: a swallowed failure must not leave a
+        # revision spent on a broadcast nobody received.
         await self._sio.emit(
             "lobby_presence_changed", delta.payload(), room=LOBBY_CHANNEL
         )
+        self._last = candidate
+        self._revision = candidate.revision
         return delta
 
     async def run(self, *, health=None) -> None:
@@ -672,7 +728,7 @@ class PresenceBroadcaster:
 
 
 def start_presence_loop(
-    broadcaster: PresenceBroadcaster, *, health=None
+    broadcaster: LobbyBroadcaster, *, health=None
 ) -> asyncio.Task[None]:
     return asyncio.create_task(broadcaster.run(health=health))
 

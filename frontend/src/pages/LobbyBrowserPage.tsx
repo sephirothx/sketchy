@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
-import { startVisibilityAwarePolling } from "../lib/roomListPolling";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
 import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
@@ -13,20 +12,18 @@ import { PublicRoomCard } from "../components/PublicRoomCard";
 import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { useRoomsStore } from "../store/roomsStore";
 import { ModalShell } from "../components/ui/ModalShell";
 import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
-import { useLobbyPresence } from "../hooks/useLobbyPresence";
+import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AlertCircleIcon, ChevronDownIcon, PlusIcon, SearchIcon } from "../components/icons";
-import { useClientConfig } from "../hooks/useClientConfig";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import type { AckResponse, RoomSummary } from "../types";
 
-const ROOM_FETCH_TIMEOUT_MS = 6000;
 const ROOM_CODE_LENGTH = 6;
 
-type RoomListStatus = "loading" | "loaded" | "error";
 type PendingJoin = { key: string; mode: "join" | "spectate" };
 
 function normalizeRoomCodeInput(value: string): string {
@@ -147,11 +144,10 @@ export function LobbyBrowserPage() {
   const colorblindSafeColors = useSettingsStore((s) => s.colorblindSafeColors);
   const setSession = useGameStore((s) => s.setSession);
   const setExitingRoom = useGameStore((s) => s.setExitingRoom);
-  // Server-decided, so lobby freshness can be traded against request volume
-  // without a deploy.
-  const { lobbyPollIntervalMs } = useClientConfig();
-
-  const [rooms, setRooms] = useState<RoomSummary[]>([]);
+  // Pushed over the lobby channel rather than polled (#462). The store is
+  // replaced by a snapshot and patched by deltas; nothing here refetches.
+  const roomsState = useRoomsStore((state) => state.rooms);
+  const rooms = roomsState.rooms;
   const [joinCode, setJoinCode] = useState("");
   const [codeSheetOpen, setCodeSheetOpen] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
@@ -178,19 +174,12 @@ export function LobbyBrowserPage() {
   const codeFieldRef = useRef<HTMLInputElement | null>(null);
   // Only the lobby watches the presence channel: a player inside a room is
   // not reading this list and should not be paying for it mid-game.
-  useLobbyPresence();
+  useLobbyChannel();
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
   const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
-  const [roomListStatus, setRoomListStatus] = useState<RoomListStatus>("loading");
-  const [roomListError, setRoomListError] = useState<string | null>(null);
-  const [roomRefreshError, setRoomRefreshError] = useState<string | null>(null);
-  const [roomListRetry, setRoomListRetry] = useState(0);
-  const hasLoadedRoomsRef = useRef(false);
   // The validator from the last successful fetch. A ref rather than state:
-  // changing it must not re-render, and the poll reads it at request time.
-  const roomsEtagRef = useRef<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [languageFilter, setLanguageFilter] = useState("all");
@@ -210,81 +199,6 @@ export function LobbyBrowserPage() {
   useEffect(() => {
     setExitingRoom(false);
   }, [setExitingRoom]);
-
-  useEffect(() => {
-    // The polling controller stops new work; this flag also prevents an
-    // already-running fetch from updating React state after effect cleanup.
-    let cancelled = false;
-    let activeController: AbortController | null = null;
-    let activeTimeout: number | null = null;
-
-    async function fetchRooms() {
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), ROOM_FETCH_TIMEOUT_MS);
-      activeController = controller;
-      activeTimeout = timeout;
-      try {
-        const res = await fetch("/api/rooms", {
-          signal: controller.signal,
-          headers: roomsEtagRef.current ? { "If-None-Match": roomsEtagRef.current } : {},
-        });
-        if (res.status === 304) {
-          // Nothing has changed since the last poll, and the server sent no
-          // body to prove it. The rooms already on screen are current.
-          if (!cancelled) {
-            setRoomListStatus("loaded");
-            setRoomRefreshError(null);
-          }
-          return;
-        }
-        if (!res.ok) throw new Error(`Room list request failed with ${res.status}`);
-        const data: unknown = await res.json();
-        if (!Array.isArray(data)) throw new Error("Invalid room list response");
-        if (!cancelled) {
-          hasLoadedRoomsRef.current = true;
-          // Stored with the list it describes, never before it. This poll can
-          // land after the effect has torn down, and the ref outlives the
-          // effect - so recording a validator whose body was then dropped
-          // would make every later poll answer 304 for rooms that were never
-          // applied, leaving the lobby stale until the list happened to
-          // change again.
-          roomsEtagRef.current = res.headers.get("ETag");
-          setRooms(data as RoomSummary[]);
-          setRoomListStatus("loaded");
-          setRoomListError(null);
-          setRoomRefreshError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          const message = "Could not load public rooms. Check your connection and try again.";
-          if (hasLoadedRoomsRef.current) setRoomRefreshError(message);
-          else {
-            setRoomListStatus("error");
-            setRoomListError(message);
-          }
-        }
-      } finally {
-        window.clearTimeout(timeout);
-        if (activeController === controller) activeController = null;
-        if (activeTimeout === timeout) activeTimeout = null;
-      }
-    }
-
-    const stopPolling = startVisibilityAwarePolling(fetchRooms, lobbyPollIntervalMs);
-    return () => {
-      cancelled = true;
-      stopPolling();
-      if (activeTimeout !== null) window.clearTimeout(activeTimeout);
-      activeController?.abort();
-    };
-  }, [roomListRetry, lobbyPollIntervalMs]);
-
-  function retryRoomList() {
-    setRoomListError(null);
-    setRoomRefreshError(null);
-    if (!hasLoadedRoomsRef.current) setRoomListStatus("loading");
-    setRoomListRetry((value) => value + 1);
-  }
 
   const roomLanguages = [...new Set(rooms.map((room) => room.promptLanguage))].sort((a, b) =>
     promptLanguageLabel(a).localeCompare(promptLanguageLabel(b)),
@@ -417,11 +331,11 @@ export function LobbyBrowserPage() {
         <div className="lobby-rooms-heading">
           <h2>Public rooms</h2>
           <span className="lobby-rooms-count">
-            {roomListStatus === "loading" ? "Loading…" : rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length}` : "0 rooms"}
+            {!roomsState.loaded ? "Loading…" : rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length}` : "0 rooms"}
           </span>
         </div>
 
-        {roomListStatus === "loaded" && rooms.length > 0 && (
+        {roomsState.loaded && rooms.length > 0 && (
           <div className="lobby-filter-bar">
             <span className="lobby-room-search">
               <SearchIcon size={15} />
@@ -548,12 +462,12 @@ export function LobbyBrowserPage() {
           </BottomSheet>
         )}
 
-        {roomRefreshError && <div className="room-list-warning" role="status"><span>{roomRefreshError}</span><button type="button" onClick={retryRoomList}>Retry</button></div>}
-
-        {roomListStatus === "loading" ? (
+        {/* No retry, and no refresh error. There is nothing to re-ask: the
+            channel re-subscribes itself on reconnect and on a missed delta,
+            and a socket that is down is what `ConnectionStatusBanner` is for.
+            The only states left are "not told yet" and "told". */}
+        {!roomsState.loaded ? (
           <div className="room-list-loading" role="status">Loading public rooms…</div>
-        ) : roomListStatus === "error" ? (
-          <div className="room-list-error" role="alert"><p>{roomListError}</p><button type="button" onClick={retryRoomList}>Retry</button></div>
         ) : rooms.length === 0 ? (
           <p>No public rooms yet. Create one!</p>
         ) : filteredRooms.length === 0 ? (

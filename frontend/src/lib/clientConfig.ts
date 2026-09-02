@@ -14,17 +14,18 @@ lost. Subscribers are therefore called immediately with what is already known.
 
 A missing or malformed field falls back to the compiled default. A server that
 cannot say is not a reason to stop drawing, and these numbers all have an
-answer that has always worked. */
+answer that has always worked.
+
+Version 2 dropped `lobbyPollIntervalMs`: the lobby is told about rooms over its
+channel now (#462) and has no cadence of its own to be given. */
 
 export interface ClientConfig {
   flushIntervalMs: number;
-  lobbyPollIntervalMs: number;
 }
 
 /** What the client uses until a server says otherwise, and if one never does. */
 export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   flushIntervalMs: 40,
-  lobbyPollIntervalMs: 4000,
 };
 
 /** The bounds the server enforces, mirrored so a bad payload cannot get through.
@@ -34,7 +35,6 @@ refuses a number that would break the client outright: a zero or negative
 interval is a busy loop, and a huge one is a canvas that never updates. */
 const BOUNDS: Record<keyof ClientConfig, { min: number; max: number }> = {
   flushIntervalMs: { min: 10, max: 200 },
-  lobbyPollIntervalMs: { min: 1000, max: 60000 },
 };
 
 function reading(
@@ -51,7 +51,7 @@ function reading(
 }
 
 /** The notice shape this build understands. */
-export const CLIENT_CONFIG_CONTRACT_VERSION = 1;
+export const CLIENT_CONFIG_CONTRACT_VERSION = 2;
 
 /** Read a `client_config` notice, or `null` if it is not one this build knows.
 
@@ -68,7 +68,6 @@ export function parseClientConfig(payload: unknown): ClientConfig | null {
   if (record.contractVersion !== CLIENT_CONFIG_CONTRACT_VERSION) return null;
   return {
     flushIntervalMs: reading(record, "flushIntervalMs"),
-    lobbyPollIntervalMs: reading(record, "lobbyPollIntervalMs"),
   };
 }
 
