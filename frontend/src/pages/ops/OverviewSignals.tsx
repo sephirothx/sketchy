@@ -68,7 +68,7 @@ function SignalCard({
         </div>
         <Chip kind={healthy ? "success" : "warm"}>{healthy ? "Healthy" : "Attention"}</Chip>
       </div>
-      {children}
+      <div className="ops-card-body">{children}</div>
     </section>
   );
 }
