@@ -287,3 +287,122 @@ async def test_the_pair_is_stored_once_whichever_side_asks(env):
         total = await session.scalar(select(func.count()).select_from(Friendship))
     assert total == 1
     assert low < high
+
+
+class Notifications:
+    """Stands in for the socket emit `main.py` wires to these routers."""
+
+    def __init__(self):
+        self.told: list[str] = []
+
+    async def __call__(self, user_id: str) -> None:
+        self.told.append(user_id)
+
+
+@pytest_asyncio.fixture
+async def wired(monkeypatch):
+    """The same app, with the friends-changed hook captured."""
+    monkeypatch.setenv("IP_HASH_SECRET", "friends-notify-secret")
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    friends = FriendService(factory)
+    told = Notifications()
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
+    app.include_router(
+        create_friends_router(factory, friends, on_friends_changed=told)
+    )
+    app.include_router(
+        create_user_blocks_router(
+            factory, BlockService(factory), friends, on_friends_changed=told
+        )
+    )
+    clients: list[AsyncClient] = []
+
+    def new_client() -> AsyncClient:
+        client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+        clients.append(client)
+        return client
+
+    try:
+        yield new_client, told
+    finally:
+        for client in clients:
+            await client.aclose()
+        await engine.dispose()
+
+
+async def test_every_change_to_somebody_elses_list_reaches_them(wired):
+    """Add, accept, decline and unfriend all move the other person's list."""
+    new_client, told = wired
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "Ada")
+    bob = await register(bob_http, "Bob")
+
+    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    assert told.told == [bob["id"]]
+
+    told.told.clear()
+    await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+    assert told.told == [ada["id"]]
+
+    # Unfriending takes it off the other person's list too.
+    told.told.clear()
+    await ada_http.delete(f"/api/users/me/friends/{bob['id']}")
+    assert told.told == [bob["id"]]
+
+    # And so does declining a request.
+    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    told.told.clear()
+    await bob_http.delete(f"/api/users/me/friends/{ada['id']}")
+    assert told.told == [ada["id"]]
+
+
+async def test_nothing_is_said_when_nothing_moved(wired):
+    """Or the endpoints become a way to ask what a stranger's list holds."""
+    new_client, told = wired
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "Ada")
+    bob = await register(bob_http, "Bob")
+
+    # Removing a friendship that is not there.
+    await ada_http.delete(f"/api/users/me/friends/{bob['id']}")
+    assert told.told == []
+
+    # A request that was quietly dropped.
+    await bob_http.post("/api/users/me/blocks", json={"userId": ada["id"]})
+    told.told.clear()
+    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    assert told.told == []
+
+
+async def test_a_block_that_revokes_a_friendship_tells_both_sides(wired):
+    new_client, told = wired
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "Ada")
+    bob = await register(bob_http, "Bob")
+    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+
+    told.told.clear()
+    await bob_http.post("/api/users/me/blocks", json={"userId": ada["id"]})
+
+    # Both, because both lists lost a row - and the blocked side especially,
+    # since they did nothing to cause it.
+    assert sorted(told.told) == sorted([ada["id"], bob["id"]])
+
+
+async def test_blocking_a_stranger_says_nothing_at_all(wired):
+    """Otherwise a block is a way to ask whether somebody was a friend."""
+    new_client, told = wired
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "Ada")
+    await register(bob_http, "Bob")
+
+    told.told.clear()
+    await bob_http.post("/api/users/me/blocks", json={"userId": ada["id"]})
+
+    assert told.told == []

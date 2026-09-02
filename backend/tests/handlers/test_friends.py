@@ -634,3 +634,41 @@ async def test_an_invitation_never_puts_the_room_on_the_wire():
     assert room.id not in flat
     assert room.code not in flat
     assert room.name not in flat
+
+
+async def test_an_invitation_survives_a_seating_that_was_refused():
+    """One use, and a full room must not be the use.
+
+    `_seat_in_room` refuses for half a dozen reasons after the invitation has
+    been checked - the room filled, a rate limit, an identity that would not
+    resolve. Spending the token on any of them leaves the recipient unable to
+    try again a moment later, with nothing to show for it.
+    """
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    room = room_manager.create_room(name="Studio", is_public=False, max_players=2)
+    host = await seat_host(room_manager, room, ADA, "Ada")
+    host.sid = "sid-ada"
+    room_manager.add_player(room, "Filler", user_id=CAT, is_anonymous=False)
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": host.id})
+    await sessions.save("sid-bob", {"user_id": BOB})
+
+    await sio.handlers["/"]["invite_friend"]("sid-ada", {"friendUserId": BOB})
+    token = emitted(sio, "friend_invite_received")[0].args[1]["inviteToken"]
+
+    full = await sio.handlers["/"]["join_friend_room"](
+        "sid-bob", {"friendUserId": ADA, "inviteToken": token, "nickname": "Bob"}
+    )
+    assert full["ok"] is False
+    assert full.get("roomFull") is True
+
+    # A seat frees up, and the same invitation still works.
+    room_manager.remove_player(room, next(
+        p.id for p in room.players.values() if p.user_id == CAT
+    ))
+    retried = await sio.handlers["/"]["join_friend_room"](
+        "sid-bob", {"friendUserId": ADA, "inviteToken": token, "nickname": "Bob"}
+    )
+    assert retried["ok"] is True
+    await ctx.timers.close()

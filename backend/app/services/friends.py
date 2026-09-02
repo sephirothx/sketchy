@@ -31,6 +31,7 @@ import logging
 from uuid import UUID
 
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import Friendship, IdentityAlias, User, UserBlock
@@ -53,6 +54,8 @@ class FriendshipOutcome(StrEnum):
 
     CREATED = "created"
     ACCEPTED = "accepted"
+    #: A row was deleted - a request cancelled, or a friendship ended.
+    REMOVED = "removed"
     #: Nothing to do - already friends, or already asked.
     UNCHANGED = "unchanged"
     #: Deliberately nothing, and deliberately not said out loud.
@@ -217,6 +220,24 @@ class FriendService:
     async def request(self, requester_id: UUID, target_id: UUID) -> FriendshipOutcome:
         """Ask to be friends, or answer a request that was already waiting.
 
+        Retried once on a primary-key collision. Two people asking each other
+        at the same moment both find no row and both insert one; the pair is
+        the key, so the loser is rejected by the database rather than writing a
+        second row. Re-reading is all it takes - the row that won is now the
+        `pending` request this call should have been answering, which is the
+        crossing-request case, and the second attempt handles it. The block
+        router retries the same way for the same reason.
+        """
+        try:
+            return await self._request_once(requester_id, target_id)
+        except IntegrityError:
+            return await self._request_once(requester_id, target_id)
+
+    async def _request_once(
+        self, requester_id: UUID, target_id: UUID
+    ) -> FriendshipOutcome:
+        """One attempt at `request`. See there for what any of this means.
+
         Answers the same way whether the request landed or was quietly dropped.
         A caller cannot tell a block from a decline from an id that was never
         an account, which is the point: the alternative is an endpoint that
@@ -329,9 +350,9 @@ class FriendService:
                     # Somebody else's refusal is not this caller's to clear.
                     return FriendshipOutcome.UNCHANGED
                 await session.delete(row)
-                return FriendshipOutcome.UNCHANGED
+                return FriendshipOutcome.REMOVED
 
-    async def forget_pair(self, session: AsyncSession, a: UUID, b: UUID) -> None:
+    async def forget_pair(self, session: AsyncSession, a: UUID, b: UUID) -> bool:
         """Remove any friendship between two accounts, in the caller's session.
 
         Called from the block router - a surviving friendship is a capability the
@@ -341,11 +362,16 @@ class FriendService:
         restore a friendship neither party re-agreed to.
         """
         low, high = friendship_key(a, b)
-        await session.execute(
+        result = await session.execute(
             delete(Friendship).where(
                 Friendship.user_low_id == low, Friendship.user_high_id == high
             )
         )
+        # Whether anything was actually revoked. The caller uses it to decide
+        # whether to tell the other account their lists moved - saying so when
+        # there was no friendship would turn a block into a way to ask whether
+        # one existed.
+        return bool(result.rowcount)
 
     # --- ceilings ---------------------------------------------------------
 

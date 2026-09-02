@@ -501,7 +501,10 @@ api.include_router(create_user_settings_router(async_session_factory))
 api.include_router(create_room_preset_router(room_preset_service))
 api.include_router(
     create_user_blocks_router(
-        async_session_factory, block_service, friend_service
+        async_session_factory,
+        block_service,
+        friend_service,
+        on_friends_changed=push_friends_changed,
     )
 )
 api.include_router(

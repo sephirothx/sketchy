@@ -1,6 +1,7 @@
 """Persistent block, unblock, and block-list endpoints."""
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -60,6 +61,9 @@ def create_user_blocks_router(
     session_factory: async_sessionmaker[AsyncSession],
     block_service: BlockService,
     friend_service: FriendService | None = None,
+    # Called with each side of a friendship a block has just revoked, so their
+    # lists stop showing a join capability that is gone.
+    on_friends_changed: Callable[[str], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/users/me/blocks")
 
@@ -88,6 +92,7 @@ def create_user_blocks_router(
         current_id = blocker_id(request)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
 
+        unfriended = False
         async with session_factory() as session:
             try:
                 async with session.begin():
@@ -131,7 +136,7 @@ def create_user_blocks_router(
                         # block is now the durable record, and unblocking must
                         # not silently restore a friendship neither party
                         # re-agreed to.
-                        await friend_service.forget_pair(
+                        unfriended = await friend_service.forget_pair(
                             session, current_id, target.id
                         )
                     session.add(
@@ -167,6 +172,12 @@ def create_user_blocks_router(
                     return _block_payload(*pair)
 
         block_service.invalidate(str(target.id))
+        # After the commit, and only where a friendship actually went. Telling
+        # a stranger their lists moved would make a block a way to ask whether
+        # they were a friend.
+        if unfriended and on_friends_changed is not None:
+            await on_friends_changed(str(current_id))
+            await on_friends_changed(str(target.id))
         response.status_code = 201
         return _block_payload(block, target)
 

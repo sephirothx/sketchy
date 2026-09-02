@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import pytest
 
+from sqlalchemy.exc import IntegrityError
+
 from app.db.models import Friendship, User, UserBlock, generate_uuid
 from app.domain_values import AccountState, FriendshipState
 from app.services.friends import (
@@ -504,5 +506,111 @@ async def test_a_merge_collapses_two_crossing_requests_into_a_friendship():
         await _merge(factory, guest, account)
 
         assert await service.are_friends(account, friend)
+    finally:
+        await engine.dispose()
+
+
+# --- races ----------------------------------------------------------------
+
+
+async def test_a_request_that_loses_the_insert_race_reads_again():
+    """Two people asking each other at once both find no row and both write one.
+
+    The pair is the primary key, so the database refuses the second. Re-reading
+    is all it takes: the row that won is the pending request this call should
+    have been answering, which is the crossing-request case.
+
+    Driven by raising the collision rather than by racing two coroutines - the
+    in-memory fixture serves both sessions from one connection, so a real
+    conflict there rolls back the winner too and models nothing that happens
+    on PostgreSQL.
+    """
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        bob = await make_account(factory, "Bob")
+        # Bob's request is the one that won the insert.
+        await service.request(bob, ada)
+
+        attempts = []
+        real = service._request_once
+
+        async def once(requester_id, target_id):
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise IntegrityError("INSERT", {}, Exception("duplicate key"))
+            return await real(requester_id, target_id)
+
+        service._request_once = once
+        outcome = await service.request(ada, bob)
+
+        assert len(attempts) == 2, "the collision was not retried"
+        assert outcome == FriendshipOutcome.ACCEPTED
+        assert await service.are_friends(ada, bob)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_collision_that_keeps_happening_is_not_swallowed():
+    """One retry, not a loop: a conflict that survives it is a real fault."""
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        bob = await make_account(factory, "Bob")
+
+        async def always(requester_id, target_id):
+            raise IntegrityError("INSERT", {}, Exception("duplicate key"))
+
+        service._request_once = always
+        with pytest.raises(IntegrityError):
+            await service.request(ada, bob)
+    finally:
+        await engine.dispose()
+
+
+async def test_removing_says_whether_anything_actually_went():
+    """So a caller can tell a real removal from a no-op it should stay quiet about."""
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        bob = await make_account(factory, "Bob")
+
+        # Nothing there at all.
+        assert await service.remove(ada, bob) == FriendshipOutcome.UNCHANGED
+
+        # Cancelling your own request, and ending a friendship.
+        await service.request(ada, bob)
+        assert await service.remove(ada, bob) == FriendshipOutcome.REMOVED
+        await service.request(ada, bob)
+        await service.accept(bob, ada)
+        assert await service.remove(bob, ada) == FriendshipOutcome.REMOVED
+
+        # Declining leaves the refusal behind, which is its own answer.
+        await service.request(ada, bob)
+        assert await service.remove(bob, ada) == FriendshipOutcome.IGNORED
+    finally:
+        await engine.dispose()
+
+
+async def test_forgetting_a_pair_reports_whether_it_revoked_anything():
+    """A block of a stranger must not be a way to ask whether they were a friend."""
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        bob = await make_account(factory, "Bob")
+        stranger = await make_account(factory, "Stranger")
+        await service.request(ada, bob)
+        await service.accept(bob, ada)
+
+        async with factory() as session:
+            async with session.begin():
+                assert await service.forget_pair(session, ada, bob) is True
+        async with factory() as session:
+            async with session.begin():
+                assert await service.forget_pair(session, ada, stranger) is False
     finally:
         await engine.dispose()

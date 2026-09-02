@@ -168,7 +168,16 @@ def create_friends_router(
         me = await current_account(request)
         if user_id == me.id:
             raise HTTPException(status_code=422, detail="That is you.")
-        await friend_service.remove(me.id, user_id)
+        outcome = await friend_service.remove(me.id, user_id)
+        # A decline, a cancelled request and an unfriend all take something off
+        # the other person's list, so all three are worth telling them about. A
+        # no-op is not: nothing moved, and saying so would be a way to ask
+        # whether a row existed.
+        if outcome in (
+            FriendshipOutcome.REMOVED,
+            FriendshipOutcome.IGNORED,
+        ) and on_friends_changed is not None:
+            await on_friends_changed(str(user_id))
         response.status_code = 204
         return None
 

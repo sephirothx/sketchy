@@ -263,10 +263,14 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
                     "uninvited. Ask them for an invite.",
                 }
 
-    # Everything that could refuse has refused, so the one use is spent here.
-    if invite is not None:
+    answer = await _seat_in_room(ctx, sid, room, payload, seated)
+    # Spent only once there is a seat. `_seat_in_room` refuses for half a dozen
+    # reasons after this point - the room filled, a rate limit, an identity
+    # that would not resolve - and burning the one use on any of them would
+    # leave the recipient unable to try again a moment later.
+    if invite is not None and answer.get("ok"):
         ctx.friend_invites.redeem(payload.invite_token, account)
-    return await _seat_in_room(ctx, sid, room, payload, seated)
+    return answer
 
 
 def _room_of(ctx: HandlerContext, user_id: str):
