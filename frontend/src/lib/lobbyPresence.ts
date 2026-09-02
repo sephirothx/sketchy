@@ -97,12 +97,24 @@ function parseRevision(value: unknown): number | null {
     : null;
 }
 
-/** Replace the store wholesale. The answer to `watch_lobby`, and to a resync. */
-export function applySnapshot(payload: unknown): PresenceState {
+/** Replace the store wholesale. The answer to `watch_lobby`, and to a resync.
+
+Never backwards, for the reason `applyRoomsSnapshot` gives: one
+acknowledgement stamps both feeds, so a resync asked for because the *rooms*
+missed a message still replaces presence - and a presence delta applied while
+that answer was in flight would be undone by it. Nothing afterwards would look
+like a gap either, so if that delta was the last presence change the rolled-back
+list would simply stay until somebody else connected or left.
+
+A reset zeroes the revision rather than remembering one, so a reconnect is not
+caught by this: every revision a new server offers is at least as high as the
+nothing this client holds. */
+export function applySnapshot(state: PresenceState, payload: unknown): PresenceState {
   if (!payload || typeof payload !== "object") return EMPTY_PRESENCE;
   const message = payload as Record<string, unknown>;
   const revision = parseRevision(message.revision);
   if (revision === null) return EMPTY_PRESENCE;
+  if (revision < state.revision) return state;
   const players = parsePlayers(message.players).sort(comparePlayers);
   return {
     revision,

@@ -581,6 +581,15 @@ a list nobody was sent, so an unchanged list would give an empty delta and the
 change would never go out at all. Re-sending costs nothing: a client ignores a
 revision it already holds, and every entry is an upsert or a delete.
 
+**Neither snapshot is ever applied backwards.** One acknowledgement stamps
+both feeds, so a resync the *rooms* asked for still replaces presence — and a
+presence delta applied while that answer was in flight would be undone by it,
+with nothing afterwards looking like a gap to correct it. Both
+`applyRoomsSnapshot` and `applySnapshot` therefore take the state they replace
+and decline a revision behind it. A reconnect is not caught by either: both
+stores zero their revision first, so whatever the new server offers is at
+least as high as the nothing the client holds.
+
 **The client applies no delta before its baseline.** `watch_lobby` joins the
 channel before it builds the acknowledgement, so the first delta can beat the
 list it applies to. Patching an empty list would leave a lobby showing only the
