@@ -580,6 +580,15 @@ friendship it revokes commit together, and an account deletion happens inside
 a sweep in `auth/account_data.py`. Each hands back who was affected, and calls
 `FriendService.announce_to` once the commit is theirs to talk about.
 
+**Affected means both parties, the one who acted included.** The natural thing
+to write beside a request is "tell the other person", and that is what each of
+these did. But `friends_changed` is delivered per *account*, and it is the only
+thing that makes a client re-read its lists - the REST answer refreshes the tab
+that called and nothing else. One account with two lobbies open therefore had
+one that acted and one that went on offering to send a request that had already
+been sent. `forget_pair` was the one that got it right, because a block has no
+obvious "other person" to privilege.
+
 ### Room ceilings
 
 Creating a room is the only ordinary socket command that allocates unbounded process

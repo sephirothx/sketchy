@@ -259,19 +259,35 @@ async def test_you_cannot_accept_your_own_request():
 
 
 async def test_a_block_placed_after_the_request_still_wins():
-    """Or it is a block that did not hold."""
+    """Or it is a block that did not hold.
+
+    Reached only by inserting the block behind the router, which deletes the
+    friendship as it writes one - so an accept after a real block finds no row
+    at all. The branch is kept for the second way to block somebody will add,
+    which is why its announcement is pinned here too.
+    """
     factory, engine = await create_test_db()
+    told: list[str] = []
+
+    async def announce(user_id: str) -> None:
+        told.append(user_id)
+
     try:
-        service = FriendService(factory)
+        service = FriendService(factory, announce=announce)
         ada = await make_account(factory, "Ada")
         bob = await make_account(factory, "Bob")
         await service.request(ada, bob)
         await block(factory, bob, ada)
+        told.clear()
 
         assert await service.accept(bob, ada) == FriendshipOutcome.IGNORED
         assert not await service.are_friends(ada, bob)
         row = await row_for(factory, ada, bob)
         assert row.status == FriendshipState.DECLINED.value
+        # The row moved, so both lists did. What Ada sees is her outgoing
+        # request going away, which is what an ordinary decline looks like -
+        # so this says nothing a decline does not say already.
+        assert sorted(told) == sorted([str(ada), str(bob)])
     finally:
         await engine.dispose()
 
@@ -777,25 +793,31 @@ async def test_every_write_announces_itself_and_no_no_op_does():
         bob = await make_account(factory, "Bob")
         guest = await make_account(factory, "Guesty", guest=True)
 
+        # Everyone whose list moved, which always includes the account that
+        # did it: the event is delivered per account, and a player with a
+        # second lobby open has no other way to hear about their own write.
         await service.request(ada, bob)
-        assert told == [str(bob)]
+        assert sorted(told) == sorted([str(ada), str(bob)])
 
         told.clear()
         await service.accept(bob, ada)
-        assert told == [str(ada)], "the person who asked was not told"
+        assert str(ada) in told, "the person who asked was not told"
+        assert str(bob) in told, "the account that accepted was not told"
 
         told.clear()
         await service.remove(ada, bob)
-        assert told == [str(bob)], "unfriending said nothing"
+        assert sorted(told) == sorted([str(ada), str(bob)]), "unfriending said nothing"
 
         # A refusal is a change to the asker's list too.
         told.clear()
         await service.request(bob, ada)
         told.clear()
         await service.remove(ada, bob)
-        assert told == [str(bob)]
+        assert sorted(told) == sorted([str(ada), str(bob)])
 
-        # And nothing that wrote nothing says anything.
+        # And nothing that wrote nothing says anything - to anybody, the
+        # caller included. A request quietly dropped must not become
+        # detectable by the asker's own other tabs waking up.
         told.clear()
         await service.request(ada, guest)
         await service.remove(ada, guest)

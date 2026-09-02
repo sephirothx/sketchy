@@ -289,7 +289,11 @@ class FriendService:
             # dropped would be the tell the silence exists to avoid.
             await self._refund_request(requester_id)
             return outcome
-        await self.announce_to([target_id])
+        # Both, not just the target. An account's own other tabs are told the
+        # same way anybody else is - `friends_changed` is the only thing that
+        # makes a client re-read - so telling only the counterparty leaves a
+        # second lobby still offering to send a request that has been sent.
+        await self.announce_to([requester_id, target_id])
         return outcome
 
     async def announce_to(self, user_ids) -> None:
@@ -300,6 +304,15 @@ class FriendService:
         in a sweep elsewhere. Both hand back who was affected and call this
         once the commit is theirs to talk about. Everything else in here
         announces on its own.
+
+        **Everyone whose list moved, which always includes the account that
+        did it.** Not only the counterparty: this event is the only thing that
+        makes a client re-read, and it is delivered to `user:{id}`, so an
+        account with two lobbies open has one that acted and one that would
+        otherwise sit on a view that is now wrong. The acting tab refetches
+        from its own acknowledgement and will fetch a second time, which costs
+        one list read of a bounded list on a button press. `forget_pair`
+        already hands back both sides for the same reason.
 
         **Best effort per recipient, and it has to be said per recipient.**
         The row is already committed by the time any of this runs, so a
@@ -412,9 +425,23 @@ class FriendService:
                 outcome = await self._accept_in(session, user_id, other_id, low, high)
         # Announced after the commit, never inside it: a notification for a row
         # that rolled back is worse than one that never arrived.
-        if outcome == FriendshipOutcome.ACCEPTED:
-            # The person who asked is the one who has been waiting.
-            await self.announce_to([other_id])
+        #
+        # Both outcomes that write the row, not just the happy one. An accept
+        # into a block tombstones the row as declined and answers `IGNORED`,
+        # which is still a change to both lists. No path reaches that today -
+        # blocking deletes the friendship in the same transaction, so an
+        # accept afterwards finds no row and answers `UNCHANGED` - and that is
+        # exactly why it is worth getting right: the branch is kept for a
+        # second way to block that does not delete, and the announcement has
+        # to already be correct when somebody adds one. It discloses nothing
+        # either. What the requester sees is their outgoing request going
+        # away, which is what an ordinary decline looks like, and an ordinary
+        # decline already announces to both.
+        if outcome in (FriendshipOutcome.ACCEPTED, FriendshipOutcome.IGNORED):
+            # The person who asked has been waiting; this account's own other
+            # tabs are still showing the request as incoming, with buttons to
+            # answer something that is already answered.
+            await self.announce_to([user_id, other_id])
         return outcome
 
     async def _accept_in(
@@ -455,7 +482,7 @@ class FriendService:
         # the other person's list. A no-op does not, and saying so would be a
         # way to ask whether a row existed.
         if outcome in (FriendshipOutcome.REMOVED, FriendshipOutcome.IGNORED):
-            await self.announce_to([other_id])
+            await self.announce_to([user_id, other_id])
         return outcome
 
     async def _remove_in(
