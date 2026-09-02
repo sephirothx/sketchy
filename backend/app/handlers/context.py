@@ -20,7 +20,7 @@ from app.domain_values import RuntimeEventType
 from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
 from app.services.runtime_metrics import metrics
-from app.services.telemetry import telemetry
+from app.services.telemetry import payload_bytes, telemetry
 from app.services.timers import TimerManager
 
 if TYPE_CHECKING:
@@ -132,6 +132,8 @@ class HandlerContext:
             # Keyed by the kind of traffic, not the command: two commands of
             # one kind share the allowance their kind was given.
             key = f"{sid}:{self.command_budgets.class_of(command)}"
+            # Sized before the budget check: a throttled payload arrived too.
+            telemetry.socket_command_payload(command, payload_bytes(*args))
             if self._command_windows.check(key, budget):
                 # Timed and counted here, at the one door every command
                 # uses, so a handler cannot be added without being measured.

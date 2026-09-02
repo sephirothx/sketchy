@@ -10,6 +10,7 @@ import {
   type AttentionCard,
   type AttentionReason,
   type LiveSnapshot,
+  type PayloadSizeRow,
 } from "../../lib/operations";
 import { Sparkline } from "./Sparkline";
 
@@ -111,8 +112,61 @@ export function TrafficCard({ live, reasons }: { live: LiveSnapshot; reasons: At
           note={`refused ${formatPercent(socket.refusedRate)} · throttled ${formatRate(socket.throttledPerMinute)}/min`}
           warning={flagged(reasons, "socket-errors")}
         />
+        <Cell
+          label="Socket in / min"
+          value={formatBytes(socket.bytesInPerMinute)}
+          note={`${formatBytes(socket.bytesInTotal)} since start · before compression`}
+        >
+          <Sparkline values={series.socketBytesInPerMinute} label="Socket bytes received per minute" format={formatBytes} />
+        </Cell>
+        <Cell
+          label="Socket out / min"
+          value={formatBytes(socket.bytesOutPerMinute)}
+          note={`${formatBytes(socket.bytesOutTotal)} since start · per recipient`}
+        >
+          <Sparkline values={series.socketBytesOutPerMinute} label="Socket bytes sent per minute" format={formatBytes} />
+        </Cell>
       </div>
+      <PayloadSizes title="Command payloads" rows={socket.commandSizes} />
+      <PayloadSizes title="Emitted payloads" rows={socket.emitSizes} />
     </SignalCard>
+  );
+}
+
+/** What each command or event weighs, largest total first, since start.
+
+Sizes are the payload as the handler saw it, before framing and compression:
+the right number for "which command is the chatty one", not for a bill. */
+function PayloadSizes({ title, rows }: { title: string; rows: PayloadSizeRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="ops-sizes">
+      <h3>{title}</h3>
+      <table className="ops-size-table">
+        <thead>
+          <tr>
+            <th scope="col">Event</th>
+            <th scope="col">Count</th>
+            <th scope="col">p50</th>
+            <th scope="col">p95</th>
+            <th scope="col">p99</th>
+            <th scope="col">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.event}>
+              <th scope="row">{row.event}</th>
+              <td>{row.count.toLocaleString()}</td>
+              <td>{formatBytes(row.p50)}</td>
+              <td>{formatBytes(row.p95)}</td>
+              <td>{formatBytes(row.p99)}</td>
+              <td>{formatBytes(row.bytesTotal)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

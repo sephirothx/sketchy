@@ -53,7 +53,10 @@ function healthy(overrides = {}) {
     generatedAt: "2026-09-02T01:00:00Z",
     windowMinutes: 5,
     http: { perMinute: 10, errorRate: 0, p50Ms: 3, p95Ms: 20, p99Ms: 50, inFlight: 0, total: 100 },
-    socket: { perMinute: 100, errorRate: 0, refusedRate: 0, throttledPerMinute: 0, p95Ms: 2, connected: 4, total: 1000 },
+    socket: {
+      perMinute: 100, errorRate: 0, refusedRate: 0, throttledPerMinute: 0, p95Ms: 2, connected: 4, total: 1000,
+      bytesInPerMinute: 0, bytesOutPerMinute: 0, bytesInTotal: 0, bytesOutTotal: 0, commandSizes: [], emitSizes: [],
+    },
     process: {
       loopLagMs: 1, loopLagP95Ms: 3, cpuPercent: 2, rssBytes: 100e6, rssIsPeak: false,
       uptimeSeconds: 3600, startedAt: "2026-09-02T00:00:00Z", diskFreeBytes: 1e9, diskTotalBytes: 2e9, diskPath: "/srv",
@@ -66,7 +69,10 @@ function healthy(overrides = {}) {
     },
     queues: { mailOutbox: { pending: 0, oldestSeconds: null, sweepSeconds: 30 }, dataExports: { pending: 0, oldestSeconds: null } },
     loops: { mail_delivery: { running: true, consecutiveFailures: 0, totalFailures: 0, secondsSinceSuccess: 5, secondsSinceFailure: null } },
-    series: { httpPerMinute: [], socketPerMinute: [], httpP95Ms: [], socketP95Ms: [], loopLagMaxMs: [], rssBytes: [] },
+    series: {
+      httpPerMinute: [], socketPerMinute: [], httpP95Ms: [], socketP95Ms: [], loopLagMaxMs: [],
+      socketBytesInPerMinute: [], socketBytesOutPerMinute: [], rssBytes: [],
+    },
   };
   return deepMerge(base, overrides);
 }

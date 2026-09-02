@@ -119,6 +119,16 @@ export type LoopStatus = {
 
 export type QueueDepth = { pending: number; oldestSeconds: number | null };
 
+/** The size distribution of one command's or event's payload, in bytes. */
+export type PayloadSizeRow = {
+  event: string;
+  count: number;
+  bytesTotal: number;
+  p50: number | null;
+  p95: number | null;
+  p99: number | null;
+};
+
 export type PoolGauges = {
   size: number;
   checkedOut: number;
@@ -154,6 +164,14 @@ export type ServerSignals = {
     p95Ms: number | null;
     connected: number | null;
     total: number;
+    /** Socket.IO packet bytes, before compression; out is per recipient. */
+    bytesInPerMinute: number;
+    bytesOutPerMinute: number;
+    bytesInTotal: number;
+    bytesOutTotal: number;
+    /** Largest total first, since process start; the scrape has the rest. */
+    commandSizes: PayloadSizeRow[];
+    emitSizes: PayloadSizeRow[];
   };
   process: {
     loopLagMs: number | null;
@@ -190,6 +208,8 @@ export type ServerSignals = {
     httpP95Ms: MinuteSeries;
     socketP95Ms: MinuteSeries;
     loopLagMaxMs: MinuteSeries;
+    socketBytesInPerMinute: MinuteSeries;
+    socketBytesOutPerMinute: MinuteSeries;
     rssBytes: MinuteSeries;
   };
 };

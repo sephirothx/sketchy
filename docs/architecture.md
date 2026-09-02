@@ -1014,7 +1014,13 @@ handler's own `ok: False`, `error` for an exception, counted before it propagate
 `throttled`), a supervised sampler measures how late a one-second timer fires (event-loop
 lag) and reads CPU and resident memory, two cursor listeners time every statement and the
 pool is asked for its occupancy, and the two durable queues (mail outbox, account
-exports) report their depth and oldest age. Labels are bounded by construction — route
+exports) report their depth and oldest age. Bytes cross the socket in three places
+([`backend/app/handlers/socket_wire.py`](../backend/app/handlers/socket_wire.py)): every
+Engine.IO packet received and every one sent (per recipient, which is what a fan-out
+costs) is counted at its wire size, and every command received and every `emit` is sized
+once by event name into a payload-size histogram — all before compression, so the
+numbers overstate what the network carries and answer "which command is the chatty one"
+rather than a bandwidth bill. Labels are bounded by construction — route
 *templates* not paths, status *classes* not codes, command names from the registration
 table, a hard cap per family beyond which values fold into `other` — because a series per
 room id is how an exposition falls over.
@@ -1279,6 +1285,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/lobby_chat.py`](../backend/app/services/lobby_chat.py) | The last few lines said in the lobby, and the number each one was given. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
 | [`app/request_timing.py`](../backend/app/request_timing.py) | Count and time every HTTP request by the route template it matched. |
+| [`app/handlers/socket_wire.py`](../backend/app/handlers/socket_wire.py) | Bytes in and out of the socket, and payload sizes per command and per emitted event. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
 | [`app/services/room_quotas.py`](../backend/app/services/room_quotas.py) | Ceilings on room creation, so one client cannot spend the whole server. |
 | [`app/services/room_presets.py`](../backend/app/services/room_presets.py) | Private, account-owned templates for ordinary room configuration. |

@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import bisect
 import contextlib
+import json
 import logging
 import os
 import shutil
@@ -57,6 +58,12 @@ logger = logging.getLogger(__name__)
 HTTP_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
 FAST_BUCKETS = (0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5)
 DB_BUCKETS = (0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0)
+# Payload sizes in bytes: a guess is tens of bytes, a draw frame hundreds, a
+# canvas snapshot or a recap tens of kilobytes.
+SIZE_BUCKETS = (64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0)
+# How many commands and events the admin payload names by size; the rest
+# are still in the scrape.
+TOP_SIZES = 8
 
 RING_MINUTES = 60
 WINDOW_MINUTES = 5
@@ -112,6 +119,33 @@ def _round(value: float | None, digits: int) -> float | None:
 
 def _ms(seconds: float | None) -> float | None:
     return None if seconds is None else round(seconds * 1000.0, 1)
+
+
+def payload_bytes(*values: object) -> int:
+    """How big a Socket.IO payload is, as the handler received or emitted it.
+
+    Bytes are counted as they are; text as UTF-8; anything else as the
+    compact JSON it becomes on the wire. Draw frames - the bulk of the
+    traffic - arrive as bytes, so the JSON pass is paid only by the small
+    conversational payloads. This is the size *before* framing and
+    compression: the wire carries less, and the page says so.
+    """
+    total = 0
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            total += len(value)
+        elif isinstance(value, str):
+            total += len(value.encode("utf-8"))
+        else:
+            try:
+                total += len(
+                    json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                )
+            except (TypeError, ValueError):
+                total += len(repr(value))
+    return total
 
 
 # --- rings -------------------------------------------------------------------
@@ -352,6 +386,25 @@ class Histogram:
             "p99": quantile(0.99, self.buckets, vector),
         }
 
+    def per_label(self, *, top: int | None = None) -> list[dict[str, object]]:
+        """Each label's cumulative count, sum and quantiles, largest sum first."""
+        rows = []
+        for key, series in self._series.items():
+            if series.n == 0:
+                continue
+            rows.append(
+                {
+                    "labels": key,
+                    "count": series.n,
+                    "total": series.total,
+                    "p50": quantile(0.5, self.buckets, series.counts),
+                    "p95": quantile(0.95, self.buckets, series.counts),
+                    "p99": quantile(0.99, self.buckets, series.counts),
+                }
+            )
+        rows.sort(key=lambda row: (-row["total"], row["labels"]))  # type: ignore[operator]
+        return rows if top is None else rows[:top]
+
     def per_minute_quantile(self, now: float, q: float = 0.95) -> list[float | None]:
         return [
             None if payload is None else quantile(q, self.buckets, payload)
@@ -484,6 +537,20 @@ class ProcessState:
         self.ticks += 1
 
 
+def _size_rows(histogram: Histogram) -> list[dict[str, object]]:
+    return [
+        {
+            "event": row["labels"][0],  # type: ignore[index]
+            "count": row["count"],
+            "bytesTotal": int(row["total"]),  # type: ignore[call-overload]
+            "p50": None if row["p50"] is None else int(row["p50"]),  # type: ignore[call-overload]
+            "p95": None if row["p95"] is None else int(row["p95"]),  # type: ignore[call-overload]
+            "p99": None if row["p99"] is None else int(row["p99"]),  # type: ignore[call-overload]
+        }
+        for row in histogram.per_label(top=TOP_SIZES)
+    ]
+
+
 # --- the store ---------------------------------------------------------------
 
 
@@ -530,12 +597,32 @@ class Telemetry:
             FAST_BUCKETS,
             ("event",),
         )
-        # events, errors, refused, throttled
-        self.socket_minutes = CountRing(4)
+        # events, errors, refused, throttled, bytes in, bytes out
+        self.socket_minutes = CountRing(6)
         self.socket_connections = LabelledCounter(
             "sketchy_socket_connections_total",
             "Socket handshakes, by outcome.",
             ("outcome",),
+        )
+        self.socket_bytes_in = LabelledCounter(
+            "sketchy_socket_bytes_in_total",
+            "Socket.IO packet bytes received, before compression.",
+        )
+        self.socket_bytes_out = LabelledCounter(
+            "sketchy_socket_bytes_out_total",
+            "Socket.IO packet bytes sent, per recipient, before compression.",
+        )
+        self.socket_command_bytes = Histogram(
+            "sketchy_socket_command_bytes",
+            "Payload size of a client command as the handler received it.",
+            SIZE_BUCKETS,
+            ("event",),
+        )
+        self.socket_emit_bytes = Histogram(
+            "sketchy_socket_emit_bytes",
+            "Payload size of an event emitted by the server, once per emit.",
+            SIZE_BUCKETS,
+            ("event",),
         )
 
         self.loop_lag = Histogram(
@@ -598,6 +685,20 @@ class Telemetry:
             self.socket_minutes.bump(now, field=3)
         if seconds is not None:
             self.socket_duration.observe(seconds, (event,), now=now)
+
+    def note_socket_bytes_in(self, size: int) -> None:
+        self.socket_bytes_in.inc(by=size)
+        self.socket_minutes.bump(self._clock(), field=4, by=size)
+
+    def note_socket_bytes_out(self, size: int) -> None:
+        self.socket_bytes_out.inc(by=size)
+        self.socket_minutes.bump(self._clock(), field=5, by=size)
+
+    def socket_command_payload(self, event: str, size: int) -> None:
+        self.socket_command_bytes.observe(float(size), (event,), now=self._clock())
+
+    def socket_emit_payload(self, event: str, size: int) -> None:
+        self.socket_emit_bytes.observe(float(size), (event,), now=self._clock())
 
     def socket_connection(self, outcome: str) -> None:
         if outcome not in CONNECTION_OUTCOMES:
@@ -663,6 +764,8 @@ class Telemetry:
         socket_errors = self.socket_minutes.window_total(now, field=1)
         socket_refused = self.socket_minutes.window_total(now, field=2)
         socket_throttled = self.socket_minutes.window_total(now, field=3)
+        socket_bytes_in = self.socket_minutes.window_total(now, field=4)
+        socket_bytes_out = self.socket_minutes.window_total(now, field=5)
         socket_latency = self.socket_duration.windowed(now)
 
         db_count = self.db_minutes.window_total(now)
@@ -693,6 +796,12 @@ class Telemetry:
                 "p95Ms": _ms(socket_latency["p95"]),
                 "connected": self._sockets(),
                 "total": self.socket_events.total(),
+                "bytesInPerMinute": round(socket_bytes_in / minutes),
+                "bytesOutPerMinute": round(socket_bytes_out / minutes),
+                "bytesInTotal": self.socket_bytes_in.total(),
+                "bytesOutTotal": self.socket_bytes_out.total(),
+                "commandSizes": _size_rows(self.socket_command_bytes),
+                "emitSizes": _size_rows(self.socket_emit_bytes),
             },
             "process": {
                 "loopLagMs": _ms(self.loop_lag_last),
@@ -732,6 +841,8 @@ class Telemetry:
                     _ms(value) for value in self.socket_duration.per_minute_quantile(now)
                 ],
                 "loopLagMaxMs": [_ms(value) for value in self.lag_samples.points_max(now)],
+                "socketBytesInPerMinute": self.socket_minutes.points(now, field=4),
+                "socketBytesOutPerMinute": self.socket_minutes.points(now, field=5),
                 "rssBytes": [
                     None if value is None else int(value)
                     for value in self.rss_samples.points_max(now)
@@ -751,6 +862,10 @@ class Telemetry:
         lines += self.socket_events.lines()
         lines += self.socket_duration.lines()
         lines += self.socket_connections.lines()
+        lines += self.socket_bytes_in.lines()
+        lines += self.socket_bytes_out.lines()
+        lines += self.socket_command_bytes.lines()
+        lines += self.socket_emit_bytes.lines()
         lines += gauge_lines(
             "sketchy_sockets_connected", "Sockets currently open on this worker.", self._sockets()
         )

@@ -1413,8 +1413,9 @@ bearer token and is disabled entirely until `METRICS_TOKEN` is set. The
 in-app page at `/admin/operations` needs the administrator role and carries
 live counts, trends over the retained window, the raw activity table, and the
 audit ledger as its own tab. Its overview also shows the process signals: request
-and command rates, error shares and p95 latency with an hour of sparklines, event-loop
-lag, CPU and resident memory, pool occupancy and statement latency, the mail and
+and command rates, error shares and p95 latency with an hour of sparklines, socket
+bytes in and out per minute (before compression) with the heaviest commands and
+emitted events by payload size, event-loop lag, CPU and resident memory, pool occupancy and statement latency, the mail and
 export queues, and every supervised loop. It re-reads them every ten seconds while it
 is the tab on screen. The status banner and the "Attention" list are driven by one
 ordered set of triggers — a dropped observation, a stopped or failing loop, a

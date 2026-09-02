@@ -209,6 +209,8 @@ def test_the_snapshot_is_json_and_stays_small_with_every_ring_full():
         "httpP95Ms",
         "socketP95Ms",
         "loopLagMaxMs",
+        "socketBytesInPerMinute",
+        "socketBytesOutPerMinute",
         "rssBytes",
     }
     assert all(len(points) == RING_MINUTES for points in series.values())
@@ -281,3 +283,60 @@ async def test_the_sampler_measures_a_blocked_loop():
     assert max(
         value for value in telemetry.lag_samples.points_max(time.time()) if value is not None
     ) >= 0.05
+
+
+# --- bytes over the socket -------------------------------------------------------
+
+
+def test_payload_size_is_bytes_as_they_are_and_json_for_the_rest():
+    from app.services.telemetry import payload_bytes
+
+    assert payload_bytes(b"\x00" * 300) == 300
+    assert payload_bytes("héllo") == 6
+    assert payload_bytes({"text": "cat"}) == len(b'{"text":"cat"}')
+    assert payload_bytes(None) == 0
+    assert payload_bytes(b"ab", {"a": 1}) == 2 + len(b'{"a":1}')
+    assert payload_bytes(object()) > 0
+
+
+def test_socket_bytes_are_rated_per_minute_and_sized_per_event():
+    telemetry, clock = store()
+    # Half a minute in: the rate is over the one minute the process has lived.
+    clock.advance(30)
+    telemetry.note_socket_bytes_in(3000)
+    telemetry.note_socket_bytes_out(9000)
+    for size in (100, 100, 100, 5000):
+        telemetry.socket_command_payload("draw", size)
+    telemetry.socket_command_payload("guess", 30)
+    telemetry.socket_emit_payload("room_state", 20_000)
+
+    socket = telemetry.snapshot()["socket"]
+    assert socket["bytesInPerMinute"] == 3000
+    assert socket["bytesOutPerMinute"] == 9000
+    assert socket["bytesInTotal"] == 3000 and socket["bytesOutTotal"] == 9000
+    # Largest total first, with the distribution of each.
+    assert [row["event"] for row in socket["commandSizes"]] == ["draw", "guess"]
+    draw = socket["commandSizes"][0]
+    assert draw["count"] == 4 and draw["bytesTotal"] == 5300
+    assert draw["p50"] <= 256 and draw["p99"] >= 4096
+    assert socket["emitSizes"][0]["event"] == "room_state"
+    series = telemetry.snapshot()["series"]
+    assert series["socketBytesInPerMinute"][-1] == 3000
+    assert series["socketBytesOutPerMinute"][-1] == 9000
+
+    lines = telemetry.prometheus_lines()
+    assert "sketchy_socket_bytes_in_total 3000" in lines
+    assert "sketchy_socket_bytes_out_total 9000" in lines
+    assert 'sketchy_socket_command_bytes_bucket{event="draw",le="256.0"} 3' in lines
+    assert 'sketchy_socket_emit_bytes_count{event="room_state"} 1' in lines
+
+
+def test_the_size_table_is_bounded():
+    from app.services.telemetry import TOP_SIZES
+
+    telemetry, _ = store()
+    for index in range(TOP_SIZES + 5):
+        telemetry.socket_command_payload(f"cmd{index}", 10 + index)
+    rows = telemetry.snapshot()["socket"]["commandSizes"]
+    assert len(rows) == TOP_SIZES
+    assert rows[0]["event"] == f"cmd{TOP_SIZES + 4}"
