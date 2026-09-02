@@ -7,6 +7,8 @@ and the textfile a scrape reads.
 """
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from app.probe import (
@@ -76,6 +78,9 @@ def test_the_textfile_carries_the_three_probe_series():
         assert f"# TYPE {name} gauge" in text
     assert "sketchy_probe_success 1\n" in text
     assert 'sketchy_probe_step_seconds{step="draw"} 0.020' in text
+    # The staleness page reads this; a file without it would never go stale.
+    stamp = next(line for line in text.splitlines() if line.startswith("sketchy_probe_last_run_timestamp_seconds "))
+    assert abs(int(stamp.split()[1]) - time.time()) < 5
     failed = ProbeResult(ok=False, failed_step="join", error="refused")
     assert "sketchy_probe_success 0\n" in failed.as_textfile()
     assert failed.as_json()["failedStep"] == "join"

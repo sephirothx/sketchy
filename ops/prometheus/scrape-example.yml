@@ -9,6 +9,15 @@ scrape_configs:
     static_configs:
       - targets: ["sketchy.example:8000"]
 
+  # The synthetic game's series (sketchy_probe_*) do not come from the
+  # application: `python -m app.probe --textfile ...` writes them for
+  # node_exporter's textfile collector on whichever host runs the probe.
+  # Without this job SketchyProbeStale fires on absence, which is the point.
+  - job_name: sketchy-probe
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["monitor.example:9100"]
+
 rule_files:
   - rules/sketchy-recording.yml
   - rules/sketchy-alerts.yml

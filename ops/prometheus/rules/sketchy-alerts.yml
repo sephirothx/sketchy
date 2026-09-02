@@ -34,6 +34,21 @@ groups:
           description: "Step timings are in sketchy_probe_step_seconds; the failing step is the first one missing."
           runbook: "README.md#on-call"
 
+      # A textfile keeps saying whatever the last run wrote, so "success 1"
+      # from an hour ago is not success; and a series that was never
+      # collected cannot compare equal to anything. Both are the monitoring
+      # itself being down, which pages like the thing it monitors.
+      - alert: SketchyProbeStale
+        expr: >
+          absent(sketchy_probe_last_run_timestamp_seconds)
+          or (time() - sketchy_probe_last_run_timestamp_seconds) > 300
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "The synthetic game has not run in the last five minutes, or its series is not being collected"
+          description: "Check the probe's cron entry, the textfile path, and that the node_exporter textfile job is scraped (ops/prometheus/scrape-example.yml)."
+          runbook: "README.md#on-call"
+
       # --- data already lost ---------------------------------------------------------
       - alert: SketchyHistoryWritesLost
         expr: increase(sketchy_history_writes_abandoned_total[1h]) > 0

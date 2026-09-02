@@ -16,7 +16,7 @@ resets every in-memory series; Prometheus keeps the history.
 
 | # | Objective | Measured by | Window | Alert |
 | --- | --- | --- | --- | --- |
-| **SLO-1** | A game can be played: guest, create, join, start, draw, leave all succeed within 20 s | `sketchy_probe_success` from `python -m app.probe` (textfile collector) | ≥ 99.5 % of probe runs over 30 days | `SketchyProbeFailing` (page, 5 m) |
+| **SLO-1** | A game can be played: guest, create, join, start, draw, leave all succeed within 20 s - and the probe itself keeps running | `sketchy_probe_success` and `sketchy_probe_last_run_timestamp_seconds` from `python -m app.probe` (textfile collector) | ≥ 99.5 % of probe runs over 30 days | `SketchyProbeFailing` (page, 5 m); `SketchyProbeStale` (page, 5 m) when the last run is over five minutes old or the series is absent |
 | **SLO-2** | The process is up and can reach its database | `up{job="sketchy"}`, `sketchy_db_ready` | ≥ 99.9 % over 30 days | `SketchyDown`, `SketchyDatabaseUnreachable` (page, 2 m) |
 | **SLO-3** | API requests succeed | `sketchy:http_error_ratio:5m` | < 1 % 5xx over any 5 m | `SketchyHighErrorRate` (page) |
 | **SLO-4** | Client commands do not raise | `sketchy:socket_error_ratio:5m` | < 0.5 % `outcome="error"` over any 5 m | `SketchySocketErrors` (page) |
@@ -53,7 +53,13 @@ shipping features and look at what spent it.
   (`backend/app/services/telemetry.py`), so a p95 reads as "at most the bucket bound
   it fell in". The buckets are dense where the thresholds sit.
 - `sketchy_probe_*` come from the probe's textfile, not from the server, so they
-  survive the server being down - which is when they matter.
+  survive the server being down - which is when they matter. The other side of that:
+  a textfile says whatever the last run wrote until something overwrites it, so
+  `SketchyProbeStale` pages on `sketchy_probe_last_run_timestamp_seconds` falling more
+  than five minutes behind, or on the series being absent - a dead cron, a wrong
+  textfile path, or a textfile job nobody scraped all look the same as an outage,
+  because for the purpose of knowing whether a game can be played they are one. The
+  scrape example carries the node_exporter job for this reason.
 - Counters reset on restart; `rate()` and `increase()` handle that, plain comparisons
   do not.
 

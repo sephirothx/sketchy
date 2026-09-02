@@ -44,7 +44,15 @@ from pathlib import Path
 PROBE_SUCCESS_METRIC = "sketchy_probe_success"
 PROBE_DURATION_METRIC = "sketchy_probe_duration_seconds"
 PROBE_STEP_METRIC = "sketchy_probe_step_seconds"
-PROBE_METRIC_NAMES = (PROBE_SUCCESS_METRIC, PROBE_DURATION_METRIC, PROBE_STEP_METRIC)
+# When the file was last written, so a rule can tell "the last game passed"
+# from "the last game passed, an hour ago, and nothing has run since".
+PROBE_LAST_RUN_METRIC = "sketchy_probe_last_run_timestamp_seconds"
+PROBE_METRIC_NAMES = (
+    PROBE_SUCCESS_METRIC,
+    PROBE_DURATION_METRIC,
+    PROBE_STEP_METRIC,
+    PROBE_LAST_RUN_METRIC,
+)
 
 STEPS = ("guest", "connect", "create", "join", "start", "prompt", "draw", "leave")
 DEFAULT_STATE_PATH = Path.home() / ".cache" / "sketchy" / "probe-sessions.json"
@@ -361,6 +369,11 @@ class ProbeResult:
         ]
         for step, seconds in self.steps.items():
             lines.append(f'{PROBE_STEP_METRIC}{{step="{step}"}} {seconds:.3f}')
+        lines += [
+            f"# HELP {PROBE_LAST_RUN_METRIC} Unix time this file was last written by a probe run.",
+            f"# TYPE {PROBE_LAST_RUN_METRIC} gauge",
+            f"{PROBE_LAST_RUN_METRIC} {int(time.time())}",
+        ]
         return "\n".join(lines) + "\n"
 
 
