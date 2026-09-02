@@ -558,6 +558,28 @@ online - worse than offering nothing, and nobody scans a list this size by
 typing anyway. Finding one person is a different feature from seeing who is
 around, and it needs a server-side lookup over the registry.
 
+### Friendship rules live with the write
+
+Everything a friendship must obey - the ceilings, the hourly request limit,
+the silences that keep a request from reporting a block, and telling the other
+account their lists moved - is enforced in
+[`services/friends.py`](../backend/app/services/friends.py), not beside a
+caller.
+
+That is a reaction to how #529 was reviewed rather than a principle applied up
+front. Six rounds found the same shape of finding: one entry point enforcing
+something the other did not, because the rule had been written next to the
+first caller. The rate limit lived in the REST router, so the socket command
+did not have it. Three of the five paths that changed somebody's list told
+them nothing. There are two ways in today and there will be a third; a rule
+out here is one the third gets for free.
+
+Two writes cannot announce themselves, and both say so where they are:
+`forget_pair` joins the block router's transaction so that a block and the
+friendship it revokes commit together, and an account deletion happens inside
+a sweep in `auth/account_data.py`. Each hands back who was affected, and calls
+`FriendService.announce_to` once the commit is theirs to talk about.
+
 ### Room ceilings
 
 Creating a room is the only ordinary socket command that allocates unbounded process
@@ -1047,7 +1069,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
-| [`app/services/friends.py`](../backend/app/services/friends.py) | Friendship rules: the canonical pair, and what a request is not told. |
+| [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |
 | [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |
 | [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |

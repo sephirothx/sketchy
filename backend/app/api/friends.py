@@ -13,7 +13,6 @@ a convenience.
 """
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -23,16 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.db.models import Friendship, User
 from app.domain_values import AccountState, FriendshipState
 from app.services.friends import (
+    REGISTER_FIRST,
     FriendService,
     FriendshipOutcome,
     FriendshipRefused,
     FriendshipThrottled,
-)
-
-
-REGISTER_FIRST = (
-    "Create an account to add friends - a guest account is removed after a "
-    "month of not playing."
 )
 
 
@@ -64,10 +58,6 @@ def _person_payload(row: Friendship, person: User, viewer_id: UUID) -> dict:
 def create_friends_router(
     session_factory: async_sessionmaker[AsyncSession],
     friend_service: FriendService,
-    # Called with the *other* account whenever a call here changed what their
-    # own lists say. The router has no socket of its own, the way the ban and
-    # deletion paths do not either.
-    on_friends_changed: Callable[[str], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/users/me/friends")
 
@@ -109,12 +99,6 @@ def create_friends_router(
             raise HTTPException(status_code=429, detail=str(throttled)) from throttled
         except FriendshipRefused as refused:
             raise HTTPException(status_code=409, detail=str(refused)) from refused
-        if outcome in (FriendshipOutcome.IGNORED, FriendshipOutcome.UNCHANGED):
-            pass
-        elif on_friends_changed is not None:
-            # Only where something moved: a notification on a request that was
-            # quietly dropped would be the tell the silence exists to avoid.
-            await on_friends_changed(str(body.user_id))
         response.status_code = 201 if outcome == FriendshipOutcome.CREATED else 200
         return {"status": _reported_status(outcome)}
 
@@ -127,9 +111,6 @@ def create_friends_router(
             outcome = await friend_service.accept(me.id, user_id)
         except FriendshipRefused as refused:
             raise HTTPException(status_code=409, detail=str(refused)) from refused
-        if outcome == FriendshipOutcome.ACCEPTED and on_friends_changed is not None:
-            # The person who asked is the one who has been waiting.
-            await on_friends_changed(str(user_id))
         return {"status": _accept_status(outcome)}
 
     @router.delete("/{user_id}", status_code=204)
@@ -142,16 +123,7 @@ def create_friends_router(
         me = await current_account(request)
         if user_id == me.id:
             raise HTTPException(status_code=422, detail="That is you.")
-        outcome = await friend_service.remove(me.id, user_id)
-        # A decline, a cancelled request and an unfriend all take something off
-        # the other person's list, so all three are worth telling them about. A
-        # no-op is not: nothing moved, and saying so would be a way to ask
-        # whether a row existed.
-        if outcome in (
-            FriendshipOutcome.REMOVED,
-            FriendshipOutcome.IGNORED,
-        ) and on_friends_changed is not None:
-            await on_friends_changed(str(user_id))
+        await friend_service.remove(me.id, user_id)
         response.status_code = 204
         return None
 

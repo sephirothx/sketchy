@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -175,9 +175,11 @@ def create_auth_router(
     # the handshake - which is written once, while these can change at any
     # moment and from a request that touches no socket at all.
     on_profile_changed: Callable[[str], None] | None = None,
-    # Called with each account that lost a friendship or a pending request to
-    # a deletion, so their lists stop showing somebody who is gone.
-    on_friends_changed: Callable[[str], Awaitable[None]] | None = None,
+    # Called with every account that lost a friendship or a pending request
+    # to a deletion, so their lists stop showing somebody who is gone. Wired to
+    # the friend service's own announcement, so there is one implementation of
+    # "tell them their lists moved" rather than one per caller.
+    on_friends_changed: Callable[[Iterable[str]], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
@@ -715,14 +717,11 @@ def create_auth_router(
         # Best effort and after the commit, like every other notification: the
         # deletion is done, and a socket that missed this sees it on the next
         # read.
-        if on_friends_changed is not None:
-            for friend_id in result.friends_notified:
-                try:
-                    await on_friends_changed(friend_id)
-                except Exception:
-                    logger.exception(
-                        "Could not tell %s their friend list changed", friend_id
-                    )
+        # No `try` of its own: the friend service isolates each recipient and
+        # logs, so a wrapper here would only be able to hide the one failure
+        # it cannot see anyway.
+        if on_friends_changed is not None and result.friends_notified:
+            await on_friends_changed(result.friends_notified)
         if on_account_deleted is not None:
             try:
                 await on_account_deleted(result.user_id)

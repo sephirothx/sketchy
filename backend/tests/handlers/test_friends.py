@@ -436,12 +436,11 @@ async def test_add_friend_names_only_the_outcomes_that_changed_something():
         )
 
         assert answer == {"ok": True, "status": expected}
-        # Told only where something moved. A notice on a request that was
-        # quietly dropped would be the tell that silence exists to avoid.
-        notices = emitted(sio, "friends_changed")
-        assert bool(notices) is (
-            outcome in (FriendshipOutcome.CREATED, FriendshipOutcome.ACCEPTED)
-        )
+        # Not from here. Telling the other account their lists moved is the
+        # service's, so that every entry point does it - and a handler that
+        # also announced would say it twice. `test_friends_api.py` covers who
+        # actually hears about it.
+        assert emitted(sio, "friends_changed") == []
 
 
 # --- the paths that refuse -------------------------------------------------

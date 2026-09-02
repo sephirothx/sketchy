@@ -2,6 +2,7 @@
 import asyncio
 
 import pytest
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
@@ -230,11 +231,21 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
                     break
                 drawer = host if await host.query_selector(".prompt-choices button") else guest
                 other = guest if drawer is host else host
-                if await drawer.query_selector(".prompt-choices button"):
-                    prompt = (
-                        await drawer.inner_text(".prompt-choices button:first-child")
-                    ).strip()
-                    await drawer.click(".prompt-choices button:first-child")
+                choice = drawer.locator(".prompt-choices button").first
+                try:
+                    # Read and clicked with their own short deadline rather
+                    # than checked and then clicked. The choosing phase has a
+                    # deadline of its own, and the server picks for a drawer
+                    # who runs out of time - so between finding this button
+                    # and pressing it, it can stop existing. Under the suite's
+                    # eight workers that is a real gap, and the default
+                    # twenty-second click timeout turned it into a failure of
+                    # this test rather than the tick it actually is.
+                    prompt = (await choice.inner_text(timeout=2000)).strip()
+                    await choice.click(timeout=2000)
+                except PlaywrightTimeoutError:
+                    prompt = None
+                if prompt:
                     await drawer.wait_for_selector("canvas.drawing-canvas")
                     guess_input = other.locator(".chat-input input")
                     await guess_input.fill(prompt)

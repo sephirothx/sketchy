@@ -44,15 +44,16 @@ from app.handlers.rooms import (
     _bounded,
     _seat_in_room,
 )
-from app.services.friends import FriendshipOutcome, FriendshipRefused
+from app.services.friends import (
+    REGISTER_FIRST,
+    FriendshipOutcome,
+    FriendshipRefused,
+)
 
 logger = logging.getLogger("sketchy.handlers.friends")
 
-REGISTER_FIRST = {
-    "ok": False,
-    "error": "Create an account to add friends - a guest account is removed "
-    "after a month of not playing.",
-}
+#: The same wording the REST refusal carries, from the same constant.
+REGISTER_FIRST_ACK = {"ok": False, "error": REGISTER_FIRST}
 NOT_IN_A_GAME = {"ok": False, "error": "Your friend is not in a game right now."}
 # Deliberately the same answer for "we are not friends" and "there is no such
 # account": neither is a fact this caller is owed, and telling them apart makes
@@ -99,7 +100,7 @@ async def add_friend(ctx: HandlerContext, sid, data):
         # a room you cannot see, and neither is a friend request.
         return {"ok": True}
     if me.is_anonymous or not me.user_id:
-        return REGISTER_FIRST
+        return REGISTER_FIRST_ACK
     if not target.user_id:
         return {"ok": True}
 
@@ -115,8 +116,6 @@ async def add_friend(ctx: HandlerContext, sid, data):
         return BUSY_ACKNOWLEDGEMENT
     except FriendshipRefused as refused:
         return {"ok": False, "error": str(refused)}
-    if outcome in (FriendshipOutcome.CREATED, FriendshipOutcome.ACCEPTED):
-        await _notify_friends_changed(ctx, target.user_id)
     # Only the two outcomes that changed something are named. Everything else -
     # already friends, already asked, or a block - answers the same, so the
     # command cannot be used to tell those apart.
@@ -141,7 +140,7 @@ async def invite_friend(ctx: HandlerContext, sid, data):
     if ctx.friend_service is None or ctx.friend_invites is None:
         return {"ok": False, "error": "Friends are unavailable right now."}
     if me.is_anonymous or not me.user_id:
-        return REGISTER_FIRST
+        return REGISTER_FIRST_ACK
 
     mine = await _uuid_or_none(me.user_id)
     theirs = await _uuid_or_none(payload.friend_user_id)
@@ -329,19 +328,6 @@ async def _joinable_rooms(ctx: HandlerContext, mine, friend_user_id: str) -> lis
         ):
             joinable.append(room)
     return joinable
-
-
-async def _notify_friends_changed(ctx: HandlerContext, to_user_id: str) -> None:
-    """Tell an account its friend lists moved, without saying how.
-
-    One event for every reason - a request arrived, one was answered - because
-    the list endpoint is the source of truth and the client refetches either
-    way. A second event carrying detail would be a second thing to keep
-    agreeing with that endpoint.
-
-    Best effort: somebody offline simply sees it next time they look.
-    """
-    await ctx.sio.emit("friends_changed", {}, room=f"user:{to_user_id}")
 
 
 def register(ctx: HandlerContext) -> None:
