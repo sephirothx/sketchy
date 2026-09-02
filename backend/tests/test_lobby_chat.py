@@ -221,3 +221,13 @@ def test_the_backlog_is_restored_only_before_anything_was_said():
     say(log, "ada", "already said")
     with pytest.raises(RuntimeError):
         log.restore([])
+
+
+def test_a_retained_row_with_no_account_behind_it_is_not_restored():
+    """The loader's query already excludes these; `restore` is also handed rows
+    directly, and a line with nobody to attribute it to is not a line."""
+    log = LobbyChatLog()
+    orphan = retained(UUID(int=9), "orphaned", at=NOON)
+    orphan.sender_user_id = None
+    assert log.restore([orphan]) == 0
+    assert log.backlog_for() == [] and log.last_seq == 0
