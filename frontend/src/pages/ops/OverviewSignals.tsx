@@ -47,17 +47,20 @@ function SignalCard({
   sub,
   card,
   reasons,
+  wide = false,
   children,
 }: {
   title: string;
   sub: string;
   card: AttentionCard;
   reasons: AttentionReason[];
+  /** Spans the whole signal row: the card with the most to say. */
+  wide?: boolean;
   children: ReactNode;
 }) {
   const healthy = !reasons.some((reason) => reason.card === card);
   return (
-    <section className="ops-card" aria-label={title}>
+    <section className={`ops-card${wide ? " ops-card-wide" : ""}`} aria-label={title}>
       <div className="ops-card-head">
         <div>
           <h2>{title}</h2>
@@ -82,6 +85,7 @@ export function TrafficCard({ live, reasons }: { live: LiveSnapshot; reasons: At
       sub={`Rates and latency over the last ${windowMinutes} min · sparklines cover an hour`}
       card="traffic"
       reasons={reasons}
+      wide
     >
       <div className="ops-signal-grid">
         <Cell label="Requests / min" value={formatRate(http.perMinute)} note={`${http.inFlight} in flight`}>
@@ -127,8 +131,10 @@ export function TrafficCard({ live, reasons }: { live: LiveSnapshot; reasons: At
           <Sparkline values={series.socketBytesOutPerMinute} label="Socket bytes sent per minute" format={formatBytes} />
         </Cell>
       </div>
-      <PayloadSizes title="Command payloads" rows={socket.commandSizes} />
-      <PayloadSizes title="Emitted payloads" rows={socket.emitSizes} />
+      <div className="ops-sizes-row">
+        <PayloadSizes title="Command payloads" rows={socket.commandSizes} />
+        <PayloadSizes title="Emitted payloads" rows={socket.emitSizes} />
+      </div>
     </SignalCard>
   );
 }

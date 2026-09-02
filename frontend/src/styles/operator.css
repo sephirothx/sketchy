@@ -163,15 +163,53 @@
 }
 
 /* ------------------------------------------------------------ signal cards */
+/* Six tracks: the wide card takes the row, the other three take a third
+   each. Traffic is the card an operator reads first and the one with two
+   tables in it, so it gets the room. */
 .ops-signals {
   display: grid;
   gap: 12px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   margin-bottom: 14px;
 }
 
+.ops-signals > .ops-card {
+  grid-column: span 2;
+  min-width: 0;
+}
+
+.ops-signals > .ops-card-wide {
+  grid-column: 1 / -1;
+}
+
+.ops-card-wide .ops-signal-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1000px) {
+  .ops-signals > .ops-card {
+    grid-column: span 3;
+  }
+}
+
 @media (max-width: 800px) {
-  .ops-signals {
+  .ops-signals > .ops-card {
+    grid-column: 1 / -1;
+  }
+
+  .ops-card-wide .ops-signal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.ops-sizes-row {
+  display: grid;
+  gap: 0 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 800px) {
+  .ops-sizes-row {
     grid-template-columns: 1fr;
   }
 }
@@ -255,7 +293,18 @@
   border-collapse: collapse;
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
+  table-layout: fixed;
   width: 100%;
+}
+
+/* The name is the column worth reading; the numbers are short. */
+.ops-size-table th:first-child {
+  width: 34%;
+}
+
+.ops-size-table th[scope="row"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ops-size-table th,
