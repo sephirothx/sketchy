@@ -175,6 +175,9 @@ def create_auth_router(
     # the handshake - which is written once, while these can change at any
     # moment and from a request that touches no socket at all.
     on_profile_changed: Callable[[str], None] | None = None,
+    # Called with each account that lost a friendship or a pending request to
+    # a deletion, so their lists stop showing somebody who is gone.
+    on_friends_changed: Callable[[str], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
@@ -708,6 +711,18 @@ def create_auth_router(
             result = await anonymize_account(session_factory, user_id=user.id)
         except AccountDataError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+        # Their friends lose a row too, and are still connected to hear it.
+        # Best effort and after the commit, like every other notification: the
+        # deletion is done, and a socket that missed this sees it on the next
+        # read.
+        if on_friends_changed is not None:
+            for friend_id in result.friends_notified:
+                try:
+                    await on_friends_changed(friend_id)
+                except Exception:
+                    logger.exception(
+                        "Could not tell %s their friend list changed", friend_id
+                    )
         if on_account_deleted is not None:
             try:
                 await on_account_deleted(result.user_id)

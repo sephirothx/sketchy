@@ -1008,3 +1008,32 @@ async def test_a_corrupt_export_document_is_refused_not_served(env):
         job.artifact = gzip.compress(b"")
         with pytest.raises(AccountDataError, match="decoded to nothing"):
             decode_export_artifact(job)
+
+
+async def test_deleting_an_account_names_the_friends_it_takes_something_from(env):
+    """Their lists lose a row, and they are still connected to hear it.
+
+    Collected before the delete: afterwards there is nothing left to say who
+    they were.
+    """
+    http, _, _, factory = env
+    owner = await register(http)
+    other_http = AsyncClient(transport=http._transport, base_url="http://test")
+    async with other_http:
+        friend = await register(other_http, "FriendOfOwner")
+        async with factory() as session:
+            async with session.begin():
+                low, high = friendship_key(UUID(owner["id"]), UUID(friend["id"]))
+                session.add(
+                    Friendship(
+                        user_low_id=low,
+                        user_high_id=high,
+                        requested_by_id=UUID(owner["id"]),
+                        status=FriendshipState.ACCEPTED.value,
+                    )
+                )
+
+        result = await anonymize_account(factory, user_id=UUID(owner["id"]))
+
+    # The friend, and nobody else - certainly not the account being deleted.
+    assert result.friends_notified == (friend["id"],)

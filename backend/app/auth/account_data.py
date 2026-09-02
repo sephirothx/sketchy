@@ -87,6 +87,10 @@ class AccountDeletionResult:
     user_id: str
     identities_anonymized: int
     sessions_revoked: int
+    #: Accounts that lost a friendship or a pending request to this deletion,
+    #: so the caller can tell them their lists moved. Never the deleted
+    #: identities themselves - their sockets are already being closed.
+    friends_notified: tuple[str, ...] = ()
 
 
 def _entity_id(value: str | UUID) -> UUID:
@@ -1053,6 +1057,7 @@ async def anonymize_account(
                 ).all()
             )
             identity_ids = [account.id, *source_ids]
+            friends_of: set[str] = set()
 
             owned_concept_ids = list(
                 (
@@ -1204,6 +1209,24 @@ async def anonymize_account(
                     )
                 )
             )
+            # Read before they go: the accounts on the other side of these
+            # rows are about to lose something from their own lists, and after
+            # the delete there is nothing left to say who they were.
+            for low, high in (
+                await session.execute(
+                    select(Friendship.user_low_id, Friendship.user_high_id).where(
+                        or_(
+                            Friendship.user_low_id.in_(identity_ids),
+                            Friendship.user_high_id.in_(identity_ids),
+                        )
+                    )
+                )
+            ).all():
+                friends_of.update(
+                    str(side)
+                    for side in (low, high)
+                    if side not in identity_ids
+                )
             # Both halves, and every status: a refusal this account sent or
             # received is as much a fact about them as an accepted friendship.
             await session.execute(
@@ -1269,6 +1292,7 @@ async def anonymize_account(
                 user_id=str(account.id),
                 identities_anonymized=len(identity_ids),
                 sessions_revoked=int(sessions.rowcount or 0),
+                friends_notified=tuple(sorted(friends_of)),
             )
 
 

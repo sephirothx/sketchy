@@ -66,6 +66,10 @@ class FriendshipRefused(Exception):
     """A ceiling was reached. The message is for the person who hit it."""
 
 
+class FriendshipThrottled(FriendshipRefused):
+    """Too many requests in too short a time, rather than too many at once."""
+
+
 def friendship_key(a: UUID, b: UUID) -> tuple[UUID, UUID]:
     """The pair in the order the table stores it.
 
@@ -137,8 +141,19 @@ class FriendService:
     statement, not which entity.
     """
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        request_limiter=None,
+    ) -> None:
         self._session_factory = session_factory
+        # Held here rather than by a router, so every way of sending a request
+        # answers to it. It used to live in the REST router alone, which meant
+        # the in-room command had only the generic per-socket command budget -
+        # a documented hourly ceiling that one of the two entry points did not
+        # have. A rule that lives beside one caller is a rule the next caller
+        # does not get.
+        self._request_limiter = request_limiter
 
     # --- reads ------------------------------------------------------------
 
@@ -228,10 +243,29 @@ class FriendService:
         crossing-request case, and the second attempt handles it. The block
         router retries the same way for the same reason.
         """
+        if self._request_limiter is not None and not await self._request_limiter.check(
+            str(requester_id)
+        ):
+            raise FriendshipThrottled(
+                "You have sent a lot of friend requests recently. "
+                "Try again later."
+            )
         try:
-            return await self._request_once(requester_id, target_id)
-        except IntegrityError:
-            return await self._request_once(requester_id, target_id)
+            try:
+                outcome = await self._request_once(requester_id, target_id)
+            except IntegrityError:
+                outcome = await self._request_once(requester_id, target_id)
+        except FriendshipRefused:
+            await self._refund_request(requester_id)
+            raise
+        if outcome in (FriendshipOutcome.IGNORED, FriendshipOutcome.UNCHANGED):
+            # Nothing was written, so nothing was spent (R-RATE-05's rule).
+            await self._refund_request(requester_id)
+        return outcome
+
+    async def _refund_request(self, requester_id: UUID) -> None:
+        if self._request_limiter is not None:
+            await self._request_limiter.refund(str(requester_id))
 
     async def _request_once(
         self, requester_id: UUID, target_id: UUID

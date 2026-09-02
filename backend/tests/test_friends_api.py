@@ -20,7 +20,7 @@ from app.api.user_blocks import create_user_blocks_router
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import Base
+from app.db.models import Base, UserBlock
 from app.domain_values import FriendshipState
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.friends import FriendService, friendship_key
@@ -406,3 +406,59 @@ async def test_blocking_a_stranger_says_nothing_at_all(wired):
     await bob_http.post("/api/users/me/blocks", json={"userId": ada["id"]})
 
     assert told.told == []
+
+
+async def test_accepting_says_what_actually_happened(env):
+    """The vagueness on POST / protects a stranger; here there is none to protect.
+
+    The caller is answering a request already on their own list, so reporting
+    `pending` when the row has just been declined by a block - or was never
+    there - leaves a client showing a request that is gone.
+
+    The block is written straight to the table rather than through its own
+    endpoint: that endpoint deletes the friendship in the same transaction, so
+    going through it leaves nothing to accept and never reaches this branch.
+    What is left is the belt-and-braces case - a block that exists while the
+    row somehow does - which is exactly what `accept` re-checks for.
+    """
+    new_client, factory, _ = env
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "Ada")
+    bob = await register(bob_http, "Bob")
+
+    # Nothing to accept at all.
+    nothing = await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+    assert nothing.json()["status"] == "unchanged"
+
+    # A real acceptance reads as one.
+    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    accepted = await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+    assert accepted.json()["status"] == FriendshipState.ACCEPTED.value
+
+    # And a block that outlived its row turns the answer into a refusal.
+    cleo_http = new_client()
+    cleo = await register(cleo_http, "Cleo")
+    await cleo_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                UserBlock(
+                    blocker_user_id=UUID(bob["id"]),
+                    blocked_user_id=UUID(cleo["id"]),
+                )
+            )
+    blocked = await bob_http.post(f"/api/users/me/friends/{cleo['id']}/accept")
+    assert blocked.json()["status"] == FriendshipState.DECLINED.value
+
+
+async def test_a_request_is_still_answered_vaguely(env):
+    """The contract that protects a stranger has not moved."""
+    new_client, _, _ = env
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "Ada")
+    bob = await register(bob_http, "Bob")
+    await bob_http.post("/api/users/me/blocks", json={"userId": ada["id"]})
+
+    blocked = await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    assert blocked.status_code == 200
+    assert blocked.json()["status"] == FriendshipState.PENDING.value

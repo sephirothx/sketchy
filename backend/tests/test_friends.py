@@ -19,6 +19,7 @@ from app.services.friends import (
     FriendService,
     FriendshipOutcome,
     FriendshipRefused,
+    FriendshipThrottled,
     friendship_key,
 )
 from tests.dbfixtures import create_test_db
@@ -664,5 +665,87 @@ async def test_re_asking_along_a_refusal_respects_a_full_friends_list():
 
         with pytest.raises(FriendshipRefused, match="full"):
             await service.request(decliner, asker)
+    finally:
+        await engine.dispose()
+
+
+# --- the hourly ceiling ---------------------------------------------------
+
+
+class CountingLimiter:
+    """Stands in for the persistent bucket, so both entry points can be checked."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.spent: dict[str, int] = {}
+
+    async def check(self, key: str) -> bool:
+        if self.spent.get(key, 0) >= self.limit:
+            return False
+        self.spent[key] = self.spent.get(key, 0) + 1
+        return True
+
+    async def refund(self, key: str) -> None:
+        self.spent[key] = max(0, self.spent.get(key, 0) - 1)
+
+
+async def test_the_hourly_ceiling_lives_with_the_service_not_a_router():
+    """So every way of sending a request answers to it.
+
+    It used to be the REST router's, which left the in-room command with only
+    the generic per-socket command budget - a documented hourly ceiling that
+    one of the two entry points did not have.
+    """
+    factory, engine = await create_test_db()
+    try:
+        limiter = CountingLimiter(2)
+        service = FriendService(factory, request_limiter=limiter)
+        ada = await make_account(factory, "Ada")
+        others = [await make_account(factory, f"Other{i}") for i in range(3)]
+
+        assert await service.request(ada, others[0]) == FriendshipOutcome.CREATED
+        assert await service.request(ada, others[1]) == FriendshipOutcome.CREATED
+        with pytest.raises(FriendshipThrottled):
+            await service.request(ada, others[2])
+        assert await row_for(factory, ada, others[2]) is None
+    finally:
+        await engine.dispose()
+
+
+async def test_a_request_that_wrote_nothing_is_given_back():
+    """R-RATE-05's rule, and now it applies to both entry points at once."""
+    factory, engine = await create_test_db()
+    try:
+        limiter = CountingLimiter(2)
+        service = FriendService(factory, request_limiter=limiter)
+        ada = await make_account(factory, "Ada")
+        guest = await make_account(factory, "Guesty", guest=True)
+        bob = await make_account(factory, "Bob")
+
+        # A request that goes nowhere, several times over.
+        for _ in range(5):
+            assert await service.request(ada, guest) == FriendshipOutcome.IGNORED
+        assert limiter.spent[str(ada)] == 0
+
+        # Asking the same person twice spends one, not two.
+        await service.request(ada, bob)
+        await service.request(ada, bob)
+        assert limiter.spent[str(ada)] == 1
+    finally:
+        await engine.dispose()
+
+
+async def test_a_refused_ceiling_gives_the_allowance_back_too():
+    factory, engine = await create_test_db()
+    try:
+        limiter = CountingLimiter(10)
+        service = FriendService(factory, request_limiter=limiter)
+        ada = await make_account(factory, "Ada")
+        await _fill(factory, ada, MAX_PENDING_SENT, FriendshipState.PENDING.value)
+        newcomer = await make_account(factory, "Newcomer")
+
+        with pytest.raises(FriendshipRefused):
+            await service.request(ada, newcomer)
+        assert limiter.spent[str(ada)] == 0
     finally:
         await engine.dispose()

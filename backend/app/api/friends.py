@@ -13,7 +13,6 @@ a convenience.
 """
 from __future__ import annotations
 
-import os
 from collections.abc import Awaitable, Callable
 from uuid import UUID
 
@@ -21,25 +20,14 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.auth.rate_limit import PersistentRateLimiter
 from app.db.models import Friendship, User
 from app.domain_values import AccountState, FriendshipState
 from app.services.friends import (
     FriendService,
     FriendshipOutcome,
     FriendshipRefused,
+    FriendshipThrottled,
 )
-
-
-def _limit(name: str, default: int) -> int:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return default
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    return value if value > 0 else default
 
 
 REGISTER_FIRST = (
@@ -83,16 +71,6 @@ def create_friends_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/users/me/friends")
 
-    # Per account rather than per address: the address is the proxy's behind a
-    # reverse proxy, and this is an action only a signed-in account can take
-    # anyway. Persistent, so a restart is not a fresh allowance.
-    request_limiter = PersistentRateLimiter(
-        session_factory,
-        scope="friend_request",
-        limit=_limit("FRIEND_REQUEST_LIMIT", 20),
-        window_seconds=3600,
-    )
-
     async def current_account(request: Request) -> User:
         value = getattr(request.state, "user_id", None)
         if not value:
@@ -123,20 +101,16 @@ def create_friends_router(
         would each be a fact about somebody who is not in this conversation.
         """
         me = await current_account(request)
-        if not await request_limiter.check(str(me.id)):
-            raise HTTPException(
-                status_code=429,
-                detail="You have sent a lot of friend requests recently. "
-                "Try again later.",
-            )
         try:
+            # The hourly ceiling and its refund live in the service, so the
+            # in-room command answers to the same one.
             outcome = await friend_service.request(me.id, body.user_id)
+        except FriendshipThrottled as throttled:
+            raise HTTPException(status_code=429, detail=str(throttled)) from throttled
         except FriendshipRefused as refused:
-            await request_limiter.refund(str(me.id))
             raise HTTPException(status_code=409, detail=str(refused)) from refused
         if outcome in (FriendshipOutcome.IGNORED, FriendshipOutcome.UNCHANGED):
-            # Nothing was written, so nothing was spent (R-RATE-05's rule).
-            await request_limiter.refund(str(me.id))
+            pass
         elif on_friends_changed is not None:
             # Only where something moved: a notification on a request that was
             # quietly dropped would be the tell the silence exists to avoid.
@@ -156,7 +130,7 @@ def create_friends_router(
         if outcome == FriendshipOutcome.ACCEPTED and on_friends_changed is not None:
             # The person who asked is the one who has been waiting.
             await on_friends_changed(str(user_id))
-        return {"status": _reported_status(outcome)}
+        return {"status": _accept_status(outcome)}
 
     @router.delete("/{user_id}", status_code=204)
     async def remove_friend(user_id: UUID, request: Request, response: Response):
@@ -185,7 +159,7 @@ def create_friends_router(
 
 
 def _reported_status(outcome: FriendshipOutcome) -> str:
-    """What the caller is told, which is less than what happened.
+    """What a *request* is told, which is less than what happened.
 
     `IGNORED` and `UNCHANGED` both report `pending`: from the outside, a
     request that was dropped and one that is genuinely waiting look the same,
@@ -194,4 +168,20 @@ def _reported_status(outcome: FriendshipOutcome) -> str:
     if outcome == FriendshipOutcome.ACCEPTED:
         return FriendshipState.ACCEPTED.value
     return FriendshipState.PENDING.value
+
+
+def _accept_status(outcome: FriendshipOutcome) -> str:
+    """What an *answer* is told, which is the truth.
+
+    The vagueness above protects somebody the caller has not met. Here they
+    are answering a request already on their own list, so there is nothing to
+    withhold - and saying `pending` when the row has just been declined by a
+    block, or was never there, leaves a client showing a request that is gone.
+    """
+    if outcome == FriendshipOutcome.ACCEPTED:
+        return FriendshipState.ACCEPTED.value
+    if outcome == FriendshipOutcome.IGNORED:
+        # A block landed between the request and this answer, and won.
+        return FriendshipState.DECLINED.value
+    return "unchanged"
 

@@ -57,6 +57,7 @@ from app.auth.retention import (
 from app.auth.mail import purge_expired_outbox_entries
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
+from app.auth.rate_limit import PersistentRateLimiter
 from app.services.friends import FriendService
 from app.services.presence import start_presence_loop, stop_presence_loop
 from app.services.readiness import LoopHealth, ReadinessProbe
@@ -138,7 +139,30 @@ user_repo = SqlAlchemyUserRepository(async_session_factory)
 game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
 prompt_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
 block_service = BlockService(async_session_factory)
-friend_service = FriendService(async_session_factory)
+def _friend_request_limit() -> int:
+    """How many friend requests one account may send in an hour."""
+    raw = os.environ.get("FRIEND_REQUEST_LIMIT", "").strip()
+    if not raw:
+        return 20
+    try:
+        value = int(raw)
+    except ValueError:
+        return 20
+    return value if value > 0 else 20
+
+
+friend_service = FriendService(
+    async_session_factory,
+    # Per account rather than per address: behind a reverse proxy every caller
+    # presents the proxy, and this is an action only a signed-in account can
+    # take. Persistent, so a restart is not a fresh allowance.
+    request_limiter=PersistentRateLimiter(
+        async_session_factory,
+        scope="friend_request",
+        limit=_friend_request_limit(),
+        window_seconds=3600,
+    ),
+)
 room_preset_service = RoomPresetService(async_session_factory, prompt_list_repo)
 shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
 readiness_probe = ReadinessProbe(async_session_factory)
@@ -473,6 +497,7 @@ api.include_router(
         on_account_deleted=remove_deleted_account_from_live_rooms,
         on_identity_merged=forget_merged_identities,
         on_profile_changed=forget_presence_identity,
+        on_friends_changed=push_friends_changed,
     )
 )
 api.include_router(create_operations_router(async_session_factory))

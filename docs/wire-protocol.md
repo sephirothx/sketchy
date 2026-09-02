@@ -984,7 +984,7 @@ to anyone without the role — the account menu decides what is *shown* and noth
 | `GET`/`POST` | `/api/users/me/blocks` | Directional; self-blocks rejected |
 | `GET` | `/api/users/me/friends` | `{friends, incoming, outgoing}`. Refusals are in none of them |
 | `POST` | `/api/users/me/friends` | `{userId}`. **Answers the same whether it landed, hit a block, hit an earlier refusal, or named nobody** (R-FRIEND-04); 409 only for a ceiling the caller reached (`FRIEND_REQUEST_LIMIT`) |
-| `POST` | `/api/users/me/friends/{user_id}/accept` | Re-checks blocks: one placed since the request has to win |
+| `POST` | `/api/users/me/friends/{user_id}/accept` | Re-checks blocks: one placed since the request has to win. Answers `accepted`, `declined` or `unchanged` — the caller is answering a request on their own list, so unlike `POST /` there is no third party to be vague about |
 | `DELETE` | `/api/users/me/friends/{user_id}` | Decline, cancel, or unfriend — the server decides which the row is asking for |
 | `DELETE` | `/api/users/me/blocks/{user_id}` | Idempotent |
 | `GET`/`POST` | `/api/room-presets` | ≤ 20 per account |
