@@ -1,0 +1,14 @@
+# A Prometheus scrape job for one Sketchy worker. `/metrics` is disabled
+# until METRICS_TOKEN is set on the server and answers 401 without it.
+scrape_configs:
+  - job_name: sketchy
+    metrics_path: /metrics
+    scrape_interval: 15s
+    authorization:
+      credentials: "<METRICS_TOKEN>"
+    static_configs:
+      - targets: ["sketchy.example:8000"]
+
+rule_files:
+  - rules/sketchy-recording.yml
+  - rules/sketchy-alerts.yml

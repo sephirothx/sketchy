@@ -1440,7 +1440,42 @@ scrape_configs:
       credentials: "<METRICS_TOKEN>"
     static_configs:
       - targets: ["sketchy.example:8000"]
-``` Its per-player view answers "which account keeps
+```
+
+### On-call
+
+The objectives, their thresholds and their error budgets are in
+[`docs/slo.md`](docs/slo.md); the Prometheus recording and alert rules that enforce
+them are in [`ops/prometheus/rules/`](ops/prometheus/rules/), with a scrape job in
+[`ops/prometheus/scrape-example.yml`](ops/prometheus/scrape-example.yml). A test refuses
+a rule that names a series the server does not expose, so a metric rename fails CI
+rather than silencing an alert.
+
+The synthetic game is the probe that tells "the process is up" from "a game can be
+played": two guests, a room, a join, a start, one stroke seen by the other seat, and a
+leave, over Socket.IO long-polling with nothing but the standard library. Run it from
+cron or a node_exporter textfile job:
+
+```bash
+cd backend
+.venv/bin/python -m app.probe --base-url https://sketchy.example --json
+.venv/bin/python -m app.probe --base-url https://sketchy.example \
+  --textfile /var/lib/node_exporter/textfile/sketchy.prom
+```
+
+It exits 0 when every step passed, names the failing step otherwise, and writes
+`sketchy_probe_success`, `sketchy_probe_duration_seconds` and per-step
+`sketchy_probe_step_seconds{step}` to the textfile.
+
+When something pages, the order to look in is the order the overview at
+`/admin/operations` lists its attention reasons: what is already lost (a dropped
+observation, a stopped loop, a finished game not saved), then a dependency that is
+down (the readiness probe), then latency (event-loop lag before request or command
+p95), then a queue that is merely slow. Quote the `X-Request-ID` of any failing
+request: the access line, the audit entry and every log line inside that request
+carry it, and every command's lines carry its socket id and command name. Event-loop
+lag with no matching database latency is a starved loop, not a slow database; the
+reverse is the pool or the disk. Its per-player view answers "which account keeps
 disconnecting", and because that is a surveillance surface on the game's own
 players, every use writes an audit event naming both who looked and who was
 looked at.

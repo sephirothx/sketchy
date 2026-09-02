@@ -96,10 +96,17 @@ def _diagnostic_blob_keys() -> set[str]:
     raise AssertionError("_live_room_context has moved - update this exemption")
 
 
+# The synthetic probe is a *client* of the wire protocol - it emits commands
+# and reads server events - so its literals are the other side of every
+# contract checked here, not the server's.
+CLIENT_SIDE_MODULES = {BACKEND_APP / "probe.py"}
+
+
 def _python_sources() -> list[ast.Module]:
     return [
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for path in sorted(BACKEND_APP.rglob("*.py"))
+        if path not in CLIENT_SIDE_MODULES
     ]
 
 
