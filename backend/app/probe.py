@@ -244,6 +244,8 @@ class PollingSocket:
         self._poller = asyncio.create_task(self._poll_forever(), name=f"probe-poll-{self.label}")
         while self.socket_sid is None:
             event = await asyncio.wait_for(self._events.get(), STEP_TIMEOUT_SECONDS)
+            if event.name == "__failed__":
+                raise ProbeError(self.label, f"the connection failed: {self.failure}")
             if event.name == "__connected__":
                 self.socket_sid = event.args[0]
             else:
@@ -252,6 +254,15 @@ class PollingSocket:
                 await asyncio.sleep(0)
 
     async def _poll_forever(self) -> None:
+        """Receive until cancelled or until something is wrong.
+
+        Nothing may raise out of here: an exception in a background task is
+        a line on stderr nobody reads, and the flow would then sit on an
+        empty queue until its step timed out with the wrong reason. Every
+        failure - the poll, a packet that cannot be read, a connection the
+        server refused - goes through `_fail`, which is what `connect`,
+        `expect` and `call` all watch.
+        """
         while True:
             try:
                 packets = await self._get(wait=POLL_TIMEOUT_SECONDS)
@@ -262,11 +273,30 @@ class PollingSocket:
                 # wait, which is longer than its own ping. Ask again.
                 continue
             except Exception as error:  # noqa: BLE001 - reported, not raised, from a background task
-                self.failure = f"{type(error).__name__}: {error}"
-                self._events.put_nowait(Event("__failed__", []))
+                self._fail(f"{type(error).__name__}: {error}")
                 return
-            for packet in packets:
-                self._handle(packet)
+            try:
+                for packet in packets:
+                    self._handle(packet)
+            except asyncio.CancelledError:
+                raise
+            except ProbeError as error:
+                self._fail(str(error).split(": ", 1)[-1])
+                return
+            except Exception as error:  # noqa: BLE001 - as above
+                self._fail(f"unreadable packet: {type(error).__name__}: {error}")
+                return
+
+    def _fail(self, reason: str) -> None:
+        """Mark the socket dead and wake everything waiting on it."""
+        self.failure = reason
+        self._events.put_nowait(Event("__failed__", []))
+        for future in self._acks.values():
+            if not future.done():
+                future.set_exception(
+                    ProbeError(self.label, f"the connection failed: {reason}")
+                )
+        self._acks.clear()
 
     def _handle(self, packet: str | bytes) -> None:
         if isinstance(packet, bytes):
@@ -312,6 +342,8 @@ class PollingSocket:
         future: asyncio.Future[list] = asyncio.get_running_loop().create_future()
         self._acks[ack_id] = future
         await self._post([self._encode(event, args, ack_id)])
+        if self.failure is not None:
+            raise ProbeError(self.label, f"the connection failed: {self.failure}")
         try:
             return await asyncio.wait_for(future, wait_seconds)
         except TimeoutError as error:

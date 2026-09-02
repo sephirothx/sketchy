@@ -241,3 +241,50 @@ async def test_a_failed_poll_is_reported_by_the_next_expect():
         assert caught.value.step == "draw"
     finally:
         await socket.close()
+
+
+class Scripted:
+    """A transport that answers polls from a script, then hangs like a quiet long-poll."""
+
+    def __init__(self, polls: list[bytes]) -> None:
+        self._polls = list(polls)
+        self.posted: list[bytes] = []
+
+    async def __call__(self, method, url, body, headers, *, wait_seconds=None):
+        if method == "POST":
+            self.posted.append(body)
+            return HttpResponse(200, {}, b"ok")
+        if self._polls:
+            return HttpResponse(200, {}, self._polls.pop(0))
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+
+@pytest.mark.asyncio
+async def test_a_refused_connection_fails_the_probe_with_the_servers_reason():
+    """`44{...}` is the server saying no; it must not become a step timeout."""
+    transport = Scripted([b'0{"sid":"eio1"}', b'44{"message":"This account is suspended."}'])
+    socket = PollingSocket("http://x", transport, "c=1", label="connect")
+    with pytest.raises(ProbeError) as caught:
+        await socket.connect()
+    assert "connection refused" in str(caught.value)
+    assert "suspended" in str(caught.value)
+    await socket.close()
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_packet_fails_the_waiting_call_and_expect():
+    transport = Scripted([b'42["room_state",{"a":1}]', b"4}not json"])
+    socket = PollingSocket("http://x", transport, "c=1", label="create")
+    socket.sid = "eio"
+    socket._poller = asyncio.create_task(socket._poll_forever())
+    try:
+        await socket.expect("room_state", wait_seconds=2)
+        with pytest.raises(ProbeError) as caught:
+            await socket.call("create_room", {"nickname": "x"}, wait_seconds=2)
+        assert "unreadable packet" in str(caught.value)
+        # And the socket stays failed for anything asked afterwards.
+        with pytest.raises(ProbeError):
+            await socket.expect("anything", wait_seconds=2)
+    finally:
+        await socket.close()
