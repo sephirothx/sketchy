@@ -717,14 +717,11 @@ def create_auth_router(
         # Best effort and after the commit, like every other notification: the
         # deletion is done, and a socket that missed this sees it on the next
         # read.
+        # No `try` of its own: the friend service isolates each recipient and
+        # logs, so a wrapper here would only be able to hide the one failure
+        # it cannot see anyway.
         if on_friends_changed is not None and result.friends_notified:
-            try:
-                await on_friends_changed(result.friends_notified)
-            except Exception:
-                logger.exception(
-                    "Could not tell %d accounts their friend list changed",
-                    len(result.friends_notified),
-                )
+            await on_friends_changed(result.friends_notified)
         if on_account_deleted is not None:
             try:
                 await on_account_deleted(result.user_id)

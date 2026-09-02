@@ -300,12 +300,27 @@ class FriendService:
         in a sweep elsewhere. Both hand back who was affected and call this
         once the commit is theirs to talk about. Everything else in here
         announces on its own.
+
+        **Best effort per recipient, and it has to be said per recipient.**
+        The row is already committed by the time any of this runs, so a
+        notification that cannot be delivered is not a reason to undo it or to
+        report the write as failed - and one recipient being unreachable is
+        not a reason to skip the next. Deleting an account tells everybody who
+        lost a row, which is the batch where that matters; before these calls
+        moved in here the deletion route looped with its own `try` per id, and
+        collapsing that into one call quietly took the isolation with it.
         """
         if self._announce is None:
             return
         for user_id in user_ids:
-            if user_id:
+            if not user_id:
+                continue
+            try:
                 await self._announce(str(user_id))
+            except Exception:
+                logger.exception(
+                    "Could not tell %s their friend lists moved", user_id
+                )
 
     async def _refund_request(self, requester_id: UUID) -> None:
         if self._request_limiter is not None:

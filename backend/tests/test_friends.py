@@ -15,6 +15,7 @@ from app.db.models import Friendship, User, UserBlock, generate_uuid
 from app.domain_values import AccountState, FriendshipState
 from app.services.friends import (
     MAX_FRIENDS_PER_ACCOUNT,
+    MAX_PENDING_RECEIVED,
     MAX_PENDING_SENT,
     FriendService,
     FriendshipOutcome,
@@ -800,5 +801,175 @@ async def test_every_write_announces_itself_and_no_no_op_does():
         await service.remove(ada, guest)
         await service.accept(ada, guest)
         assert told == []
+    finally:
+        await engine.dispose()
+
+
+async def test_one_unreachable_recipient_does_not_silence_the_rest():
+    """Best effort has to be per recipient, or it is best effort for the first.
+
+    Deleting an account tells everybody who lost a row, which is the batch
+    where this shows. The deletion route used to loop with its own `try` per
+    id; collapsing that into one call took the isolation with it until this
+    put it back where the announcement lives.
+    """
+    factory, engine = await create_test_db()
+    told: list[str] = []
+
+    async def announce(user_id: str) -> None:
+        told.append(user_id)
+        if len(told) == 1:
+            raise RuntimeError("that socket has gone")
+
+    try:
+        service = FriendService(factory, announce=announce)
+        await service.announce_to(["one", "two", "three"])
+        assert told == ["one", "two", "three"]
+    finally:
+        await engine.dispose()
+
+
+async def test_a_write_stands_even_when_nobody_can_be_told():
+    """The row is committed by the time any of this runs.
+
+    A notification that cannot be delivered is not a reason to report the
+    write as failed - which is what an exception escaping here would do, with
+    the friendship already in the database.
+    """
+    factory, engine = await create_test_db()
+
+    async def announce(user_id: str) -> None:
+        raise RuntimeError("the channel is gone")
+
+    try:
+        service = FriendService(factory, announce=announce)
+        ada = await make_account(factory, "Ada")
+        bob = await make_account(factory, "Bob")
+
+        assert await service.request(ada, bob) == FriendshipOutcome.CREATED
+        assert await service.accept(bob, ada) == FriendshipOutcome.ACCEPTED
+        assert await service.are_friends(ada, bob)
+        assert await service.remove(ada, bob) == FriendshipOutcome.REMOVED
+    finally:
+        await engine.dispose()
+
+
+# --- the refusals nothing else reaches ------------------------------------
+
+
+async def test_announcing_skips_an_empty_id_rather_than_emitting_one():
+    factory, engine = await create_test_db()
+    told: list[str] = []
+
+    async def announce(user_id: str) -> None:
+        told.append(user_id)
+
+    try:
+        service = FriendService(factory, announce=announce)
+        await service.announce_to(["real", "", None])
+        assert told == ["real"]
+        # And a service with nowhere to announce is not an error.
+        await FriendService(factory).announce_to(["real"])
+    finally:
+        await engine.dispose()
+
+
+async def test_are_friends_answers_no_for_a_question_that_is_not_one():
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        assert await service.are_friends(None, ada) is False
+        assert await service.are_friends(ada, None) is False
+        assert await service.are_friends(ada, ada) is False
+    finally:
+        await engine.dispose()
+
+
+async def test_the_pair_block_check_is_answerable_on_its_own():
+    """The join and invite paths ask it without a transaction of their own."""
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        bob = await make_account(factory, "Bob")
+        assert await service.is_blocked_pair(ada, bob) is False
+        await block(factory, bob, ada)
+        assert await service.is_blocked_pair(ada, bob) is True
+    finally:
+        await engine.dispose()
+
+
+async def test_a_request_to_somebody_whose_list_is_full_says_so_without_numbers():
+    """How full somebody else's list is, is their fact rather than the caller's."""
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        popular = await make_account(factory, "Popular")
+        await _fill(
+            factory, popular, MAX_FRIENDS_PER_ACCOUNT, FriendshipState.ACCEPTED.value
+        )
+        # Their request is waiting, so Ada asking back is an acceptance - which
+        # is where the other person's ceiling is read. Written directly: they
+        # could not have sent it through `request`, because their own list
+        # being full is refused first, and that is a different refusal.
+        await _add_row(factory, popular, ada, popular, FriendshipState.PENDING.value)
+
+        with pytest.raises(FriendshipRefused) as refused:
+            await service.request(ada, popular)
+        assert str(MAX_FRIENDS_PER_ACCOUNT) not in str(refused.value)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_crowded_inbox_is_refused_without_describing_it():
+    """Naming the recipient's inbox would disclose a third party's state."""
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        popular = await make_account(factory, "Popular")
+        # Requests *to* them, from many different accounts.
+        async with factory() as session:
+            async with session.begin():
+                for index in range(MAX_PENDING_RECEIVED):
+                    other = generate_uuid()
+                    session.add(
+                        User(
+                            id=other,
+                            display_name=f"Asker{index}",
+                            username=f"asker{index}",
+                            password_hash="hash",
+                            state=AccountState.REGISTERED.value,
+                        )
+                    )
+                    low, high = friendship_key(popular, other)
+                    session.add(
+                        Friendship(
+                            user_low_id=low,
+                            user_high_id=high,
+                            requested_by_id=other,
+                            status=FriendshipState.PENDING.value,
+                        )
+                    )
+
+        with pytest.raises(FriendshipRefused, match="could not be sent"):
+            await service.request(ada, popular)
+    finally:
+        await engine.dispose()
+
+
+async def test_asking_somebody_you_are_already_friends_with_changes_nothing():
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        bob = await make_account(factory, "Bob")
+        await service.request(ada, bob)
+        await service.accept(bob, ada)
+
+        assert await service.request(ada, bob) == FriendshipOutcome.UNCHANGED
+        assert await service.request(bob, ada) == FriendshipOutcome.UNCHANGED
     finally:
         await engine.dispose()
