@@ -263,10 +263,16 @@
   overflow-wrap: anywhere;
 }
 
+/* Charts and tables sit in a well - a step darker than the card - so their
+   edges read without a border competing with the data. */
 .ops-sparkline {
+  background: var(--well);
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
   display: block;
-  height: 28px;
-  margin-top: 4px;
+  height: 34px;
+  margin-top: 6px;
+  padding: 3px 4px;
   width: 100%;
 }
 
@@ -297,11 +303,20 @@
 }
 
 .ops-size-table {
-  border-collapse: collapse;
+  background: var(--well);
+  border-collapse: separate;
+  border-radius: var(--radius-sm);
+  border-spacing: 0;
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
   table-layout: fixed;
   width: 100%;
+}
+
+.ops-size-table tbody tr:last-child th,
+.ops-size-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 /* The name is the column worth reading; the numbers are short. */
@@ -317,7 +332,7 @@
 .ops-size-table th,
 .ops-size-table td {
   border-bottom: 1px solid var(--line);
-  padding: 4px 6px 4px 0;
+  padding: 5px 8px;
   text-align: right;
   white-space: nowrap;
 }
@@ -360,11 +375,13 @@
 /* -------------------------------------------------------------- trend chart */
 .ops-chart-bars {
   align-items: flex-end;
+  background: var(--well);
   border-bottom: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   display: flex;
   gap: 7px;
   height: 150px;
-  padding: 0 2px;
+  padding: 8px 8px 0;
 }
 
 .ops-chart-bar {
