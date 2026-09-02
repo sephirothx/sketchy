@@ -19,7 +19,7 @@ interface RoomsStore {
 export const useRoomsStore = create<RoomsStore>((set) => ({
   rooms: NO_ROOMS,
   receiveSnapshot: (rooms, revision) =>
-    set({ rooms: applyRoomsSnapshot(rooms, revision) }),
+    set((state) => ({ rooms: applyRoomsSnapshot(state.rooms, rooms, revision) })),
   // An identical reference when there is nothing to do is what keeps the room
   // list from re-rendering on a tick that carried somebody else's news.
   receiveDelta: (payload) =>

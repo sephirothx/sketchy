@@ -635,11 +635,20 @@ class LobbyBroadcaster:
         delta = diff_rooms(self._last_rooms, candidate)
         if delta.is_empty:
             return None
-        self._last_rooms = candidate
-        self._rooms_revision = candidate.revision
+        # Emitted before the revision is consumed. `run` swallows a failed
+        # tick so that one bad broadcast does not stop every later one, which
+        # means a raise here must leave the feed exactly where it was: state
+        # written first would mark this revision delivered and diff the next
+        # tick against a list nobody was sent, so the change would never go
+        # out again and watchers would sit on the old list until some
+        # unrelated room moved. Re-sending instead is free - a client ignores
+        # a revision it already holds, and every entry is an upsert or a
+        # delete.
         await self._sio.emit(
             "lobby_rooms_changed", delta.payload(), room=LOBBY_CHANNEL
         )
+        self._last_rooms = candidate
+        self._rooms_revision = candidate.revision
         return delta
 
     async def _repair_identities(self) -> None:
@@ -682,11 +691,14 @@ class LobbyBroadcaster:
         # rendering the old number for as long as the list stayed still.
         if delta.is_empty and candidate.online_count == self._last.online_count:
             return None
-        self._last = candidate
-        self._revision = candidate.revision
+        # Emitted before the revision is consumed, for the reason
+        # `_flush_rooms` gives at length: a swallowed failure must not leave a
+        # revision spent on a broadcast nobody received.
         await self._sio.emit(
             "lobby_presence_changed", delta.payload(), room=LOBBY_CHANNEL
         )
+        self._last = candidate
+        self._revision = candidate.revision
         return delta
 
     async def run(self, *, health=None) -> None:

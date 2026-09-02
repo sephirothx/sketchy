@@ -74,10 +74,22 @@ function parseRevision(value: unknown): number | null {
     : null;
 }
 
-/** Replace the list wholesale: the answer to `watch_lobby`, and every resync. */
-export function applyRoomsSnapshot(rooms: unknown, revision: unknown): RoomsState {
+/** Replace the list wholesale: the answer to `watch_lobby`, and every resync.
+
+Never backwards. The socket joins the channel before its acknowledgement is
+built, so a delta can already be in flight when the baseline is stamped, and a
+resync asked for twice can be answered out of order. Applying the older of two
+snapshots would put the client behind a delta it has already applied and leave
+it there, because nothing after that would look like a gap. */
+export function applyRoomsSnapshot(
+  state: RoomsState,
+  rooms: unknown,
+  revision: unknown,
+): RoomsState {
   const at = parseRevision(revision);
   if (at === null) return NO_ROOMS;
+  // A stale list holds no usable revision, so anything the server says wins.
+  if (state.loaded && !state.stale && at < state.revision) return state;
   return {
     revision: at,
     rooms: parseRooms(rooms),
@@ -93,6 +105,12 @@ export function applyRoomsDelta(state: RoomsState, payload: unknown): RoomsState
   // A list whose sequence ended cannot be patched back into agreement with
   // the server. The snapshot on the way replaces it wholesale.
   if (state.stale) return state;
+  // Nor can a list that never began. `enter_room` runs before the
+  // acknowledgement is built, so the first delta can arrive before the
+  // baseline it applies to - and patching an empty list would leave the lobby
+  // showing only the rooms that happened to move while `loaded` claimed that
+  // was the whole list. The acknowledgement is already on its way.
+  if (!state.loaded) return state;
   const message = payload as Record<string, unknown>;
   const revision = parseRevision(message.revision);
   if (revision === null) return state;

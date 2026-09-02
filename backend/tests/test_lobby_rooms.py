@@ -222,3 +222,62 @@ async def test_a_room_going_private_leaves_the_feed_as_a_close():
     _, payload, _ = rooms_frames(caster)[-1]
     assert payload["closed"] == [room.id]
     assert payload["revision"] == 2
+
+
+class FailingSio:
+    """A channel that refuses the first emit and accepts the rest."""
+
+    def __init__(self, failures: int = 1):
+        self.emitted = []
+        self._left = failures
+
+    async def emit(self, event, payload=None, room=None, **_):
+        if self._left:
+            self._left -= 1
+            raise RuntimeError("the channel is having a moment")
+        self.emitted.append((event, payload, room))
+
+
+@pytest.mark.asyncio
+async def test_a_broadcast_that_failed_is_sent_again_rather_than_skipped():
+    """`run` swallows a bad tick, so the revision must not be spent on it.
+
+    Written first, the state would mark this revision delivered and the next
+    tick would diff against a list nobody was sent: an unchanged list gives an
+    empty delta, so the change would never go out at all and watchers would
+    hold the old one until some unrelated room happened to move.
+    """
+    manager = RoomManager()
+    caster = broadcaster_for(manager)
+    caster._sio = FailingSio()
+    room = manager.create_room(name="Open", is_public=True)
+
+    with pytest.raises(RuntimeError):
+        await caster.flush()
+    # Nothing was delivered, so nothing was consumed.
+    assert caster.rooms_revision == 0
+    assert caster._last_rooms is EMPTY_ROOMS
+
+    # The next tick says the same thing, with the same revision.
+    await caster.flush()
+    frames = [f for f in caster._sio.emitted if f[0] == "lobby_rooms_changed"]
+    assert len(frames) == 1
+    assert [entry["id"] for entry in frames[0][1]["opened"]] == [room.id]
+    assert frames[0][1]["revision"] == 1 == caster.rooms_revision
+
+
+@pytest.mark.asyncio
+async def test_a_failed_presence_broadcast_does_not_spend_its_revision_either():
+    """The same rule on the other feed, which shares the tick."""
+    caster = broadcaster_for(RoomManager())
+    caster._sio = FailingSio()
+    caster._registry.note_socket_opened("sid-a", "user-1")
+
+    with pytest.raises(RuntimeError):
+        await caster.flush()
+    assert caster.revision == 0
+
+    await caster.flush()
+    frames = [f for f in caster._sio.emitted if f[0] == "lobby_presence_changed"]
+    assert len(frames) == 1
+    assert frames[0][1]["revision"] == 1 == caster.revision
