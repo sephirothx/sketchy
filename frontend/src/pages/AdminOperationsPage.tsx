@@ -409,9 +409,7 @@ export function AdminOperationsPage() {
                   ))}
                 </select>
               </div>
-              <div className="ops-card-body">
-                <DailyBars days={days} metric={chartMetric} />
-              </div>
+              <DailyBars days={days} metric={chartMetric} />
             </section>
 
             <section className="ops-card" aria-label="Recorder health">
@@ -421,7 +419,6 @@ export function AdminOperationsPage() {
                   {recorderHealthy ? "Healthy" : "Attention"}
                 </Chip>
               </div>
-              <div className="ops-card-body">
               <div className="ops-health-row">
                 <span className="ops-health-dot" aria-hidden="true" />
                 <strong>Observations stored</strong>
@@ -450,7 +447,6 @@ export function AdminOperationsPage() {
                     ))}
                   </ul>
                 )}
-              </div>
               </div>
             </section>
           </div>

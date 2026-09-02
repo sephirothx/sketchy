@@ -142,15 +142,6 @@
   font-weight: 600;
 }
 
-/* Everything under a card's head sits in a well - a step darker than the
-   card in both themes - so where one card's content ends is never a guess.
-   Charts and tables inside it are raised back to the card colour. */
-.ops-card-body {
-  background: var(--well);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px 6px;
-}
-
 .ops-card-sub {
   color: var(--faint);
   font-size: 12.5px;
@@ -237,11 +228,22 @@
   margin-bottom: 8px;
 }
 
+/* Each cell is its own small tile: a well a step darker than the card, with
+   a contour, so one number's edge is never a guess. The chart inside is
+   raised back to the card colour. */
 .ops-signal {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  padding: 10px 12px;
+}
+
+.ops-signal.is-warning {
+  border-color: var(--warm);
 }
 
 .ops-signal-label {
@@ -312,7 +314,8 @@
 }
 
 .ops-size-table {
-  background: var(--card);
+  background: var(--well);
+  border: 1px solid var(--line);
   border-collapse: separate;
   border-radius: var(--radius-sm);
   border-spacing: 0;
@@ -384,7 +387,8 @@
 /* -------------------------------------------------------------- trend chart */
 .ops-chart-bars {
   align-items: flex-end;
-  background: var(--card);
+  background: var(--well);
+  border: 1px solid var(--line);
   border-bottom: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   display: flex;
@@ -429,10 +433,6 @@
   font-size: 13.5px;
   gap: 10px;
   padding: 9px 2px;
-}
-
-.ops-card-body > .ops-health-row:last-child {
-  border-bottom: 0;
 }
 
 .ops-health-dot {
