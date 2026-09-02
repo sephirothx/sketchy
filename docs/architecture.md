@@ -1056,6 +1056,16 @@ value, a password inside a database URL, and the local part of any e-mail addres
 replaced before the line is written, because a log store is kept longer than the data
 that leaks into it.
 
+The objectives these signals are held to, and the rules that page on them, live in
+the repository rather than in a monitoring console: [`docs/slo.md`](slo.md) states each
+SLO in the series that measures it, [`ops/prometheus/rules/`](../ops/prometheus/rules/)
+computes the ratios and percentiles once and alerts on them, and
+[`backend/tests/test_alert_rules.py`](../backend/tests/test_alert_rules.py) refuses a rule
+naming a series the server does not expose. The one thing none of that can see - whether
+a stranger can open a room, be joined, and draw a line the other seat receives - is what
+[`backend/app/probe.py`](../backend/app/probe.py) plays out from outside on a schedule,
+and reports as its own series so it survives the server being down.
+
 `/api/admin/metrics` carries all of it beside the live counts; the overview polls it
 every ten seconds while it is the tab on screen and the document is visible, and never
 otherwise. One ordered list of *attention reasons* — data already lost first (a dropped
@@ -1281,6 +1291,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/live_drawing.py`](../backend/app/live_drawing.py) | Compact, versioned binary frames for live drawing Socket.IO events. |
 | [`app/logging_config.py`](../backend/app/logging_config.py) | Make the application's own log lines reach somebody - as JSON in production, stamped with their request or command, secrets redacted. |
 | [`app/correlation.py`](../backend/app/correlation.py) | The request id, socket id and command a log line belongs to, carried as task-local context. |
+| [`app/probe.py`](../backend/app/probe.py) | The synthetic game - two guests, a room, one stroke - over Socket.IO long-polling with the standard library; the `sketchy_probe_*` textfile series. |
 | [`app/main.py`](../backend/app/main.py) | ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app. |
 | [`app/message_limits.py`](../backend/app/message_limits.py) | Shared backend limits for player-authored chat and guess text. |
 | [`app/presenters.py`](../backend/app/presenters.py) | Pure construction of Socket.IO response and broadcast payloads. |

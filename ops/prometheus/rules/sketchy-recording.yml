@@ -1,0 +1,38 @@
+# The few numbers the SLOs in docs/slo.md are stated in, computed once here so
+# the alert rules, the dashboards and a human at the console read the same
+# series. Every metric named here is checked against the server's exposition
+# by backend/tests/test_alert_rules.py, so a rename breaks CI, not the pager.
+groups:
+  - name: sketchy-recording
+    interval: 30s
+    rules:
+      - record: sketchy:http_error_ratio:5m
+        expr: >
+          sum(rate(sketchy_http_requests_total{status_class="5xx"}[5m]))
+          / clamp_min(sum(rate(sketchy_http_requests_total[5m])), 1e-9)
+      - record: sketchy:http_p95_seconds:5m
+        expr: >
+          histogram_quantile(0.95,
+            sum by (le) (rate(sketchy_http_request_duration_seconds_bucket[5m])))
+      - record: sketchy:socket_error_ratio:5m
+        expr: >
+          sum(rate(sketchy_socket_events_total{outcome="error"}[5m]))
+          / clamp_min(sum(rate(sketchy_socket_events_total[5m])), 1e-9)
+      - record: sketchy:socket_p95_seconds:5m
+        expr: >
+          histogram_quantile(0.95,
+            sum by (le) (rate(sketchy_socket_event_duration_seconds_bucket[5m])))
+      - record: sketchy:loop_lag_p95_seconds:5m
+        expr: >
+          histogram_quantile(0.95,
+            sum by (le) (rate(sketchy_event_loop_lag_seconds_bucket[5m])))
+      - record: sketchy:db_query_p95_seconds:5m
+        expr: >
+          histogram_quantile(0.95,
+            sum by (le) (rate(sketchy_db_query_duration_seconds_bucket[5m])))
+      - record: sketchy:db_pool_fill_ratio
+        expr: >
+          sketchy_db_pool_checked_out / clamp_min(sketchy_db_pool_capacity, 1)
+      - record: sketchy:disk_free_ratio
+        expr: >
+          sketchy_data_disk_free_bytes / clamp_min(sketchy_data_disk_total_bytes, 1)

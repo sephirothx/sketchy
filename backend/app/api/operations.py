@@ -293,6 +293,26 @@ def create_operations_router(
     def database_readiness() -> dict[str, object] | None:
         return None if readiness is None else readiness.last_database_result()
 
+    async def scraped_database_readiness() -> dict[str, object] | None:
+        """The readiness result, refreshed for the scrape.
+
+        The page reads the last result and must not become a prober, but a
+        scraper is the load balancer's peer: without this, a worker nobody
+        has asked `/api/ready` never emits `sketchy_db_ready` at all, and a
+        rule on `== 0` is silent on the deployment that only scrapes. The
+        probe is cached for a few seconds and bounded to one, so the cost
+        is one `SELECT 1` per cache window at most.
+        """
+        if readiness is None:
+            return None
+        try:
+            await asyncio.wait_for(readiness.check_database(), timeout=QUEUE_SCRAPE_TIMEOUT_SECONDS)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("readiness could not be refreshed for the scrape", exc_info=True)
+        return readiness.last_database_result()
+
     @router.get("/metrics")
     async def scrape(request: Request):
         """Prometheus exposition, for deployments that scrape.
@@ -316,7 +336,7 @@ def create_operations_router(
             *_loop_lines(loop_snapshot()),
             *_queue_lines(await _queue_depths_for_scrape(queues)),
         ]
-        database = database_readiness()
+        database = await scraped_database_readiness()
         if database is not None:
             lines += gauge_lines(
                 "sketchy_db_ready",

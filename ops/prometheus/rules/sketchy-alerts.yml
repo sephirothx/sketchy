@@ -1,0 +1,173 @@
+# What pages, what warns, and what each one means. Thresholds follow
+# docs/slo.md; runbook pointers go to README.md § On-call.
+#
+# `severity: page` is for a condition a player can feel right now or data
+# already lost. `severity: warn` is for a trend that becomes a page if
+# nobody looks. Every metric named here is checked against the server's
+# exposition by backend/tests/test_alert_rules.py.
+groups:
+  - name: sketchy-alerts
+    rules:
+      # --- availability -----------------------------------------------------------
+      - alert: SketchyDown
+        expr: up{job="sketchy"} == 0
+        for: 2m
+        labels: {severity: page}
+        annotations:
+          summary: "Sketchy is not answering its scrape"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyDatabaseUnreachable
+        expr: sketchy_db_ready == 0
+        for: 2m
+        labels: {severity: page}
+        annotations:
+          summary: "The readiness probe cannot reach the database"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyProbeFailing
+        expr: sketchy_probe_success == 0
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "The synthetic game has not succeeded for five minutes"
+          description: "Step timings are in sketchy_probe_step_seconds; the failing step is the first one missing."
+          runbook: "README.md#on-call"
+
+      # A textfile keeps saying whatever the last run wrote, so "success 1"
+      # from an hour ago is not success; and a series that was never
+      # collected cannot compare equal to anything. Both are the monitoring
+      # itself being down, which pages like the thing it monitors.
+      - alert: SketchyProbeStale
+        expr: >
+          absent(sketchy_probe_last_run_timestamp_seconds)
+          or (time() - sketchy_probe_last_run_timestamp_seconds) > 300
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "The synthetic game has not run in the last five minutes, or its series is not being collected"
+          description: "Check the probe's cron entry, the textfile path, and that the node_exporter textfile job is scraped (ops/prometheus/scrape-example.yml)."
+          runbook: "README.md#on-call"
+
+      # --- data already lost ---------------------------------------------------------
+      - alert: SketchyHistoryWritesLost
+        expr: increase(sketchy_history_writes_abandoned_total[1h]) > 0
+        labels: {severity: page}
+        annotations:
+          summary: "A finished game's history was not saved (kind={{ $labels.kind }}, reason={{ $labels.reason }})"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyRecorderDropping
+        expr: increase(sketchy_events_dropped_total[10m]) > 0
+        labels: {severity: warn}
+        annotations:
+          summary: "The runtime recorder is dropping observations to a full buffer"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyLoopStopped
+        expr: sketchy_loop_running == 0
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: "Background loop {{ $labels.loop }} has stopped and will not come back without a restart"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyLoopFailing
+        expr: sketchy_loop_consecutive_failures >= 3
+        for: 5m
+        labels: {severity: warn}
+        annotations:
+          summary: "Background loop {{ $labels.loop }} has failed {{ $value }} times in a row"
+          runbook: "README.md#on-call"
+
+      # --- what a player feels ----------------------------------------------------
+      - alert: SketchyHighErrorRate
+        expr: sketchy:http_error_ratio:5m > 0.01
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "More than 1% of API requests are failing ({{ $value | humanizePercentage }})"
+          runbook: "README.md#on-call"
+
+      - alert: SketchySocketErrors
+        expr: sketchy:socket_error_ratio:5m > 0.005
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "More than 0.5% of client commands are raising ({{ $value | humanizePercentage }})"
+          runbook: "README.md#on-call"
+
+      - alert: SketchySlowRequests
+        expr: sketchy:http_p95_seconds:5m > 0.3
+        for: 10m
+        labels: {severity: warn}
+        annotations:
+          summary: "API p95 is over 300 ms ({{ $value | humanizeDuration }})"
+          runbook: "README.md#on-call"
+
+      - alert: SketchySlowCommands
+        expr: sketchy:socket_p95_seconds:5m > 0.1
+        for: 10m
+        labels: {severity: warn}
+        annotations:
+          summary: "Command handler p95 is over 100 ms ({{ $value | humanizeDuration }})"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyLoopLag
+        expr: sketchy:loop_lag_p95_seconds:5m > 0.25
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "The event loop is stalling: lag p95 {{ $value | humanizeDuration }}"
+          description: "Timers, hints and turn ends all fire late when this is high; it is a starved loop, not a slow database."
+          runbook: "README.md#on-call"
+
+      # --- saturation --------------------------------------------------------------
+      - alert: SketchyPoolSaturated
+        expr: sketchy:db_pool_fill_ratio >= 1
+        for: 5m
+        labels: {severity: warn}
+        annotations:
+          summary: "Every database connection is in use; queries are waiting for one"
+          runbook: "README.md#on-call"
+
+      - alert: SketchySlowQueries
+        expr: sketchy:db_query_p95_seconds:5m > 0.05
+        for: 10m
+        labels: {severity: warn}
+        annotations:
+          summary: "Statement p95 is over 50 ms ({{ $value | humanizeDuration }})"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyMailBacklog
+        expr: sketchy_mail_outbox_oldest_seconds > 600
+        for: 10m
+        labels: {severity: warn}
+        annotations:
+          summary: "The oldest undelivered message has waited {{ $value | humanizeDuration }}"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyExportStuck
+        expr: sketchy_data_exports_oldest_seconds > 600
+        for: 10m
+        labels: {severity: warn}
+        annotations:
+          summary: "An account export has been pending for {{ $value | humanizeDuration }}"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyDiskLow
+        expr: sketchy:disk_free_ratio < 0.10
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "Less than 10% of the data volume is free"
+          runbook: "README.md#on-call"
+
+      - alert: SketchyMemoryHigh
+        expr: sketchy_process_resident_memory_bytes > 1.5e9
+        for: 15m
+        labels: {severity: warn}
+        annotations:
+          summary: "Resident memory is over 1.5 GB ({{ $value | humanize1024 }}B)"
+          description: "Sized for a single worker on a small host; adjust to the deployment. A steady climb with no load is a leak."
+          runbook: "README.md#on-call"
