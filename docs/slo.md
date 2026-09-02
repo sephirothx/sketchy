@@ -68,5 +68,12 @@ node_exporter textfile job, or a separate monitor:
     --textfile /var/lib/node_exporter/textfile/sketchy.prom
 ```
 
-It creates two guest accounts per run, named `probeh…` and `probeg…`, which
-the guest retention sweep removes like any other idle guest.
+It keeps its two guest sessions between runs in `--state` (default
+`~/.cache/sketchy/probe-sessions.json`), checking each with one request before use and
+provisioning a replacement only when the server no longer knows it. That is what makes
+a one-minute cadence safe: guest provisioning is rate-limited per client
+(`GUEST_PROVISION_LIMIT`, 60 an hour by default), and a probe minting two guests a
+minute would page on its own rate limit after half an hour. The accounts are named
+`probeh…` and `probeg…`; if the state file is lost they are provisioned again and the
+old ones go the way of any idle guest. `--no-state` disables the reuse, for a one-off
+run from a laptop.

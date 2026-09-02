@@ -18,6 +18,12 @@ back to when WebSockets are blocked, so exercising it is not a shortcut.
 
 Exit status is 0 when every step passed and 1 otherwise, so an alert can
 be as simple as "the probe has not succeeded in five minutes".
+
+The two guest sessions are kept between runs (`--state`, on by default),
+because provisioning a guest is rate-limited per client - sixty an hour by
+default - and a probe that minted two every minute would page on its own
+rate limit after half an hour. A saved session is checked with one request
+before it is used and replaced only when the server no longer knows it.
 """
 from __future__ import annotations
 
@@ -41,6 +47,7 @@ PROBE_STEP_METRIC = "sketchy_probe_step_seconds"
 PROBE_METRIC_NAMES = (PROBE_SUCCESS_METRIC, PROBE_DURATION_METRIC, PROBE_STEP_METRIC)
 
 STEPS = ("guest", "connect", "create", "join", "start", "prompt", "draw", "leave")
+DEFAULT_STATE_PATH = Path.home() / ".cache" / "sketchy" / "probe-sessions.json"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 STEP_TIMEOUT_SECONDS = 8.0
 RECORD_SEPARATOR = "\x1e"
@@ -329,6 +336,7 @@ class ProbeResult:
     duration_seconds: float = 0.0
     failed_step: str | None = None
     error: str | None = None
+    provisioned: bool = False
 
     def as_json(self) -> dict[str, object]:
         return {
@@ -337,6 +345,7 @@ class ProbeResult:
             "steps": {step: round(seconds * 1000, 1) for step, seconds in self.steps.items()},
             "failedStep": self.failed_step,
             "error": self.error,
+            "provisioned": self.provisioned,
         }
 
     def as_textfile(self) -> str:
@@ -364,6 +373,12 @@ async def _guest(base_url: str, transport: Transport, name: str) -> str:
         body,
         {"Content-Type": "application/json", "Accept": "application/json"},
     )
+    if response.status == 429:
+        raise ProbeError(
+            "guest",
+            "guest provisioning is rate-limited for this host; keep the probe's "
+            "state file so sessions are reused, or raise GUEST_PROVISION_LIMIT",
+        )
     if response.status != 200:
         raise ProbeError("guest", f"display-name answered {response.status}")
     cookie = response.headers.get("set-cookie", "")
@@ -372,12 +387,87 @@ async def _guest(base_url: str, transport: Transport, name: str) -> str:
     return cookie.split(";", 1)[0]
 
 
+async def _session_is_known(base_url: str, transport: Transport, cookie: str) -> bool:
+    """Whether the server still answers `/api/auth/me` with an account for this cookie."""
+    try:
+        response = await transport(
+            "GET",
+            f"{base_url.rstrip('/')}/api/auth/me",
+            None,
+            {"Cookie": cookie, "Accept": "application/json"},
+        )
+    except Exception:
+        return False
+    if response.status != 200:
+        return False
+    try:
+        return json.loads(response.body or b"null") is not None
+    except ValueError:
+        return False
+
+
+def load_sessions(path: Path | None, base_url: str) -> dict[str, str]:
+    """The cookies a previous run saved for this server, if any."""
+    if path is None:
+        return {}
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(stored, dict) or stored.get("baseUrl") != base_url.rstrip("/"):
+        return {}
+    sessions = stored.get("sessions")
+    return dict(sessions) if isinstance(sessions, dict) else {}
+
+
+def save_sessions(path: Path | None, base_url: str, sessions: dict[str, str]) -> None:
+    if path is None:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(
+            json.dumps({"baseUrl": base_url.rstrip("/"), "sessions": sessions}, indent=2),
+            encoding="utf-8",
+        )
+        tmp.replace(path)
+        path.chmod(0o600)
+    except OSError:
+        # A probe that cannot remember still probes; it just provisions again.
+        pass
+
+
+async def _sessions(
+    base_url: str, transport: Transport, state_path: Path | None, name_prefix: str
+) -> tuple[str, str, bool]:
+    """The host's and guest's cookies, reused from the state file when the
+    server still knows them, provisioned otherwise. The flag says whether
+    anything was provisioned, for the report."""
+    saved = load_sessions(state_path, base_url)
+    cookies: dict[str, str] = {}
+    provisioned = False
+    # Names are 3-16 characters from a small alphabet, so: a short prefix,
+    # one letter for the seat, and the seconds of the clock.
+    stamp = str(int(time.time()))[-6:]
+    for seat in ("host", "guest"):
+        cookie = saved.get(seat)
+        if cookie and await _session_is_known(base_url, transport, cookie):
+            cookies[seat] = cookie
+            continue
+        cookies[seat] = await _guest(base_url, transport, f"{name_prefix[:8]}{seat[0]}{stamp}")
+        provisioned = True
+    if provisioned or cookies != saved:
+        save_sessions(state_path, base_url, cookies)
+    return cookies["host"], cookies["guest"], provisioned
+
+
 async def run_probe(
     base_url: str,
     *,
     transport: Transport | None = None,
     budget_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     name_prefix: str = "probe",
+    state_path: Path | None = DEFAULT_STATE_PATH,
 ) -> ProbeResult:
     transport = transport or urllib_transport()
     result = ProbeResult(ok=False)
@@ -392,11 +482,9 @@ async def run_probe(
         step_started = now
 
     async def flow() -> None:
-        # Names are 3-16 characters from a small alphabet, so: a short prefix,
-        # one letter for the seat, and the seconds of the clock.
-        stamp = str(int(time.time()))[-6:]
-        host_cookie = await _guest(base_url, transport, f"{name_prefix[:8]}h{stamp}")
-        guest_cookie = await _guest(base_url, transport, f"{name_prefix[:8]}g{stamp}")
+        host_cookie, guest_cookie, result.provisioned = await _sessions(
+            base_url, transport, state_path, name_prefix
+        )
         done("guest")
 
         host = PollingSocket(base_url, transport, host_cookie, label="connect")
@@ -498,9 +586,26 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="write Prometheus textfile-collector metrics here (atomically)",
     )
+    parser.add_argument(
+        "--state",
+        type=Path,
+        default=DEFAULT_STATE_PATH,
+        help="where the two guest sessions are kept between runs (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--no-state",
+        action="store_true",
+        help="provision fresh guests every run; mind GUEST_PROVISION_LIMIT",
+    )
     args = parser.parse_args(argv)
 
-    result = asyncio.run(run_probe(args.base_url, budget_seconds=args.timeout))
+    result = asyncio.run(
+        run_probe(
+            args.base_url,
+            budget_seconds=args.timeout,
+            state_path=None if args.no_state else args.state,
+        )
+    )
 
     if args.textfile is not None:
         tmp = args.textfile.with_suffix(args.textfile.suffix + ".tmp")

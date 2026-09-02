@@ -1465,7 +1465,10 @@ cd backend
 
 It exits 0 when every step passed, names the failing step otherwise, and writes
 `sketchy_probe_success`, `sketchy_probe_duration_seconds` and per-step
-`sketchy_probe_step_seconds{step}` to the textfile.
+`sketchy_probe_step_seconds{step}` to the textfile. Its two guest sessions are kept
+between runs in `--state` (default `~/.cache/sketchy/probe-sessions.json`) and only
+re-provisioned when the server no longer knows them, so a one-minute cadence stays
+well inside `GUEST_PROVISION_LIMIT`; make sure the cron user can write that path.
 
 When something pages, the order to look in is the order the overview at
 `/admin/operations` lists its attention reasons: what is already lost (a dropped

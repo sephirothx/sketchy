@@ -18,12 +18,23 @@ BASE_URL = "http://localhost:8000"
 pytestmark = pytest.mark.asyncio
 
 
-async def test_a_stranger_can_open_a_room_be_joined_and_draw():
-    result = await run_probe(BASE_URL, name_prefix="e2e")
+async def test_a_stranger_can_open_a_room_be_joined_and_draw(tmp_path):
+    state = tmp_path / "sessions.json"
+    result = await run_probe(BASE_URL, name_prefix="e2e", state_path=state)
     assert result.ok, (result.failed_step, result.error)
     assert list(result.steps) == list(STEPS)
     assert all(seconds >= 0 for seconds in result.steps.values())
     assert result.duration_seconds < 20
+    assert result.provisioned is True
+
+    # The run a minute later reuses both sessions rather than minting two
+    # more, which is what keeps a one-minute cadence under the provisioning
+    # allowance.
+    saved = state.read_text(encoding="utf-8")
+    again = await run_probe(BASE_URL, name_prefix="e2e", state_path=state)
+    assert again.ok, (again.failed_step, again.error)
+    assert again.provisioned is False
+    assert state.read_text(encoding="utf-8") == saved
 
 
 def test_the_command_line_reports_json_and_exits_zero(tmp_path):
@@ -38,6 +49,8 @@ def test_the_command_line_reports_json_and_exits_zero(tmp_path):
             "--json",
             "--textfile",
             str(textfile),
+            "--state",
+            str(tmp_path / "cli-sessions.json"),
         ],
         capture_output=True,
         text=True,

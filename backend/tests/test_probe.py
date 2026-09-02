@@ -12,11 +12,16 @@ import pytest
 from app.probe import (
     DRAW_START_FRAME,
     PROBE_METRIC_NAMES,
+    HttpResponse,
     PollingSocket,
+    ProbeError,
     ProbeResult,
+    _sessions,
     decode_payload,
     encode_payload,
+    load_sessions,
     parse_message,
+    save_sessions,
 )
 
 
@@ -74,3 +79,75 @@ def test_the_textfile_carries_the_three_probe_series():
     failed = ProbeResult(ok=False, failed_step="join", error="refused")
     assert "sketchy_probe_success 0\n" in failed.as_textfile()
     assert failed.as_json()["failedStep"] == "join"
+
+
+# --- sessions kept between runs ---------------------------------------------------
+
+
+class FakeServer:
+    """Answers the two requests session handling makes, and counts provisioning."""
+
+    def __init__(self, known: set[str], *, limit_after: int | None = None) -> None:
+        self.known = set(known)
+        self.provisioned = 0
+        self.limit_after = limit_after
+
+    async def __call__(self, method, url, body, headers):
+        if url.endswith("/api/auth/me"):
+            cookie = headers.get("Cookie", "")
+            return HttpResponse(200, {}, b'{"id":"u"}' if cookie in self.known else b"null")
+        if url.endswith("/api/auth/display-name"):
+            if self.limit_after is not None and self.provisioned >= self.limit_after:
+                return HttpResponse(429, {}, b"")
+            self.provisioned += 1
+            cookie = f"sketchy_session=fresh{self.provisioned}"
+            self.known.add(cookie)
+            return HttpResponse(200, {"set-cookie": cookie + "; Path=/; HttpOnly"}, b"{}")
+        raise AssertionError(url)
+
+
+@pytest.mark.asyncio
+async def test_saved_sessions_are_reused_while_the_server_still_knows_them(tmp_path):
+    state = tmp_path / "sessions.json"
+    server = FakeServer(known=set())
+
+    host, guest, provisioned = await _sessions("http://x/", server, state, "probe")
+    assert provisioned and server.provisioned == 2
+    assert load_sessions(state, "http://x") == {"host": host, "guest": guest}
+
+    # A second run an hour later: nothing minted, the same cookies back.
+    again = await _sessions("http://x/", server, state, "probe")
+    assert again == (host, guest, False)
+    assert server.provisioned == 2
+
+
+@pytest.mark.asyncio
+async def test_a_session_the_server_forgot_is_replaced_alone(tmp_path):
+    state = tmp_path / "sessions.json"
+    save_sessions(state, "http://x", {"host": "sketchy_session=old-host", "guest": "sketchy_session=old-guest"})
+    server = FakeServer(known={"sketchy_session=old-guest"})
+
+    host, guest, provisioned = await _sessions("http://x", server, state, "probe")
+    assert provisioned and server.provisioned == 1
+    assert guest == "sketchy_session=old-guest"
+    assert host == "sketchy_session=fresh1"
+    assert load_sessions(state, "http://x") == {"host": host, "guest": guest}
+
+
+@pytest.mark.asyncio
+async def test_a_state_file_for_another_server_is_not_trusted(tmp_path):
+    state = tmp_path / "sessions.json"
+    save_sessions(state, "http://elsewhere", {"host": "a", "guest": "b"})
+    assert load_sessions(state, "http://x") == {}
+    assert load_sessions(tmp_path / "missing.json", "http://x") == {}
+    (tmp_path / "junk.json").write_text("not json")
+    assert load_sessions(tmp_path / "junk.json", "http://x") == {}
+
+
+@pytest.mark.asyncio
+async def test_the_rate_limit_is_named_rather_than_reported_as_a_status():
+    server = FakeServer(known=set(), limit_after=1)
+    with pytest.raises(ProbeError) as caught:
+        await _sessions("http://x", server, None, "probe")
+    assert caught.value.step == "guest"
+    assert "GUEST_PROVISION_LIMIT" in str(caught.value)
