@@ -17,7 +17,7 @@ resets every in-memory series; Prometheus keeps the history.
 | # | Objective | Measured by | Window | Alert |
 | --- | --- | --- | --- | --- |
 | **SLO-1** | A game can be played: guest, create, join, start, draw, leave all succeed within 20 s - and the probe itself keeps running | `sketchy_probe_success` and `sketchy_probe_last_run_timestamp_seconds` from `python -m app.probe` (textfile collector) | ≥ 99.5 % of probe runs over 30 days | `SketchyProbeFailing` (page, 5 m); `SketchyProbeStale` (page, 5 m) when the last run is over five minutes old or the series is absent |
-| **SLO-2** | The process is up and can reach its database | `up{job="sketchy"}`, `sketchy_db_ready` | ≥ 99.9 % over 30 days | `SketchyDown`, `SketchyDatabaseUnreachable` (page, 2 m) |
+| **SLO-2** | The process is up and can reach its database | `up{job="sketchy"}`, `sketchy_db_ready` (refreshed by the scrape, so it needs no `/api/ready` caller) | ≥ 99.9 % over 30 days | `SketchyDown`, `SketchyDatabaseUnreachable` (page, 2 m) |
 | **SLO-3** | API requests succeed | `sketchy:http_error_ratio:5m` | < 1 % 5xx over any 5 m | `SketchyHighErrorRate` (page) |
 | **SLO-4** | Client commands do not raise | `sketchy:socket_error_ratio:5m` | < 0.5 % `outcome="error"` over any 5 m | `SketchySocketErrors` (page) |
 | **SLO-5** | The event loop keeps time | `sketchy:loop_lag_p95_seconds:5m` | p95 < 250 ms | `SketchyLoopLag` (page, 5 m) |

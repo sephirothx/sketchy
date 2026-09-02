@@ -638,3 +638,22 @@ async def test_a_database_outage_costs_the_scrape_only_the_queue_family(env, mon
     response = await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})
     assert response.status_code == 200
     assert "sketchy_mail_outbox_pending" not in response.text
+
+
+async def test_the_scrape_reports_database_readiness_without_anyone_asking_ready(env, monkeypatch):
+    """A deployment that only scrapes must still see a database outage."""
+    new_client, factory = env
+    monkeypatch.setenv("METRICS_TOKEN", "scrape-me")
+    probe: ReadinessProbe = INJECTED["readiness"]  # type: ignore[assignment]
+    assert probe.last_database_result() is None
+
+    text = (await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})).text
+    assert "sketchy_db_ready 1" in text
+
+    async def refused():
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(probe, "_select_one", refused)
+    monkeypatch.setattr(probe, "cache_seconds", 0.0)
+    text = (await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})).text
+    assert "sketchy_db_ready 0" in text
