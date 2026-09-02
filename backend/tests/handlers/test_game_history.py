@@ -652,3 +652,96 @@ async def test_a_room_closed_without_a_game_records_nothing():
     await ctx.timers.close()
 
     assert history.saved == []
+
+
+# --- #482: a swallowed write is counted, with its reason -----------------------
+
+
+def abandoned_writes() -> list:
+    """The `history.write_abandoned` observations recorded since the last drain."""
+    from app.domain_values import RuntimeEventType
+    from app.services.runtime_metrics import metrics
+
+    return [
+        event
+        for event in metrics.drain()
+        if event.event_type == RuntimeEventType.HISTORY_WRITE_ABANDONED.value
+    ]
+
+
+@pytest.fixture
+def signals(monkeypatch):
+    from app.services.runtime_metrics import metrics
+    from app.services.telemetry import Telemetry
+
+    store = Telemetry()
+    monkeypatch.setattr(game_flow, "telemetry", store)
+    metrics.drain()
+    yield store
+    metrics.drain()
+
+
+async def test_a_history_write_the_database_refused_is_counted_as_an_error(signals):
+    room_manager, room, players = build_room(rounds=1)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(fail=True))
+
+    await play_to_completion(ctx, room, players)
+
+    events = abandoned_writes()
+    assert [event.details for event in events] == [{"kind": "game", "reason": "error"}]
+    assert events[0].room_id == room.id
+    assert signals.history_writes_abandoned.get(("game", "error")) == 1
+    # And the game still ended for the players.
+    assert room.state == "waiting"
+
+
+async def test_a_history_write_that_hung_is_counted_as_a_timeout(signals):
+    room_manager, room, players = build_room(rounds=1)
+
+    class HungRepo(FakeGameHistoryRepository):
+        async def save_game(self, *args):
+            await asyncio.sleep(3600)
+
+    ctx = build_context(room_manager, HungRepo())
+    with patch.object(game_flow, "HISTORY_WRITE_TIMEOUT_SECONDS", 0.05):
+        await play_to_completion(ctx, room, players)
+
+    events = abandoned_writes()
+    assert [event.details for event in events] == [{"kind": "game", "reason": "timeout"}]
+    assert events[0].value >= 50
+    assert signals.history_writes_abandoned.get(("game", "timeout")) == 1
+
+
+async def test_prompt_usage_losses_are_counted_under_their_own_kind(signals):
+    room_manager, room, players = build_room(rounds=1)
+    attach_curated_sources(room)
+    words = FakeWordListRepository(hang=True)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
+    with patch.object(game_flow, "PROMPT_USAGE_WRITE_TIMEOUT_SECONDS", 0.05):
+        await play_to_completion(ctx, room, players)
+    assert [event.details for event in abandoned_writes()] == [
+        {"kind": "prompt_usage", "reason": "timeout"}
+    ]
+
+    room_manager, room, players = build_room(rounds=1)
+    attach_curated_sources(room)
+
+    class RefusingWords(FakeWordListRepository):
+        async def record_prompt_usage(self, prompt_list_revision_ids, usage):
+            raise RuntimeError("locked")
+
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), RefusingWords())
+    await play_to_completion(ctx, room, players)
+    assert [event.details for event in abandoned_writes()] == [
+        {"kind": "prompt_usage", "reason": "error"}
+    ]
+    assert signals.history_writes_abandoned.get(("prompt_usage", "timeout")) == 1
+    assert signals.history_writes_abandoned.get(("prompt_usage", "error")) == 1
+
+
+async def test_a_write_that_lands_is_not_counted_as_lost(signals):
+    room_manager, room, players = build_room(rounds=1)
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    await play_to_completion(ctx, room, players)
+    assert abandoned_writes() == []
+    assert signals.history_writes_abandoned.total() == 0

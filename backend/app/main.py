@@ -37,6 +37,7 @@ from app.auth.warnings import pending_warning_payload
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
 from app.request_limits import RequestSizeLimitMiddleware
+from app.request_timing import RequestTimingMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db
 from app.db.seed import seed_prompt_lists
@@ -62,6 +63,7 @@ from app.services.friends import FriendService
 from app.services.lobby_chat import restore_lobby_backlog
 from app.services.presence import start_presence_loop, stop_presence_loop
 from app.services.readiness import LoopHealth, ReadinessProbe
+from app.services.telemetry import start_lag_sampler, stop_lag_sampler, telemetry
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -192,6 +194,9 @@ handler_context = register_all_handlers(
     friend_service=friend_service,
     shutdown=shutdown_coordinator,
 )
+# The socket ledger already knows exactly how many are open; the gauge reads
+# it rather than keeping a second count that could drift from it.
+telemetry.sources.sockets_connected = lambda: handler_context.room_capacity.open_sockets
 # Built here rather than at import so it can reach the live policy objects the
 # handlers consult: a change has to move the value the next command reads, not
 # a copy of it.
@@ -413,10 +418,12 @@ async def lifespan(_app: FastAPI):
     metrics_flush = None
     retention_sweep = None
     presence_broadcast = None
+    lag_sampler = None
     mail_health = LoopHealth("mail_delivery")
     metrics_health = LoopHealth("runtime_metrics")
     retention_health = LoopHealth("retention_sweep")
     presence_health = LoopHealth("presence_broadcast")
+    lag_health = LoopHealth("loop_lag")
     try:
         # Before anything that might have something to say.
         configure_logging()
@@ -454,12 +461,17 @@ async def lifespan(_app: FastAPI):
         presence_broadcast = start_presence_loop(
             handler_context.presence_broadcaster, health=presence_health
         )
+        # Supervised like the sweeps: a sampler that has stopped leaves the
+        # operations page showing a lag figure that is no longer true, which
+        # is the one condition readiness exists to surface.
+        lag_sampler = start_lag_sampler(telemetry, health=lag_health)
         readiness_probe.supervise("mail_delivery", mail_delivery, mail_health)
         readiness_probe.supervise("runtime_metrics", metrics_flush, metrics_health)
         readiness_probe.supervise("retention_sweep", retention_sweep, retention_health)
         readiness_probe.supervise(
             "presence_broadcast", presence_broadcast, presence_health
         )
+        readiness_probe.supervise("loop_lag", lag_sampler, lag_health)
         shutdown_coordinator.mark_ready()
         yield
     finally:
@@ -467,6 +479,7 @@ async def lifespan(_app: FastAPI):
         # is not a crashed one, and readiness has already gone 503 for the
         # drain by the time this runs.
         readiness_probe.release()
+        await stop_lag_sampler(lag_sampler)
         # First, and with nothing to flush: it holds no state of its own, and
         # a tick that broadcast into a drain would be describing a lobby that
         # is about to stop existing.
@@ -510,7 +523,9 @@ api.include_router(
         on_friends_changed=friend_service.announce_to,
     )
 )
-api.include_router(create_operations_router(async_session_factory))
+api.include_router(
+    create_operations_router(async_session_factory, readiness=readiness_probe)
+)
 api.include_router(
     create_admin_settings_router(
         async_session_factory, runtime_settings, on_change=announce_client_config
@@ -644,5 +659,11 @@ async def list_public_rooms(request: Request):
 # (single-port self-hosting). No-op during development when the folder is absent.
 _frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 configure_frontend(api, _frontend_dist)
+# Added after everything else, so it is outermost and the time it records is
+# the whole of what a client waited for: the size guard, the session lookup,
+# routing, the handler, and compression. Socket.IO traffic never reaches it -
+# `socketio.ASGIApp` answers `/socket.io` itself - so polling cannot drown
+# the REST numbers.
+api.add_middleware(RequestTimingMiddleware)
 
 app = socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io")

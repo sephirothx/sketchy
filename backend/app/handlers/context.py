@@ -5,6 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 import logging
+from time import perf_counter
 from typing import AsyncIterator, Iterable, Iterator, TYPE_CHECKING
 
 import socketio
@@ -19,6 +20,7 @@ from app.domain_values import RuntimeEventType
 from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
 from app.services.runtime_metrics import metrics
+from app.services.telemetry import payload_bytes, telemetry
 from app.services.timers import TimerManager
 
 if TYPE_CHECKING:
@@ -130,8 +132,28 @@ class HandlerContext:
             # Keyed by the kind of traffic, not the command: two commands of
             # one kind share the allowance their kind was given.
             key = f"{sid}:{self.command_budgets.class_of(command)}"
+            # Sized before the budget check: a throttled payload arrived too.
+            telemetry.socket_command_payload(command, payload_bytes(*args))
             if self._command_windows.check(key, budget):
-                return await handler(sid, *args)
+                # Timed and counted here, at the one door every command
+                # uses, so a handler cannot be added without being measured.
+                # A refusal the handler chose (`ok: False`) is a different
+                # outcome from an exception it did not, and the exception is
+                # counted before it propagates rather than instead.
+                started = perf_counter()
+                try:
+                    result = await handler(sid, *args)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    telemetry.socket_event(command, "error", perf_counter() - started)
+                    raise
+                refused = isinstance(result, dict) and result.get("ok") is False
+                telemetry.socket_event(
+                    command, "refused" if refused else "ok", perf_counter() - started
+                )
+                return result
+            telemetry.socket_event(command, "throttled", None)
             if self._command_windows.should_report(key, budget):
                 logger.warning("throttled %s from %s", command, sid)
                 metrics.record(

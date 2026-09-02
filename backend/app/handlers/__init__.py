@@ -4,6 +4,7 @@ from __future__ import annotations
 import socketio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.handlers.socket_wire import instrument_socket_server
 from app.handlers import (
     chat,
     connection,
@@ -119,4 +120,6 @@ def register_all_handlers(
     friends.register(ctx)
     lobby.register(ctx)
     connection.register(ctx)
+    # After the handlers, so the wire counters wrap the server they use.
+    instrument_socket_server(sio)
     return ctx

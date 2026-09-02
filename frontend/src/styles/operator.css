@@ -162,14 +162,244 @@
   }
 }
 
+/* ------------------------------------------------------------ signal cards */
+/* Six tracks: the wide card takes the row, the other three take a third
+   each. Traffic is the card an operator reads first and the one with two
+   tables in it, so it gets the room. */
+.ops-signals {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.ops-signals > .ops-card {
+  grid-column: span 2;
+  min-width: 0;
+}
+
+.ops-signals > .ops-card-wide {
+  grid-column: 1 / -1;
+}
+
+/* One row per kind of traffic - requests, commands, sockets - three across,
+   so the "per minute / p95 / errors" columns line up between rows. */
+.ops-card-wide .ops-signal-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ops-card-wide .ops-signal-row + .ops-signal-row {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+@media (max-width: 1000px) {
+  .ops-signals > .ops-card {
+    grid-column: span 3;
+  }
+}
+
+@media (max-width: 800px) {
+  .ops-signals > .ops-card {
+    grid-column: 1 / -1;
+  }
+
+  .ops-card-wide .ops-signal-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.ops-sizes-row {
+  display: grid;
+  gap: 0 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 800px) {
+  .ops-sizes-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ops-signal-grid {
+  display: grid;
+  gap: 10px 14px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-bottom: 8px;
+}
+
+/* Each cell is its own small tile: a well a step darker than the card, with
+   a contour, so one number's edge is never a guess. The chart inside is
+   raised back to the card colour. */
+.ops-signal {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.ops-signal.is-warning {
+  border-color: var(--warm);
+}
+
+/* A cell with a path to show rather than a number: the whole row. */
+.ops-signal-full {
+  grid-column: 1 / -1;
+}
+
+.ops-signal-label {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ops-signal-value {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.ops-signal.is-warning .ops-signal-value {
+  color: var(--warm-ink);
+}
+
+.ops-signal-note {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* Charts and tables sit in a well - a step darker than the card - so their
+   edges read without a border competing with the data. */
+.ops-sparkline {
+  display: block;
+  height: 28px;
+  margin-top: 6px;
+  width: 100%;
+}
+
+.ops-sparkline path {
+  fill: none;
+  stroke: var(--primary);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.ops-sparkline.is-warning path {
+  stroke: var(--warm);
+}
+
+.ops-sizes {
+  margin-top: 10px;
+}
+
+.ops-sizes h3 {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.ops-size-table {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-collapse: separate;
+  border-radius: var(--radius-sm);
+  border-spacing: 0;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.ops-size-table tbody tr:last-child th,
+.ops-size-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* The name is the column worth reading; the numbers are short. */
+.ops-size-table th:first-child {
+  width: 34%;
+}
+
+.ops-size-table th[scope="row"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ops-size-table th,
+.ops-size-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 5px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ops-size-table th[scope="col"] {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ops-size-table th[scope="col"]:first-child {
+  text-align: left;
+}
+
+.ops-size-table th[scope="row"] {
+  color: var(--ink);
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  text-align: left;
+}
+
+.ops-size-table td {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.ops-loop-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+}
+
+.ops-attention ul {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ops-attention li + li {
+  margin-top: 4px;
+}
+
 /* -------------------------------------------------------------- trend chart */
 .ops-chart-bars {
   align-items: flex-end;
+  background: var(--well);
+  border: 1px solid var(--line);
   border-bottom: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   display: flex;
   gap: 7px;
   height: 150px;
-  padding: 0 2px;
+  padding: 8px 8px 0;
 }
 
 .ops-chart-bar {

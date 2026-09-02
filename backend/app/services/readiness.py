@@ -39,7 +39,7 @@ DATABASE_PROBE_CACHE_SECONDS = 5.0
 class LoopHealth:
     """One background loop's own account of how it is getting on.
 
-    All three loops swallow every exception but cancellation and carry on for
+    Every supervised loop swallows every exception but cancellation and carries on for
     ever, which keeps one bad row from stopping every later sweep - and also
     makes a loop that fails on every single iteration indistinguishable, from
     outside, from one that is working. These counters are that distinction,
@@ -155,6 +155,21 @@ class ReadinessProbe:
             if cached is not None:
                 return cached
             return await self._probe()
+
+    def last_database_result(self) -> dict[str, object] | None:
+        """The most recent probe, however old, for the operations page.
+
+        Not a probe itself: the page must not be a second load balancer.
+        `None` before the first probe has run.
+        """
+        cached = self._cached_database
+        if cached is None:
+            return None
+        return {
+            "ok": cached[1],
+            "reason": cached[2],
+            "checkedAgoSeconds": round(max(0.0, self.clock() - cached[0]), 1),
+        }
 
     def _fresh_result(self) -> tuple[bool, str | None] | None:
         cached = self._cached_database

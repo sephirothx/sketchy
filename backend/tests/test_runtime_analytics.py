@@ -23,10 +23,17 @@ from app.services.runtime_metrics import (
     metrics,
     purge_expired_events,
 )
+from app.auth.mail import queue_email
+from app.domain_values import EmailTemplate
+from app.services.queue_depths import QueueDepths
+from app.services.readiness import LoopHealth, ReadinessProbe
+from app.services.telemetry import RING_MINUTES, Telemetry
 
 
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
+# What the `env` fixture wired into the router, for tests that drive it.
+INJECTED: dict[str, object] = {}
 
 
 @pytest_asyncio.fixture
@@ -40,7 +47,19 @@ async def env(monkeypatch):
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
-    app.include_router(create_operations_router(factory))
+    # Fresh signal stores rather than the process's, so nothing another test
+    # (or this test module's own imports) recorded leaks into an assertion.
+    INJECTED["readiness"] = ReadinessProbe(factory)
+    INJECTED["telemetry"] = Telemetry()
+    app.include_router(
+        create_operations_router(
+            factory,
+            readiness=INJECTED["readiness"],
+            telemetry=INJECTED["telemetry"],
+            queue_depths=QueueDepths(factory, cache_seconds=0.0),
+            mail_sweep_seconds=30.0,
+        )
+    )
 
     clients: list[AsyncClient] = []
 
@@ -427,3 +446,140 @@ async def test_an_id_written_without_dashes_still_finds_its_name(env):
     # Each is answered in the spelling it was stored in, so the id column keeps
     # showing what is actually on the row.
     assert by_type["ban.revoked"]["targetId"] == bare
+
+
+async def test_the_admin_payload_carries_the_process_signals(env):
+    """The page's numbers: rates and percentiles over the window, sixty-point
+    series behind them, and the queues and loops the scrape also sees."""
+    new_client, factory = env
+    admin = new_client()
+    account = await register(admin, "Operator")
+    await promote(factory, account["id"])
+    store: Telemetry = INJECTED["telemetry"]  # type: ignore[assignment]
+    store.http_request("GET", "/api/rooms", 200, 0.02)
+    store.socket_event("draw", "ok", 0.001)
+    store.record_loop_lag(0.004)
+
+    body = (await admin.get("/api/admin/metrics")).json()
+
+    assert body["windowMinutes"] == 5
+    assert body["http"]["total"] == 1
+    assert body["http"]["p95Ms"] is not None
+    assert body["socket"]["total"] == 1
+    assert body["process"]["loopLagMs"] == 4.0
+    assert body["process"]["uptimeSeconds"] >= 0
+    assert body["database"]["readiness"] is None
+    assert body["database"]["historyWritesAbandoned"]["total"] == 0
+    assert body["queues"]["mailOutbox"] == {
+        "pending": 0,
+        "oldestSeconds": None,
+        "sweepSeconds": 30.0,
+    }
+    assert body["queues"]["dataExports"] == {"pending": 0, "oldestSeconds": None}
+    assert body["loops"] == {}
+    assert all(len(points) == RING_MINUTES for points in body["series"].values())
+
+
+async def test_queued_mail_shows_as_depth_and_age(env):
+    new_client, factory = env
+    admin = new_client()
+    account = await register(admin, "Operator")
+    await promote(factory, account["id"])
+    async with factory() as session:
+        async with session.begin():
+            queue_email(
+                session,
+                to_address="someone@example.test",
+                template=list(EmailTemplate)[0],
+                payload={},
+            )
+
+    body = (await admin.get("/api/admin/metrics")).json()
+
+    assert body["queues"]["mailOutbox"]["pending"] == 1
+    assert body["queues"]["mailOutbox"]["oldestSeconds"] >= 0
+
+
+async def test_a_supervised_loop_that_stopped_is_reported_as_such(env):
+    new_client, factory = env
+    admin = new_client()
+    account = await register(admin, "Operator")
+    await promote(factory, account["id"])
+    probe: ReadinessProbe = INJECTED["readiness"]  # type: ignore[assignment]
+
+    async def done() -> None:
+        return None
+
+    import asyncio
+
+    task = asyncio.create_task(done())
+    await task
+    health = LoopHealth("mail_delivery")
+    health.record_failure()
+    probe.supervise("mail_delivery", task, health)
+
+    body = (await admin.get("/api/admin/metrics")).json()
+
+    assert body["loops"]["mail_delivery"]["running"] is False
+    assert body["loops"]["mail_delivery"]["consecutiveFailures"] == 1
+    assert body["loops"]["mail_delivery"]["secondsSinceSuccess"] is None
+
+
+async def test_the_scrape_carries_every_new_family(env, monkeypatch):
+    new_client, factory = env
+    monkeypatch.setenv("METRICS_TOKEN", "scrape-me")
+    store: Telemetry = INJECTED["telemetry"]  # type: ignore[assignment]
+    probe: ReadinessProbe = INJECTED["readiness"]  # type: ignore[assignment]
+    store.http_request("GET", "/api/rooms", 200, 0.02)
+    store.socket_event("draw", "ok", 0.001)
+    store.db_query(0.001)
+    store.record_loop_lag(0.001)
+    store.history_write_abandoned("game", "timeout")
+    await probe.check_database()
+
+    async def forever() -> None:
+        import asyncio
+
+        await asyncio.sleep(3600)
+
+    import asyncio
+
+    task = asyncio.create_task(forever())
+    health = LoopHealth("presence_broadcast")
+    health.record_success()
+    probe.supervise("presence_broadcast", task, health)
+    async with factory() as session:
+        async with session.begin():
+            queue_email(
+                session,
+                to_address="someone@example.test",
+                template=list(EmailTemplate)[0],
+                payload={},
+            )
+
+    try:
+        text = (
+            await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})
+        ).text
+    finally:
+        task.cancel()
+
+    for needle in (
+        'sketchy_http_requests_total{method="GET",route="/api/rooms",status_class="2xx"} 1',
+        'sketchy_http_request_duration_seconds_bucket{route="/api/rooms",le="+Inf"} 1',
+        'sketchy_socket_events_total{event="draw",outcome="ok"} 1',
+        "sketchy_event_loop_lag_seconds_count 1",
+        "sketchy_db_queries_total 1",
+        'sketchy_history_writes_abandoned_total{kind="game",reason="timeout"} 1',
+        "sketchy_mail_outbox_pending 1",
+        "sketchy_data_exports_pending 0",
+        'sketchy_loop_running{loop="presence_broadcast"} 1',
+        'sketchy_loop_consecutive_failures{loop="presence_broadcast"} 0',
+        "sketchy_db_ready 1",
+        "sketchy_process_uptime_seconds ",
+        # The nine that were there before are still there.
+        "sketchy_rooms_live ",
+    ):
+        assert needle in text, needle
+    # SQLite keeps no pool count, and the family is absent rather than zero.
+    assert "sketchy_db_pool_" not in text

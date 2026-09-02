@@ -291,6 +291,10 @@ class RuntimeEventType(StrEnum):
     DRAWING_STORED = "drawing.stored"
     RECAP_BUDGET_DROPPED = "recap.budget_dropped"
     COMMAND_THROTTLED = "command.throttled"
+    # A finished game's history, or its prompt-usage facts, that the server
+    # gave up writing. The swallow is deliberate (a slow database must not
+    # hold a room open); the count is what makes the loss visible (#482).
+    HISTORY_WRITE_ABANDONED = "history.write_abandoned"
 
 
 class GameOutcome(StrEnum):
