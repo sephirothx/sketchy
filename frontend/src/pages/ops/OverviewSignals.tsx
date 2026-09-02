@@ -24,16 +24,19 @@ function Cell({
   value,
   note,
   warning = false,
+  full = false,
   children,
 }: {
   label: string;
   value: string;
   note?: string;
   warning?: boolean;
+  /** Spans the grid: for a cell whose note is a path, not a number. */
+  full?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <div className={`ops-signal${warning ? " is-warning" : ""}`}>
+    <div className={`ops-signal${warning ? " is-warning" : ""}${full ? " ops-signal-full" : ""}`}>
       <span className="ops-signal-label">{label}</span>
       <span className="ops-signal-value">{value}</span>
       {note && <span className="ops-signal-note">{note}</span>}
@@ -211,6 +214,7 @@ export function ProcessCard({ live, reasons }: { live: LiveSnapshot; reasons: At
           label="Disk free"
           value={formatBytes(process.diskFreeBytes)}
           note={`of ${formatBytes(process.diskTotalBytes)} at ${process.diskPath}`}
+          full
         />
       </div>
     </SignalCard>

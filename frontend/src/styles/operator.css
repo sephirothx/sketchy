@@ -246,6 +246,11 @@
   border-color: var(--warm);
 }
 
+/* A cell with a path to show rather than a number: the whole row. */
+.ops-signal-full {
+  grid-column: 1 / -1;
+}
+
 .ops-signal-label {
   color: var(--faint);
   font-size: 11px;
@@ -277,13 +282,9 @@
 /* Charts and tables sit in a well - a step darker than the card - so their
    edges read without a border competing with the data. */
 .ops-sparkline {
-  background: var(--card);
-  border-radius: var(--radius-sm);
-  box-sizing: border-box;
   display: block;
-  height: 34px;
+  height: 28px;
   margin-top: 6px;
-  padding: 3px 4px;
   width: 100%;
 }
 
@@ -353,6 +354,10 @@
   color: var(--faint);
   font-size: 11px;
   font-weight: 800;
+}
+
+.ops-size-table th[scope="col"]:first-child {
+  text-align: left;
 }
 
 .ops-size-table th[scope="row"] {
