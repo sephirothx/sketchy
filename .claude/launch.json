@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sketchy-preview",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd backend && DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-stefano-repos-sketchy--claude-worktrees-nice-moser-e85566/9a8d1143-350c-48fa-a631-0bb4e7afba59/scratchpad/preview.db GUEST_PROVISION_LIMIT=1000 LOG_LEVEL=warning .venv/bin/python -m app.server"
+      ],
+      "port": 8000
+    }
+  ]
+}

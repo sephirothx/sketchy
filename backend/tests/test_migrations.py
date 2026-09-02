@@ -1335,3 +1335,104 @@ async def test_runtime_event_key_swap_refuses_a_populated_dev_database(tmp_path)
             await _migrate(engine, alembic_command.upgrade, "head")
     finally:
         await engine.dispose()
+
+
+def _lobby_line_sql(message_id: str) -> str:
+    return (
+        "INSERT INTO room_messages (id, room_instance_id, sender_user_id, "
+        "sender_player_id, sender_display_name_snapshot, "
+        "sender_is_anonymous_snapshot, is_spectator, message_kind, audience, "
+        "audience_user_ids, text, created_at, expires_at) VALUES "
+        f"('{message_id}', NULL, NULL, NULL, 'Ada', 0, 0, 'chat', 'lobby', '[]', "
+        "'hello', '2026-09-02 12:00:00', '2026-10-02 12:00:00')"
+    )
+
+
+async def test_lobby_lines_are_let_go_when_the_schema_that_holds_them_is_undone(
+    tmp_path,
+):
+    """x7e1c5a9b036 made a null scope mean 'said in the lobby'. Going back, the
+    columns are NOT NULL again, so the short-lived rows that cannot satisfy
+    that are dropped rather than the downgrade refused - they are thirty-day
+    rows kept for a report that may never come."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'lobby.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.begin() as connection:
+            await connection.execute(text(_lobby_line_sql(uuid.uuid4().hex)))
+
+        await _migrate(engine, alembic_command.downgrade, "w6d0b4f8a925")
+
+        async with engine.connect() as connection:
+            remaining = await connection.scalar(
+                text("SELECT COUNT(*) FROM room_messages")
+            )
+        assert remaining == 0
+        async with engine.begin() as connection:
+            with pytest.raises(IntegrityError):
+                await connection.execute(text(_lobby_line_sql(uuid.uuid4().hex)))
+    finally:
+        await engine.dispose()
+
+
+async def test_pinned_lobby_evidence_refuses_the_downgrade(tmp_path):
+    """Evidence a report pinned is a moderator's record of why they decided
+    something. A migration does not get to decide that, so it stops."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.db.models import (
+        PlayerReport,
+        PlayerReportMessageEvidence,
+        User,
+        generate_uuid,
+    )
+
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'pinned.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "head")
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        reporter_id, target_id, report_id = generate_uuid(), generate_uuid(), generate_uuid()
+        now = datetime.now(timezone.utc)
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    [
+                        User(id=reporter_id, display_name="Reporter"),
+                        User(id=target_id, display_name="Target"),
+                    ]
+                )
+            async with session.begin():
+                session.add(
+                    PlayerReport(
+                        id=report_id,
+                        reporter_user_id=reporter_id,
+                        reported_user_id=target_id,
+                        reason="harassment",
+                        details="Said in the lobby.",
+                    )
+                )
+            async with session.begin():
+                session.add(
+                    PlayerReportMessageEvidence(
+                        report_id=report_id,
+                        position=0,
+                        source_message_id=None,
+                        source_message_snapshot_id=generate_uuid(),
+                        sender_user_id=target_id,
+                        sender_display_name_snapshot="Target",
+                        sender_name_color_snapshot=None,
+                        sender_is_anonymous_snapshot=False,
+                        message_kind="chat",
+                        audience="lobby",
+                        near_miss_kind=None,
+                        text_snapshot="hello",
+                        message_created_at=now,
+                    )
+                )
+
+        with pytest.raises(Exception, match="pinned report evidence"):
+            await _migrate(engine, alembic_command.downgrade, "w6d0b4f8a925")
+    finally:
+        await engine.dispose()

@@ -145,7 +145,7 @@ optional services. Handler domains:
 | [`chat.py`](../backend/app/handlers/chat.py) | `send_chat`, `guess`, `buy_hint`, `buy_wheel_letter` |
 | [`moderation.py`](../backend/app/handlers/moderation.py) | `toggle_afk`, `vote_player`, `report_player` |
 | [`restart.py`](../backend/app/handlers/restart.py) | `propose_restart_vote`, `cast_restart_vote` |
-| [`lobby.py`](../backend/app/handlers/lobby.py) | `watch_lobby`, `unwatch_lobby` - joining and leaving the online-players channel |
+| [`lobby.py`](../backend/app/handlers/lobby.py) | `watch_lobby`, `unwatch_lobby`, `send_lobby_chat` - joining and leaving the lobby channel, and speaking into it |
 | [`friends.py`](../backend/app/handlers/friends.py) | `add_friend`, `invite_friend`, `join_friend_room` — the two ways into a room nobody named |
 | [`identity.py`](../backend/app/handlers/identity.py) | Resolving the account behind a socket into the name/color it plays under |
 | [`sessions.py`](../backend/app/handlers/sessions.py) | Socket session resolution shared by handler domains |
@@ -272,6 +272,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Runtime observations (30 days) and permanent daily roll-ups | Database | Yes |
 | Who is connected, and whether they are seated | `PresenceRegistry` (memory) | No |
 | The public room list a watching lobby holds | `LobbyBroadcaster` (memory, derived from `RoomManager`) | No |
+| The last 50 lobby chat lines, for an arrival | `LobbyChatLog` (memory, re-seeded from the retained rows at startup) | Effectively — a restart reads the most recent fifty back from `room_messages` |
 | Live counts of rooms/players/games | In-process counters | No, deliberately |
 
 The boundary is a rule, not an accident: **durable configuration and durable
@@ -632,6 +633,77 @@ online - worse than offering nothing, and nobody scans a list this size by
 typing anyway. Finding one person is a different feature from seeing who is
 around, and it needs a server-side lookup over the registry.
 
+### Lobby chat is an event stream, not a feed
+
+The obvious way to add chat to the channel above was as a third feed: a ring
+buffer diffed on the tick, with a revision of its own. It is not built that
+way, and the reasons are the properties the other two feeds rely on. Presence
+and the room list are *state* — there is a source of truth to rebuild them
+from, so a diff is cheap and a resync is always possible — and the doc above
+justifies discard-and-resubscribe on a gap with "a stale lobby row is cosmetic".
+A chat line has none of that. There is nothing to rebuild it from; a
+one-second tick is latency a conversation feels; and a gap in its numbering is
+not a fault but the design — a line is deliberately never delivered to somebody
+who blocked its author, so the blocker's copy of the sequence *has* holes, and
+a client that resynced on one would resubscribe every time anybody it muted
+spoke.
+
+So `send_lobby_chat` ([`handlers/lobby.py`](../backend/app/handlers/lobby.py))
+emits `lobby_chat_message` to the channel the moment a line is accepted, from
+the handler rather than the broadcaster, the way room chat does. What it shares
+with the feeds is the **channel and the acknowledgement**: `watch_lobby` hands
+an arrival the last fifty lines beside the other two baselines, for the same
+reason those are on the acknowledgement — the client applies nothing before
+its baseline, so a line that beats the answer must be in the backlog or it is
+lost. Each line carries a per-process `seq`, and the client uses it for one
+thing: a line numbered at or below what it holds is one it has. On a reconnect
+the backlog *replaces* the store, since the numbers belong to a process that
+may be gone; on a resync the other feeds asked for on a live socket it is
+*merged*, so a lobby open all evening is not cut back to fifty lines because
+presence missed a tick. A dropped socket leaves the chat drawn — those lines
+were said — where presence empties and the rooms go stale.
+
+**Blocks are honoured on both paths, from the same cache.** A line by an author
+somebody has muted is sent to a recipient list rather than the channel,
+mirroring `_emit_player_chat`: every socket in the channel, minus those whose
+account is in the author's blockers — resolved through
+`PresenceRegistry.user_for_sid`, because the channel is a list of sockets and
+a block is between accounts. A socket with no account has no block list and
+always receives. That is the one path that is not a single broadcast, and it
+costs one walk over the channel's membership, only when the author has
+blockers. The backlog is filtered the other way round, per arrival: one bounded
+lookup per distinct author, together, and an author whose lookup fails is
+shown rather than hidden (R-BLOCK-06). There is no seat to warm the cache at,
+so the handshake warms it beside the identity it already reads.
+
+**Retention reuses the room table.** A lobby line is a `room_messages` row
+with audience `lobby`, no room scope, no seat, and an empty recipient list —
+a CHECK makes a null scope *mean* lobby rather than a room line missing its
+room. The alternative, a second table, would have meant a second purge, a
+second deletion sweep and a second evidence path for a row that differs from a
+room line in three nullable columns. The recipient list is empty on purpose:
+the line went to every open lobby, and writing every watcher's id per line
+would be a directory of who was around. The moderation API reads the audience
+value instead ([*Chat delivery and the database*](#chat-delivery-and-the-database)).
+
+The backlog is held in memory, and a restart re-seeds it from the retained
+rows before the first socket is served (`restore_lobby_backlog`, called from
+the lifespan right after the expiry purge), so a deploy does not empty the
+lobby. That read is bounded at ten seconds and cannot fail the start: a
+database that does not answer leaves the ring empty, which is what a first
+ever start has. What keeps this a buffer rather than a transcript is that
+nothing ever reads further back than the fifty — the 30-day copy exists so a
+line can be cited in a report, and N-05 still stands. A deleted or suspended
+account is dropped from the backlog in the same sweep that clears its
+presence, so its name and words are not handed to the next fifty arrivals;
+the restore query excludes a currently suspended author for the same reason,
+and a deleted account's rows are already gone.
+
+Every line carries the server's `sentAt`, the same instant written to its
+row, and the panel shows an age beside it — "now", "5m", a time of day,
+"yesterday", a count of days — because a backlog on a quiet server can span
+days and a line from yesterday must not read as a greeting.
+
 ### Friendship rules live with the write
 
 Everything a friendship must obey - the ceilings, the hourly request limit,
@@ -795,10 +867,19 @@ it was when a failed write returned nothing — the line still goes out, it simp
 cannot be cited. The queue is drained on the way out of a planned shutdown, after the
 sockets, so the last thing anybody said is written rather than abandoned.
 
+A lobby line takes the same hand-off through `record_lobby`, which shares the queue,
+the worker and the queue-full rule with `record` and composes a row with no room and
+no seat. Its `created_at` is the instant the line went out, so the age a watcher saw
+beside it is the time a moderator sees on it. The evidence rules in
+[`api/moderation.py`](../backend/app/api/moderation.py) read the row's audience: a
+lobby line is public by construction, so the "did you receive it" check does not
+apply, the author must still be the reported account, and a report never mixes lobby
+and room lines. `evidence_from_live_room` is scoped to a room and never picks them.
+
 The block filter is answered from memory. `BlockService` caches who has muted a sender
 and is invalidated on every change, and the entry path warms a player's entry when they
 take a seat — where waiting is what entering a room already does — so the chat path is
-left with a cache hit. A miss is a read bounded at two seconds, and a read that does not
+left with a cache hit. The handshake warms it too, for the lobby, which has no seat. A miss is a read bounded at two seconds, and a read that does not
 come back answers "nobody": the line goes out unfiltered rather than late. That is a
 deliberate ranking of one failure over another. Blocking is a presentation filter, not a
 security boundary — the sender is in the room either way, in the player list and on the
@@ -1056,6 +1137,7 @@ already public.
 | A game rule or a scoring constant | [`backend/app/game.py`](../backend/app/game.py) | Bump `SCORING_RULES_VERSION`; update `rule_snapshot()`; [`requirements.md`](requirements.md) §Scoring |
 | A room setting | [`backend/app/rooms.py`](../backend/app/rooms.py), [`payloads.py`](../backend/app/handlers/payloads.py) | `to_state_payload`, `editable_room_settings_payload`, `frontend/src/types.ts`, preset columns, [`database.md`](database.md) |
 | A Socket.IO event or payload key | the handler + [`frontend/src/types.ts`](../frontend/src/types.ts) | `test_wire_contract.py`, [`wire-protocol.md`](wire-protocol.md) |
+| A chat delivery rule, room or lobby | [`handlers/chat.py`](../backend/app/handlers/chat.py) or [`handlers/lobby.py`](../backend/app/handlers/lobby.py), [`services/message_retention.py`](../backend/app/services/message_retention.py) | [`auth/blocks.py`](../backend/app/auth/blocks.py), [`database.md`](database.md) §`room_messages`, [`requirements.md`](requirements.md) R-BLOCK-02 and §Lobby chat |
 | The drawing wire format | [`live_drawing.py`](../backend/app/live_drawing.py) | `canvas_history.py`, `useCanvasProtocol.ts`, `fixtures/canvas_protocol_v1.json`, [`wire-protocol.md`](wire-protocol.md) |
 | The stored drawing format | [`canvas_storage.py`](../backend/app/canvas_storage.py) | Add a decoder entry; **never remove one** |
 | A table or column | [`backend/app/db/models.py`](../backend/app/db/models.py) | A new Alembic migration, `test_migrations.py`, [`database.md`](database.md) |
@@ -1121,6 +1203,8 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/handlers/__init__.py`](../backend/app/handlers/__init__.py) | Wire all Socket.IO handler domains onto a server. |
 | [`app/handlers/chat.py`](../backend/app/handlers/chat.py) | Socket.IO handlers for the chat domain. |
 | [`app/handlers/connection.py`](../backend/app/handlers/connection.py) | Socket.IO handlers for the connection domain. |
+| [`app/handlers/friends.py`](../backend/app/handlers/friends.py) | Socket.IO handlers for friend requests, invitations, and joining a friend's room. |
+| [`app/handlers/lobby.py`](../backend/app/handlers/lobby.py) | Socket.IO handlers for the lobby: its online player list, and its chat. |
 | [`app/handlers/context.py`](../backend/app/handlers/context.py) | Shared dependencies passed to every Socket.IO handler domain. |
 | [`app/handlers/drawing.py`](../backend/app/handlers/drawing.py) | Socket.IO handlers for the drawing domain. |
 | [`app/handlers/game.py`](../backend/app/handlers/game.py) | Socket.IO handlers for the game domain. |
@@ -1156,6 +1240,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |
 | [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it and the room list. |
 | [`app/services/lobby_rooms.py`](../backend/app/services/lobby_rooms.py) | The public room list as a snapshot and deltas, for that channel. |
+| [`app/services/lobby_chat.py`](../backend/app/services/lobby_chat.py) | The last few lines said in the lobby, and the number each one was given. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
 | [`app/services/room_quotas.py`](../backend/app/services/room_quotas.py) | Ceilings on room creation, so one client cannot spend the whole server. |
@@ -1173,10 +1258,10 @@ Files are named for their single concern; the directory says the role.
 | Directory | Files |
 | --- | --- |
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
-| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `friendsStore.ts`, `gameStore.ts`, `presenceStore.ts`, `roomsStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
+| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `presenceStore.ts`, `roomsStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `OnlinePlayersPanel.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomSetupControls.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `api.ts`, `avatar.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `userBlocks.ts`, `userSettings.ts` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DrawingRecapGallery.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportPlayerDialog.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomSetupControls.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsIcon.tsx`, `SettingsModal.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).

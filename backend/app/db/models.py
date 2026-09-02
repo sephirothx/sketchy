@@ -801,6 +801,19 @@ class RoomMessage(Base):
         CheckConstraint(
             "expires_at > created_at", name="ck_room_messages_expiry_after_creation"
         ),
+        # A lobby line has no room and no seat; a room line has both. Never
+        # one without the other, so a null scope is a statement, not a gap.
+        CheckConstraint(
+            "(audience = 'lobby' AND room_instance_id IS NULL"
+            " AND sender_player_id IS NULL)"
+            " OR (audience <> 'lobby' AND room_instance_id IS NOT NULL"
+            " AND sender_player_id IS NOT NULL)",
+            name="ck_room_messages_lobby_has_no_scope",
+        ),
+        CheckConstraint(
+            "audience <> 'lobby' OR message_kind = 'chat'",
+            name="ck_room_messages_lobby_is_chat",
+        ),
         Index("ix_room_messages_expires_at", "expires_at"),
         Index("ix_room_messages_game_turn_created", "game_id", "turn_id", "created_at"),
         Index("ix_room_messages_sender_created", "sender_user_id", "created_at"),
@@ -809,8 +822,9 @@ class RoomMessage(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
     )
-    room_instance_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+    # Null for a lobby line, which is the only kind without a room.
+    room_instance_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True, index=True
     )
     # Games and turns are allocated at runtime but written only when the game
     # completes. These durable correlation IDs intentionally do not use FKs so
@@ -826,8 +840,8 @@ class RoomMessage(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    sender_player_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    sender_player_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
     sender_seat_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=True

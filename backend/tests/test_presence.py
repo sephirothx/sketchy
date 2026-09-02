@@ -809,3 +809,16 @@ def test_rekeying_an_account_with_no_sockets_is_a_no_op():
     registry.rekey("account", "account")
     assert registry.online_accounts == 1
     assert registry.is_online("account")
+
+
+def test_a_socket_answers_for_the_account_that_opened_it():
+    """What lobby chat asks when narrowing a muted author's recipients: the
+    channel is a list of sockets, and a block is between accounts."""
+    registry = PresenceRegistry()
+    assert registry.user_for_sid("nobody") is None
+    registry.note_socket_opened("guest-tab", "guest")
+    assert registry.user_for_sid("guest-tab") == "guest"
+    registry.rekey("guest", "account")
+    assert registry.user_for_sid("guest-tab") == "account"
+    registry.note_socket_closed("guest-tab")
+    assert registry.user_for_sid("guest-tab") is None

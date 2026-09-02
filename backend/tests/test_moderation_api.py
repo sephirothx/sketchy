@@ -1061,3 +1061,100 @@ async def test_a_consequence_decides_its_report_in_one_transaction(env):
         },
     )
     assert banned.status_code == 409
+
+
+async def test_a_lobby_line_is_evidence_on_its_own_terms(env):
+    """Said to every lobby that was open, so it has no room to agree on and no
+    recipient list to check the reporter against - public by construction.
+    It is one conversation and not any room's, so it is never cited beside a
+    room line, and it still has to be the reported player's own."""
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    moderator_http = new_client()
+    reporter = await register(reporter_http, "LobbyReporter")
+    target = await register(target_http, "LobbyTarget")
+    moderator = await register(moderator_http, "LobbyMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    now = datetime.now(timezone.utc)
+    lobby_id = generate_uuid()
+    room_id = generate_uuid()
+    reporters_own = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            common = {
+                "sender_display_name_snapshot": "LobbyTarget",
+                "sender_is_anonymous_snapshot": False,
+                "is_spectator": False,
+                "message_kind": "chat",
+                "near_miss_kind": None,
+                "created_at": now,
+                "expires_at": now + timedelta(days=30),
+            }
+            session.add_all(
+                [
+                    RoomMessage(
+                        id=lobby_id,
+                        sender_user_id=UUID(target["id"]),
+                        room_instance_id=None,
+                        sender_player_id=None,
+                        audience="lobby",
+                        audience_user_ids=[],
+                        text="Said to the whole lobby",
+                        **common,
+                    ),
+                    RoomMessage(
+                        id=room_id,
+                        sender_user_id=UUID(target["id"]),
+                        room_instance_id=generate_uuid(),
+                        sender_player_id=generate_uuid(),
+                        audience="room",
+                        audience_user_ids=[reporter["id"], target["id"]],
+                        text="Said in a room",
+                        **common,
+                    ),
+                    RoomMessage(
+                        id=reporters_own,
+                        sender_user_id=UUID(reporter["id"]),
+                        room_instance_id=None,
+                        sender_player_id=None,
+                        audience="lobby",
+                        audience_user_ids=[],
+                        text="The reporter's own lobby line",
+                        **common,
+                    ),
+                ]
+            )
+
+    def report(message_ids, details):
+        return reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "harassment",
+                "details": details,
+                "messageIds": [str(message_id) for message_id in message_ids],
+            },
+        )
+
+    mixed = await report([lobby_id, room_id], "One from the lobby, one from a room.")
+    assert mixed.status_code == 422
+    assert "cannot be mixed" in mixed.json()["detail"]
+
+    not_theirs = await report([reporters_own], "This one is mine, not theirs.")
+    assert not_theirs.status_code == 422
+    assert "authored by the reported player" in not_theirs.json()["detail"]
+
+    accepted = await report([lobby_id], "Please review what they said in the lobby.")
+    assert accepted.status_code == 201
+
+    listing = await moderator_http.get("/api/moderation/reports")
+    [pinned] = [
+        item
+        for item in listing.json()["reports"]
+        if item["reportedUserId"] == target["id"]
+    ]
+    [evidence] = pinned["messageEvidence"]
+    assert evidence["sourceMessageId"] == str(lobby_id)
+    assert evidence["audience"] == "lobby"
+    assert evidence["text"] == "Said to the whole lobby"

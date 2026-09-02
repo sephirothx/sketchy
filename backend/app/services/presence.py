@@ -325,6 +325,14 @@ class PresenceRegistry:
     def is_online(self, user_id: str | None) -> bool:
         return bool(user_id) and user_id in self._sids_by_user
 
+    def user_for_sid(self, sid: str) -> str | None:
+        """The account behind one socket; None for a socket with no account.
+
+        What a lobby chat line consults when its author is blocked: the
+        channel is a list of sockets, and a block is between accounts.
+        """
+        return self._user_by_sid.get(sid)
+
     def online_user_ids(self) -> list[str]:
         return list(self._sids_by_user)
 

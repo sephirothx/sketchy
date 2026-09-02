@@ -23,6 +23,9 @@ per command, because the thing being tuned is a *kind* of traffic:
   floor rather than a ceiling: a few seconds between full canvas replays.
 * **Everything else** - votes, hints, settings, renames, previews - is a
   human pressing a control, which no one does thirty times in ten seconds.
+* **Lobby chat** is conversation with a different fan-out: a room line
+  reaches at most twenty-four seats, a lobby line reaches every lobby that is
+  open. Its own kind, so tightening it never tightens guessing.
 
 Held in a policy object rather than read from the environment, because the
 values follow the client's cadence rather than the size of the host, and
@@ -112,12 +115,24 @@ ACTION = BudgetClass(
     ),
 )
 
+LOBBY_CHAT = BudgetClass(
+    name="lobby_chat",
+    # Its own kind rather than `conversation`: a room line reaches at most
+    # twenty-four seats, a lobby line reaches every lobby that is open, so the
+    # same allowance is a different amount of everybody else's bandwidth.
+    default=Budget(limit=6, window_seconds=10.0),
+    minimum=1,
+    maximum=60,
+    description="Lobby chat lines per ten seconds.",
+)
+
 BUDGET_CLASSES: tuple[BudgetClass, ...] = (
     DRAWING,
     CONVERSATION,
     RESYNC,
     HEARTBEAT,
     ACTION,
+    LOBBY_CHAT,
 )
 
 # Commands not named here answer to `action`, so a command added without a
@@ -127,6 +142,7 @@ COMMAND_CLASSES: Mapping[str, str] = {
     "undo_stroke": DRAWING.name,
     "send_chat": CONVERSATION.name,
     "guess": CONVERSATION.name,
+    "send_lobby_chat": LOBBY_CHAT.name,
     "request_sync_strokes": RESYNC.name,
     "session_ping": HEARTBEAT.name,
 }

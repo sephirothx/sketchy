@@ -54,7 +54,7 @@ from app.services.shutdown import ShutdownCoordinator
 
 
 def budget_tunables(policy: CommandBudgetPolicy) -> list[Tunable]:
-    """The five per-caller command budgets, described by the policy itself.
+    """The six per-caller command budgets, described by the policy itself.
 
     Nothing here restates a bound or a description. `BudgetClass` already
     carries both, sized against what the client actually does, and a bound

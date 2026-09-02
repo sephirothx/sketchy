@@ -635,7 +635,23 @@ def create_moderation_router(
                     retained_messages = [
                         by_id[message_id] for message_id in body.message_ids
                     ]
-                    if len(
+                    # A lobby line was said to every lobby that was open, so
+                    # it has no room to agree on and no recipient list to
+                    # check the reporter against. It is public by
+                    # construction, which is the answer to both questions -
+                    # but it is one conversation, not any room's, so the two
+                    # are never cited together.
+                    lobby_lines = [
+                        message
+                        for message in retained_messages
+                        if message.audience == "lobby"
+                    ]
+                    if lobby_lines and len(lobby_lines) != len(retained_messages):
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Lobby and room messages cannot be mixed in one report.",
+                        )
+                    if not lobby_lines and len(
                         {message.room_instance_id for message in retained_messages}
                     ) != 1:
                         raise HTTPException(
@@ -648,7 +664,10 @@ def create_moderation_router(
                                 status_code=422,
                                 detail="Evidence must be authored by the reported player.",
                             )
-                        if reporter_id not in message.audience_user_ids:
+                        if (
+                            message.audience != "lobby"
+                            and reporter_id not in message.audience_user_ids
+                        ):
                             raise HTTPException(
                                 status_code=403,
                                 detail="You cannot select a message you did not receive.",

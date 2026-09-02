@@ -4,6 +4,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
+import { LobbyChatPanel } from "../components/LobbyChatPanel";
 import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
 import { ApiError } from "../lib/api";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
@@ -486,18 +487,7 @@ export function LobbyBrowserPage() {
           they sit below the list rather than above it. They stack on a phone
           in the same order: the room browser is what the page is for. */}
       <div className="lobby-social">
-        <section className="panel lobby-chat-panel" aria-labelledby="lobby-chat-heading">
-          <div className="lobby-rooms-heading">
-            <h2 id="lobby-chat-heading">Chat</h2>
-          </div>
-          {/* Deliberately not a disabled composer. A greyed-out text box reads
-              as broken rather than unbuilt, and invites bug reports about a
-              feature nobody has written yet. #533 replaces this whole panel. */}
-          <p className="lobby-chat-placeholder">
-            A lobby-wide chat is coming. For now, conversation happens inside a
-            room.
-          </p>
-        </section>
+        <LobbyChatPanel />
 
         <OnlinePlayersPanel />
       </div>

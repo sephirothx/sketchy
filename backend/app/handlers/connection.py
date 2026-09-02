@@ -92,6 +92,12 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             # never has to. A read that does not answer leaves the account out
             # of the list until something warms it again - never a blank row.
             await ctx.presence_identities.warm(user_id)
+            # And who has muted them, for the same reason: a lobby line has no
+            # seat to warm the block filter at, so the handshake is where a
+            # sender's entry is read, bounded, with a miss answering "nobody".
+            block_service = getattr(ctx, "block_service", None)
+            if block_service is not None:
+                await block_service.warm(user_id)
         # Sent to every socket, including one that will be told to upgrade:
         # a client running the current bundle needs these before it draws
         # anything, and there is no acknowledgement on a handshake to put

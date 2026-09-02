@@ -155,6 +155,7 @@ legitimate drawer produces and the budget decides how many are accepted.
 | --- | --- | --- |
 | `drawing` | `draw`, `undo_stroke` | 100 per 2 s |
 | `conversation` | `send_chat`, `guess` | 20 per 10 s |
+| `lobby_chat` | `send_lobby_chat` | 6 per 10 s — its own kind, because a lobby line reaches every open lobby rather than one room's seats |
 | `resync` | `request_sync_strokes` | 1 per 2 s |
 | `heartbeat` | `session_ping` | 20 per 10 s |
 | `action` | everything else | 30 per 10 s |
@@ -284,6 +285,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `cast_restart_vote` | `RestartVotePayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `watch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `unwatch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
+| `send_lobby_chat` | `TextPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `invite_friend` | `FriendUserPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `join_friend_room` | `JoinFriendRoomPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
@@ -405,6 +407,7 @@ the server resolves the seat against the live room and selects the evidence itse
 | `server_full` | `{reason}` — the socket is closed immediately afterwards | one socket, at handshake |
 | `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_rooms_changed` | `{revision, opened: RoomSummary[], closed: roomId[], changed: RoomSummary[]}` — the public room list moved, on the same fixed tick. Its own revision, because the two feeds move independently | the `lobby` channel: every socket that asked with `watch_lobby` |
+| `lobby_chat_message` | `LobbyChatMessage` — one line, the moment it was said. Not a feed: no revision, no tick, and a gap in `seq` is never resynced | the `lobby` channel, minus the sockets of accounts that blocked the author |
 | `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it | every socket of **both** affected accounts, the one that acted included: its REST answer refreshes only the tab that called, and a second lobby has no other way to hear |
 | `friend_invite_received` | `{fromUserId, displayName, inviteToken, expiresIn}` — **no room code, name, or id** | every socket of the invited account |
 | `client_config` | `ClientConfig` — cadences the client runs at | one socket at handshake; every socket when one changes |
@@ -422,17 +425,18 @@ R-FRIEND-06). `add_friend` names a **seat**, not an account, so no account id
 crosses the wire inside a room (R-ROOM-07).
 
 **`LobbyPlayer`** — one row of the lobby's online list. The `watch_lobby`
-**acknowledgement** carries both of the channel's baselines at once:
+**acknowledgement** carries every one of the channel's baselines at once:
 
 ```jsonc
 { "ok": true,
   "revision": 41, "players": [LobbyPlayer], "onlineCount": 412,
-  "roomsRevision": 17, "rooms": [RoomSummary] }
+  "roomsRevision": 17, "rooms": [RoomSummary],
+  "chatSeq": 1207, "chat": [LobbyChatMessage] }
 ```
 
 Baselines, not events, so there is no window in which a socket is in the
 channel receiving deltas against a list it does not have yet — and one
-acknowledgement rather than two, so that guarantee holds for both feeds. The
+acknowledgement rather than three, so that guarantee holds for every feed. The
 revisions are separate on purpose: a room filling up must not look like
 presence news, and somebody signing in must not re-send the rooms.
 
@@ -462,7 +466,39 @@ The client empties its presence list and marks its room list *stale* — still
 drawn, because those rooms are public and were true a moment ago, but patched
 by nothing until a fresh acknowledgement replaces it. The rooms in
 `lobby_rooms_changed` are the same `RoomSummary` shape `GET /api/rooms`
-returns, from the same serializer.
+returns, from the same serializer. The chat is left exactly as it is: those
+lines were said, and the next acknowledgement's backlog replaces them.
+
+**`LobbyChatMessage`** — one line of the lobby's chat, delivered by
+`lobby_chat_message` the moment it is accepted and handed to an arrival in
+the acknowledgement's `chat`, oldest first, at most the fifty the server
+holds (re-read from the retained rows after a restart):
+
+```jsonc
+{ "seq": 1208, "userId": "…", "displayName": "Ada", "nameColor": "#4f9",
+  "isAnonymous": false, "text": "anyone up for a round?",
+  "sentAt": "2026-09-02T15:04:05.123456+00:00",
+  "retainedMessageId": "0192…" }   // present only when retention took the row
+```
+
+Chat rides the channel but is **not a third feed** of it. Presence and the
+room list are state, rebuilt on the tick and numbered so a client can resync
+across a gap; a line is an event with nothing to rebuild it from, and a gap
+in `seq` is *expected* — a line is deliberately not delivered to somebody
+who blocked its author. So `seq` is a per-process counter the client uses
+for one thing: putting the backlog and the lines that beat the
+acknowledgement into one order without a duplicate (a line numbered at or
+below what it holds is one it has). `chatSeq` is the number of the last line
+said, shown to this watcher or not, so the next line is never taken for an
+old one. On a reconnect the backlog *replaces* what the client holds, since
+the numbers belong to the old process; on a resync the other feeds asked for
+on a live socket it is *merged*, so a lobby left open all evening keeps what
+it watched go by. It carries an account id for the reason `LobbyPlayer` does
+— there is no seat to resolve, and a report needs a stable target — and never
+a room. `sentAt` is the server's instant, the same one written to the
+retained row, and the client renders it as an age rather than sorting by it.
+`retainedMessageId` follows room chat's rule exactly (R-MOD-08a): absent means
+the line cannot be cited.
 
 
 **`room_state`** ([`backend/app/rooms.py:511`](../backend/app/rooms.py) →
@@ -1171,6 +1207,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
+| `PROTOCOL_VERSION` (8) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | The frame layout changes. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` and the `{v,a}` JSON | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

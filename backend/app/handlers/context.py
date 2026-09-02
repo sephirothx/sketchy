@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from app.services.game_flow import GameFlowService
     from app.services.friend_invites import FriendInviteBook
     from app.services.friends import FriendService
+    from app.services.lobby_chat import LobbyChatLog
     from app.services.message_retention import MessageRetentionService
     from app.services.presence import (
         LobbyBroadcaster,
@@ -84,6 +85,9 @@ class HandlerContext:
     presence: PresenceRegistry = field(init=False)
     presence_identities: PresenceIdentityCache = field(init=False)
     presence_broadcaster: LobbyBroadcaster = field(init=False)
+    # The last few lobby lines, for an arrival; an event stream rather than a
+    # feed of the broadcaster's, so it lives beside it rather than inside it.
+    lobby_chat: LobbyChatLog = field(init=False)
     # Friendships are durable, so the service exists only where there is a
     # database; the invitations are live state and always exist.
     friend_service: FriendService | None = None
