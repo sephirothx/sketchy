@@ -983,6 +983,13 @@ Base path `/api` unless noted. `SessionAuthMiddleware`
 hashed session cookie for every request. Role-gated endpoints answer **404**, not 403,
 to anyone without the role — the account menu decides what is *shown* and nothing more.
 
+Every response carries an `X-Request-ID`: the UUID the caller sent in the request
+header of that name, if it sent one, else one the server minted. It is the id the
+server's own log lines for that request are stamped with, and the one written into
+`audit_events.request_id` when the request produced a ledger entry - so a client, a
+proxy and the operator can quote the same id. A supplied value that is not a UUID is
+replaced, not echoed.
+
 ### Health, discovery, metrics
 
 | Method | Path | Notes |

@@ -24,6 +24,7 @@ from app.services.runtime_metrics import (
     purge_expired_events,
 )
 from app.auth.mail import queue_email
+from app.request_timing import RequestTimingMiddleware
 from app.domain_values import EmailTemplate
 from app.services.queue_depths import QueueDepths
 from app.services.readiness import LoopHealth, ReadinessProbe
@@ -46,6 +47,9 @@ async def env(monkeypatch):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    # Outermost, as in main.py: it is what gives the request the id the
+    # audit ledger and the log lines share.
+    app.add_middleware(RequestTimingMiddleware, telemetry=Telemetry())
     app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
     # Fresh signal stores rather than the process's, so nothing another test
     # (or this test module's own imports) recorded leaks into an assertion.
@@ -583,3 +587,24 @@ async def test_the_scrape_carries_every_new_family(env, monkeypatch):
         assert needle in text, needle
     # SQLite keeps no pool count, and the family is absent rather than zero.
     assert "sketchy_db_pool_" not in text
+
+
+async def test_the_ledger_row_and_the_response_share_one_request_id(env):
+    """One id, quoted by the client, in the response, and on the audit row."""
+    new_client, factory = env
+    admin, subject = new_client(), new_client()
+    operator = await register(admin, "Watcher")
+    watched = await register(subject, "Watched")
+    await promote(factory, operator["id"])
+
+    # No header sent: the id is the one the middleware minted, which the
+    # ledger can only know by reading the request's context rather than
+    # minting a second one of its own.
+    response = await admin.get(f"/api/admin/players/{watched['id']}/activity")
+
+    minted = response.headers["x-request-id"]
+    async with factory() as session:
+        event = await session.scalar(
+            select(AuditEvent).where(AuditEvent.event_type == "admin.player_activity_viewed")
+        )
+        assert event.request_id == minted

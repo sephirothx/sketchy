@@ -1035,6 +1035,27 @@ as the buckets. Everything here is process memory and vanishes on restart, like 
 counts, and for the same reason. The queue depths are the one thing that costs a query,
 so they are cached for ten seconds and shared by both surfaces.
 
+**Logs** are the third surface, and since #472 they can be read by a machine and say what
+they belong to ([`backend/app/logging_config.py`](../backend/app/logging_config.py),
+[`backend/app/correlation.py`](../backend/app/correlation.py)). Every request gets an id
+at the timing middleware - the `X-Request-ID` the caller sent, if it was a UUID, else a
+fresh one - echoed on the response and set as task-local context; every client command
+gets the socket id, the command name and a fresh id of its own at `HandlerContext.on`.
+A filter on the handler stamps each record with whatever is current, so a logger deep
+in a service never has to be told, and the audit ledger reads the same id rather than
+minting another. The middleware also writes the one access line per request (route
+template, status, milliseconds; probes and static files at DEBUG), which replaces
+uvicorn's access log: the server starts uvicorn with its own logging configuration
+switched off so its lines take the application's shape too. That shape is one JSON
+object per line - `ts`, `level`, `logger`, `msg`, the correlation keys when present, a
+`fields` object for structured extras, `exc` for a traceback - when `LOG_FORMAT=json`,
+which is the default under `SKETCHY_ENV=production`; the development default is the old
+text line with the correlation keys as a suffix. Either way each line passes a redaction
+filter first: a bearer or basic credential, a `password=`/`token=`/`secret=`/cookie
+value, a password inside a database URL, and the local part of any e-mail address are
+replaced before the line is written, because a log store is kept longer than the data
+that leaks into it.
+
 `/api/admin/metrics` carries all of it beside the live counts; the overview polls it
 every ten seconds while it is the tab on screen and the document is visible, and never
 otherwise. One ordered list of *attention reasons* — data already lost first (a dropped
@@ -1258,7 +1279,8 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/handlers/sessions.py`](../backend/app/handlers/sessions.py) | Socket session resolution shared by handler domains. |
 | [`app/identifiers.py`](../backend/app/identifiers.py) | Central generation policy for durable entity identifiers. |
 | [`app/live_drawing.py`](../backend/app/live_drawing.py) | Compact, versioned binary frames for live drawing Socket.IO events. |
-| [`app/logging_config.py`](../backend/app/logging_config.py) | Make the application's own log lines reach somebody. |
+| [`app/logging_config.py`](../backend/app/logging_config.py) | Make the application's own log lines reach somebody - as JSON in production, stamped with their request or command, secrets redacted. |
+| [`app/correlation.py`](../backend/app/correlation.py) | The request id, socket id and command a log line belongs to, carried as task-local context. |
 | [`app/main.py`](../backend/app/main.py) | ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app. |
 | [`app/message_limits.py`](../backend/app/message_limits.py) | Shared backend limits for player-authored chat and guess text. |
 | [`app/presenters.py`](../backend/app/presenters.py) | Pure construction of Socket.IO response and broadcast payloads. |
